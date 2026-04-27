@@ -1,0 +1,54 @@
+{
+  "name": "tabs-workbench-integration",
+  "displayName": "Tabs Workbench Integration",
+  "description": "Runs Tabs tools inside a Code-OSS-first desktop shell.",
+  "version": "0.0.1",
+  "publisher": "tabs",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:tabs.openShell",
+    "onCommand:tabs.openAgents",
+    "onCommand:tabs.openServer",
+    "onCommand:tabs.openBrowser",
+    "onCommand:tabs.focusCode",
+    "onCommand:tabs.focusGit"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "tabs.openShell",
+        "title": "Tabs: Open Workspace Panel",
+        "category": "Tabs"
+      },
+      {
+        "command": "tabs.openAgents",
+        "title": "Tabs: Open Agents",
+        "category": "Tabs"
+      },
+      {
+        "command": "tabs.openServer",
+        "title": "Tabs: Open Server",
+        "category": "Tabs"
+      },
+      {
+        "command": "tabs.openBrowser",
+        "title": "Tabs: Open Browser",
+        "category": "Tabs"
+      },
+      {
+        "command": "tabs.focusCode",
+        "title": "Tabs: Focus Code",
+        "category": "Tabs"
+      },
+      {
+        "command": "tabs.focusGit",
+        "title": "Tabs: Focus Git",
+        "category": "Tabs"
+      }
+    ]
+  }
+}

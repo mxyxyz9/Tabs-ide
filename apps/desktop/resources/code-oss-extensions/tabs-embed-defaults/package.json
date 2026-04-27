@@ -1,0 +1,43 @@
+{
+  "name": "tabs-embed-defaults",
+  "displayName": "Tabs Embed Defaults",
+  "description": "Embed-specific editor defaults for the Tabs browser tab.",
+  "version": "0.0.1",
+  "publisher": "tabs",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "activationEvents": [],
+  "contributes": {
+    "resourceLabelFormatters": [
+      {
+        "authority": "mount",
+        "scheme": "vscode-test-web",
+        "formatting": {
+          "label": "${query.tabsLabel}${path}",
+          "stripPathStartingSeparator": true
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "workbench.startupEditor": "none",
+      "workbench.tips.enabled": false,
+      "workbench.editor.empty.hint": "hidden",
+      "window.commandCenter": false,
+      "workbench.layoutControl.enabled": false,
+      "breadcrumbs.enabled": false,
+      "workbench.editorAssociations": {
+        "*.svg": "default"
+      }
+    }
+  }
+}
