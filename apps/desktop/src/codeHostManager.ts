@@ -425,7 +425,7 @@ function resolveExplicitEntry(
     reason: [
       `Unsupported Code-OSS entry: ${candidate}.`,
       "Tabs now embeds VS Code through a served web runtime, not a raw `workbench.html` file.",
-      "Set `TABS_CODE_OSS_ENTRY` to an `http://` or `https://` workbench URL, or set `TABS_CODE_OSS_BUILD_DIR` to the local `vscode-main` checkout root built with `npm run compile && npm run compile-web`.",
+      "Set `TABS_CODE_OSS_ENTRY` to an `http://` or `https://` workbench URL, or set `TABS_CODE_OSS_BUILD_DIR` to the local `tabs-code-main` checkout root built with `npm run compile && npm run compile-web`.",
     ].join(" "),
   };
 }
@@ -517,14 +517,14 @@ function resolveManagedDesktopRoot(
 }
 
 function getDefaultResolutionFailureReason(rootDir: string): string {
-  const expectedSiblingRoot = Path.join(rootDir, "..", "vscode-main");
+  const expectedSiblingRoot = Path.join(rootDir, "..", "tabs-code-main");
   const expectedAsset = Path.join(expectedSiblingRoot, CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH);
   return [
     "Code-OSS desktop runtime not found.",
     `Expected local VS Code checkout: ${expectedSiblingRoot}`,
     `Expected compiled asset: ${expectedAsset}`,
-    "Build it with: `cd ../vscode-main && npm install && npm run compile`",
-    "Or set `TABS_CODE_OSS_ENTRY` to a served workbench URL or `TABS_CODE_OSS_BUILD_DIR` to the local `vscode-main` checkout root.",
+    "Build it with: `cd ../tabs-code-main && npm install && npm run compile`",
+    "Or set `TABS_CODE_OSS_ENTRY` to a served workbench URL or `TABS_CODE_OSS_BUILD_DIR` to the local `tabs-code-main` checkout root.",
   ].join(" ");
 }
 
@@ -574,7 +574,7 @@ export function resolveCodeHostConfigWithFs(
     return createUnavailableState(resolvedDesktopRoot.reason);
   }
 
-  const fallbackRoots = [Path.join(input.rootDir, "..", "vscode-main"), Path.join(input.rootDir, "..", "vscode")];
+  const fallbackRoots = [Path.join(input.rootDir, "..", "tabs-code-main"), Path.join(input.rootDir, "..", "vscode")];
   for (const fallbackRoot of fallbackRoots) {
     if (!isDirectory(fallbackRoot, fs)) {
       continue;

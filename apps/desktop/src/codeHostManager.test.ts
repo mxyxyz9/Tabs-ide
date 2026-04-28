@@ -169,10 +169,10 @@ describe("resolveCodeHostConfig", () => {
     });
   });
 
-  it("falls back to a sibling vscode-main checkout", () => {
+  it("falls back to a sibling tabs-code-main checkout", () => {
     const parentDir = makeTempDir("tabs-parent-");
     const rootDir = Path.join(parentDir, "tabs-main");
-    const vscodeMainDir = Path.join(parentDir, "vscode-main");
+    const vscodeMainDir = Path.join(parentDir, "tabs-code-main");
     FS.mkdirSync(rootDir, { recursive: true });
     writeVsCodeCheckout(vscodeMainDir);
 
@@ -191,7 +191,7 @@ describe("resolveCodeHostConfig", () => {
   it("prefers a sibling desktop checkout when desktop and web assets both exist", () => {
     const parentDir = makeTempDir("tabs-parent-");
     const rootDir = Path.join(parentDir, "tabs-main");
-    const vscodeMainDir = Path.join(parentDir, "vscode-main");
+    const vscodeMainDir = Path.join(parentDir, "tabs-code-main");
     FS.mkdirSync(rootDir, { recursive: true });
     writeVsCodeCheckout(vscodeMainDir);
     writeVsCodeDesktopCheckout(vscodeMainDir);
@@ -233,7 +233,7 @@ describe("resolveCodeHostConfig", () => {
   it("returns an actionable message when the desktop build is missing", () => {
     const parentDir = makeTempDir("tabs-parent-");
     const rootDir = Path.join(parentDir, "tabs-main");
-    const vscodeMainDir = Path.join(parentDir, "vscode-main");
+    const vscodeMainDir = Path.join(parentDir, "tabs-code-main");
     FS.mkdirSync(rootDir, { recursive: true });
     FS.mkdirSync(vscodeMainDir, { recursive: true });
     for (const relativePath of [
@@ -254,7 +254,7 @@ describe("resolveCodeHostConfig", () => {
     expect(config.state.reason).toContain("Code-OSS desktop runtime not found");
     expect(config.state.reason).toContain("npm run compile");
     expect(config.state.reason).not.toContain("npm run compile-web");
-    expect(config.state.reason).toContain("vscode-main");
+    expect(config.state.reason).toContain("tabs-code-main");
   });
 });
 

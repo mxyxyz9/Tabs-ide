@@ -6,8 +6,8 @@ import {
 } from "./codeHost.logic";
 
 describe("code host availability messaging", () => {
-  it("falls back to the local vscode-main build instructions", () => {
-    expect(getDefaultCodeHostUnavailableMessage()).toContain("vscode-main");
+  it("falls back to the local tabs-code-main build instructions", () => {
+    expect(getDefaultCodeHostUnavailableMessage()).toContain("tabs-code-main");
     expect(getDefaultCodeHostUnavailableMessage()).toContain("npm run compile");
     expect(getDefaultCodeHostUnavailableMessage()).not.toContain("npm run compile-web");
     expect(getCodeHostUnavailableMessage(null)).toBe(getDefaultCodeHostUnavailableMessage());

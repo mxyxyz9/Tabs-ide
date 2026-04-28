@@ -1,34 +1,100 @@
 # Tabs
 
-Tabs is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
+Tabs is a desktop-first workspace for coding agents.
 
-## How to use
+It combines:
+- a React web app for chat, project state, browser tools, terminal tools, and workspace controls
+- a local Node/WebSocket server that brokers provider runtimes such as Codex and Claude
+- an Electron shell that can host the app, embedded terminals, browser surfaces, and a local VS Code-based workbench inside the Code tab
 
-> [!WARNING]
-> You need to have [Codex CLI](https://github.com/openai/codex) installed and authorized for Tabs to work.
+## What the project contains
+
+- `apps/web`
+  The main Tabs frontend.
+- `apps/server`
+  The local server that owns settings, orchestration, provider runtime integration, git helpers, terminal sessions, and IPC-facing APIs.
+- `apps/desktop`
+  The Electron desktop shell.
+- `packages/contracts`
+  Shared runtime contracts and schemas.
+- `packages/shared`
+  Shared utilities used across the app.
+
+## Core features
+
+- provider-backed agent threads
+- project-aware chat and workspace state
+- embedded browser tooling
+- embedded terminal tooling
+- project-specific custom browser tabs and terminal tabs
+- git and server controls inside the workspace shell
+- desktop app with an embedded Code tab powered by a local VS Code build
+
+## Prerequisites
+
+You need:
+- `bun` 1.3+
+- `node` 24+
+- a working Codex CLI install if you want Codex-backed threads
+- a working Claude CLI / agent install if you want Claude-backed threads
+
+## Install dependencies
+
+From the repo root:
 
 ```bash
-npx tabs
+bun install
 ```
 
-You can also just install the desktop app. It's cooler.
+## Run the web app and local server in development
 
-Install the [desktop app from the Releases page](https://github.com/pingdotgg/tabs/releases)
-
-## Embedded VS Code in the desktop app
-
-The desktop Code tab prefers a local `vscode-main` checkout built for the desktop Electron renderer.
-T3 boots the stock desktop workbench inside its Code tab instead of loading the web workbench first.
-
-From the sibling VS Code checkout:
+From the repo root:
 
 ```bash
-cd ../vscode-main
+bun run dev
+```
+
+Useful variants:
+
+```bash
+bun run dev:web
+bun run dev:server
+bun run dev:desktop
+```
+
+## Run the desktop app
+
+From the repo root:
+
+```bash
+bun run dev:desktop
+```
+
+For a packaged-start style local run:
+
+```bash
+bun run start:desktop
+```
+
+## Embedded Code tab setup
+
+The desktop Code tab prefers a sibling VS Code checkout that has already been compiled for the Electron workbench.
+
+Tabs now expects that checkout at:
+
+```bash
+../tabs-code-main
+```
+
+Build it like this:
+
+```bash
+cd ../tabs-code-main
 npm install
 npm run compile
 ```
 
-T3 will auto-detect `../vscode-main` and expects these compiled assets:
+Tabs will auto-detect `../tabs-code-main` and expects these compiled assets:
 
 - `out/vs/base/parts/sandbox/electron-browser/preload.js`
 - `out/vs/code/electron-browser/workbench/workbench.html`
@@ -36,17 +102,57 @@ T3 will auto-detect `../vscode-main` and expects these compiled assets:
 
 You can also override detection with:
 
-- `TABS_CODE_OSS_BUILD_DIR`: absolute path to the local `vscode-main` checkout root
-- `TABS_CODE_OSS_ENTRY`: absolute `http://` or `https://` URL for an already running VS Code web workbench if you explicitly want that mode
+- `TABS_CODE_OSS_BUILD_DIR`
+  Absolute path to the local `tabs-code-main` checkout root
+- `TABS_CODE_OSS_ENTRY`
+  `http://` or `https://` URL for a served workbench if you explicitly want web-hosted workbench mode
 
-## Some notes
+## Workspace folder layout expected by this repo
 
-We are very very early in this project. Expect bugs.
+A typical local layout now looks like:
 
-We are not accepting contributions yet.
+```text
+tabs/
+  logo/
+  tabs-main/
+  tabs-code-main/
+  tabs-code-web/
+```
 
-## If you REALLY want to contribute still.... read this first
+`tabs-code-web` is the renamed companion web checkout folder in the workspace. Tabs itself does not rely on that sibling name for the desktop Code tab boot path the way it does for `tabs-code-main`, but keeping the naming consistent helps local development.
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+## Typecheck
 
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+From the repo root:
+
+```bash
+bun typecheck
+```
+
+## Tests
+
+From the repo root:
+
+```bash
+bun test
+```
+
+You can also run package-specific checks as needed.
+
+## Build
+
+From the repo root:
+
+```bash
+bun run build
+```
+
+## Notes
+
+- This project is still under active development.
+- Some areas still reflect upstream VS Code internals because the desktop Code tab is built on top of a local VS Code workbench checkout.
+- Internal VS Code protocol names such as `vscode-webview` are expected and should not be treated as Tabs branding issues.
+
+## Contributing
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a change.
