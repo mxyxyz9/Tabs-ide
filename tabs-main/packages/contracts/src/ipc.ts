@@ -208,6 +208,7 @@ export interface DesktopBrowserSessionState {
 export interface DesktopBridge {
   getWsUrl: () => string | null;
   pickFolder: () => Promise<string | null>;
+  pickFile: () => Promise<string | null>;
   confirm: (message: string) => Promise<boolean>;
   setTheme: (theme: DesktopTheme) => Promise<void>;
   setIconTheme: (theme: DesktopIconTheme) => Promise<void>;
@@ -248,6 +249,7 @@ export interface DesktopBridge {
 export interface NativeApi {
   dialogs: {
     pickFolder: () => Promise<string | null>;
+    pickFile: () => Promise<string | null>;
     confirm: (message: string) => Promise<boolean>;
   };
   terminal: {

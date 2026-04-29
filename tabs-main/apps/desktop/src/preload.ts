@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { DesktopBridge } from "@tabs/contracts";
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
+const PICK_FILE_CHANNEL = "desktop:pick-file";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
@@ -40,6 +41,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     return typeof result === "string" ? result : null;
   },
   pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
+  pickFile: () => ipcRenderer.invoke(PICK_FILE_CHANNEL),
   confirm: (message) => ipcRenderer.invoke(CONFIRM_CHANNEL, message),
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
   setIconTheme: (theme) => ipcRenderer.invoke(SET_ICON_THEME_CHANNEL, theme),

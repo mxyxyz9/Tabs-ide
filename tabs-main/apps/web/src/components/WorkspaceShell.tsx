@@ -67,7 +67,7 @@ import {
   projectSearchEntriesQueryOptions,
 } from "../lib/projectReactQuery";
 import { cn, newCommandId, newProjectId, randomUUID } from "../lib/utils";
-import { readNativeApi } from "../nativeApi";
+import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
 import GitCommitComposer from "./GitCommitComposer";
 import { Badge } from "./ui/badge";
@@ -343,6 +343,26 @@ function toolIcon(tool: ProjectToolKind) {
 function basenameOfPath(input: string): string {
   const parts = input.split(/[/\\]/g).filter(Boolean);
   return parts[parts.length - 1] ?? input;
+}
+
+function dirnameOfPath(input: string): string | null {
+  const normalized = input.replace(/[/\\]+$/, "");
+  const lastSeparator = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+  if (lastSeparator <= 0) {
+    return null;
+  }
+  return normalized.slice(0, lastSeparator);
+}
+
+function relativePathFromParent(parent: string, target: string): string | null {
+  const normalizedParent = parent.replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalizedTarget = target.replace(/\\/g, "/");
+  const prefix = `${normalizedParent}/`;
+  if (!normalizedTarget.startsWith(prefix)) {
+    return null;
+  }
+  const relative = normalizedTarget.slice(prefix.length);
+  return relative.length > 0 ? relative : null;
 }
 
 function createEmptyBrowserSessionState(projectId: ProjectId): DesktopBrowserSessionState {
@@ -4044,6 +4064,7 @@ function DesktopBrowserTool(props: { project: Project; projectSettings: ProjectW
     createEmptyBrowserSessionState(props.project.id),
   );
   const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
+  const [isChromeExpanded, setIsChromeExpanded] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
 
@@ -4678,6 +4699,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
     createEmptyBrowserSessionState(props.project.id),
   );
   const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
+  const [isChromeExpanded, setIsChromeExpanded] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
   const normalizedUrl = normalizeBrowserUrl(props.url);
@@ -4927,100 +4949,139 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-2">
-      <Card className="relative z-20">
-        <CardContent className="space-y-1.5 p-2">
-          <div className="flex flex-wrap items-center gap-1">
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              disabled={!sessionState.canGoBack}
-              onClick={() =>
-                void bridge.goBackBrowserSession({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <ArrowLeftIcon className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              disabled={!sessionState.canGoForward}
-              onClick={() =>
-                void bridge.goForwardBrowserSession({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <ArrowRightIcon className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={() =>
-                void bridge.reloadBrowserSession({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <RefreshCwIcon className="size-3.5" />
-              Refresh
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant={sessionState.devToolsOpen ? "secondary" : "outline"}
-              onClick={() =>
-                void bridge.toggleBrowserDevTools({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <BugIcon className="size-3.5" />
-              Inspect
-            </Button>
-            <div className="min-w-0 flex-1 px-1.5">
-              <div className="truncate text-sm font-medium text-foreground">{props.title}</div>
-              <div className="truncate text-xs text-muted-foreground">{normalizedUrl}</div>
-            </div>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
-            >
-              <ExternalLinkIcon className="size-3.5" />
-              External
-            </Button>
-            <div className="flex items-center gap-1.5">
+    <div className="relative flex h-full min-h-0 flex-col gap-2 p-2">
+      {isChromeExpanded ? (
+        <Card className="relative z-20">
+          <CardContent className="space-y-1.5 p-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                disabled={!sessionState.canGoBack}
+                onClick={() =>
+                  void bridge.goBackBrowserSession({
+                    projectId: props.project.id,
+                  })
+                }
+              >
+                <ArrowLeftIcon className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                disabled={!sessionState.canGoForward}
+                onClick={() =>
+                  void bridge.goForwardBrowserSession({
+                    projectId: props.project.id,
+                  })
+                }
+              >
+                <ArrowRightIcon className="size-3.5" />
+              </Button>
               <Button
                 type="button"
                 size="xs"
                 variant="outline"
                 onClick={() =>
-                  setBrowserViewport(props.project.id, {
-                    devicePreset: browserState.devicePreset,
-                    landscape: !browserState.landscape,
+                  void bridge.reloadBrowserSession({
+                    projectId: props.project.id,
                   })
                 }
               >
-                <RotateCwIcon className="size-3.5" />
-                {browserState.landscape ? "Portrait" : "Landscape"}
+                <RefreshCwIcon className="size-3.5" />
+                Refresh
               </Button>
-              <BrowserViewportSelector
-                browserState={browserState}
-                projectId={props.project.id}
-                setBrowserViewport={setBrowserViewport}
-                onOpenChange={setViewportSelectorOpen}
-              />
+              <Button
+                type="button"
+                size="xs"
+                variant={sessionState.devToolsOpen ? "secondary" : "outline"}
+                onClick={() =>
+                  void bridge.toggleBrowserDevTools({
+                    projectId: props.project.id,
+                  })
+                }
+              >
+                <BugIcon className="size-3.5" />
+                Inspect
+              </Button>
+              <div className="min-w-0 flex-1 px-1.5">
+                <div className="truncate text-sm font-medium text-foreground">{props.title}</div>
+                <div className="truncate text-xs text-muted-foreground">{normalizedUrl}</div>
+              </div>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
+              >
+                <ExternalLinkIcon className="size-3.5" />
+                External
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() =>
+                    setBrowserViewport(props.project.id, {
+                      devicePreset: browserState.devicePreset,
+                      landscape: !browserState.landscape,
+                    })
+                  }
+                >
+                  <RotateCwIcon className="size-3.5" />
+                  {browserState.landscape ? "Portrait" : "Landscape"}
+                </Button>
+                <BrowserViewportSelector
+                  browserState={browserState}
+                  projectId={props.project.id}
+                  setBrowserViewport={setBrowserViewport}
+                  onOpenChange={setViewportSelectorOpen}
+                />
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="outline"
+                  onClick={() => setIsChromeExpanded(false)}
+                  aria-label="Collapse custom tab controls"
+                >
+                  <PanelTopCloseIcon className="size-3.5" />
+                </Button>
+              </div>
             </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="pointer-events-none absolute right-4 top-4 z-20">
+          <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-full border border-border/80 bg-background/85 shadow-sm backdrop-blur-sm">
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="rounded-none px-3"
+              onClick={() => setIsChromeExpanded(true)}
+              aria-label="Show custom tab controls"
+            >
+              <PanelTopOpenIcon className="size-3.5" />
+              Controls
+            </Button>
+            <div className="h-4 w-px bg-border/80" />
+            <Button
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="rounded-none px-3"
+              onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
+              aria-label={`Open ${props.title} externally`}
+            >
+              <ExternalLinkIcon className="size-3.5" />
+              External
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
       <div className="relative z-0 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5">
         {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
@@ -6095,6 +6156,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const closeProject = useWorkspaceShellStore((state) => state.closeProject);
   const setActiveProject = useWorkspaceShellStore((state) => state.setActiveProject);
   const setActiveTool = useWorkspaceShellStore((state) => state.setActiveTool);
+  const setCodeFocusedPath = useWorkspaceShellStore((state) => state.setCodeFocusedPath);
   const rememberThread = useWorkspaceShellStore((state) => state.rememberThread);
   const upsertProjectSettings = useWorkspaceShellStore((state) => state.upsertProjectSettings);
   const settings = useSettings();
@@ -6323,6 +6385,70 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     setActiveTool(projectId, "code");
     await navigate({ to: "/" });
   }, [focusProject, navigate, openProject, projects, setActiveProject, setActiveTool]);
+
+  const ensureProjectForWorkspaceRoot = useCallback(
+    async (workspaceRoot: string): Promise<ProjectId> => {
+      const existing = projects.find((project) => project.cwd === workspaceRoot);
+      if (existing) {
+        openProject(existing.id);
+        return existing.id;
+      }
+
+      const projectId = newProjectId();
+      await ensureNativeApi().orchestration.dispatchCommand({
+        type: "project.create",
+        commandId: newCommandId(),
+        projectId,
+        title: basenameOfPath(workspaceRoot),
+        workspaceRoot,
+        defaultModelSelection: {
+          provider: "codex",
+          model: DEFAULT_MODEL_BY_PROVIDER.codex,
+        },
+        createdAt: new Date().toISOString(),
+      });
+      openProject(projectId);
+      return projectId;
+    },
+    [openProject, projects],
+  );
+
+  const handleOpenProjectRepository = useCallback(async () => {
+    await handleCreateProject();
+  }, [handleCreateProject]);
+
+  const handleOpenProjectFile = useCallback(async () => {
+    const api = readNativeApi();
+    if (!api) return;
+    const filePath = await api.dialogs.pickFile();
+    if (!filePath) return;
+
+    const workspaceRoot = dirnameOfPath(filePath);
+    if (!workspaceRoot) {
+      toastManager.add({
+        type: "error",
+        title: "Could not open file",
+        description: "The selected file does not have a usable parent folder.",
+      });
+      return;
+    }
+
+    const relativePath = relativePathFromParent(workspaceRoot, filePath);
+    if (!relativePath) {
+      toastManager.add({
+        type: "error",
+        title: "Could not open file",
+        description: "Tabs could not resolve the selected file inside its project folder.",
+      });
+      return;
+    }
+
+    const projectId = await ensureProjectForWorkspaceRoot(workspaceRoot);
+    setActiveProject(projectId);
+    setActiveTool(projectId, "code");
+    setCodeFocusedPath(projectId, relativePath);
+    await navigate({ to: "/" });
+  }, [ensureProjectForWorkspaceRoot, navigate, setActiveProject, setActiveTool, setCodeFocusedPath]);
 
   const openAgentsForProject = useCallback(
     async (projectId: ProjectId) => {
@@ -6913,6 +7039,22 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                 >
                   <PlusIcon className="size-4 text-muted-foreground" />
                   <span>Add Project...</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
+                  onClick={() => void handleOpenProjectFile()}
+                >
+                  <FolderSearchIcon className="size-4 text-muted-foreground" />
+                  <span>Open File...</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
+                  onClick={() => void handleOpenProjectRepository()}
+                >
+                  <GitBranchIcon className="size-4 text-muted-foreground" />
+                  <span>Open Repository...</span>
                 </button>
                 <button
                   type="button"

@@ -138,6 +138,10 @@ export function createWsNativeApi(): NativeApi {
         if (!window.desktopBridge) return null;
         return window.desktopBridge.pickFolder();
       },
+      pickFile: async () => {
+        if (!window.desktopBridge) return null;
+        return window.desktopBridge.pickFile();
+      },
       confirm: async (message) => {
         if (window.desktopBridge) {
           return window.desktopBridge.confirm(message);

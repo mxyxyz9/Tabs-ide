@@ -7,6 +7,7 @@
   "engines": {
     "vscode": "^1.70.0"
   },
+  "main": "./extension.js",
   "categories": [
     "Other"
   ],
@@ -16,7 +17,9 @@
       "supported": true
     }
   },
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "resourceLabelFormatters": [
       {
@@ -29,6 +32,9 @@
       }
     ],
     "configurationDefaults": {
+      "workbench.welcome.enabled": false,
+      "workbench.welcomePage.walkthroughs.openOnInstall": false,
+      "workbench.editor.restoreEditors": false,
       "workbench.startupEditor": "none",
       "workbench.tips.enabled": false,
       "workbench.editor.empty.hint": "hidden",

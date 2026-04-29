@@ -60,6 +60,7 @@ import { BrowserHostManager } from "./browserHostManager";
 syncShellEnvironment();
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
+const PICK_FILE_CHANNEL = "desktop:pick-file";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
@@ -1588,6 +1589,20 @@ function registerIpcHandlers(): void {
         })
       : await dialog.showOpenDialog({
           properties: ["openDirectory", "createDirectory"],
+        });
+    if (result.canceled) return null;
+    return result.filePaths[0] ?? null;
+  });
+
+  ipcMain.removeHandler(PICK_FILE_CHANNEL);
+  ipcMain.handle(PICK_FILE_CHANNEL, async () => {
+    const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    const result = owner
+      ? await dialog.showOpenDialog(owner, {
+          properties: ["openFile"],
+        })
+      : await dialog.showOpenDialog({
+          properties: ["openFile"],
         });
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
