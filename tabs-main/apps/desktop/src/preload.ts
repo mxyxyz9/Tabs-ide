@@ -35,6 +35,11 @@ const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const BROWSER_HOST_SESSION_STATE_CHANNEL = "desktop:browser-host:session-state";
 
+// Persistence channels
+const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
+const SET_PERSISTED_ITEM_CHANNEL = "desktop:set-persisted-item";
+const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
+
 contextBridge.exposeInMainWorld("desktopBridge", {
   getWsUrl: () => {
     const result = ipcRenderer.sendSync(GET_WS_URL_CHANNEL);
@@ -102,5 +107,18 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     return () => {
       ipcRenderer.removeListener(UPDATE_STATE_CHANNEL, wrappedListener);
     };
+  },
+  
+  // Persistence methods
+  getPersistedItem: (key: string) => {
+    return ipcRenderer.invoke(GET_PERSISTED_ITEM_CHANNEL, key);
+  },
+  
+  setPersistedItem: (key: string, value: string) => {
+    return ipcRenderer.invoke(SET_PERSISTED_ITEM_CHANNEL, key, value);
+  },
+  
+  removePersistedItem: (key: string) => {
+    return ipcRenderer.invoke(REMOVE_PERSISTED_ITEM_CHANNEL, key);
   },
 } satisfies DesktopBridge);

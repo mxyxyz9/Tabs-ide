@@ -14,6 +14,21 @@ export interface GitWorkspaceLayoutSection {
   parentId?: "history";
 }
 
+export type GitWorkspaceMode = "basic" | "advanced";
+
+export type GitWorkspaceSwitchReason =
+  | "manual"
+  | "active_operation"
+  | "conflicts"
+  | "detached_head_blocked";
+
+export interface GitWorkspaceViewState {
+  mode: GitWorkspaceMode;
+  autoSwitched: boolean;
+  switchReason: GitWorkspaceSwitchReason | null;
+  hasBlockingOperation: boolean;
+}
+
 export const GIT_WORKSPACE_WIDE_BREAKPOINT = "2xl";
 
 export const GIT_WORKSPACE_LAYOUT_SECTIONS: ReadonlyArray<GitWorkspaceLayoutSection> = [

@@ -15,6 +15,9 @@ export interface GitActionMenuItem {
   icon: GitActionIconName;
   kind: "open_dialog" | "open_pr";
   dialogAction?: GitDialogAction;
+  modeAvailability?: "basic" | "advanced" | "both";
+  riskLevel?: "safe" | "risky" | "destructive";
+  requiresTypedConfirm?: boolean;
 }
 
 export interface GitQuickAction {
@@ -23,6 +26,8 @@ export interface GitQuickAction {
   kind: "run_action" | "run_pull" | "open_pr" | "show_hint";
   action?: GitStackedAction;
   hint?: string;
+  modeAvailability?: "basic" | "advanced" | "both";
+  riskLevel?: "safe" | "risky" | "destructive";
 }
 
 export interface DefaultBranchActionDialogCopy {
@@ -154,6 +159,8 @@ export function buildMenuItems(
       icon: "commit",
       kind: "open_dialog",
       dialogAction: "commit",
+      modeAvailability: "both",
+      riskLevel: "safe",
     },
     {
       id: "push",
@@ -162,6 +169,8 @@ export function buildMenuItems(
       icon: "push",
       kind: "open_dialog",
       dialogAction: "push",
+      modeAvailability: "both",
+      riskLevel: "safe",
     },
     hasOpenPr
       ? {
@@ -170,6 +179,8 @@ export function buildMenuItems(
           disabled: !canOpenPr,
           icon: "pr",
           kind: "open_pr",
+          modeAvailability: "both",
+          riskLevel: "safe",
         }
       : {
           id: "pr",
@@ -178,6 +189,8 @@ export function buildMenuItems(
           icon: "pr",
           kind: "open_dialog",
           dialogAction: "create_pr",
+          modeAvailability: "both",
+          riskLevel: "safe",
         },
   ];
 }

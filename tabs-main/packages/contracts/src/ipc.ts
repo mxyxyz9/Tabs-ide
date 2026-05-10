@@ -207,6 +207,9 @@ export interface DesktopBrowserSessionState {
 
 export interface DesktopBridge {
   getWsUrl: () => string | null;
+  getPersistedItem: (key: string) => Promise<string | null>;
+  setPersistedItem: (key: string, value: string) => Promise<void>;
+  removePersistedItem: (key: string) => Promise<void>;
   pickFolder: () => Promise<string | null>;
   pickFile: () => Promise<string | null>;
   confirm: (message: string) => Promise<boolean>;

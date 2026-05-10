@@ -10,11 +10,21 @@ export interface GitCommitComposerActionState {
   disabledReason: string | null;
   kind: "run_action" | "open_pr";
   action?: GitStackedAction;
+  modeAvailability?: "basic" | "advanced" | "both";
+  riskLevel?: "safe" | "risky" | "destructive";
+  requiresTypedConfirm?: boolean;
 }
 
 export interface GitCommitComposerState {
   actions: [GitCommitComposerActionState, GitCommitComposerActionState, GitCommitComposerActionState];
   isDefaultBranch: boolean;
+}
+
+export interface GitPrimaryActionState {
+  id: GitCommitComposerActionState["id"];
+  label: string;
+  disabled: boolean;
+  disabledReason: string | null;
 }
 
 function resolveDefaultBranchStatus(
@@ -111,6 +121,8 @@ export function buildGitCommitComposerState(input: {
         disabledReason: commitDisabledReason,
         kind: "run_action",
         action: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "commit_push",
@@ -123,6 +135,8 @@ export function buildGitCommitComposerState(input: {
         disabledReason: commitPushDisabledReason,
         kind: "run_action",
         action: "commit_push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       hasOpenPr
         ? {
@@ -134,6 +148,8 @@ export function buildGitCommitComposerState(input: {
             disabled: sharedDisabledReason !== null,
             disabledReason: sharedDisabledReason,
             kind: "open_pr",
+            modeAvailability: "both",
+            riskLevel: "safe",
           }
         : {
             id: "commit_push_pr",
@@ -146,7 +162,45 @@ export function buildGitCommitComposerState(input: {
             disabledReason: commitPrDisabledReason,
             kind: "run_action",
             action: "commit_push_pr",
+            modeAvailability: "both",
+            riskLevel: "safe",
           },
     ],
+  };
+}
+
+export function resolveGitPrimaryActionState(
+  state: GitCommitComposerState,
+): GitPrimaryActionState {
+  const [commit, commitPush, commitPushPr] = state.actions;
+  if (!commit.disabled) {
+    return {
+      id: commit.id,
+      label: commit.label,
+      disabled: false,
+      disabledReason: null,
+    };
+  }
+  if (!commitPush.disabled) {
+    return {
+      id: commitPush.id,
+      label: commitPush.label,
+      disabled: false,
+      disabledReason: null,
+    };
+  }
+  if (!commitPushPr.disabled) {
+    return {
+      id: commitPushPr.id,
+      label: commitPushPr.label,
+      disabled: false,
+      disabledReason: null,
+    };
+  }
+  return {
+    id: commit.id,
+    label: commit.label,
+    disabled: true,
+    disabledReason: commit.disabledReason,
   };
 }

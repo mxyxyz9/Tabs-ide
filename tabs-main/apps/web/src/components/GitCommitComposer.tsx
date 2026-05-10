@@ -52,6 +52,7 @@ interface GitCommitComposerProps {
   branchList: GitListBranchesResult | null;
   stagedFiles: ReadonlyArray<GitStatusFile>;
   externalBusy?: boolean;
+  workspaceMode?: "basic" | "advanced";
 }
 
 interface PendingDefaultBranchAction {
@@ -108,7 +109,15 @@ function GitComposerActionIcon(props: {
 }
 
 export default function GitCommitComposer(props: GitCommitComposerProps) {
-  const { gitCwd, activeThreadId, gitStatus, branchList, stagedFiles, externalBusy = false } = props;
+  const {
+    gitCwd,
+    activeThreadId,
+    gitStatus,
+    branchList,
+    stagedFiles,
+    externalBusy = false,
+    workspaceMode = "basic",
+  } = props;
   const composerSection = getGitWorkspaceLayoutSection("composer");
   const threadToastData = useMemo(
     () => (activeThreadId ? { threadId: activeThreadId } : undefined),
@@ -311,6 +320,16 @@ export default function GitCommitComposer(props: GitCommitComposerProps) {
         ...(input.featureBranch !== undefined ? { featureBranch: input.featureBranch } : {}),
       });
       const actionId = randomUUID();
+      if (workspaceMode === "basic") {
+        window.dispatchEvent(
+          new CustomEvent("tabs:git-telemetry", {
+            detail: {
+              event: "git_basic_primary_action_executed",
+              action: input.action,
+            },
+          }),
+        );
+      }
       const toastId = toastManager.add({
         type: "loading",
         title: progressStages[0] ?? "Running git action...",
@@ -521,7 +540,12 @@ export default function GitCommitComposer(props: GitCommitComposerProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="grid min-w-0 gap-4 pt-6 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <CardContent
+          className={cn(
+            "grid min-w-0 gap-4 pt-6",
+            "2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]",
+          )}
+        >
           {!branchList?.isRepo ? (
             <div className="min-w-0 rounded-2xl border border-dashed border-border/70 bg-background/40 p-5 text-sm text-muted-foreground">
               <div className="space-y-2">
@@ -685,7 +709,7 @@ export default function GitCommitComposer(props: GitCommitComposerProps) {
                   </div>
                 ))}
               </div>
-            </>
+              </>
           )}
         </CardContent>
       </Card>

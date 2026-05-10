@@ -98,11 +98,13 @@ import {
 } from "./ui/select";
 import { Separator } from "./ui/separator";
 import { Switch } from "./ui/switch";
+import { Toggle, ToggleGroup } from "./ui/toggle-group";
 import { Textarea } from "./ui/textarea";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { getGitWorkspaceLayoutSection } from "./GitToolLayout.logic";
+import type { GitWorkspaceMode, GitWorkspaceSwitchReason } from "./GitToolLayout.logic";
 import {
   resolveProjectTools,
   useProjectWorkspaceSettings,
@@ -125,6 +127,8 @@ const BROWSER_DEVICE_PRESETS = [
   { id: "wide", label: "Large Desktop", width: 1600, height: 960 },
   { id: "custom", label: "Custom size", width: null, height: null },
 ] as const;
+
+const GIT_WORKSPACE_MODE_STORAGE_KEY = "tabs:git-workspace-mode";
 
 function formatBrowserViewportLabel(browserState: ProjectBrowserToolState): string {
   const selectedPreset =
@@ -1443,6 +1447,32 @@ function CodeTool(props: { project: Project }) {
   return <FallbackCodeTool project={props.project} />;
 }
 
+function readInitialGitWorkspaceMode(): GitWorkspaceMode {
+  if (typeof window === "undefined") return "basic";
+  const value = window.localStorage.getItem(GIT_WORKSPACE_MODE_STORAGE_KEY);
+  return value === "advanced" ? "advanced" : "basic";
+}
+
+function emitGitWorkspaceTelemetry(
+  event:
+    | "git_mode_switched"
+    | "git_mode_auto_switched"
+    | "git_basic_primary_action_executed"
+    | "git_advanced_action_executed"
+    | "git_action_cancelled_confirm_dialog",
+  detail?: Record<string, unknown>,
+) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("tabs:git-telemetry", {
+      detail: {
+        event,
+        ...(detail ?? {}),
+      },
+    }),
+  );
+}
+
 function GitTool(props: {
   project: Project;
   activeThreadId: ThreadId | null;
@@ -1479,7 +1509,15 @@ function GitTool(props: {
   const [branchManagerOpen, setBranchManagerOpen] = useState(false);
   const [advancedActionsOpen, setAdvancedActionsOpen] = useState(false);
   const [stashPanelOpen, setStashPanelOpen] = useState(false);
+  const [gitWorkspaceMode, setGitWorkspaceMode] = useState<GitWorkspaceMode>(() =>
+    readInitialGitWorkspaceMode(),
+  );
+  const [autoSwitchReason, setAutoSwitchReason] = useState<GitWorkspaceSwitchReason | null>(null);
   const [gitTaskInFlight, setGitTaskInFlight] = useState<string | null>(null);
+  const [discardAllConfirmOpen, setDiscardAllConfirmOpen] = useState(false);
+  const [discardAllConfirmText, setDiscardAllConfirmText] = useState("");
+  const [deleteBranchConfirmOpen, setDeleteBranchConfirmOpen] = useState(false);
+  const [deleteBranchConfirmText, setDeleteBranchConfirmText] = useState("");
   const [resolverFilePath, setResolverFilePath] = useState<string | null>(null);
   const [resolverMode, setResolverMode] = useState<GitConflictResolverMode>("manual");
   const [resolverDraft, setResolverDraft] = useState("");
@@ -2082,12 +2120,9 @@ function GitTool(props: {
     [api, project.cwd, runGitTask, selectedPatchFile, selectedPath],
   );
 
-  const handleDiscardAll = useCallback(async () => {
+  const executeDiscardAll = useCallback(() => {
     if (!api) return;
-    const confirmed = await api.dialogs.confirm(
-      "Discard all local Git changes for this project, including untracked files?",
-    );
-    if (!confirmed) return;
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", { action: "discard_all" });
     void runGitTask({
       id: "discard:all",
       title: "Could not discard all changes",
@@ -2102,6 +2137,11 @@ function GitTool(props: {
         }),
     });
   }, [api, project.cwd, project.id, runGitTask, setSelectedPath]);
+
+  const handleDiscardAll = useCallback(() => {
+    setDiscardAllConfirmText("");
+    setDiscardAllConfirmOpen(true);
+  }, []);
 
   const handleFetchLatest = useCallback(() => {
     if (!api) return;
@@ -2137,6 +2177,7 @@ function GitTool(props: {
 
   const handleSaveStash = useCallback(() => {
     if (!api) return;
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", { action: "stash_save" });
     void runGitTask({
       id: "stash:save",
       title: "Could not create stash",
@@ -2158,14 +2199,20 @@ function GitTool(props: {
     branchRenameMutation.mutate({ oldBranch, newBranch });
   }, [branchRenameMutation, branchToolsBranch?.name, renameDraft]);
 
-  const handleDeleteBranch = useCallback(async () => {
-    if (!api || !branchToolsBranch || branchToolsBranch.current) return;
-    const confirmed = await api.dialogs.confirm(
-      `Delete ${branchToolsBranch.name}? If the branch is not fully merged, Git may reject the delete.`,
-    );
-    if (!confirmed) return;
-    branchDeleteMutation.mutate({ branch: branchToolsBranch.name });
-  }, [api, branchDeleteMutation, branchToolsBranch]);
+  const executeDeleteBranch = useCallback(() => {
+    if (!branchToolsBranch || branchToolsBranch.current) return;
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", {
+      action: "delete_branch",
+      branch: branchToolsBranch.name,
+    });
+    branchDeleteMutation.mutate({ branch: branchToolsBranch.name, force: true });
+  }, [branchDeleteMutation, branchToolsBranch]);
+
+  const handleDeleteBranch = useCallback(() => {
+    if (!branchToolsBranch || branchToolsBranch.current) return;
+    setDeleteBranchConfirmText("");
+    setDeleteBranchConfirmOpen(true);
+  }, [branchToolsBranch]);
 
   const handleSetUpstream = useCallback(() => {
     if (!branchToolsBranch || !selectedUpstreamBranch) return;
@@ -2366,6 +2413,10 @@ function GitTool(props: {
 
   const handleStartMerge = useCallback(() => {
     if (!api || operationBranch.trim().length === 0) return;
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", {
+      action: "start_merge",
+      branch: operationBranch,
+    });
     void runGitTask({
       id: `merge:${operationBranch}`,
       title: "Could not start merge",
@@ -2377,6 +2428,10 @@ function GitTool(props: {
 
   const handleStartRebase = useCallback(() => {
     if (!api || operationBranch.trim().length === 0) return;
+    emitGitWorkspaceTelemetry("git_advanced_action_executed", {
+      action: "start_rebase",
+      branch: operationBranch,
+    });
     void runGitTask({
       id: `rebase:${operationBranch}`,
       title: "Could not start rebase",
@@ -2440,6 +2495,18 @@ function GitTool(props: {
     gitTaskInFlight !== null || currentOperation !== null || conflictedFiles.length > 0;
   const hasWorkingTreeChanges = changedFiles.length > 0;
   const hasBlockingConflicts = conflictedFiles.length > 0;
+  const hasDetachedHead = gitStatusQuery.data?.branch === null;
+  const detachedHeadBlockedBasic = hasDetachedHead && stagedFiles.length === 0 && !hasWorkingTreeChanges;
+  const hasBlockingOperation =
+    currentOperation !== null || hasBlockingConflicts || detachedHeadBlockedBasic;
+  const blockingSwitchReason: GitWorkspaceSwitchReason | null =
+    currentOperation !== null
+      ? "active_operation"
+      : hasBlockingConflicts
+        ? "conflicts"
+        : detachedHeadBlockedBasic
+          ? "detached_head_blocked"
+          : null;
   const syncSummary = gitStatusQuery.data?.hasUpstream
     ? `Ahead ${gitStatusQuery.data.aheadCount} · Behind ${gitStatusQuery.data.behindCount}`
     : "No upstream";
@@ -2451,10 +2518,150 @@ function GitTool(props: {
   const advancedActionsSection = getGitWorkspaceLayoutSection("advanced-actions");
   const historySection = getGitWorkspaceLayoutSection("history");
   const stashesSection = getGitWorkspaceLayoutSection("stashes");
+  const isBasicMode = gitWorkspaceMode === "basic";
+
+  useEffect(() => {
+    window.localStorage.setItem(GIT_WORKSPACE_MODE_STORAGE_KEY, gitWorkspaceMode);
+  }, [gitWorkspaceMode]);
+
+  useEffect(() => {
+    if (gitWorkspaceMode !== "basic" || !blockingSwitchReason) return;
+    setGitWorkspaceMode("advanced");
+    setAutoSwitchReason(blockingSwitchReason);
+    emitGitWorkspaceTelemetry("git_mode_auto_switched", { reason: blockingSwitchReason });
+  }, [blockingSwitchReason, gitWorkspaceMode]);
+
+  const handleWorkspaceModeChange = useCallback(
+    (mode: GitWorkspaceMode) => {
+      setGitWorkspaceMode(mode);
+      setAutoSwitchReason(null);
+      emitGitWorkspaceTelemetry("git_mode_switched", { mode });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (event.altKey && event.key === "1") {
+        event.preventDefault();
+        handleWorkspaceModeChange("basic");
+        return;
+      }
+      if (event.altKey && event.key === "2") {
+        event.preventDefault();
+        handleWorkspaceModeChange("advanced");
+        return;
+      }
+      if (!isBasicMode) return;
+
+      if (event.key === "]") {
+        event.preventDefault();
+        if (changedFiles.length === 0) return;
+        const selectedIndex = changedFiles.findIndex((file) => file.path === selectedPath);
+        const nextIndex = selectedIndex < 0 ? 0 : (selectedIndex + 1) % changedFiles.length;
+        const next = changedFiles[nextIndex];
+        if (next) {
+          selectWorkingTreeFile(next.path);
+        }
+        return;
+      }
+      if (event.key === "[") {
+        event.preventDefault();
+        if (changedFiles.length === 0) return;
+        const selectedIndex = changedFiles.findIndex((file) => file.path === selectedPath);
+        const nextIndex =
+          selectedIndex < 0
+            ? Math.max(0, changedFiles.length - 1)
+            : (selectedIndex - 1 + changedFiles.length) % changedFiles.length;
+        const next = changedFiles[nextIndex];
+        if (next) {
+          selectWorkingTreeFile(next.path);
+        }
+        return;
+      }
+      if (event.key.toLowerCase() === "s" && selectedWorkingTreeFile?.unstaged) {
+        event.preventDefault();
+        handleStageFile(selectedWorkingTreeFile);
+        return;
+      }
+      if (event.key.toLowerCase() === "u" && selectedWorkingTreeFile?.staged) {
+        event.preventDefault();
+        handleUnstageFile(selectedWorkingTreeFile);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    changedFiles,
+    handleStageFile,
+    handleUnstageFile,
+    handleWorkspaceModeChange,
+    isBasicMode,
+    selectWorkingTreeFile,
+    selectedPath,
+    selectedWorkingTreeFile,
+  ]);
 
   return (
-    <div className="grid h-full min-h-0 min-w-0 content-start gap-4 overflow-x-hidden overflow-y-auto p-4 2xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,23rem)]">
+    <div
+      className={cn(
+        "grid h-full min-h-0 min-w-0 content-start gap-4 overflow-x-hidden overflow-y-auto p-4",
+        isBasicMode ? "grid-cols-1" : "2xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,23rem)]",
+      )}
+    >
       <div className="grid min-h-0 min-w-0 content-start gap-4">
+        <Card className="min-w-0">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-foreground">Git workspace mode</div>
+              <div className="text-xs text-muted-foreground">
+                {isBasicMode
+                  ? "Basic mode prioritizes the fastest commit/push/PR workflow."
+                  : "Advanced mode unlocks branch surgery, recovery, and long-running operations."}
+              </div>
+              <div className="mt-1">
+                <Badge size="sm" variant={hasBlockingOperation ? "secondary" : "outline"}>
+                  {hasBlockingOperation ? "Blocking operation detected" : "No blocking operation"}
+                </Badge>
+              </div>
+              {autoSwitchReason ? (
+                <div className="mt-1 text-xs text-amber-300">
+                  Auto-switched to Advanced:{" "}
+                  {autoSwitchReason === "active_operation"
+                    ? "a merge/rebase operation is in progress"
+                    : autoSwitchReason === "conflicts"
+                      ? "conflicts require advanced resolution controls"
+                      : "detached HEAD currently blocks the basic flow"}
+                  .
+                </div>
+              ) : null}
+            </div>
+            <ToggleGroup
+              variant="outline"
+              size="sm"
+              value={[gitWorkspaceMode]}
+              onValueChange={(value) => {
+                const next = value[0];
+                if (next === "basic" || next === "advanced") {
+                  handleWorkspaceModeChange(next);
+                }
+              }}
+            >
+              <Toggle value="basic">Basic</Toggle>
+              <Toggle value="advanced">Advanced</Toggle>
+            </ToggleGroup>
+          </CardContent>
+        </Card>
+
         <Card className="min-w-0">
           <CardHeader className="min-w-0 border-b border-border/60 pb-4">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
@@ -2465,9 +2672,13 @@ function GitTool(props: {
                 </div>
                 <div className="min-w-0">
                   <CardTitle className="text-xl">{branchHeadline}</CardTitle>
-                  <CardDescription className="mt-1 break-words">
-                    {overviewSection.description}
-                  </CardDescription>
+                  {!isBasicMode ? (
+                    <CardDescription className="mt-1 break-words">
+                      {overviewSection.description}
+                    </CardDescription>
+                  ) : (
+                    <div className="mt-1 text-xs text-muted-foreground">{branchSubline}</div>
+                  )}
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -2486,7 +2697,8 @@ function GitTool(props: {
             </div>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
-            <div className="grid gap-3 md:grid-cols-4">
+            {!isBasicMode ? (
+              <div className="grid gap-3 md:grid-cols-4">
               <div className="rounded-xl border border-border/70 bg-background/60 p-3">
                 <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   Branch
@@ -2525,7 +2737,26 @@ function GitTool(props: {
                   Across the current working tree
                 </div>
               </div>
-            </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Badge size="sm" variant="outline">
+                  Ahead {gitStatusQuery.data?.aheadCount ?? 0}
+                </Badge>
+                <Badge size="sm" variant="outline">
+                  Behind {gitStatusQuery.data?.behindCount ?? 0}
+                </Badge>
+                <Badge size="sm" variant={stagedFiles.length > 0 ? "secondary" : "outline"}>
+                  {stagedFiles.length} staged
+                </Badge>
+                <Badge size="sm" variant={hasWorkingTreeChanges ? "secondary" : "outline"}>
+                  {changedFiles.length} changed
+                </Badge>
+                <Badge size="sm" variant={hasBlockingConflicts ? "error" : "outline"}>
+                  {conflictedFiles.length} conflicts
+                </Badge>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
@@ -2638,6 +2869,7 @@ function GitTool(props: {
           branchList={branchesQuery.data ?? null}
           stagedFiles={stagedFiles}
           externalBusy={gitTaskInFlight !== null}
+          workspaceMode={gitWorkspaceMode}
         />
 
         <Card className="min-h-0 min-w-0 overflow-hidden">
@@ -2645,9 +2877,11 @@ function GitTool(props: {
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
               <div className="min-w-0">
                 <CardTitle>{changesSection.title}</CardTitle>
-                <CardDescription className="mt-1 break-words">
-                  {changesSection.description}
-                </CardDescription>
+                {!isBasicMode ? (
+                  <CardDescription className="mt-1 break-words">
+                    {changesSection.description}
+                  </CardDescription>
+                ) : null}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <Badge size="sm" variant={conflictedFiles.length > 0 ? "error" : "outline"}>
@@ -2732,7 +2966,8 @@ function GitTool(props: {
           <CardHeader className="min-w-0 flex flex-row items-start justify-between gap-4 space-y-0">
             <div className="min-w-0">
               <CardTitle>{diffSection.title}</CardTitle>
-              <CardDescription className="break-words">
+              {!isBasicMode ? (
+                <CardDescription className="break-words">
                 {resolverFilePath
                   ? resolverMode === "manual"
                     ? "Resolve this conflicted file directly inside the Git workspace."
@@ -2742,7 +2977,8 @@ function GitTool(props: {
                     : activeHistoryCommit
                       ? "Unified patch for the selected commit."
                       : "Select a changed file or commit to inspect its patch."}
-              </CardDescription>
+                </CardDescription>
+              ) : null}
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {resolverFilePath ? (
@@ -3257,16 +3493,40 @@ function GitTool(props: {
                 />
               </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
-                Select a changed file for a live working-tree diff, or choose a commit from the
-                history list to inspect its patch here.
+              <div className="space-y-3 rounded-xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
+                {changedFiles.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Quick Open Changed File
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {changedFiles.slice(0, 8).map((file) => (
+                        <Button
+                          key={`diff-quick-open:${file.path}`}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="max-w-80 justify-start truncate"
+                          onClick={() => selectWorkingTreeFile(file.path)}
+                        >
+                          {file.path}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div>
+                  Select a changed file for a live working-tree diff, or choose a commit from the
+                  history list to inspect its patch here.
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid min-h-0 min-w-0 gap-4 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
+      {!isBasicMode ? (
+        <div className="grid min-h-0 min-w-0 gap-4 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
         <Card className="min-h-0 min-w-0 overflow-hidden">
           <CardHeader className="min-w-0 border-b border-border/60 pb-4">
             <CardTitle>{branchesSection.title}</CardTitle>
@@ -3514,6 +3774,9 @@ function GitTool(props: {
                       <XIcon className="size-3.5" />
                       Delete Branch
                     </Button>
+                    <Badge size="sm" variant="error">
+                      Destructive
+                    </Badge>
                   </div>
                 </CollapsibleContent>
               </div>
@@ -3647,6 +3910,9 @@ function GitTool(props: {
                 onClick={() => void handleSaveStash()}
               >
                 Stash Changes
+                <Badge size="sm" variant="secondary">
+                  Risky
+                </Badge>
               </Button>
               <Button
                 type="button"
@@ -3656,6 +3922,9 @@ function GitTool(props: {
                 onClick={() => void handleDiscardAll()}
               >
                 Discard All
+                <Badge size="sm" variant="error">
+                  Destructive
+                </Badge>
               </Button>
             </div>
           </CardContent>
@@ -3844,7 +4113,95 @@ function GitTool(props: {
             </Collapsible>
           </CardContent>
         </Card>
-      </div>
+        </div>
+      ) : null}
+
+      <Dialog open={discardAllConfirmOpen} onOpenChange={setDiscardAllConfirmOpen}>
+        <DialogPopup>
+          <DialogPanel>
+            <DialogHeader>
+              <DialogTitle>Discard all local changes?</DialogTitle>
+              <DialogDescription>
+                This is destructive and cannot be undone. Type <code>DISCARD</code> to confirm.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              value={discardAllConfirmText}
+              onChange={(event) => setDiscardAllConfirmText(event.target.value)}
+              placeholder="Type DISCARD"
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDiscardAllConfirmOpen(false);
+                  emitGitWorkspaceTelemetry("git_action_cancelled_confirm_dialog", {
+                    action: "discard_all",
+                  });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={discardAllConfirmText.trim() !== "DISCARD"}
+                onClick={() => {
+                  setDiscardAllConfirmOpen(false);
+                  executeDiscardAll();
+                }}
+              >
+                Discard All
+              </Button>
+            </DialogFooter>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog open={deleteBranchConfirmOpen} onOpenChange={setDeleteBranchConfirmOpen}>
+        <DialogPopup>
+          <DialogPanel>
+            <DialogHeader>
+              <DialogTitle>Delete branch {branchToolsBranch?.name}?</DialogTitle>
+              <DialogDescription>
+                This can permanently remove branch history if forced. Type{" "}
+                <code>{`DELETE ${branchToolsBranch?.name ?? ""}`}</code> to confirm.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              value={deleteBranchConfirmText}
+              onChange={(event) => setDeleteBranchConfirmText(event.target.value)}
+              placeholder={`Type DELETE ${branchToolsBranch?.name ?? ""}`}
+            />
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setDeleteBranchConfirmOpen(false);
+                  emitGitWorkspaceTelemetry("git_action_cancelled_confirm_dialog", {
+                    action: "delete_branch",
+                  });
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleteBranchConfirmText.trim() !== `DELETE ${branchToolsBranch?.name ?? ""}`}
+                onClick={() => {
+                  setDeleteBranchConfirmOpen(false);
+                  executeDeleteBranch();
+                }}
+              >
+                Delete Branch
+              </Button>
+            </DialogFooter>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
     </div>
   );
 }

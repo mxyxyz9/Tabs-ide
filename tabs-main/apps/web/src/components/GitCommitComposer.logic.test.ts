@@ -1,7 +1,7 @@
 import type { GitBranch, GitListBranchesResult, GitStatusResult } from "@tabs/contracts";
 import { describe, expect, it } from "vitest";
 
-import { buildGitCommitComposerState } from "./GitCommitComposer.logic";
+import { buildGitCommitComposerState, resolveGitPrimaryActionState } from "./GitCommitComposer.logic";
 
 function createStatus(overrides: Partial<GitStatusResult> = {}): GitStatusResult {
   return {
@@ -237,5 +237,40 @@ describe("Git commit composer", () => {
       label: "Push & Create PR",
       disabled: false,
     });
+  });
+
+  it("derives the basic primary action from the first enabled composer action", () => {
+    const state = buildGitCommitComposerState({
+      gitStatus: createStatus({
+        hasWorkingTreeChanges: true,
+      }),
+      branchList: createBranchList(),
+      isBusy: false,
+      stagedCount: 1,
+    });
+
+    const primary = resolveGitPrimaryActionState(state);
+    expect(primary).toMatchObject({
+      id: "commit",
+      label: "Commit Staged",
+      disabled: false,
+      disabledReason: null,
+    });
+  });
+
+  it("marks composer actions as safe and available in both modes", () => {
+    const state = buildGitCommitComposerState({
+      gitStatus: createStatus({
+        hasWorkingTreeChanges: true,
+      }),
+      branchList: createBranchList(),
+      isBusy: false,
+      stagedCount: 1,
+    });
+
+    for (const action of state.actions) {
+      expect(action.modeAvailability).toBe("both");
+      expect(action.riskLevel).toBe("safe");
+    }
   });
 });
