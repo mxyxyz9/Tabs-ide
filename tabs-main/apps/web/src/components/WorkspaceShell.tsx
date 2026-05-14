@@ -98,7 +98,6 @@ import {
 } from "./ui/select";
 import { Separator } from "./ui/separator";
 import { Switch } from "./ui/switch";
-import { Toggle, ToggleGroup } from "./ui/toggle-group";
 import { Textarea } from "./ui/textarea";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { toastManager } from "./ui/toast";
@@ -1459,7 +1458,9 @@ function emitGitWorkspaceTelemetry(
     | "git_mode_auto_switched"
     | "git_basic_primary_action_executed"
     | "git_advanced_action_executed"
-    | "git_action_cancelled_confirm_dialog",
+    | "git_action_cancelled_confirm_dialog"
+    | "git_advanced_drawer_opened"
+    | "git_terminal_dock_toggled",
   detail?: Record<string, unknown>,
 ) {
   if (typeof window === "undefined") return;
@@ -1512,7 +1513,6 @@ function GitTool(props: {
   const [gitWorkspaceMode, setGitWorkspaceMode] = useState<GitWorkspaceMode>(() =>
     readInitialGitWorkspaceMode(),
   );
-  const [autoSwitchReason, setAutoSwitchReason] = useState<GitWorkspaceSwitchReason | null>(null);
   const [gitTaskInFlight, setGitTaskInFlight] = useState<string | null>(null);
   const [discardAllConfirmOpen, setDiscardAllConfirmOpen] = useState(false);
   const [discardAllConfirmText, setDiscardAllConfirmText] = useState("");
@@ -2497,8 +2497,6 @@ function GitTool(props: {
   const hasBlockingConflicts = conflictedFiles.length > 0;
   const hasDetachedHead = gitStatusQuery.data?.branch === null;
   const detachedHeadBlockedBasic = hasDetachedHead && stagedFiles.length === 0 && !hasWorkingTreeChanges;
-  const hasBlockingOperation =
-    currentOperation !== null || hasBlockingConflicts || detachedHeadBlockedBasic;
   const blockingSwitchReason: GitWorkspaceSwitchReason | null =
     currentOperation !== null
       ? "active_operation"
@@ -2527,14 +2525,12 @@ function GitTool(props: {
   useEffect(() => {
     if (gitWorkspaceMode !== "basic" || !blockingSwitchReason) return;
     setGitWorkspaceMode("advanced");
-    setAutoSwitchReason(blockingSwitchReason);
     emitGitWorkspaceTelemetry("git_mode_auto_switched", { reason: blockingSwitchReason });
   }, [blockingSwitchReason, gitWorkspaceMode]);
 
   const handleWorkspaceModeChange = useCallback(
     (mode: GitWorkspaceMode) => {
       setGitWorkspaceMode(mode);
-      setAutoSwitchReason(null);
       emitGitWorkspaceTelemetry("git_mode_switched", { mode });
     },
     [],
@@ -2612,164 +2608,98 @@ function GitTool(props: {
   ]);
 
   return (
-    <div
-      className={cn(
-        "grid h-full min-h-0 min-w-0 content-start gap-4 overflow-x-hidden overflow-y-auto p-4",
-        isBasicMode ? "grid-cols-1" : "2xl:grid-cols-[minmax(0,1.3fr)_minmax(18rem,23rem)]",
-      )}
-    >
-      <div className="grid min-h-0 min-w-0 content-start gap-4">
-        <Card className="min-w-0">
-          <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-foreground">Git workspace mode</div>
-              <div className="text-xs text-muted-foreground">
-                {isBasicMode
-                  ? "Basic mode prioritizes the fastest commit/push/PR workflow."
-                  : "Advanced mode unlocks branch surgery, recovery, and long-running operations."}
-              </div>
-              <div className="mt-1">
-                <Badge size="sm" variant={hasBlockingOperation ? "secondary" : "outline"}>
-                  {hasBlockingOperation ? "Blocking operation detected" : "No blocking operation"}
-                </Badge>
-              </div>
-              {autoSwitchReason ? (
-                <div className="mt-1 text-xs text-amber-300">
-                  Auto-switched to Advanced:{" "}
-                  {autoSwitchReason === "active_operation"
-                    ? "a merge/rebase operation is in progress"
-                    : autoSwitchReason === "conflicts"
-                      ? "conflicts require advanced resolution controls"
-                      : "detached HEAD currently blocks the basic flow"}
-                  .
-                </div>
-              ) : null}
-            </div>
-            <ToggleGroup
-              variant="outline"
+    <div className="grid h-full min-h-0 min-w-0 grid-cols-1 content-start gap-6 overflow-x-hidden overflow-y-auto px-6 py-8 max-w-6xl mx-auto">
+      <div className="flex flex-col min-h-0 min-w-0 gap-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+              <GitBranchIcon className="size-6 text-primary" />
+              Git Workspace
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Manage your repository, commit changes, and sync with remotes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
               size="sm"
-              value={[gitWorkspaceMode]}
-              onValueChange={(value) => {
-                const next = value[0];
-                if (next === "basic" || next === "advanced") {
-                  handleWorkspaceModeChange(next);
+              variant="secondary"
+              className="rounded-full shadow-sm"
+              onClick={() => {
+                emitGitWorkspaceTelemetry("git_terminal_dock_toggled", {
+                  open: !terminalOpen,
+                });
+                onToggleTerminal();
+              }}
+              disabled={!terminalAvailable}
+            >
+              {terminalOpen ? "Hide Terminal" : "Show Terminal"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="rounded-full shadow-sm"
+              onClick={() => {
+                const nextMode = isBasicMode ? "advanced" : "basic";
+                if (nextMode === "advanced") {
+                  emitGitWorkspaceTelemetry("git_advanced_drawer_opened");
                 }
+                handleWorkspaceModeChange(nextMode);
               }}
             >
-              <Toggle value="basic">Basic</Toggle>
-              <Toggle value="advanced">Advanced</Toggle>
-            </ToggleGroup>
-          </CardContent>
-        </Card>
+              {isBasicMode ? "Advanced" : "Close Advanced"}
+            </Button>
+          </div>
+        </div>
 
-        <Card className="min-w-0">
-          <CardHeader className="min-w-0 border-b border-border/60 pb-4">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0 space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                  <GitBranchIcon className="size-3.5" />
-                  {overviewSection.title}
-                </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-xl">{branchHeadline}</CardTitle>
-                  {!isBasicMode ? (
-                    <CardDescription className="mt-1 break-words">
-                      {overviewSection.description}
-                    </CardDescription>
-                  ) : (
-                    <div className="mt-1 text-xs text-muted-foreground">{branchSubline}</div>
-                  )}
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Badge size="sm" variant={hasBlockingConflicts ? "error" : "outline"}>
-                  {hasBlockingConflicts ? `${conflictedFiles.length} conflicts` : "No conflicts"}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Current Branch</div>
+              {gitStatusQuery.data?.pr ? (
+                <Badge size="sm" variant="outline" className="shadow-none text-[10px] py-0 h-5">
+                  PR #{gitStatusQuery.data.pr.number}
                 </Badge>
-                <Badge size="sm" variant={hasWorkingTreeChanges ? "secondary" : "outline"}>
-                  {hasWorkingTreeChanges ? `${changedFiles.length} files changed` : "Working tree clean"}
-                </Badge>
-                {gitStatusQuery.data?.pr ? (
-                  <Badge size="sm" variant="outline">
-                    PR #{gitStatusQuery.data.pr.number}
-                  </Badge>
-                ) : null}
-              </div>
+              ) : null}
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-6">
-            {!isBasicMode ? (
-              <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Branch
-                </div>
-                <div className="mt-1 truncate text-sm font-semibold text-foreground">
-                  {branchHeadline}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">{branchSubline}</div>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Sync
-                </div>
-                <div className="mt-1 text-sm font-semibold text-foreground">{syncSummary}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {gitStatusQuery.data?.hasUpstream ? "Tracking upstream" : "Connect a remote branch"}
-                </div>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Staged
-                </div>
-                <div className="mt-1 text-sm font-semibold text-foreground">
-                  {stagedFiles.length} file{stagedFiles.length === 1 ? "" : "s"}
-                </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Ready for the next commit
-                </div>
-              </div>
-              <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  Diff
-                </div>
-                <div className="mt-1 text-sm font-semibold text-foreground">{diffSummary}</div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Across the current working tree
-                </div>
-              </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <Badge size="sm" variant="outline">
-                  Ahead {gitStatusQuery.data?.aheadCount ?? 0}
-                </Badge>
-                <Badge size="sm" variant="outline">
-                  Behind {gitStatusQuery.data?.behindCount ?? 0}
-                </Badge>
-                <Badge size="sm" variant={stagedFiles.length > 0 ? "secondary" : "outline"}>
-                  {stagedFiles.length} staged
-                </Badge>
-                <Badge size="sm" variant={hasWorkingTreeChanges ? "secondary" : "outline"}>
-                  {changedFiles.length} changed
-                </Badge>
-                <Badge size="sm" variant={hasBlockingConflicts ? "error" : "outline"}>
-                  {conflictedFiles.length} conflicts
-                </Badge>
-              </div>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
+            <h2 className="mt-1 text-xl font-semibold text-foreground truncate">{branchHeadline}</h2>
+            <div className="mt-1 text-xs text-muted-foreground truncate">{branchSubline}</div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
+             <div className="flex flex-wrap items-center gap-2 border-r border-border/40 pr-4 mr-1">
+               <span className={cn("text-xs font-medium px-2 py-1 rounded-md", stagedFiles.length > 0 ? "bg-primary/10 text-primary" : "text-muted-foreground")}>
+                 {stagedFiles.length} staged
+               </span>
+               <span className={cn("text-xs font-medium px-2 py-1 rounded-md", hasWorkingTreeChanges ? "bg-amber-500/10 text-amber-500" : "text-muted-foreground")}>
+                 {changedFiles.length} changed
+               </span>
+               <span className={cn("text-xs font-medium px-2 py-1 rounded-md", hasBlockingConflicts ? "bg-destructive/10 text-destructive" : "text-muted-foreground")}>
+                 {conflictedFiles.length} conflicts
+               </span>
+               <span className="text-xs font-medium px-2 py-1 rounded-md text-muted-foreground">
+                 ↑ {gitStatusQuery.data?.aheadCount ?? 0}
+               </span>
+               <span className="text-xs font-medium px-2 py-1 rounded-md text-muted-foreground">
+                 ↓ {gitStatusQuery.data?.behindCount ?? 0}
+               </span>
+             </div>
+             <div className="flex items-center gap-2">
               <Button
                 type="button"
                 size="sm"
+                className="rounded-full shadow-sm"
                 disabled={syncActionsDisabled}
                 onClick={handleFetchLatest}
               >
-                Fetch Latest
+                Fetch
               </Button>
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
+                className="rounded-full bg-background"
                 disabled={syncActionsDisabled}
                 onClick={handlePullLatest}
               >
@@ -2778,89 +2708,73 @@ function GitTool(props: {
               <Button
                 type="button"
                 size="sm"
+                variant="outline"
+                className="rounded-full bg-background"
                 disabled={syncActionsDisabled}
                 onClick={handlePushCurrentBranch}
               >
                 Push
               </Button>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-xs"
-                      variant="outline"
-                      onClick={onToggleTerminal}
-                      disabled={!terminalAvailable}
-                      aria-label="Toggle terminal drawer"
-                    >
-                      <TerminalSquareIcon className="size-3.5" />
-                    </Button>
-                  }
-                />
-                <TooltipPopup side="bottom">
-                  {!terminalAvailable
-                    ? "Terminal is unavailable until this project has an Agents thread."
-                    : terminalOpen
-                      ? "Hide terminal drawer"
-                      : "Show terminal drawer"}
-                </TooltipPopup>
-              </Tooltip>
             </div>
-            {currentOperation ? (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="text-sm font-medium text-foreground">
-                      {currentOperation.kind === "merge" ? "Merge in progress" : "Rebase in progress"}
-                    </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      {currentOperation.status === "conflicted"
-                        ? `Resolve the ${conflictedFiles.length} conflicted file${conflictedFiles.length === 1 ? "" : "s"}, then continue or abort.`
-                        : "Git is waiting for the next step. Continue when the working tree is ready."}
-                    </div>
-                  </div>
-                  <Badge
-                    size="sm"
-                    variant={currentOperation.status === "conflicted" ? "error" : "secondary"}
-                  >
-                    {currentOperation.status === "conflicted" ? "Needs attention" : "In progress"}
-                  </Badge>
+          </div>
+        </div>
+
+        {currentOperation ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-foreground">
+                  {currentOperation.kind === "merge" ? "Merge in progress" : "Rebase in progress"}
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={gitTaskInFlight !== null}
-                    onClick={handleContinueOperation}
-                  >
-                    Continue
-                  </Button>
-                  {currentOperation.kind === "rebase" ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={gitTaskInFlight !== null}
-                      onClick={handleSkipRebase}
-                    >
-                      Skip
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={gitTaskInFlight !== null}
-                    onClick={() => void handleAbortOperation()}
-                  >
-                    Abort
-                  </Button>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {currentOperation.status === "conflicted"
+                    ? `Resolve the ${conflictedFiles.length} conflicted file${conflictedFiles.length === 1 ? "" : "s"}, then continue or abort.`
+                    : "Git is waiting for the next step. Continue when the working tree is ready."}
                 </div>
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
+              <Badge
+                size="sm"
+                variant={currentOperation.status === "conflicted" ? "error" : "secondary"}
+                className="shadow-none"
+              >
+                {currentOperation.status === "conflicted" ? "Needs attention" : "In progress"}
+              </Badge>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="rounded-full"
+                disabled={gitTaskInFlight !== null}
+                onClick={handleContinueOperation}
+              >
+                Continue
+              </Button>
+              {currentOperation.kind === "rebase" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full"
+                  disabled={gitTaskInFlight !== null}
+                  onClick={handleSkipRebase}
+                >
+                  Skip
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="rounded-full text-destructive hover:text-destructive"
+                disabled={gitTaskInFlight !== null}
+                onClick={() => void handleAbortOperation()}
+              >
+                Abort
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <GitCommitComposer
           gitCwd={project.cwd}
@@ -2872,102 +2786,100 @@ function GitTool(props: {
           workspaceMode={gitWorkspaceMode}
         />
 
-        <Card className="min-h-0 min-w-0 overflow-hidden">
-          <CardHeader className="min-w-0 border-b border-border/60 pb-4">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0">
-                <CardTitle>{changesSection.title}</CardTitle>
-                {!isBasicMode ? (
-                  <CardDescription className="mt-1 break-words">
-                    {changesSection.description}
-                  </CardDescription>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <Badge size="sm" variant={conflictedFiles.length > 0 ? "error" : "outline"}>
+        <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-4 border-b border-border/40 pb-4 mb-4">
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">{changesSection.title}</h3>
+              <p className="mt-1 break-words text-sm text-muted-foreground">
+                {changesSection.description}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              {conflictedFiles.length > 0 && (
+                <Badge size="sm" variant="error" className="shadow-none">
                   {conflictedFiles.length} conflicts
                 </Badge>
-                <Badge size="sm" variant="outline">
+              )}
+              {untrackedFiles.length > 0 && (
+                <Badge size="sm" variant="outline" className="shadow-none">
                   {untrackedFiles.length} untracked
                 </Badge>
-                <Badge size="sm" variant="outline">
+              )}
+              {unstagedFiles.length > 0 && (
+                <Badge size="sm" variant="outline" className="shadow-none">
                   {unstagedFiles.length} unstaged
                 </Badge>
-              </div>
+              )}
             </div>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden pt-6">
-            <ScrollArea className="min-h-0 flex-1 rounded-xl border border-border/70">
-              <div className="space-y-4 p-3">
-                <GitChangeSection
-                  title="Conflicts"
-                  description="Files blocked by merge or rebase conflicts."
-                  files={conflictedFiles}
-                  selectedPath={selectedPath}
-                  emptyLabel="No conflicts."
-                  selectLabel="Resolve"
-                  actionDisabled={gitTaskInFlight !== null}
-                  onSelectFile={selectWorkingTreeFile}
-                  onResolveFile={(file) => openConflictResolver(file.path, "manual")}
-                  onFixWithAi={(file) => openConflictResolver(file.path, "ai")}
-                  onOpenFile={openFileInEditor}
-                  onStageFile={handleStageFile}
-                  onUseOurs={(file) => void handleResolveConflictSide(file, "ours")}
-                  onUseTheirs={(file) => void handleResolveConflictSide(file, "theirs")}
-                  onDiscardFile={handleDiscardFile}
-                />
-                <GitChangeSection
-                  title="Staged"
-                  description="Included in the next commit."
-                  files={stagedFiles}
-                  selectedPath={selectedPath}
-                  emptyLabel="Nothing staged."
-                  selectLabel="Review"
-                  actionDisabled={gitTaskInFlight !== null}
-                  onSelectFile={selectWorkingTreeFile}
-                  onUnstageFile={handleUnstageFile}
-                  onDiscardFile={handleDiscardFile}
-                />
-                <GitChangeSection
-                  title="Unstaged"
-                  description="Modified files not yet added to the index."
-                  files={unstagedFiles}
-                  selectedPath={selectedPath}
-                  emptyLabel="No unstaged tracked files."
-                  selectLabel="Review"
-                  actionDisabled={gitTaskInFlight !== null}
-                  onSelectFile={selectWorkingTreeFile}
-                  onStageFile={handleStageFile}
-                  onDiscardFile={handleDiscardFile}
-                />
-                <GitChangeSection
-                  title="Untracked"
-                  description="New files not yet added to Git."
-                  files={untrackedFiles}
-                  selectedPath={selectedPath}
-                  emptyLabel="No untracked files."
-                  selectLabel="Review"
-                  actionDisabled={gitTaskInFlight !== null}
-                  onSelectFile={selectWorkingTreeFile}
-                  onStageFile={handleStageFile}
-                  onDiscardFile={handleDiscardFile}
-                />
-                {!hasWorkingTreeChanges ? (
-                  <div className="rounded-xl border border-dashed border-border/70 px-3 py-6 text-sm text-muted-foreground">
-                    {gitStatusQuery.isLoading ? "Loading changes..." : "Working tree is clean."}
-                  </div>
-                ) : null}
+          </div>
+          
+          <div className="space-y-6">
+            <GitChangeSection
+              title="Conflicts"
+              description="Files blocked by merge or rebase conflicts."
+              files={conflictedFiles}
+              selectedPath={selectedPath}
+              emptyLabel="No conflicts."
+              selectLabel="Resolve"
+              actionDisabled={gitTaskInFlight !== null}
+              onSelectFile={selectWorkingTreeFile}
+              onResolveFile={(file) => openConflictResolver(file.path, "manual")}
+              onFixWithAi={(file) => openConflictResolver(file.path, "ai")}
+              onOpenFile={openFileInEditor}
+              onStageFile={handleStageFile}
+              onUseOurs={(file) => void handleResolveConflictSide(file, "ours")}
+              onUseTheirs={(file) => void handleResolveConflictSide(file, "theirs")}
+              onDiscardFile={handleDiscardFile}
+            />
+            <GitChangeSection
+              title="Staged"
+              description="Included in the next commit."
+              files={stagedFiles}
+              selectedPath={selectedPath}
+              emptyLabel="Nothing staged."
+              selectLabel="Review"
+              actionDisabled={gitTaskInFlight !== null}
+              onSelectFile={selectWorkingTreeFile}
+              onUnstageFile={handleUnstageFile}
+              onDiscardFile={handleDiscardFile}
+            />
+            <GitChangeSection
+              title="Unstaged"
+              description="Modified files not yet added to the index."
+              files={unstagedFiles}
+              selectedPath={selectedPath}
+              emptyLabel="No unstaged tracked files."
+              selectLabel="Review"
+              actionDisabled={gitTaskInFlight !== null}
+              onSelectFile={selectWorkingTreeFile}
+              onStageFile={handleStageFile}
+              onDiscardFile={handleDiscardFile}
+            />
+            <GitChangeSection
+              title="Untracked"
+              description="New files not yet added to Git."
+              files={untrackedFiles}
+              selectedPath={selectedPath}
+              emptyLabel="No untracked files."
+              selectLabel="Review"
+              actionDisabled={gitTaskInFlight !== null}
+              onSelectFile={selectWorkingTreeFile}
+              onStageFile={handleStageFile}
+              onDiscardFile={handleDiscardFile}
+            />
+            {!hasWorkingTreeChanges ? (
+              <div className="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                {gitStatusQuery.isLoading ? "Loading changes..." : "Working tree is clean."}
               </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
+            ) : null}
+          </div>
+        </div>
 
-        <Card className="min-h-0 min-w-0">
-          <CardHeader className="min-w-0 flex flex-row items-start justify-between gap-4 space-y-0">
+        <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5 flex flex-col min-h-[500px]">
+          <div className="flex min-w-0 flex-row items-start justify-between gap-4 border-b border-border/40 pb-4 mb-4">
             <div className="min-w-0">
-              <CardTitle>{diffSection.title}</CardTitle>
-              {!isBasicMode ? (
-                <CardDescription className="break-words">
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">{diffSection.title}</h3>
+              <p className="mt-1 break-words text-sm text-muted-foreground">
                 {resolverFilePath
                   ? resolverMode === "manual"
                     ? "Resolve this conflicted file directly inside the Git workspace."
@@ -2977,40 +2889,39 @@ function GitTool(props: {
                     : activeHistoryCommit
                       ? "Unified patch for the selected commit."
                       : "Select a changed file or commit to inspect its patch."}
-                </CardDescription>
-              ) : null}
+              </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               {resolverFilePath ? (
-                <Badge size="sm" variant={resolverMode === "manual" ? "secondary" : "outline"}>
+                <Badge size="sm" variant={resolverMode === "manual" ? "secondary" : "outline"} className="shadow-none">
                   {resolverMode === "manual" ? "Manual Resolver" : "AI Conflict Fix"}
                 </Badge>
               ) : selectedPath ? (
-                <Badge size="sm" variant="secondary">
+                <Badge size="sm" variant="secondary" className="shadow-none">
                   Working tree
                 </Badge>
               ) : activeHistoryCommit ? (
-                <Badge size="sm" variant="outline">
+                <Badge size="sm" variant="outline" className="shadow-none">
                   Commit patch
                 </Badge>
               ) : null}
               {!resolverFilePath && diffQuery.data ? (
                 <>
-                  <Badge size="sm" variant="success">
+                  <Badge size="sm" variant="success" className="shadow-none">
                     +{diffQuery.data.stats.insertions}
                   </Badge>
-                  <Badge size="sm" variant="error">
+                  <Badge size="sm" variant="error" className="shadow-none">
                     -{diffQuery.data.stats.deletions}
                   </Badge>
-                  <Badge size="sm" variant="outline">
+                  <Badge size="sm" variant="outline" className="shadow-none">
                     {diffQuery.data.stats.filesChanged} file
                     {diffQuery.data.stats.filesChanged === 1 ? "" : "s"}
                   </Badge>
                 </>
               ) : null}
             </div>
-          </CardHeader>
-          <CardContent className="flex min-h-0 flex-col gap-4">
+          </div>
+          <div className="flex min-h-0 flex-col gap-4 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               {resolverFilePath ? (
                 <>
@@ -3521,12 +3432,17 @@ function GitTool(props: {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {!isBasicMode ? (
-        <div className="grid min-h-0 min-w-0 gap-4 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
+        <>
+          <div
+            className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px]"
+            onClick={() => handleWorkspaceModeChange("basic")}
+          />
+          <div className="fixed right-0 top-0 z-40 grid h-full w-[min(30rem,92vw)] min-h-0 min-w-0 gap-4 overflow-y-auto border-l border-border/70 bg-background/96 p-4 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
         <Card className="min-h-0 min-w-0 overflow-hidden">
           <CardHeader className="min-w-0 border-b border-border/60 pb-4">
             <CardTitle>{branchesSection.title}</CardTitle>
@@ -4113,7 +4029,8 @@ function GitTool(props: {
             </Collapsible>
           </CardContent>
         </Card>
-        </div>
+          </div>
+        </>
       ) : null}
 
       <Dialog open={discardAllConfirmOpen} onOpenChange={setDiscardAllConfirmOpen}>

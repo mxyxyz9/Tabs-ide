@@ -99,7 +99,24 @@ const VSCODE_NOTIFY_ZOOM_LEVEL_CHANNEL = "vscode:notifyZoomLevel";
 const BASE_DIR = process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs");
 const STATE_DIR = Path.join(BASE_DIR, "userdata");
 const DESKTOP_SCHEME = "tabs";
-const ROOT_DIR = Path.resolve(__dirname, "../../..");
+// In packaged apps, ROOT_DIR should point to the Resources directory, not inside the asar.
+// __dirname in packaged app: /path/to/Tabs.app/Contents/Resources/app.asar/apps/desktop/dist-electron
+// We need ROOT_DIR to be: /path/to/Tabs.app/Contents/Resources (where tabs-code-main lives).
+//
+// IMPORTANT: This MUST be a function call — a top-level ternary referencing `app.isPackaged`
+// gets tree-shaken by tsdown/esbuild because the bundler evaluates the electron import as
+// a static external and folds the branch away.  A function body is opaque to the bundler.
+function resolveRootDir(): string {
+  // Dynamic require ensures the bundler cannot statically evaluate this branch.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const _electron = require("electron") as typeof import("electron");
+  if (_electron.app.isPackaged && process.resourcesPath) {
+    return process.resourcesPath;
+  }
+  return Path.resolve(__dirname, "../../..");
+}
+const ROOT_DIR = resolveRootDir();
+
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const APP_BASE_NAME = "Tabs";
 const APP_DISPLAY_NAME = isDevelopment ? `${APP_BASE_NAME} (Dev)` : APP_BASE_NAME;

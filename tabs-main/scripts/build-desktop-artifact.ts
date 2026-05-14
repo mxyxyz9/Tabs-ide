@@ -426,6 +426,13 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     directories: {
       buildResources: "apps/desktop/resources",
     },
+    extraFiles: [
+      {
+        from: "apps/desktop/resources/tabs-code-main",
+        to: "Resources/tabs-code-main",
+        filter: ["!**/*.ts", "!**/.git"],
+      },
+    ],
   };
   const publishConfig = resolveGitHubPublishConfig();
   if (publishConfig) {
@@ -438,6 +445,15 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
     };
+    
+    // Configure DMG to ensure all files are copied correctly
+    if (target === "dmg") {
+      buildConfig.dmg = {
+        sign: false,
+        // Use electron-builder's built-in DMG creation instead of create-dmg
+        // to avoid issues with large files not being copied
+      };
+    }
   }
 
   if (platform === "linux") {
@@ -460,6 +476,65 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   return buildConfig;
+});
+
+const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
+  repoRoot: string,
+  stageResourcesDir: string,
+) {
+  const path = yield* Path.Path;
+  const fs = yield* FileSystem.FileSystem;
+
+  const vsCodeSourceDir = path.join(repoRoot, "..", "tabs-code-main");
+  const vsCodeDestDir = path.join(stageResourcesDir, "tabs-code-main");
+
+  if (!(yield* fs.exists(vsCodeSourceDir))) {
+    yield* Effect.log(
+      "[desktop-artifact] VS Code runtime (tabs-code-main) not found. " +
+      "You can provide it via TABS_CODE_OSS_BUILD_DIR environment variable at runtime.",
+    );
+    return;
+  }
+
+  yield* Effect.log("[desktop-artifact] Staging VS Code runtime...");
+  yield* fs.copy(vsCodeSourceDir, vsCodeDestDir);
+
+  // Remove problematic absolute symlinks that break code signing
+  const claudeDir = path.join(vsCodeDestDir, ".claude");
+  if (yield* fs.exists(claudeDir)) {
+    yield* fs.remove(claudeDir, { recursive: true });
+  }
+  
+  // Also remove test fixtures with symlinks
+  const terminalSuggestFixtures = path.join(vsCodeDestDir, "extensions/terminal-suggest/src/test/fixtures/symlink-test");
+  if (yield* fs.exists(terminalSuggestFixtures)) {
+    yield* fs.remove(terminalSuggestFixtures, { recursive: true });
+  }
+
+  yield* Effect.log("[desktop-artifact] Pruning VS Code runtime development dependencies...");
+  const pruneResult = yield* Effect.sync(() =>
+    spawnSync("npm", ["prune", "--production"], {
+      cwd: vsCodeDestDir,
+      stdio: "inherit",
+      env: { ...process.env },
+    })
+  );
+
+  if (pruneResult.error || pruneResult.status !== 0) {
+    yield* Effect.log(
+      `[desktop-artifact] WARNING: Failed to prune VS Code dependencies (status ${pruneResult.status}).`
+    );
+  }
+
+  yield* Effect.log("[desktop-artifact] Cleaning up dangling symlinks and .bin directories...");
+  yield* Effect.sync(() => {
+    spawnSync("find", [".", "-name", ".bin", "-type", "d", "-exec", "rm", "-rf", "{}", "+"], {
+      cwd: vsCodeDestDir,
+    });
+    spawnSync("find", [".", "-type", "l", "!", "-exec", "test", "-e", "{}", ";", "-delete"], {
+      cwd: vsCodeDestDir,
+    });
+  });
 });
 
 const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(function* (
@@ -583,10 +658,31 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
 
+  yield* stageVsCodeRuntime(repoRoot, stageResourcesDir);
   yield* assertPlatformBuildResources(options.platform, stageResourcesDir, options.verbose);
 
-  // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
-  yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
+  // Copy prod-resources but EXCLUDE tabs-code-main since it's already in stageResourcesDir
+  // and will be packaged separately outside the asar by electron-builder's extraFiles config
+  const prodResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
+  yield* fs.makeDirectory(prodResourcesDir, { recursive: true });
+  
+  const resourceEntries = yield* fs.readDirectory(stageResourcesDir);
+  for (const entry of resourceEntries) {
+    // Skip tabs-code-main - it should NOT be in the asar file
+    if (entry === "tabs-code-main") {
+      continue;
+    }
+    const from = path.join(stageResourcesDir, entry);
+    const to = path.join(prodResourcesDir, entry);
+    const stat = yield* fs.stat(from).pipe(Effect.catch(() => Effect.succeed(null)));
+    if (!stat) continue;
+    
+    if (stat.type === "Directory") {
+      yield* fs.copy(from, to);
+    } else if (stat.type === "File") {
+      yield* fs.copyFile(from, to);
+    }
+  }
 
   const stagePackageJson: StagePackageJson = {
     name: "tabs-desktop",

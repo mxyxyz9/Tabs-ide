@@ -482,6 +482,8 @@ function resolveManagedServerRoot(
   return { ok: true, vscodeRoot };
 }
 
+
+
 function resolveManagedDesktopRoot(
   candidate: string,
   fs: FsLike,
@@ -574,12 +576,32 @@ export function resolveCodeHostConfigWithFs(
     return createUnavailableState(resolvedDesktopRoot.reason);
   }
 
-  const fallbackRoots = [Path.join(input.rootDir, "..", "tabs-code-main"), Path.join(input.rootDir, "..", "vscode")];
+
+  // In packaged apps, process.resourcesPath points to the Resources directory
+  // which contains tabs-code-main as an unpacked directory
+  const fallbackRoots = process.resourcesPath
+    ? [
+        // First try Resources/tabs-code-main (packaged app location)
+        Path.join(process.resourcesPath, "tabs-code-main"),
+        // Then try sibling directories (development)
+        Path.join(input.rootDir, "..", "tabs-code-main"),
+        Path.join(input.rootDir, "..", "vscode"),
+      ]
+    : [
+        // Development mode fallbacks
+        Path.join(input.rootDir, "..", "tabs-code-main"),
+        Path.join(input.rootDir, "..", "vscode"),
+      ];
+
+
+
   for (const fallbackRoot of fallbackRoots) {
     if (!isDirectory(fallbackRoot, fs)) {
       continue;
     }
+    
     const resolvedDesktopRoot = resolveManagedDesktopRoot(fallbackRoot, fs);
+    
     if (resolvedDesktopRoot.ok) {
       return createAvailableState({
         runtime: {
@@ -601,8 +623,8 @@ export function resolveCodeHostConfigWithFs(
         rootDir: input.rootDir,
       });
     }
-    return createUnavailableState(resolvedDesktopRoot.reason);
   }
+
 
   return createUnavailableState(getDefaultResolutionFailureReason(input.rootDir));
 }

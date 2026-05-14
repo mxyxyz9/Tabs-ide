@@ -140,7 +140,7 @@ export function parseClaudeAuthStatusFromOutput(result: CommandResult): {
     lowerOutput.includes("run claude login")
   ) {
     return {
-      status: "error",
+      status: "warning",
       authStatus: "unauthenticated",
       message: "Claude is not authenticated. Run `claude auth login` and try again.",
     };
@@ -166,7 +166,7 @@ export function parseClaudeAuthStatusFromOutput(result: CommandResult): {
   }
   if (parsedAuth.auth === false) {
     return {
-      status: "error",
+      status: "warning",
       authStatus: "unauthenticated",
       message: "Claude is not authenticated. Run `claude auth login` and try again.",
     };

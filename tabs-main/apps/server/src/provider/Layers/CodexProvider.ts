@@ -189,7 +189,7 @@ export function parseAuthStatusFromOutput(result: CommandResult): {
     lowerOutput.includes("run codex login")
   ) {
     return {
-      status: "error",
+      status: "warning",
       authStatus: "unauthenticated",
       message: "Codex CLI is not authenticated. Run `codex login` and try again.",
     };
@@ -215,7 +215,7 @@ export function parseAuthStatusFromOutput(result: CommandResult): {
   }
   if (parsedAuth.auth === false) {
     return {
-      status: "error",
+      status: "warning",
       authStatus: "unauthenticated",
       message: "Codex CLI is not authenticated. Run `codex login` and try again.",
     };
