@@ -413,6 +413,175 @@ function resolveGitHubPublishConfig():
   };
 }
 
+function parseHdiutilMountPoint(output: string): string | undefined {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.includes("/Volumes/"))
+    .map((line) => line.split(/\t+/).at(-1)?.trim())
+    .find((line): line is string => Boolean(line));
+}
+
+function getRequiredMacArtifactPaths(productName: string): readonly string[] {
+  const appRoot = `${productName}.app`;
+  return [
+    join(appRoot, "Contents", "MacOS", productName),
+    join(
+      appRoot,
+      "Contents",
+      "Frameworks",
+      "Electron Framework.framework",
+      "Versions",
+      "A",
+      "Electron Framework",
+    ),
+    join(appRoot, "Contents", "Resources", "app.asar"),
+    join(
+      appRoot,
+      "Contents",
+      "Resources",
+      "tabs-code-main",
+      "out",
+      "vs",
+      "code",
+      "electron-browser",
+      "workbench",
+      "workbench-dev.html",
+    ),
+    join(
+      appRoot,
+      "Contents",
+      "Resources",
+      "tabs-code-main",
+      "out",
+      "vs",
+      "base",
+      "parts",
+      "sandbox",
+      "electron-browser",
+      "preload.js",
+    ),
+    join(
+      appRoot,
+      "Contents",
+      "Resources",
+      "tabs-code-main",
+      "out-build",
+      "nls.messages.json",
+    ),
+    join(appRoot, "Contents", "Resources", "tabs-code-main", "product.json"),
+  ] as const;
+}
+
+const assertRequiredPaths = Effect.fn("assertRequiredPaths")(function* (
+  root: string,
+  requiredPaths: readonly string[],
+  description: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const missing: string[] = [];
+
+  for (const relativePath of requiredPaths) {
+    const absolutePath = path.join(root, relativePath);
+    if (!(yield* fs.exists(absolutePath))) {
+      missing.push(relativePath);
+    }
+  }
+
+  if (missing.length > 0) {
+    return yield* new BuildScriptError({
+      message: `${description} is missing required files: ${missing.join(", ")}`,
+    });
+  }
+});
+
+const validateMacDmgContents = Effect.fn("validateMacDmgContents")(function* (
+  dmgPath: string,
+  productName: string,
+) {
+  const requiredPaths = getRequiredMacArtifactPaths(productName);
+
+  const attachResult = yield* Effect.sync(() =>
+    spawnSync("hdiutil", ["attach", "-readonly", "-nobrowse", "-noverify", dmgPath], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+  );
+
+  if (attachResult.error || attachResult.status !== 0) {
+    return yield* new BuildScriptError({
+      message:
+        `Failed to mount generated DMG for validation: ` +
+        (attachResult.stderr.trim() || attachResult.error?.message || `exit ${attachResult.status}`),
+    });
+  }
+
+  const mountPoint = parseHdiutilMountPoint(attachResult.stdout);
+  if (!mountPoint) {
+    return yield* new BuildScriptError({
+      message: `Failed to find mounted volume in hdiutil output for ${dmgPath}`,
+    });
+  }
+
+  try {
+    yield* assertRequiredPaths(mountPoint, requiredPaths, "Generated DMG");
+  } finally {
+    const detachResult = spawnSync("hdiutil", ["detach", mountPoint], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (detachResult.status !== 0) {
+      yield* Effect.log(
+        `[desktop-artifact] WARNING: Failed to detach validation DMG volume ${mountPoint}.`,
+      );
+    }
+  }
+});
+
+const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
+  readonly stageDistDir: string;
+  readonly productName: string;
+  readonly version: string;
+  readonly arch: typeof BuildArch.Type;
+  readonly verbose: boolean;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const zipPath = path.join(input.stageDistDir, `Tabs-${input.version}-${input.arch}.zip`);
+  const dmgPath = path.join(input.stageDistDir, `Tabs-${input.version}-${input.arch}.dmg`);
+
+  if (!(yield* fs.exists(zipPath))) {
+    return yield* new BuildScriptError({
+      message: `Could not create mac DMG because the expected ZIP was not found: ${zipPath}`,
+    });
+  }
+
+  const dmgRoot = yield* fs.makeTempDirectoryScoped({
+    prefix: "tabs-dmg-root-",
+  });
+  yield* Effect.log("[desktop-artifact] Creating DMG from verified ZIP payload...");
+  yield* runCommand(
+    ChildProcess.make({
+      ...commandOutputOptions(input.verbose),
+    })`ditto -x -k ${zipPath} ${dmgRoot}`,
+  );
+
+  yield* assertRequiredPaths(
+    dmgRoot,
+    getRequiredMacArtifactPaths(input.productName),
+    "Extracted mac ZIP",
+  );
+
+  yield* fs.remove(dmgPath, { force: true }).pipe(Effect.ignore({ log: true }));
+  yield* runCommand(
+    ChildProcess.make({
+      ...commandOutputOptions(input.verbose),
+    })`hdiutil create -volname ${input.productName} -srcfolder ${dmgRoot} -ov -format UDZO ${dmgPath}`,
+  );
+  yield* validateMacDmgContents(dmgPath, input.productName);
+});
+
 const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   platform: typeof BuildPlatform.Type,
   target: string,
@@ -441,19 +610,13 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
 
   if (platform === "mac") {
     buildConfig.mac = {
-      target: target === "dmg" ? [target, "zip"] : [target],
+      // electron-builder's DMG creator has dropped large framework files from
+      // our image. Build the ZIP/app payload here and create the DMG ourselves
+      // from that verified payload below.
+      target: target === "dmg" ? ["zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
     };
-    
-    // Configure DMG to ensure all files are copied correctly
-    if (target === "dmg") {
-      buildConfig.dmg = {
-        sign: false,
-        // Use electron-builder's built-in DMG creation instead of create-dmg
-        // to avoid issues with large files not being copied
-      };
-    }
   }
 
   if (platform === "linux") {
@@ -511,26 +674,33 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
     yield* fs.remove(terminalSuggestFixtures, { recursive: true });
   }
 
-  yield* Effect.log("[desktop-artifact] Pruning VS Code runtime development dependencies...");
-  const pruneResult = yield* Effect.sync(() =>
-    spawnSync("npm", ["prune", "--production"], {
-      cwd: vsCodeDestDir,
-      stdio: "inherit",
-      env: { ...process.env },
-    })
-  );
-
-  if (pruneResult.error || pruneResult.status !== 0) {
-    yield* Effect.log(
-      `[desktop-artifact] WARNING: Failed to prune VS Code dependencies (status ${pruneResult.status}).`
-    );
+  // Remove development-only directories that are not needed at runtime.
+  // NOTE: Do NOT run `npm prune --production` here — it strips node_modules
+  // packages required by the desktop-renderer mode (CSS import maps, extension
+  // host) and the managed-server fallback (@vscode/test-web).
+  yield* Effect.log("[desktop-artifact] Removing development-only files from VS Code runtime...");
+  const devOnlyDirs = [
+    "src",
+    "test",
+    ".git",
+    ".github",
+    ".vscode",
+    ".devcontainer",
+    ".eslint-plugin-local",
+    "build",
+    "cli",
+  ];
+  for (const dir of devOnlyDirs) {
+    const dirPath = path.join(vsCodeDestDir, dir);
+    if (yield* fs.exists(dirPath)) {
+      yield* fs.remove(dirPath, { recursive: true });
+    }
   }
 
-  yield* Effect.log("[desktop-artifact] Cleaning up dangling symlinks and .bin directories...");
+  // Clean up only dangling symlinks (but keep .bin directories intact — they
+  // are needed by node_modules at runtime).
+  yield* Effect.log("[desktop-artifact] Cleaning up dangling symlinks...");
   yield* Effect.sync(() => {
-    spawnSync("find", [".", "-name", ".bin", "-type", "d", "-exec", "rm", "-rf", "{}", "+"], {
-      cwd: vsCodeDestDir,
-    });
     spawnSync("find", [".", "-type", "l", "!", "-exec", "test", "-e", "{}", ";", "-delete"], {
       cwd: vsCodeDestDir,
     });
@@ -765,6 +935,16 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   if (!(yield* fs.exists(stageDistDir))) {
     return yield* new BuildScriptError({
       message: `Build completed but dist directory was not found at ${stageDistDir}`,
+    });
+  }
+
+  if (options.platform === "mac" && options.target === "dmg") {
+    yield* createMacDmgFromZip({
+      stageDistDir,
+      productName: desktopPackageJson.productName ?? "Tabs",
+      version: appVersion,
+      arch: options.arch,
+      verbose: options.verbose,
     });
   }
 

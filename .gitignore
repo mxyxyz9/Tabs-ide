@@ -4,3 +4,5 @@
 **/.electron-runtime/
 **/.git.root-import-backup/
 code-quality-analysis/
+
+DMG_BUILD_FIX_SUMMARY.md

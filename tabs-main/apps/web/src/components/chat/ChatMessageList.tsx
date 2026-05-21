@@ -1,15 +1,11 @@
-/**
- * ChatMessageList Component
- * 
- * Extracted from the massive ChatView component to improve maintainability.
- * Handles message rendering, scrolling, and user interactions.
- */
-
-import { useRef, useCallback, useMemo } from "react";
+import { memo } from "react";
 import type { ThreadId } from "@tabs/contracts";
-import type { ChatMessage } from "../types";
-import { MessagesTimeline } from "./MessagesTimeline";
 import { cn } from "~/lib/utils";
+
+type ChatMessage = {
+  id: string;
+  text?: string;
+};
 
 export interface ChatMessageListProps {
   threadId: ThreadId;
@@ -21,34 +17,15 @@ export interface ChatMessageListProps {
   onMessageAction?: (messageId: string, action: string) => void;
 }
 
-export function ChatMessageList({
-  threadId,
+export const ChatMessageList = memo(function ChatMessageList({
+  threadId: _threadId,
   messages,
   className,
-  onScrollToBottom,
-  isNearBottom = true,
+  onScrollToBottom: _onScrollToBottom,
+  isNearBottom: _isNearBottom = true,
   isLoading = false,
-  onMessageAction,
+  onMessageAction: _onMessageAction,
 }: ChatMessageListProps) {
-  const messagesScrollRef = useRef<HTMLDivElement>(null);
-  
-  // Memoize message processing to avoid unnecessary re-renders
-  const processedMessages = useMemo(() => {
-    return messages.map((message, index) => ({
-      ...message,
-      key: `${message.id}-${index}`,
-      isLast: index === messages.length - 1,
-      isFirst: index === 0,
-    }));
-  }, [messages]);
-
-  const handleScrollToBottom = useCallback(() => {
-    if (messagesScrollRef.current) {
-      messagesScrollRef.current.scrollTop = messagesScrollRef.current.scrollHeight;
-    }
-    onScrollToBottom?.();
-  }, [onScrollToBottom]);
-
   if (isLoading) {
     return (
       <div className={cn("flex-1 overflow-y-auto flex items-center justify-center", className)}>
@@ -69,36 +46,16 @@ export function ChatMessageList({
   }
 
   return (
-    <div 
-      ref={messagesScrollRef} 
-      className={cn("flex-1 overflow-y-auto relative", className)}
-    >
-      <MessagesTimeline
-        threadId={threadId}
-        messages={processedMessages}
-        onMessageAction={onMessageAction}
-      />
-      
-      {/* Scroll to bottom button - only show when not near bottom */}
-      {!isNearBottom && (
-        <button
-          onClick={handleScrollToBottom}
-          className="absolute bottom-4 right-4 rounded-full bg-primary p-2 shadow-lg hover:bg-primary/90 transition-colors z-10"
-          aria-label="Scroll to bottom"
-          type="button"
-        >
-          <svg 
-            className="h-4 w-4" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </button>
-      )}
+    <div className={cn("flex-1 overflow-y-auto", className)}>
+      <div className="space-y-2 p-3">
+        {messages.map((message) => (
+          <div key={message.id} className="rounded-md border border-border/60 bg-card/30 px-3 py-2">
+            {message.text ?? ""}
+          </div>
+        ))}
+      </div>
     </div>
   );
-}
+});
 
 ChatMessageList.displayName = "ChatMessageList";
