@@ -1,0 +1,128 @@
+name: Build Desktop Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to build (comma-separated: mac-arm64, mac-x64, linux-x64, win-x64)"
+        required: false
+        default: "mac-arm64,mac-x64,linux-x64,win-x64"
+        type: string
+      version:
+        description: "Build version label (leave empty to use package.json version)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    name: Resolve build matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.result }}
+    steps:
+      - id: matrix
+        name: Build matrix from input
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allTargets = {
+              'mac-arm64':  { label: 'macOS arm64',  runner: 'macos-14',        platform: 'mac',   target: 'dmg',      arch: 'arm64' },
+              'mac-x64':    { label: 'macOS x64',    runner: 'macos-15-intel',  platform: 'mac',   target: 'dmg',      arch: 'x64'   },
+              'linux-x64':  { label: 'Linux x64',    runner: 'ubuntu-24.04',    platform: 'linux', target: 'AppImage', arch: 'x64'   },
+              'win-x64':    { label: 'Windows x64',  runner: 'windows-2022',    platform: 'win',   target: 'nsis',     arch: 'x64'   },
+            };
+
+            const input = '${{ inputs.platforms }}'.trim();
+            const keys = input ? input.split(',').map(k => k.trim()).filter(Boolean) : Object.keys(allTargets);
+
+            const include = [];
+            for (const key of keys) {
+              const entry = allTargets[key];
+              if (!entry) {
+                core.setFailed(`Unknown platform key: ${key}. Valid keys: ${Object.keys(allTargets).join(', ')}`);
+                return;
+              }
+              include.push(entry);
+            }
+
+            if (include.length === 0) {
+              core.setFailed('No platforms selected.');
+              return;
+            }
+
+            return { include };
+
+  build:
+    name: Build ${{ matrix.label }}
+    needs: resolve
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolve.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build desktop artifact
+        shell: bash
+        run: |
+          args=(
+            --platform "${{ matrix.platform }}"
+            --target "${{ matrix.target }}"
+            --arch "${{ matrix.arch }}"
+            --verbose
+          )
+
+          version="${{ inputs.version }}"
+          if [[ -n "$version" ]]; then
+            version="${version#v}"
+            args+=(--build-version "$version")
+          fi
+
+          bun run dist:desktop:artifact -- "${args[@]}"
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+
+          shopt -s nullglob
+          for pattern in \
+            "release/*.dmg" \
+            "release/*.zip" \
+            "release/*.AppImage" \
+            "release/*.exe" \
+            "release/*.blockmap" \
+            "release/latest*.yml" \
+            "release/builder-debug.yml"; do
+            for file in $pattern; do
+              cp "$file" artifacts/
+            done
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
