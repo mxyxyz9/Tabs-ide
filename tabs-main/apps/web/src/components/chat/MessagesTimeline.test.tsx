@@ -18,6 +18,9 @@ beforeAll(() => {
     contains: () => false,
   };
 
+  vi.stubGlobal("navigator", {
+    userAgent: "node",
+  });
   vi.stubGlobal("localStorage", {
     getItem: () => null,
     setItem: () => {},

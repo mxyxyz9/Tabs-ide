@@ -530,7 +530,7 @@ function buildUserMessage(input: {
       role: "user",
       content: input.sdkContent,
     },
-  } as SDKUserMessage;
+  } as unknown as SDKUserMessage;
 }
 
 function buildClaudeImageContentBlock(input: {
