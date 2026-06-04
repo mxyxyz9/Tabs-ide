@@ -30,7 +30,7 @@ jobs:
           script: |
             const allTargets = {
               'mac-arm64':  { label: 'macOS arm64',  runner: 'macos-14',       platform: 'mac',   target: 'dmg',      arch: 'arm64' },
-              'mac-x64':    { label: 'macOS x64',    runner: 'macos-13',       platform: 'mac',   target: 'dmg',      arch: 'x64'   },
+              'mac-x64':    { label: 'macOS x64',    runner: 'macos-14',       platform: 'mac',   target: 'dmg',      arch: 'x64'   },
               'linux-x64':  { label: 'Linux x64',    runner: 'ubuntu-24.04',   platform: 'linux', target: 'AppImage', arch: 'x64'   },
               'win-x64':    { label: 'Windows x64',  runner: 'windows-2022',   platform: 'win',   target: 'nsis',     arch: 'x64'   },
             };
