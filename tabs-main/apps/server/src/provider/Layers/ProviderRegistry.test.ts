@@ -283,7 +283,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           yield* withTempCodexHome();
           const status = yield* checkCodexProviderStatus();
           assert.strictEqual(status.provider, "codex");
-          assert.strictEqual(status.status, "error");
+          assert.strictEqual(status.status, "warning");
           assert.strictEqual(status.installed, true);
           assert.strictEqual(status.authStatus, "unauthenticated");
           assert.strictEqual(
@@ -309,7 +309,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           yield* withTempCodexHome();
           const status = yield* checkCodexProviderStatus();
           assert.strictEqual(status.provider, "codex");
-          assert.strictEqual(status.status, "error");
+          assert.strictEqual(status.status, "warning");
           assert.strictEqual(status.installed, true);
           assert.strictEqual(status.authStatus, "unauthenticated");
           assert.strictEqual(
@@ -533,8 +533,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
         Effect.gen(function* () {
           yield* withTempCodexHome('model_provider = "openai"\n');
           const status = yield* checkCodexProviderStatus();
-          // The auth probe runs and sees "not logged in" → error
-          assert.strictEqual(status.status, "error");
+          // The auth probe runs and sees "not logged in" → warning
+          assert.strictEqual(status.status, "warning");
           assert.strictEqual(status.authStatus, "unauthenticated");
         }).pipe(
           Effect.provide(
@@ -565,7 +565,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           stderr: "",
           code: 0,
         });
-        assert.strictEqual(parsed.status, "error");
+        assert.strictEqual(parsed.status, "warning");
         assert.strictEqual(parsed.authStatus, "unauthenticated");
       });
 
@@ -767,7 +767,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
         Effect.gen(function* () {
           const status = yield* checkClaudeProviderStatus();
           assert.strictEqual(status.provider, "claudeAgent");
-          assert.strictEqual(status.status, "error");
+          assert.strictEqual(status.status, "warning");
           assert.strictEqual(status.installed, true);
           assert.strictEqual(status.authStatus, "unauthenticated");
           assert.strictEqual(
@@ -795,7 +795,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
         Effect.gen(function* () {
           const status = yield* checkClaudeProviderStatus();
           assert.strictEqual(status.provider, "claudeAgent");
-          assert.strictEqual(status.status, "error");
+          assert.strictEqual(status.status, "warning");
           assert.strictEqual(status.installed, true);
           assert.strictEqual(status.authStatus, "unauthenticated");
         }).pipe(
@@ -861,7 +861,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           stderr: "",
           code: 0,
         });
-        assert.strictEqual(parsed.status, "error");
+        assert.strictEqual(parsed.status, "warning");
         assert.strictEqual(parsed.authStatus, "unauthenticated");
       });
 
