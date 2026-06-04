@@ -1765,7 +1765,7 @@ export class GettingStartedInputSerializer implements IEditorSerializer {
 	}
 
 	public serialize(editorInput: GettingStartedInput): string {
-		return undefined;
+		return undefined!;
 	}
 
 	public deserialize(instantiationService: IInstantiationService, serializedEditorInput: string): GettingStartedInput | undefined {
