@@ -9,6 +9,8 @@ const { browserViews, MockBrowserView } = vi.hoisted(() => {
     webContents: {
       loadURL: ReturnType<typeof vi.fn>;
       close: ReturnType<typeof vi.fn>;
+      on: ReturnType<typeof vi.fn>;
+      removeListener: ReturnType<typeof vi.fn>;
     };
     loadedUrls: string[];
     bounds: { x: number; y: number; width: number; height: number } | null;
@@ -22,6 +24,8 @@ const { browserViews, MockBrowserView } = vi.hoisted(() => {
         this.loadedUrls.push(url);
       }),
       close: vi.fn(),
+      on: vi.fn(),
+      removeListener: vi.fn(),
     };
 
     readonly loadedUrls: string[] = [];
