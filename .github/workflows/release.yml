@@ -164,11 +164,14 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=6144"
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
         run: |
-          # Skip postinstall (it runs npm install in 50+ subdirectories and
-          # compiles 17 native modules from source — takes 40+ min).
-          # compile-client only needs root node_modules + build/ subdeps.
+          # Skip postinstall (it runs npm install in 50+ subdirectories —
+          # takes 40+ min). We only need root + build/ subdeps for compilation.
           npm install --ignore-scripts
-          cd build && npm install --ignore-scripts
+          cd build && npm install --ignore-scripts && cd ..
+          # Rebuild native modules against Electron headers (read from .npmrc:
+          # runtime=electron, target=39.8.3). These are needed at runtime for
+          # terminals, file watching, etc. Takes ~5-10 min vs 40+ for full postinstall.
+          npm rebuild
 
       - name: Compile VS Code workbench
         if: steps.vscode_build_cache.outputs.cache-hit != 'true'
@@ -193,13 +196,9 @@ jobs:
             --target "${{ matrix.target }}"
             --arch "${{ matrix.arch }}"
             --build-version "${{ needs.preflight.outputs.version }}"
-            --thin
             --verbose
           )
 
-          # --thin: ship a small installer and publish the VS Code runtime as a
-          # `tabs-code-runtime-*.zip` asset the app downloads on first run.
-          # (Drop --thin to bundle the runtime into the installer instead.)
           bun run dist:desktop:artifact -- "${args[@]}"
 
       - name: Collect release assets
