@@ -90,12 +90,14 @@ jobs:
           sudo apt-get install -y libkrb5-dev libsecret-1-dev libxkbfile-dev
 
       # Cache node_modules separately from build output so that source-only
-      # changes don't re-run the expensive (~15-30 min) npm install.
+      # changes don't re-run the expensive npm install.
       - name: Cache VS Code node_modules
         id: vscode_nm_cache
         uses: actions/cache@v4
         with:
-          path: tabs-code-main/node_modules
+          path: |
+            tabs-code-main/node_modules
+            tabs-code-main/build/node_modules
           key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-node24-${{ hashFiles('tabs-code-main/package-lock.json') }}
 
       - name: Cache VS Code build output
@@ -112,7 +114,13 @@ jobs:
         working-directory: tabs-code-main
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
-        run: npm install
+          VSCODE_SKIP_NODE_VERSION_CHECK: "1"
+        run: |
+          # Skip postinstall (it runs npm install in 50+ subdirectories and
+          # compiles 17 native modules from source — takes 40+ min).
+          # compile-client only needs root node_modules + build/ subdeps.
+          npm install --ignore-scripts
+          cd build && npm install --ignore-scripts
 
       - name: Compile VS Code workbench
         if: steps.vscode_build_cache.outputs.cache-hit != 'true'
