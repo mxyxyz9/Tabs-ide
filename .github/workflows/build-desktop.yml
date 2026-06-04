@@ -59,6 +59,7 @@ jobs:
     name: Build ${{ matrix.label }}
     needs: resolve
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.resolve.outputs.matrix) }}
@@ -88,11 +89,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libkrb5-dev libsecret-1-dev libxkbfile-dev
 
+      - name: Cache VS Code build
+        id: vscode_build_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            tabs-code-main/node_modules
+            tabs-code-main/out
+            tabs-code-main/out-build
+          key: vscode-build-${{ runner.os }}-${{ matrix.arch }}-node24-${{ hashFiles('tabs-code-main/package-lock.json', 'tabs-code-main/src/**', 'tabs-code-main/build/**', 'tabs-code-main/product.json') }}
+
       - name: Compile VS Code workbench
+        if: steps.vscode_build_cache.outputs.cache-hit != 'true'
         working-directory: tabs-code-main
         run: |
           npm install
           npm run compile
+          # out-build/nls.messages.{json,js} : required by the artifact assert and
+          # the runtime. without-mangling avoids the protected-fields mangler error.
+          npm run gulp compile-build-without-mangling
 
       - name: Build desktop artifact
         working-directory: tabs-main
