@@ -68,6 +68,8 @@ describe("when: branch is clean and has an open PR", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -76,6 +78,8 @@ describe("when: branch is clean and has an open PR", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -83,6 +87,8 @@ describe("when: branch is clean and has an open PR", () => {
         disabled: false,
         icon: "pr",
         kind: "open_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -109,6 +115,8 @@ describe("when: actions are busy", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -117,6 +125,8 @@ describe("when: actions are busy", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -125,6 +135,8 @@ describe("when: actions are busy", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -189,6 +201,8 @@ describe("when: branch is clean, ahead, and has an open PR", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -197,6 +211,8 @@ describe("when: branch is clean, ahead, and has an open PR", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -204,6 +220,8 @@ describe("when: branch is clean, ahead, and has an open PR", () => {
         disabled: false,
         icon: "pr",
         kind: "open_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -229,6 +247,8 @@ describe("when: branch is clean, ahead, and has no open PR", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -237,6 +257,8 @@ describe("when: branch is clean, ahead, and has no open PR", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -245,6 +267,8 @@ describe("when: branch is clean, ahead, and has no open PR", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -269,6 +293,8 @@ describe("when: branch is clean, up to date, and has no open PR", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -277,6 +303,8 @@ describe("when: branch is clean, up to date, and has no open PR", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -285,6 +313,8 @@ describe("when: branch is clean, up to date, and has no open PR", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -306,6 +336,8 @@ describe("when: branch is behind upstream", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -314,6 +346,8 @@ describe("when: branch is behind upstream", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -322,6 +356,8 @@ describe("when: branch is behind upstream", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -396,6 +432,8 @@ describe("when: working tree has local changes", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -404,6 +442,8 @@ describe("when: working tree has local changes", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -412,6 +452,8 @@ describe("when: working tree has local changes", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -470,6 +512,8 @@ describe("when: working tree has local changes and branch is behind upstream", (
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -478,6 +522,8 @@ describe("when: working tree has local changes and branch is behind upstream", (
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -486,6 +532,8 @@ describe("when: working tree has local changes and branch is behind upstream", (
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -510,6 +558,8 @@ describe("when: HEAD is detached and there are no local changes", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -518,6 +568,8 @@ describe("when: HEAD is detached and there are no local changes", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -526,6 +578,8 @@ describe("when: HEAD is detached and there are no local changes", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -602,6 +656,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -610,6 +666,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -618,6 +676,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -668,6 +728,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -676,6 +738,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -684,6 +748,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -702,6 +768,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -710,6 +778,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -718,6 +788,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
@@ -778,6 +850,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "commit",
         kind: "open_dialog",
         dialogAction: "commit",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "push",
@@ -786,6 +860,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "push",
         kind: "open_dialog",
         dialogAction: "push",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
       {
         id: "pr",
@@ -794,6 +870,8 @@ describe("when: branch has no upstream configured", () => {
         icon: "pr",
         kind: "open_dialog",
         dialogAction: "create_pr",
+        modeAvailability: "both",
+        riskLevel: "safe",
       },
     ]);
   });
