@@ -167,9 +167,13 @@ jobs:
             --target "${{ matrix.target }}"
             --arch "${{ matrix.arch }}"
             --build-version "${{ needs.preflight.outputs.version }}"
+            --thin
             --verbose
           )
 
+          # --thin: ship a small installer and publish the VS Code runtime as a
+          # `tabs-code-runtime-*.zip` asset the app downloads on first run.
+          # (Drop --thin to bundle the runtime into the installer instead.)
           bun run dist:desktop:artifact -- "${args[@]}"
 
       - name: Collect release assets
@@ -182,6 +186,7 @@ jobs:
           for pattern in \
             "tabs-main/release/*.dmg" \
             "tabs-main/release/*.zip" \
+            "tabs-main/release/*.sha256" \
             "tabs-main/release/*.AppImage" \
             "tabs-main/release/*.exe" \
             "tabs-main/release/*.blockmap" \
@@ -230,6 +235,7 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
+            release-assets/*.sha256
             release-assets/*.AppImage
             release-assets/*.exe
             release-assets/*.blockmap

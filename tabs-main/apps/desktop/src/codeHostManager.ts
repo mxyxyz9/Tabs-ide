@@ -1076,6 +1076,29 @@ export class CodeHostManager {
     this.config.state.reason = reason;
   }
 
+  /**
+   * Adopt a newly-resolved runtime/state (e.g. after the Code-OSS runtime
+   * finished downloading on a thin install). Clears existing sessions and
+   * mutates the held config in place so callers keep a valid reference.
+   */
+  reconfigure(config: CodeHostConfig): void {
+    this.hideActiveSession();
+    for (const session of this.sessions.values()) {
+      this.stopSessionServer(session);
+      this.disposeSessionConfigChannel(session);
+      session.view?.webContents.close({ waitForBeforeUnload: false });
+    }
+    this.sessions.clear();
+    this.config.runtime = config.runtime;
+    this.config.state.available = config.state.available;
+    this.config.state.mode = config.state.mode;
+    this.config.state.entry = config.state.entry;
+    this.config.state.reason = config.state.reason;
+    if (config.rootDir) {
+      this.config.rootDir = config.rootDir;
+    }
+  }
+
   private async loadSession(session: CodeSession): Promise<void> {
     const runtime = await this.ensureSessionRuntime(session);
     const nextUrl =

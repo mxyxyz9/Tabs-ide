@@ -56,6 +56,12 @@ import {
   resolveCodeHostConfig,
 } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
+import {
+  ensureRuntimeInstalled,
+  isRuntimeInstalled,
+  resolveInstalledRuntimeDir,
+  type RuntimeInstallProgress,
+} from "./codeOssRuntimeInstaller";
 
 syncShellEnvironment();
 
@@ -159,6 +165,12 @@ let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
 let restoreStdIoCapture: (() => void) | null = null;
+// Level B (thin installer): when the runtime isn't bundled, resolve a
+// previously-downloaded one for this app version so the editor "just works"
+// after the one-time download.
+if (!process.env.TABS_CODE_OSS_BUILD_DIR?.trim() && isRuntimeInstalled(app.getVersion())) {
+  process.env.TABS_CODE_OSS_BUILD_DIR = resolveInstalledRuntimeDir(app.getVersion());
+}
 const codeHostConfig = resolveCodeHostConfig({
   rootDir: ROOT_DIR,
   env: process.env,
@@ -2316,8 +2328,69 @@ app.on("second-instance", () => {
   targetWindow.focus();
 });
 
+function formatRuntimeDownloadStatus(progress: RuntimeInstallProgress): string {
+  if (progress.phase === "downloading") {
+    if (progress.totalBytes && progress.receivedBytes) {
+      const pct = Math.floor((progress.receivedBytes / progress.totalBytes) * 100);
+      const mb = Math.round(progress.totalBytes / 1_000_000);
+      return `Preparing the editor… downloading runtime (${pct}% of ~${mb} MB).`;
+    }
+    return "Preparing the editor… downloading runtime.";
+  }
+  if (progress.phase === "verifying") return "Preparing the editor… verifying download.";
+  if (progress.phase === "extracting") return "Preparing the editor… installing runtime.";
+  return "Editor runtime ready.";
+}
+
+let codeOssRuntimeDownloadStarted = false;
+
+/**
+ * Level B (thin installer): when no runtime is bundled or already downloaded,
+ * fetch it on demand and adopt it once ready. Download progress is reflected in
+ * the Code-OSS state `reason` (surfaced in the Code tab). No-op for fat/dev
+ * builds where a runtime is already resolvable.
+ */
+function ensureDownloadedCodeOssRuntime(): void {
+  if (codeOssRuntimeDownloadStarted || codeHostConfig.state.available) {
+    return;
+  }
+  const appVersion = app.getVersion();
+  if (isRuntimeInstalled(appVersion)) {
+    return; // already resolved synchronously at startup
+  }
+  codeOssRuntimeDownloadStarted = true;
+  codeHostConfig.state.available = false;
+  codeHostConfig.state.reason = "Preparing the editor… downloading runtime.";
+
+  void ensureRuntimeInstalled({
+    version: appVersion,
+    onProgress: (progress) => {
+      codeHostConfig.state.reason = formatRuntimeDownloadStatus(progress);
+    },
+  })
+    .then(() => {
+      process.env.TABS_CODE_OSS_BUILD_DIR = resolveInstalledRuntimeDir(appVersion);
+      const next = resolveCodeHostConfig({ rootDir: ROOT_DIR, env: process.env });
+      if (next.state.available) {
+        codeHostManager.reconfigure(next);
+        writeDesktopLogHeader("code-oss runtime downloaded and activated");
+      } else {
+        codeHostManager.disableEmbeddedHost(
+          next.state.reason ?? "Downloaded editor runtime could not be resolved.",
+        );
+      }
+    })
+    .catch((error: unknown) => {
+      codeOssRuntimeDownloadStarted = false; // allow a retry on next launch
+      codeHostManager.disableEmbeddedHost(
+        `Could not download the editor runtime: ${formatErrorMessage(error)}. It will retry next launch.`,
+      );
+    });
+}
+
 async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap start");
+  ensureDownloadedCodeOssRuntime();
   backendPort = await Effect.service(NetService).pipe(
     Effect.flatMap((net) => net.reserveLoopbackPort()),
     Effect.provide(NetService.layer),

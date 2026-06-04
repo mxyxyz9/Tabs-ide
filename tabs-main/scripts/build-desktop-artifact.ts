@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import rootPackageJson from "../package.json" with { type: "json" };
@@ -63,6 +64,7 @@ interface BuildCliInput {
   readonly keepStage: Option.Option<boolean>;
   readonly signed: Option.Option<boolean>;
   readonly verbose: Option.Option<boolean>;
+  readonly thin: Option.Option<boolean>;
 }
 
 function detectHostBuildPlatform(hostPlatform: string): typeof BuildPlatform.Type | undefined {
@@ -151,6 +153,10 @@ interface ResolvedBuildOptions {
   readonly keepStage: boolean;
   readonly signed: boolean;
   readonly verbose: boolean;
+  // Thin installer: don't bundle the VS Code runtime into the app; instead emit
+  // it as a standalone `tabs-code-runtime-*.zip` (+ .sha256) for on-demand
+  // download on first run.
+  readonly thin: boolean;
 }
 
 interface StagePackageJson {
@@ -193,6 +199,7 @@ const BuildEnvConfig = Config.all({
   keepStage: Config.boolean("TABS_DESKTOP_KEEP_STAGE").pipe(Config.withDefault(false)),
   signed: Config.boolean("TABS_DESKTOP_SIGNED").pipe(Config.withDefault(false)),
   verbose: Config.boolean("TABS_DESKTOP_VERBOSE").pipe(Config.withDefault(false)),
+  thin: Config.boolean("TABS_DESKTOP_THIN").pipe(Config.withDefault(false)),
 });
 
 const resolveBooleanFlag = (flag: Option.Option<boolean>, envValue: boolean) =>
@@ -226,6 +233,7 @@ const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (input: B
   const keepStage = resolveBooleanFlag(input.keepStage, env.keepStage);
   const signed = resolveBooleanFlag(input.signed, env.signed);
   const verbose = resolveBooleanFlag(input.verbose, env.verbose);
+  const thin = resolveBooleanFlag(input.thin, env.thin);
 
   return {
     platform,
@@ -237,6 +245,7 @@ const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (input: B
     keepStage,
     signed,
     verbose,
+    thin,
   } satisfies ResolvedBuildOptions;
 });
 
@@ -420,9 +429,9 @@ function parseHdiutilMountPoint(output: string): string | undefined {
     .find((line): line is string => Boolean(line));
 }
 
-function getRequiredMacArtifactPaths(productName: string): readonly string[] {
+function getRequiredMacArtifactPaths(productName: string, thin = false): readonly string[] {
   const appRoot = `${productName}.app`;
-  return [
+  const appLevel = [
     join(appRoot, "Contents", "MacOS", productName),
     join(
       appRoot,
@@ -434,45 +443,22 @@ function getRequiredMacArtifactPaths(productName: string): readonly string[] {
       "Electron Framework",
     ),
     join(appRoot, "Contents", "Resources", "app.asar"),
-    join(
-      appRoot,
-      "Contents",
-      "Resources",
-      "tabs-code-main",
-      "out",
-      "vs",
-      "code",
-      "electron-browser",
-      "workbench",
-      "workbench-dev.html",
-    ),
-    join(
-      appRoot,
-      "Contents",
-      "Resources",
-      "tabs-code-main",
-      "out",
-      "vs",
-      "base",
-      "parts",
-      "sandbox",
-      "electron-browser",
-      "preload.js",
-    ),
-    join(appRoot, "Contents", "Resources", "tabs-code-main", "out-build", "nls.messages.json"),
-    join(appRoot, "Contents", "Resources", "tabs-code-main", "product.json"),
+  ];
+  // Thin builds don't bundle the VS Code runtime (it's downloaded on first run).
+  if (thin) {
+    return appLevel;
+  }
+  const codeOss = join(appRoot, "Contents", "Resources", "tabs-code-main");
+  return [
+    ...appLevel,
+    join(codeOss, "out", "vs", "code", "electron-browser", "workbench", "workbench-dev.html"),
+    join(codeOss, "out", "vs", "base", "parts", "sandbox", "electron-browser", "preload.js"),
+    join(codeOss, "out-build", "nls.messages.json"),
+    join(codeOss, "product.json"),
     // Root node_modules must be present for server-main.js bootstrap imports
     // (e.g. `import minimist from 'minimist'` resolves against root node_modules).
-    join(
-      appRoot,
-      "Contents",
-      "Resources",
-      "tabs-code-main",
-      "node_modules",
-      "minimist",
-      "index.js",
-    ),
-  ] as const;
+    join(codeOss, "node_modules", "minimist", "index.js"),
+  ];
 }
 
 const assertRequiredPaths = Effect.fn("assertRequiredPaths")(function* (
@@ -576,6 +562,7 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
   readonly version: string;
   readonly arch: typeof BuildArch.Type;
   readonly verbose: boolean;
+  readonly thin: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -611,7 +598,7 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     "tabs-code-main",
   );
   const codeOssNodeModules = path.join(codeOssAppDir, "node_modules");
-  if ((yield* fs.exists(codeOssAppDir)) && !(yield* fs.exists(codeOssNodeModules))) {
+  if (!input.thin && (yield* fs.exists(codeOssAppDir)) && !(yield* fs.exists(codeOssNodeModules))) {
     const stageAppDir = path.dirname(input.stageDistDir);
     const stagedNodeModules = path.join(
       stageAppDir,
@@ -635,7 +622,7 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
 
   yield* assertRequiredPaths(
     dmgRoot,
-    getRequiredMacArtifactPaths(input.productName),
+    getRequiredMacArtifactPaths(input.productName, input.thin),
     "Extracted mac ZIP",
   );
 
@@ -645,7 +632,10 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
       ...commandOutputOptions(input.verbose),
     })`hdiutil create -volname ${input.productName} -srcfolder ${dmgRoot} -ov -format UDZO ${dmgPath}`,
   );
-  yield* validateMacDmgContents(dmgPath, input.productName);
+  // The smoke test runs the bundled server; thin builds don't bundle it.
+  if (!input.thin) {
+    yield* validateMacDmgContents(dmgPath, input.productName);
+  }
 });
 
 const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -653,6 +643,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   target: string,
   productName: string,
   signed: boolean,
+  thin: boolean,
 ) {
   const buildConfig: Record<string, unknown> = {
     appId: "com.tabs.app",
@@ -661,13 +652,17 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     directories: {
       buildResources: "apps/desktop/resources",
     },
-    extraFiles: [
-      {
-        from: "apps/desktop/resources/tabs-code-main",
-        to: "Resources/tabs-code-main",
-        filter: ["!**/*.ts", "!**/.git"],
-      },
-    ],
+    // Thin builds ship without the VS Code runtime (it's downloaded on first
+    // run from the emitted tabs-code-runtime-*.zip asset).
+    extraFiles: thin
+      ? []
+      : [
+          {
+            from: "apps/desktop/resources/tabs-code-main",
+            to: "Resources/tabs-code-main",
+            filter: ["!**/*.ts", "!**/.git"],
+          },
+        ],
   };
   const publishConfig = resolveGitHubPublishConfig();
   if (publishConfig) {
@@ -744,9 +739,6 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   }
 
   // Remove development-only directories that are not needed at runtime.
-  // NOTE: Do NOT run `npm prune --production` here — it strips node_modules
-  // packages required by the desktop-renderer mode (CSS import maps, extension
-  // host) and the managed-server fallback (@vscode/test-web).
   yield* Effect.log("[desktop-artifact] Removing development-only files from VS Code runtime...");
   const devOnlyDirs = [
     "src",
@@ -774,6 +766,34 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   const gitignorePath = path.join(vsCodeDestDir, ".gitignore");
   if (yield* fs.exists(gitignorePath)) {
     yield* fs.remove(gitignorePath);
+  }
+
+  // Drop large, clearly build/test-only node_modules that the runtime server
+  // (out/server-main.js) never imports — ~1GB. NOTE: a blanket
+  // `npm prune --omit=dev` is NOT safe here: server-main.js dynamically imports
+  // some packages npm classifies as dev, so pruning them yields
+  // ERR_MODULE_NOT_FOUND. This curated list is verified by the DMG smoke test
+  // (`server-main.js --help`) below.
+  yield* Effect.log("[desktop-artifact] Trimming dev-only node_modules from VS Code runtime...");
+  const devOnlyModules = [
+    "electron", // tabs-code-main's build Electron; the server runs under Tabs' Electron
+    "@github",
+    "playwright",
+    "@playwright",
+    "typescript",
+    "@typescript",
+    "@ts-morph",
+    "innosetup",
+    "@azure",
+    "@actions",
+    "pseudo-localization",
+    "agent-browser",
+  ];
+  for (const mod of devOnlyModules) {
+    const modPath = path.join(vsCodeDestDir, "node_modules", mod);
+    if (yield* fs.exists(modPath)) {
+      yield* fs.remove(modPath, { recursive: true });
+    }
   }
 
   // Clean up only dangling symlinks (but keep .bin directories intact — they
@@ -804,6 +824,63 @@ const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(f
   if (platform === "win") {
     yield* stageWindowsIcons(stageResourcesDir);
   }
+});
+
+/**
+ * Emit the staged (pruned) VS Code runtime as a standalone release asset
+ * (`tabs-code-runtime-<version>-<os>-<arch>.zip` + `.sha256`) for thin
+ * installers to download on first run. The archive's top-level entry is
+ * `tabs-code-main/`, matching what `codeOssRuntimeInstaller` expects.
+ */
+const emitCodeOssRuntimeBundle = Effect.fn("emitCodeOssRuntimeBundle")(function* (input: {
+  readonly runtimeDir: string;
+  readonly outputDir: string;
+  readonly version: string;
+  readonly arch: typeof BuildArch.Type;
+  readonly platform: typeof BuildPlatform.Type;
+  readonly verbose: boolean;
+}) {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  if (!(yield* fs.exists(input.runtimeDir))) {
+    return yield* new BuildScriptError({
+      message: `Cannot emit runtime bundle: ${input.runtimeDir} does not exist.`,
+    });
+  }
+  yield* fs.makeDirectory(input.outputDir, { recursive: true });
+  const osTag = input.platform === "mac" ? "mac" : input.platform === "win" ? "win" : "linux";
+  const zipName = `tabs-code-runtime-${input.version}-${osTag}-${input.arch}.zip`;
+  const zipPath = path.join(input.outputDir, zipName);
+  yield* fs.remove(zipPath, { force: true }).pipe(Effect.ignore({ log: true }));
+  yield* Effect.log(`[desktop-artifact] Emitting Code-OSS runtime bundle ${zipName}...`);
+
+  if (input.platform === "mac") {
+    yield* runCommand(
+      ChildProcess.make({
+        ...commandOutputOptions(input.verbose),
+      })`ditto -c -k --keepParent ${input.runtimeDir} ${zipPath}`,
+    );
+  } else if (input.platform === "win") {
+    yield* runCommand(
+      ChildProcess.make({
+        shell: true,
+        ...commandOutputOptions(input.verbose),
+      })`powershell -NoProfile -Command Compress-Archive -Force -Path '${input.runtimeDir}' -DestinationPath '${zipPath}'`,
+    );
+  } else {
+    yield* runCommand(
+      ChildProcess.make({
+        cwd: path.dirname(input.runtimeDir),
+        ...commandOutputOptions(input.verbose),
+      })`zip -r -q -y ${zipPath} ${path.basename(input.runtimeDir)}`,
+    );
+  }
+
+  yield* Effect.sync(() => {
+    const digest = createHash("sha256").update(readFileSync(zipPath)).digest("hex");
+    writeFileSync(`${zipPath}.sha256`, `${digest}  ${zipName}\n`);
+  });
+  yield* Effect.log(`[desktop-artifact] Runtime bundle ready: ${zipPath}`);
 });
 
 const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
@@ -910,6 +987,20 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* stageVsCodeRuntime(repoRoot, stageResourcesDir);
   yield* assertPlatformBuildResources(options.platform, stageResourcesDir, options.verbose);
 
+  // Thin build: emit the staged runtime as a downloadable release asset, then
+  // let it be excluded from the app bundle below (createBuildConfig drops the
+  // tabs-code-main extraFiles entry when thin).
+  if (options.thin) {
+    yield* emitCodeOssRuntimeBundle({
+      runtimeDir: path.join(stageResourcesDir, "tabs-code-main"),
+      outputDir: options.outputDir,
+      version: appVersion,
+      arch: options.arch,
+      platform: options.platform,
+      verbose: options.verbose,
+    });
+  }
+
   // Copy prod-resources but EXCLUDE tabs-code-main since it's already in stageResourcesDir
   // and will be packaged separately outside the asar by electron-builder's extraFiles config
   const prodResourcesDir = path.join(stageAppDir, "apps/desktop/prod-resources");
@@ -947,6 +1038,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.target,
       desktopPackageJson.productName ?? "Tabs",
       options.signed,
+      options.thin,
     ),
     dependencies: {
       ...resolvedServerDependencies,
@@ -1024,6 +1116,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       version: appVersion,
       arch: options.arch,
       verbose: options.verbose,
+      thin: options.thin,
     });
   }
 
@@ -1093,6 +1186,12 @@ const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
   ),
   verbose: Flag.boolean("verbose").pipe(
     Flag.withDescription("Stream subprocess stdout (env: TABS_DESKTOP_VERBOSE)."),
+    Flag.optional,
+  ),
+  thin: Flag.boolean("thin").pipe(
+    Flag.withDescription(
+      "Thin build: don't bundle the VS Code runtime; emit it as tabs-code-runtime-*.zip for on-demand download (env: TABS_DESKTOP_THIN).",
+    ),
     Flag.optional,
   ),
 }).pipe(
