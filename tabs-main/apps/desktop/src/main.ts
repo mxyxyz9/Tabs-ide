@@ -387,6 +387,33 @@ function getDestructiveMenuIcon(): Electron.NativeImage | undefined {
     return undefined;
   }
 }
+
+/**
+ * Per-platform title-bar configuration.
+ *
+ * - macOS: inset traffic lights over our custom top bar (`hiddenInset`).
+ * - Windows: hide the native title bar and overlay the caption buttons onto our
+ *   own top bar via the Window Controls Overlay. Without this Windows renders a
+ *   separate native title-bar strip *above* the tabs, which looks odd.
+ * - Linux: keep the previous behavior.
+ */
+function resolveTitleBarOptions(): Pick<
+  Electron.BrowserWindowConstructorOptions,
+  "titleBarStyle" | "trafficLightPosition" | "titleBarOverlay"
+> {
+  if (process.platform === "darwin") {
+    return { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 18 } };
+  }
+  if (process.platform === "win32") {
+    return {
+      titleBarStyle: "hidden",
+      // Matches the app's dark top-bar surface and the 52px header height so the
+      // min/maximize/close buttons sit on the tab bar instead of a native strip.
+      titleBarOverlay: { color: "#161616", symbolColor: "#cfcfcf", height: 52 },
+    };
+  }
+  return { titleBarStyle: "hiddenInset" };
+}
 let updatePollTimer: ReturnType<typeof setInterval> | null = null;
 let updateStartupTimer: ReturnType<typeof setTimeout> | null = null;
 let updateCheckInFlight = false;
@@ -2069,8 +2096,7 @@ function createLegacyWindow(): BrowserWindow {
     autoHideMenuBar: true,
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 18 },
+    ...resolveTitleBarOptions(),
     webPreferences: {
       preload: Path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -2156,8 +2182,7 @@ function createCodeOssWindow(
     autoHideMenuBar: true,
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 16, y: 18 },
+    ...resolveTitleBarOptions(),
     backgroundColor: "#1e1e1e",
     webPreferences: {
       preload: getRequiredCodeOssPath(runtime.vscodeRoot, CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH),

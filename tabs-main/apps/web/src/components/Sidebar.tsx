@@ -44,7 +44,19 @@ import {
 } from "@tabs/contracts/settings";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
-import { isLinuxPlatform, isMacPlatform, newCommandId, newProjectId } from "../lib/utils";
+import {
+  isLinuxPlatform,
+  isMacPlatform,
+  isWindowsPlatform,
+  newCommandId,
+  newProjectId,
+} from "../lib/utils";
+
+// Windows hides the native title bar and overlays the caption buttons at the
+// top-right, so the sidebar header should not reserve the macOS traffic-light
+// space on the left.
+const isWindowsDesktop =
+  isElectron && typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform);
 import { useStore } from "../store";
 import { shortcutLabelForCommand } from "../keybindings";
 import { derivePendingApprovals, derivePendingUserInputs } from "../session-logic";
@@ -1624,7 +1636,11 @@ export default function Sidebar() {
     <>
       {isElectron ? (
         <>
-          <SidebarHeader className="drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 pl-[90px]">
+          <SidebarHeader
+            className={`drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 ${
+              isWindowsDesktop ? "" : "pl-[90px]"
+            }`}
+          >
             {wordmark}
             {showDesktopUpdateButton && (
               <Tooltip>

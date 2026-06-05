@@ -66,7 +66,13 @@ import {
   projectReadFileQueryOptions,
   projectSearchEntriesQueryOptions,
 } from "../lib/projectReactQuery";
-import { cn, newCommandId, newProjectId, randomUUID } from "../lib/utils";
+import { cn, isWindowsPlatform, newCommandId, newProjectId, randomUUID } from "../lib/utils";
+
+// On Windows the native title bar is hidden and the caption buttons are overlaid
+// (Window Controls Overlay) at the top-right, so the top bar reserves space on
+// the right instead of the macOS traffic-light space on the left.
+const isWindowsDesktop =
+  isElectron && typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform);
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
 import GitCommitComposer from "./GitCommitComposer";
@@ -659,7 +665,9 @@ function ProjectTabs(props: {
     <div
       className={cn(
         "drag-region flex items-end gap-3 overflow-x-auto border-b border-border/70 bg-linear-to-b from-background via-background to-card/85 px-3 pt-3",
-        isElectron && "pl-[92px]",
+        // Reserve space for the OS window controls: traffic lights (left) on
+        // macOS/Linux, the overlaid caption buttons (right) on Windows.
+        isElectron && (isWindowsDesktop ? "pr-[140px]" : "pl-[92px]"),
       )}
     >
       <div className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
