@@ -147,7 +147,10 @@ jobs:
           path: |
             tabs-code-main/node_modules
             tabs-code-main/build/node_modules
-          key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-node24-${{ hashFiles('tabs-code-main/package-lock.json') }}
+          # `el40` tracks the @electron/rebuild target below — bump it whenever
+          # the rebuild Electron version changes so the cached (wrong-ABI)
+          # node_modules is not reused.
+          key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-el40-${{ hashFiles('tabs-code-main/package-lock.json') }}
 
       - name: Cache VS Code build output
         id: vscode_build_cache
@@ -175,7 +178,18 @@ jobs:
           # @electron/rebuild handles header downloading + cross-platform
           # compilation without triggering npm lifecycle scripts (unlike
           # npm rebuild which fails on Windows due to preinstall.ts).
-          npx --yes @electron/rebuild -v 39.8.3
+          #
+          # IMPORTANT: target the Electron that actually RUNS these modules at
+          # runtime — Tabs' Electron (apps/desktop/package.json), NOT
+          # tabs-code-main's dev electron (39.8.3). The Code-OSS server is
+          # spawned via ELECTRON_RUN_AS_NODE on Tabs' Electron 40 binary, so
+          # @parcel/watcher / node-pty / native-keymap must match its ABI or
+          # they fail with NODE_MODULE_VERSION mismatch.
+          #
+          # `--arch` matters: macos-14 is arm64, so the mac-x64 artifact must
+          # cross-build x64 natives here, otherwise the x64 DMG ships arm64
+          # binaries that won't load on Intel Macs.
+          npx --yes @electron/rebuild -v 40.6.0 --arch ${{ matrix.arch }}
 
       - name: Compile VS Code workbench
         if: steps.vscode_build_cache.outputs.cache-hit != 'true'

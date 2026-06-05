@@ -620,11 +620,41 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     }
   }
 
+  // Ad-hoc codesign the assembled app. We modify the bundle after
+  // electron-builder runs (injecting node_modules above), which invalidates any
+  // existing signature; combined with no Developer ID, the unsigned build is
+  // reported by Gatekeeper on Apple Silicon as "damaged and can't be opened".
+  // A deep ad-hoc signature applied as the final step makes the bundle
+  // launchable. Without a Developer ID we cannot notarize, so users still clear
+  // quarantine on first launch (right-click -> Open, or `xattr -cr`).
+  const appPath = path.join(dmgRoot, `${input.productName}.app`);
+  if (yield* fs.exists(appPath)) {
+    yield* Effect.log("[desktop-artifact] Ad-hoc codesigning the app bundle (no Developer ID)...");
+    yield* runCommand(
+      ChildProcess.make({
+        ...commandOutputOptions(input.verbose),
+      })`codesign --force --deep --sign - --timestamp=none ${appPath}`,
+    );
+  }
+
   yield* assertRequiredPaths(
     dmgRoot,
     getRequiredMacArtifactPaths(input.productName, input.thin),
     "Extracted mac ZIP",
   );
+
+  // Add the familiar drag-to-install layout: a symlink to /Applications next to
+  // the app, so the mounted DMG shows "Tabs.app  ->  Applications" and the user
+  // can drag the app into place. (A custom background/icon positioning needs a
+  // writable DMG + .DS_Store, which is fragile on headless CI — the alias alone
+  // gives the standard drag target reliably.)
+  const applicationsAlias = path.join(dmgRoot, "Applications");
+  if (!(yield* fs.exists(applicationsAlias))) {
+    yield* Effect.log("[desktop-artifact] Adding /Applications drag target to DMG...");
+    yield* Effect.sync(() => {
+      spawnSync("ln", ["-s", "/Applications", applicationsAlias]);
+    });
+  }
 
   yield* fs.remove(dmgPath, { force: true }).pipe(Effect.ignore({ log: true }));
   yield* runCommand(
@@ -652,6 +682,11 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     directories: {
       buildResources: "apps/desktop/resources",
     },
+    // Restore tabs-code-main/node_modules that electron-builder drops from the
+    // extraFiles copy (Windows/Linux installers). Without it the packaged
+    // Code-OSS server fails on `import minimist from 'minimist'`. macOS is
+    // handled separately in createMacDmgFromZip. No-op for thin builds.
+    afterPack: "./build/afterPack.cjs",
     // Thin builds ship without the VS Code runtime (it's downloaded on first
     // run from the emitted tabs-code-runtime-*.zip asset).
     extraFiles: thin
@@ -797,13 +832,17 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   }
 
   // Clean up only dangling symlinks (but keep .bin directories intact — they
-  // are needed by node_modules at runtime).
-  yield* Effect.log("[desktop-artifact] Cleaning up dangling symlinks...");
-  yield* Effect.sync(() => {
-    spawnSync("find", [".", "-type", "l", "!", "-exec", "test", "-e", "{}", ";", "-delete"], {
-      cwd: vsCodeDestDir,
+  // are needed by node_modules at runtime). Unix-only: `find` here is the POSIX
+  // tool; on Windows the same name resolves to an unrelated text-search command,
+  // and npm uses junctions/cmd-shims rather than dangling symlinks there anyway.
+  if (process.platform !== "win32") {
+    yield* Effect.log("[desktop-artifact] Cleaning up dangling symlinks...");
+    yield* Effect.sync(() => {
+      spawnSync("find", [".", "-type", "l", "!", "-exec", "test", "-e", "{}", ";", "-delete"], {
+        cwd: vsCodeDestDir,
+      });
     });
-  });
+  }
 });
 
 const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(function* (
@@ -1087,6 +1126,16 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     }
     buildEnv.npm_config_msvs_version = buildEnv.npm_config_msvs_version ?? "2022";
     buildEnv.GYP_MSVS_VERSION = buildEnv.GYP_MSVS_VERSION ?? "2022";
+  }
+
+  // Ship the afterPack hook referenced by createBuildConfig. It restores
+  // tabs-code-main/node_modules into the packaged resources on Windows/Linux
+  // (electron-builder drops it from the extraFiles copy).
+  const afterPackSource = path.join(process.cwd(), "scripts", "desktop-afterpack.cjs");
+  if (yield* fs.exists(afterPackSource)) {
+    const afterPackDestDir = path.join(stageAppDir, "build");
+    yield* fs.makeDirectory(afterPackDestDir, { recursive: true });
+    yield* fs.copyFile(afterPackSource, path.join(afterPackDestDir, "afterPack.cjs"));
   }
 
   yield* Effect.log(

@@ -102,7 +102,10 @@ jobs:
           path: |
             tabs-code-main/node_modules
             tabs-code-main/build/node_modules
-          key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-node24-${{ hashFiles('tabs-code-main/package-lock.json') }}
+          # `el40` tracks the @electron/rebuild target below — bump it whenever
+          # the rebuild Electron version changes so the cached (wrong-ABI)
+          # node_modules is not reused.
+          key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-el40-${{ hashFiles('tabs-code-main/package-lock.json') }}
 
       - name: Cache VS Code build output
         id: vscode_build_cache
@@ -122,7 +125,13 @@ jobs:
         run: |
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
-          npx --yes @electron/rebuild -v 39.8.3
+          # Target the Electron that RUNS these modules at runtime (Tabs'
+          # Electron 40, apps/desktop/package.json) — not tabs-code-main's dev
+          # electron (39.8.3). The Code-OSS server runs via ELECTRON_RUN_AS_NODE
+          # on Tabs' Electron, so native modules must match its ABI.
+          # `--arch` cross-builds x64 natives for the mac-x64 artifact on the
+          # arm64 macos-14 runner.
+          npx --yes @electron/rebuild -v 40.6.0 --arch ${{ matrix.arch }}
 
       - name: Compile VS Code workbench
         if: steps.vscode_build_cache.outputs.cache-hit != 'true'
