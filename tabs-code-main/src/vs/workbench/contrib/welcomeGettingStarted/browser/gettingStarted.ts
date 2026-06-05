@@ -1760,15 +1760,15 @@ export class GettingStartedPage extends EditorPane {
 }
 
 export class GettingStartedInputSerializer implements IEditorSerializer {
-	public canSerialize(editorInput: GettingStartedInput): boolean {
+	public canSerialize(_editorInput: GettingStartedInput): boolean {
 		return false;
 	}
 
-	public serialize(editorInput: GettingStartedInput): string {
-		return undefined!;
+	public serialize(_editorInput: GettingStartedInput): string | undefined {
+		return undefined;
 	}
 
-	public deserialize(instantiationService: IInstantiationService, serializedEditorInput: string): GettingStartedInput | undefined {
+	public deserialize(_instantiationService: IInstantiationService, _serializedEditorInput: string): GettingStartedInput | undefined {
 
 		return undefined;
 	}
