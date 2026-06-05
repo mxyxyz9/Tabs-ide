@@ -137,8 +137,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libkrb5-dev libsecret-1-dev libxkbfile-dev
 
-      # Cache node_modules separately from build output so that source-only
-      # changes don't re-run the expensive npm install.
+      # Cache VS Code node_modules (includes subdirectories installed by
+      # postinstall). First run is slow (~30 min) but all subsequent runs
+      # hit the cache and skip entirely.
       - name: Cache VS Code node_modules
         id: vscode_nm_cache
         uses: actions/cache@v4
@@ -146,6 +147,9 @@ jobs:
           path: |
             tabs-code-main/node_modules
             tabs-code-main/build/node_modules
+            tabs-code-main/build/npm/gyp/node_modules
+            tabs-code-main/remote/node_modules
+            tabs-code-main/extensions/*/node_modules
           key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-node24-${{ hashFiles('tabs-code-main/package-lock.json') }}
 
       - name: Cache VS Code build output
@@ -163,15 +167,7 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
-        run: |
-          # Skip postinstall (it runs npm install in 50+ subdirectories —
-          # takes 40+ min). We only need root + build/ subdeps for compilation.
-          npm install --ignore-scripts
-          cd build && npm install --ignore-scripts && cd ..
-          # Rebuild native modules against Electron headers (read from .npmrc:
-          # runtime=electron, target=39.8.3). These are needed at runtime for
-          # terminals, file watching, etc. Takes ~5-10 min vs 40+ for full postinstall.
-          npm rebuild
+        run: npm install
 
       - name: Compile VS Code workbench
         if: steps.vscode_build_cache.outputs.cache-hit != 'true'
@@ -207,15 +203,12 @@ jobs:
           set -euo pipefail
           mkdir -p release-publish
 
+          # Only collect the main installers — keep the release page clean.
           shopt -s nullglob
           for pattern in \
             "tabs-main/release/*.dmg" \
-            "tabs-main/release/*.zip" \
-            "tabs-main/release/*.sha256" \
             "tabs-main/release/*.AppImage" \
-            "tabs-main/release/*.exe" \
-            "tabs-main/release/*.blockmap" \
-            "tabs-main/release/latest*.yml"; do
+            "tabs-main/release/*.exe"; do
             for file in $pattern; do
               cp "$file" release-publish/
             done
@@ -259,9 +252,5 @@ jobs:
           make_latest: ${{ needs.preflight.outputs.make_latest }}
           files: |
             release-assets/*.dmg
-            release-assets/*.zip
-            release-assets/*.sha256
             release-assets/*.AppImage
             release-assets/*.exe
-            release-assets/*.blockmap
-            release-assets/latest*.yml
