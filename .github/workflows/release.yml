@@ -137,9 +137,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libkrb5-dev libsecret-1-dev libxkbfile-dev
 
-      # Cache VS Code node_modules (includes subdirectories installed by
-      # postinstall). First run is slow (~30 min) but all subsequent runs
-      # hit the cache and skip entirely.
+      # Cache VS Code node_modules. Uses --ignore-scripts to avoid the
+      # postinstall that spawns 50+ concurrent npm processes (exhausts
+      # the runner's 7GB RAM and hangs indefinitely).
       - name: Cache VS Code node_modules
         id: vscode_nm_cache
         uses: actions/cache@v4
@@ -147,9 +147,6 @@ jobs:
           path: |
             tabs-code-main/node_modules
             tabs-code-main/build/node_modules
-            tabs-code-main/build/npm/gyp/node_modules
-            tabs-code-main/remote/node_modules
-            tabs-code-main/extensions/*/node_modules
           key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-node24-${{ hashFiles('tabs-code-main/package-lock.json') }}
 
       - name: Cache VS Code build output
@@ -167,7 +164,18 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
-        run: npm install
+        run: |
+          # Install packages without lifecycle scripts (~3 min).
+          # The postinstall spawns 50+ concurrent npm install processes
+          # which exhausts 7GB RAM on CI runners and hangs indefinitely.
+          npm install --ignore-scripts
+          cd build && npm install --ignore-scripts && cd ..
+
+          # Rebuild native modules against Electron headers (~5-10 min).
+          # @electron/rebuild handles header downloading + cross-platform
+          # compilation without triggering npm lifecycle scripts (unlike
+          # npm rebuild which fails on Windows due to preinstall.ts).
+          npx --yes @electron/rebuild -v 39.8.3
 
       - name: Compile VS Code workbench
         if: steps.vscode_build_cache.outputs.cache-hit != 'true'
