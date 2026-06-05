@@ -674,6 +674,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   productName: string,
   signed: boolean,
   thin: boolean,
+  afterPackHook: boolean,
 ) {
   const buildConfig: Record<string, unknown> = {
     appId: "com.tabs.app",
@@ -686,7 +687,9 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // extraFiles copy (Windows/Linux installers). Without it the packaged
     // Code-OSS server fails on `import minimist from 'minimist'`. macOS is
     // handled separately in createMacDmgFromZip. No-op for thin builds.
-    afterPack: "./build/afterPack.cjs",
+    // Only referenced when the hook was actually staged (see below) — otherwise
+    // electron-builder would abort trying to resolve a missing module.
+    ...(afterPackHook ? { afterPack: "./build/afterPack.cjs" } : {}),
     // Thin builds ship without the VS Code runtime (it's downloaded on first
     // run from the emitted tabs-code-runtime-*.zip asset).
     extraFiles: thin
@@ -1063,6 +1066,27 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     }
   }
 
+  // Ship the afterPack hook (referenced by createBuildConfig below). It restores
+  // tabs-code-main/node_modules into the packaged resources on Windows/Linux
+  // (electron-builder drops it from the extraFiles copy). Resolve the source
+  // relative to this module — not process.cwd() — so it works regardless of the
+  // invocation directory. Only flip the build-config flag once the file is
+  // actually in place, so a missing hook can never become an electron-builder
+  // "cannot resolve ./build/afterPack.cjs" failure.
+  const afterPackSource = path.join(repoRoot, "scripts", "desktop-afterpack.cjs");
+  let afterPackHookStaged = false;
+  if (yield* fs.exists(afterPackSource)) {
+    const afterPackDestDir = path.join(stageAppDir, "build");
+    yield* fs.makeDirectory(afterPackDestDir, { recursive: true });
+    yield* fs.copyFile(afterPackSource, path.join(afterPackDestDir, "afterPack.cjs"));
+    afterPackHookStaged = true;
+  } else {
+    yield* Effect.logWarning(
+      `[desktop-artifact] afterPack hook not found at ${afterPackSource}; ` +
+        "packaged Code-OSS node_modules will not be restored on Windows/Linux.",
+    );
+  }
+
   const stagePackageJson: StagePackageJson = {
     name: "tabs-desktop",
     version: appVersion,
@@ -1078,6 +1102,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       desktopPackageJson.productName ?? "Tabs",
       options.signed,
       options.thin,
+      afterPackHookStaged,
     ),
     dependencies: {
       ...resolvedServerDependencies,
@@ -1126,16 +1151,6 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     }
     buildEnv.npm_config_msvs_version = buildEnv.npm_config_msvs_version ?? "2022";
     buildEnv.GYP_MSVS_VERSION = buildEnv.GYP_MSVS_VERSION ?? "2022";
-  }
-
-  // Ship the afterPack hook referenced by createBuildConfig. It restores
-  // tabs-code-main/node_modules into the packaged resources on Windows/Linux
-  // (electron-builder drops it from the extraFiles copy).
-  const afterPackSource = path.join(process.cwd(), "scripts", "desktop-afterpack.cjs");
-  if (yield* fs.exists(afterPackSource)) {
-    const afterPackDestDir = path.join(stageAppDir, "build");
-    yield* fs.makeDirectory(afterPackDestDir, { recursive: true });
-    yield* fs.copyFile(afterPackSource, path.join(afterPackDestDir, "afterPack.cjs"));
   }
 
   yield* Effect.log(
