@@ -26,6 +26,7 @@ const { browserViews, MockBrowserView } = vi.hoisted(() => {
       close: vi.fn(),
       on: vi.fn(),
       removeListener: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
     };
 
     readonly loadedUrls: string[] = [];

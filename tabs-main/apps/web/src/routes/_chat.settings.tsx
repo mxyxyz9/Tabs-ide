@@ -62,6 +62,8 @@ import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { DEFAULT_DESKTOP_ICON_THEME, DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
 import { Equal } from "effect";
 
+const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
+
 const THEME_OPTIONS = [
   {
     value: "system",
@@ -549,6 +551,9 @@ function SettingsRouteView() {
       : []),
     ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
       ? ["Delete confirmation"]
+      : []),
+    ...(settings.confirmTabClose !== DEFAULT_UNIFIED_SETTINGS.confirmTabClose
+      ? ["Confirm tab close"]
       : []),
     ...(isGitWritingModelDirty ? ["Git writing model"] : []),
     ...(areProviderSettingsDirty ? ["Providers"] : []),
@@ -1043,6 +1048,33 @@ function SettingsRouteView() {
                       })
                     }
                     aria-label="Confirm thread deletion"
+                  />
+                }
+              />
+              <SettingsRow
+                title="Confirm tab close"
+                description="Ask before closing a project tab (cmd/ctrl+W or the tab's × button)."
+                resetAction={
+                  settings.confirmTabClose !== DEFAULT_UNIFIED_SETTINGS.confirmTabClose ? (
+                    <SettingResetButton
+                      label="confirm tab close"
+                      onClick={() =>
+                        updateSettings({
+                          confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
+                        })
+                      }
+                    />
+                  ) : null
+                }
+                control={
+                  <Switch
+                    checked={settings.confirmTabClose}
+                    onCheckedChange={(checked) =>
+                      updateSettings({
+                        confirmTabClose: Boolean(checked),
+                      })
+                    }
+                    aria-label="Confirm before closing a tab"
                   />
                 }
               />
@@ -1629,6 +1661,21 @@ function SettingsRouteView() {
                   control={(() => {
                     const action = resolveDesktopUpdateButtonAction(updateState);
                     if (action === "none") {
+                      // When auto-update is unavailable (e.g. unsigned macOS),
+                      // point the user to the GitHub releases page instead.
+                      if (updateState.status === "disabled" || updateState.status === "error") {
+                        return (
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() =>
+                              void window.desktopBridge?.openExternal(TABS_RELEASES_URL)
+                            }
+                          >
+                            View releases
+                          </Button>
+                        );
+                      }
                       return (
                         <span className="text-xs text-muted-foreground">
                           {updateState.status === "checking" ? "Checking…" : "Up to date"}

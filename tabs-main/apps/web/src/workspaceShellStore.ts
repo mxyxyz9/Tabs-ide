@@ -46,6 +46,9 @@ export interface WorkspaceShellPersistedState {
   session: ProjectWorkspaceSessionStateType;
   projectSettingsByProjectId: Record<ProjectId, ProjectWorkspaceSettingsType>;
   browserStateByProjectId: Record<ProjectId, ProjectBrowserToolState>;
+  // Last-navigated URL per browser tab, keyed by `${projectId}:${sessionId}`, so
+  // each tab (incl. custom tabs) reopens where the user left it.
+  browserUrlBySessionKey: Record<string, string>;
   codeStateByProjectId: Record<ProjectId, ProjectCodeToolState>;
   gitStateByProjectId: Record<ProjectId, ProjectGitToolState>;
   serverStateByProjectId: Record<ProjectId, ProjectServerToolState>;
@@ -65,6 +68,7 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
       | ((current: ProjectWorkspaceSettingsType) => ProjectWorkspaceSettingsType),
   ) => void;
   setBrowserCurrentUrl: (projectId: ProjectId, url: string) => void;
+  setBrowserSessionUrl: (projectId: ProjectId, sessionId: string, url: string) => void;
   setBrowserViewport: (
     projectId: ProjectId,
     input: {
@@ -120,10 +124,11 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
 
 function defaultBrowserToolState(settings: ProjectWorkspaceSettingsType): ProjectBrowserToolState {
   return {
-    // Seed the live URL once, at creation. Keep it non-empty so a later change to
-    // `browser.defaultUrl` (the template for new tabs) can never retroactively
-    // re-navigate this already-open tab.
-    currentUrl: settings.browser.defaultUrl.trim() || "http://localhost:3000",
+    // Seed the live URL once, at creation, from the configured default. Empty is
+    // allowed — it renders a blank "new tab" rather than forcing localhost:3000.
+    // A later change to `browser.defaultUrl` never re-navigates an open tab
+    // (upsertProjectSettings leaves an existing tab's currentUrl untouched).
+    currentUrl: settings.browser.defaultUrl.trim(),
     devicePreset: Schema.decodeSync(BrowserDevicePreset)("project-default"),
     customWidth: null,
     customHeight: null,
@@ -228,6 +233,7 @@ export function createDefaultWorkspaceShellPersistedState(): WorkspaceShellPersi
     session: decodeProjectWorkspaceSessionState({}),
     projectSettingsByProjectId: {},
     browserStateByProjectId: {},
+    browserUrlBySessionKey: {},
     codeStateByProjectId: {},
     gitStateByProjectId: {},
     serverStateByProjectId: {},
@@ -241,6 +247,9 @@ export function syncWorkspaceShellState(
 ): WorkspaceShellPersistedState {
   const projectIds = new Set(projects.map((project) => project.id));
   let nextState = createDefaultWorkspaceShellPersistedState();
+  // Preserve per-tab navigated URLs (keyed by `${projectId}:${sessionId}`) across
+  // the project sync so tabs reopen where the user left them.
+  nextState.browserUrlBySessionKey = { ...input.browserUrlBySessionKey };
 
   for (const project of projects) {
     nextState = ensureProjectDefaults(nextState, project.id);
@@ -445,6 +454,20 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             },
           };
         }),
+      setBrowserSessionUrl: (projectId, sessionId, url) =>
+        set((state) => {
+          const key = `${projectId}:${sessionId}`;
+          if (state.browserUrlBySessionKey[key] === url) {
+            return state;
+          }
+          return {
+            ...state,
+            browserUrlBySessionKey: {
+              ...state.browserUrlBySessionKey,
+              [key]: url,
+            },
+          };
+        }),
       setBrowserViewport: (projectId, input) =>
         set((state) => ({
           ...state,
@@ -535,6 +558,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
         session: state.session,
         projectSettingsByProjectId: state.projectSettingsByProjectId,
         browserStateByProjectId: state.browserStateByProjectId,
+        browserUrlBySessionKey: state.browserUrlBySessionKey,
         codeStateByProjectId: state.codeStateByProjectId,
         gitStateByProjectId: state.gitStateByProjectId,
         serverStateByProjectId: state.serverStateByProjectId,

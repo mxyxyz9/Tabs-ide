@@ -28,6 +28,7 @@ export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
 export const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
 
 export const ClientSettingsSchema = Schema.Struct({
+  confirmTabClose: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
   confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
   desktopIconTheme: DesktopIconTheme.pipe(
     Schema.withDecodingDefault(() => DEFAULT_DESKTOP_ICON_THEME),

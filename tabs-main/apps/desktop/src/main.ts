@@ -97,6 +97,11 @@ const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-sessi
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
+
+function readBrowserSessionId(input: unknown): string | undefined {
+  const value = (input as { sessionId?: unknown }).sessionId;
+  return typeof value === "string" ? value : undefined;
+}
 const VSCODE_FETCH_SHELL_ENV_CHANNEL = "vscode:fetchShellEnv";
 const VSCODE_TOGGLE_DEVTOOLS_CHANNEL = "vscode:toggleDevTools";
 const VSCODE_OPEN_DEVTOOLS_CHANNEL = "vscode:openDevTools";
@@ -767,10 +772,68 @@ function configureApplicationMenu(): void {
               },
               { type: "separator" as const },
             ]),
-        { role: process.platform === "darwin" ? "close" : "quit" },
+        process.platform === "darwin"
+          ? // cmd+W closes the active tab (see Tabs menu); window close moves to
+            // cmd+shift+W, matching the browser convention.
+            { role: "close" as const, accelerator: "CmdOrCtrl+Shift+W" }
+          : { role: "quit" as const },
       ],
     },
     { role: "editMenu" },
+    {
+      label: "Tabs",
+      submenu: [
+        {
+          label: "New Project Tab",
+          accelerator: "CmdOrCtrl+T",
+          click: () => dispatchMenuAction("tab-new"),
+        },
+        {
+          label: "Close Tab",
+          accelerator: "CmdOrCtrl+W",
+          click: () => dispatchMenuAction("tab-close"),
+        },
+        { type: "separator" },
+        {
+          label: "Next Tab",
+          accelerator: "CmdOrCtrl+Shift+]",
+          click: () => dispatchMenuAction("tab-next"),
+        },
+        {
+          label: "Previous Tab",
+          accelerator: "CmdOrCtrl+Shift+[",
+          click: () => dispatchMenuAction("tab-prev"),
+        },
+        // Hidden duplicates so Ctrl+Tab / Ctrl+Shift+Tab also cycle tabs.
+        {
+          label: "Next Tab",
+          accelerator: "Control+Tab",
+          visible: false,
+          click: () => dispatchMenuAction("tab-next"),
+        },
+        {
+          label: "Previous Tab",
+          accelerator: "Control+Shift+Tab",
+          visible: false,
+          click: () => dispatchMenuAction("tab-prev"),
+        },
+        { type: "separator" },
+        ...Array.from({ length: 9 }, (_, index) => ({
+          label: `Go to Tab ${index + 1}`,
+          accelerator: `CmdOrCtrl+${index + 1}`,
+          click: () => dispatchMenuAction(`tab-go-${index + 1}`),
+        })),
+        { type: "separator" },
+        {
+          label: "Switch Tool",
+          submenu: Array.from({ length: 9 }, (_, index) => ({
+            label: `Tool ${index + 1}`,
+            accelerator: `CmdOrCtrl+Alt+${index + 1}`,
+            click: () => dispatchMenuAction(`tool-go-${index + 1}`),
+          })),
+        },
+      ],
+    },
     {
       label: "View",
       submenu: [
@@ -1298,6 +1361,7 @@ function shouldEnableAutoUpdates(): boolean {
       platform: process.platform,
       appImage: process.env.APPIMAGE,
       disabledByEnv: process.env.TABS_DISABLE_AUTO_UPDATE === "1",
+      macUpdatesSupported: process.env.TABS_ENABLE_MAC_AUTO_UPDATE === "1",
     }) === null
   );
 }
@@ -1912,7 +1976,10 @@ function registerIpcHandlers(): void {
     ) {
       return null;
     }
-    return browserHostManager.getSessionState((input as { projectId: string }).projectId);
+    return browserHostManager.getSessionState(
+      (input as { projectId: string }).projectId,
+      readBrowserSessionId(input),
+    );
   });
 
   ipcMain.removeHandler(BROWSER_HOST_ENSURE_SESSION_CHANNEL);
@@ -1925,12 +1992,16 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    const safeUrl = getSafeExternalUrl((input as { initialUrl: string }).initialUrl);
-    if (!safeUrl) {
+    // Allow an empty initialUrl: create a blank "new tab" view that loads
+    // nothing until the user navigates. A non-empty URL must be a safe http(s).
+    const rawUrl = (input as { initialUrl: string }).initialUrl;
+    const safeUrl = rawUrl.trim().length === 0 ? "" : getSafeExternalUrl(rawUrl);
+    if (safeUrl === null) {
       return;
     }
     await browserHostManager.ensureSession({
       projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
       initialUrl: safeUrl,
     });
   });
@@ -1946,6 +2017,7 @@ function registerIpcHandlers(): void {
     }
     await browserHostManager.activateSession({
       projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
     });
   });
 
@@ -1970,6 +2042,7 @@ function registerIpcHandlers(): void {
     }
     await browserHostManager.navigate({
       projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
       url: safeUrl,
     });
   });
@@ -1983,7 +2056,10 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    await browserHostManager.reload((input as { projectId: string }).projectId);
+    await browserHostManager.reload({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
   });
 
   ipcMain.removeHandler(BROWSER_HOST_BACK_SESSION_CHANNEL);
@@ -1995,7 +2071,10 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    await browserHostManager.goBack((input as { projectId: string }).projectId);
+    await browserHostManager.goBack({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
   });
 
   ipcMain.removeHandler(BROWSER_HOST_FORWARD_SESSION_CHANNEL);
@@ -2007,7 +2086,10 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    await browserHostManager.goForward((input as { projectId: string }).projectId);
+    await browserHostManager.goForward({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
   });
 
   ipcMain.removeHandler(BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL);
@@ -2019,7 +2101,10 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    await browserHostManager.toggleDevTools((input as { projectId: string }).projectId);
+    await browserHostManager.toggleDevTools({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
   });
 
   ipcMain.removeHandler(BROWSER_HOST_SET_BOUNDS_CHANNEL);
@@ -2038,6 +2123,7 @@ function registerIpcHandlers(): void {
     }
     browserHostManager.setBounds({
       projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
       x: (input as { x: number }).x,
       y: (input as { y: number }).y,
       width: (input as { width: number }).width,

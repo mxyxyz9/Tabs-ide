@@ -8,6 +8,7 @@ import {
 } from "electron";
 import type {
   DesktopBrowserHostActivateSessionInput,
+  DesktopBrowserHostControlInput,
   DesktopBrowserHostEnsureSessionInput,
   DesktopBrowserHostNavigateInput,
   DesktopBrowserHostSetBoundsInput,
@@ -21,8 +22,12 @@ const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
 };
 const DOCKED_DEVTOOLS_MODE = "bottom";
 
+const DEFAULT_SESSION_ID = "browser";
+
 type BrowserSession = {
   projectId: string;
+  sessionId: string;
+  key: string;
   view: BrowserView;
   bounds: Rectangle | null;
   currentUrl: string | null;
@@ -35,20 +40,27 @@ type BrowserSession = {
 };
 
 export class BrowserHostManager {
+  // Keyed by `${projectId}::${sessionId}` so each browser tab keeps its own
+  // BrowserView alive — switching tabs shows/hides instead of reloading.
   private readonly sessions = new Map<string, BrowserSession>();
-  private activeProjectId: string | null = null;
+  private activeKey: string | null = null;
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
+
+  private sessionKey(projectId: string, sessionId?: string): string {
+    return `${projectId}::${sessionId ?? DEFAULT_SESSION_ID}`;
+  }
 
   getState(): DesktopBrowserHostState {
     return DEFAULT_BROWSER_HOST_STATE;
   }
 
-  getSessionState(projectId: string): DesktopBrowserSessionState {
-    const session = this.sessions.get(projectId);
+  getSessionState(projectId: string, sessionId?: string): DesktopBrowserSessionState {
+    const session = this.sessions.get(this.sessionKey(projectId, sessionId));
     if (!session) {
       return {
         projectId,
+        sessionId: sessionId ?? DEFAULT_SESSION_ID,
         currentUrl: null,
         pageTitle: null,
         loading: false,
@@ -63,19 +75,26 @@ export class BrowserHostManager {
   }
 
   async ensureSession(input: DesktopBrowserHostEnsureSessionInput): Promise<void> {
-    const existing = this.sessions.get(input.projectId);
+    const key = this.sessionKey(input.projectId, input.sessionId);
+    const existing = this.sessions.get(key);
     if (existing) {
-      if (existing.currentUrl !== input.initialUrl) {
-        await this.navigate({ projectId: input.projectId, url: input.initialUrl });
+      // Keep the tab alive across switches/re-mounts: do NOT re-navigate here
+      // (that caused the reload-on-switch). Only load if it has nothing yet.
+      if (!existing.currentUrl && input.initialUrl) {
+        await this.loadUrl(existing, input.initialUrl);
       }
       return;
     }
 
+    const sessionId = input.sessionId ?? DEFAULT_SESSION_ID;
     const view = new BrowserView({
       webPreferences: {
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
+        // Shared per-project partition so logins/cookies are common across the
+        // project's browser tabs (like a real browser), while each tab keeps
+        // its own kept-alive view.
         partition: `persist:tabs-browser:${input.projectId}`,
       },
     });
@@ -83,6 +102,8 @@ export class BrowserHostManager {
 
     const session: BrowserSession = {
       projectId: input.projectId,
+      sessionId,
+      key,
       view,
       bounds: null,
       currentUrl: null,
@@ -95,23 +116,26 @@ export class BrowserHostManager {
     };
 
     this.registerSessionEvents(session);
-    this.sessions.set(input.projectId, session);
-    await this.loadUrl(session, input.initialUrl);
+    this.sessions.set(key, session);
+    if (input.initialUrl) {
+      await this.loadUrl(session, input.initialUrl);
+    }
   }
 
   async activateSession(input: DesktopBrowserHostActivateSessionInput): Promise<void> {
-    const session = this.sessions.get(input.projectId);
+    const key = this.sessionKey(input.projectId, input.sessionId);
+    const session = this.sessions.get(key);
     const window = this.getWindow();
     if (!session || !window) {
       return;
     }
 
-    const current = this.activeProjectId ? this.sessions.get(this.activeProjectId) : null;
-    if (current && current.projectId !== session.projectId) {
+    const current = this.activeKey ? this.sessions.get(this.activeKey) : null;
+    if (current && current.key !== session.key) {
       this.detachSession(current);
     }
 
-    this.activeProjectId = session.projectId;
+    this.activeKey = key;
     if (session.bounds) {
       this.attachSession(session);
       session.view.setBounds(session.bounds);
@@ -119,23 +143,24 @@ export class BrowserHostManager {
   }
 
   hideActiveSession(): void {
-    if (!this.activeProjectId) return;
-    const session = this.sessions.get(this.activeProjectId);
+    if (!this.activeKey) return;
+    const session = this.sessions.get(this.activeKey);
     if (session) {
       this.detachSession(session);
     }
-    this.activeProjectId = null;
+    this.activeKey = null;
   }
 
   setBounds(input: DesktopBrowserHostSetBoundsInput): void {
-    const session = this.sessions.get(input.projectId);
+    const key = this.sessionKey(input.projectId, input.sessionId);
+    const session = this.sessions.get(key);
     if (!session) {
       return;
     }
 
     if (!input.visible || input.width <= 0 || input.height <= 0) {
       session.bounds = null;
-      if (this.activeProjectId === input.projectId) {
+      if (this.activeKey === key) {
         this.detachSession(session);
       }
       return;
@@ -148,44 +173,44 @@ export class BrowserHostManager {
       height: Math.round(input.height),
     };
 
-    if (this.activeProjectId === input.projectId) {
+    if (this.activeKey === key) {
       this.attachSession(session);
       session.view.setBounds(session.bounds);
     }
   }
 
   async navigate(input: DesktopBrowserHostNavigateInput): Promise<void> {
-    const session = this.sessions.get(input.projectId);
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
     await this.loadUrl(session, input.url);
   }
 
-  async reload(projectId: string): Promise<void> {
-    const session = this.sessions.get(projectId);
+  async reload(input: DesktopBrowserHostControlInput): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
     session.lastError = null;
     this.emitState(session);
     session.view.webContents.reload();
   }
 
-  async goBack(projectId: string): Promise<void> {
-    const session = this.sessions.get(projectId);
+  async goBack(input: DesktopBrowserHostControlInput): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session || !session.view.webContents.canGoBack()) return;
     session.lastError = null;
     this.emitState(session);
     session.view.webContents.goBack();
   }
 
-  async goForward(projectId: string): Promise<void> {
-    const session = this.sessions.get(projectId);
+  async goForward(input: DesktopBrowserHostControlInput): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session || !session.view.webContents.canGoForward()) return;
     session.lastError = null;
     this.emitState(session);
     session.view.webContents.goForward();
   }
 
-  async toggleDevTools(projectId: string): Promise<void> {
-    const session = this.sessions.get(projectId);
+  async toggleDevTools(input: DesktopBrowserHostControlInput): Promise<void> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
     if (!session) return;
     if (session.view.webContents.isDevToolsOpened()) {
       session.view.webContents.closeDevTools();
@@ -196,14 +221,14 @@ export class BrowserHostManager {
 
   syncSessions(projectIds: readonly string[]): void {
     const allowed = new Set(projectIds);
-    for (const [projectId, session] of this.sessions) {
-      if (allowed.has(projectId)) continue;
-      if (this.activeProjectId === projectId) {
+    for (const [key, session] of this.sessions) {
+      if (allowed.has(session.projectId)) continue;
+      if (this.activeKey === key) {
         this.detachSession(session);
-        this.activeProjectId = null;
+        this.activeKey = null;
       }
       session.view.webContents.close({ waitForBeforeUnload: false });
-      this.sessions.delete(projectId);
+      this.sessions.delete(key);
     }
   }
 
@@ -225,6 +250,7 @@ export class BrowserHostManager {
   private snapshotSession(session: BrowserSession): DesktopBrowserSessionState {
     return {
       projectId: session.projectId,
+      sessionId: session.sessionId,
       currentUrl: session.currentUrl,
       pageTitle: session.pageTitle,
       loading: session.loading,

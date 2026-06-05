@@ -376,9 +376,13 @@ function relativePathFromParent(parent: string, target: string): string | null {
   return relative.length > 0 ? relative : null;
 }
 
-function createEmptyBrowserSessionState(projectId: ProjectId): DesktopBrowserSessionState {
+function createEmptyBrowserSessionState(
+  projectId: ProjectId,
+  sessionId = "browser",
+): DesktopBrowserSessionState {
   return {
     projectId,
+    sessionId,
     currentUrl: null,
     pageTitle: null,
     loading: false,
@@ -599,14 +603,12 @@ function sortProjectThreads(threads: ReadonlyArray<Thread>): Thread[] {
 }
 
 function resolveProjectDefaultBrowserUrl(
-  project: Project,
+  _project: Project,
   settings: ProjectWorkspaceSettings,
 ): string {
-  const configured = settings.browser.defaultUrl.trim();
-  if (configured.length > 0) {
-    return configured;
-  }
-  return "http://localhost:3000";
+  // Empty default = a blank "new tab" (don't force localhost:3000). The browser
+  // tool renders a start state and waits for the user to enter a URL.
+  return settings.browser.defaultUrl.trim();
 }
 
 function normalizeBrowserUrl(rawUrl: string): string {
@@ -4448,7 +4450,7 @@ function DesktopBrowserTool(props: {
       .catch(() => undefined);
 
     const unsubscribe = bridge.onBrowserSessionState((nextState) => {
-      if (nextState.projectId !== props.project.id) {
+      if (nextState.projectId !== props.project.id || nextState.sessionId !== "browser") {
         return;
       }
       setSessionState(nextState);
@@ -5020,7 +5022,12 @@ function BrowserTool(props: { project: Project; projectSettings: ProjectWorkspac
   return <EmbeddedBrowserTool project={props.project} projectSettings={props.projectSettings} />;
 }
 
-function DesktopCustomEmbedTool(props: { project: Project; title: string; url: string }) {
+function DesktopCustomEmbedTool(props: {
+  project: Project;
+  title: string;
+  url: string;
+  sessionId: string;
+}) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
   const projectSettings = useProjectWorkspaceSettings(props.project.id);
@@ -5037,19 +5044,37 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       landscape: false,
     } as const;
   });
-  const setBrowserCurrentUrl = useWorkspaceShellStore((state) => state.setBrowserCurrentUrl);
   const setBrowserViewport = useWorkspaceShellStore((state) => state.setBrowserViewport);
   const [hostState, setHostState] = useState<DesktopBrowserHostState>(
     DEFAULT_DESKTOP_BROWSER_HOST_STATE,
   );
   const [sessionState, setSessionState] = useState<DesktopBrowserSessionState>(
-    createEmptyBrowserSessionState(props.project.id),
+    createEmptyBrowserSessionState(props.project.id, props.sessionId),
   );
   const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
   const [isChromeExpanded, setIsChromeExpanded] = useState(false);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
-  const normalizedUrl = normalizeBrowserUrl(props.url);
+  const sessionKey = `${props.project.id}:${props.sessionId}`;
+  const storedUrl = useWorkspaceShellStore((state) => state.browserUrlBySessionKey[sessionKey]);
+  const setBrowserSessionUrl = useWorkspaceShellStore((state) => state.setBrowserSessionUrl);
+  // A custom tab reopens at the URL the user last navigated to (persisted),
+  // falling back to its configured URL; editing the configured URL takes over.
+  const configuredUrl = normalizeBrowserUrl(props.url);
+  const normalizedUrl = normalizeBrowserUrl(storedUrl ?? props.url);
+  const prevConfiguredUrlRef = useRef(configuredUrl);
+  useEffect(() => {
+    if (prevConfiguredUrlRef.current !== configuredUrl) {
+      prevConfiguredUrlRef.current = configuredUrl;
+      setBrowserSessionUrl(props.project.id, props.sessionId, configuredUrl);
+    }
+  }, [configuredUrl, props.project.id, props.sessionId, setBrowserSessionUrl]);
+  useEffect(() => {
+    const current = sessionState.currentUrl;
+    if (current && current !== storedUrl) {
+      setBrowserSessionUrl(props.project.id, props.sessionId, current);
+    }
+  }, [sessionState.currentUrl, storedUrl, setBrowserSessionUrl, props.project.id, props.sessionId]);
 
   useEffect(() => {
     if (!bridge) {
@@ -5065,7 +5090,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       })
       .catch(() => undefined);
     void bridge
-      .getBrowserSessionState({ projectId: props.project.id })
+      .getBrowserSessionState({ projectId: props.project.id, sessionId: props.sessionId })
       .then((nextState) => {
         if (disposed || !nextState) return;
         setSessionState(nextState);
@@ -5074,17 +5099,19 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
     void bridge
       .ensureBrowserSession({
         projectId: props.project.id,
+        sessionId: props.sessionId,
         initialUrl: normalizedUrl,
       })
       .then(() =>
         bridge.activateBrowserSession({
           projectId: props.project.id,
+          sessionId: props.sessionId,
         }),
       )
       .catch(() => undefined);
 
     const unsubscribe = bridge.onBrowserSessionState((nextState) => {
-      if (nextState.projectId !== props.project.id) {
+      if (nextState.projectId !== props.project.id || nextState.sessionId !== props.sessionId) {
         return;
       }
       setSessionState(nextState);
@@ -5110,25 +5137,21 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       return;
     }
     lastRequestedUrlRef.current = normalizedUrl;
+    // A custom embed is pinned to its configured URL — it must NOT write into
+    // the shared per-project browser state (that would clobber the main
+    // Browser tab's persisted URL on relaunch).
     void bridge
       .navigateBrowserSession({
         projectId: props.project.id,
+        sessionId: props.sessionId,
         url: normalizedUrl,
       })
-      .then(() => setBrowserCurrentUrl(props.project.id, normalizedUrl))
       .catch(() => {
         if (lastRequestedUrlRef.current === normalizedUrl) {
           lastRequestedUrlRef.current = null;
         }
       });
-  }, [
-    bridge,
-    hostState.available,
-    normalizedUrl,
-    props.project.id,
-    sessionState.currentUrl,
-    setBrowserCurrentUrl,
-  ]);
+  }, [bridge, hostState.available, normalizedUrl, props.project.id, sessionState.currentUrl]);
 
   const selectedPreset =
     BROWSER_DEVICE_PRESETS.find((preset) => preset.id === browserState.devicePreset) ??
@@ -5156,6 +5179,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
+        sessionId: props.sessionId,
         x: Math.round(rect.left),
         y: Math.round(rect.top),
         width: Math.round(rect.width),
@@ -5198,6 +5222,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       void bridge
         .setBrowserBounds({
           projectId: props.project.id,
+          sessionId: props.sessionId,
           x: 0,
           y: 0,
           width: 0,
@@ -5216,6 +5241,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       void bridge
         .activateBrowserSession({
           projectId: props.project.id,
+          sessionId: props.sessionId,
         })
         .catch(() => undefined);
     }
@@ -5245,6 +5271,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
       void bridge
         .activateBrowserSession({
           projectId: props.project.id,
+          sessionId: props.sessionId,
         })
         .catch(() => undefined);
     };
@@ -5311,6 +5338,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
                 onClick={() =>
                   void bridge.goBackBrowserSession({
                     projectId: props.project.id,
+                    sessionId: props.sessionId,
                   })
                 }
               >
@@ -5324,6 +5352,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
                 onClick={() =>
                   void bridge.goForwardBrowserSession({
                     projectId: props.project.id,
+                    sessionId: props.sessionId,
                   })
                 }
               >
@@ -5336,6 +5365,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
                 onClick={() =>
                   void bridge.reloadBrowserSession({
                     projectId: props.project.id,
+                    sessionId: props.sessionId,
                   })
                 }
               >
@@ -5349,6 +5379,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
                 onClick={() =>
                   void bridge.toggleBrowserDevTools({
                     projectId: props.project.id,
+                    sessionId: props.sessionId,
                   })
                 }
               >
@@ -5465,6 +5496,7 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
                       onClick={() =>
                         void bridge.reloadBrowserSession({
                           projectId: props.project.id,
+                          sessionId: props.sessionId,
                         })
                       }
                     >
@@ -5492,9 +5524,21 @@ function DesktopCustomEmbedTool(props: { project: Project; title: string; url: s
   );
 }
 
-function CustomEmbedTool(props: { project: Project; title: string; url: string }) {
+function CustomEmbedTool(props: {
+  project: Project;
+  title: string;
+  url: string;
+  sessionId: string;
+}) {
   if (window.desktopBridge) {
-    return <DesktopCustomEmbedTool project={props.project} title={props.title} url={props.url} />;
+    return (
+      <DesktopCustomEmbedTool
+        project={props.project}
+        title={props.title}
+        url={props.url}
+        sessionId={props.sessionId}
+      />
+    );
   }
 
   const api = readNativeApi();
@@ -6516,6 +6560,21 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const rememberThread = useWorkspaceShellStore((state) => state.rememberThread);
   const upsertProjectSettings = useWorkspaceShellStore((state) => state.upsertProjectSettings);
   const settings = useSettings();
+  // Close a project tab, optionally asking for confirmation first. Gated by the
+  // "Confirm before closing a tab" setting (Settings → General).
+  const requestCloseProject = useCallback(
+    async (projectId: ProjectId): Promise<boolean> => {
+      if (settings.confirmTabClose) {
+        const confirmed = await (readNativeApi() ?? ensureNativeApi()).dialogs.confirm(
+          "Close this tab? Anything unsaved in it may be lost.",
+        );
+        if (!confirmed) return false;
+      }
+      closeProject(projectId);
+      return true;
+    },
+    [closeProject, settings.confirmTabClose],
+  );
   const threadsHydrated = useStore((state) => state.threadsHydrated);
   const embeddedMode = useMemo(() => resolveEmbeddedWorkspaceMode(), []);
   const embeddedProjectCreateRequestedRef = useRef<string | null>(null);
@@ -6742,6 +6801,53 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     await navigate({ to: "/" });
   }, [focusProject, navigate, openProject, projects, setActiveProject, setActiveTool]);
 
+  // Browser-like tab keyboard shortcuts, driven by application-menu accelerators
+  // (cmd/ctrl + T / W / 1..9 / shift+[ ] / ctrl+Tab). Using menu accelerators —
+  // not a window keydown listener — means they fire even when focus is inside an
+  // embedded Code-OSS or Browser BrowserView, so they work everywhere in Tabs.
+  const tabShortcutStateRef = useRef({
+    openProjects,
+    activeProjectId: workspaceState.session.activeProjectId,
+  });
+  tabShortcutStateRef.current = {
+    openProjects,
+    activeProjectId: workspaceState.session.activeProjectId,
+  };
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge) return;
+    return bridge.onMenuAction((action) => {
+      const { openProjects: tabs, activeProjectId } = tabShortcutStateRef.current;
+      const activate = (index: number) => {
+        const target = tabs[index];
+        if (target) setActiveProject(target.id);
+      };
+      const currentIndex = tabs.findIndex((project) => project.id === activeProjectId);
+      const base = currentIndex < 0 ? 0 : currentIndex;
+      switch (action) {
+        case "tab-new":
+          void handleCreateProject();
+          return;
+        case "tab-close":
+          if (activeProjectId) void requestCloseProject(activeProjectId);
+          return;
+        case "tab-next":
+          if (tabs.length > 0) activate((base + 1) % tabs.length);
+          return;
+        case "tab-prev":
+          if (tabs.length > 0) activate((base - 1 + tabs.length) % tabs.length);
+          return;
+        default: {
+          const goMatch = /^tab-go-([1-9])$/.exec(action);
+          if (goMatch && tabs.length > 0) {
+            const requested = Number(goMatch[1]);
+            activate(requested === 9 ? tabs.length - 1 : Math.min(requested - 1, tabs.length - 1));
+          }
+        }
+      }
+    });
+  }, [handleCreateProject, requestCloseProject, setActiveProject]);
+
   const ensureProjectForWorkspaceRoot = useCallback(
     async (workspaceRoot: string): Promise<ProjectId> => {
       const existing = projects.find((project) => project.cwd === workspaceRoot);
@@ -6891,6 +6997,23 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       workspaceState.session.rememberedThreadIdByProjectId,
     ],
   );
+
+  // Tool-switching shortcuts (cmd/ctrl+alt+1..9 → the Nth visible tool of the
+  // active project), via menu accelerators so they work everywhere — including
+  // inside the embedded editor/browser views.
+  const toolShortcutRef = useRef({ availableTools, switchTool: handleSelectTool });
+  toolShortcutRef.current = { availableTools, switchTool: handleSelectTool };
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge) return;
+    return bridge.onMenuAction((action) => {
+      const match = /^tool-go-([1-9])$/.exec(action);
+      if (!match) return;
+      const { availableTools: tools, switchTool } = toolShortcutRef.current;
+      const target = tools[Number(match[1]) - 1];
+      if (target) void switchTool(target.id);
+    });
+  }, []);
 
   const rememberedThreadId = activeProject
     ? (workspaceState.session.rememberedThreadIdByProjectId[activeProject.id] ?? null)
@@ -7310,7 +7433,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               ) ?? null)
             : null;
           return embed ? (
-            <CustomEmbedTool project={activeProject} title={embed.label} url={embed.url} />
+            <CustomEmbedTool
+              project={activeProject}
+              title={embed.label}
+              url={embed.url}
+              sessionId={`custom-${embed.id}`}
+            />
           ) : null;
         })()
       : null;
@@ -7510,8 +7638,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           activeProjectId={activeProject?.id ?? null}
           onActivateProject={(projectId) => void focusProject(projectId)}
           onCloseProject={(projectId) => {
-            closeProject(projectId);
-            if (workspaceState.session.activeProjectId === projectId) {
+            const wasActive = workspaceState.session.activeProjectId === projectId;
+            void requestCloseProject(projectId).then((closed) => {
+              if (!closed || !wasActive) return;
               const fallbackProjectId =
                 workspaceState.session.openProjectIds.find((id) => id !== projectId) ?? null;
               if (fallbackProjectId) {
@@ -7519,7 +7648,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               } else {
                 void navigate({ to: "/" });
               }
-            }
+            });
           }}
           onCreateProject={() => void handleCreateProject()}
           onOpenProject={(projectId) => void focusProject(projectId)}

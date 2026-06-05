@@ -167,26 +167,34 @@ export interface DesktopBrowserHostState {
   reason: string | null;
 }
 
+// `sessionId` identifies a distinct browser tab within a project (e.g. the main
+// "Browser" tool vs. each custom browser tab). Each session gets its own
+// kept-alive BrowserView so switching tabs doesn't reload. Defaults to "browser".
 export interface DesktopBrowserHostEnsureSessionInput {
   projectId: string;
+  sessionId?: string | undefined;
   initialUrl: string;
 }
 
 export interface DesktopBrowserHostActivateSessionInput {
   projectId: string;
+  sessionId?: string | undefined;
 }
 
 export interface DesktopBrowserHostNavigateInput {
   projectId: string;
+  sessionId?: string | undefined;
   url: string;
 }
 
 export interface DesktopBrowserHostControlInput {
   projectId: string;
+  sessionId?: string | undefined;
 }
 
 export interface DesktopBrowserHostSetBoundsInput {
   projectId: string;
+  sessionId?: string | undefined;
   x: number;
   y: number;
   width: number;
@@ -196,6 +204,7 @@ export interface DesktopBrowserHostSetBoundsInput {
 
 export interface DesktopBrowserSessionState {
   projectId: string;
+  sessionId: string;
   currentUrl: string | null;
   pageTitle: string | null;
   loading: boolean;

@@ -1,13 +1,32 @@
 import { type ProjectWorkspaceSettings } from "@tabs/contracts/settings";
 import {
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ChevronDownIcon,
   ChevronUpIcon,
+  GripVerticalIcon,
   PlusIcon,
   RotateCcwIcon,
   SaveIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 
 import { useStore } from "../store";
 import { Button } from "./ui/button";
@@ -15,6 +34,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
+import { cn } from "../lib/utils";
 import { useProjectWorkspaceSettings, useWorkspaceShellStore } from "../workspaceShellStore";
 
 function createCustomEmbedId() {
@@ -58,6 +78,32 @@ function reorderItems<T>(items: readonly T[], index: number, direction: -1 | 1):
   reordered[index] = target;
   reordered[nextIndex] = current;
   return reordered;
+}
+
+/**
+ * Sortable wrapper for a toolbar-tool row. Provides the draggable node + drag
+ * transform; the row renders its own drag handle via the `attributes`/`listeners`
+ * passed to the render-prop child so the rest of the row stays interactive.
+ */
+function SortableToolRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: (handle: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "relative z-10")}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  );
 }
 
 function mergeToolGroup(
@@ -248,6 +294,12 @@ export function ProjectWorkspaceSettingsSection() {
     serverProcessesDirty,
   ]);
 
+  const dndSensors = useSensors(
+    // Require a small drag distance so taps/clicks on the row still work.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   if (!activeProjectId || !activeProject || !projectSettings) {
     return (
       <section className="space-y-3">
@@ -267,6 +319,34 @@ export function ProjectWorkspaceSettingsSection() {
   }
 
   const projectId = activeProjectId;
+
+  // Drag-to-reorder the toolbar tools. The preview list is a merge of saved
+  // tools and (when edited) draft custom tabs/terminals, so persist the new
+  // order to both the saved tool list and the draft arrays by rank.
+  const handleReorderTools = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = toolbarPreviewTools.map((tool) => tool.id);
+    const from = ids.indexOf(String(active.id));
+    const to = ids.indexOf(String(over.id));
+    if (from < 0 || to < 0) return;
+    const rank = new Map(arrayMove(ids, from, to).map((id, position) => [id, position]));
+    const rankOf = (id: string) => rank.get(id) ?? Number.MAX_SAFE_INTEGER;
+    upsertProjectSettings(projectId, (current) => ({
+      ...current,
+      tools: [...current.tools].sort((a, b) => rankOf(a.id) - rankOf(b.id)),
+    }));
+    setCustomEmbedDrafts((current) =>
+      [...current].sort(
+        (a, b) => rankOf(createCustomEmbedToolId(a.id)) - rankOf(createCustomEmbedToolId(b.id)),
+      ),
+    );
+    setServerProcessDrafts((current) =>
+      [...current].sort(
+        (a, b) => rankOf(createServerProcessToolId(a.id)) - rankOf(createServerProcessToolId(b.id)),
+      ),
+    );
+  };
 
   const removeCustomEmbedDraft = (embedId: string) => {
     setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== embedId));
@@ -357,262 +437,208 @@ export function ProjectWorkspaceSettingsSection() {
               </div>
             </div>
             <div className="space-y-2">
-              {toolbarPreviewTools.map((tool, index) => {
-                const isExpanded = expandedToolbarToolIds[tool.id] === true;
-                const embedDraft =
-                  tool.kind === "custom_embed"
-                    ? (customEmbedDrafts.find(
-                        (entry) => createCustomEmbedToolId(entry.id) === tool.id,
-                      ) ?? null)
-                    : null;
-                const processDraft =
-                  tool.kind === "custom_process"
-                    ? (serverProcessDrafts.find(
-                        (entry) => createServerProcessToolId(entry.id) === tool.id,
-                      ) ?? null)
-                    : null;
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                onDragEnd={handleReorderTools}
+              >
+                <SortableContext
+                  items={toolbarPreviewTools.map((toolItem) => toolItem.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {toolbarPreviewTools.map((tool) => {
+                    const isExpanded = expandedToolbarToolIds[tool.id] === true;
+                    const embedDraft =
+                      tool.kind === "custom_embed"
+                        ? (customEmbedDrafts.find(
+                            (entry) => createCustomEmbedToolId(entry.id) === tool.id,
+                          ) ?? null)
+                        : null;
+                    const processDraft =
+                      tool.kind === "custom_process"
+                        ? (serverProcessDrafts.find(
+                            (entry) => createServerProcessToolId(entry.id) === tool.id,
+                          ) ?? null)
+                        : null;
 
-                return (
-                  <div key={tool.id} className="rounded-xl border border-border/70 px-3 py-2">
-                    <div className="flex items-center gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-foreground">{tool.label}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {describeToolKind(tool.kind)}
-                        </div>
-                      </div>
-                      {tool.kind === "custom_embed" || tool.kind === "custom_process" ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            setExpandedToolbarToolIds((current) => ({
-                              ...current,
-                              [tool.id]: !current[tool.id],
-                            }))
-                          }
-                        >
-                          {isExpanded ? "Collapse" : "Expand"}
-                        </Button>
-                      ) : null}
-                      <Switch
-                        checked={tool.visible}
-                        onCheckedChange={(checked) =>
-                          tool.kind === "custom_embed"
-                            ? setCustomEmbedDrafts((current) =>
-                                current.map((entry) =>
-                                  createCustomEmbedToolId(entry.id) === tool.id
-                                    ? { ...entry, visible: Boolean(checked) }
-                                    : entry,
-                                ),
-                              )
-                            : tool.kind === "custom_process"
-                              ? setServerProcessDrafts((current) =>
-                                  current.map((entry) =>
-                                    createServerProcessToolId(entry.id) === tool.id
-                                      ? { ...entry, visible: Boolean(checked) }
-                                      : entry,
-                                  ),
-                                )
-                              : upsertProjectSettings(activeProjectId, (current) => ({
-                                  ...current,
-                                  tools: current.tools.map((entry) =>
-                                    entry.id === tool.id
-                                      ? { ...entry, visible: Boolean(checked) }
-                                      : entry,
-                                  ),
-                                }))
-                        }
-                        aria-label={`Toggle ${tool.label}`}
-                      />
-                      {tool.kind === "custom_embed" && embedDraft ? (
-                        <Button
-                          type="button"
-                          size="icon-xs"
-                          variant="outline"
-                          onClick={() => removeCustomEmbedDraft(embedDraft.id)}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                        </Button>
-                      ) : null}
-                      {tool.kind === "custom_process" && processDraft ? (
-                        <Button
-                          type="button"
-                          size="icon-xs"
-                          variant="outline"
-                          onClick={() => removeServerProcessDraft(processDraft.id)}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                        </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="icon-xs"
-                        variant="outline"
-                        disabled={index === 0}
-                        onClick={() =>
-                          tool.kind === "custom_embed"
-                            ? setCustomEmbedDrafts((current) => {
-                                const draftIndex = current.findIndex(
-                                  (entry) => createCustomEmbedToolId(entry.id) === tool.id,
-                                );
-                                return draftIndex < 0
-                                  ? current
-                                  : reorderItems(current, draftIndex, -1);
-                              })
-                            : tool.kind === "custom_process"
-                              ? setServerProcessDrafts((current) => {
-                                  const draftIndex = current.findIndex(
-                                    (entry) => createServerProcessToolId(entry.id) === tool.id,
-                                  );
-                                  return draftIndex < 0
-                                    ? current
-                                    : reorderItems(current, draftIndex, -1);
-                                })
-                              : upsertProjectSettings(activeProjectId, (current) => {
-                                  const tools = [...current.tools];
-                                  const persistedIndex = tools.findIndex(
-                                    (entry) => entry.id === tool.id,
-                                  );
-                                  const previous = tools[persistedIndex - 1];
-                                  const currentTool = tools[persistedIndex];
-                                  if (persistedIndex < 0 || !previous || !currentTool)
-                                    return current;
-                                  tools[persistedIndex - 1] = currentTool;
-                                  tools[persistedIndex] = previous;
-                                  return { ...current, tools };
-                                })
-                        }
-                      >
-                        <ChevronUpIcon className="size-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-xs"
-                        variant="outline"
-                        disabled={index === toolbarPreviewTools.length - 1}
-                        onClick={() =>
-                          tool.kind === "custom_embed"
-                            ? setCustomEmbedDrafts((current) => {
-                                const draftIndex = current.findIndex(
-                                  (entry) => createCustomEmbedToolId(entry.id) === tool.id,
-                                );
-                                return draftIndex < 0
-                                  ? current
-                                  : reorderItems(current, draftIndex, 1);
-                              })
-                            : tool.kind === "custom_process"
-                              ? setServerProcessDrafts((current) => {
-                                  const draftIndex = current.findIndex(
-                                    (entry) => createServerProcessToolId(entry.id) === tool.id,
-                                  );
-                                  return draftIndex < 0
-                                    ? current
-                                    : reorderItems(current, draftIndex, 1);
-                                })
-                              : upsertProjectSettings(activeProjectId, (current) => {
-                                  const tools = [...current.tools];
-                                  const persistedIndex = tools.findIndex(
-                                    (entry) => entry.id === tool.id,
-                                  );
-                                  const currentTool = tools[persistedIndex];
-                                  const next = tools[persistedIndex + 1];
-                                  if (persistedIndex < 0 || !currentTool || !next) return current;
-                                  tools[persistedIndex] = next;
-                                  tools[persistedIndex + 1] = currentTool;
-                                  return { ...current, tools };
-                                })
-                        }
-                      >
-                        <ChevronDownIcon className="size-3.5" />
-                      </Button>
-                    </div>
+                    return (
+                      <SortableToolRow key={tool.id} id={tool.id}>
+                        {({ attributes, listeners }) => (
+                          <div className="rounded-xl border border-border/70 px-3 py-2">
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                aria-label={`Drag to reorder ${tool.label}`}
+                                className="-ms-1 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground/50 hover:text-foreground active:cursor-grabbing"
+                                {...attributes}
+                                {...listeners}
+                              >
+                                <GripVerticalIcon className="size-4" />
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium text-foreground">
+                                  {tool.label}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {describeToolKind(tool.kind)}
+                                </div>
+                              </div>
+                              {tool.kind === "custom_embed" || tool.kind === "custom_process" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    setExpandedToolbarToolIds((current) => ({
+                                      ...current,
+                                      [tool.id]: !current[tool.id],
+                                    }))
+                                  }
+                                >
+                                  {isExpanded ? "Collapse" : "Expand"}
+                                </Button>
+                              ) : null}
+                              <Switch
+                                checked={tool.visible}
+                                onCheckedChange={(checked) =>
+                                  tool.kind === "custom_embed"
+                                    ? setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          createCustomEmbedToolId(entry.id) === tool.id
+                                            ? { ...entry, visible: Boolean(checked) }
+                                            : entry,
+                                        ),
+                                      )
+                                    : tool.kind === "custom_process"
+                                      ? setServerProcessDrafts((current) =>
+                                          current.map((entry) =>
+                                            createServerProcessToolId(entry.id) === tool.id
+                                              ? { ...entry, visible: Boolean(checked) }
+                                              : entry,
+                                          ),
+                                        )
+                                      : upsertProjectSettings(activeProjectId, (current) => ({
+                                          ...current,
+                                          tools: current.tools.map((entry) =>
+                                            entry.id === tool.id
+                                              ? { ...entry, visible: Boolean(checked) }
+                                              : entry,
+                                          ),
+                                        }))
+                                }
+                                aria-label={`Toggle ${tool.label}`}
+                              />
+                              {tool.kind === "custom_embed" && embedDraft ? (
+                                <Button
+                                  type="button"
+                                  size="icon-xs"
+                                  variant="outline"
+                                  onClick={() => removeCustomEmbedDraft(embedDraft.id)}
+                                >
+                                  <Trash2Icon className="size-3.5" />
+                                </Button>
+                              ) : null}
+                              {tool.kind === "custom_process" && processDraft ? (
+                                <Button
+                                  type="button"
+                                  size="icon-xs"
+                                  variant="outline"
+                                  onClick={() => removeServerProcessDraft(processDraft.id)}
+                                >
+                                  <Trash2Icon className="size-3.5" />
+                                </Button>
+                              ) : null}
+                            </div>
 
-                    {tool.kind === "custom_embed" && embedDraft && isExpanded ? (
-                      <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-                        <div>
-                          <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            Custom URL
-                          </div>
-                          <Input
-                            value={embedDraft.url}
-                            onChange={(event) =>
-                              setCustomEmbedDrafts((current) =>
-                                current.map((entry) =>
-                                  entry.id === embedDraft.id
-                                    ? { ...entry, url: event.target.value }
-                                    : entry,
-                                ),
-                              )
-                            }
-                            placeholder="https://www.figma.com/file/..."
-                          />
-                        </div>
-                        <div>
-                          <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            Label
-                          </div>
-                          <Input
-                            value={embedDraft.label}
-                            onChange={(event) =>
-                              setCustomEmbedDrafts((current) =>
-                                current.map((entry) =>
-                                  entry.id === embedDraft.id
-                                    ? { ...entry, label: event.target.value }
-                                    : entry,
-                                ),
-                              )
-                            }
-                            placeholder="Figma"
-                          />
-                        </div>
-                      </div>
-                    ) : null}
+                            {tool.kind === "custom_embed" && embedDraft && isExpanded ? (
+                              <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Custom URL
+                                  </div>
+                                  <Input
+                                    value={embedDraft.url}
+                                    onChange={(event) =>
+                                      setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === embedDraft.id
+                                            ? { ...entry, url: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="https://www.figma.com/file/..."
+                                  />
+                                </div>
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Label
+                                  </div>
+                                  <Input
+                                    value={embedDraft.label}
+                                    onChange={(event) =>
+                                      setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === embedDraft.id
+                                            ? { ...entry, label: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="Figma"
+                                  />
+                                </div>
+                              </div>
+                            ) : null}
 
-                    {tool.kind === "custom_process" && processDraft && isExpanded ? (
-                      <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-                        <div>
-                          <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            Label
+                            {tool.kind === "custom_process" && processDraft && isExpanded ? (
+                              <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Label
+                                  </div>
+                                  <Input
+                                    value={processDraft.label}
+                                    onChange={(event) =>
+                                      setServerProcessDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === processDraft.id
+                                            ? { ...entry, label: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="OpenCore"
+                                  />
+                                </div>
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Working Directory
+                                  </div>
+                                  <Input
+                                    value={processDraft.cwd}
+                                    onChange={(event) =>
+                                      setServerProcessDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === processDraft.id
+                                            ? { ...entry, cwd: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder={activeProject.cwd}
+                                  />
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                          <Input
-                            value={processDraft.label}
-                            onChange={(event) =>
-                              setServerProcessDrafts((current) =>
-                                current.map((entry) =>
-                                  entry.id === processDraft.id
-                                    ? { ...entry, label: event.target.value }
-                                    : entry,
-                                ),
-                              )
-                            }
-                            placeholder="OpenCore"
-                          />
-                        </div>
-                        <div>
-                          <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            Working Directory
-                          </div>
-                          <Input
-                            value={processDraft.cwd}
-                            onChange={(event) =>
-                              setServerProcessDrafts((current) =>
-                                current.map((entry) =>
-                                  entry.id === processDraft.id
-                                    ? { ...entry, cwd: event.target.value }
-                                    : entry,
-                                ),
-                              )
-                            }
-                            placeholder={activeProject.cwd}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
+                        )}
+                      </SortableToolRow>
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
             </div>
           </div>
 

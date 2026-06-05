@@ -225,12 +225,20 @@ jobs:
           set -euo pipefail
           mkdir -p release-publish
 
-          # Only collect the main installers — keep the release page clean.
+          # Installers for every platform, plus the electron-updater feed files
+          # (latest.yml / latest-linux.yml + blockmaps) so Windows and Linux can
+          # auto-update. macOS auto-update needs a code-signed build, so we ship
+          # only the .dmg there (no latest-mac.yml / .zip) and users update
+          # manually from the release page.
           shopt -s nullglob
           for pattern in \
             "tabs-main/release/*.dmg" \
             "tabs-main/release/*.AppImage" \
-            "tabs-main/release/*.exe"; do
+            "tabs-main/release/*.AppImage.blockmap" \
+            "tabs-main/release/*.exe" \
+            "tabs-main/release/*.exe.blockmap" \
+            "tabs-main/release/latest.yml" \
+            "tabs-main/release/latest-linux.yml"; do
             for file in $pattern; do
               cp "$file" release-publish/
             done
@@ -275,4 +283,8 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.AppImage
+            release-assets/*.AppImage.blockmap
             release-assets/*.exe
+            release-assets/*.exe.blockmap
+            release-assets/latest.yml
+            release-assets/latest-linux.yml

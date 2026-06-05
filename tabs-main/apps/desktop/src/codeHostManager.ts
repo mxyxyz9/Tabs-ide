@@ -11,6 +11,7 @@ import {
   BrowserView,
   ipcMain,
   nativeTheme,
+  shell,
   type BrowserWindow,
   type ProtocolRequest,
   type Rectangle,
@@ -917,6 +918,20 @@ export class CodeHostManager {
       },
     });
     view.setBackgroundColor("#121212");
+
+    // Keep the embedded editor fully inside Tabs: never let Code-OSS spawn a
+    // separate window (e.g. cmd+shift+n "New Window"). Deny every new-window
+    // request; genuinely external links open in the system browser instead.
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      const isInternal =
+        url === "about:blank" || /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(url);
+      if (!isInternal && /^https?:\/\//i.test(url)) {
+        void shell.openExternal(url).catch(() => {
+          /* ignore */
+        });
+      }
+      return { action: "deny" };
+    });
 
     // Theme the embedded Code-OSS workbench to match the Tabs shell. The
     // managed-server runtime loads the workbench over http into this view, so
