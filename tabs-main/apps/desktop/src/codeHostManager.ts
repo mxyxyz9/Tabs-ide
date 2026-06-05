@@ -29,6 +29,11 @@ import { CODE_OSS_THEME_CSS } from "./codeOssThemeCss";
 const CODE_OSS_SERVER_HOST = "127.0.0.1";
 const CODE_OSS_SERVER_START_TIMEOUT_MS = 20_000;
 const CODE_OSS_STARTUP_LOG_LIMIT = 24;
+// A reserved loopback port can be claimed by another process between our
+// reservation and the server's bind (TOCTOU); allow a few fresh-port retries.
+const MANAGED_SERVER_START_ATTEMPTS = 3;
+// Grace period after SIGTERM before escalating to SIGKILL when stopping a server.
+const PROCESS_KILL_GRACE_MS = 3_000;
 
 export const CODE_OSS_WEB_LAUNCHER_RELATIVE_PATH = Path.join("scripts", "code-web.js");
 export const CODE_OSS_WEB_SERVER_RELATIVE_PATH = Path.join(
@@ -760,6 +765,43 @@ export function buildManagedServerArgs(input: {
   ];
 }
 
+function isPortConflictError(error: Error): boolean {
+  const message = error.message.toLowerCase();
+  return message.includes("eaddrinuse") || message.includes("address already in use");
+}
+
+/**
+ * Terminate a child process and all of its descendants. The Code-OSS server
+ * forks an extension host, pty host and file watchers; killing only the top PID
+ * would orphan them (especially on Windows, where signals don't propagate to
+ * the tree). On Windows `taskkill /T` kills the whole tree; elsewhere we send
+ * SIGTERM and escalate to SIGKILL if the process ignores it.
+ */
+function terminateProcessTree(child: ChildProcess.ChildProcess): void {
+  if (child.killed || child.pid === undefined) {
+    return;
+  }
+  const pid = child.pid;
+  if (process.platform === "win32") {
+    try {
+      ChildProcess.spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+      return;
+    } catch {
+      // Fall through to a direct kill.
+    }
+  }
+  child.kill("SIGTERM");
+  const killTimer = setTimeout(() => {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already exited (or PID gone) — nothing to escalate.
+    }
+  }, PROCESS_KILL_GRACE_MS);
+  killTimer.unref?.();
+  child.once("exit", () => clearTimeout(killTimer));
+}
+
 async function reserveLoopbackPort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = Net.createServer();
@@ -1224,108 +1266,172 @@ export class CodeHostManager {
     FS.mkdirSync(CODE_OSS_WEB_SERVER_DATA_DIR, { recursive: true });
     ensureCodeOssWebServerDefaultSettings();
 
-    const port = await reserveLoopbackPort();
-    const entry = `http://${CODE_OSS_SERVER_HOST}:${port}`;
     const mountedWorkspace = buildMountedWorkspaceDescriptor(session.workspaceRoot);
 
-    session.serverStartupLogs = [];
-    const serverArgs = buildManagedServerArgs({
-      host: CODE_OSS_SERVER_HOST,
-      port,
-      serverDataDir: CODE_OSS_WEB_SERVER_DATA_DIR,
-    });
-    // Run the Code-OSS server (and the extension host it forks) on Electron's
-    // bundled Node via `ELECTRON_RUN_AS_NODE`, rather than a `node` from PATH.
-    // This (a) removes the dependency on the user having Node installed in the
-    // packaged app, and (b) guarantees Node >= 22 so `globalThis.WebSocket`
-    // exists — without it `@vscode/proxy-agent`'s `createWebSocketPatch` throws
-    // `Cannot read properties of undefined (reading 'prototype')` during
-    // extension-host startup.
-    const child = ChildProcess.spawn(process.execPath, serverArgs, {
-      cwd: runtime.vscodeRoot,
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
-        BROWSER: "none",
-        VSCODE_DEV: "1",
-      },
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    session.serverProcess = child;
-    const appendLog = (chunk: Buffer | string) => {
-      for (const line of String(chunk).split(/\r?\n/)) {
-        const trimmedLine = line.trim();
-        if (trimmedLine.length > 0) {
-          session.serverStartupLogs.push(trimmedLine);
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= MANAGED_SERVER_START_ATTEMPTS; attempt++) {
+      try {
+        return await this.spawnManagedServerOnce(runtime, session, mountedWorkspace);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        // Retry with a fresh port only when the bind raced another process;
+        // every other failure (missing assets, hung start, crash) is fatal.
+        if (attempt < MANAGED_SERVER_START_ATTEMPTS && isPortConflictError(lastError)) {
+          continue;
         }
+        throw lastError;
       }
-    };
-    child.stdout?.on("data", appendLog);
-    child.stderr?.on("data", appendLog);
-
-    child.once("exit", (code, signal) => {
-      if (session.serverProcess !== child) {
-        return;
-      }
-
-      session.serverProcess = null;
-      session.entry = null;
-      session.workspaceUri = null;
-      session.runtimeStartPromise = null;
-      if (this.disposed) {
-        return;
-      }
-
-      this.config.state.available = false;
-      if (this.config.state.entry === entry) {
-        this.config.state.entry = null;
-      }
-      this.config.state.reason = [
-        "The local VS Code web runtime exited unexpectedly.",
-        signal ? `Signal: ${signal}.` : `Exit code: ${code ?? "unknown"}.`,
-        `Workspace root: ${session.workspaceRoot}.`,
-        `Mounted root: ${mountedWorkspace.mountRoot}.`,
-        `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`,
-      ].join(" ");
-    });
-
-    child.once("error", (error) => {
-      appendLog(error.message);
-    });
-
-    try {
-      await waitForHttpReady(entry, CODE_OSS_SERVER_START_TIMEOUT_MS);
-      return {
-        kind: "managed-server",
-        entry,
-        mountRoot: mountedWorkspace.mountRoot,
-        workspaceUri: mountedWorkspace.workspaceUri,
-      };
-    } catch (error) {
-      this.stopSessionServer(session);
-      const prefix =
-        error instanceof Error && error.message.includes("Timed out waiting")
-          ? error.message
-          : "Failed to start the local VS Code web runtime.";
-      const details =
-        error instanceof Error && error.message.includes("Timed out waiting")
-          ? `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`
-          : [
-              error instanceof Error ? error.message : String(error),
-              `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`,
-            ].join(" ");
-      throw new Error(
-        [
-          prefix,
-          `Checkout root: ${runtime.vscodeRoot}.`,
-          `Workspace root: ${session.workspaceRoot}.`,
-          `Mounted root: ${mountedWorkspace.mountRoot}.`,
-          `Launch command: node ${serverArgs.map((arg) => normalizeFilePath(arg)).join(" ")}.`,
-          details,
-        ].join(" "),
-      );
     }
+    // Unreachable: the loop body always returns or throws.
+    throw lastError ?? new Error("Failed to start the local VS Code web runtime.");
+  }
+
+  private spawnManagedServerOnce(
+    runtime: Extract<CodeHostRuntime, { kind: "managed-server" }>,
+    session: CodeSession,
+    mountedWorkspace: ReturnType<typeof buildMountedWorkspaceDescriptor>,
+  ): Promise<CodeSessionRuntime> {
+    return new Promise<CodeSessionRuntime>((resolve, reject) => {
+      void (async () => {
+        const port = await reserveLoopbackPort();
+        const entry = `http://${CODE_OSS_SERVER_HOST}:${port}`;
+
+        session.serverStartupLogs = [];
+        const serverArgs = buildManagedServerArgs({
+          host: CODE_OSS_SERVER_HOST,
+          port,
+          serverDataDir: CODE_OSS_WEB_SERVER_DATA_DIR,
+        });
+
+        const buildFailureError = (causeMessage: string): Error =>
+          new Error(
+            [
+              causeMessage,
+              `Checkout root: ${runtime.vscodeRoot}.`,
+              `Workspace root: ${session.workspaceRoot}.`,
+              `Mounted root: ${mountedWorkspace.mountRoot}.`,
+              `Launch command: node ${serverArgs.map((arg) => normalizeFilePath(arg)).join(" ")}.`,
+              `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`,
+            ].join(" "),
+          );
+
+        // Run the Code-OSS server (and the extension host it forks) on Electron's
+        // bundled Node via `ELECTRON_RUN_AS_NODE`, rather than a `node` from PATH.
+        // This (a) removes the dependency on the user having Node installed in the
+        // packaged app, and (b) guarantees Node >= 22 so `globalThis.WebSocket`
+        // exists — without it `@vscode/proxy-agent`'s `createWebSocketPatch` throws
+        // `Cannot read properties of undefined (reading 'prototype')` during
+        // extension-host startup.
+        const child = ChildProcess.spawn(process.execPath, serverArgs, {
+          cwd: runtime.vscodeRoot,
+          env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: "1",
+            BROWSER: "none",
+            VSCODE_DEV: "1",
+          },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        session.serverProcess = child;
+        let ready = false;
+        // Guards the readiness/early-exit race: whichever settles this attempt
+        // first wins, so a late readiness timeout can't tear down a server that a
+        // later retry attempt has already brought up.
+        let settled = false;
+
+        const appendLog = (chunk: Buffer | string) => {
+          for (const line of String(chunk).split(/\r?\n/)) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.length > 0) {
+              session.serverStartupLogs.push(trimmedLine);
+            }
+          }
+        };
+        child.stdout?.on("data", appendLog);
+        child.stderr?.on("data", appendLog);
+
+        child.once("error", (error) => {
+          appendLog(error.message);
+        });
+
+        child.once("exit", (code, signal) => {
+          if (session.serverProcess !== child) {
+            return;
+          }
+
+          session.serverProcess = null;
+          session.entry = null;
+          session.workspaceUri = null;
+          session.runtimeStartPromise = null;
+
+          if (!ready) {
+            // Exited before becoming ready — fail this attempt immediately so the
+            // caller can retry (e.g. on a raced port) instead of waiting out the
+            // full readiness timeout.
+            if (settled) {
+              return;
+            }
+            settled = true;
+            reject(
+              buildFailureError(
+                [
+                  "The local VS Code web runtime exited before it became ready.",
+                  signal ? `Signal: ${signal}.` : `Exit code: ${code ?? "unknown"}.`,
+                ].join(" "),
+              ),
+            );
+            return;
+          }
+
+          if (this.disposed) {
+            return;
+          }
+
+          this.config.state.available = false;
+          if (this.config.state.entry === entry) {
+            this.config.state.entry = null;
+          }
+          this.config.state.reason = [
+            "The local VS Code web runtime exited unexpectedly.",
+            signal ? `Signal: ${signal}.` : `Exit code: ${code ?? "unknown"}.`,
+            `Workspace root: ${session.workspaceRoot}.`,
+            `Mounted root: ${mountedWorkspace.mountRoot}.`,
+            `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`,
+          ].join(" ");
+        });
+
+        try {
+          await waitForHttpReady(entry, CODE_OSS_SERVER_START_TIMEOUT_MS);
+          if (settled) {
+            return;
+          }
+          settled = true;
+          ready = true;
+          resolve({
+            kind: "managed-server",
+            entry,
+            mountRoot: mountedWorkspace.mountRoot,
+            workspaceUri: mountedWorkspace.workspaceUri,
+          });
+        } catch (error) {
+          // The process exited early and already settled this attempt — don't
+          // tear down whatever server is currently assigned to the session.
+          if (settled) {
+            return;
+          }
+          settled = true;
+          this.stopSessionServer(session);
+          const causeMessage =
+            error instanceof Error && error.message.includes("Timed out waiting")
+              ? error.message
+              : `Failed to start the local VS Code web runtime. ${
+                  error instanceof Error ? error.message : String(error)
+                }`;
+          reject(buildFailureError(causeMessage));
+        }
+      })().catch(reject);
+    });
   }
 
   private stopSessionServer(session: CodeSession): void {
@@ -1338,9 +1444,7 @@ export class CodeHostManager {
     session.entry = null;
     session.workspaceUri = null;
     session.runtimeStartPromise = null;
-    if (!serverProcess.killed) {
-      serverProcess.kill("SIGTERM");
-    }
+    terminateProcessTree(serverProcess);
   }
 
   private startDesktopRenderer(

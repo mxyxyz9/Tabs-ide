@@ -67,13 +67,20 @@ export function isRuntimeInstalled(version: string): boolean {
   return FS.existsSync(Path.join(dir, "out", "server-main.js"));
 }
 
-function httpGetFollow(url: string): Promise<IncomingMessage> {
+function httpGetFollow(url: string, redirectsLeft = 5): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
     const request = Https.get(url, { headers: { "User-Agent": "tabs-desktop" } }, (response) => {
       const status = response.statusCode ?? 0;
       if (status >= 300 && status < 400 && response.headers.location) {
         response.resume();
-        httpGetFollow(new URL(response.headers.location, url).toString()).then(resolve, reject);
+        if (redirectsLeft <= 0) {
+          reject(new Error(`Runtime download failed: too many redirects for ${url}`));
+          return;
+        }
+        httpGetFollow(new URL(response.headers.location, url).toString(), redirectsLeft - 1).then(
+          resolve,
+          reject,
+        );
         return;
       }
       if (status !== 200) {
@@ -121,7 +128,11 @@ function extractZip(zipPath: string, destDir: string): void {
             [
               "-NoProfile",
               "-Command",
-              `Expand-Archive -Force -LiteralPath '${zipPath}' -DestinationPath '${destDir}'`,
+              // Single-quote the paths and escape embedded quotes (PowerShell
+              // escapes `'` by doubling it) so a quote in the home/TABS_HOME path
+              // can't break or inject into the command.
+              `Expand-Archive -Force -LiteralPath '${zipPath.replace(/'/g, "''")}' ` +
+                `-DestinationPath '${destDir.replace(/'/g, "''")}'`,
             ],
             { stdio: "ignore" },
           )

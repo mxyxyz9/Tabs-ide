@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
+  type ModelSelection,
+  type ModelSlug,
   PROVIDER_DISPLAY_NAMES,
   type ProviderKind,
   type ServerProvider,
@@ -38,9 +40,9 @@ import {
 } from "../components/ui/select";
 import { SidebarTrigger } from "../components/ui/sidebar";
 import { Switch } from "../components/ui/switch";
-import { ProviderModelPicker } from "../components/chat/ProviderModelPicker";
+import { AVAILABLE_PROVIDER_OPTIONS } from "../components/chat/ProviderModelPicker";
 import { ProjectWorkspaceSettingsSection } from "../components/ProjectWorkspaceSettingsSection";
-import { TraitsPicker } from "../components/chat/TraitsPicker";
+import { buildTraitModelOptions, getSelectedTraits } from "../components/chat/TraitsPicker";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { isElectron } from "../env";
@@ -365,6 +367,50 @@ function SettingsRouteView() {
     textGenProvider,
     textGenModel,
   );
+  // Text-generation model row uses plain Selects (provider + model + traits)
+  // instead of the menu/submenu pickers, which were hard to operate in the
+  // right-aligned settings row. Trait controls are only rendered when the
+  // selected model actually exposes them.
+  const textGenModels =
+    serverProviders.find((entry) => entry.provider === textGenProvider)?.models ?? [];
+  const textGenTraits = getSelectedTraits(
+    textGenProvider,
+    textGenModels,
+    textGenModel,
+    "",
+    textGenModelOptions,
+    false,
+  );
+  const textGenProviderOptions = AVAILABLE_PROVIDER_OPTIONS.filter(
+    (option) => (gitModelOptionsByProvider[option.value]?.length ?? 0) > 0,
+  );
+  const textGenModelLabel =
+    (gitModelOptionsByProvider[textGenProvider] ?? []).find(
+      (option) => option.slug === textGenModel,
+    )?.name ?? textGenModel;
+  const applyTextGenSelection = (provider: ProviderKind, model: ModelSlug) => {
+    updateSettings({
+      textGenerationModelSelection: resolveAppModelSelectionState(
+        { ...settings, textGenerationModelSelection: { provider, model } },
+        serverProviders,
+      ),
+    });
+  };
+  const applyTextGenOptions = (options: ReturnType<typeof buildTraitModelOptions>) => {
+    updateSettings({
+      textGenerationModelSelection: resolveAppModelSelectionState(
+        {
+          ...settings,
+          textGenerationModelSelection: {
+            provider: textGenProvider,
+            model: textGenModel,
+            options,
+          } as ModelSelection,
+        },
+        serverProviders,
+      ),
+    });
+  };
   const areProviderSettingsDirty = PROVIDER_SETTINGS.some((providerSettings) => {
     const currentSettings = settings.providers[providerSettings.provider];
     const defaultSettings = DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
@@ -905,56 +951,125 @@ function SettingsRouteView() {
                   ) : null
                 }
                 control={
-                  <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <ProviderModelPicker
-                      provider={textGenProvider}
-                      model={textGenModel}
-                      lockedProvider={null}
-                      providers={serverProviders}
-                      modelOptionsByProvider={gitModelOptionsByProvider}
-                      triggerVariant="outline"
-                      triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                      onProviderModelChange={(provider, model) => {
-                        updateSettings({
-                          textGenerationModelSelection: resolveAppModelSelectionState(
-                            {
-                              ...settings,
-                              textGenerationModelSelection: { provider, model },
-                            },
-                            serverProviders,
-                          ),
-                        });
+                  <div className="flex w-full flex-wrap items-center justify-end gap-2">
+                    <Select
+                      value={textGenProvider}
+                      onValueChange={(value) => {
+                        const nextProvider = value as ProviderKind;
+                        const firstModel = gitModelOptionsByProvider[nextProvider]?.[0]?.slug;
+                        if (!firstModel) return;
+                        applyTextGenSelection(nextProvider, firstModel as ModelSlug);
                       }}
-                    />
-                    <TraitsPicker
-                      provider={textGenProvider}
-                      models={
-                        serverProviders.find((provider) => provider.provider === textGenProvider)
-                          ?.models ?? []
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="w-full sm:w-36"
+                        aria-label="Text generation provider"
+                      >
+                        <SelectValue>{PROVIDER_DISPLAY_NAMES[textGenProvider]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectPopup align="end" alignItemWithTrigger={false}>
+                        {textGenProviderOptions.map((option) => (
+                          <SelectItem hideIndicator key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                    <Select
+                      value={textGenModel as string}
+                      onValueChange={(value) =>
+                        applyTextGenSelection(textGenProvider, value as ModelSlug)
                       }
-                      model={textGenModel}
-                      prompt=""
-                      onPromptChange={() => {}}
-                      modelOptions={textGenModelOptions}
-                      allowPromptInjectedEffort={false}
-                      triggerVariant="outline"
-                      triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                      onModelOptionsChange={(nextOptions) => {
-                        updateSettings({
-                          textGenerationModelSelection: resolveAppModelSelectionState(
-                            {
-                              ...settings,
-                              textGenerationModelSelection: {
-                                provider: textGenProvider,
-                                model: textGenModel,
-                                ...(nextOptions ? { options: nextOptions } : {}),
-                              },
-                            },
-                            serverProviders,
-                          ),
-                        });
-                      }}
-                    />
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        className="w-full sm:w-52"
+                        aria-label="Text generation model"
+                      >
+                        <SelectValue>{textGenModelLabel}</SelectValue>
+                      </SelectTrigger>
+                      <SelectPopup align="end" alignItemWithTrigger={false}>
+                        {(gitModelOptionsByProvider[textGenProvider] ?? []).map((option) => (
+                          <SelectItem hideIndicator key={option.slug} value={option.slug}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                    {textGenTraits.effort ? (
+                      <Select
+                        value={textGenTraits.effort}
+                        onValueChange={(value) => {
+                          if (typeof value !== "string" || !value) return;
+                          applyTextGenOptions(
+                            buildTraitModelOptions(textGenProvider, textGenModelOptions, {
+                              effort: value,
+                            }),
+                          );
+                        }}
+                      >
+                        <SelectTrigger
+                          size="sm"
+                          className="w-full sm:w-36"
+                          aria-label="Reasoning effort"
+                        >
+                          <SelectValue>
+                            {textGenTraits.effortLevels.find(
+                              (level) => level.value === textGenTraits.effort,
+                            )?.label ?? textGenTraits.effort}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectPopup align="end" alignItemWithTrigger={false}>
+                          {textGenTraits.effortLevels.map((level) => (
+                            <SelectItem hideIndicator key={level.value} value={level.value}>
+                              {level.label}
+                            </SelectItem>
+                          ))}
+                        </SelectPopup>
+                      </Select>
+                    ) : textGenTraits.thinkingEnabled !== null ? (
+                      <Select
+                        value={textGenTraits.thinkingEnabled ? "on" : "off"}
+                        onValueChange={(value) => {
+                          applyTextGenOptions(
+                            buildTraitModelOptions(textGenProvider, textGenModelOptions, {
+                              thinking: value === "on",
+                            }),
+                          );
+                        }}
+                      >
+                        <SelectTrigger size="sm" className="w-full sm:w-36" aria-label="Thinking">
+                          <SelectValue>
+                            {textGenTraits.thinkingEnabled ? "Thinking On" : "Thinking Off"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectPopup align="end" alignItemWithTrigger={false}>
+                          <SelectItem hideIndicator value="on">
+                            Thinking On
+                          </SelectItem>
+                          <SelectItem hideIndicator value="off">
+                            Thinking Off
+                          </SelectItem>
+                        </SelectPopup>
+                      </Select>
+                    ) : null}
+                    {textGenTraits.caps.supportsFastMode ? (
+                      <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
+                        Fast mode
+                        <Switch
+                          checked={textGenTraits.fastModeEnabled}
+                          onCheckedChange={(checked) =>
+                            applyTextGenOptions(
+                              buildTraitModelOptions(textGenProvider, textGenModelOptions, {
+                                fastMode: Boolean(checked),
+                              }),
+                            )
+                          }
+                          aria-label="Fast mode"
+                        />
+                      </label>
+                    ) : null}
                   </div>
                 }
               />

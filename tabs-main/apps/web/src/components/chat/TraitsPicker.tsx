@@ -64,7 +64,31 @@ function buildNextOptions(
   return { ...(modelOptions as ClaudeModelOptions | undefined), ...patch } as ClaudeModelOptions;
 }
 
-function getSelectedTraits(
+/**
+ * Build the next provider options from a trait patch, mapping each trait to its
+ * provider-specific option key (effort uses `reasoningEffort` on codex, `effort`
+ * elsewhere). Centralizes the key knowledge so callers (e.g. the Settings
+ * text-generation controls) don't duplicate it.
+ */
+export function buildTraitModelOptions(
+  provider: ProviderKind,
+  modelOptions: ProviderOptions | null | undefined,
+  patch: { effort?: string; thinking?: boolean; fastMode?: boolean },
+): ProviderOptions {
+  const next: Record<string, unknown> = {};
+  if (patch.effort !== undefined) {
+    next[provider === "codex" ? "reasoningEffort" : "effort"] = patch.effort;
+  }
+  if (patch.thinking !== undefined) {
+    next.thinking = patch.thinking;
+  }
+  if (patch.fastMode !== undefined) {
+    next.fastMode = patch.fastMode;
+  }
+  return buildNextOptions(provider, modelOptions, next);
+}
+
+export function getSelectedTraits(
   provider: ProviderKind,
   models: ReadonlyArray<ServerProviderModel>,
   model: string | null | undefined,

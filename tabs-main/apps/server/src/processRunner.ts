@@ -97,6 +97,21 @@ function killChild(child: ChildProcessHandle, signal: NodeJS.Signals = "SIGTERM"
   child.kill(signal);
 }
 
+/**
+ * Largest cut point <= `end` that does not fall inside a multi-byte UTF-8
+ * sequence. UTF-8 continuation bytes match `10xxxxxx`; if the byte at the cut
+ * is a continuation byte we're mid-character, so back up to the lead byte. This
+ * keeps a truncated buffer from ending in a mojibake `�`.
+ */
+function utf8SafeEnd(buf: Buffer, end: number): number {
+  if (end >= buf.length) return buf.length;
+  let safeEnd = Math.max(0, end);
+  while (safeEnd > 0 && (buf[safeEnd]! & 0xc0) === 0x80) {
+    safeEnd--;
+  }
+  return safeEnd;
+}
+
 function appendChunkWithinLimit(
   target: string,
   currentBytes: number,
@@ -118,9 +133,11 @@ function appendChunkWithinLimit(
       truncated: false,
     };
   }
+  // Truncate on a UTF-8 character boundary so the final char isn't corrupted.
+  const safeEnd = utf8SafeEnd(chunk, remaining);
   return {
-    next: `${target}${chunk.subarray(0, remaining).toString()}`,
-    nextBytes: currentBytes + remaining,
+    next: `${target}${chunk.subarray(0, safeEnd).toString()}`,
+    nextBytes: currentBytes + safeEnd,
     truncated: true,
   };
 }

@@ -120,7 +120,10 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
 
 function defaultBrowserToolState(settings: ProjectWorkspaceSettingsType): ProjectBrowserToolState {
   return {
-    currentUrl: settings.browser.defaultUrl,
+    // Seed the live URL once, at creation. Keep it non-empty so a later change to
+    // `browser.defaultUrl` (the template for new tabs) can never retroactively
+    // re-navigate this already-open tab.
+    currentUrl: settings.browser.defaultUrl.trim() || "http://localhost:3000",
     devicePreset: Schema.decodeSync(BrowserDevicePreset)("project-default"),
     customWidth: null,
     customHeight: null,
@@ -392,21 +395,22 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
           const nextSettings = decodeProjectWorkspaceSettings(
             typeof updater === "function" ? updater(current) : { ...current, ...updater },
           );
-          const browserState =
-            state.browserStateByProjectId[projectId] ?? defaultBrowserToolState(nextSettings);
           return {
             ...state,
             projectSettingsByProjectId: {
               ...state.projectSettingsByProjectId,
               [projectId]: nextSettings,
             },
-            browserStateByProjectId: {
-              ...state.browserStateByProjectId,
-              [projectId]:
-                browserState.currentUrl.trim().length > 0
-                  ? browserState
-                  : { ...browserState, currentUrl: nextSettings.browser.defaultUrl },
-            },
+            // `browser.defaultUrl` is the template for *new* browser tabs only.
+            // Never re-write an existing tab's live `currentUrl` from a settings
+            // change — otherwise editing the default re-navigates open tabs. Seed
+            // a fresh entry only when one doesn't exist yet.
+            browserStateByProjectId: state.browserStateByProjectId[projectId]
+              ? state.browserStateByProjectId
+              : {
+                  ...state.browserStateByProjectId,
+                  [projectId]: defaultBrowserToolState(nextSettings),
+                },
             session: {
               ...state.session,
               activeToolIdByProjectId: {
