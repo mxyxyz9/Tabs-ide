@@ -191,7 +191,12 @@ export const DEFAULT_PROJECT_TOOL_ORDER = [
   "browser",
 ] as const satisfies ReadonlyArray<ProjectToolKind>;
 
-export const DEFAULT_PROJECT_TOOL_KIND: ProjectToolKind = "code";
+// Land on the lightweight Agents (chat) tab by default rather than the embedded
+// editor. Defaulting to "code" made every fresh project open boot the heavy
+// Code-OSS REH server immediately (server + workbench + extension host), which
+// pegs the shared GPU/main process and makes the host UI freeze on first load —
+// the Code boot now happens only when the user actually opens the Code tab.
+export const DEFAULT_PROJECT_TOOL_KIND: ProjectToolKind = "agents";
 
 const ProjectSettingId = TrimmedNonEmptyString;
 

@@ -96,7 +96,7 @@ describe("workspaceShellStore", () => {
     expect(state.browserStateByProjectId[projectBeta]?.currentUrl).toBe("http://localhost:5173");
   });
 
-  it("falls back to the code tool when a persisted active tool becomes hidden", () => {
+  it("falls back to the default tool when a persisted active tool becomes hidden", () => {
     const projectId = ProjectId.makeUnsafe("project-shell");
     const store = useWorkspaceShellStore.getState();
 
@@ -108,7 +108,9 @@ describe("workspaceShellStore", () => {
     }));
 
     const state = useWorkspaceShellStore.getState();
-    expect(state.session.activeToolIdByProjectId[projectId]).toBe("code");
+    // Defaults to the Agents tab (DEFAULT_PROJECT_TOOL_KIND) — not the heavy
+    // Code-OSS editor, which would cold-boot on every fresh load.
+    expect(state.session.activeToolIdByProjectId[projectId]).toBe("agents");
   });
 
   it("syncs persisted shell state against available projects and valid threads", () => {
