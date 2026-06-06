@@ -5123,7 +5123,7 @@ function DesktopCustomEmbedTool(props: {
       lastRequestedUrlRef.current = null;
       void bridge.hideBrowserSession().catch(() => undefined);
     };
-  }, [bridge, normalizedUrl, props.project.id]);
+  }, [bridge, normalizedUrl, props.project.id, props.sessionId]);
 
   useEffect(() => {
     if (!bridge || !hostState.available || normalizedUrl.length === 0) {
@@ -5795,7 +5795,22 @@ function ServerTool(props: {
   activeTerminalId: string | null;
   hasTerminalWorkspace: boolean;
 }) {
-  const processes = props.projectSettings.serverProcesses;
+  // Server presets and custom "terminal tab" embeds share one `serverProcesses`
+  // array (a custom_process tool references its process via `serverProcessId`).
+  // The Server tab must only surface presets the user added *here* — never the
+  // processes that back standalone terminal tabs (e.g. gemini/claude).
+  const processes = useMemo(() => {
+    const customProcessIds = new Set(
+      props.projectSettings.tools.flatMap((tool) =>
+        tool.kind === "custom_process" && tool.serverProcessId != null
+          ? [tool.serverProcessId]
+          : [],
+      ),
+    );
+    return props.projectSettings.serverProcesses.filter(
+      (process) => !customProcessIds.has(process.id),
+    );
+  }, [props.projectSettings.serverProcesses, props.projectSettings.tools]);
   const terminalIdSet = new Set(props.terminalIds);
   const runningProcessIdSet = new Set(props.runningProcessIds);
   const [presetsExpanded, setPresetsExpanded] = useState(false);
@@ -7332,7 +7347,17 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   }, [activeTool?.kind]);
   useEffect(() => {
     if (activeTool?.kind !== "server" || !activeProjectSettings) return;
+    // Processes backing custom terminal tabs auto-start in their own tab — the
+    // Server tab must not also launch them in the shared server thread.
+    const customProcessIds = new Set(
+      activeProjectSettings.tools.flatMap((tool) =>
+        tool.kind === "custom_process" && tool.serverProcessId != null
+          ? [tool.serverProcessId]
+          : [],
+      ),
+    );
     for (const process of activeProjectSettings.serverProcesses) {
+      if (customProcessIds.has(process.id)) continue;
       if (!process.autoStart || process.commands.every((command) => command.trim().length === 0)) {
         continue;
       }
@@ -7371,17 +7396,31 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         onHideTerminal={hideServerTerminal}
         onCloseAllTerminals={() => void closeAllServerTerminals()}
         onSavePresets={(presets) =>
-          upsertProjectSettings(activeProject.id, (current) => ({
-            ...current,
-            serverProcesses: presets.map((preset) => ({
-              id: preset.id,
-              label: preset.label,
-              commands: preset.commands,
-              cwd: preset.cwd,
-              env: {},
-              autoStart: preset.autoStart,
-            })),
-          }))
+          upsertProjectSettings(activeProject.id, (current) => {
+            // Preserve the processes that back custom terminal tabs — the Server
+            // preset editor only manages presets created in the Server tab.
+            const customProcessIds = new Set(
+              current.tools.flatMap((tool) =>
+                tool.kind === "custom_process" && tool.serverProcessId != null
+                  ? [tool.serverProcessId]
+                  : [],
+              ),
+            );
+            return {
+              ...current,
+              serverProcesses: [
+                ...current.serverProcesses.filter((process) => customProcessIds.has(process.id)),
+                ...presets.map((preset) => ({
+                  id: preset.id,
+                  label: preset.label,
+                  commands: preset.commands,
+                  cwd: preset.cwd,
+                  env: {},
+                  autoStart: preset.autoStart,
+                })),
+              ],
+            };
+          })
         }
         terminalVisible={Boolean(serverTerminalState?.terminalOpen)}
         terminalIds={serverTerminalState?.terminalIds ?? []}
@@ -7433,7 +7472,15 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               ) ?? null)
             : null;
           return embed ? (
+            // Key by embed id so switching between custom browser tabs mounts a
+            // fresh instance per session. Without it React reuses one instance
+            // and only swaps props; the bounds/session effects (which don't list
+            // sessionId as a dep) then never re-run for the newly selected tab,
+            // leaving its BrowserView unpositioned (blank). The underlying
+            // BrowserView is kept alive in the main process, so this does not
+            // reload page content.
             <CustomEmbedTool
+              key={embed.id}
               project={activeProject}
               title={embed.label}
               url={embed.url}
