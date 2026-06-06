@@ -20,7 +20,15 @@ function ScrollArea({
     <ScrollAreaPrimitive.Root className={cn("size-full min-h-0", className)} {...props}>
       <ScrollAreaPrimitive.Viewport
         className={cn(
-          "h-full overscroll-contain rounded-[inherit] outline-none transition-shadows focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-has-overflow-x:overscroll-x-contain",
+          // `max-h-[inherit]` (+ max-w) is load-bearing: Base UI's Root is only
+          // `position: relative` with no definite height, so when a caller caps
+          // the Root with `max-h-*` the viewport's `h-full` resolves to `auto`
+          // and `overflow: scroll` never engages — tall content then spills out
+          // of the Root (whose overflow is visible) and overlaps whatever is
+          // below it. Inheriting the Root's max-height makes the viewport itself
+          // the bounded scroll container. It's a no-op when the Root has no
+          // max-height (inherits `none`), so fill-parent usages are unaffected.
+          "h-full max-h-[inherit] max-w-[inherit] overscroll-contain rounded-[inherit] outline-none transition-shadows focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background data-has-overflow-x:overscroll-x-contain",
           scrollFade &&
             "mask-t-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-start)))] mask-b-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-y-end)))] mask-l-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-start)))] mask-r-from-[calc(100%-min(var(--fade-size),var(--scroll-area-overflow-x-end)))] [--fade-size:1.5rem]",
           scrollbarGutter && "data-has-overflow-y:pe-2.5 data-has-overflow-x:pb-2.5",

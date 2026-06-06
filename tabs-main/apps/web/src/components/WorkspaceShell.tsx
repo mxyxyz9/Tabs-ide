@@ -5062,6 +5062,19 @@ function DesktopCustomEmbedTool(props: {
   // falling back to its configured URL; editing the configured URL takes over.
   const configuredUrl = normalizeBrowserUrl(props.url);
   const normalizedUrl = normalizeBrowserUrl(storedUrl ?? props.url);
+  // Editable address bar for the custom embed. Navigating here writes the
+  // per-session URL (NOT the shared per-project browser state — see the
+  // navigate effect below), which recomputes `normalizedUrl` and drives the
+  // BrowserView. Lets the user recover a tab whose page broke by editing the
+  // URL and reloading, without going back to Settings.
+  const [draftUrl, setDraftUrl] = useState(normalizedUrl);
+  const submitDraftUrl = () => {
+    const nextUrl = normalizeBrowserUrl(draftUrl);
+    if (nextUrl.length === 0) {
+      return;
+    }
+    setBrowserSessionUrl(props.project.id, props.sessionId, nextUrl);
+  };
   const prevConfiguredUrlRef = useRef(configuredUrl);
   useEffect(() => {
     if (prevConfiguredUrlRef.current !== configuredUrl) {
@@ -5075,6 +5088,11 @@ function DesktopCustomEmbedTool(props: {
       setBrowserSessionUrl(props.project.id, props.sessionId, current);
     }
   }, [sessionState.currentUrl, storedUrl, setBrowserSessionUrl, props.project.id, props.sessionId]);
+  // Keep the address bar reflecting where the embed actually is (e.g. after the
+  // user clicks a link inside it or navigates), like a real browser URL bar.
+  useEffect(() => {
+    setDraftUrl(sessionState.currentUrl ?? normalizedUrl);
+  }, [sessionState.currentUrl, normalizedUrl]);
 
   useEffect(() => {
     if (!bridge) {
@@ -5386,9 +5404,21 @@ function DesktopCustomEmbedTool(props: {
                 <BugIcon className="size-3.5" />
                 Inspect
               </Button>
-              <div className="min-w-0 flex-1 px-1.5">
-                <div className="truncate text-sm font-medium text-foreground">{props.title}</div>
-                <div className="truncate text-xs text-muted-foreground">{normalizedUrl}</div>
+              <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
+                <Input
+                  className="h-8"
+                  value={draftUrl}
+                  onChange={(event) => setDraftUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    submitDraftUrl();
+                  }}
+                  placeholder="Enter a URL"
+                  aria-label={`${props.title} URL`}
+                />
+                <Button type="button" size="xs" onClick={submitDraftUrl}>
+                  Go
+                </Button>
               </div>
               <Button
                 type="button"
