@@ -345,9 +345,56 @@ export class BrowserHostManager {
       session.devToolsOpen = false;
       this.emitState(session);
     });
-    contents.setWindowOpenHandler(({ url }) => {
+    contents.setWindowOpenHandler(({ url, disposition }) => {
+      // OAuth flows ("Continue with Google", SSO, etc.) call window.open(...)
+      // with popup features, which Electron reports as a "new-window"
+      // disposition. Those popups MUST stay in-app and share this view's
+      // session partition — otherwise the auth completes in the external
+      // browser (different cookies, no window.opener) and can never hand the
+      // session back. Allow them as a child window on the same partition.
+      if (disposition === "new-window") {
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            webPreferences: {
+              contextIsolation: true,
+              sandbox: true,
+              nodeIntegration: false,
+              partition: `persist:tabs-browser:${session.projectId}`,
+            },
+          },
+        };
+      }
+      // Plain link clicks (target=_blank / foreground-tab) open in the user's
+      // real browser, matching prior behavior.
       void shell.openExternal(url).catch(() => undefined);
       return { action: "deny" };
+    });
+    contents.on("did-create-window", (childWindow) => {
+      // Keep the OAuth popup tidy and let it close itself when the provider
+      // calls window.close() at the end of the flow.
+      childWindow.setMenuBarVisibility(false);
+      childWindow.webContents.setWindowOpenHandler(
+        ({ url: nestedUrl, disposition: nestedDisposition }) => {
+          if (nestedDisposition === "new-window") {
+            return {
+              action: "allow",
+              overrideBrowserWindowOptions: {
+                autoHideMenuBar: true,
+                webPreferences: {
+                  contextIsolation: true,
+                  sandbox: true,
+                  nodeIntegration: false,
+                  partition: `persist:tabs-browser:${session.projectId}`,
+                },
+              },
+            };
+          }
+          void shell.openExternal(nestedUrl).catch(() => undefined);
+          return { action: "deny" };
+        },
+      );
     });
     contents.on("context-menu", (_event, params) => {
       const template: MenuItemConstructorOptions[] = [

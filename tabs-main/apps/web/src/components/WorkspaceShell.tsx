@@ -7052,6 +7052,21 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       ? selectThreadTerminalState(state.terminalStateByThreadId, serverThreadId)
       : null,
   );
+  // Custom "terminal tab" embeds (gemini/codex/etc.) must run in their OWN
+  // terminal thread — never the shared `server:<project>` thread — so their
+  // terminals don't leak into the Server tab's terminal list. Only the active
+  // custom_process tab needs a live thread at a time.
+  const activeCustomProcessId =
+    activeTool?.kind === "custom_process" ? (activeTool.serverProcessId ?? null) : null;
+  const customProcessThreadId =
+    activeProject && activeCustomProcessId
+      ? ThreadId.makeUnsafe(`server:${activeProject.id}:custom:${activeCustomProcessId}`)
+      : null;
+  const customProcessTerminalState = useTerminalStateStore((state) =>
+    customProcessThreadId
+      ? selectThreadTerminalState(state.terminalStateByThreadId, customProcessThreadId)
+      : null,
+  );
   const storeSetTerminalOpen = useTerminalStateStore((state) => state.setTerminalOpen);
   const storeSetTerminalHeight = useTerminalStateStore((state) => state.setTerminalHeight);
   const storeSplitTerminal = useTerminalStateStore((state) => state.splitTerminal);
@@ -7184,6 +7199,85 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       serverThreadId,
     ],
   );
+  // ── Thread-parameterized terminal/process cores ──────────────────────
+  // Shared by the Server tab (server thread) and each custom terminal tab
+  // (its own isolated thread) so the two never cross-contaminate.
+  const openProcessTerminal = useCallback(
+    async (input: {
+      threadId: ThreadId;
+      terminalState: ReturnType<typeof selectThreadTerminalState> | null;
+      process: ProjectWorkspaceSettings["serverProcesses"][number];
+      reveal: boolean;
+    }) => {
+      const api = readNativeApi();
+      if (!api || !activeProject) return;
+      const commands = input.process.commands
+        .map((command) => command.trim())
+        .filter((command) => command.length > 0);
+      if (commands.length === 0) return;
+      const terminalId = input.process.id || DEFAULT_THREAD_TERMINAL_ID;
+      const cwd = input.process.cwd.trim().length > 0 ? input.process.cwd : activeProject.cwd;
+      const env = input.process.env;
+      if (input.reveal) {
+        storeSetTerminalOpen(input.threadId, true);
+      }
+      if (input.terminalState?.terminalIds.includes(terminalId)) {
+        storeSetActiveTerminal(input.threadId, terminalId);
+      } else {
+        storeNewTerminal(input.threadId, terminalId);
+      }
+      setShellTerminalFocusRequestId((value) => value + 1);
+      try {
+        await api.terminal.open({ threadId: input.threadId, terminalId, cwd, env });
+        for (const command of commands) {
+          await api.terminal.write({ threadId: input.threadId, terminalId, data: `${command}\r` });
+        }
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: `Could not run "${input.process.label}"`,
+          description: error instanceof Error ? error.message : "Terminal startup failed.",
+        });
+      }
+    },
+    [activeProject, storeNewTerminal, storeSetActiveTerminal, storeSetTerminalOpen],
+  );
+  const closeThreadTerminal = useCallback(
+    async (input: {
+      threadId: ThreadId;
+      terminalState: ReturnType<typeof selectThreadTerminalState> | null;
+      terminalId: string;
+      clearIfFinal: boolean;
+    }) => {
+      const api = readNativeApi();
+      const isFinalTerminal = (input.terminalState?.terminalIds.length ?? 0) <= 1;
+      const fallbackExitWrite = () =>
+        api?.terminal
+          .write({ threadId: input.threadId, terminalId: input.terminalId, data: "exit\n" })
+          .catch(() => undefined) ?? Promise.resolve();
+      if (api && "close" in api.terminal && typeof api.terminal.close === "function") {
+        try {
+          if (input.clearIfFinal && isFinalTerminal) {
+            await api.terminal
+              .clear({ threadId: input.threadId, terminalId: input.terminalId })
+              .catch(() => undefined);
+          }
+          await api.terminal.close({
+            threadId: input.threadId,
+            terminalId: input.terminalId,
+            deleteHistory: true,
+          });
+        } catch {
+          await fallbackExitWrite().catch(() => undefined);
+        }
+      } else {
+        await fallbackExitWrite().catch(() => undefined);
+      }
+      storeCloseTerminal(input.threadId, input.terminalId);
+      setShellTerminalFocusRequestId((value) => value + 1);
+    },
+    [storeCloseTerminal],
+  );
   const closeServerTerminal = useCallback(
     (terminalId: string) => {
       const api = readNativeApi();
@@ -7241,64 +7335,23 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   );
   const runServerProcess = useCallback(
     async (processId: string) => {
-      const api = readNativeApi();
-      if (
-        !api ||
-        !activeProject ||
-        !activeProjectSettings ||
-        !serverThreadId ||
-        !serverTerminalState
-      ) {
-        return;
-      }
+      if (!activeProjectSettings || !serverThreadId) return;
       const process = activeProjectSettings.serverProcesses.find((entry) => entry.id === processId);
-      if (!process) {
-        return;
-      }
-      const commands = process.commands
-        .map((command) => command.trim())
-        .filter((command) => command.length > 0);
-      if (commands.length === 0) return;
-      const terminalId = process.id || DEFAULT_THREAD_TERMINAL_ID;
-      const cwd = process.cwd.trim().length > 0 ? process.cwd : activeProject.cwd;
-      const env = process.env;
+      if (!process) return;
       revealServerTerminal();
-      if (serverTerminalState.terminalIds.includes(terminalId)) {
-        storeSetActiveTerminal(serverThreadId, terminalId);
-      } else {
-        storeNewTerminal(serverThreadId, terminalId);
-      }
-      setShellTerminalFocusRequestId((value) => value + 1);
-      try {
-        await api.terminal.open({
-          threadId: serverThreadId,
-          terminalId,
-          cwd,
-          env,
-        });
-        for (const command of commands) {
-          await api.terminal.write({
-            threadId: serverThreadId,
-            terminalId,
-            data: `${command}\r`,
-          });
-        }
-      } catch (error) {
-        toastManager.add({
-          type: "error",
-          title: `Could not run "${process.label}"`,
-          description: error instanceof Error ? error.message : "Terminal startup failed.",
-        });
-      }
+      await openProcessTerminal({
+        threadId: serverThreadId,
+        terminalState: serverTerminalState,
+        process,
+        reveal: true,
+      });
     },
     [
-      activeProject,
       activeProjectSettings,
+      openProcessTerminal,
       revealServerTerminal,
       serverTerminalState,
       serverThreadId,
-      storeNewTerminal,
-      storeSetActiveTerminal,
     ],
   );
   const restartServerProcess = useCallback(
@@ -7307,6 +7360,35 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       await runServerProcess(processId);
     },
     [runServerProcess, stopServerProcess],
+  );
+  // ── Custom terminal-tab handlers (isolated per-process thread) ────────
+  const runCustomProcess = useCallback(
+    async (process: ProjectWorkspaceSettings["serverProcesses"][number], threadId: ThreadId) => {
+      await openProcessTerminal({
+        threadId,
+        terminalState: selectThreadTerminalState(
+          useTerminalStateStore.getState().terminalStateByThreadId,
+          threadId,
+        ),
+        process,
+        reveal: true,
+      });
+    },
+    [openProcessTerminal],
+  );
+  const stopCustomProcess = useCallback(
+    async (terminalId: string, threadId: ThreadId) => {
+      await closeThreadTerminal({
+        threadId,
+        terminalState: selectThreadTerminalState(
+          useTerminalStateStore.getState().terminalStateByThreadId,
+          threadId,
+        ),
+        terminalId,
+        clearIfFinal: false,
+      });
+    },
+    [closeThreadTerminal],
   );
   const closeAllServerTerminals = useCallback(async () => {
     const api = readNativeApi();
@@ -7493,26 +7575,36 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     activeProject &&
     activeProjectSettings &&
     activeTool?.kind === "custom_process" &&
-    serverThreadId
+    customProcessThreadId
       ? (() => {
           const process = activeTool.serverProcessId
             ? (activeProjectSettings.serverProcesses.find(
                 (entry) => entry.id === activeTool.serverProcessId,
               ) ?? null)
             : null;
+          const threadId = customProcessThreadId;
           return process ? (
             <CustomProcessTool
+              key={process.id}
               project={activeProject}
               process={process}
-              threadId={serverThreadId}
-              terminalState={serverTerminalState ?? selectThreadTerminalState({}, serverThreadId)}
+              threadId={threadId}
+              terminalState={customProcessTerminalState ?? selectThreadTerminalState({}, threadId)}
               focusRequestId={shellTerminalFocusRequestId}
-              onRunProcess={(processId) => void runServerProcess(processId)}
-              onRestartProcess={(processId) => void restartServerProcess(processId)}
-              onStopProcess={(processId) => void stopServerProcess(processId)}
-              onActivateTerminal={focusServerProcessTerminal}
-              onCloseTerminal={closeServerTerminal}
-              onHeightChange={setServerTerminalHeight}
+              onRunProcess={() => void runCustomProcess(process, threadId)}
+              onRestartProcess={() => {
+                void (async () => {
+                  await stopCustomProcess(process.id, threadId);
+                  await runCustomProcess(process, threadId);
+                })();
+              }}
+              onStopProcess={() => void stopCustomProcess(process.id, threadId)}
+              onActivateTerminal={(terminalId) => {
+                storeSetActiveTerminal(threadId, terminalId);
+                setShellTerminalFocusRequestId((value) => value + 1);
+              }}
+              onCloseTerminal={(terminalId) => void stopCustomProcess(terminalId, threadId)}
+              onHeightChange={(height) => storeSetTerminalHeight(threadId, height)}
             />
           ) : null;
         })()
