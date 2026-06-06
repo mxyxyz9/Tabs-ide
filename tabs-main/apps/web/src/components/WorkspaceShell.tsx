@@ -6595,8 +6595,17 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const embeddedProjectCreateRequestedRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Wait for the server read model to actually arrive before syncing. Until
+    // then `projects` is the empty initial state, and syncing against it would
+    // filter the persisted `openProjectIds` (and active tab) down to nothing
+    // and then persist that empty result — wiping the restored workspace on
+    // every launch. `threadsHydrated` flips true only once the snapshot (with
+    // its projects) has been applied, so gating on it preserves the saved tabs.
+    if (!threadsHydrated) {
+      return;
+    }
     syncProjects(projects, threads);
-  }, [projects, syncProjects, threads]);
+  }, [projects, syncProjects, threads, threadsHydrated]);
 
   useEffect(() => {
     if (!embeddedMode.enabled || !embeddedMode.workspaceRoot || !threadsHydrated) {

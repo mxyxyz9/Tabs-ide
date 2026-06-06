@@ -223,6 +223,31 @@ describe("workspaceShellStore", () => {
     expect(next.session.activeToolIdByProjectId[project.id]).toBe("code");
   });
 
+  it("clears open tabs when synced against an empty project list (why callers must gate on hydration)", () => {
+    // syncWorkspaceShellState rebuilds from scratch and keeps only tabs whose
+    // project is present in `projects`. If a caller runs it before the server
+    // read model has loaded (projects still []), it wipes the restored
+    // workspace. WorkspaceShell therefore gates the sync effect on
+    // `threadsHydrated`; this test pins the clobbering behavior so that gate is
+    // never removed without understanding the consequence.
+    const project = makeProject("project-prehydration");
+    const baseState = createDefaultWorkspaceShellPersistedState();
+
+    const input: WorkspaceShellPersistedState = {
+      ...baseState,
+      session: {
+        ...baseState.session,
+        openProjectIds: [project.id],
+        activeProjectId: project.id,
+      },
+    };
+
+    const next = syncWorkspaceShellState(input, [], []);
+
+    expect(next.session.openProjectIds).toEqual([]);
+    expect(next.session.activeProjectId).toBeNull();
+  });
+
   it("restores custom terminal and browser tabs (plus per-tab URLs) when the project id is stable", () => {
     const project = makeProject("project-restore");
     const baseState = createDefaultWorkspaceShellPersistedState();
