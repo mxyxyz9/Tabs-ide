@@ -566,23 +566,40 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const zipPath = path.join(input.stageDistDir, `Tabs-${input.version}-${input.arch}.zip`);
   const dmgPath = path.join(input.stageDistDir, `Tabs-${input.version}-${input.arch}.dmg`);
 
-  if (!(yield* fs.exists(zipPath))) {
+  // Source the DMG payload from electron-builder's directly-packaged `.app`
+  // bundle (in dist/mac*/), NOT from the `.zip` it also emits. Extracting the
+  // zip with `ditto -x -k` mangles the nested framework version symlinks
+  // (`Foo.framework/Versions/Current`), which then makes `codesign --deep`
+  // abort with "bundle format is ambiguous (could be app or framework)" on
+  // frameworks like ReactiveObjC / Electron Framework. Copying the packaged
+  // app with `ditto <src> <dst>` preserves those symlinks intact.
+  const distEntries = yield* fs.readDirectory(input.stageDistDir);
+  let packagedAppPath: string | null = null;
+  for (const entry of distEntries) {
+    if (!entry.startsWith("mac")) continue;
+    const candidate = path.join(input.stageDistDir, entry, `${input.productName}.app`);
+    if (yield* fs.exists(candidate)) {
+      packagedAppPath = candidate;
+      break;
+    }
+  }
+  if (packagedAppPath === null) {
     return yield* new BuildScriptError({
-      message: `Could not create mac DMG because the expected ZIP was not found: ${zipPath}`,
+      message: `Could not create mac DMG because no packaged .app was found under ${input.stageDistDir}/mac*`,
     });
   }
 
   const dmgRoot = yield* fs.makeTempDirectoryScoped({
     prefix: "tabs-dmg-root-",
   });
-  yield* Effect.log("[desktop-artifact] Creating DMG from verified ZIP payload...");
+  yield* Effect.log("[desktop-artifact] Creating DMG from packaged app bundle...");
+  // `ditto <src> <dst>` deep-copies while preserving symlinks/metadata.
   yield* runCommand(
     ChildProcess.make({
       ...commandOutputOptions(input.verbose),
-    })`ditto -x -k ${zipPath} ${dmgRoot}`,
+    })`ditto ${packagedAppPath} ${path.join(dmgRoot, `${input.productName}.app`)}`,
   );
 
   // electron-builder drops `node_modules` from the `extraFiles` copy of
