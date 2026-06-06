@@ -24,6 +24,18 @@ const DOCKED_DEVTOOLS_MODE = "bottom";
 
 const DEFAULT_SESSION_ID = "browser";
 
+// Electron appends app/runtime tokens to the default User-Agent, e.g.
+// "... (KHTML, like Gecko) Tabs/0.0.14 Chrome/140.0.0.0 Electron/40.6.0 Safari/537.36".
+// Some web apps (figma being the notable one) branch on the UA and throw a
+// client-side exception when they see the `Electron/` token / unrecognized
+// product, rendering a blank error page inside the embed. Present as a vanilla
+// Chrome build by stripping the `Electron/<ver>` token and the product token
+// that precedes `Chrome/`, while preserving the real platform + Chrome version
+// (so this stays correct across macOS/Windows/Linux and Electron upgrades).
+export function sanitizeEmbeddedBrowserUserAgent(userAgent: string): string {
+  return userAgent.replace(/ Electron\/[^ ]+/g, "").replace(/ [^ /]+\/[^ ]+ Chrome\//, " Chrome/");
+}
+
 type BrowserSession = {
   projectId: string;
   sessionId: string;
@@ -99,6 +111,9 @@ export class BrowserHostManager {
       },
     });
     view.setBackgroundColor("#111111");
+    view.webContents.setUserAgent(
+      sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
+    );
 
     const session: BrowserSession = {
       projectId: input.projectId,
@@ -337,6 +352,30 @@ export class BrowserHostManager {
         this.emitState(session);
       },
     );
+    // A blank embed used to be indistinguishable from a crash: if the page's
+    // renderer process died, the BrowserView just painted its background color
+    // with no indication. Surface it as an error (which the UI shows with a
+    // reload affordance) instead of a silent black void.
+    contents.on("render-process-gone", (_event, details) => {
+      session.loading = false;
+      session.lastError = `The page crashed (${details.reason}). Reload to try again.`;
+      refreshNavigationState();
+      this.emitState(session);
+      console.error(
+        `[browser-host] render process gone for ${session.key} (${session.currentUrl ?? "?"}): ${details.reason}`,
+      );
+    });
+    // Forward page-level error logs to the main process log. Many "the site is
+    // blank" reports are a client-side exception thrown by the embedded page
+    // (e.g. figma); capturing it here makes those diagnosable without manually
+    // opening DevTools on the BrowserView.
+    contents.on("console-message", (details) => {
+      if (details.level === "error") {
+        console.error(
+          `[browser-host] page console error ${session.key} (${details.sourceId}:${details.lineNumber}): ${details.message}`,
+        );
+      }
+    });
     contents.on("devtools-opened", () => {
       session.devToolsOpen = true;
       this.emitState(session);

@@ -5436,8 +5436,14 @@ function DesktopCustomEmbedTool(props: {
           </CardContent>
         </Card>
       ) : (
-        <div className="pointer-events-none absolute right-4 top-4 z-20">
-          <div className="pointer-events-auto inline-flex items-center overflow-hidden rounded-full border border-border/80 bg-background/85 shadow-sm backdrop-blur-sm">
+        // Rendered IN FLOW (not as an absolute overlay): the native BrowserView
+        // always paints on top of the DOM, so an overlay here would be hidden
+        // behind the page and the user could never reach these controls — e.g.
+        // to bail out of a site that fails inside the embed (figma renders its
+        // own client-side-error page that Tabs can't detect). Keeping the row in
+        // flow positions the view below it, so Controls/External stay clickable.
+        <div className="flex items-center justify-end">
+          <div className="inline-flex items-center overflow-hidden rounded-full border border-border/80 bg-background/85 shadow-sm backdrop-blur-sm">
             <Button
               type="button"
               size="xs"
