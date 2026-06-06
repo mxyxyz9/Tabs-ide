@@ -71,6 +71,35 @@ export function requireProjectAbsent(input: {
   );
 }
 
+export function requireWorkspaceRootAvailable(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly projectId: ProjectId;
+  readonly workspaceRoot: string;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  // One live project per workspace root. All per-project UI state (open tool
+  // tabs, custom terminals/browsers, active tool, browser URLs) is keyed by
+  // project id, so a second project for the same folder would silently orphan
+  // the user's restored workspace on reopen. Creation callers already dedup by
+  // path; this is the authoritative guard that makes project identity stable
+  // regardless of caller races.
+  const conflict = input.readModel.projects.find(
+    (project) =>
+      project.deletedAt === null &&
+      project.id !== input.projectId &&
+      project.workspaceRoot === input.workspaceRoot,
+  );
+  if (!conflict) {
+    return Effect.void;
+  }
+  return Effect.fail(
+    invariantError(
+      input.command.type,
+      `A project for workspace root '${input.workspaceRoot}' already exists (project '${conflict.id}'); refusing to create a duplicate.`,
+    ),
+  );
+}
+
 export function requireThread(input: {
   readonly readModel: OrchestrationReadModel;
   readonly command: OrchestrationCommand;

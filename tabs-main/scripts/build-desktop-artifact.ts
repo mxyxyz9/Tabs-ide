@@ -15,7 +15,18 @@ import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Config, Data, Effect, FileSystem, Layer, Logger, Option, Path, Schema } from "effect";
+import {
+  Config,
+  Data,
+  Duration,
+  Effect,
+  FileSystem,
+  Layer,
+  Logger,
+  Option,
+  Path,
+  Schema,
+} from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
@@ -266,6 +277,45 @@ const runCommand = Effect.fn("runCommand")(function* (command: ChildProcess.Comm
     });
   }
 });
+
+/**
+ * Run a command with bounded retries. electron-builder downloads its NSIS/7zip
+ * toolchain from GitHub's electron-builder-binaries releases at build time, and
+ * that host intermittently returns 5xx (e.g. 504 Gateway Time-out), which fails
+ * the whole release for a transient network reason — after packaging, native
+ * rebuild and code-signing have already succeeded. Re-running electron-builder
+ * is idempotent (it overwrites dist/ and resumes the toolchain download), so a
+ * few backed-off retries turn these flakes into a self-healing build. A genuine
+ * build error still surfaces after the attempts are exhausted.
+ */
+type RunCommandEffect = ReturnType<typeof runCommand>;
+
+const runCommandWithRetry = (
+  command: ChildProcess.Command,
+  options?: {
+    readonly attempts?: number;
+    readonly baseDelaySeconds?: number;
+    readonly label?: string;
+  },
+): RunCommandEffect => {
+  const attempts = Math.max(1, options?.attempts ?? 3);
+  const baseDelaySeconds = options?.baseDelaySeconds ?? 20;
+  const label = options?.label ?? "command";
+  const attempt = (n: number): RunCommandEffect =>
+    runCommand(command).pipe(
+      Effect.catch((error) =>
+        n >= attempts
+          ? Effect.fail(error)
+          : Effect.logWarning(
+              `[desktop-artifact] ${label} attempt ${n}/${attempts} failed (often a transient toolchain download error); retrying in ${baseDelaySeconds * n}s...`,
+            ).pipe(
+              Effect.andThen(Effect.sleep(Duration.seconds(baseDelaySeconds * n))),
+              Effect.andThen(attempt(n + 1)),
+            ),
+      ),
+    );
+  return attempt(1);
+};
 
 function generateMacIconSet(
   sourcePng: string,
@@ -1173,7 +1223,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* Effect.log(
     `[desktop-artifact] Building ${options.platform}/${options.target} (arch=${options.arch}, version=${appVersion})...`,
   );
-  yield* runCommand(
+  yield* runCommandWithRetry(
     ChildProcess.make({
       cwd: stageAppDir,
       env: buildEnv,
@@ -1181,6 +1231,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       // Windows needs shell mode to resolve .cmd shims.
       shell: process.platform === "win32",
     })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --publish never`,
+    { label: "electron-builder" },
   );
 
   const stageDistDir = path.join(stageAppDir, "dist");

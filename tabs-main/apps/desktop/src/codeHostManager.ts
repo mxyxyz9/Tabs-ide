@@ -283,10 +283,13 @@ function ensureCodeOssWebServerDefaultSettings(): void {
     "workbench.welcome.enabled": false,
     "workbench.tips.enabled": false,
     "workbench.editor.empty.hint": "hidden",
-    // The "Setup VS Code Web" walkthrough kept coming back because it was a
-    // *restored* editor tab (restore ignores startupEditor). Don't restore
-    // editors in the embed so the walkthrough cannot persist.
-    "workbench.editor.restoreEditors": false,
+    // Restore the user's open editors across app restarts so the Code tab
+    // reopens exactly where they left off (a core "continue where I left off"
+    // expectation). The "Setup VS Code Web" walkthrough that previously rode
+    // back in on restore is suppressed structurally instead: it can never be
+    // opened in the first place (startupEditor "none" + welcome/walkthrough
+    // disabled above), so there is nothing for the restore to bring back.
+    "workbench.editor.restoreEditors": true,
   };
   try {
     FS.mkdirSync(userDir, { recursive: true });

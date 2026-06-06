@@ -11,6 +11,7 @@ import {
   requireProjectAbsent,
   requireThread,
   requireThreadAbsent,
+  requireWorkspaceRootAvailable,
 } from "./commandInvariants.ts";
 
 const nowIso = () => new Date().toISOString();
@@ -62,6 +63,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         readModel,
         command,
         projectId: command.projectId,
+      });
+      yield* requireWorkspaceRootAvailable({
+        readModel,
+        command,
+        projectId: command.projectId,
+        workspaceRoot: command.workspaceRoot,
       });
 
       return {

@@ -205,6 +205,20 @@ jobs:
           # `compile-build` fails on the protected-fields mangler check.
           npm run gulp compile-build-without-mangling
 
+      # Cache electron-builder's downloaded NSIS/7zip/winCodeSign toolchain so a
+      # populated run never re-downloads it. The download host (GitHub's
+      # electron-builder-binaries releases) intermittently returns 504s that
+      # otherwise fail the whole release at the very end. Only the current
+      # runner's path exists; the others are ignored.
+      - name: Cache electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron-builder
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-binaries-${{ runner.os }}-${{ matrix.arch }}-v1
+
       - name: Build desktop artifact
         working-directory: tabs-main
         shell: bash

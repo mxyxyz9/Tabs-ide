@@ -222,4 +222,70 @@ describe("workspaceShellStore", () => {
 
     expect(next.session.activeToolIdByProjectId[project.id]).toBe("code");
   });
+
+  it("restores custom terminal and browser tabs (plus per-tab URLs) when the project id is stable", () => {
+    const project = makeProject("project-restore");
+    const baseState = createDefaultWorkspaceShellPersistedState();
+    const browserSessionKey = `${project.id}:browser-figma`;
+
+    const input: WorkspaceShellPersistedState = {
+      ...baseState,
+      session: {
+        ...baseState.session,
+        openProjectIds: [project.id],
+        activeProjectId: project.id,
+        activeToolIdByProjectId: {
+          [project.id]: "terminal-frontend",
+        },
+      },
+      browserUrlBySessionKey: {
+        [browserSessionKey]: "https://figma.com/file/abc",
+      },
+      projectSettingsByProjectId: {
+        [project.id]: {
+          tools: [
+            { id: "agents", kind: "agents", label: "Agents", visible: true },
+            {
+              id: "terminal-frontend",
+              kind: "custom_process",
+              label: "Frontend",
+              visible: true,
+              serverProcessId: "frontend",
+            },
+            {
+              id: "browser-figma",
+              kind: "custom_embed",
+              label: "Figma",
+              visible: true,
+              customEmbedId: "figma",
+            },
+          ],
+          browser: { defaultUrl: "", openExternalByDefault: false },
+          serverProcesses: [
+            {
+              id: "frontend",
+              label: "Frontend",
+              commands: ["npm run dev"],
+              cwd: "",
+              env: {},
+              autoStart: false,
+            },
+          ],
+          customEmbeds: [{ id: "figma", label: "Figma", url: "https://figma.com" }],
+        },
+      },
+    };
+
+    const next = syncWorkspaceShellState(input, [project], []);
+
+    const restoredTools = next.projectSettingsByProjectId[project.id]?.tools ?? [];
+    // Both custom tabs survive the project sync, so they reappear on reopen.
+    expect(restoredTools.some((tool) => tool.id === "terminal-frontend")).toBe(true);
+    expect(restoredTools.some((tool) => tool.id === "browser-figma")).toBe(true);
+    // The active tool (the custom terminal) and the project itself are restored.
+    expect(next.session.openProjectIds).toEqual([project.id]);
+    expect(next.session.activeToolIdByProjectId[project.id]).toBe("terminal-frontend");
+    // The per-tab browser URL is preserved so the tab reopens where it was.
+    expect(next.browserUrlBySessionKey[browserSessionKey]).toBe("https://figma.com/file/abc");
+  });
 });
