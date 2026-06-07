@@ -807,6 +807,18 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   return buildConfig;
 });
 
+/**
+ * Stage the VS Code runtime from the source directory into the build staging
+ * area. Returns `true` if staging succeeded, `false` if the source was not
+ * found (caller should switch to thin mode in that case).
+ *
+ * Source resolution order:
+ *  1. `TABS_CODE_OSS_BUILD_DIR` env var — an explicit path to a pre-built
+ *     tabs-code-main directory (e.g. on a CI runner that checked it out
+ *     separately).
+ *  2. `<repoRoot>/../tabs-code-main` — the conventional sibling checkout used
+ *     in local development.
+ */
 const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   repoRoot: string,
   stageResourcesDir: string,
@@ -814,15 +826,22 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
 
-  const vsCodeSourceDir = path.join(repoRoot, "..", "tabs-code-main");
+  // Honour an explicit override first (useful for CI runners that check out
+  // tabs-code-main into a non-standard location).
+  const envOverride = process.env.TABS_CODE_OSS_BUILD_DIR?.trim();
+  const vsCodeSourceDir = envOverride
+    ? path.resolve(envOverride)
+    : path.join(repoRoot, "..", "tabs-code-main");
   const vsCodeDestDir = path.join(stageResourcesDir, "tabs-code-main");
 
   if (!(yield* fs.exists(vsCodeSourceDir))) {
     yield* Effect.log(
-      "[desktop-artifact] VS Code runtime (tabs-code-main) not found. " +
-        "You can provide it via TABS_CODE_OSS_BUILD_DIR environment variable at runtime.",
+      `[desktop-artifact] VS Code runtime source not found at ${vsCodeSourceDir}. ` +
+        "Set TABS_CODE_OSS_BUILD_DIR to override the source path. " +
+        "The build will automatically use thin mode — the runtime will be downloaded " +
+        "from the GitHub release on first launch.",
     );
-    return;
+    return false;
   }
 
   yield* Effect.log("[desktop-artifact] Staging VS Code runtime...");
@@ -913,6 +932,8 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
       });
     });
   }
+
+  return true;
 });
 
 const assertPlatformBuildResources = Effect.fn("assertPlatformBuildResources")(function* (
@@ -1093,13 +1114,27 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
 
-  yield* stageVsCodeRuntime(repoRoot, stageResourcesDir);
+  const runtimeStaged = yield* stageVsCodeRuntime(repoRoot, stageResourcesDir);
   yield* assertPlatformBuildResources(options.platform, stageResourcesDir, options.verbose);
+
+  // When the VS Code runtime source was not found, auto-switch to thin mode.
+  // A non-thin build with no staged runtime would leave the electron-builder
+  // `extraFiles` entry pointing at a path that doesn't exist, producing a
+  // broken or incomplete installer. Thin mode drops the extraFiles entry and
+  // lets the app download the runtime from the GitHub release on first launch.
+  const effectiveThin = options.thin || !runtimeStaged;
+  if (!options.thin && !runtimeStaged) {
+    yield* Effect.log(
+      "[desktop-artifact] Runtime not staged — automatically enabling thin mode. " +
+        "Publish a tabs-code-runtime-*.zip to the GitHub release so the app can " +
+        "download it on first launch (run: bun run dist:desktop:artifact -- --thin).",
+    );
+  }
 
   // Thin build: emit the staged runtime as a downloadable release asset, then
   // let it be excluded from the app bundle below (createBuildConfig drops the
   // tabs-code-main extraFiles entry when thin).
-  if (options.thin) {
+  if (effectiveThin && runtimeStaged) {
     yield* emitCodeOssRuntimeBundle({
       runtimeDir: path.join(stageResourcesDir, "tabs-code-main"),
       outputDir: options.outputDir,
@@ -1168,7 +1203,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       options.target,
       desktopPackageJson.productName ?? "Tabs",
       options.signed,
-      options.thin,
+      effectiveThin,
       afterPackHookStaged,
     ),
     dependencies: {
@@ -1248,7 +1283,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       version: appVersion,
       arch: options.arch,
       verbose: options.verbose,
-      thin: options.thin,
+      thin: effectiveThin,
     });
   }
 
