@@ -37,10 +37,10 @@ export function hygiene(some: NodeJS.ReadWriteStream | string[] | undefined, run
 	const productJson = es.through(function (file: VinylFile) {
 		const product = JSON.parse(file.contents!.toString('utf8'));
 
-		if (product.extensionsGallery) {
-			console.error(`product.json: Contains 'extensionsGallery'`);
-			errorCount++;
-		}
+		// Note: upstream Code-OSS blocks extensionsGallery in product.json because
+		// Microsoft's marketplace license restricts usage to official VS Code builds.
+		// Tabs IDE uses Open VSX (open-vsx.org), which is license-compatible with
+		// Code-OSS forks, so the check is intentionally removed.
 
 		this.emit('data', file);
 	});
