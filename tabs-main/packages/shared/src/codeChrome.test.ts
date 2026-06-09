@@ -1,0 +1,97 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  CODE_ACTIVITY_ITEMS,
+  CODE_CHROME_COMMAND_ALLOWLIST,
+  CODE_CHROME_COMMANDS,
+  coerceChromeState,
+  DEFAULT_CODE_CHROME_STATE,
+  deriveActiveFileName,
+  isAllowedChromeCommand,
+  parseCodeControlClientMessage,
+  parseCodeControlServerMessage,
+} from "./codeChrome";
+
+describe("deriveActiveFileName", () => {
+  it("returns the basename for POSIX paths", () => {
+    expect(deriveActiveFileName("/Users/x/project/src/main.ts")).toBe("main.ts");
+  });
+  it("returns the basename for Windows paths", () => {
+    expect(deriveActiveFileName("C:\\Users\\x\\project\\src\\main.ts")).toBe("main.ts");
+  });
+  it("returns empty string for nullish/empty input", () => {
+    expect(deriveActiveFileName(null)).toBe("");
+    expect(deriveActiveFileName(undefined)).toBe("");
+    expect(deriveActiveFileName("")).toBe("");
+  });
+  it("ignores a trailing separator", () => {
+    expect(deriveActiveFileName("/a/b/c/")).toBe("c");
+  });
+});
+
+describe("command allowlist", () => {
+  it("includes every activity-item command and every chrome command", () => {
+    for (const item of CODE_ACTIVITY_ITEMS) {
+      expect(isAllowedChromeCommand(item.commandId)).toBe(true);
+    }
+    for (const commandId of Object.values(CODE_CHROME_COMMANDS)) {
+      expect(isAllowedChromeCommand(commandId)).toBe(true);
+    }
+  });
+  it("rejects arbitrary commands", () => {
+    expect(isAllowedChromeCommand("workbench.action.files.delete")).toBe(false);
+    expect(isAllowedChromeCommand("")).toBe(false);
+  });
+  it("has no duplicate entries", () => {
+    const set = new Set(CODE_CHROME_COMMAND_ALLOWLIST);
+    expect(set.size).toBe(CODE_CHROME_COMMAND_ALLOWLIST.length);
+  });
+});
+
+describe("parseCodeControlServerMessage", () => {
+  it("parses a valid runCommand", () => {
+    expect(
+      parseCodeControlServerMessage(JSON.stringify({ type: "runCommand", commandId: "x" })),
+    ).toEqual({
+      type: "runCommand",
+      commandId: "x",
+    });
+  });
+  it("rejects malformed JSON and unknown/invalid shapes", () => {
+    expect(parseCodeControlServerMessage("not json")).toBeNull();
+    expect(parseCodeControlServerMessage(JSON.stringify({ type: "runCommand" }))).toBeNull();
+    expect(parseCodeControlServerMessage(JSON.stringify({ type: "nope" }))).toBeNull();
+  });
+});
+
+describe("parseCodeControlClientMessage / coerceChromeState", () => {
+  it("parses hello", () => {
+    expect(parseCodeControlClientMessage(JSON.stringify({ type: "hello" }))).toEqual({
+      type: "hello",
+    });
+  });
+  it("parses and coerces chromeState", () => {
+    const parsed = parseCodeControlClientMessage(
+      JSON.stringify({
+        type: "chromeState",
+        state: { activeViewId: "scm", panelOpen: true, dirtyCount: 2.9, branch: "main" },
+      }),
+    );
+    expect(parsed).toEqual({
+      type: "chromeState",
+      state: { activeViewId: "scm", panelOpen: true, dirtyCount: 2, branch: "main" },
+    });
+  });
+  it("falls back to defaults for junk state", () => {
+    expect(coerceChromeState(null)).toEqual(DEFAULT_CODE_CHROME_STATE);
+    expect(coerceChromeState({ activeViewId: "bogus", dirtyCount: -5 })).toEqual({
+      activeViewId: null,
+      panelOpen: false,
+      dirtyCount: 0,
+      branch: null,
+    });
+  });
+  it("rejects malformed JSON", () => {
+    expect(parseCodeControlClientMessage("{")).toBeNull();
+  });
+});

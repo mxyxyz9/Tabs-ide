@@ -162,6 +162,22 @@ export interface DesktopCodeHostSetBoundsInput {
   visible: boolean;
 }
 
+/** Sidebar view ids the native Code-tab activity rail can switch between. */
+export type CodeActivityViewId = "explorer" | "search" | "scm" | "debug" | "extensions";
+
+/**
+ * State of the embedded workbench surfaced to the native Code-tab chrome
+ * (activity rail / header / status bar). Pushed from the integration extension
+ * through the loopback control channel. Runtime helpers that produce/validate
+ * this live in `@tabs/shared/codeChrome` (contracts stays schema-only).
+ */
+export interface CodeChromeState {
+  activeViewId: CodeActivityViewId | null;
+  panelOpen: boolean;
+  dirtyCount: number;
+  branch: string | null;
+}
+
 export interface DesktopBrowserHostState {
   available: boolean;
   reason: string | null;
@@ -241,6 +257,10 @@ export interface DesktopBridge {
   openCodeFile: (input: DesktopCodeHostOpenFileInput) => Promise<void>;
   setCodeBounds: (input: DesktopCodeHostSetBoundsInput) => Promise<void>;
   syncCodeSessions: (projectIds: readonly string[]) => Promise<void>;
+  /** Forward an allowlisted workbench command to the embedded editor. Resolves true when delivered. */
+  runCodeCommand: (commandId: string) => Promise<boolean>;
+  /** Subscribe to chrome-state pushes from the embedded workbench. Returns an unsubscribe fn. */
+  onCodeChromeState: (listener: (state: CodeChromeState) => void) => () => void;
   getBrowserHostState: () => Promise<DesktopBrowserHostState>;
   getBrowserSessionState: (
     input: DesktopBrowserHostControlInput,

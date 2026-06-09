@@ -100,17 +100,23 @@ export const CODE_OSS_THEME_CSS = /* css */ `
 }
 
 /* ===================================================== ACTIVITY BAR === */
-/* Clean and standard: a thin cyan left indicator on the active item (driven by
-   --vscode-activityBar-activeBorder above) + a cyan active icon. No floating
-   tiles. */
-.monaco-workbench .activitybar .action-item.checked .action-label,
-.monaco-workbench .activitybar .action-item.checked:hover .action-label {
-  color: var(--tabs-accent) !important;
+/* The stock activity bar, title bar and status bar are hidden via workbench
+   settings (see ensureCodeOssWebServerDefaultSettings) because Tabs renders its
+   own native React chrome (activity rail / header / status bar) in the gutters
+   around this embedded view. Defensive CSS in case a future VS Code build still
+   paints a sliver: collapse them so they can never leave a gap beside the React
+   chrome. */
+.monaco-workbench .part.activitybar,
+.monaco-workbench .part.titlebar,
+.monaco-workbench .part.statusbar {
+  display: none !important;
 }
 
 /* ============================================================ SIDEBAR === */
 .monaco-workbench .part.sidebar {
-  padding-top: 2px;
+  /* The native React rail sits to the left of this view, so the sidebar reads as
+     the first column — give it a touch more breathing room at the top. */
+  padding-top: 6px;
 }
 .monaco-workbench .pane-header {
   font-size: 11px;
@@ -166,14 +172,10 @@ export const CODE_OSS_THEME_CSS = /* css */ `
   font-size: 12.5px;
 }
 
-/* ========================================================= STATUS BAR === */
-.monaco-workbench .part.statusbar {
-  border-top: 1px solid var(--tabs-hairline);
-  font-size: 11.5px;
-}
-.monaco-workbench .part.statusbar .statusbar-item {
-  padding: 0 7px;
-}
+/* The stock status bar is hidden (settings + the collapse rule above); Tabs
+   renders its own native status bar below the embedded view. The status-bar
+   token mappings near the top are kept so any transient status surfaces (e.g.
+   notifications anchored to it) still read in-palette. */
 
 /* ============================================ INPUTS / WIDGETS / MENUS === */
 .monaco-workbench .quick-input-widget,

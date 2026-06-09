@@ -122,6 +122,10 @@ import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { getCodeHostUnavailableMessage } from "./codeHost.logic";
+import { CodeActivityRail } from "./code/CodeActivityRail";
+import { CodeHeaderBar } from "./code/CodeHeaderBar";
+import { CodeStatusBar } from "./code/CodeStatusBar";
+import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
 
 const BROWSER_DEVICE_PRESETS = [
   { id: "project-default", label: "Project", width: null, height: null },
@@ -1194,6 +1198,20 @@ function DesktopCodeTool(props: { project: Project }) {
     (state) =>
       state.codeStateByProjectId[props.project.id] ?? { lastFocusedPath: null, navigationNonce: 0 },
   );
+  // Native-chrome state pushed from the embedded workbench through the desktop
+  // bridge (the integration extension reports view/panel/scm state over the
+  // loopback control channel). Clicks forward allowlisted workbench commands.
+  const [chromeState, setChromeState] = useState<CodeChromeState>(DEFAULT_CODE_CHROME_STATE);
+  const runCodeCommand = useCallback((commandId: string) => {
+    void window.desktopBridge?.runCodeCommand(commandId).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge?.onCodeChromeState) {
+      return;
+    }
+    return bridge.onCodeChromeState(setChromeState);
+  }, []);
 
   const openProjectInEditor = useCallback(async () => {
     if (!api) return;
@@ -1435,16 +1453,29 @@ function DesktopCodeTool(props: { project: Project }) {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 min-w-0 flex-col bg-background">
-      <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0 bg-background" />
-
-      {!hostReady ? (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/64 text-sm text-muted-foreground">
-          <div className="rounded-2xl border border-border/70 bg-background/86 px-5 py-4 shadow-lg backdrop-blur-sm">
-            {hostError ?? "Attaching stock Code-OSS for this project…"}
-          </div>
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
+      <CodeHeaderBar
+        workspaceName={props.project.name}
+        activeFilePath={codeState.lastFocusedPath}
+        onRunCommand={runCodeCommand}
+      />
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <CodeActivityRail activeViewId={chromeState.activeViewId} onRunCommand={runCodeCommand} />
+        {/* The BrowserView is positioned to exactly cover this host node (see the
+            ResizeObserver effect above), so leaving it as a flex child inset by
+            the rail/header/status bar automatically insets the native view. */}
+        <div className="relative min-h-0 min-w-0 flex-1">
+          <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0 bg-background" />
+          {!hostReady ? (
+            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/64 text-sm text-muted-foreground">
+              <div className="rounded-2xl border border-border/70 bg-background/86 px-5 py-4 shadow-lg backdrop-blur-sm">
+                {hostError ?? "Attaching stock Code-OSS for this project…"}
+              </div>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
+      <CodeStatusBar chrome={chromeState} onRunCommand={runCodeCommand} />
     </div>
   );
 }

@@ -62,6 +62,8 @@ import {
   resolveInstalledRuntimeDir,
   type RuntimeInstallProgress,
 } from "./codeOssRuntimeInstaller";
+import { CodeControlChannel } from "./codeControlChannel";
+import type { CodeChromeState } from "@tabs/shared/codeChrome";
 
 syncShellEnvironment();
 
@@ -85,6 +87,11 @@ const CODE_HOST_HIDE_SESSION_CHANNEL = "desktop:code-host:hide-session";
 const CODE_HOST_OPEN_FILE_CHANNEL = "desktop:code-host:open-file";
 const CODE_HOST_SET_BOUNDS_CHANNEL = "desktop:code-host:set-bounds";
 const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
+// Native Code-tab chrome ↔ embedded workbench command bridge (see
+// codeControlChannel.ts). The renderer invokes run-command; main pushes
+// chrome-state updates back to the renderer.
+const CODE_HOST_RUN_COMMAND_CHANNEL = "desktop:code-host:run-command";
+const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
 const BROWSER_HOST_ENSURE_SESSION_CHANNEL = "desktop:browser-host:ensure-session";
@@ -182,6 +189,7 @@ const codeHostConfig = resolveCodeHostConfig({
 });
 const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig);
 const browserHostManager = new BrowserHostManager(() => mainWindow);
+const codeControlChannel = new CodeControlChannel();
 const CODE_OSS_FILE_PROTOCOL = "vscode-file";
 const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
@@ -1159,6 +1167,10 @@ function buildPrimaryCodeOssWindowConfiguration(
       TABS_DESKTOP_HTTP_URL: backendHttpUrl,
       TABS_WEB_APP_URL: resolveEmbeddedTabsWebAppUrl(),
       TABS_WORKSPACE_ROOT: workspaceRoot ?? "",
+      // The desktop-renderer fallback is the legacy Code-OSS-first shell: keep
+      // the integration extension's in-editor "Tabs" panel behavior here. The
+      // managed-server runtime omits this flag so only the control channel runs.
+      TABS_CODE_OSS_PRIMARY_SHELL: "1",
     },
     product: getCodeOssProductConfiguration(runtime.vscodeRoot),
     zoomLevel: 0,
@@ -1964,6 +1976,20 @@ function registerIpcHandlers(): void {
     codeHostManager.syncSessions(projectIds);
   });
 
+  ipcMain.removeHandler(CODE_HOST_RUN_COMMAND_CHANNEL);
+  ipcMain.handle(CODE_HOST_RUN_COMMAND_CHANNEL, async (_event, input: unknown) => {
+    // The control channel re-validates against the allowlist; this is just the
+    // shape guard for the IPC boundary.
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { commandId?: unknown }).commandId !== "string"
+    ) {
+      return false;
+    }
+    return codeControlChannel.runCommand((input as { commandId: string }).commandId);
+  });
+
   ipcMain.removeHandler(BROWSER_HOST_GET_STATE_CHANNEL);
   ipcMain.handle(BROWSER_HOST_GET_STATE_CHANNEL, async () => browserHostManager.getState());
 
@@ -2514,6 +2540,24 @@ async function bootstrap(): Promise<void> {
   backendHttpUrl = `http://127.0.0.1:${backendPort}`;
   writeDesktopLogHeader(`bootstrap resolved websocket endpoint baseUrl=${wsBaseUrl}`);
 
+  // Start the loopback control channel and expose its URL to the embedded
+  // Code-OSS extension host via env (inherited by the spawned REH server). Done
+  // before startBackend so the env is in place when the code session later
+  // spawns its server. Non-fatal if it fails — the chrome simply can't drive
+  // the workbench (clicks become no-ops) but the editor still works.
+  try {
+    const control = await codeControlChannel.start();
+    process.env.TABS_CODE_CONTROL_URL = control.url;
+    codeControlChannel.onChromeState((state: CodeChromeState) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, state);
+      }
+    });
+    writeDesktopLogHeader("bootstrap code control channel started");
+  } catch (error) {
+    writeDesktopLogHeader(`bootstrap code control channel failed: ${formatErrorMessage(error)}`);
+  }
+
   registerIpcHandlers();
   writeDesktopLogHeader("bootstrap ipc handlers registered");
   startBackend();
@@ -2528,6 +2572,7 @@ app.on("before-quit", () => {
   clearUpdatePollTimer();
   codeHostManager.dispose();
   browserHostManager.dispose();
+  codeControlChannel.dispose();
   stopBackend();
   restoreStdIoCapture?.();
 });

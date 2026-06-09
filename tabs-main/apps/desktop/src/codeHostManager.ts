@@ -63,6 +63,12 @@ export const CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH = Path.join(
   "code-oss-extensions",
   "tabs-embed-defaults",
 );
+export const CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH = Path.join(
+  "..",
+  "resources",
+  "code-oss-extensions",
+  "tabs-workbench-integration",
+);
 export const CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH = Path.join(
   "out",
   "vs",
@@ -255,6 +261,52 @@ function formatCodeHostPayload(entries: ReadonlyArray<readonly [string, string]>
   return JSON.stringify(entries);
 }
 
+const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
+  "workbench.startupEditor": "none",
+  "workbench.welcomePage.walkthroughs.openOnInstall": false,
+  "workbench.welcome.enabled": false,
+  "workbench.tips.enabled": false,
+  "workbench.editor.empty.hint": "hidden",
+  // Restore the user's open editors across app restarts so the Code tab
+  // reopens exactly where they left off (a core "continue where I left off"
+  // expectation). The "Setup VS Code Web" walkthrough that previously rode
+  // back in on restore is suppressed structurally instead: it can never be
+  // opened in the first place (startupEditor "none" + welcome/walkthrough
+  // disabled above), so there is nothing for the restore to bring back.
+  "workbench.editor.restoreEditors": true,
+  // Hide VS Code's own chrome — Tabs renders its own native React chrome
+  // (activity rail, header, status bar) in the gutters around the embedded
+  // view (see DesktopCodeTool in apps/web). The remaining sidebar / editor /
+  // panel stay inside the embedded view and are driven by the integration
+  // extension's command bridge.
+  "workbench.activityBar.location": "hidden",
+  "workbench.activityBar.visible": false,
+  "workbench.statusBar.visible": false,
+  "window.menuBarVisibility": "hidden",
+  "window.titleBarStyle": "native",
+  "window.customTitleBarVisibility": "never",
+  "workbench.layoutControl.enabled": false,
+  "window.commandCenter": false,
+  // The embedded editor is a single-user local IDE driving the user's own
+  // checkout — Workspace Trust prompts add nothing here and, more importantly,
+  // an untrusted workspace can prevent the bundled Tabs integration extension
+  // from activating.
+  "security.workspace.trust.enabled": false,
+};
+
+function writeMergedJsonFile(pathname: string, patch: Record<string, unknown>): void {
+  FS.mkdirSync(Path.dirname(pathname), { recursive: true });
+  let current: Record<string, unknown> = {};
+  if (isFile(pathname, FS)) {
+    try {
+      current = JSON.parse(FS.readFileSync(pathname, "utf8")) as Record<string, unknown>;
+    } catch {
+      current = {};
+    }
+  }
+  FS.writeFileSync(pathname, `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`, "utf8");
+}
+
 export function buildMountedWorkspaceDescriptor(workspaceRoot: string): {
   mountRoot: string;
   workspaceUri: string;
@@ -277,35 +329,8 @@ export function buildMountedWorkspaceDescriptor(workspaceRoot: string): {
 function ensureCodeOssWebServerDefaultSettings(): void {
   const userDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "data", "User");
   const settingsPath = Path.join(userDir, "settings.json");
-  const embedDefaults: Record<string, unknown> = {
-    "workbench.startupEditor": "none",
-    "workbench.welcomePage.walkthroughs.openOnInstall": false,
-    "workbench.welcome.enabled": false,
-    "workbench.tips.enabled": false,
-    "workbench.editor.empty.hint": "hidden",
-    // Restore the user's open editors across app restarts so the Code tab
-    // reopens exactly where they left off (a core "continue where I left off"
-    // expectation). The "Setup VS Code Web" walkthrough that previously rode
-    // back in on restore is suppressed structurally instead: it can never be
-    // opened in the first place (startupEditor "none" + welcome/walkthrough
-    // disabled above), so there is nothing for the restore to bring back.
-    "workbench.editor.restoreEditors": true,
-  };
   try {
-    FS.mkdirSync(userDir, { recursive: true });
-    let current: Record<string, unknown> = {};
-    if (isFile(settingsPath, FS)) {
-      try {
-        current = JSON.parse(FS.readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
-      } catch {
-        current = {};
-      }
-    }
-    FS.writeFileSync(
-      settingsPath,
-      `${JSON.stringify({ ...current, ...embedDefaults }, null, 2)}\n`,
-      "utf8",
-    );
+    writeMergedJsonFile(settingsPath, CODE_OSS_EMBED_DEFAULT_SETTINGS);
   } catch {
     // Non-fatal.
   }
@@ -363,6 +388,111 @@ function buildVsCodeFileUrl(pathname: string): string {
 
 function getCodeOssEmbedExtensionPath(baseDir: string): string {
   return Path.resolve(baseDir, CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH);
+}
+
+// Identity of the bundled integration extension (publisher.name from its
+// package.json), used to lay it out under the server's extensions dir.
+const CONTROL_EXTENSION_ID = "tabs.tabs-workbench-integration";
+const CONTROL_EXTENSION_VERSION = "0.0.1";
+const CONTROL_EXTENSION_FOLDER = `${CONTROL_EXTENSION_ID}-${CONTROL_EXTENSION_VERSION}`;
+
+function resolveBundledIntegrationExtensionSource(baseDir: string): string | null {
+  // Mirror main.ts resolveResourcePath's candidate order: in packaged builds
+  // the resources may live under `prod-resources` or `process.resourcesPath`
+  // rather than `../resources`. Return the first directory that exists.
+  const relative = Path.join("code-oss-extensions", "tabs-workbench-integration");
+  const candidates = [
+    Path.resolve(baseDir, CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH),
+    Path.resolve(baseDir, "..", "prod-resources", relative),
+    ...(process.resourcesPath
+      ? [
+          Path.join(process.resourcesPath, "resources", relative),
+          Path.join(process.resourcesPath, relative),
+        ]
+      : []),
+  ];
+  return candidates.find((candidate) => isDirectory(candidate, FS)) ?? null;
+}
+
+/**
+ * Upsert one entry into a Code-OSS `extensions.json` manifest (the source of
+ * truth for the server's user-installed extensions). Pure for testability.
+ * Preserves all other entries; replaces any existing entry with the same id.
+ */
+export function upsertInstalledExtensionManifest(
+  existing: readonly unknown[],
+  entry: { id: string; version: string; absolutePath: string; relativeLocation: string },
+): unknown[] {
+  const others = existing.filter((item) => {
+    const id = (item as { identifier?: { id?: unknown } })?.identifier?.id;
+    return typeof id !== "string" || id.toLowerCase() !== entry.id.toLowerCase();
+  });
+  others.push({
+    identifier: { id: entry.id },
+    version: entry.version,
+    location: { $mid: 1, path: entry.absolutePath, scheme: "file" },
+    relativeLocation: entry.relativeLocation,
+    metadata: {
+      installedTimestamp: Date.now(),
+      pinned: true,
+      source: "vsix",
+      isApplicationScoped: false,
+    },
+  });
+  return others;
+}
+
+/**
+ * Install the bundled integration extension into the managed server's
+ * extensions directory so it loads as a normal installed extension (its
+ * control channel then drives the native Tabs chrome).
+ *
+ * Why this mechanism: `out/server-main.js` (the REH web server) silently
+ * ignores `--extensionDevelopmentPath`, so a dev-path load never activates.
+ * The supported path is a folder under `<server-data-dir>/extensions` listed in
+ * `extensions.json`. We copy the (tiny) extension there and upsert the manifest
+ * entry — preserving any other installed extensions (e.g. Open VSX installs).
+ *
+ * The copy also resolves the asar problem: the server runs as plain Node
+ * (`ELECTRON_RUN_AS_NODE`) and cannot read inside `app.asar`, but the Electron
+ * main process can, so the copy lands on real disk the server can read.
+ * Best-effort: failures are swallowed (the editor still works, the chrome's
+ * buttons just no-op).
+ */
+function installManagedServerControlExtension(baseDir: string): void {
+  const source = resolveBundledIntegrationExtensionSource(baseDir);
+  if (!source) {
+    return;
+  }
+  try {
+    const extensionsDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "extensions");
+    const destDir = Path.join(extensionsDir, CONTROL_EXTENSION_FOLDER);
+    FS.mkdirSync(extensionsDir, { recursive: true });
+    FS.rmSync(destDir, { recursive: true, force: true });
+    FS.cpSync(source, destDir, { recursive: true });
+
+    const manifestPath = Path.join(extensionsDir, "extensions.json");
+    let existing: unknown[] = [];
+    if (isFile(manifestPath, FS)) {
+      try {
+        const parsed = JSON.parse(FS.readFileSync(manifestPath, "utf8"));
+        if (Array.isArray(parsed)) {
+          existing = parsed;
+        }
+      } catch {
+        existing = [];
+      }
+    }
+    const next = upsertInstalledExtensionManifest(existing, {
+      id: CONTROL_EXTENSION_ID,
+      version: CONTROL_EXTENSION_VERSION,
+      absolutePath: destDir,
+      relativeLocation: CONTROL_EXTENSION_FOLDER,
+    });
+    FS.writeFileSync(manifestPath, JSON.stringify(next), "utf8");
+  } catch {
+    // Non-fatal.
+  }
 }
 
 function isDirectory(pathname: string, fs: FsLike): boolean {
@@ -1315,6 +1445,13 @@ export class CodeHostManager {
         const entry = `http://${CODE_OSS_SERVER_HOST}:${port}`;
 
         session.serverStartupLogs = [];
+        // Install the bundled integration extension into the server's
+        // extensions dir so its native-chrome control channel runs in the
+        // remote extension host. (The legacy in-editor "Tabs" panel it can also
+        // show is gated off — see the extension's TABS_CODE_OSS_PRIMARY_SHELL
+        // guard — so only the control channel runs.) Must happen before the
+        // server starts so it scans the extension on boot.
+        installManagedServerControlExtension(__dirname);
         const serverArgs = buildManagedServerArgs({
           host: CODE_OSS_SERVER_HOST,
           port,
@@ -1658,6 +1795,9 @@ export class CodeHostManager {
       appRoot: runtime.vscodeRoot,
       userEnv: {
         VSCODE_CWD: session.workspaceRoot,
+        ...(process.env.TABS_CODE_CONTROL_URL
+          ? { TABS_CODE_CONTROL_URL: process.env.TABS_CODE_CONTROL_URL }
+          : null),
       },
       product: this.getProductConfiguration(runtime.vscodeRoot),
       zoomLevel: 0,
@@ -1736,6 +1876,11 @@ export class CodeHostManager {
       Path.join(location, "globalStorage"),
     ]) {
       FS.mkdirSync(pathname, { recursive: true });
+    }
+    try {
+      writeMergedJsonFile(Path.join(location, "settings.json"), CODE_OSS_EMBED_DEFAULT_SETTINGS);
+    } catch {
+      // Non-fatal. The integration extension also enforces these settings.
     }
 
     return {

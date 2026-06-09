@@ -35,6 +35,10 @@
     "./Struct": {
       "types": "./src/Struct.ts",
       "import": "./src/Struct.ts"
+    },
+    "./codeChrome": {
+      "types": "./src/codeChrome.ts",
+      "import": "./src/codeChrome.ts"
     }
   },
   "scripts": {

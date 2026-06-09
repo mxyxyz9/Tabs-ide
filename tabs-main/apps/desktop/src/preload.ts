@@ -21,6 +21,8 @@ const CODE_HOST_HIDE_SESSION_CHANNEL = "desktop:code-host:hide-session";
 const CODE_HOST_OPEN_FILE_CHANNEL = "desktop:code-host:open-file";
 const CODE_HOST_SET_BOUNDS_CHANNEL = "desktop:code-host:set-bounds";
 const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
+const CODE_HOST_RUN_COMMAND_CHANNEL = "desktop:code-host:run-command";
+const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
 const BROWSER_HOST_ENSURE_SESSION_CHANNEL = "desktop:browser-host:ensure-session";
@@ -73,6 +75,19 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   openCodeFile: (input) => ipcRenderer.invoke(CODE_HOST_OPEN_FILE_CHANNEL, input),
   setCodeBounds: (input) => ipcRenderer.invoke(CODE_HOST_SET_BOUNDS_CHANNEL, input),
   syncCodeSessions: (projectIds) => ipcRenderer.invoke(CODE_HOST_SYNC_SESSIONS_CHANNEL, projectIds),
+  runCodeCommand: (commandId: string) =>
+    ipcRenderer.invoke(CODE_HOST_RUN_COMMAND_CHANNEL, { commandId }),
+  onCodeChromeState: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
+      if (typeof state !== "object" || state === null) return;
+      listener(state as Parameters<typeof listener>[0]);
+    };
+
+    ipcRenderer.on(CODE_HOST_CHROME_STATE_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(CODE_HOST_CHROME_STATE_CHANNEL, wrappedListener);
+    };
+  },
   getBrowserHostState: () => ipcRenderer.invoke(BROWSER_HOST_GET_STATE_CHANNEL),
   getBrowserSessionState: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_GET_SESSION_STATE_CHANNEL, input),
