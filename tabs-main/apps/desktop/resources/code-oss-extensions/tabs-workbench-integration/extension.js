@@ -17,8 +17,15 @@ const EMBED_CHROME_DEFAULTS = {
   "workbench.startupEditor": "none",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,
   "workbench.welcome.enabled": false,
-  "workbench.tips.enabled": false,
-  "workbench.editor.empty.hint": "hidden",
+  // Show the editor-group watermark (the "Show All Commands / Go to File / Open
+  // File…" key tips) when NO editor is open. The editor area is a native
+  // BrowserView painting above the DOM, so a React overlay can't cover it — and
+  // the sidebar shares that same view, so we can't hide it to show one. The
+  // watermark is therefore the only way to signal "idle, not crashed" in that
+  // empty space. Gated entirely on this setting (see editorGroupWatermark.ts).
+  "workbench.tips.enabled": true,
+  // Also keep the hint for an open-but-empty editor (e.g. a new untitled file).
+  "workbench.editor.empty.hint": "text",
   "security.workspace.trust.enabled": false,
 };
 
@@ -40,6 +47,70 @@ const CHROME_COMMAND_ALLOWLIST = new Set([
   "workbench.action.terminal.toggleTerminal",
   "workbench.action.quickOpen",
   "workbench.action.openSettings",
+  // Application menu-bar commands (the native ≡ menu in the rail). Mirror of
+  // CODE_MENU_COMMAND_IDS in packages/shared/src/codeChrome.ts — keep in sync.
+  "workbench.action.files.newUntitledFile",
+  "welcome.showNewFileEntries",
+  "workbench.action.newWindow",
+  "workbench.action.duplicateWorkspaceInNewWindow",
+  "workbench.action.toggleAutoSave",
+  "workbench.action.files.openFileFolder",
+  "workbench.action.files.openFolder",
+  "workbench.action.openWorkspace",
+  "workbench.action.openRecent",
+  "workbench.action.addRootFolder",
+  "workbench.action.saveWorkspaceAs",
+  "workbench.action.files.save",
+  "workbench.action.files.saveAs",
+  "workbench.action.files.saveAll",
+  "workbench.action.files.revert",
+  "workbench.action.closeActiveEditor",
+  "workbench.action.closeFolder",
+  "undo",
+  "redo",
+  "editor.action.clipboardCutAction",
+  "editor.action.clipboardCopyAction",
+  "editor.action.clipboardPasteAction",
+  "actions.find",
+  "editor.action.startFindReplaceAction",
+  "editor.action.commentLine",
+  "editor.action.blockComment",
+  "editor.action.selectAll",
+  "editor.action.smartSelect.expand",
+  "editor.action.smartSelect.shrink",
+  "editor.action.copyLinesUpAction",
+  "editor.action.copyLinesDownAction",
+  "editor.action.moveLinesUpAction",
+  "editor.action.moveLinesDownAction",
+  "editor.action.insertCursorAbove",
+  "editor.action.insertCursorBelow",
+  "workbench.action.openView",
+  "workbench.actions.view.problems",
+  "workbench.action.output.toggleOutput",
+  "editor.action.toggleWordWrap",
+  "workbench.action.navigateBack",
+  "workbench.action.navigateForward",
+  "workbench.action.showAllSymbols",
+  "workbench.action.gotoSymbol",
+  "editor.action.revealDefinition",
+  "workbench.action.gotoLine",
+  "workbench.action.debug.start",
+  "workbench.action.debug.run",
+  "workbench.action.debug.stop",
+  "workbench.action.debug.restart",
+  "workbench.action.debug.configure",
+  "debug.addConfiguration",
+  "editor.debug.action.toggleBreakpoint",
+  "workbench.action.terminal.new",
+  "workbench.action.terminal.split",
+  "workbench.action.tasks.runTask",
+  "workbench.action.tasks.build",
+  "workbench.action.tasks.configureTaskRunner",
+  "workbench.action.openWalkthrough",
+  "workbench.action.openDocumentationUrl",
+  "workbench.action.toggleDevTools",
+  "workbench.action.openProcessExplorer",
+  "workbench.action.showAboutDialog",
 ]);
 
 // Map view-reveal commands → the activity-rail view id, so we can report which
@@ -53,6 +124,21 @@ const VIEW_COMMAND_TO_ID = {
   "workbench.view.debug": "debug",
   "workbench.view.extensions": "extensions",
 };
+
+const registeredViewContainerCommands = new Set();
+const commandToContainerId = new Map();
+const BUILTIN_ACTIVITY_CONTAINERS = new Set([
+  "workbench.view.explorer",
+  "workbench.view.search",
+  "workbench.view.scm",
+  "workbench.view.debug",
+  "workbench.view.extensions",
+  "explorer",
+  "search",
+  "scm",
+  "debug",
+  "extensions",
+]);
 
 /** @type {vscode.WebviewPanel | null} */
 let shellPanel = null;
@@ -210,8 +296,15 @@ function startCodeControlChannel(context) {
   // commands/state to the right editor when multiple projects are open.
   const projectId = process.env.TABS_PROJECT_ID || "";
 
-  /** @type {{ activeViewId: string | null, panelOpen: boolean, dirtyCount: number, branch: string | null }} */
-  const state = { activeViewId: null, panelOpen: false, dirtyCount: 0, branch: null };
+  /** @type {{ activeViewId: string | null, panelOpen: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean }} */
+  const state = {
+    activeViewId: null,
+    panelOpen: false,
+    dirtyCount: 0,
+    branch: null,
+    activityBarItems: [],
+    autoSaveEnabled: false,
+  };
   let socket = null;
   let disposed = false;
   let reconnectTimer = null;
@@ -231,6 +324,16 @@ function startCodeControlChannel(context) {
   const computeDirtyCount = () =>
     vscode.workspace.textDocuments.filter((doc) => doc.isDirty).length;
 
+  // Mirror `files.autoSave` so the rail's Auto Save menu entry can show a live
+  // checkmark. Any value other than "off" counts as enabled.
+  const computeAutoSaveEnabled = () => {
+    try {
+      return vscode.workspace.getConfiguration("files").get("autoSave") !== "off";
+    } catch {
+      return false;
+    }
+  };
+
   const refreshBranch = () => {
     try {
       const gitExtension = vscode.extensions.getExtension("vscode.git");
@@ -243,8 +346,182 @@ function startCodeControlChannel(context) {
     }
   };
 
+  // Extension-contributed container icons are local files (SVG/PNG) shipped
+  // inside the extension, addressed by absolute fsPath. The native Tabs rail
+  // lives on the web-app origin — a *different* origin than this Code server
+  // and with no connection token — so it can't fetch `/vscode-remote-resource`.
+  // Resolve the files to base64 data URIs here (the extension host has `fs`)
+  // and ship those instead, so the rail's <img>/mask renders on any origin
+  // with no token. Codicon (`themeIcon`) icons are fonts, not files, so they
+  // pass through untouched and are rendered with the codicon font web-side.
+  const ICON_MIME_BY_EXT = {
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+  };
+  // Container icons are tiny; cap reads so a pathological file can't bloat the
+  // newline-delimited JSON control channel.
+  const MAX_ICON_BYTES = 256 * 1024;
+  const iconDataUriCache = new Map();
+  const resolveIconFileToDataUri = (fsPath) => {
+    if (typeof fsPath !== "string" || !fsPath) return null;
+    if (iconDataUriCache.has(fsPath)) return iconDataUriCache.get(fsPath);
+    let dataUri = null;
+    try {
+      const mime = ICON_MIME_BY_EXT[path.extname(fsPath).toLowerCase()];
+      if (mime && fs.statSync(fsPath).size <= MAX_ICON_BYTES) {
+        dataUri = `data:${mime};base64,${fs.readFileSync(fsPath).toString("base64")}`;
+      }
+    } catch {
+      dataUri = null;
+    }
+    iconDataUriCache.set(fsPath, dataUri);
+    return dataUri;
+  };
+  const resolveContainerIcon = (icon) => {
+    if (!icon || typeof icon !== "object") return undefined;
+    if (icon.type === "themeIcon") {
+      return icon.value ? { type: "themeIcon", value: icon.value } : undefined;
+    }
+    if (icon.type === "uri") {
+      const dataUri = resolveIconFileToDataUri(icon.value);
+      return dataUri ? { type: "uri", value: dataUri } : undefined;
+    }
+    if (icon.type === "themeUri") {
+      const light = resolveIconFileToDataUri(icon.light || icon.value);
+      const dark = resolveIconFileToDataUri(icon.dark || icon.value);
+      if (light || dark) {
+        return { type: "themeUri", light: light || dark, dark: dark || light };
+      }
+      return undefined;
+    }
+    return undefined;
+  };
+
+  let lastRegistryCacheKey = "";
+  const refreshContainers = async () => {
+    try {
+      const containers = await vscode.commands.executeCommand("_tabs.getViewContainers");
+      if (!Array.isArray(containers)) return;
+
+      const customContainers = containers.filter(
+        (c) => c && c.id && !BUILTIN_ACTIVITY_CONTAINERS.has(c.id),
+      );
+
+      const cacheKey = customContainers
+        .map((c) => `${c.id}:${c.commandId}:${c.order || 0}`)
+        .join("|");
+      if (cacheKey === lastRegistryCacheKey) {
+        return;
+      }
+      lastRegistryCacheKey = cacheKey;
+
+      registeredViewContainerCommands.clear();
+      commandToContainerId.clear();
+
+      const activityBarItems = [];
+
+      for (const c of customContainers) {
+        registeredViewContainerCommands.add(c.commandId);
+        commandToContainerId.set(c.commandId, c.id);
+
+        // Fall back to the generic "extensions" codicon when the contributed
+        // icon is missing or its file can't be read, so the entry stays visible.
+        const icon = resolveContainerIcon(c.icon) ?? { type: "themeIcon", value: "extensions" };
+
+        activityBarItems.push({
+          id: c.id,
+          label: c.title,
+          commandId: c.commandId,
+          icon,
+          order: c.order,
+        });
+      }
+
+      state.activityBarItems = activityBarItems;
+      pushState();
+    } catch (err) {
+      log(`refreshContainers error: ${err && err.message ? err.message : err}`);
+    }
+  };
+
+  let activeWatcher = null;
+  const watchActiveContainerFile = () => {
+    const userdataDir = process.env.TABS_CODE_CONTROL_FILE
+      ? path.dirname(process.env.TABS_CODE_CONTROL_FILE)
+      : "/Users/rushil.dev/.tabs/userdata";
+    const activeContainerFile = path.join(userdataDir, "active-container.json");
+
+    const readAndApplyActiveContainer = () => {
+      try {
+        if (fs.existsSync(activeContainerFile)) {
+          const content = fs.readFileSync(activeContainerFile, "utf8");
+          const data = JSON.parse(content);
+          if (data && typeof data.id === "string") {
+            const newActiveId = data.id || null;
+            let mappedId = newActiveId;
+            if (newActiveId === "workbench.view.explorer") mappedId = "explorer";
+            else if (newActiveId === "workbench.view.search") mappedId = "search";
+            else if (newActiveId === "workbench.view.scm") mappedId = "scm";
+            else if (newActiveId === "workbench.view.debug") mappedId = "debug";
+            else if (newActiveId === "workbench.view.extensions") mappedId = "extensions";
+
+            if (state.activeViewId !== mappedId) {
+              state.activeViewId = mappedId;
+              pushState();
+            }
+          }
+        }
+      } catch (err) {
+        log(`readAndApplyActiveContainer error: ${err && err.message ? err.message : err}`);
+      }
+    };
+
+    // Initial query
+    vscode.commands
+      .executeCommand("_tabs.getActiveViewContainer")
+      .then((activeId) => {
+        if (activeId && typeof activeId === "string") {
+          let mappedId = activeId;
+          if (activeId === "workbench.view.explorer") mappedId = "explorer";
+          else if (activeId === "workbench.view.search") mappedId = "search";
+          else if (activeId === "workbench.view.scm") mappedId = "scm";
+          else if (activeId === "workbench.view.debug") mappedId = "debug";
+          else if (activeId === "workbench.view.extensions") mappedId = "extensions";
+
+          if (state.activeViewId !== mappedId) {
+            state.activeViewId = mappedId;
+            pushState();
+          }
+        }
+      })
+      .catch(() => {});
+
+    readAndApplyActiveContainer();
+
+    try {
+      if (fs.existsSync(userdataDir)) {
+        activeWatcher = fs.watch(userdataDir, (eventType, filename) => {
+          if (filename === "active-container.json") {
+            readAndApplyActiveContainer();
+          }
+        });
+      }
+    } catch (err) {
+      log(`fs.watch active-container.json error: ${err && err.message ? err.message : err}`);
+    }
+  };
+
+  watchActiveContainerFile();
+
   const runCommand = async (commandId) => {
-    if (!CHROME_COMMAND_ALLOWLIST.has(commandId)) {
+    const isStaticAllowed = CHROME_COMMAND_ALLOWLIST.has(commandId);
+    const isDynamicAllowed = registeredViewContainerCommands.has(commandId);
+
+    if (!isStaticAllowed && !isDynamicAllowed) {
       return;
     }
     try {
@@ -256,6 +533,8 @@ function startCodeControlChannel(context) {
     // public active-viewlet / panel-visibility API).
     if (Object.prototype.hasOwnProperty.call(VIEW_COMMAND_TO_ID, commandId)) {
       state.activeViewId = VIEW_COMMAND_TO_ID[commandId];
+    } else if (commandToContainerId.has(commandId)) {
+      state.activeViewId = commandToContainerId.get(commandId);
     } else if (commandId === "workbench.action.toggleSidebarVisibility") {
       state.activeViewId = state.activeViewId === null ? "explorer" : null;
     } else if (
@@ -323,8 +602,11 @@ function startCodeControlChannel(context) {
       log(`control channel connected (port=${target.port})`);
       refreshBranch();
       state.dirtyCount = computeDirtyCount();
-      send({ type: "hello", projectId, token: target.token });
-      pushState();
+      state.autoSaveEnabled = computeAutoSaveEnabled();
+      void refreshContainers().then(() => {
+        send({ type: "hello", projectId, token: target.token });
+        pushState();
+      });
     });
     sock.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
@@ -390,55 +672,46 @@ function startCodeControlChannel(context) {
       pushState();
     }
   };
+
+  const containerInterval = setInterval(() => {
+    void refreshContainers();
+  }, 5000);
+
+  const extensionChangeSub = vscode.extensions.onDidChange(() => {
+    void refreshContainers();
+  });
+
+  const configChangeSub = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration("files.autoSave")) {
+      const next = computeAutoSaveEnabled();
+      if (next !== state.autoSaveEnabled) {
+        state.autoSaveEnabled = next;
+        pushState();
+      }
+    }
+  });
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument(recomputeDirty),
     vscode.workspace.onDidSaveTextDocument(recomputeDirty),
     vscode.workspace.onDidOpenTextDocument(recomputeDirty),
     vscode.workspace.onDidCloseTextDocument(recomputeDirty),
-  );
-  try {
-    const gitExtension = vscode.extensions.getExtension("vscode.git");
-    if (gitExtension) {
-      void gitExtension.activate().then(() => {
-        refreshBranch();
-        pushState();
-        try {
-          const api = gitExtension.exports.getAPI(1);
-          const repo = api && api.repositories && api.repositories[0];
-          if (repo && typeof repo.state.onDidChange === "function") {
-            context.subscriptions.push(
-              repo.state.onDidChange(() => {
-                refreshBranch();
-                pushState();
-              }),
-            );
+    extensionChangeSub,
+    configChangeSub,
+    {
+      dispose() {
+        clearInterval(containerInterval);
+        if (activeWatcher) {
+          try {
+            activeWatcher.close();
+          } catch {
+            /* ignore */
           }
-        } catch {
-          /* ignore */
+          activeWatcher = null;
         }
-      });
-    }
-  } catch {
-    /* ignore */
-  }
-
-  context.subscriptions.push({
-    dispose() {
-      disposed = true;
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      if (socket) {
-        try {
-          socket.destroy();
-        } catch {
-          /* ignore */
-        }
-        socket = null;
-      }
+      },
     },
-  });
+  );
 
   connect();
 }
@@ -756,4 +1029,6 @@ function escapeHtmlAttribute(value) {
 module.exports = {
   activate,
   deactivate,
+  registeredViewContainerCommands,
+  commandToContainerId,
 };

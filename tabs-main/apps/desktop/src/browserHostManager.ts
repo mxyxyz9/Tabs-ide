@@ -111,6 +111,23 @@ export class BrowserHostManager {
       },
     });
     view.setBackgroundColor("#111111");
+
+    const allowedPermissions = new Set([
+      "clipboard-read",
+      "clipboard-write",
+      "clipboard-sanitized-write",
+      "pointerLock",
+      "notifications",
+    ]);
+    if (view.webContents?.session) {
+      view.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
+        callback(allowedPermissions.has(permission));
+      });
+      view.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+        return allowedPermissions.has(permission);
+      });
+    }
+
     view.webContents.setUserAgent(
       sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
     );

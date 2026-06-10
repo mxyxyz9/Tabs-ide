@@ -1476,7 +1476,7 @@ function DesktopCodeTool(props: { project: Project }) {
         onRunCommand={runCodeCommand}
       />
       <div className="flex min-h-0 min-w-0 flex-1">
-        <CodeActivityRail activeViewId={chromeState.activeViewId} onRunCommand={runCodeCommand} />
+        <CodeActivityRail chromeState={chromeState} onRunCommand={runCodeCommand} />
         {/* The BrowserView is positioned to exactly cover this host node (see the
             ResizeObserver effect above), so leaving it as a flex child inset by
             the rail/header/status bar automatically insets the native view. */}

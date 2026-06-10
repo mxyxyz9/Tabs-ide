@@ -17,9 +17,9 @@
  * from every layer.
  */
 
-import type { CodeActivityViewId, CodeChromeState } from "@tabs/contracts";
+import type { CodeActivityViewId, CodeChromeState, CustomActivityBarItem } from "@tabs/contracts";
 
-export type { CodeActivityViewId, CodeChromeState };
+export type { CodeActivityViewId, CodeChromeState, CustomActivityBarItem };
 
 /** lucide-react icon names (resolved to components in the web layer). */
 export type CodeActivityIcon = "files" | "search" | "git-branch" | "bug" | "puzzle";
@@ -56,15 +56,361 @@ export const CODE_CHROME_COMMANDS = {
   settings: "workbench.action.openSettings",
 } as const;
 
+// ----------------------------------------------------------------------------
+// Application menu bar (the native ≡ menu in the activity rail). VS Code's own
+// menu bar used to live atop its activity bar, which the Tabs embed hides — so
+// the rail hosts a native menu that runs these workbench commands through the
+// control channel. This is the single source of truth: the allowlist below is
+// derived from it, and the extension mirrors the derived ids (see extension.js).
+// ----------------------------------------------------------------------------
+
+/** A single command entry in a menu. `shortcut` is a macOS display hint only. */
+export interface CodeMenuItem {
+  readonly label: string;
+  readonly commandId: string;
+  readonly shortcut?: string;
+}
+
+/** A run of items rendered together; groups are visually separated. */
+export interface CodeMenuGroup {
+  readonly items: readonly CodeMenuItem[];
+}
+
+/** A top-level menu (File, Edit, …) and its grouped items. */
+export interface CodeMenu {
+  readonly id: string;
+  readonly label: string;
+  readonly groups: readonly CodeMenuGroup[];
+}
+
+export const CODE_MENU_BAR: readonly CodeMenu[] = [
+  {
+    id: "file",
+    label: "File",
+    groups: [
+      {
+        items: [
+          {
+            label: "New Text File",
+            commandId: "workbench.action.files.newUntitledFile",
+            shortcut: "⌘N",
+          },
+          { label: "New File…", commandId: "welcome.showNewFileEntries", shortcut: "⌃⌥⌘N" },
+          { label: "New Window", commandId: "workbench.action.newWindow", shortcut: "⇧⌘N" },
+        ],
+      },
+      {
+        items: [
+          {
+            label: "Open File…",
+            commandId: "workbench.action.files.openFileFolder",
+            shortcut: "⌘O",
+          },
+          { label: "Open Folder…", commandId: "workbench.action.files.openFolder" },
+          { label: "Open Workspace from File…", commandId: "workbench.action.openWorkspace" },
+          { label: "Open Recent", commandId: "workbench.action.openRecent" },
+        ],
+      },
+      {
+        items: [
+          { label: "Add Folder to Workspace…", commandId: "workbench.action.addRootFolder" },
+          { label: "Save Workspace As…", commandId: "workbench.action.saveWorkspaceAs" },
+          {
+            label: "Duplicate Workspace",
+            commandId: "workbench.action.duplicateWorkspaceInNewWindow",
+          },
+        ],
+      },
+      {
+        items: [
+          { label: "Save", commandId: "workbench.action.files.save", shortcut: "⌘S" },
+          { label: "Save As…", commandId: "workbench.action.files.saveAs", shortcut: "⇧⌘S" },
+          { label: "Save All", commandId: "workbench.action.files.saveAll", shortcut: "⌥⌘S" },
+        ],
+      },
+      {
+        items: [
+          // Rendered as a checkbox bound to chromeState.autoSaveEnabled (see rail).
+          { label: "Auto Save", commandId: "workbench.action.toggleAutoSave" },
+          { label: "Preferences: Settings", commandId: "workbench.action.openSettings" },
+        ],
+      },
+      {
+        items: [
+          { label: "Revert File", commandId: "workbench.action.files.revert" },
+          {
+            label: "Close Editor",
+            commandId: "workbench.action.closeActiveEditor",
+            shortcut: "⌘W",
+          },
+          { label: "Close Folder", commandId: "workbench.action.closeFolder", shortcut: "⌘K F" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "edit",
+    label: "Edit",
+    groups: [
+      {
+        items: [
+          { label: "Undo", commandId: "undo", shortcut: "⌘Z" },
+          { label: "Redo", commandId: "redo", shortcut: "⇧⌘Z" },
+        ],
+      },
+      {
+        items: [
+          { label: "Cut", commandId: "editor.action.clipboardCutAction", shortcut: "⌘X" },
+          { label: "Copy", commandId: "editor.action.clipboardCopyAction", shortcut: "⌘C" },
+          { label: "Paste", commandId: "editor.action.clipboardPasteAction", shortcut: "⌘V" },
+        ],
+      },
+      {
+        items: [
+          { label: "Find", commandId: "actions.find", shortcut: "⌘F" },
+          { label: "Replace", commandId: "editor.action.startFindReplaceAction", shortcut: "⌥⌘F" },
+        ],
+      },
+      {
+        items: [
+          { label: "Toggle Line Comment", commandId: "editor.action.commentLine", shortcut: "⌘/" },
+          {
+            label: "Toggle Block Comment",
+            commandId: "editor.action.blockComment",
+            shortcut: "⇧⌥A",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "selection",
+    label: "Selection",
+    groups: [
+      {
+        items: [
+          { label: "Select All", commandId: "editor.action.selectAll", shortcut: "⌘A" },
+          {
+            label: "Expand Selection",
+            commandId: "editor.action.smartSelect.expand",
+            shortcut: "⌃⇧⌘→",
+          },
+          {
+            label: "Shrink Selection",
+            commandId: "editor.action.smartSelect.shrink",
+            shortcut: "⌃⇧⌘←",
+          },
+        ],
+      },
+      {
+        items: [
+          { label: "Copy Line Up", commandId: "editor.action.copyLinesUpAction", shortcut: "⇧⌥↑" },
+          {
+            label: "Copy Line Down",
+            commandId: "editor.action.copyLinesDownAction",
+            shortcut: "⇧⌥↓",
+          },
+          { label: "Move Line Up", commandId: "editor.action.moveLinesUpAction", shortcut: "⌥↑" },
+          {
+            label: "Move Line Down",
+            commandId: "editor.action.moveLinesDownAction",
+            shortcut: "⌥↓",
+          },
+        ],
+      },
+      {
+        items: [
+          {
+            label: "Add Cursor Above",
+            commandId: "editor.action.insertCursorAbove",
+            shortcut: "⌥⌘↑",
+          },
+          {
+            label: "Add Cursor Below",
+            commandId: "editor.action.insertCursorBelow",
+            shortcut: "⌥⌘↓",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "view",
+    label: "View",
+    groups: [
+      {
+        items: [
+          {
+            label: "Command Palette…",
+            commandId: "workbench.action.showCommands",
+            shortcut: "⇧⌘P",
+          },
+          { label: "Open View…", commandId: "workbench.action.openView" },
+        ],
+      },
+      {
+        items: [
+          { label: "Explorer", commandId: "workbench.view.explorer" },
+          { label: "Search", commandId: "workbench.view.search" },
+          { label: "Source Control", commandId: "workbench.view.scm" },
+          { label: "Run", commandId: "workbench.view.debug" },
+          { label: "Extensions", commandId: "workbench.view.extensions" },
+        ],
+      },
+      {
+        items: [
+          { label: "Problems", commandId: "workbench.actions.view.problems", shortcut: "⇧⌘M" },
+          { label: "Output", commandId: "workbench.action.output.toggleOutput", shortcut: "⇧⌘U" },
+          {
+            label: "Terminal",
+            commandId: "workbench.action.terminal.toggleTerminal",
+            shortcut: "⌃`",
+          },
+        ],
+      },
+      {
+        items: [
+          { label: "Toggle Word Wrap", commandId: "editor.action.toggleWordWrap", shortcut: "⌥Z" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "go",
+    label: "Go",
+    groups: [
+      {
+        items: [
+          { label: "Back", commandId: "workbench.action.navigateBack", shortcut: "⌃-" },
+          { label: "Forward", commandId: "workbench.action.navigateForward", shortcut: "⌃⇧-" },
+        ],
+      },
+      {
+        items: [
+          { label: "Go to File…", commandId: "workbench.action.quickOpen", shortcut: "⌘P" },
+          {
+            label: "Go to Symbol in Workspace…",
+            commandId: "workbench.action.showAllSymbols",
+            shortcut: "⌘T",
+          },
+          {
+            label: "Go to Symbol in Editor…",
+            commandId: "workbench.action.gotoSymbol",
+            shortcut: "⇧⌘O",
+          },
+          {
+            label: "Go to Definition",
+            commandId: "editor.action.revealDefinition",
+            shortcut: "F12",
+          },
+          { label: "Go to Line/Column…", commandId: "workbench.action.gotoLine", shortcut: "⌃G" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "run",
+    label: "Run",
+    groups: [
+      {
+        items: [
+          { label: "Start Debugging", commandId: "workbench.action.debug.start", shortcut: "F5" },
+          {
+            label: "Run Without Debugging",
+            commandId: "workbench.action.debug.run",
+            shortcut: "⌃F5",
+          },
+          { label: "Stop Debugging", commandId: "workbench.action.debug.stop", shortcut: "⇧F5" },
+          {
+            label: "Restart Debugging",
+            commandId: "workbench.action.debug.restart",
+            shortcut: "⇧⌘F5",
+          },
+        ],
+      },
+      {
+        items: [
+          { label: "Open Configurations", commandId: "workbench.action.debug.configure" },
+          { label: "Add Configuration…", commandId: "debug.addConfiguration" },
+          {
+            label: "Toggle Breakpoint",
+            commandId: "editor.debug.action.toggleBreakpoint",
+            shortcut: "F9",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "terminal",
+    label: "Terminal",
+    groups: [
+      {
+        items: [
+          { label: "New Terminal", commandId: "workbench.action.terminal.new", shortcut: "⌃⇧`" },
+          {
+            label: "Split Terminal",
+            commandId: "workbench.action.terminal.split",
+            shortcut: "⌘\\",
+          },
+        ],
+      },
+      {
+        items: [
+          { label: "Run Task…", commandId: "workbench.action.tasks.runTask" },
+          { label: "Run Build Task…", commandId: "workbench.action.tasks.build", shortcut: "⇧⌘B" },
+          { label: "Configure Tasks…", commandId: "workbench.action.tasks.configureTaskRunner" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "help",
+    label: "Help",
+    groups: [
+      {
+        items: [
+          { label: "Welcome", commandId: "workbench.action.openWalkthrough" },
+          { label: "Show All Commands", commandId: "workbench.action.showCommands" },
+          { label: "Documentation", commandId: "workbench.action.openDocumentationUrl" },
+        ],
+      },
+      {
+        items: [
+          {
+            label: "Toggle Developer Tools",
+            commandId: "workbench.action.toggleDevTools",
+            shortcut: "⌥⌘I",
+          },
+          { label: "Open Process Explorer", commandId: "workbench.action.openProcessExplorer" },
+        ],
+      },
+      { items: [{ label: "About", commandId: "workbench.action.showAboutDialog" }] },
+    ],
+  },
+] as const;
+
+/** Flattened, de-duplicated list of every command id the menu bar can run. */
+export const CODE_MENU_COMMAND_IDS: readonly string[] = [
+  ...new Set(
+    CODE_MENU_BAR.flatMap((menu) =>
+      menu.groups.flatMap((group) => group.items.map((item) => item.commandId)),
+    ),
+  ),
+];
+
 /**
  * Every command id the chrome is allowed to request. Both the broker (Electron
  * main) and the extension validate against this before executing, so a
  * compromised renderer can only trigger this fixed, side-effect-light set of
- * navigation/layout commands — never arbitrary VS Code commands.
+ * navigation/layout/editor commands — never arbitrary VS Code commands.
  */
 export const CODE_CHROME_COMMAND_ALLOWLIST: readonly string[] = [
-  ...CODE_ACTIVITY_ITEMS.map((item) => item.commandId),
-  ...Object.values(CODE_CHROME_COMMANDS),
+  ...new Set([
+    ...CODE_ACTIVITY_ITEMS.map((item) => item.commandId),
+    ...Object.values(CODE_CHROME_COMMANDS),
+    ...CODE_MENU_COMMAND_IDS,
+  ]),
 ];
 
 export function isAllowedChromeCommand(commandId: string): boolean {
@@ -140,15 +486,73 @@ export function parseCodeControlServerMessage(raw: string): CodeControlServerMes
 }
 
 /** Coerce an untrusted value into a CodeChromeState, filling defaults. */
+export const BUILTIN_ACTIVITY_CONTAINERS = new Set<string>([
+  "workbench.view.explorer",
+  "workbench.view.search",
+  "workbench.view.scm",
+  "workbench.view.debug",
+  "workbench.view.extensions",
+  "explorer",
+  "search",
+  "scm",
+  "debug",
+  "extensions",
+]);
+
 export function coerceChromeState(value: unknown): CodeChromeState {
   if (typeof value !== "object" || value === null) return { ...DEFAULT_CODE_CHROME_STATE };
   const record = value as Record<string, unknown>;
-  const activeViewId =
-    typeof record.activeViewId === "string" &&
-    CODE_ACTIVITY_ITEMS.some((item) => item.id === record.activeViewId)
-      ? (record.activeViewId as CodeActivityViewId)
+
+  const activityBarItems: CustomActivityBarItem[] = [];
+  if (Array.isArray(record.activityBarItems)) {
+    for (const item of record.activityBarItems) {
+      if (item && typeof item === "object") {
+        const itemRecord = item as Record<string, unknown>;
+        if (
+          typeof itemRecord.id === "string" &&
+          typeof itemRecord.label === "string" &&
+          typeof itemRecord.commandId === "string"
+        ) {
+          const iconRecord = itemRecord.icon as Record<string, unknown> | undefined;
+          let icon: CustomActivityBarItem["icon"] | undefined;
+          if (iconRecord && typeof iconRecord === "object") {
+            const type = iconRecord.type;
+            if (type === "themeIcon" || type === "uri" || type === "themeUri") {
+              icon = { type };
+              if (typeof iconRecord.value === "string") icon.value = iconRecord.value;
+              if (typeof iconRecord.light === "string") icon.light = iconRecord.light;
+              if (typeof iconRecord.dark === "string") icon.dark = iconRecord.dark;
+            }
+          }
+          if (icon) {
+            const entry: CustomActivityBarItem = {
+              id: itemRecord.id,
+              label: itemRecord.label,
+              commandId: itemRecord.commandId,
+              icon,
+            };
+            if (typeof itemRecord.order === "number") entry.order = itemRecord.order;
+            activityBarItems.push(entry);
+          }
+        }
+      }
+    }
+  }
+
+  let activeViewId =
+    typeof record.activeViewId === "string" && record.activeViewId.length > 0
+      ? record.activeViewId
       : null;
-  return {
+
+  if (activeViewId !== null) {
+    const isBuiltIn = CODE_ACTIVITY_ITEMS.some((item) => item.id === activeViewId);
+    const isCustom = activityBarItems.some((item) => item.id === activeViewId);
+    if (!isBuiltIn && !isCustom) {
+      activeViewId = null;
+    }
+  }
+
+  const state: CodeChromeState = {
     activeViewId,
     panelOpen: record.panelOpen === true,
     dirtyCount:
@@ -157,6 +561,13 @@ export function coerceChromeState(value: unknown): CodeChromeState {
         : 0,
     branch: typeof record.branch === "string" && record.branch.length > 0 ? record.branch : null,
   };
+  if (record.activityBarItems !== undefined) {
+    state.activityBarItems = activityBarItems;
+  }
+  if (typeof record.autoSaveEnabled === "boolean") {
+    state.autoSaveEnabled = record.autoSaveEnabled;
+  }
+  return state;
 }
 
 /**

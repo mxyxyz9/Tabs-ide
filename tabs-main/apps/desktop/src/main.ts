@@ -14,6 +14,7 @@ import {
   nativeImage,
   nativeTheme,
   protocol,
+  session,
   shell,
 } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
@@ -2594,6 +2595,21 @@ if (hasSingleInstanceLock) {
       configureApplicationMenu();
       registerDesktopProtocol();
       configureAutoUpdater();
+
+      const allowedPermissions = new Set([
+        "clipboard-read",
+        "clipboard-write",
+        "clipboard-sanitized-write",
+        "pointerLock",
+        "notifications",
+      ]);
+      session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+        callback(allowedPermissions.has(permission));
+      });
+      session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+        return allowedPermissions.has(permission);
+      });
+
       void bootstrap().catch((error) => {
         handleFatalStartupError("bootstrap", error);
       });

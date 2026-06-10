@@ -37,11 +37,14 @@ import {
   parseCodeControlClientMessage,
   type CodeChromeState,
   type CodeControlServerMessage,
+  type CustomActivityBarItem,
 } from "@tabs/shared/codeChrome";
 
 // Hard cap on a connection's unframed buffer: control messages are tiny, so
 // anything larger is a misbehaving or hostile local client.
 const MAX_BUFFERED_BYTES = 1_000_000;
+
+const VIEW_COMMAND_REGEX = /^workbench\.view(\.extension)?\.[A-Za-z0-9._-]+$/;
 
 export class CodeControlChannel {
   private server: Net.Server | null = null;
@@ -50,6 +53,7 @@ export class CodeControlChannel {
   // clobber each other, routing a click to the wrong editor.
   private readonly socketsByProject = new Map<string, Net.Socket>();
   private readonly projectBySocket = new Map<Net.Socket, string>();
+  private readonly dynamicAllowedCommandsByProject = new Map<string, Set<string>>();
   private token = "";
   private port = 0;
   private chromeStateListener: ((projectId: string, state: CodeChromeState) => void) | null = null;
@@ -117,6 +121,15 @@ export class CodeControlChannel {
           continue;
         }
         if (message.type === "chromeState") {
+          const allowed = new Set<string>();
+          if (message.state.activityBarItems) {
+            for (const item of message.state.activityBarItems) {
+              if (VIEW_COMMAND_REGEX.test(item.commandId)) {
+                allowed.add(item.commandId);
+              }
+            }
+          }
+          this.dynamicAllowedCommandsByProject.set(message.projectId, allowed);
           this.chromeStateListener?.(message.projectId, message.state);
         }
       }
@@ -128,6 +141,7 @@ export class CodeControlChannel {
         this.projectBySocket.delete(socket);
         if (this.socketsByProject.get(projectId) === socket) {
           this.socketsByProject.delete(projectId);
+          this.dynamicAllowedCommandsByProject.delete(projectId);
         }
       }
     };
@@ -176,7 +190,11 @@ export class CodeControlChannel {
    * sent. Routing by project keeps a click on one editor from driving another.
    */
   runCommand(projectId: string, commandId: string): boolean {
-    if (!CODE_CHROME_COMMAND_ALLOWLIST.includes(commandId)) {
+    const isStaticAllowed = CODE_CHROME_COMMAND_ALLOWLIST.includes(commandId);
+    const projectDynamicAllowed = this.dynamicAllowedCommandsByProject.get(projectId);
+    const isDynamicAllowed = projectDynamicAllowed?.has(commandId) ?? false;
+
+    if (!isStaticAllowed && !isDynamicAllowed) {
       return false;
     }
     const socket = this.socketsByProject.get(projectId);
@@ -202,6 +220,7 @@ export class CodeControlChannel {
     }
     this.socketsByProject.clear();
     this.projectBySocket.clear();
+    this.dynamicAllowedCommandsByProject.clear();
     this.server?.close();
     this.server = null;
     this.chromeStateListener = null;

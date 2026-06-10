@@ -441,5 +441,6 @@ import './contrib/editTelemetry/browser/editTelemetry.contribution.js';
 
 // Opener
 import './contrib/opener/browser/opener.contribution.js';
+import './contrib/tabs/browser/tabs.contribution.js';
 
 //#endregion

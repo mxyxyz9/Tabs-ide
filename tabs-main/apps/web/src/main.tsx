@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
 
 import "@xterm/xterm/css/xterm.css";
+import "@vscode/codicons/dist/codicon.css";
 import "./index.css";
 
 import { isElectron } from "./env";

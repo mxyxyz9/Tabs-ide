@@ -141,6 +141,15 @@ export class WebClientServer {
 	 */
 	async handle(req: http.IncomingMessage, res: http.ServerResponse, parsedUrl: url.UrlWithParsedQuery, pathname: string): Promise<void> {
 		try {
+			if (pathname === '/active-container') {
+				const id = parsedUrl.query['id'];
+				if (typeof id === 'string') {
+					await promises.writeFile('/Users/rushil.dev/.tabs/userdata/active-container.json', JSON.stringify({ id }));
+					res.writeHead(200, { 'Content-Type': 'text/plain' });
+					res.end('ok');
+					return;
+				}
+			}
 			if (pathname.startsWith(STATIC_PATH) && pathname.charCodeAt(STATIC_PATH.length) === CharCode.Slash) {
 				return this._handleStatic(req, res, pathname.substring(STATIC_PATH.length));
 			}

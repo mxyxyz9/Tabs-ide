@@ -171,11 +171,27 @@ export type CodeActivityViewId = "explorer" | "search" | "scm" | "debug" | "exte
  * through the loopback control channel. Runtime helpers that produce/validate
  * this live in `@tabs/shared/codeChrome` (contracts stays schema-only).
  */
+export interface CustomActivityBarItem {
+  id: string;
+  label: string;
+  commandId: string;
+  icon: {
+    type: "themeIcon" | "uri" | "themeUri";
+    value?: string;
+    light?: string;
+    dark?: string;
+  };
+  order?: number;
+}
+
 export interface CodeChromeState {
-  activeViewId: CodeActivityViewId | null;
+  activeViewId: string | null;
   panelOpen: boolean;
   dirtyCount: number;
   branch: string | null;
+  activityBarItems?: readonly CustomActivityBarItem[];
+  /** Whether `files.autoSave` is on — drives the Auto Save menu checkmark. */
+  autoSaveEnabled?: boolean;
 }
 
 export interface DesktopBrowserHostState {

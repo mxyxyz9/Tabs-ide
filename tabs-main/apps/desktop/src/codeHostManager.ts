@@ -1131,6 +1131,22 @@ export class CodeHostManager {
     });
     view.setBackgroundColor("#121212");
 
+    const allowedPermissions = new Set([
+      "clipboard-read",
+      "clipboard-write",
+      "clipboard-sanitized-write",
+      "pointerLock",
+      "notifications",
+    ]);
+    if (view.webContents?.session) {
+      view.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
+        callback(allowedPermissions.has(permission));
+      });
+      view.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+        return allowedPermissions.has(permission);
+      });
+    }
+
     // Keep the embedded editor fully inside Tabs: never let Code-OSS spawn a
     // separate window (e.g. cmd+shift+n "New Window"). Deny every new-window
     // request; genuinely external links open in the system browser instead.
@@ -2111,6 +2127,12 @@ export class CodeHostManager {
     });
     session.view.webContents.on("console-message", (_event, level, message, line, sourceId) => {
       console.error(`${prefix} console`, { level, message, line, sourceId });
+      try {
+        FS.appendFileSync(
+          "/Users/rushil.dev/.tabs/userdata/workbench-console.log",
+          `[console] ${message} (${sourceId}:${line})\n`,
+        );
+      } catch (e) {}
     });
     session.view.webContents.on("did-finish-load", () => {
       setTimeout(() => {
