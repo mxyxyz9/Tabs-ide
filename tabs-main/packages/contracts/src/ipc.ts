@@ -246,8 +246,25 @@ export interface DesktopBrowserSessionState {
   lastError: string | null;
 }
 
+/** Result of cloning a git repository into a local folder (desktop only). */
+export type DesktopCloneRepositoryResult =
+  | { ok: true; path: string }
+  | { ok: false; error: string };
+
+/** Input for cloning a git repository: the remote URL and the parent directory to clone into. */
+export interface DesktopCloneRepositoryInput {
+  url: string;
+  parentDir: string;
+}
+
 export interface DesktopBridge {
   getWsUrl: () => string | null;
+  /**
+   * Clone a git repository into `parentDir` using the user's local git (so
+   * existing SSH keys / credential helpers apply). Resolves with the cloned
+   * folder path, or an error message. Desktop-only.
+   */
+  cloneRepository: (input: DesktopCloneRepositoryInput) => Promise<DesktopCloneRepositoryResult>;
   getPersistedItem: (key: string) => Promise<string | null>;
   setPersistedItem: (key: string, value: string) => Promise<void>;
   removePersistedItem: (key: string) => Promise<void>;
@@ -319,6 +336,10 @@ export interface NativeApi {
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;
     openExternal: (url: string) => Promise<void>;
+  };
+  repositories: {
+    /** Clone a git repo into `parentDir`; resolves with the cloned path or an error. */
+    clone: (input: DesktopCloneRepositoryInput) => Promise<DesktopCloneRepositoryResult>;
   };
   git: {
     // Existing branch/worktree API

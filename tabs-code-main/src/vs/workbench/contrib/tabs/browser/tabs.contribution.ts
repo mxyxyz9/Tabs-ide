@@ -3,8 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Registry } from '../../../../platform/registry/common/platform.js';
-import { IViewContainersRegistry, Extensions as ViewContainerExtensions, ViewContainerLocation } from '../../../common/views.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../../common/views.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
@@ -29,34 +28,30 @@ class TabsIntegrationContribution extends Disposable implements IWorkbenchContri
 }
 
 CommandsRegistry.registerCommand('_tabs.getViewContainers', (accessor) => {
-	const viewContainersRegistry = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry);
-	const sidebarContainers = viewContainersRegistry.all.filter(v => viewContainersRegistry.getViewContainerLocation(v) === ViewContainerLocation.Sidebar);
-	return sidebarContainers.map(v => {
-		let serializableIcon: any = undefined;
-		if (v.icon) {
-			if (ThemeIcon.isThemeIcon(v.icon)) {
-				serializableIcon = { type: 'themeIcon', value: v.icon.id };
-			} else if (URI.isUri(v.icon)) {
-				serializableIcon = { type: 'uri', value: v.icon.fsPath };
-			} else if (v.icon && typeof v.icon === 'object' && ('light' in v.icon && 'dark' in v.icon)) {
-				const lightIcon = (v.icon as any).light;
-				const darkIcon = (v.icon as any).dark;
-				if (URI.isUri(lightIcon) && URI.isUri(darkIcon)) {
-					serializableIcon = {
-						type: 'themeUri',
-						light: lightIcon.fsPath,
-						dark: darkIcon.fsPath
-					};
-				}
-			}
+	const viewDescriptorService = accessor.get(IViewDescriptorService);
+	// Mirror exactly what VS Code's activity bar shows: sidebar containers that
+	// currently have at least one active view. Containers with no active views
+	// (empty/placeholder registrations the user never installed) are hidden by
+	// the real activity bar too — surfacing them would show blank rail icons.
+	const sidebarContainers = viewDescriptorService.getViewContainersByLocation(ViewContainerLocation.Sidebar)
+		.filter(container => viewDescriptorService.getViewContainerModel(container).activeViewDescriptors.length > 0);
+	return sidebarContainers.map(container => {
+		// Use the container *model*'s resolved icon/title — it reflects the icon
+		// the activity bar actually renders (falling back to a view's icon, etc.).
+		const model = viewDescriptorService.getViewContainerModel(container);
+		let serializableIcon: { type: string; value?: string; light?: string; dark?: string } | undefined;
+		const icon = model.icon;
+		if (ThemeIcon.isThemeIcon(icon)) {
+			serializableIcon = { type: 'themeIcon', value: icon.id };
+		} else if (URI.isUri(icon)) {
+			serializableIcon = { type: 'uri', value: icon.fsPath };
 		}
-		const title = typeof v.title === 'string' ? v.title : v.title.value;
 		return {
-			id: v.id,
-			title: title,
-			commandId: v.openCommandActionDescriptor?.id ?? v.id,
+			id: container.id,
+			title: model.title,
+			commandId: container.openCommandActionDescriptor?.id ?? container.id,
 			icon: serializableIcon,
-			order: v.order
+			order: container.order
 		};
 	});
 });

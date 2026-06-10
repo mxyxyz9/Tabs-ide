@@ -1872,6 +1872,10 @@ export class CodeHostManager {
       Path.join(runtime.vscodeRoot, ".build", "extensions"),
       session.workspaceRoot,
       sessionStateRoot,
+      // Shared (user-global) extensions live outside the per-project session
+      // root, so they must be allowlisted explicitly or the workbench can't load
+      // installed extensions' icons/webview assets through the file protocol.
+      this.getDesktopSharedExtensionsDir(runtime.stateDir),
       getCodeOssEmbedExtensionPath(__dirname),
     ]
       .map((pathname) => Path.resolve(pathname))
@@ -1916,6 +1920,7 @@ export class CodeHostManager {
     }
 
     const sessionStateRoot = this.getDesktopSessionStateRoot(projectId, runtime.stateDir);
+    const sharedExtensionsDir = this.getDesktopSharedExtensionsDir(runtime.stateDir);
     const profileRoot = Path.join(sessionStateRoot, "profile");
     const profile = this.ensureDesktopUserDataProfile(profileRoot);
     const focusedFilePath = session.lastFocusedPath
@@ -1926,7 +1931,7 @@ export class CodeHostManager {
 
     FS.mkdirSync(Path.join(sessionStateRoot, "logs"), { recursive: true });
     FS.mkdirSync(Path.join(sessionStateRoot, "cache"), { recursive: true });
-    FS.mkdirSync(Path.join(sessionStateRoot, "extensions"), { recursive: true });
+    FS.mkdirSync(sharedExtensionsDir, { recursive: true });
 
     const configuration: DesktopWindowConfiguration = {
       _: [],
@@ -1935,7 +1940,7 @@ export class CodeHostManager {
       "disable-updates": true,
       "skip-release-notes": true,
       "skip-welcome": true,
-      "extensions-dir": Path.join(sessionStateRoot, "extensions"),
+      "extensions-dir": sharedExtensionsDir,
       windowId: session.view.webContents.id,
       appRoot: runtime.vscodeRoot,
       userEnv: {
@@ -2018,6 +2023,17 @@ export class CodeHostManager {
 
   private getDesktopSessionStateRoot(projectId: string, stateDir: string): string {
     return Path.join(stateDir, "code-oss-desktop", projectId);
+  }
+
+  /**
+   * Extensions install location, shared by every project window — mirrors real
+   * VS Code, where the extensions dir is per-user, not per-folder. Lives beside
+   * the per-project session roots so installing an extension in one project
+   * makes it available in all of them (per-project enablement state still lives
+   * in each project's userDataDir). This is deliberately NOT under a projectId.
+   */
+  private getDesktopSharedExtensionsDir(stateDir: string): string {
+    return Path.join(stateDir, "code-oss-desktop", "extensions");
   }
 
   private ensureDesktopUserDataProfile(profileRoot: string): DesktopUserDataProfile {

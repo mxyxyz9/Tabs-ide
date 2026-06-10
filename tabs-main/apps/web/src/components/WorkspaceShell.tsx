@@ -78,6 +78,7 @@ import { openInPreferredEditor } from "../editorPreferences";
 import GitCommitComposer from "./GitCommitComposer";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { CloneRepositoryDialog } from "./CloneRepositoryDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import {
@@ -6982,9 +6983,16 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     [openProject, projects],
   );
 
-  const handleOpenProjectRepository = useCallback(async () => {
-    await handleCreateProject();
-  }, [handleCreateProject]);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
+  const handleClonedRepository = useCallback(
+    async (clonedPath: string) => {
+      const projectId = await ensureProjectForWorkspaceRoot(clonedPath);
+      setActiveProject(projectId);
+      setActiveTool(projectId, "code");
+      await navigate({ to: "/" });
+    },
+    [ensureProjectForWorkspaceRoot, navigate, setActiveProject, setActiveTool],
+  );
 
   const handleOpenProjectFile = useCallback(async () => {
     const api = readNativeApi();
@@ -7772,10 +7780,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
-                  onClick={() => void handleOpenProjectRepository()}
+                  onClick={() => setCloneDialogOpen(true)}
                 >
                   <GitBranchIcon className="size-4 text-muted-foreground" />
-                  <span>Open Repository...</span>
+                  <span>Clone from Git...</span>
                 </button>
                 <button
                   type="button"
@@ -7862,6 +7870,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
 
   return (
     <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
+      <CloneRepositoryDialog
+        open={cloneDialogOpen}
+        onOpenChange={setCloneDialogOpen}
+        onCloned={handleClonedRepository}
+      />
       {shouldHideShellChrome ? null : (
         <ProjectTabs
           projects={projects}

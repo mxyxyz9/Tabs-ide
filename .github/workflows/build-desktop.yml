@@ -146,6 +146,27 @@ jobs:
           # the runtime. without-mangling avoids the protected-fields mangler error.
           npm run gulp compile-build-without-mangling
 
+      # The embedded workbench activates these built-in extensions at startup
+      # (git-base → git, configuration-editing). compile-client above skips ALL
+      # extensions, and the root install used --ignore-scripts (to dodge the
+      # postinstall OOM), so they had neither node_modules nor a compile — at
+      # runtime that throws "Cannot find module .../<ext>/out/..." and cascades
+      # to dependents (e.g. CodeRabbit needs git). Install each one's deps and
+      # compile it to extensions/<ext>/out (the dev built-in layout the runtime
+      # falls back to). Run unconditionally so the out/ build cache above can't
+      # mask a missing extension compile. Keep this list in sync with the
+      # compiled-runtime guard in tabs-main/scripts/build-desktop-artifact.ts.
+      - name: Compile required built-in extensions
+        working-directory: tabs-code-main
+        shell: bash
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
+        run: |
+          for ext in git-base git configuration-editing; do
+            (cd "extensions/$ext" && npm install --no-audit --no-fund --ignore-scripts)
+            npm run gulp "compile-extension:$ext"
+          done
+
       - name: Build desktop artifact
         working-directory: tabs-main
         shell: bash

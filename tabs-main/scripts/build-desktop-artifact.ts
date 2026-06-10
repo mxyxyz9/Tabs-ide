@@ -844,6 +844,35 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
     return false;
   }
 
+  // Guard: the source must be FULLY compiled before we stage/zip it. A common
+  // failure mode is a tree where the core `out/` exists but the built-in
+  // extensions were never compiled (no `extensions/<name>/out`). At runtime that
+  // surfaces as "Cannot find module .../configuration-editing/out/..." plus a
+  // cascade of failed activations (git-base → git → CodeRabbit, etc.) and a
+  // stale-looking workbench. Fail loudly here instead of packaging a half-built
+  // runtime (or uploading a broken runtime zip that thin installers download).
+  const compiledMarkers = [
+    "out/vs/code/electron-browser/workbench/workbench-dev.html",
+    "extensions/git/out",
+    "extensions/git-base/out",
+    "extensions/configuration-editing/out",
+  ];
+  const missingMarkers: string[] = [];
+  for (const marker of compiledMarkers) {
+    if (!(yield* fs.exists(path.join(vsCodeSourceDir, marker)))) {
+      missingMarkers.push(marker);
+    }
+  }
+  if (missingMarkers.length > 0) {
+    return yield* new BuildScriptError({
+      message:
+        `The VS Code runtime at ${vsCodeSourceDir} is not fully compiled — missing: ` +
+        `${missingMarkers.join(", ")}. Compile the core AND the built-in extensions before ` +
+        "building (in tabs-code-main run `npm run compile`, which runs the gulp `compile-extensions` " +
+        "task), then point TABS_CODE_OSS_BUILD_DIR at the fully compiled tree.",
+    });
+  }
+
   yield* Effect.log("[desktop-artifact] Staging VS Code runtime...");
   yield* fs.copy(vsCodeSourceDir, vsCodeDestDir);
 

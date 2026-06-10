@@ -164,6 +164,14 @@ export function createWsNativeApi(): NativeApi {
       readFile: (input) => transport.request(WS_METHODS.projectsReadFile, input),
       writeFile: (input) => transport.request(WS_METHODS.projectsWriteFile, input),
     },
+    repositories: {
+      clone: async (input) => {
+        if (!window.desktopBridge) {
+          return { ok: false, error: "Cloning a repository requires the desktop app." };
+        }
+        return window.desktopBridge.cloneRepository(input);
+      },
+    },
     shell: {
       openInEditor: (cwd, editor) =>
         transport.request(WS_METHODS.shellOpenInEditor, { cwd, editor }),

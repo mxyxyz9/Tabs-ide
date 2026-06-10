@@ -28,7 +28,11 @@ import type {
 import { DEFAULT_DESKTOP_ICON_THEME } from "@tabs/contracts/settings";
 import { autoUpdater } from "electron-updater";
 
-import type { ContextMenuItem } from "@tabs/contracts";
+import type {
+  ContextMenuItem,
+  DesktopCloneRepositoryInput,
+  DesktopCloneRepositoryResult,
+} from "@tabs/contracts";
 import { NetService } from "@tabs/shared/Net";
 import { RotatingFileSink } from "@tabs/shared/logging";
 import { showDesktopConfirmDialog } from "./confirmDialog";
@@ -69,6 +73,7 @@ import type { CodeChromeState } from "@tabs/shared/codeChrome";
 syncShellEnvironment();
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
+const CLONE_REPOSITORY_CHANNEL = "desktop:clone-repository";
 const PICK_FILE_CHANNEL = "desktop:pick-file";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
@@ -1749,6 +1754,65 @@ function registerIpcHandlers(): void {
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
   });
+
+  ipcMain.removeHandler(CLONE_REPOSITORY_CHANNEL);
+  ipcMain.handle(
+    CLONE_REPOSITORY_CHANNEL,
+    async (_event, rawInput: unknown): Promise<DesktopCloneRepositoryResult> => {
+      const input = (rawInput ?? null) as Partial<DesktopCloneRepositoryInput> | null;
+      const url = typeof input?.url === "string" ? input.url.trim() : "";
+      const parentDir = typeof input?.parentDir === "string" ? input.parentDir : "";
+
+      // Accept remote URLs git understands: scheme-based (https/http/git/ssh) or
+      // scp-like (user@host:path). Local-path "URLs" are rejected on purpose —
+      // this surface is for cloning remotes, and it keeps the input unambiguous.
+      const isPlausibleGitUrl =
+        /^(?:https?|git|ssh):\/\/.+/i.test(url) || /^[^@\s]+@[^:\s]+:.+/.test(url);
+      if (!isPlausibleGitUrl) {
+        return { ok: false, error: "Enter a valid git URL (https://…, git@…:…, or ssh://…)." };
+      }
+      if (!parentDir || !isDirectory(parentDir)) {
+        return { ok: false, error: "Choose a valid destination folder." };
+      }
+
+      // Mirror git's own default: the folder is the last path segment minus .git.
+      const dirName = url
+        .replace(/[/]+$/, "")
+        .replace(/\.git$/i, "")
+        .split(/[/:]/)
+        .pop()
+        ?.replace(/[^A-Za-z0-9._-]/g, "");
+      if (!dirName) {
+        return { ok: false, error: "Could not derive a folder name from that URL." };
+      }
+
+      const dest = Path.join(parentDir, dirName);
+      if (FS.existsSync(dest) && FS.readdirSync(dest).length > 0) {
+        return { ok: false, error: `"${dirName}" already exists and is not empty.` };
+      }
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          ChildProcess.execFile(
+            "git",
+            ["clone", "--progress", "--", url, dest],
+            { cwd: parentDir, env: process.env, timeout: 10 * 60_000, maxBuffer: 32 * 1024 * 1024 },
+            (error, _stdout, stderr) => {
+              if (error) {
+                const detail = stderr ? stderr.toString().trim() : "";
+                reject(new Error(detail || error.message));
+              } else {
+                resolve();
+              }
+            },
+          );
+        });
+        return { ok: true, path: dest };
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : "git clone failed." };
+      }
+    },
+  );
 
   ipcMain.removeHandler(CONFIRM_CHANNEL);
   ipcMain.handle(CONFIRM_CHANNEL, async (_event, message: unknown) => {
