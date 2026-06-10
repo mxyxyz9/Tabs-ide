@@ -1,6 +1,6 @@
 {
   "name": "@tabs/desktop",
-  "version": "0.0.14",
+  "version": "1.2.0",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
@@ -16,14 +16,12 @@
   "dependencies": {
     "effect": "catalog:",
     "electron": "40.6.0",
-    "electron-updater": "^6.6.2",
-    "ws": "^8.21.0"
+    "electron-updater": "^6.6.2"
   },
   "devDependencies": {
     "@tabs/contracts": "workspace:*",
     "@tabs/shared": "workspace:*",
     "@types/node": "catalog:",
-    "@types/ws": "^8.18.1",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",

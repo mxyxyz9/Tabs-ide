@@ -166,5 +166,26 @@
 		"github-enterprise": [
 			"GitHub.copilot-chat"
 		]
+	},
+	"configurationDefaults": {
+		"workbench.startupEditor": "none",
+		"workbench.welcomePage.walkthroughs.openOnInstall": false,
+		"workbench.welcome.enabled": false,
+		"workbench.tips.enabled": false,
+		"workbench.editor.empty.hint": "hidden",
+		"workbench.editor.restoreEditors": true,
+		"workbench.activityBar.location": "hidden",
+		"workbench.activityBar.visible": false,
+		"workbench.statusBar.visible": false,
+		"window.menuBarVisibility": "hidden",
+		"window.titleBarStyle": "native",
+		"window.customTitleBarVisibility": "never",
+		"workbench.layoutControl.enabled": false,
+		"window.commandCenter": false,
+		"security.workspace.trust.enabled": false,
+		"chat.disableAIFeatures": true,
+		"chat.commandCenter.enabled": false,
+		"workbench.secondarySideBar.defaultVisibility": "hidden",
+		"extensions.autoCheckUpdates": false
 	}
 }

@@ -68,9 +68,106 @@ export function devInjectNodeModuleLookupPath(injectPath: string): void {
 		throw new Error('Missing injectPath');
 	}
 
-	// register a loader hook
 	const Module = require('node:module');
-	Module.register('./bootstrap-import.js', { parentURL: import.meta.url, data: injectPath });
+	if (typeof Module.registerHooks === 'function') {
+		// Prefer the synchronous in-thread hooks API (Node >= 22.15). The
+		// off-thread `Module.register` loader worker can deadlock under
+		// Electron-run-as-Node: a synchronous resolve request parks the main
+		// thread in the hooks channel's futex wait while the worker never
+		// wakes, freezing the whole process on the next dynamic import (this
+		// froze every remote extension host in the embedded Tabs runtime).
+		// The mapping is a plain table lookup, so it needs no worker at all.
+		devRegisterSyncNodeModuleHooks(Module, injectPath);
+	} else {
+		// register a loader hook
+		Module.register('./bootstrap-import.js', { parentURL: import.meta.url, data: injectPath });
+	}
+}
+
+/**
+ * Synchronous equivalent of the mapping in `bootstrap-import.ts`: redirects
+ * bare imports of the inject path's package dependencies to that
+ * node_modules tree. Keep the resolution logic in sync with
+ * `bootstrap-import.ts#initialize`.
+ */
+function devRegisterSyncNodeModuleHooks(Module: typeof import('node:module'), injectPath: string): void {
+	const { fileURLToPath, pathToFileURL } = require('node:url');
+
+	const specifierToUrl: Record<string, string> = {};
+	const specifierToFormat: Record<string, string> = {};
+
+	const injectPackageJSONPath = fileURLToPath(new URL('../package.json', pathToFileURL(injectPath)));
+	const packageJSON = JSON.parse(String(fs.readFileSync(injectPackageJSONPath)));
+	for (const [name] of Object.entries(packageJSON.dependencies)) {
+		try {
+			const pkgJsonPath = path.join(injectPackageJSONPath, `../node_modules/${name}/package.json`);
+			const pkgJson = JSON.parse(String(fs.readFileSync(pkgJsonPath)));
+
+			// Determine the entry point: prefer exports["."].import for ESM, then main.
+			// Handle conditional export targets where exports["."].import/default
+			// can be a string or an object with a string `default` field.
+			let main: string | undefined;
+			if (pkgJson.exports?.['.']) {
+				const dotExport = pkgJson.exports['.'];
+				if (typeof dotExport === 'string') {
+					main = dotExport;
+				} else if (typeof dotExport === 'object' && dotExport !== null) {
+					const resolveCondition = (v: unknown): string | undefined => {
+						if (typeof v === 'string') {
+							return v;
+						}
+						if (typeof v === 'object' && v !== null) {
+							const d = (v as { default?: unknown }).default;
+							if (typeof d === 'string') {
+								return d;
+							}
+						}
+						return undefined;
+					};
+					main = resolveCondition(dotExport.import) ?? resolveCondition(dotExport.default);
+				}
+			}
+			if (typeof main !== 'string') {
+				main = typeof pkgJson.main === 'string' ? pkgJson.main : undefined;
+			}
+
+			if (!main) {
+				main = 'index.js';
+			}
+			if (!main.endsWith('.js') && !main.endsWith('.mjs') && !main.endsWith('.cjs')) {
+				main += '.js';
+			}
+			const mainPath = path.join(injectPackageJSONPath, `../node_modules/${name}/${main}`);
+			specifierToUrl[name] = pathToFileURL(mainPath).href;
+			// Determine module format: .mjs is always ESM, .cjs always CJS, otherwise check type field
+			const isModule = main.endsWith('.mjs')
+				? true
+				: main.endsWith('.cjs')
+					? false
+					: pkgJson.type === 'module';
+			specifierToFormat[name] = isModule ? 'module' : 'commonjs';
+
+		} catch (err) {
+			console.error(name);
+			console.error(err);
+		}
+	}
+
+	Module.registerHooks({
+		resolve(specifier, context, nextResolve) {
+			const newSpecifier = specifierToUrl[specifier];
+			if (newSpecifier !== undefined) {
+				return {
+					format: specifierToFormat[specifier] ?? 'commonjs',
+					shortCircuit: true,
+					url: newSpecifier
+				};
+			}
+			return nextResolve(specifier, context);
+		}
+	});
+
+	console.log(`[bootstrap-import] Initialized node_modules redirector (sync hooks) for: ${injectPath}`);
 }
 
 export function removeGlobalNodeJsModuleLookupPaths(): void {

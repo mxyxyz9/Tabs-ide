@@ -65,20 +65,31 @@ describe("parseCodeControlServerMessage", () => {
 });
 
 describe("parseCodeControlClientMessage / coerceChromeState", () => {
-  it("parses hello", () => {
+  it("parses hello with projectId and token", () => {
+    expect(
+      parseCodeControlClientMessage(
+        JSON.stringify({ type: "hello", projectId: "p1", token: "t1" }),
+      ),
+    ).toEqual({ type: "hello", projectId: "p1", token: "t1" });
+  });
+  it("defaults projectId and token to empty strings when missing", () => {
     expect(parseCodeControlClientMessage(JSON.stringify({ type: "hello" }))).toEqual({
       type: "hello",
+      projectId: "",
+      token: "",
     });
   });
-  it("parses and coerces chromeState", () => {
+  it("parses and coerces chromeState with projectId", () => {
     const parsed = parseCodeControlClientMessage(
       JSON.stringify({
         type: "chromeState",
+        projectId: "p2",
         state: { activeViewId: "scm", panelOpen: true, dirtyCount: 2.9, branch: "main" },
       }),
     );
     expect(parsed).toEqual({
       type: "chromeState",
+      projectId: "p2",
       state: { activeViewId: "scm", panelOpen: true, dirtyCount: 2, branch: "main" },
     });
   });

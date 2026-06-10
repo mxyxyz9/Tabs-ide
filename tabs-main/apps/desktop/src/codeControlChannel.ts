@@ -10,20 +10,28 @@
  * call `vscode.commands.executeCommand` is the extension host. Main is the
  * natural broker: it already owns the BrowserView and the desktopBridge IPC.
  *
- * Transport: a `ws` WebSocket server bound to 127.0.0.1 on an ephemeral port,
- * gated by a random token. The URL+token are handed to the extension via env
- * vars (it inherits the main process env through the spawned REH server). Only
- * one extension connection is kept (the most recent); commands are forwarded to
- * it and `chromeState` pushes are surfaced via `onChromeState`.
+ * Transport: a raw TCP server (`node:net`) bound to 127.0.0.1 on an ephemeral
+ * port, speaking newline-delimited JSON. Deliberately NOT WebSocket: the
+ * extension host replaces `globalThis.WebSocket` with @vscode/proxy-agent's
+ * patched constructor, which can hang indefinitely on loopback URLs — raw TCP
+ * has no proxy layer, no patching, and both ends of this channel are ours.
  *
- * Security: binds to loopback only, requires a per-launch token, and forwards
- * only allowlisted command ids (`CODE_CHROME_COMMAND_ALLOWLIST`). A compromised
- * renderer therefore cannot trigger arbitrary VS Code commands.
+ * Auth: a per-launch random token, sent in-band as the first (`hello`) message;
+ * connections that send anything else first are destroyed. The connection info
+ * is handed to the extension via env vars and a JSON file (it inherits the main
+ * process env through the spawned REH server; the file lets a long-lived
+ * extension host re-read the current port after a main-process restart).
+ *
+ * Routing: one connection per project — the `hello` carries the projectId the
+ * desktop set in the server's env, and commands are forwarded only to that
+ * project's socket, so several open projects can't clobber each other.
  */
 import * as Crypto from "node:crypto";
+import * as FS from "node:fs";
+import * as Net from "node:net";
+import * as Path from "node:path";
 import type { AddressInfo } from "node:net";
 
-import { WebSocketServer, type WebSocket } from "ws";
 import {
   CODE_CHROME_COMMAND_ALLOWLIST,
   parseCodeControlClientMessage,
@@ -31,113 +39,178 @@ import {
   type CodeControlServerMessage,
 } from "@tabs/shared/codeChrome";
 
-const CONTROL_PATH = "/code-control";
+// Hard cap on a connection's unframed buffer: control messages are tiny, so
+// anything larger is a misbehaving or hostile local client.
+const MAX_BUFFERED_BYTES = 1_000_000;
 
 export class CodeControlChannel {
-  private server: WebSocketServer | null = null;
-  private socket: WebSocket | null = null;
+  private server: Net.Server | null = null;
+  // One connection per project (keyed by the projectId the extension announces
+  // in its `hello`). A single shared socket would let multiple open projects
+  // clobber each other, routing a click to the wrong editor.
+  private readonly socketsByProject = new Map<string, Net.Socket>();
+  private readonly projectBySocket = new Map<Net.Socket, string>();
   private token = "";
   private port = 0;
-  private chromeStateListener: ((state: CodeChromeState) => void) | null = null;
+  private chromeStateListener: ((projectId: string, state: CodeChromeState) => void) | null = null;
+  private urlFilePath: string | null = null;
 
   /**
    * Start the loopback control server. Idempotent — repeated calls return the
    * already-resolved connection info. Resolves once the server is listening.
+   *
+   * When `urlFilePath` is provided, the live `{ url, token }` is written there
+   * (atomically) so a long-lived extension host can re-read the current target
+   * on each reconnect — surviving a main-process restart on a new port.
    */
-  start(): Promise<{ url: string; token: string }> {
+  start(urlFilePath?: string): Promise<{ url: string; token: string }> {
     if (this.server) {
       return Promise.resolve({ url: this.url(), token: this.token });
     }
+    this.urlFilePath = urlFilePath ?? null;
     this.token = Crypto.randomBytes(24).toString("hex");
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: CONTROL_PATH });
+    const server = Net.createServer((socket) => this.handleConnection(socket));
     this.server = server;
-
-    server.on("connection", (socket, request) => {
-      // Token check: reject connections without the exact per-launch token.
-      const requestUrl = new URL(request.url ?? "", "ws://127.0.0.1");
-      if (requestUrl.searchParams.get("token") !== this.token) {
-        socket.close(1008, "invalid token");
-        return;
-      }
-      // Keep only the most recent connection (one embedded workbench at a time).
-      if (this.socket && this.socket !== socket) {
-        try {
-          this.socket.close(1000, "superseded");
-        } catch {
-          /* ignore */
-        }
-      }
-      this.socket = socket;
-
-      socket.on("message", (raw: unknown) => {
-        const text =
-          typeof raw === "string"
-            ? raw
-            : raw instanceof Buffer
-              ? raw.toString("utf8")
-              : Buffer.from(raw as ArrayBuffer).toString("utf8");
-        const message = parseCodeControlClientMessage(text);
-        if (!message) return;
-        if (message.type === "chromeState") {
-          this.chromeStateListener?.(message.state);
-        }
-      });
-      socket.on("close", () => {
-        if (this.socket === socket) {
-          this.socket = null;
-        }
-      });
-      socket.on("error", () => {
-        if (this.socket === socket) {
-          this.socket = null;
-        }
-      });
-    });
 
     return new Promise((resolve, reject) => {
       server.once("error", reject);
-      server.once("listening", () => {
+      server.listen(0, "127.0.0.1", () => {
         this.port = (server.address() as AddressInfo).port;
+        this.writeUrlFile();
         resolve({ url: this.url(), token: this.token });
       });
     });
   }
 
-  /** Register the callback invoked whenever the extension pushes chrome state. */
-  onChromeState(listener: (state: CodeChromeState) => void): void {
+  private handleConnection(socket: Net.Socket): void {
+    let authed = false;
+    let buffer = "";
+    socket.setNoDelay(true);
+
+    socket.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      if (buffer.length > MAX_BUFFERED_BYTES) {
+        socket.destroy();
+        return;
+      }
+      let newlineIndex = buffer.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        newlineIndex = buffer.indexOf("\n");
+        if (line.length === 0) {
+          continue;
+        }
+        const message = parseCodeControlClientMessage(line);
+        if (!message) {
+          continue;
+        }
+        // Token check: the first message must be a `hello` carrying the exact
+        // per-launch token; anything else gets the connection destroyed.
+        if (!authed) {
+          if (message.type !== "hello" || message.token !== this.token) {
+            socket.destroy();
+            return;
+          }
+          authed = true;
+          this.registerForProject(message.projectId, socket);
+          continue;
+        }
+        if (message.type === "chromeState") {
+          this.chromeStateListener?.(message.projectId, message.state);
+        }
+      }
+    });
+
+    const cleanup = () => {
+      const projectId = this.projectBySocket.get(socket);
+      if (projectId !== undefined) {
+        this.projectBySocket.delete(socket);
+        if (this.socketsByProject.get(projectId) === socket) {
+          this.socketsByProject.delete(projectId);
+        }
+      }
+    };
+    socket.on("close", cleanup);
+    socket.on("error", cleanup);
+  }
+
+  private registerForProject(projectId: string, socket: Net.Socket): void {
+    // Supersede only a prior socket for the SAME project (e.g. a reconnect
+    // after the workbench reloaded), never a different project's socket.
+    const existing = this.socketsByProject.get(projectId);
+    if (existing && existing !== socket) {
+      try {
+        existing.destroy();
+      } catch {
+        /* ignore */
+      }
+      this.projectBySocket.delete(existing);
+    }
+    this.socketsByProject.set(projectId, socket);
+    this.projectBySocket.set(socket, projectId);
+  }
+
+  /** Persist the live URL/token for the extension to re-read on reconnect. */
+  private writeUrlFile(): void {
+    if (!this.urlFilePath) return;
+    try {
+      FS.mkdirSync(Path.dirname(this.urlFilePath), { recursive: true });
+      // Write to a temp file then rename so a reader never sees a partial write.
+      const tmp = `${this.urlFilePath}.${process.pid}.tmp`;
+      FS.writeFileSync(tmp, JSON.stringify({ url: this.url(), token: this.token }), "utf8");
+      FS.renameSync(tmp, this.urlFilePath);
+    } catch {
+      // Non-fatal: the extension falls back to the env URL.
+    }
+  }
+
+  /** Register the callback invoked whenever an extension pushes chrome state. */
+  onChromeState(listener: (projectId: string, state: CodeChromeState) => void): void {
     this.chromeStateListener = listener;
   }
 
   /**
-   * Forward an allowlisted command to the connected extension. Returns true if a
-   * connection existed and the (allowed) command was sent.
+   * Forward an allowlisted command to a specific project's extension. Returns
+   * true if that project had a live connection and the (allowed) command was
+   * sent. Routing by project keeps a click on one editor from driving another.
    */
-  runCommand(commandId: string): boolean {
+  runCommand(projectId: string, commandId: string): boolean {
     if (!CODE_CHROME_COMMAND_ALLOWLIST.includes(commandId)) {
       return false;
     }
-    const socket = this.socket;
-    if (!socket || socket.readyState !== socket.OPEN) {
+    const socket = this.socketsByProject.get(projectId);
+    if (!socket || socket.destroyed || !socket.writable) {
       return false;
     }
     const message: CodeControlServerMessage = { type: "runCommand", commandId };
-    socket.send(JSON.stringify(message));
+    socket.write(`${JSON.stringify(message)}\n`);
     return true;
   }
 
   url(): string {
-    return `ws://127.0.0.1:${this.port}${CONTROL_PATH}?token=${this.token}`;
+    return `tcp://127.0.0.1:${this.port}/?token=${this.token}`;
   }
 
   dispose(): void {
-    try {
-      this.socket?.close();
-    } catch {
-      /* ignore */
+    for (const socket of this.socketsByProject.values()) {
+      try {
+        socket.destroy();
+      } catch {
+        /* ignore */
+      }
     }
-    this.socket = null;
+    this.socketsByProject.clear();
+    this.projectBySocket.clear();
     this.server?.close();
     this.server = null;
     this.chromeStateListener = null;
+    if (this.urlFilePath) {
+      try {
+        FS.rmSync(this.urlFilePath, { force: true });
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }

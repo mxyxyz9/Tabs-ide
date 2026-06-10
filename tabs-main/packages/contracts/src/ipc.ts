@@ -257,10 +257,12 @@ export interface DesktopBridge {
   openCodeFile: (input: DesktopCodeHostOpenFileInput) => Promise<void>;
   setCodeBounds: (input: DesktopCodeHostSetBoundsInput) => Promise<void>;
   syncCodeSessions: (projectIds: readonly string[]) => Promise<void>;
-  /** Forward an allowlisted workbench command to the embedded editor. Resolves true when delivered. */
-  runCodeCommand: (commandId: string) => Promise<boolean>;
-  /** Subscribe to chrome-state pushes from the embedded workbench. Returns an unsubscribe fn. */
-  onCodeChromeState: (listener: (state: CodeChromeState) => void) => () => void;
+  /** Forward an allowlisted workbench command to a project's embedded editor. Resolves true when delivered. */
+  runCodeCommand: (projectId: string, commandId: string) => Promise<boolean>;
+  /** Subscribe to chrome-state pushes from the embedded workbench (tagged by project). Returns an unsubscribe fn. */
+  onCodeChromeState: (
+    listener: (update: { projectId: string; state: CodeChromeState }) => void,
+  ) => () => void;
   getBrowserHostState: () => Promise<DesktopBrowserHostState>;
   getBrowserSessionState: (
     input: DesktopBrowserHostControlInput,

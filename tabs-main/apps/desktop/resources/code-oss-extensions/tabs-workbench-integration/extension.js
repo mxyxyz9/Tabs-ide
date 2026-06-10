@@ -59,11 +59,38 @@ let shellPanel = null;
 /** @type {ReturnType<typeof createShellController> | null} */
 let shellController = null;
 
+/**
+ * Last-resort trace channel for diagnosing this extension inside the remote
+ * extension host, where console output is captured into the desktop main
+ * process's in-memory ring and the workbench UI is hard to reach. Best-effort.
+ */
+function trace(message) {
+  try {
+    require("node:fs").appendFileSync(
+      require("node:path").join(require("node:os").tmpdir(), "tabs-ext-trace.log"),
+      `${new Date().toISOString()} [${process.pid}] ${message}\n`,
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
 function activate(context) {
   void applyEmbedChromeDefaults();
+  // Tabs renders its own Agents surface; close VS Code's auxiliary bar (the
+  // stock Chat / "Build with Agent" panel) if a previously persisted layout
+  // restored it open — the disableAIFeatures setting only prevents NEW chat UI.
+  void vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar").then(
+    () => undefined,
+    () => undefined,
+  );
   shellController = createShellController(context);
   context.subscriptions.push(shellController);
-  startCodeControlChannel(context);
+  try {
+    startCodeControlChannel(context);
+  } catch (error) {
+    trace(`activate: control channel threw: ${error && error.stack ? error.stack : error}`);
+  }
   context.subscriptions.push(
     vscode.commands.registerCommand("tabs.openShell", () => shellController.show("agents")),
     vscode.commands.registerCommand("tabs.openAgents", () => shellController.show("agents")),
@@ -114,19 +141,74 @@ async function applyEmbedChromeDefaults() {
  * unavailable the editor still works, the chrome's buttons simply no-op.
  */
 function startCodeControlChannel(context) {
-  const url = process.env.TABS_CODE_CONTROL_URL;
-  const WS = globalThis.WebSocket;
-  // Diagnostics surface in the remote ext host log; prefixed for grep-ability.
-  const log = (message) => console.error(`[tabs-control] ${message}`);
-  if (!url) {
-    log("no TABS_CODE_CONTROL_URL in env; chrome control channel disabled");
+  const fs = require("node:fs");
+  const net = require("node:net");
+  const path = require("node:path");
+  // Diagnostics: extension-host console output is hard to reach from outside,
+  // so also append to a logfile next to the control-URL file (the one location
+  // both sides of the channel already share).
+  const controlFile = process.env.TABS_CODE_CONTROL_FILE;
+  const logFile = controlFile ? path.join(path.dirname(controlFile), "code-control-ext.log") : null;
+  const log = (message) => {
+    console.error(`[tabs-control] ${message}`);
+    trace(`control: ${message}`);
+    if (logFile) {
+      try {
+        fs.appendFileSync(logFile, `${new Date().toISOString()} ${message}\n`);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  // Resolve the *current* control target on every (re)connect rather than
+  // trusting a launch-time value. The Electron main process writes its live
+  // `tcp://127.0.0.1:<port>/?token=<token>` URL to TABS_CODE_CONTROL_FILE;
+  // reading it fresh each attempt lets a long-lived workbench reconnect to a
+  // main process that restarted on a new port (common in dev, where the main
+  // process hot-restarts but this server is reused). Falls back to the env URL.
+  // The channel is raw TCP + newline-delimited JSON, deliberately NOT
+  // WebSocket: the extension host's proxy patch makes WebSocket connects to
+  // loopback hang indefinitely.
+  const resolveControlTarget = () => {
+    const candidates = [];
+    if (process.env.TABS_CODE_CONTROL_FILE) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(process.env.TABS_CODE_CONTROL_FILE, "utf8"));
+        if (parsed && typeof parsed.url === "string") {
+          candidates.push(parsed.url);
+        }
+      } catch {
+        /* fall through to env */
+      }
+    }
+    if (process.env.TABS_CODE_CONTROL_URL) {
+      candidates.push(process.env.TABS_CODE_CONTROL_URL);
+    }
+    for (const candidate of candidates) {
+      try {
+        const url = new URL(candidate);
+        const port = Number.parseInt(url.port, 10);
+        const token = url.searchParams.get("token") || "";
+        if (Number.isFinite(port) && port > 0 && token) {
+          return { port, token };
+        }
+      } catch {
+        /* try next candidate */
+      }
+    }
+    return null;
+  };
+
+  if (!process.env.TABS_CODE_CONTROL_FILE && !process.env.TABS_CODE_CONTROL_URL) {
+    log("no control URL/file in env; chrome control channel disabled");
     return;
   }
-  if (typeof WS !== "function") {
-    log("globalThis.WebSocket unavailable; chrome control channel disabled");
-    return;
-  }
-  log(`starting control channel → ${url.replace(/token=[^&]+/, "token=…")}`);
+  log("starting control channel");
+
+  // Identifies this workbench on the shared control channel so the broker routes
+  // commands/state to the right editor when multiple projects are open.
+  const projectId = process.env.TABS_PROJECT_ID || "";
 
   /** @type {{ activeViewId: string | null, panelOpen: boolean, dirtyCount: number, branch: string | null }} */
   const state = { activeViewId: null, panelOpen: false, dirtyCount: 0, branch: null };
@@ -136,15 +218,15 @@ function startCodeControlChannel(context) {
   let reconnectDelay = 1000;
 
   const send = (message) => {
-    if (socket && socket.readyState === 1 /* OPEN */) {
+    if (socket && !socket.destroyed && socket.writable) {
       try {
-        socket.send(JSON.stringify(message));
+        socket.write(`${JSON.stringify(message)}\n`);
       } catch {
         /* ignore */
       }
     }
   };
-  const pushState = () => send({ type: "chromeState", state: { ...state } });
+  const pushState = () => send({ type: "chromeState", projectId, state: { ...state } });
 
   const computeDirtyCount = () =>
     vscode.workspace.textDocuments.filter((doc) => doc.isDirty).length;
@@ -187,43 +269,104 @@ function startCodeControlChannel(context) {
 
   const connect = () => {
     if (disposed) return;
-    let ws;
-    try {
-      ws = new WS(url);
-    } catch {
+    const target = resolveControlTarget();
+    if (!target) {
+      log("no control target resolvable; will retry");
       scheduleReconnect();
       return;
     }
-    socket = ws;
-    ws.addEventListener("open", () => {
-      reconnectDelay = 1000;
-      log("control channel connected");
-      refreshBranch();
-      state.dirtyCount = computeDirtyCount();
-      send({ type: "hello" });
-      pushState();
-    });
-    ws.addEventListener("message", (event) => {
-      let parsed;
-      try {
-        parsed = JSON.parse(typeof event.data === "string" ? event.data : String(event.data));
-      } catch {
-        return;
-      }
-      if (parsed && parsed.type === "runCommand" && typeof parsed.commandId === "string") {
-        log(`runCommand ${parsed.commandId}`);
-        void runCommand(parsed.commandId);
-      }
-    });
-    ws.addEventListener("close", () => {
-      socket = null;
+    // Dial the broker on a guaranteed-unpatched socket. @vscode/proxy-agent
+    // mutates `net`, and in practice the stashed `net.__vscodeOriginal.connect`
+    // ALSO deferred the dial behind system-certificate loading — the socket sat
+    // `pending` forever with no connect/error event (confirmed via lsof: broker
+    // LISTENing, ext host alive, yet no ESTABLISHED connection). Constructing a
+    // bare `net.Socket` and invoking `Socket.prototype.connect` on the instance
+    // bypasses the module-level patch.
+    let sock;
+    try {
+      sock = new net.Socket();
+      net.Socket.prototype.connect.call(sock, { host: "127.0.0.1", port: target.port });
+      trace(`control: dialing via Socket.prototype.connect, pending=${sock.pending}`);
+    } catch (error) {
+      log(`connect failed: ${error && error.message ? error.message : error}`);
       scheduleReconnect();
-    });
-    ws.addEventListener("error", () => {
+      return;
+    }
+
+    socket = sock;
+    sock.setNoDelay(true);
+    let buffer = "";
+    // `settled` keeps the timeout from racing a connect/error that already
+    // resolved this dial.
+    let settled = false;
+
+    // Hard cap on the dial: the failure we hit was a silent indefinite hang
+    // (no connect, no error). If neither fires within 5s, tear the socket down
+    // and retry rather than wedging forever.
+    const connectTimeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      log("connect timed out after 5s; destroying socket and retrying");
       try {
-        ws.close();
+        sock.destroy();
       } catch {
         /* ignore */
+      }
+      if (socket === sock) socket = null;
+      scheduleReconnect();
+    }, 5000);
+
+    sock.on("connect", () => {
+      settled = true;
+      clearTimeout(connectTimeout);
+      reconnectDelay = 1000;
+      log(`control channel connected (port=${target.port})`);
+      refreshBranch();
+      state.dirtyCount = computeDirtyCount();
+      send({ type: "hello", projectId, token: target.token });
+      pushState();
+    });
+    sock.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      let newlineIndex = buffer.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        newlineIndex = buffer.indexOf("\n");
+        if (!line) continue;
+        let parsed;
+        try {
+          parsed = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (parsed && parsed.type === "runCommand" && typeof parsed.commandId === "string") {
+          log(`runCommand ${parsed.commandId}`);
+          void runCommand(parsed.commandId);
+        }
+      }
+    });
+    sock.on("close", () => {
+      clearTimeout(connectTimeout);
+      settled = true;
+      if (socket === sock) {
+        socket = null;
+      }
+      log("control channel closed");
+      scheduleReconnect();
+    });
+    sock.on("error", (error) => {
+      clearTimeout(connectTimeout);
+      log(`control channel error: ${error && error.message ? error.message : "unknown"}`);
+      try {
+        sock.destroy();
+      } catch {
+        /* ignore */
+      }
+      if (!settled) {
+        settled = true;
+        if (socket === sock) socket = null;
+        scheduleReconnect();
       }
     });
   };
@@ -234,7 +377,9 @@ function startCodeControlChannel(context) {
       reconnectTimer = null;
       connect();
     }, reconnectDelay);
-    reconnectDelay = Math.min(reconnectDelay * 2, 15000);
+    // Cap at 5s so a workbench recovers reasonably fast after the main process
+    // restarts on a new port (it re-reads the URL file on each attempt).
+    reconnectDelay = Math.min(reconnectDelay * 2, 5000);
   };
 
   // Keep derived state fresh from editor / save / git activity.
@@ -286,7 +431,7 @@ function startCodeControlChannel(context) {
       }
       if (socket) {
         try {
-          socket.close();
+          socket.destroy();
         } catch {
           /* ignore */
         }

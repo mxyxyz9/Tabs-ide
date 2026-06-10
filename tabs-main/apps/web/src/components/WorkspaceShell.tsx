@@ -1202,16 +1202,26 @@ function DesktopCodeTool(props: { project: Project }) {
   // bridge (the integration extension reports view/panel/scm state over the
   // loopback control channel). Clicks forward allowlisted workbench commands.
   const [chromeState, setChromeState] = useState<CodeChromeState>(DEFAULT_CODE_CHROME_STATE);
-  const runCodeCommand = useCallback((commandId: string) => {
-    void window.desktopBridge?.runCodeCommand(commandId).catch(() => undefined);
-  }, []);
+  const projectId = props.project.id;
+  const runCodeCommand = useCallback(
+    (commandId: string) => {
+      void window.desktopBridge?.runCodeCommand(projectId, commandId).catch(() => undefined);
+    },
+    [projectId],
+  );
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!bridge?.onCodeChromeState) {
       return;
     }
-    return bridge.onCodeChromeState(setChromeState);
-  }, []);
+    // Only apply state tagged for this project — several editors share the one
+    // control channel.
+    return bridge.onCodeChromeState((update) => {
+      if (update.projectId === projectId) {
+        setChromeState(update.state);
+      }
+    });
+  }, [projectId]);
 
   const openProjectInEditor = useCallback(async () => {
     if (!api) return;
@@ -1378,11 +1388,14 @@ function DesktopCodeTool(props: { project: Project }) {
     }
 
     let suspendedForOverlay = false;
-    let frameId = 0;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const syncOverlayVisibility = () => {
-      frameId = 0;
+      debounceTimer = null;
       const overlayOpen = document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null;
+      // Guard: only act when the overlay-open state actually changed, so a burst
+      // of unrelated DOM mutations during layout settling can't thrash the view
+      // by detaching/reattaching it.
       if (overlayOpen === suspendedForOverlay) {
         return;
       }
@@ -1400,11 +1413,14 @@ function DesktopCodeTool(props: { project: Project }) {
         .catch(() => undefined);
     };
 
+    // Debounce 50ms: the MutationObserver fires rapidly while the layout settles;
+    // coalesce bursts into a single trailing check (the state-diff guard above
+    // then drops no-op transitions).
     const scheduleSync = () => {
-      if (frameId !== 0) {
+      if (debounceTimer !== null) {
         return;
       }
-      frameId = window.requestAnimationFrame(syncOverlayVisibility);
+      debounceTimer = setTimeout(syncOverlayVisibility, 50);
     };
 
     const observer = new MutationObserver(() => {
@@ -1420,8 +1436,8 @@ function DesktopCodeTool(props: { project: Project }) {
 
     return () => {
       observer.disconnect();
-      if (frameId !== 0) {
-        window.cancelAnimationFrame(frameId);
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
       }
     };
   }, [codeHostState.available, props.project.id]);

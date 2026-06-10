@@ -112,6 +112,31 @@ export const CODE_OSS_THEME_CSS = /* css */ `
   display: none !important;
 }
 
+/* Backstop for the reserved-grid-column gap: when a settings race leaves the
+   activity-bar column allocated, display:none alone does not reclaim the cell.
+   Force the part to zero width so the sidebar is not pushed right by an empty
+   48px gutter. NOTE: the authoritative reclaim is the
+   workbench.activityBar.location=hidden setting applying once the workbench
+   boots cleanly; this only papers over the gap if that races. */
+.monaco-workbench .part.activitybar {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+/* Collapse the secondary (auxiliary) side bar — Tabs renders no chat panel. */
+.monaco-workbench .part.auxiliarybar {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+}
+/* Pull the sidebar flush-left in case the grid kept the activity-bar offset.
+   (If this misaligns the sidebar against the editor, it is the first rule to
+   drop — the real fix is the boot/settings path, not CSS.) */
+.monaco-workbench .part.sidebar {
+  left: 0 !important;
+}
+
 /* ============================================================ SIDEBAR === */
 .monaco-workbench .part.sidebar {
   /* The native React rail sits to the left of this view, so the sidebar reads as

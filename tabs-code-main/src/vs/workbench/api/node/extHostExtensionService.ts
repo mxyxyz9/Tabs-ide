@@ -23,7 +23,7 @@ import nodeModule from 'node:module';
 import { assertType } from '../../../base/common/types.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { BidirectionalMap } from '../../../base/common/map.js';
-import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 
 const require = nodeModule.createRequire(import.meta.url);
 
@@ -81,37 +81,6 @@ class NodeModuleESMInterceptor extends RequireInterceptor {
 		return `data:text/javascript;base64,${Buffer.from(scriptContent).toString('base64')}`;
 	}
 
-	// This string is a script that runs in the loader thread of NodeJS.
-	private static _loaderScript = `
-	let lookup;
-	export const initialize = async (context) => {
-		let requestIds = 0;
-		const { port } = context;
-		const pendingRequests = new Map();
-		port.onmessage = (event) => {
-			const { id, url } = event.data;
-			pendingRequests.get(id)?.(url);
-		};
-		lookup = url => {
-			// debugger;
-			const myId = requestIds++;
-			return new Promise((resolve) => {
-				pendingRequests.set(myId, resolve);
-				port.postMessage({ id: myId, url, });
-			});
-		};
-	};
-	export const resolve = async (specifier, context, nextResolve) => {
-		if (specifier !== 'vscode' || !context.parentURL) {
-			return nextResolve(specifier, context);
-		}
-		const otherUrl = await lookup(context.parentURL);
-		return {
-			url: otherUrl,
-			shortCircuit: true,
-		};
-	};`;
-
 	private static _vscodeImportFnName = `_VSCODE_IMPORT_VSCODE_API`;
 
 	private readonly _store = new DisposableStore();
@@ -121,8 +90,6 @@ class NodeModuleESMInterceptor extends RequireInterceptor {
 	}
 
 	protected override _installInterceptor(): void {
-
-		type Message = { id: string; url: string };
 
 		const apiInstances = new BidirectionalMap<typeof vscode, string>();
 		const apiImportDataUrl = new Map<string, string>();
@@ -137,28 +104,21 @@ class NodeModuleESMInterceptor extends RequireInterceptor {
 			}
 		});
 
-		const { port1, port2 } = new MessageChannel();
-
 		let apiModuleFactory: INodeModuleFactory | undefined;
 
-		// this is a workaround for the fact that the layer checker does not understand
-		// that onmessage is NodeJS API here
-		const port1LayerCheckerWorkaround: any = port1;
-
-		port1LayerCheckerWorkaround.onmessage = (e: { data: Message }) => {
-
-			// Get the vscode-module factory - which is the same logic that's also used by
-			// the CommonJS require interceptor
+		// Resolve the 'vscode' specifier to a data-url containing the API exports.
+		// This runs synchronously on the main thread, avoiding the deadlock that
+		// occurs with nodeModule.register() + off-thread loader worker + MessagePort.
+		const resolveVscodeUri = (parentURL: string): string => {
 			if (!apiModuleFactory) {
 				apiModuleFactory = this._factories.get('vscode');
 				assertType(apiModuleFactory);
 			}
 
-			const { id, url } = e.data;
-			const uri = URI.parse(url);
+			const uri = URI.parse(parentURL);
 
 			// Get or create the API instance. The interface is per extension and extensions are
-			// looked up by the uri (e.data.url) and path containment.
+			// looked up by the uri and path containment.
 			const apiInstance = apiModuleFactory.load('_not_used', uri, () => { throw new Error('CANNOT LOAD MODULE from here.'); });
 			let key = apiInstances.get(apiInstance);
 			if (!key) {
@@ -174,22 +134,28 @@ class NodeModuleESMInterceptor extends RequireInterceptor {
 				apiImportDataUrl.set(key, scriptDataUrlSrc);
 			}
 
-			port1.postMessage({
-				id,
-				url: scriptDataUrlSrc
-			});
+			return scriptDataUrlSrc;
 		};
 
-		nodeModule.register(NodeModuleESMInterceptor._createDataUri(NodeModuleESMInterceptor._loaderScript), {
-			parentURL: import.meta.url,
-			data: { port: port2 },
-			transferList: [port2],
+		// Use synchronous in-thread resolve hooks (Node >= 22.15) instead of
+		// nodeModule.register() which spawns an off-thread loader worker.
+		// The async worker approach deadlocks because:
+		//   1. Main thread calls import('vscode.github') and blocks in Atomics.wait()
+		//      during synchronous module linking
+		//   2. Loader worker resolves 'vscode' and sends MessagePort request to main thread
+		//   3. Main thread can't process the message because its event loop is blocked
+		//   => circular wait / deadlock
+		nodeModule.registerHooks({
+			resolve(specifier: string, context: { parentURL?: string }, nextResolve: Function) {
+				if (specifier === 'vscode' && context.parentURL) {
+					return {
+						url: resolveVscodeUri(context.parentURL),
+						shortCircuit: true
+					};
+				}
+				return nextResolve(specifier, context);
+			}
 		});
-
-		this._store.add(toDisposable(() => {
-			port1.close();
-			port2.close();
-		}));
 	}
 }
 

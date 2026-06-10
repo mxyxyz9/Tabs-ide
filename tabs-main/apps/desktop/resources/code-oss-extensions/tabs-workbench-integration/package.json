@@ -40,13 +40,7 @@
     ]
   },
   "activationEvents": [
-    "onCommand:tabs.focusCode",
-    "onCommand:tabs.focusGit",
-    "onCommand:tabs.openAgents",
-    "onCommand:tabs.openBrowser",
-    "onCommand:tabs.openServer",
-    "onCommand:tabs.openShell",
-    "onStartupFinished"
+    "*"
   ],
   "extensionKind": [
     "workspace"

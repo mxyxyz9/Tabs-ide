@@ -86,10 +86,18 @@ export const DEFAULT_CODE_CHROME_STATE: CodeChromeState = {
 /** Messages sent from the broker (Electron main) → extension. */
 export type CodeControlServerMessage = { type: "runCommand"; commandId: string };
 
-/** Messages sent from the extension → broker (Electron main). */
+/**
+ * Messages sent from the extension → broker (Electron main). Both carry the
+ * `projectId` (from the TABS_PROJECT_ID env the desktop sets per session) so
+ * the broker can route commands/state to the right editor when several projects
+ * share the one control channel. `projectId` may be empty if the env was unset.
+ * `hello` additionally carries the per-launch auth `token`: the channel is a
+ * raw loopback TCP socket (newline-delimited JSON), so authentication happens
+ * in-band as the first message rather than in a URL.
+ */
 export type CodeControlClientMessage =
-  | { type: "hello" }
-  | { type: "chromeState"; state: CodeChromeState };
+  | { type: "hello"; projectId: string; token: string }
+  | { type: "chromeState"; projectId: string; state: CodeChromeState };
 
 /**
  * Parse/validate an inbound control message from a JSON string. Returns null on
@@ -105,9 +113,13 @@ export function parseCodeControlClientMessage(raw: string): CodeControlClientMes
   }
   if (typeof value !== "object" || value === null) return null;
   const record = value as Record<string, unknown>;
-  if (record.type === "hello") return { type: "hello" };
+  const projectId = typeof record.projectId === "string" ? record.projectId : "";
+  if (record.type === "hello") {
+    const token = typeof record.token === "string" ? record.token : "";
+    return { type: "hello", projectId, token };
+  }
   if (record.type === "chromeState") {
-    return { type: "chromeState", state: coerceChromeState(record.state) };
+    return { type: "chromeState", projectId, state: coerceChromeState(record.state) };
   }
   return null;
 }

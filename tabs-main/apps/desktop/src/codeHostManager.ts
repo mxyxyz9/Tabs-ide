@@ -292,6 +292,18 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // an untrusted workspace can prevent the bundled Tabs integration extension
   // from activating.
   "security.workspace.trust.enabled": false,
+  // Tabs has its own Agents surface; VS Code's built-in Chat ("Build with
+  // Agent") duplicates it and its auxiliary bar squeezes the editor. Disable
+  // the AI features and keep the secondary side bar closed by default. (The
+  // integration extension also closes the auxiliary bar on activation, which
+  // covers workspaces whose persisted layout still has the chat panel open.)
+  "chat.disableAIFeatures": true,
+  "chat.commandCenter.enabled": false,
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  // The embed ships a fixed, bundled extension set with no marketplace, so
+  // background update checks only add startup work and network noise (and can
+  // delay the integration extension's activation on a cold session).
+  "extensions.autoCheckUpdates": false,
 };
 
 function writeMergedJsonFile(pathname: string, patch: Record<string, unknown>): void {
@@ -331,6 +343,8 @@ function ensureCodeOssWebServerDefaultSettings(): void {
   const settingsPath = Path.join(userDir, "settings.json");
   try {
     writeMergedJsonFile(settingsPath, CODE_OSS_EMBED_DEFAULT_SETTINGS);
+    // Verify in dev which profile dir the running session actually reads.
+    console.log(`[code-oss] embed settings written (managed-server) → ${settingsPath}`);
   } catch {
     // Non-fatal.
   }
@@ -415,43 +429,68 @@ function resolveBundledIntegrationExtensionSource(baseDir: string): string | nul
 }
 
 /**
- * Upsert one entry into a Code-OSS `extensions.json` manifest (the source of
- * truth for the server's user-installed extensions). Pure for testability.
- * Preserves all other entries; replaces any existing entry with the same id.
+ * Remove every manifest entry with the given extension id from a Code-OSS
+ * `extensions.json` array. Pure for testability; preserves all other entries.
  */
-export function upsertInstalledExtensionManifest(
-  existing: readonly unknown[],
-  entry: { id: string; version: string; absolutePath: string; relativeLocation: string },
-): unknown[] {
-  const others = existing.filter((item) => {
-    const id = (item as { identifier?: { id?: unknown } })?.identifier?.id;
-    return typeof id !== "string" || id.toLowerCase() !== entry.id.toLowerCase();
+export function removeExtensionFromManifest(existing: readonly unknown[], id: string): unknown[] {
+  return existing.filter((item) => {
+    const itemId = (item as { identifier?: { id?: unknown } })?.identifier?.id;
+    return typeof itemId !== "string" || itemId.toLowerCase() !== id.toLowerCase();
   });
-  others.push({
-    identifier: { id: entry.id },
-    version: entry.version,
-    location: { $mid: 1, path: entry.absolutePath, scheme: "file" },
-    relativeLocation: entry.relativeLocation,
-    metadata: {
-      installedTimestamp: Date.now(),
-      pinned: true,
-      source: "vsix",
-      isApplicationScoped: false,
-    },
-  });
-  return others;
 }
 
 /**
- * Install the bundled integration extension into the managed server's
- * extensions directory so it loads as a normal installed extension (its
- * control channel then drives the native Tabs chrome).
+ * Merge the embed's settings into a product.json's `configurationDefaults`.
+ * Pure for testability. Returns the next product object and whether anything
+ * actually changed (callers skip the disk write when unchanged).
  *
- * Why this mechanism: `out/server-main.js` (the REH web server) silently
- * ignores `--extensionDevelopmentPath`, so a dev-path load never activates.
- * The supported path is a folder under `<server-data-dir>/extensions` listed in
- * `extensions.json`. We copy the (tiny) extension there and upsert the manifest
- * entry — preserving any other installed extensions (e.g. Open VSX installs).
+ * Why product.json: settings written to the REH server's `data/User/
+ * settings.json` only cover the REMOTE configuration scope — application-scoped
+ * settings (most importantly `security.workspace.trust.enabled`) are read by
+ * the WEB CLIENT, which never sees that file. An enabled Workspace Trust prompt
+ * then gates the whole workbench startup: extension-host timers and sockets
+ * stall until the user answers, so the integration extension's control channel
+ * never connects and the native chrome looks dead. `configurationDefaults` is
+ * VS Code's distro-level default mechanism, honored by client and server alike
+ * before first render — no prompt, no per-workspace state, no race.
+ */
+export function mergeProductConfigurationDefaults(
+  product: Record<string, unknown>,
+  defaults: Record<string, unknown>,
+): { product: Record<string, unknown>; changed: boolean } {
+  const existing =
+    typeof product.configurationDefaults === "object" && product.configurationDefaults !== null
+      ? (product.configurationDefaults as Record<string, unknown>)
+      : {};
+  let changed = false;
+  for (const [key, value] of Object.entries(defaults)) {
+    if (JSON.stringify(existing[key]) !== JSON.stringify(value)) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) {
+    return { product, changed: false };
+  }
+  return {
+    product: { ...product, configurationDefaults: { ...existing, ...defaults } },
+    changed: true,
+  };
+}
+
+/**
+ * Install the bundled integration extension as a BUILT-IN extension (under
+ * `<vscodeRoot>/extensions/`, next to vscode.git) so its control channel runs
+ * in the remote extension host and drives the native Tabs chrome.
+ *
+ * Why built-in: `out/server-main.js` silently ignores
+ * `--extensionDevelopmentPath`, and the user-extensions route
+ * (`<server-data-dir>/extensions` + `extensions.json`) proved unreliable — the
+ * workbench skipped the scan in some sessions, leaving the chrome dead.
+ * Built-ins are scanned from disk on every boot and activate unconditionally
+ * (every session log shows vscode.git et al activating), so this is the only
+ * mechanism with the reliability the chrome needs. Also cleans up any legacy
+ * user-dir install so the same id is not present twice.
  *
  * The copy also resolves the asar problem: the server runs as plain Node
  * (`ELECTRON_RUN_AS_NODE`) and cannot read inside `app.asar`, but the Electron
@@ -459,39 +498,74 @@ export function upsertInstalledExtensionManifest(
  * Best-effort: failures are swallowed (the editor still works, the chrome's
  * buttons just no-op).
  */
-function installManagedServerControlExtension(baseDir: string): void {
+function installManagedServerControlExtension(baseDir: string, vscodeRoot: string): void {
   const source = resolveBundledIntegrationExtensionSource(baseDir);
   if (!source) {
     return;
   }
   try {
-    const extensionsDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "extensions");
-    const destDir = Path.join(extensionsDir, CONTROL_EXTENSION_FOLDER);
-    FS.mkdirSync(extensionsDir, { recursive: true });
+    const destDir = Path.join(vscodeRoot, "extensions", "tabs-workbench-integration");
     FS.rmSync(destDir, { recursive: true, force: true });
     FS.cpSync(source, destDir, { recursive: true });
 
-    const manifestPath = Path.join(extensionsDir, "extensions.json");
-    let existing: unknown[] = [];
+    // Remove the legacy user-dir install (folder + manifest entry) so the
+    // extension service never sees the same id from two locations.
+    const userExtensionsDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "extensions");
+    FS.rmSync(Path.join(userExtensionsDir, CONTROL_EXTENSION_FOLDER), {
+      recursive: true,
+      force: true,
+    });
+    const manifestPath = Path.join(userExtensionsDir, "extensions.json");
     if (isFile(manifestPath, FS)) {
       try {
         const parsed = JSON.parse(FS.readFileSync(manifestPath, "utf8"));
         if (Array.isArray(parsed)) {
-          existing = parsed;
+          FS.writeFileSync(
+            manifestPath,
+            JSON.stringify(removeExtensionFromManifest(parsed, CONTROL_EXTENSION_ID)),
+            "utf8",
+          );
         }
       } catch {
-        existing = [];
+        /* ignore */
       }
     }
-    const next = upsertInstalledExtensionManifest(existing, {
-      id: CONTROL_EXTENSION_ID,
-      version: CONTROL_EXTENSION_VERSION,
-      absolutePath: destDir,
-      relativeLocation: CONTROL_EXTENSION_FOLDER,
-    });
-    FS.writeFileSync(manifestPath, JSON.stringify(next), "utf8");
+
+    // Drop stale extension-scan caches so the (re)installed built-in is picked
+    // up immediately instead of a cached scan result masking it.
+    for (const cacheDir of ["CachedExtensions", Path.join("data", "CachedExtensions")]) {
+      FS.rmSync(Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, cacheDir), {
+        recursive: true,
+        force: true,
+      });
+    }
   } catch {
     // Non-fatal.
+  }
+}
+
+/**
+ * Bake the embed defaults into the runtime's product.json
+ * `configurationDefaults` (see mergeProductConfigurationDefaults for why the
+ * settings.json route is not enough). Idempotent; best-effort.
+ */
+function ensureProductConfigurationDefaults(vscodeRoot: string): void {
+  try {
+    const productPath = Path.join(vscodeRoot, "product.json");
+    if (!isFile(productPath, FS)) {
+      return;
+    }
+    const parsed = JSON.parse(FS.readFileSync(productPath, "utf8")) as Record<string, unknown>;
+    const { product, changed } = mergeProductConfigurationDefaults(
+      parsed,
+      CODE_OSS_EMBED_DEFAULT_SETTINGS,
+    );
+    if (changed) {
+      FS.writeFileSync(productPath, `${JSON.stringify(product, null, "\t")}\n`, "utf8");
+    }
+  } catch {
+    // Non-fatal: the workbench still runs, the user may just see stock chrome
+    // prompts (e.g. Workspace Trust) that the defaults would have suppressed.
   }
 }
 
@@ -1038,6 +1112,12 @@ export class CodeHostManager {
         sandbox: true,
         nodeIntegration: false,
         partition,
+        // Never throttle the workbench while the Code tab is hidden: a detached
+        // view throttles timers, which stalls the workbench's startup lifecycle
+        // (it can sit forever before "Restored"/"Eventually"), so extensions
+        // gated on later activation phases never start and the editor resumes
+        // half-initialized when the tab is shown again.
+        backgroundThrottling: false,
         ...(desktopRuntime
           ? {
               preload: getRequiredCodeOssPath(
@@ -1045,7 +1125,6 @@ export class CodeHostManager {
                 CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH,
               ),
               additionalArguments: [`--vscode-window-config=${desktopConfigChannel}`],
-              backgroundThrottling: false,
             }
           : null),
       },
@@ -1078,6 +1157,49 @@ export class CodeHostManager {
       };
       view.webContents.on("did-finish-load", applyThemeCss);
       view.webContents.on("dom-ready", applyThemeCss);
+      // One-shot layout probe: record where each stock workbench part actually
+      // sits (left/width/display) so "the chrome has a weird gap" reports are
+      // diagnosable from ~/.tabs/userdata/layout-diagnostic.json instead of
+      // guessing from screenshots.
+      let layoutProbed = false;
+      view.webContents.on("did-finish-load", () => {
+        if (layoutProbed) return;
+        layoutProbed = true;
+        setTimeout(() => {
+          void view.webContents
+            .executeJavaScript(
+              `(() => {
+                 const m = (sel) => {
+                   const el = document.querySelector(sel);
+                   if (!el) return null;
+                   const r = el.getBoundingClientRect();
+                   const cs = getComputedStyle(el);
+                   return { left: Math.round(r.left), width: Math.round(r.width), display: cs.display };
+                 };
+                 return JSON.stringify({
+                   activitybar: m('.monaco-workbench .part.activitybar'),
+                   sidebar: m('.monaco-workbench .part.sidebar'),
+                   auxiliarybar: m('.monaco-workbench .part.auxiliarybar'),
+                   statusbar: m('.monaco-workbench .part.statusbar'),
+                   titlebar: m('.monaco-workbench .part.titlebar'),
+                   banner: m('.monaco-workbench .part.banner'),
+                 });
+               })()`,
+            )
+            .then((result: unknown) => {
+              try {
+                FS.writeFileSync(
+                  Path.join(DEFAULT_CODE_HOST_STATE_DIR, "layout-diagnostic.json"),
+                  String(result),
+                  "utf8",
+                );
+              } catch {
+                /* ignore */
+              }
+            })
+            .catch(() => undefined);
+        }, 3000);
+      });
     }
 
     if (desktopConfigChannel) {
@@ -1445,13 +1567,16 @@ export class CodeHostManager {
         const entry = `http://${CODE_OSS_SERVER_HOST}:${port}`;
 
         session.serverStartupLogs = [];
-        // Install the bundled integration extension into the server's
-        // extensions dir so its native-chrome control channel runs in the
-        // remote extension host. (The legacy in-editor "Tabs" panel it can also
-        // show is gated off — see the extension's TABS_CODE_OSS_PRIMARY_SHELL
-        // guard — so only the control channel runs.) Must happen before the
-        // server starts so it scans the extension on boot.
-        installManagedServerControlExtension(__dirname);
+        // Install the bundled integration extension as a built-in so its
+        // native-chrome control channel runs in the remote extension host.
+        // (The legacy in-editor "Tabs" panel it can also show is gated off —
+        // see the extension's TABS_CODE_OSS_PRIMARY_SHELL guard — so only the
+        // control channel runs.) Must happen before the server starts so it
+        // scans the extension on boot. The product defaults suppress the
+        // Workspace Trust prompt, which would otherwise gate workbench startup
+        // (and with it the extension's control channel) behind a modal.
+        installManagedServerControlExtension(__dirname, runtime.vscodeRoot);
+        ensureProductConfigurationDefaults(runtime.vscodeRoot);
         const serverArgs = buildManagedServerArgs({
           host: CODE_OSS_SERVER_HOST,
           port,
@@ -1484,6 +1609,10 @@ export class CodeHostManager {
             ELECTRON_RUN_AS_NODE: "1",
             BROWSER: "none",
             VSCODE_DEV: "1",
+            // Identify this project's extension host on the shared control
+            // channel so the native chrome routes commands to the right editor
+            // when multiple projects are open at once.
+            TABS_PROJECT_ID: session.projectId,
           },
           stdio: ["ignore", "pipe", "pipe"],
         });
@@ -1795,8 +1924,19 @@ export class CodeHostManager {
       appRoot: runtime.vscodeRoot,
       userEnv: {
         VSCODE_CWD: session.workspaceRoot,
+        // Identify this project's extension host on the shared control channel so
+        // the native chrome routes commands to the right editor — mirrors the
+        // managed-server spawn env (see spawnManagedServerOnce). Without it the
+        // integration extension announces an empty projectId and the broker can't
+        // match it, leaving every chrome button a silent no-op.
+        TABS_PROJECT_ID: projectId,
         ...(process.env.TABS_CODE_CONTROL_URL
           ? { TABS_CODE_CONTROL_URL: process.env.TABS_CODE_CONTROL_URL }
+          : null),
+        // The extension prefers the live URL file (it survives a main-process
+        // restart on a new port); forward it alongside the launch-time URL.
+        ...(process.env.TABS_CODE_CONTROL_FILE
+          ? { TABS_CODE_CONTROL_FILE: process.env.TABS_CODE_CONTROL_FILE }
           : null),
       },
       product: this.getProductConfiguration(runtime.vscodeRoot),
@@ -1878,7 +2018,10 @@ export class CodeHostManager {
       FS.mkdirSync(pathname, { recursive: true });
     }
     try {
-      writeMergedJsonFile(Path.join(location, "settings.json"), CODE_OSS_EMBED_DEFAULT_SETTINGS);
+      const desktopSettingsPath = Path.join(location, "settings.json");
+      writeMergedJsonFile(desktopSettingsPath, CODE_OSS_EMBED_DEFAULT_SETTINGS);
+      // Verify in dev which profile dir the running session actually reads.
+      console.log(`[code-oss] embed settings written (desktop-renderer) → ${desktopSettingsPath}`);
     } catch {
       // Non-fatal. The integration extension also enforces these settings.
     }

@@ -62,8 +62,9 @@ import {
   buildMountedWorkspaceDescriptor,
   buildManagedServerArgs,
   buildSessionUrl,
+  mergeProductConfigurationDefaults,
+  removeExtensionFromManifest,
   resolveCodeHostConfig,
-  upsertInstalledExtensionManifest,
 } from "./codeHostManager";
 
 function makeTempDir(prefix: string): string {
@@ -308,46 +309,56 @@ describe("buildManagedServerArgs", () => {
     // The workspace folder is passed via the URL, not as a CLI argument.
     expect(args).not.toContain("--browserType");
     // The REH server ignores --extensionDevelopmentPath; the integration
-    // extension is installed into the extensions dir instead (see
-    // installManagedServerControlExtension / upsertInstalledExtensionManifest).
+    // extension is installed as a built-in under <vscodeRoot>/extensions
+    // instead (see installManagedServerControlExtension).
     expect(args).not.toContain("--extensionDevelopmentPath");
   });
 });
 
-describe("upsertInstalledExtensionManifest", () => {
-  const entry = {
-    id: "tabs.tabs-workbench-integration",
-    version: "0.0.1",
-    absolutePath: "/data/extensions/tabs.tabs-workbench-integration-0.0.1",
-    relativeLocation: "tabs.tabs-workbench-integration-0.0.1",
-  };
+describe("mergeProductConfigurationDefaults", () => {
+  const defaults = { "security.workspace.trust.enabled": false, "chat.disableAIFeatures": true };
 
-  it("adds a valid entry to an empty manifest", () => {
-    const next = upsertInstalledExtensionManifest([], entry);
-    expect(next).toHaveLength(1);
-    expect(next[0]).toMatchObject({
-      identifier: { id: "tabs.tabs-workbench-integration" },
-      version: "0.0.1",
-      location: { $mid: 1, path: entry.absolutePath, scheme: "file" },
-      relativeLocation: "tabs.tabs-workbench-integration-0.0.1",
-    });
+  it("adds configurationDefaults to a product without any", () => {
+    const { product, changed } = mergeProductConfigurationDefaults({ nameShort: "Code" }, defaults);
+    expect(changed).toBe(true);
+    expect(product.configurationDefaults).toEqual(defaults);
+    expect(product.nameShort).toBe("Code");
+  });
+
+  it("preserves unrelated existing defaults", () => {
+    const { product, changed } = mergeProductConfigurationDefaults(
+      { configurationDefaults: { "editor.fontSize": 13 } },
+      defaults,
+    );
+    expect(changed).toBe(true);
+    expect(product.configurationDefaults).toEqual({ "editor.fontSize": 13, ...defaults });
+  });
+
+  it("reports unchanged when the defaults are already present", () => {
+    const { changed } = mergeProductConfigurationDefaults(
+      { configurationDefaults: { ...defaults, "editor.fontSize": 13 } },
+      defaults,
+    );
+    expect(changed).toBe(false);
+  });
+});
+
+describe("removeExtensionFromManifest", () => {
+  const id = "tabs.tabs-workbench-integration";
+
+  it("removes matching entries case-insensitively", () => {
+    const stale = { identifier: { id: "Tabs.Tabs-Workbench-Integration" }, version: "0.0.1" };
+    expect(removeExtensionFromManifest([stale], id)).toEqual([]);
   });
 
   it("preserves unrelated installed extensions", () => {
     const other = { identifier: { id: "acme.other" }, version: "1.0.0" };
-    const next = upsertInstalledExtensionManifest([other], entry);
-    expect(next).toHaveLength(2);
-    expect(next).toContain(other);
+    expect(removeExtensionFromManifest([other, { identifier: { id } }], id)).toEqual([other]);
   });
 
-  it("replaces an existing entry with the same id (case-insensitive)", () => {
-    const stale = {
-      identifier: { id: "Tabs.Tabs-Workbench-Integration" },
-      version: "0.0.0",
-    };
-    const next = upsertInstalledExtensionManifest([stale], entry);
-    expect(next).toHaveLength(1);
-    expect((next[0] as { version: string }).version).toBe("0.0.1");
+  it("leaves malformed entries untouched", () => {
+    const junk = [null, 42, { identifier: {} }];
+    expect(removeExtensionFromManifest(junk, id)).toEqual(junk);
   });
 });
 

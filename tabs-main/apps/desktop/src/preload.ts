@@ -75,8 +75,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   openCodeFile: (input) => ipcRenderer.invoke(CODE_HOST_OPEN_FILE_CHANNEL, input),
   setCodeBounds: (input) => ipcRenderer.invoke(CODE_HOST_SET_BOUNDS_CHANNEL, input),
   syncCodeSessions: (projectIds) => ipcRenderer.invoke(CODE_HOST_SYNC_SESSIONS_CHANNEL, projectIds),
-  runCodeCommand: (commandId: string) =>
-    ipcRenderer.invoke(CODE_HOST_RUN_COMMAND_CHANNEL, { commandId }),
+  runCodeCommand: (projectId: string, commandId: string) =>
+    ipcRenderer.invoke(CODE_HOST_RUN_COMMAND_CHANNEL, { projectId, commandId }),
   onCodeChromeState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;

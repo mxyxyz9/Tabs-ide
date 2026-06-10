@@ -1983,11 +1983,15 @@ function registerIpcHandlers(): void {
     if (
       typeof input !== "object" ||
       input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
       typeof (input as { commandId?: unknown }).commandId !== "string"
     ) {
       return false;
     }
-    return codeControlChannel.runCommand((input as { commandId: string }).commandId);
+    return codeControlChannel.runCommand(
+      (input as { projectId: string }).projectId,
+      (input as { commandId: string }).commandId,
+    );
   });
 
   ipcMain.removeHandler(BROWSER_HOST_GET_STATE_CHANNEL);
@@ -2546,11 +2550,15 @@ async function bootstrap(): Promise<void> {
   // spawns its server. Non-fatal if it fails — the chrome simply can't drive
   // the workbench (clicks become no-ops) but the editor still works.
   try {
-    const control = await codeControlChannel.start();
+    // Deterministic path (stable across restarts) so a reused/long-lived
+    // workbench can re-read the current URL after a main-process restart.
+    const controlUrlFile = Path.join(STATE_DIR, "code-control.json");
+    const control = await codeControlChannel.start(controlUrlFile);
     process.env.TABS_CODE_CONTROL_URL = control.url;
-    codeControlChannel.onChromeState((state: CodeChromeState) => {
+    process.env.TABS_CODE_CONTROL_FILE = controlUrlFile;
+    codeControlChannel.onChromeState((projectId: string, state: CodeChromeState) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, state);
+        mainWindow.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, { projectId, state });
       }
     });
     writeDesktopLogHeader("bootstrap code control channel started");
