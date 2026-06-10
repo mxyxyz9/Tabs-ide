@@ -137,23 +137,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libkrb5-dev libsecret-1-dev libxkbfile-dev
 
-      # Cache VS Code node_modules. Uses --ignore-scripts to avoid the
-      # postinstall that spawns 50+ concurrent npm processes (exhausts
-      # the runner's 7GB RAM and hangs indefinitely).
-      - name: Cache VS Code node_modules
-        id: vscode_nm_cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            tabs-code-main/node_modules
-            tabs-code-main/build/node_modules
-          # `el40` tracks the @electron/rebuild target below — bump it whenever
-          # the rebuild Electron version changes so the cached (wrong-ABI)
-          # node_modules is not reused.
-          key: vscode-nm-${{ runner.os }}-${{ matrix.arch }}-el40-${{ hashFiles('tabs-code-main/package-lock.json') }}
-
       - name: Install VS Code dependencies
-        if: steps.vscode_nm_cache.outputs.cache-hit != 'true'
         working-directory: tabs-code-main
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
