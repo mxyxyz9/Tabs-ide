@@ -8,15 +8,21 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 import * as CodexClient from "./client.ts";
+
+const fixtureDir = join(import.meta.dirname, "../test/fixtures");
+const mockPeerFixturePath = join(fixtureDir, "codex-app-server-mock-peer.ts");
+const fixtureExists = existsSync(mockPeerFixturePath);
 
 const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(import.meta.dirname, "../test/fixtures/codex-app-server-mock-peer.ts"),
 );
 const mockPeerArgs = (path: string) => [path];
 
-it.layer(NodeServices.layer)("effect-codex-app-server client", (it) => {
+it.layer(NodeServices.layer, { skip: !fixtureExists })("effect-codex-app-server client", (it) => {
   const makeHandle = () =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
