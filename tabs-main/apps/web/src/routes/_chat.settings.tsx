@@ -24,6 +24,7 @@ import {
   type ModelSelection,
   type ModelSlug,
   PROVIDER_DISPLAY_NAMES,
+  type ProviderInstanceId,
   type ProviderKind,
   type ServerProvider,
   type ServerProviderModel,
@@ -546,6 +547,61 @@ function SettingsRouteView() {
         setIsRefreshingProviders(false);
       });
   }, [queryClient]);
+
+  const [providerMaintenancePending, setProviderMaintenancePending] = useState<
+    Partial<Record<ProviderSettingsKey, "install" | "update">>
+  >({});
+  const providerMaintenanceRef = useRef<Set<string>>(new Set());
+
+  // Run an Install / Update silently on the server. The command itself is
+  // resolved server-side (the web never ships a shell string), progress streams
+  // back via the provider snapshot push, and we refetch config on completion.
+  const runProviderMaintenance = useCallback(
+    (input: {
+      instanceId: ProviderInstanceId;
+      providerKey: ProviderSettingsKey;
+      action: "install" | "update";
+      providerName: string;
+    }) => {
+      const { instanceId, providerKey, action, providerName } = input;
+      if (providerMaintenanceRef.current.has(instanceId)) return;
+      providerMaintenanceRef.current.add(instanceId);
+      setProviderMaintenancePending((prev) => ({ ...prev, [providerKey]: action }));
+      const api = ensureNativeApi();
+      api.server
+        .runProviderMaintenance({ instanceId, action })
+        .then(() => {
+          void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
+          toastManager.add({
+            type: "success",
+            title: action === "install" ? `${providerName} installed` : `${providerName} updated`,
+            description:
+              action === "install"
+                ? "The provider is ready to use."
+                : "The provider is up to date.",
+          });
+        })
+        .catch((error: unknown) => {
+          toastManager.add({
+            type: "error",
+            title:
+              action === "install"
+                ? `${providerName} install failed`
+                : `${providerName} update failed`,
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        })
+        .finally(() => {
+          providerMaintenanceRef.current.delete(instanceId);
+          setProviderMaintenancePending((prev) => {
+            const next = { ...prev };
+            delete next[providerKey];
+            return next;
+          });
+        });
+    },
+    [queryClient],
+  );
 
   const modelListRefs = useRef<Partial<Record<ProviderSettingsKey, HTMLDivElement | null>>>({});
 
@@ -1466,6 +1522,12 @@ function SettingsRouteView() {
                           providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
                         ] ?? providerCard.title;
                       const RowIcon = providerCard.icon;
+                      const maintenanceInstanceId =
+                        providerCard.liveProvider?.instanceId ??
+                        (providerCard.provider as ProviderInstanceId);
+                      const pendingMaintenance =
+                        providerMaintenancePending[providerCard.provider] ?? null;
+                      const canRunMaintenance = providerCard.liveProvider != null;
 
                       return (
                         <div
@@ -1570,14 +1632,24 @@ function SettingsRouteView() {
                                         size="sm"
                                         variant="outline"
                                         className="h-7 gap-1.5 px-2.5 text-xs"
+                                        disabled={!canRunMaintenance || pendingMaintenance !== null}
                                         onClick={() =>
-                                          copyToClipboard(providerCard.installCommand ?? "", {
+                                          runProviderMaintenance({
+                                            instanceId: maintenanceInstanceId,
+                                            providerKey: providerCard.provider,
+                                            action: "install",
                                             providerName: providerDisplayName,
                                           })
                                         }
                                       >
-                                        <DownloadIcon className="size-3.5" />
-                                        Install
+                                        {pendingMaintenance === "install" ? (
+                                          <LoaderIcon className="size-3.5 animate-spin" />
+                                        ) : (
+                                          <DownloadIcon className="size-3.5" />
+                                        )}
+                                        {pendingMaintenance === "install"
+                                          ? "Installing…"
+                                          : "Install"}
                                       </Button>
                                     ) : null}
                                     {providerCard.updatePrompt?.command ? (
@@ -1585,17 +1657,22 @@ function SettingsRouteView() {
                                         size="sm"
                                         variant="outline"
                                         className="h-7 gap-1.5 px-2.5 text-xs"
+                                        disabled={!canRunMaintenance || pendingMaintenance !== null}
                                         onClick={() =>
-                                          copyToClipboard(
-                                            providerCard.updatePrompt?.command ?? "",
-                                            {
-                                              providerName: providerDisplayName,
-                                            },
-                                          )
+                                          runProviderMaintenance({
+                                            instanceId: maintenanceInstanceId,
+                                            providerKey: providerCard.provider,
+                                            action: "update",
+                                            providerName: providerDisplayName,
+                                          })
                                         }
                                       >
-                                        <ArrowUpCircleIcon className="size-3.5" />
-                                        Update
+                                        {pendingMaintenance === "update" ? (
+                                          <LoaderIcon className="size-3.5 animate-spin" />
+                                        ) : (
+                                          <ArrowUpCircleIcon className="size-3.5" />
+                                        )}
+                                        {pendingMaintenance === "update" ? "Updating…" : "Update"}
                                       </Button>
                                     ) : null}
                                     {providerCard.needsAuth && providerCard.loginCommand ? (
@@ -1613,9 +1690,16 @@ function SettingsRouteView() {
                                         Sign in
                                       </Button>
                                     ) : null}
-                                    <span className="text-[11px] text-muted-foreground/70">
-                                      Copies the command to run in your terminal.
-                                    </span>
+                                    {providerCard.needsAuth && providerCard.loginCommand ? (
+                                      <span className="text-[11px] text-muted-foreground/70">
+                                        Install and update run automatically. Sign in copies the
+                                        login command to run in your terminal.
+                                      </span>
+                                    ) : (
+                                      <span className="text-[11px] text-muted-foreground/70">
+                                        Runs automatically — no terminal needed.
+                                      </span>
+                                    )}
                                   </div>
                                 ) : null}
                               </div>

@@ -17,6 +17,7 @@ import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRun
 import { RuntimeReceiptBusLive } from "./orchestration/Layers/RuntimeReceiptBus";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry";
 import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry";
+import { layer as ProviderMaintenanceRunnerLive } from "./provider/providerMaintenanceRunner";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory";
 import { ProviderSessionReaperLive } from "./provider/Layers/ProviderSessionReaper";
@@ -152,5 +153,6 @@ export function makeServerRuntimeServicesLayer() {
     gitManagerLayer,
     terminalLayer,
     KeybindingsLive,
+    ProviderMaintenanceRunnerLive,
   );
 }

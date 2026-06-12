@@ -199,3 +199,17 @@ export const ServerProviderUpdatedPayload = Schema.Struct({
   providers: ServerProviders,
 });
 export type ServerProviderUpdatedPayload = typeof ServerProviderUpdatedPayload.Type;
+
+/**
+ * Maintenance actions the server can run on behalf of a provider instance.
+ * The command itself is resolved server-side (the web never supplies a shell
+ * string) — clients only name the configured instance and the action.
+ */
+export const ServerProviderMaintenanceAction = Schema.Literals(["install", "update"]);
+export type ServerProviderMaintenanceAction = typeof ServerProviderMaintenanceAction.Type;
+
+export const ServerRunProviderMaintenanceInput = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  action: ServerProviderMaintenanceAction,
+});
+export type ServerRunProviderMaintenanceInput = typeof ServerRunProviderMaintenanceInput.Type;

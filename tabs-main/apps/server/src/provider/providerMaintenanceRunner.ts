@@ -30,6 +30,41 @@ const isServerProviderUpdateError = Schema.is(ServerProviderUpdateError);
 const UPDATE_TIMEOUT_MS = 5 * 60_000;
 const UPDATE_OUTPUT_MAX_BYTES = 10_000;
 
+interface ProviderInstallCommand {
+  readonly executable: string;
+  readonly args: ReadonlyArray<string>;
+  readonly lockKey: string;
+}
+
+/**
+ * Server-owned install commands keyed by driver kind slug. The web never
+ * supplies a shell string (RCE guard) — install is resolved here so the only
+ * thing a client names is the configured instance + the action.
+ */
+const PROVIDER_INSTALL_COMMANDS: Readonly<Record<string, ProviderInstallCommand>> = {
+  codex: { executable: "npm", args: ["install", "-g", "@openai/codex"], lockKey: "npm-global" },
+  claudeAgent: {
+    executable: "npm",
+    args: ["install", "-g", "@anthropic-ai/claude-code"],
+    lockKey: "npm-global",
+  },
+  cursor: {
+    executable: "sh",
+    args: ["-c", "curl https://cursor.com/install -fsS | bash"],
+    lockKey: "cursor-install",
+  },
+  grok: {
+    executable: "npm",
+    args: ["install", "-g", "@vibe-kit/grok-cli"],
+    lockKey: "npm-global",
+  },
+  opencode: { executable: "npm", args: ["install", "-g", "opencode-ai"], lockKey: "npm-global" },
+};
+
+function resolveInstallCommand(provider: ProviderDriverKind): ProviderInstallCommand | null {
+  return PROVIDER_INSTALL_COMMANDS[provider as unknown as string] ?? null;
+}
+
 export interface ProviderMaintenanceCommandResult {
   readonly stdout: string;
   readonly stderr: string;
@@ -39,14 +74,25 @@ export interface ProviderMaintenanceCommandResult {
   readonly stderrTruncated: boolean;
 }
 
+export type ProviderMaintenanceTarget =
+  | ProviderDriverKind
+  | {
+      readonly provider: ProviderDriverKind;
+      readonly instanceId?: ProviderInstanceId | undefined;
+    };
+
 export interface ProviderMaintenanceRunnerShape {
   readonly updateProvider: (
-    target:
-      | ProviderDriverKind
-      | {
-          readonly provider: ProviderDriverKind;
-          readonly instanceId?: ProviderInstanceId | undefined;
-        },
+    target: ProviderMaintenanceTarget,
+  ) => Effect.Effect<ServerProviderUpdatedPayload, ServerProviderUpdateError>;
+  /**
+   * Install a provider's CLI using the server-owned install command for its
+   * driver kind. Progress is projected onto the same volatile `updateState`
+   * channel the UI already renders, then the instance is refreshed so a
+   * successful install flips the provider to `installed`.
+   */
+  readonly installProvider: (
+    target: ProviderMaintenanceTarget,
   ) => Effect.Effect<ServerProviderUpdatedPayload, ServerProviderUpdateError>;
 }
 
@@ -410,8 +456,136 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
       );
   });
 
+  const installProvider: ProviderMaintenanceRunnerShape["installProvider"] = Effect.fn(
+    "ProviderMaintenanceRunner.installProvider",
+  )(function* (target) {
+    const provider = typeof target === "string" ? target : target.provider;
+    const instanceId =
+      typeof target === "string"
+        ? defaultInstanceIdForDriver(provider)
+        : (target.instanceId ?? defaultInstanceIdForDriver(provider));
+    const command = resolveInstallCommand(provider);
+    if (!command) {
+      return yield* new ServerProviderUpdateError({
+        provider,
+        reason: "This provider does not support one-click install.",
+      });
+    }
+
+    const targetKey = `instance:${instanceId}`;
+    const setUpdateState = (state: ServerProviderUpdateState | null) =>
+      providerRegistry.setProviderMaintenanceActionState({
+        instanceId,
+        action: "update",
+        state,
+      });
+    const setQueuedState = setUpdateState(
+      makeUpdateState({
+        status: "queued",
+        startedAt: null,
+        finishedAt: null,
+        message: "Waiting for another provider task to finish.",
+      }),
+    ).pipe(Effect.asVoid);
+
+    const runProviderInstall = Effect.fn("ProviderMaintenanceRunner.runProviderInstall")(
+      function* () {
+        const finish = (state: ServerProviderUpdateState) =>
+          setUpdateState(state).pipe(Effect.map((providers) => ({ providers })));
+        const startedAtRef = yield* Ref.make<string | null>(null);
+
+        const runCommandAndRefresh = Effect.fn("ProviderMaintenanceRunner.runInstallCommand")(
+          function* () {
+            const startedAt = yield* nowIso;
+            yield* Ref.set(startedAtRef, startedAt);
+            yield* setUpdateState(
+              makeUpdateState({
+                status: "running",
+                startedAt,
+                finishedAt: null,
+                message: "Installing provider.",
+              }),
+            );
+
+            const result = yield* runMaintenanceCommand(command.executable, command.args);
+            const finishedAt = yield* nowIso;
+            if (result.timedOut || result.exitCode !== 0) {
+              return yield* finish(
+                makeUpdateState({
+                  status: "failed",
+                  startedAt,
+                  finishedAt,
+                  message: result.timedOut
+                    ? "Install timed out."
+                    : `Install command exited with code ${result.exitCode}.`,
+                  output: commandOutput(result),
+                }),
+              );
+            }
+
+            const providers = yield* providerRegistry.refreshInstance(instanceId);
+            const installed = providers.some(
+              (candidate) =>
+                candidate.driver === provider &&
+                candidate.instanceId === instanceId &&
+                candidate.installed,
+            );
+            return yield* finish(
+              makeUpdateState({
+                status: installed ? "succeeded" : "unchanged",
+                startedAt,
+                finishedAt,
+                message: installed
+                  ? "Provider installed."
+                  : "Install command completed, but T3 Code could not detect the provider. You may need to restart.",
+                output: commandOutput(result),
+              }),
+            );
+          },
+        );
+
+        const recordFailedInstall = Effect.fn("ProviderMaintenanceRunner.recordFailedInstall")(
+          function* (cause: Cause.Cause<unknown>) {
+            const failure = Cause.squash(cause);
+            const startedAt = yield* Ref.get(startedAtRef);
+            return yield* finish(
+              makeUpdateState({
+                status: "failed",
+                startedAt,
+                finishedAt: yield* nowIso,
+                message: failure instanceof Error ? failure.message : "Install command failed.",
+                output: null,
+              }),
+            );
+          },
+        );
+
+        return yield* runCommandAndRefresh().pipe(Effect.catchCause(recordFailedInstall));
+      },
+    );
+
+    return yield* commandCoordinator
+      .withCommandLock({
+        targetKey,
+        lockKey: command.lockKey,
+        onQueued: setQueuedState,
+        run: runProviderInstall(),
+      })
+      .pipe(
+        Effect.mapError((error) =>
+          isServerProviderUpdateError(error)
+            ? new ServerProviderUpdateError({
+                provider,
+                reason: error.reason,
+              })
+            : error,
+        ),
+      );
+  });
+
   return ProviderMaintenanceRunner.of({
     updateProvider,
+    installProvider,
   });
 });
 

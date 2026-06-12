@@ -238,6 +238,64 @@ describe("providerMaintenanceRunner", () => {
     );
   });
 
+  it.effect("runs the server-owned install command and records success", () => {
+    const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+    return Effect.gen(function* () {
+      const { registry, updateStatesRef } = yield* makeRegistry({
+        ...baseProvider,
+        installed: false,
+      });
+      // After the install command runs, the registry refresh detects the CLI.
+      const installer = yield* makeTestRunner({
+        ...registry,
+        refreshInstance: () => Effect.succeed([baseProvider]),
+      });
+
+      const result = yield* installer.installProvider(CODEX_DRIVER);
+      assert.deepStrictEqual(calls, [
+        {
+          command: "npm",
+          args: ["install", "-g", "@openai/codex"],
+        },
+      ]);
+      assert.strictEqual(result.providers[0]?.updateState?.status, "succeeded");
+      assert.deepStrictEqual(
+        (yield* Ref.get(updateStatesRef)).map((state) => state.status),
+        ["queued", "running", "succeeded"],
+      );
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          latestVersionHttpClient("0.0.0"),
+          mockSpawnerLayer((command, args) => {
+            calls.push({ command, args });
+            return { stdout: "added 1 package" };
+          }),
+        ),
+      ),
+    );
+  });
+
+  it.effect("records a failed install when the command exits non-zero", () => {
+    return Effect.gen(function* () {
+      const { registry } = yield* makeRegistry({
+        ...baseProvider,
+        installed: false,
+      });
+      const installer = yield* makeTestRunner(registry);
+
+      const result = yield* installer.installProvider(CODEX_DRIVER);
+      assert.strictEqual(result.providers[0]?.updateState?.status, "failed");
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          latestVersionHttpClient("0.0.0"),
+          mockSpawnerLayer(() => ({ stderr: "npm ERR! network", code: 1 })),
+        ),
+      ),
+    );
+  });
+
   it.effect("uses the resolved provider capabilities when choosing the update executable", () => {
     const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
     return Effect.gen(function* () {

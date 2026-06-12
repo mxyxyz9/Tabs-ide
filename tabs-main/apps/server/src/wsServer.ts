@@ -57,6 +57,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { OrchestrationReactor } from "./orchestration/Services/OrchestrationReactor";
 import { ProviderService } from "./provider/Services/ProviderService";
 import { ProviderRegistry } from "./provider/Services/ProviderRegistry";
+import { ProviderMaintenanceRunner } from "./provider/providerMaintenanceRunner";
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
 import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
@@ -218,7 +219,8 @@ export type ServerCoreRuntimeServices =
   | CheckpointDiffQuery
   | OrchestrationReactor
   | ProviderService
-  | ProviderRegistry;
+  | ProviderRegistry
+  | ProviderMaintenanceRunner;
 
 export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
@@ -266,6 +268,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const keybindingsManager = yield* Keybindings;
   const serverSettingsManager = yield* ServerSettingsService;
   const providerRegistry = yield* ProviderRegistry;
+  const providerMaintenanceRunner = yield* ProviderMaintenanceRunner;
   const git = yield* GitCore;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -1066,6 +1069,30 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const providers = yield* providerRegistry.refresh();
         yield* Ref.set(providersRef, providers);
         return { providers };
+      }
+
+      case WS_METHODS.serverRunProviderMaintenance: {
+        const body = stripRequestTag(request.body);
+        const providers = yield* providerRegistry.getProviders;
+        const target = providers.find((candidate) => candidate.instanceId === body.instanceId);
+        if (!target) {
+          return yield* new RouteRequestError({
+            message: `Unknown provider instance: ${body.instanceId}`,
+          });
+        }
+        const result = yield* (
+          body.action === "install"
+            ? providerMaintenanceRunner.installProvider({
+                provider: target.driver,
+                instanceId: body.instanceId,
+              })
+            : providerMaintenanceRunner.updateProvider({
+                provider: target.driver,
+                instanceId: body.instanceId,
+              })
+        ).pipe(Effect.mapError((error) => new RouteRequestError({ message: error.reason })));
+        yield* Ref.set(providersRef, result.providers);
+        return result;
       }
 
       case WS_METHODS.serverUpsertKeybinding: {
