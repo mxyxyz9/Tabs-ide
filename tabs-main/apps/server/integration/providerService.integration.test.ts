@@ -1,13 +1,15 @@
 import type { ProviderRuntimeEvent } from "@tabs/contracts";
-import { ThreadId } from "@tabs/contracts";
+import { ProviderDriverKind, ProviderInstanceId, ThreadId } from "@tabs/contracts";
 import { DEFAULT_SERVER_SETTINGS } from "@tabs/contracts/settings";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it, assert } from "@effect/vitest";
-import { Effect, FileSystem, Layer, Path, Queue, Stream } from "effect";
+import { Effect, FileSystem, Layer, Path, PubSub, Queue, Stream } from "effect";
 
 import { ProviderUnsupportedError } from "../src/provider/Errors.ts";
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
+import { ProviderEventLoggersLive } from "../src/provider/Layers/ProviderEventLoggers.ts";
+import { ServerConfig } from "../src/config.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
 import {
   ProviderService,
@@ -40,19 +42,36 @@ const makeWorkspaceDirectory = Effect.gen(function* () {
 interface IntegrationFixture {
   readonly cwd: string;
   readonly harness: TestProviderAdapterHarness;
-  readonly layer: Layer.Layer<ProviderService, unknown, never>;
+  readonly layer: Layer.Layer<ProviderService, unknown, NodeServices.NodeServices>;
 }
 
 const makeIntegrationFixture = Effect.gen(function* () {
   const cwd = yield* makeWorkspaceDirectory;
   const harness = yield* makeTestProviderAdapterHarness();
 
+  const codexInstance = ProviderInstanceId.makeUnsafe("codex");
+  const codexDriver = ProviderDriverKind.makeUnsafe("codex");
   const registry: typeof ProviderAdapterRegistry.Service = {
-    getByProvider: (provider) =>
-      provider === "codex"
+    getByInstance: (instanceId) =>
+      instanceId === codexInstance
         ? Effect.succeed(harness.adapter)
-        : Effect.fail(new ProviderUnsupportedError({ provider })),
-    listProviders: () => Effect.succeed(["codex"]),
+        : Effect.fail(new ProviderUnsupportedError({ provider: codexDriver })),
+    getInstanceInfo: (instanceId) =>
+      instanceId === codexInstance
+        ? Effect.succeed({
+            instanceId: codexInstance,
+            driverKind: codexDriver,
+            displayName: undefined,
+            enabled: true,
+            continuationIdentity: { driverKind: codexDriver, continuationKey: codexInstance },
+          })
+        : Effect.fail(new ProviderUnsupportedError({ provider: codexDriver })),
+    listInstances: () => Effect.succeed([codexInstance]),
+    listProviders: () => Effect.succeed([codexDriver]),
+    streamChanges: Stream.empty,
+    subscribeChanges: PubSub.unbounded<void>().pipe(
+      Effect.flatMap((pubsub) => PubSub.subscribe(pubsub)),
+    ),
   };
 
   const directoryLayer = ProviderSessionDirectoryLive.pipe(
@@ -62,9 +81,13 @@ const makeIntegrationFixture = Effect.gen(function* () {
   const shared = Layer.mergeAll(
     directoryLayer,
     Layer.succeed(ProviderAdapterRegistry, registry),
+    ProviderEventLoggersLive,
     ServerSettingsService.layerTest(DEFAULT_SERVER_SETTINGS),
     AnalyticsService.layerTest,
-  ).pipe(Layer.provide(SqlitePersistenceMemory));
+  ).pipe(
+    Layer.provideMerge(ServerConfig.layerTest(cwd, { prefix: "tabs-provider-integration-" })),
+    Layer.provide(SqlitePersistenceMemory),
+  );
 
   const layer = makeProviderServiceLive().pipe(Layer.provide(shared));
 
@@ -126,7 +149,7 @@ it.effect("replays typed runtime fixture events", () =>
         ThreadId.makeUnsafe("thread-integration-typed"),
         {
           threadId: ThreadId.makeUnsafe("thread-integration-typed"),
-          provider: "codex",
+          provider: ProviderDriverKind.makeUnsafe("codex"),
           cwd: fixture.cwd,
           runtimeMode: "full-access",
         },
@@ -161,7 +184,7 @@ it.effect("replays file-changing fixture turn events", () =>
         ThreadId.makeUnsafe("thread-integration-tools"),
         {
           threadId: ThreadId.makeUnsafe("thread-integration-tools"),
-          provider: "codex",
+          provider: ProviderDriverKind.makeUnsafe("codex"),
           cwd: fixture.cwd,
           runtimeMode: "full-access",
         },
@@ -200,7 +223,7 @@ it.effect("runs multi-turn tool/approval flow", () =>
         ThreadId.makeUnsafe("thread-integration-multi"),
         {
           threadId: ThreadId.makeUnsafe("thread-integration-multi"),
-          provider: "codex",
+          provider: ProviderDriverKind.makeUnsafe("codex"),
           cwd: fixture.cwd,
           runtimeMode: "full-access",
         },
@@ -254,7 +277,7 @@ it.effect("rolls back provider conversation state only", () =>
         ThreadId.makeUnsafe("thread-integration-rollback"),
         {
           threadId: ThreadId.makeUnsafe("thread-integration-rollback"),
-          provider: "codex",
+          provider: ProviderDriverKind.makeUnsafe("codex"),
           cwd: fixture.cwd,
           runtimeMode: "full-access",
         },

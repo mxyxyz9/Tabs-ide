@@ -395,6 +395,7 @@ export class WebClientServer {
 			enableWorkspaceTrust: !this._environmentService.args['disable-workspace-trust'],
 			folderUri: resolveWorkspaceURI(this._environmentService.args['default-folder']),
 			workspaceUri: resolveWorkspaceURI(this._environmentService.args['default-workspace']),
+			configurationDefaults: this._productService.configurationDefaults,
 			productConfiguration,
 			callbackRoute: callbackRoute
 		};

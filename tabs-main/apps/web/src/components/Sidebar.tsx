@@ -29,13 +29,14 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_MODEL,
   type DesktopUpdateState,
   ProjectId,
   ThreadId,
   type GitStatusResult,
   type ResolvedKeybindingsConfig,
 } from "@tabs/contracts";
+import { makeAppModelSelection } from "../modelSelection";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -548,10 +549,7 @@ export default function Sidebar() {
           projectId,
           title,
           workspaceRoot: cwd,
-          defaultModelSelection: {
-            provider: "codex",
-            model: DEFAULT_MODEL_BY_PROVIDER.codex,
-          },
+          defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
           createdAt,
         });
         await handleNewThread(projectId, {

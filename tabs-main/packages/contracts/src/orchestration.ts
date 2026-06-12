@@ -1,5 +1,7 @@
 import { Option, Schema, SchemaIssue, Struct } from "effect";
-import { ClaudeModelOptions, CodexModelOptions } from "./model";
+import * as Effect from "effect/Effect";
+import * as SchemaTransformation from "effect/SchemaTransformation";
+import { ProviderOptionSelections } from "./model";
 import {
   ApprovalRequestId,
   CheckpointRef,
@@ -14,6 +16,7 @@ import {
   TrimmedNonEmptyString,
   TurnId,
 } from "./baseSchemas";
+import { ProviderInstanceId } from "./providerInstance";
 
 export const ORCHESTRATION_WS_METHODS = {
   getSnapshot: "orchestration.getSnapshot",
@@ -44,21 +47,65 @@ export const ProviderSandboxMode = Schema.Literals([
 export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 export const DEFAULT_PROVIDER_KIND: ProviderKind = "codex";
 
-export const CodexModelSelection = Schema.Struct({
-  provider: Schema.Literal("codex"),
+/**
+ * `ModelSelection` — selection of a model on a configured provider instance.
+ *
+ * The routing key is `instanceId` (a user-defined slug identifying one
+ * configured provider instance). Wire legacy: selections persisted before the
+ * driver/instance split carried a `provider: <driver-id>` field instead. The
+ * schema absorbs that shape via a pre-decoding transform — `{provider, model}`
+ * is promoted to `{instanceId: provider, model}` (instance ids and the legacy
+ * driver kinds share the same slug space, so `defaultInstanceIdForDriver` is a
+ * no-op rename here). The transform is the only compat surface.
+ */
+const ModelSelectionWire = Schema.Struct({
+  instanceId: ProviderInstanceId,
+  // Legacy mirror of `instanceId`. The decode transform and web construction
+  // helpers always populate it (so decoded values carry it), but it is optional
+  // on the type so hand-built selections (`{ instanceId, model }`) stay valid.
+  // All reads route on `instanceId`; `provider` exists only for wire/back-compat.
+  provider: Schema.optionalKey(ProviderInstanceId),
   model: TrimmedNonEmptyString,
-  options: Schema.optionalKey(CodexModelOptions),
+  options: Schema.optionalKey(ProviderOptionSelections),
 });
-export type CodexModelSelection = typeof CodexModelSelection.Type;
 
-export const ClaudeModelSelection = Schema.Struct({
-  provider: Schema.Literal("claudeAgent"),
-  model: TrimmedNonEmptyString,
-  options: Schema.optionalKey(ClaudeModelOptions),
+const ModelSelectionSource = Schema.Struct({
+  provider: Schema.optional(Schema.Unknown),
+  instanceId: Schema.optional(Schema.Unknown),
+  model: Schema.Unknown,
+  options: Schema.optional(Schema.Unknown),
 });
-export type ClaudeModelSelection = typeof ClaudeModelSelection.Type;
 
-export const ModelSelection = Schema.Union([CodexModelSelection, ClaudeModelSelection]);
+export const ModelSelection = ModelSelectionSource.pipe(
+  Schema.decodeTo(
+    ModelSelectionWire,
+    SchemaTransformation.transformOrFail({
+      decode: (raw) => {
+        const instanceIdSource =
+          raw.instanceId !== undefined
+            ? raw.instanceId
+            : typeof raw.provider === "string"
+              ? raw.provider
+              : undefined;
+        const base: Record<string, unknown> = {
+          instanceId: instanceIdSource,
+          provider: instanceIdSource,
+          model: raw.model,
+        };
+        if (raw.options !== undefined) base.options = raw.options;
+        return Effect.succeed(base as typeof ModelSelectionWire.Encoded);
+      },
+      encode: (value) => {
+        const base: Record<string, unknown> = {
+          model: value.model,
+          instanceId: value.instanceId,
+        };
+        if (value.options !== undefined) base.options = value.options;
+        return Effect.succeed(base as typeof ModelSelectionSource.Encoded);
+      },
+    }),
+  ),
+);
 export type ModelSelection = typeof ModelSelection.Type;
 
 export const RuntimeMode = Schema.Literals(["approval-required", "full-access"]);

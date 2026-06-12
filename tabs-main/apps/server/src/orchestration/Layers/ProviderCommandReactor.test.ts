@@ -12,6 +12,8 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
+  ProviderInstanceId,
+  ProviderDriverKind,
 } from "@tabs/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -27,7 +29,7 @@ import {
   type ProviderServiceShape,
 } from "../../provider/Services/ProviderService.ts";
 import { GitCore, type GitCoreShape } from "../../git/Services/GitCore.ts";
-import { TextGeneration, type TextGenerationShape } from "../../git/Services/TextGeneration.ts";
+import { TextGeneration, type TextGenerationShape } from "../../textGeneration/TextGeneration";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { ProviderCommandReactorLive } from "./ProviderCommandReactor.ts";
@@ -106,7 +108,7 @@ describe("ProviderCommandReactor", () => {
     let nextSessionIndex = 1;
     const runtimeSessions: Array<ProviderSession> = [];
     const modelSelection = input?.threadModelSelection ?? {
-      provider: "codex",
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
       model: "gpt-5-codex",
     };
     const startSession = vi.fn((_: unknown, input: unknown) => {
@@ -123,7 +125,7 @@ describe("ProviderCommandReactor", () => {
           ? ThreadId.makeUnsafe(input.threadId)
           : ThreadId.makeUnsafe(`thread-${sessionIndex}`);
       const session: ProviderSession = {
-        provider: modelSelection.provider,
+        provider: ProviderDriverKind.makeUnsafe(modelSelection.instanceId),
         status: "ready" as const,
         runtimeMode:
           typeof input === "object" &&
@@ -199,6 +201,7 @@ describe("ProviderCommandReactor", () => {
           sessionModelSwitch: input?.sessionModelSwitch ?? "in-session",
         }),
       rollbackConversation: () => unsupported(),
+      getInstanceInfo: () => unsupported(),
       streamEvents: Stream.fromPubSub(runtimeEventPubSub),
     };
 
@@ -324,12 +327,12 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5.3-codex",
-          options: {
-            reasoningEffort: "high",
-            fastMode: true,
-          },
+          options: [
+            { id: "reasoningEffort", value: "high" },
+            { id: "fastMode", value: true },
+          ],
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
@@ -343,10 +346,10 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "codex",
         model: "gpt-5.3-codex",
-        options: {
-          reasoningEffort: "high",
-          fastMode: true,
-        },
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: true },
+        ],
       },
     });
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
@@ -354,17 +357,20 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "codex",
         model: "gpt-5.3-codex",
-        options: {
-          reasoningEffort: "high",
-          fastMode: true,
-        },
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: true },
+        ],
       },
     });
   });
 
   it("forwards claude effort options through session start and turn send", async () => {
     const harness = await createHarness({
-      threadModelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
     });
     const now = new Date().toISOString();
 
@@ -380,11 +386,9 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-sonnet-4-6",
-          options: {
-            effort: "max",
-          },
+          options: [{ id: "effort", value: "max" }],
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
@@ -398,9 +402,7 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "claudeAgent",
         model: "claude-sonnet-4-6",
-        options: {
-          effort: "max",
-        },
+        options: [{ id: "effort", value: "max" }],
       },
     });
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
@@ -408,16 +410,17 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "claudeAgent",
         model: "claude-sonnet-4-6",
-        options: {
-          effort: "max",
-        },
+        options: [{ id: "effort", value: "max" }],
       },
     });
   });
 
   it("forwards claude fast mode options through session start and turn send", async () => {
     const harness = await createHarness({
-      threadModelSelection: { provider: "claudeAgent", model: "claude-opus-4-6" },
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        model: "claude-opus-4-6",
+      },
     });
     const now = new Date().toISOString();
 
@@ -433,11 +436,9 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-opus-4-6",
-          options: {
-            fastMode: true,
-          },
+          options: [{ id: "fastMode", value: true }],
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
@@ -451,9 +452,7 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "claudeAgent",
         model: "claude-opus-4-6",
-        options: {
-          fastMode: true,
-        },
+        options: [{ id: "fastMode", value: true }],
       },
     });
     expect(harness.sendTurn.mock.calls[0]?.[0]).toMatchObject({
@@ -461,9 +460,7 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "claudeAgent",
         model: "claude-opus-4-6",
-        options: {
-          fastMode: true,
-        },
+        options: [{ id: "fastMode", value: true }],
       },
     });
   });
@@ -508,7 +505,10 @@ describe("ProviderCommandReactor", () => {
 
   it("rejects a first turn when requested provider conflicts with the thread model", async () => {
     const harness = await createHarness({
-      threadModelSelection: { provider: "codex", model: "gpt-5-codex" },
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        model: "gpt-5-codex",
+      },
     });
     const now = new Date().toISOString();
 
@@ -524,7 +524,7 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-opus-4-6",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -659,7 +659,10 @@ describe("ProviderCommandReactor", () => {
 
   it("restarts claude sessions when claude effort changes", async () => {
     const harness = await createHarness({
-      threadModelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        model: "claude-sonnet-4-6",
+      },
     });
     const now = new Date().toISOString();
 
@@ -675,11 +678,9 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-sonnet-4-6",
-          options: {
-            effort: "medium",
-          },
+          options: [{ id: "effort", value: "medium" }],
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
@@ -702,11 +703,9 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-sonnet-4-6",
-          options: {
-            effort: "max",
-          },
+          options: [{ id: "effort", value: "max" }],
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
         runtimeMode: "approval-required",
@@ -721,9 +720,7 @@ describe("ProviderCommandReactor", () => {
       modelSelection: {
         provider: "claudeAgent",
         model: "claude-sonnet-4-6",
-        options: {
-          effort: "max",
-        },
+        options: [{ id: "effort", value: "max" }],
       },
     });
   });
@@ -817,7 +814,10 @@ describe("ProviderCommandReactor", () => {
 
   it("does not inject derived model options when restarting claude on runtime mode changes", async () => {
     const harness = await createHarness({
-      threadModelSelection: { provider: "claudeAgent", model: "claude-opus-4-6" },
+      threadModelSelection: {
+        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        model: "claude-opus-4-6",
+      },
     });
     const now = new Date().toISOString();
 
@@ -896,7 +896,7 @@ describe("ProviderCommandReactor", () => {
           attachments: [],
         },
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-opus-4-6",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,

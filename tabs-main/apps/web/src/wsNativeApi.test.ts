@@ -16,6 +16,8 @@ import {
   type ServerProvider,
 } from "@tabs/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { makeAppModelSelection } from "./modelSelection";
+import { makeTestServerProvider } from "./test/serverProviderFixture";
 
 const requestMock = vi.fn<(...args: Array<unknown>) => Promise<unknown>>();
 const showContextMenuFallbackMock =
@@ -93,16 +95,7 @@ function getWindowForTest(): Window & typeof globalThis & { desktopBridge?: unkn
 }
 
 const defaultProviders: ReadonlyArray<ServerProvider> = [
-  {
-    provider: "codex",
-    enabled: true,
-    installed: true,
-    version: "0.116.0",
-    status: "ready",
-    authStatus: "authenticated",
-    checkedAt: "2026-01-01T00:00:00.000Z",
-    models: [],
-  },
+  makeTestServerProvider({ checkedAt: "2026-01-01T00:00:00.000Z" }),
 ];
 
 beforeEach(() => {
@@ -331,10 +324,7 @@ describe("wsNativeApi", () => {
       projectId: ProjectId.makeUnsafe("project-1"),
       title: "Project",
       workspaceRoot: "/tmp/project",
-      defaultModelSelection: {
-        provider: "codex",
-        model: "gpt-5-codex",
-      },
+      defaultModelSelection: makeAppModelSelection("codex", "gpt-5-codex"),
       createdAt: "2026-02-24T00:00:00.000Z",
     } as const;
     await api.orchestration.dispatchCommand(command);

@@ -1,4 +1,4 @@
-import { ProjectId, ThreadId } from "@tabs/contracts";
+import { ProjectId, ThreadId, ProviderInstanceId } from "@tabs/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -28,7 +28,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         title: "Null options project",
         workspaceRoot: "/tmp/project-null-options",
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5.4",
         },
         scripts: [],
@@ -61,7 +61,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         projectId: ProjectId.makeUnsafe("project-null-options"),
       });
       assert.deepStrictEqual(Option.getOrNull(persisted)?.defaultModelSelection, {
-        provider: "codex",
+        instanceId: ProviderInstanceId.makeUnsafe("codex"),
         model: "gpt-5.4",
       });
     }),
@@ -77,7 +77,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         projectId: ProjectId.makeUnsafe("project-null-options"),
         title: "Null options thread",
         modelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-opus-4-6",
         },
         runtimeMode: "full-access",
@@ -114,7 +114,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         threadId: ThreadId.makeUnsafe("thread-null-options"),
       });
       assert.deepStrictEqual(Option.getOrNull(persisted)?.modelSelection, {
-        provider: "claudeAgent",
+        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
         model: "claude-opus-4-6",
       });
     }),

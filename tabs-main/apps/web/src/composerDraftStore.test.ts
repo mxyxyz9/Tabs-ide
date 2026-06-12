@@ -14,6 +14,11 @@ import {
 } from "./composerDraftStore";
 import { removeLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
 import {
+  makeAppModelSelection,
+  selectionsToTypedOptions,
+  typedOptionsToSelections,
+} from "./modelSelection";
+import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   insertInlineTerminalContextPlaceholder,
   type TerminalContextDraft,
@@ -80,13 +85,9 @@ function resetComposerDraftStore() {
 function modelSelection(
   provider: "codex" | "claudeAgent",
   model: string,
-  options?: ModelSelection["options"],
+  options?: Record<string, string | boolean | undefined>,
 ): ModelSelection {
-  return {
-    provider,
-    model,
-    ...(options ? { options } : {}),
-  } as ModelSelection;
+  return makeAppModelSelection(provider, model, typedOptionsToSelections(options));
 }
 
 function providerModelOptions(options: ProviderModelOptions): ProviderModelOptions {
@@ -676,9 +677,9 @@ describe("composerDraftStore modelSelection", () => {
     store.setProviderModelOptions(
       threadId,
       "claudeAgent",
-      {
+      typedOptionsToSelections({
         thinking: false,
-      },
+      }),
       { persistSticky: true },
     );
 
@@ -707,9 +708,13 @@ describe("composerDraftStore modelSelection", () => {
       }),
     );
 
-    store.setProviderModelOptions(threadId, "claudeAgent", {
-      thinking: true,
-    });
+    store.setProviderModelOptions(
+      threadId,
+      "claudeAgent",
+      typedOptionsToSelections({
+        thinking: true,
+      }),
+    );
 
     expect(
       useComposerDraftStore.getState().draftsByThreadId[threadId]?.modelSelectionByProvider
@@ -727,10 +732,14 @@ describe("composerDraftStore modelSelection", () => {
 
     store.setModelSelection(threadId, modelSelection("codex", "gpt-5.4", { fastMode: true }));
 
-    store.setProviderModelOptions(threadId, "codex", {
-      reasoningEffort: "high",
-      fastMode: false,
-    });
+    store.setProviderModelOptions(
+      threadId,
+      "codex",
+      typedOptionsToSelections({
+        reasoningEffort: "high",
+        fastMode: false,
+      }),
+    );
 
     expect(
       useComposerDraftStore.getState().draftsByThreadId[threadId]?.modelSelectionByProvider.codex,
@@ -753,9 +762,13 @@ describe("composerDraftStore modelSelection", () => {
       modelSelection("claudeAgent", "claude-opus-4-6", { effort: "max" }),
     );
 
-    store.setProviderModelOptions(threadId, "claudeAgent", {
-      thinking: false,
-    });
+    store.setProviderModelOptions(
+      threadId,
+      "claudeAgent",
+      typedOptionsToSelections({
+        thinking: false,
+      }),
+    );
 
     expect(
       useComposerDraftStore.getState().draftsByThreadId[threadId]?.modelSelectionByProvider
@@ -786,8 +799,12 @@ describe("composerDraftStore modelSelection", () => {
     store.setModelOptions(threadId, providerModelOptions({ codex: { reasoningEffort: "xhigh" } }));
 
     const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
-    expect(draft?.modelSelectionByProvider.codex?.options).toEqual({ reasoningEffort: "xhigh" });
-    expect(draft?.modelSelectionByProvider.claudeAgent?.options).toEqual({ effort: "max" });
+    expect(selectionsToTypedOptions(draft?.modelSelectionByProvider.codex?.options)).toEqual({
+      reasoningEffort: "xhigh",
+    });
+    expect(selectionsToTypedOptions(draft?.modelSelectionByProvider.claudeAgent?.options)).toEqual({
+      effort: "max",
+    });
   });
 
   it("preserves other provider options when switching the active model selection", () => {
@@ -807,7 +824,9 @@ describe("composerDraftStore modelSelection", () => {
     expect(draft?.modelSelectionByProvider.claudeAgent).toEqual(
       modelSelection("claudeAgent", "claude-opus-4-6", { effort: "max" }),
     );
-    expect(draft?.modelSelectionByProvider.codex?.options).toEqual({ fastMode: true });
+    expect(selectionsToTypedOptions(draft?.modelSelectionByProvider.codex?.options)).toEqual({
+      fastMode: true,
+    });
     expect(draft?.activeProvider).toBe("claudeAgent");
   });
 
@@ -819,9 +838,9 @@ describe("composerDraftStore modelSelection", () => {
     store.setProviderModelOptions(
       threadId,
       "codex",
-      {
+      typedOptionsToSelections({
         fastMode: true,
-      },
+      }),
       { persistSticky: true },
     );
 
@@ -846,9 +865,9 @@ describe("composerDraftStore modelSelection", () => {
     store.setProviderModelOptions(
       threadId,
       "claudeAgent",
-      {
+      typedOptionsToSelections({
         thinking: false,
-      },
+      }),
       { persistSticky: false },
     );
 
@@ -950,13 +969,36 @@ describe("composerDraftStore provider-scoped option updates", () => {
         reasoningEffort: "medium",
       }),
     );
-    store.setProviderModelOptions(threadId, "claudeAgent", { effort: "max" });
+    store.setProviderModelOptions(
+      threadId,
+      "claudeAgent",
+      typedOptionsToSelections({ effort: "max" }),
+    );
     const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
     expect(draft?.modelSelectionByProvider.codex).toEqual(
       modelSelection("codex", "gpt-5.3-codex", { reasoningEffort: "medium" }),
     );
-    expect(draft?.modelSelectionByProvider.claudeAgent?.options).toEqual({ effort: "max" });
+    expect(selectionsToTypedOptions(draft?.modelSelectionByProvider.claudeAgent?.options)).toEqual({
+      effort: "max",
+    });
     expect(draft?.activeProvider).toBe("codex");
+  });
+
+  it("keeps the passed model when changing options with no stored draft selection", () => {
+    const store = useComposerDraftStore.getState();
+    // No prior draft selection for this provider — the model lives on the thread.
+    // Changing an option must NOT reset the model to the provider default.
+    store.setProviderModelOptions(
+      threadId,
+      "codex",
+      typedOptionsToSelections({ reasoningEffort: "high" }),
+      { model: "gpt-5.3-codex", persistSticky: true },
+    );
+    const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
+    expect(draft?.modelSelectionByProvider.codex?.model).toBe("gpt-5.3-codex");
+    expect(selectionsToTypedOptions(draft?.modelSelectionByProvider.codex?.options)).toEqual({
+      reasoningEffort: "high",
+    });
   });
 });
 

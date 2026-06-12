@@ -18,12 +18,12 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
-import { ClaudeAI, CursorIcon, Gemini, Icon, OpenAI, OpenCodeIcon } from "../Icons";
+import { ClaudeAI, CursorIcon, Gemini, GrokIcon, Icon, OpenAI, OpenCodeIcon } from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderSnapshot } from "../../providerModels";
 
 function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): option is {
-  value: ProviderKind;
+  value: ProviderPickerKind;
   label: string;
   available: true;
 } {
@@ -34,14 +34,13 @@ const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
   claudeAgent: ClaudeAI,
   cursor: CursorIcon,
+  grok: GrokIcon,
+  opencode: OpenCodeIcon,
 };
 
 export const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableProviderOption);
 const UNAVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter((option) => !option.available);
-const COMING_SOON_PROVIDER_OPTIONS = [
-  { id: "opencode", label: "OpenCode", icon: OpenCodeIcon },
-  { id: "gemini", label: "Gemini", icon: Gemini },
-] as const;
+const COMING_SOON_PROVIDER_OPTIONS = [{ id: "gemini", label: "Gemini", icon: Gemini }] as const;
 
 function providerIconClassName(
   provider: ProviderKind | ProviderPickerKind,
@@ -51,31 +50,33 @@ function providerIconClassName(
 }
 
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
-  provider: ProviderKind;
+  provider: ProviderPickerKind;
   model: ModelSlug;
-  lockedProvider: ProviderKind | null;
+  lockedProvider: ProviderPickerKind | null;
   providers?: ReadonlyArray<ServerProvider>;
-  modelOptionsByProvider: Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>>;
+  modelOptionsByProvider: Partial<
+    Record<ProviderPickerKind, ReadonlyArray<{ slug: string; name: string }>>
+  >;
   activeProviderIconClassName?: string;
   compact?: boolean;
   disabled?: boolean;
   triggerVariant?: VariantProps<typeof buttonVariants>["variant"];
   triggerClassName?: string;
-  onProviderModelChange: (provider: ProviderKind, model: ModelSlug) => void;
+  onProviderModelChange: (provider: ProviderPickerKind, model: ModelSlug) => void;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const activeProvider = props.lockedProvider ?? props.provider;
-  const selectedProviderOptions = props.modelOptionsByProvider[activeProvider];
+  const selectedProviderOptions = props.modelOptionsByProvider[activeProvider] ?? [];
   const selectedModelLabel =
     selectedProviderOptions.find((option) => option.slug === props.model)?.name ?? props.model;
   const ProviderIcon = PROVIDER_ICON_BY_PROVIDER[activeProvider];
-  const handleModelChange = (provider: ProviderKind, value: string) => {
+  const handleModelChange = (provider: ProviderPickerKind, value: string) => {
     if (props.disabled) return;
     if (!value) return;
     const resolvedModel = resolveSelectableModel(
       provider,
       value,
-      props.modelOptionsByProvider[provider],
+      props.modelOptionsByProvider[provider] ?? [],
     );
     if (!resolvedModel) return;
     props.onProviderModelChange(provider, resolvedModel);
@@ -132,7 +133,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               value={props.model}
               onValueChange={(value) => handleModelChange(props.lockedProvider!, value)}
             >
-              {props.modelOptionsByProvider[props.lockedProvider].map((modelOption) => (
+              {(props.modelOptionsByProvider[props.lockedProvider] ?? []).map((modelOption) => (
                 <MenuRadioItem
                   key={`${props.lockedProvider}:${modelOption.slug}`}
                   value={modelOption.slug}
@@ -142,6 +143,12 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 </MenuRadioItem>
               ))}
             </MenuRadioGroup>
+            <MenuDivider />
+            <div className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground/80">
+              This thread uses{" "}
+              <span className="font-medium text-muted-foreground">{props.lockedProvider}</span>.
+              Start a new thread to use a different provider (Claude, Codex, …).
+            </div>
           </MenuGroup>
         ) : (
           <>
@@ -190,7 +197,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                         value={props.provider === option.value ? props.model : ""}
                         onValueChange={(value) => handleModelChange(option.value, value)}
                       >
-                        {props.modelOptionsByProvider[option.value].map((modelOption) => (
+                        {(props.modelOptionsByProvider[option.value] ?? []).map((modelOption) => (
                           <MenuRadioItem
                             key={`${option.value}:${modelOption.slug}`}
                             value={modelOption.slug}

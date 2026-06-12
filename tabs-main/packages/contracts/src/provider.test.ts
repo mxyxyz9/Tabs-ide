@@ -6,6 +6,14 @@ import { ProviderSendTurnInput, ProviderSessionStartInput } from "./provider";
 const decodeProviderSessionStartInput = Schema.decodeUnknownSync(ProviderSessionStartInput);
 const decodeProviderSendTurnInput = Schema.decodeUnknownSync(ProviderSendTurnInput);
 
+// `modelSelection.options` decodes to the canonical `ProviderOptionSelections`
+// array (`{ id, value }[]`). Legacy object inputs (`{ reasoningEffort: "high" }`)
+// are coerced to that array shape by the schema, so look options up by id.
+const opt = (
+  sel: { readonly options?: ReadonlyArray<{ readonly id: string; readonly value: unknown }> },
+  id: string,
+): unknown => sel.options?.find((o) => o.id === id)?.value;
+
 describe("ProviderSessionStartInput", () => {
   it("accepts codex-compatible payloads", () => {
     const parsed = decodeProviderSessionStartInput({
@@ -23,13 +31,13 @@ describe("ProviderSessionStartInput", () => {
       runtimeMode: "full-access",
     });
     expect(parsed.runtimeMode).toBe("full-access");
-    expect(parsed.modelSelection?.provider).toBe("codex");
+    expect(parsed.modelSelection?.instanceId).toBe("codex");
     expect(parsed.modelSelection?.model).toBe("gpt-5.3-codex");
-    if (parsed.modelSelection?.provider !== "codex") {
+    if (parsed.modelSelection?.instanceId !== "codex") {
       throw new Error("Expected codex modelSelection");
     }
-    expect(parsed.modelSelection.options?.reasoningEffort).toBe("high");
-    expect(parsed.modelSelection.options?.fastMode).toBe(true);
+    expect(opt(parsed.modelSelection, "reasoningEffort")).toBe("high");
+    expect(opt(parsed.modelSelection, "fastMode")).toBe(true);
   });
 
   it("rejects payloads without runtime mode", () => {
@@ -58,14 +66,14 @@ describe("ProviderSessionStartInput", () => {
       runtimeMode: "full-access",
     });
     expect(parsed.provider).toBe("claudeAgent");
-    expect(parsed.modelSelection?.provider).toBe("claudeAgent");
+    expect(parsed.modelSelection?.instanceId).toBe("claudeAgent");
     expect(parsed.modelSelection?.model).toBe("claude-sonnet-4-6");
-    if (parsed.modelSelection?.provider !== "claudeAgent") {
+    if (parsed.modelSelection?.instanceId !== "claudeAgent") {
       throw new Error("Expected claude modelSelection");
     }
-    expect(parsed.modelSelection.options?.thinking).toBe(true);
-    expect(parsed.modelSelection.options?.effort).toBe("max");
-    expect(parsed.modelSelection.options?.fastMode).toBe(true);
+    expect(opt(parsed.modelSelection, "thinking")).toBe(true);
+    expect(opt(parsed.modelSelection, "effort")).toBe("max");
+    expect(opt(parsed.modelSelection, "fastMode")).toBe(true);
     expect(parsed.runtimeMode).toBe("full-access");
   });
 });
@@ -84,13 +92,13 @@ describe("ProviderSendTurnInput", () => {
       },
     });
 
-    expect(parsed.modelSelection?.provider).toBe("codex");
+    expect(parsed.modelSelection?.instanceId).toBe("codex");
     expect(parsed.modelSelection?.model).toBe("gpt-5.3-codex");
-    if (parsed.modelSelection?.provider !== "codex") {
+    if (parsed.modelSelection?.instanceId !== "codex") {
       throw new Error("Expected codex modelSelection");
     }
-    expect(parsed.modelSelection.options?.reasoningEffort).toBe("xhigh");
-    expect(parsed.modelSelection.options?.fastMode).toBe(true);
+    expect(opt(parsed.modelSelection, "reasoningEffort")).toBe("xhigh");
+    expect(opt(parsed.modelSelection, "fastMode")).toBe(true);
   });
 
   it("accepts claude modelSelection including ultrathink", () => {
@@ -106,11 +114,11 @@ describe("ProviderSendTurnInput", () => {
       },
     });
 
-    expect(parsed.modelSelection?.provider).toBe("claudeAgent");
-    if (parsed.modelSelection?.provider !== "claudeAgent") {
+    expect(parsed.modelSelection?.instanceId).toBe("claudeAgent");
+    if (parsed.modelSelection?.instanceId !== "claudeAgent") {
       throw new Error("Expected claude modelSelection");
     }
-    expect(parsed.modelSelection.options?.effort).toBe("ultrathink");
-    expect(parsed.modelSelection.options?.fastMode).toBe(true);
+    expect(opt(parsed.modelSelection, "effort")).toBe("ultrathink");
+    expect(opt(parsed.modelSelection, "fastMode")).toBe(true);
   });
 });

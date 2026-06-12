@@ -20,9 +20,13 @@ import {
 import { fixPath, resolveBaseDir } from "./os-jank";
 import { Open } from "./open";
 import * as SqlitePersistence from "./persistence/Layers/Sqlite";
-import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serverLayers";
+import {
+  makeProviderInstanceRegistryLayer,
+  makeServerProviderLayer,
+  makeServerRuntimeServicesLayer,
+} from "./serverLayers";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
-import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry";
 import { Server } from "./wsServer";
 import { ServerLoggerLive } from "./serverLogger";
 import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService";
@@ -290,16 +294,22 @@ const ServerConfigLive = (input: CliInput) =>
     }),
   );
 
+// Composition order is consumer → provider (each `provideMerge` provides the
+// argument to everything accumulated above it). The provider instance registry
+// must sit below the provider service/snapshot/text-gen consumers, and
+// `NodeServices` (FileSystem/Path/ChildProcessSpawner) is innermost so the
+// per-driver spawners — created inside the instance registry — can resolve it.
 const LayerLive = (input: CliInput) =>
   Layer.empty.pipe(
     Layer.provideMerge(makeServerRuntimeServicesLayer()),
     Layer.provideMerge(makeServerProviderLayer()),
-    Layer.provideMerge(ProviderRegistryLive),
+    Layer.provideMerge(makeProviderInstanceRegistryLayer()),
     Layer.provideMerge(SqlitePersistence.layerConfig),
     Layer.provideMerge(ServerLoggerLive),
     Layer.provideMerge(AnalyticsServiceLayerLive),
     Layer.provideMerge(ServerSettingsLive),
     Layer.provideMerge(ServerConfigLive(input)),
+    Layer.provideMerge(NodeServices.layer),
   );
 
 const isWildcardHost = (host: string | undefined): boolean =>

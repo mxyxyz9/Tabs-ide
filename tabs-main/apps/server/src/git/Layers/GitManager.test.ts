@@ -15,7 +15,7 @@ import {
   type GitHubPullRequestSummary,
   GitHubCli,
 } from "../Services/GitHubCli.ts";
-import { type TextGenerationShape, TextGeneration } from "../Services/TextGeneration.ts";
+import { type TextGenerationShape, TextGeneration } from "../../textGeneration/TextGeneration";
 import { GitCoreLive } from "./GitCore.ts";
 import { GitCore } from "../Services/GitCore.ts";
 import { makeGitManager } from "./GitManager.ts";
@@ -205,6 +205,7 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
             }),
         ),
       ),
+    generateThreadTitle: () => Effect.succeed({ title: "Test thread title" }),
   };
 }
 

@@ -5,6 +5,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationReadModel,
+  ProviderInstanceId,
 } from "@tabs/contracts";
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
@@ -44,7 +45,7 @@ function makeSnapshot(input: {
         projectId: input.projectId,
         title: "Thread",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,

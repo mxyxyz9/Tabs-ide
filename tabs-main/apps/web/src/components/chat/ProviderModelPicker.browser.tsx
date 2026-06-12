@@ -5,6 +5,7 @@ import { render } from "vitest-browser-react";
 
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { getCustomModelOptionsByProvider } from "../../modelSelection";
+import { makeTestServerProvider } from "../../test/serverProviderFixture";
 import { DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
 
 function effort(value: string, isDefault = false) {
@@ -16,13 +17,9 @@ function effort(value: string, isDefault = false) {
 }
 
 const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
-  {
-    provider: "codex",
-    enabled: true,
-    installed: true,
+  makeTestServerProvider({
+    instanceId: "codex",
     version: "0.116.0",
-    status: "ready",
-    authStatus: "authenticated",
     checkedAt: new Date().toISOString(),
     models: [
       {
@@ -48,14 +45,10 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
         },
       },
     ],
-  },
-  {
-    provider: "claudeAgent",
-    enabled: true,
-    installed: true,
+  }),
+  makeTestServerProvider({
+    instanceId: "claudeAgent",
     version: "1.0.0",
-    status: "ready",
-    authStatus: "authenticated",
     checkedAt: new Date().toISOString(),
     models: [
       {
@@ -102,7 +95,7 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
         },
       },
     ],
-  },
+  }),
 ];
 
 async function mountPicker(props: {
@@ -259,7 +252,7 @@ describe("ProviderModelPicker", () => {
   it("shows disabled providers as non-selectable entries", async () => {
     const disabledProviders = TEST_PROVIDERS.slice();
     const claudeIndex = disabledProviders.findIndex(
-      (provider) => provider.provider === "claudeAgent",
+      (provider) => provider.instanceId === "claudeAgent",
     );
     if (claudeIndex >= 0) {
       const claudeProvider = disabledProviders[claudeIndex]!;

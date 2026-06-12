@@ -9,7 +9,13 @@ import { describe, expect, it, afterEach, vi } from "vitest";
 import { createServer } from "./wsServer";
 import WebSocket from "ws";
 import { deriveServerPaths, ServerConfig, type ServerConfigShape } from "./config";
-import { makeServerProviderLayer, makeServerRuntimeServicesLayer } from "./serverLayers";
+import {
+  makeProviderInstanceRegistryLayer,
+  makeServerProviderLayer,
+  makeServerRuntimeServicesLayer,
+} from "./serverLayers";
+import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory";
+import { ProviderSessionRuntimeRepositoryLive } from "./persistence/Layers/ProviderSessionRuntime";
 
 import {
   DEFAULT_TERMINAL_ID,
@@ -32,6 +38,8 @@ import {
   type WsPushChannel,
   type WsPushMessage,
   type WsPush,
+  ProviderInstanceId,
+  ProviderDriverKind,
 } from "@tabs/contracts";
 import { compileResolvedKeybindingRule, DEFAULT_KEYBINDINGS } from "./keybindings";
 import type {
@@ -69,20 +77,27 @@ const defaultOpenService: OpenShape = {
 
 const defaultProviderStatuses: ReadonlyArray<ServerProvider> = [
   {
-    provider: "codex",
+    instanceId: ProviderInstanceId.makeUnsafe("codex"),
+    driver: ProviderDriverKind.makeUnsafe("codex"),
     enabled: true,
     installed: true,
     version: "0.116.0",
     status: "ready",
-    authStatus: "authenticated",
+    auth: { status: "authenticated" },
     checkedAt: "2026-01-01T00:00:00.000Z",
     models: [],
+    slashCommands: [],
+    skills: [],
   },
 ];
 
 const defaultProviderRegistryService: ProviderRegistryShape = {
   getProviders: Effect.succeed(defaultProviderStatuses),
   refresh: () => Effect.succeed(defaultProviderStatuses),
+  refreshInstance: () => Effect.succeed(defaultProviderStatuses),
+  getProviderMaintenanceCapabilitiesForInstance: (_instanceId, provider) =>
+    Effect.succeed({ provider, packageName: null, update: null }),
+  setProviderMaintenanceActionState: () => Effect.succeed(defaultProviderStatuses),
   streamChanges: Stream.empty,
 };
 
@@ -534,7 +549,18 @@ describe("WebSocket Server", () => {
       autoBootstrapProjectFromCwd: options.autoBootstrapProjectFromCwd ?? false,
       logWebSocketEvents: options.logWebSocketEvents ?? Boolean(options.devUrl),
     } satisfies ServerConfigShape);
-    const infrastructureLayer = providerLayer.pipe(Layer.provideMerge(persistenceLayer));
+    // The orchestration runtime now depends on the provider instance registry,
+    // event loggers, and session directory (production wires these in `main.ts`
+    // via `makeProviderInstanceRegistryLayer`). Provide them here so tests that
+    // swap in a mock `providerLayer` still satisfy the runtime's context.
+    const providerSupportLayer = Layer.mergeAll(
+      makeProviderInstanceRegistryLayer(),
+      ProviderSessionDirectoryLive.pipe(Layer.provide(ProviderSessionRuntimeRepositoryLive)),
+    );
+    const infrastructureLayer = providerLayer.pipe(
+      Layer.provideMerge(providerSupportLayer),
+      Layer.provideMerge(persistenceLayer),
+    );
     const runtimeOverrides = Layer.mergeAll(
       options.gitManager ? Layer.succeed(GitManager, options.gitManager) : Layer.empty,
       options.gitCore
@@ -1263,7 +1289,7 @@ describe("WebSocket Server", () => {
     const providerService: ProviderServiceShape = {
       startSession: (threadId) =>
         Effect.succeed({
-          provider: "codex",
+          provider: ProviderDriverKind.makeUnsafe("codex"),
           status: "ready",
           runtimeMode: "full-access",
           threadId,
@@ -1281,6 +1307,7 @@ describe("WebSocket Server", () => {
       stopSession: () => unsupported(),
       listSessions: () => Effect.succeed([]),
       getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
+      getInstanceInfo: () => unsupported(),
       rollbackConversation: () => unsupported(),
       streamEvents: Stream.fromPubSub(runtimeEventPubSub),
     };

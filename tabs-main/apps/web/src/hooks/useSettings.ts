@@ -34,7 +34,7 @@ import {
 import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
 import { ensureNativeApi } from "~/nativeApi";
 import { useLocalStorage } from "./useLocalStorage";
-import { normalizeCustomModelSlugs } from "~/modelSelection";
+import { makeAppModelSelection, normalizeCustomModelSlugs } from "~/modelSelection";
 import { Predicate, Schema, Struct } from "effect";
 import { DeepMutable } from "effect/Types";
 import { deepMerge } from "@tabs/shared/Struct";
@@ -56,18 +56,20 @@ function mergeServerSettingsPatch(
     return next;
   }
 
-  const hasProvider = "provider" in selectionPatch && selectionPatch.provider !== undefined;
+  const hasProvider = "instanceId" in selectionPatch && selectionPatch.instanceId !== undefined;
   const hasModel = "model" in selectionPatch && selectionPatch.model !== undefined;
   const hasOptions = "options" in selectionPatch;
 
   if (hasProvider || hasModel) {
     return {
       ...next,
-      textGenerationModelSelection: {
-        provider: selectionPatch.provider ?? current.textGenerationModelSelection.provider,
-        model: selectionPatch.model ?? current.textGenerationModelSelection.model,
-        ...(hasOptions && selectionPatch.options ? { options: selectionPatch.options } : {}),
-      } as ServerSettings["textGenerationModelSelection"],
+      textGenerationModelSelection: makeAppModelSelection(
+        selectionPatch.instanceId ?? current.textGenerationModelSelection.instanceId,
+        selectionPatch.model ?? current.textGenerationModelSelection.model,
+        hasOptions
+          ? (selectionPatch.options ?? null)
+          : current.textGenerationModelSelection.options,
+      ) as unknown as ServerSettings["textGenerationModelSelection"],
     };
   }
 
@@ -200,7 +202,10 @@ export function buildLegacyServerSettingsMigrationPatch(legacySettings: Record<s
   }
 
   if (Schema.is(ModelSelection)(legacySettings.textGenerationModelSelection)) {
-    patch.textGenerationModelSelection = legacySettings.textGenerationModelSelection;
+    patch.textGenerationModelSelection =
+      legacySettings.textGenerationModelSelection as unknown as NonNullable<
+        (typeof patch)["textGenerationModelSelection"]
+      >;
   }
 
   if (typeof legacySettings.codexBinaryPath === "string") {

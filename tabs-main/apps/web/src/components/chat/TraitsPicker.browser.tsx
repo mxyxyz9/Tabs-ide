@@ -4,7 +4,7 @@ import {
   type ModelSelection,
   ClaudeModelOptions,
   CodexModelOptions,
-  DEFAULT_MODEL_BY_PROVIDER,
+  DEFAULT_MODEL,
   DEFAULT_SERVER_SETTINGS,
   ProjectId,
   type ServerProvider,
@@ -23,19 +23,17 @@ import {
   useComposerThreadDraft,
   useEffectiveComposerModelState,
 } from "../../composerDraftStore";
+import { makeAppModelSelection, typedOptionsToSelections } from "../../modelSelection";
+import { makeTestServerProvider } from "../../test/serverProviderFixture";
 import { DEFAULT_CLIENT_SETTINGS } from "@tabs/contracts/settings";
 
 // ── Claude TraitsPicker tests ─────────────────────────────────────────
 
 const CLAUDE_THREAD_ID = ThreadId.makeUnsafe("thread-claude-traits");
 const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
-  {
-    provider: "codex",
-    enabled: true,
-    installed: true,
+  makeTestServerProvider({
+    instanceId: "codex",
     version: "0.1.0",
-    status: "ready",
-    authStatus: "authenticated",
     checkedAt: "2026-01-01T00:00:00.000Z",
     models: [
       {
@@ -53,14 +51,10 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
         },
       },
     ],
-  },
-  {
-    provider: "claudeAgent",
-    enabled: true,
-    installed: true,
+  }),
+  makeTestServerProvider({
+    instanceId: "claudeAgent",
     version: "0.1.0",
-    status: "ready",
-    authStatus: "authenticated",
     checkedAt: "2026-01-01T00:00:00.000Z",
     models: [
       {
@@ -108,7 +102,7 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
         },
       },
     ],
-  },
+  }),
 ];
 
 function ClaudeTraitsPickerHarness(props: {
@@ -174,13 +168,11 @@ async function mountClaudePicker(props?: {
       modelSelectionByProvider: props?.skipDraftModelOptions
         ? {}
         : {
-            claudeAgent: {
-              provider: "claudeAgent",
+            claudeAgent: makeAppModelSelection(
+              "claudeAgent",
               model,
-              ...(claudeOptions && Object.keys(claudeOptions).length > 0
-                ? { options: claudeOptions }
-                : {}),
-            },
+              typedOptionsToSelections(claudeOptions),
+            ),
           },
       activeProvider: "claudeAgent",
       runtimeMode: null,
@@ -196,11 +188,11 @@ async function mountClaudePicker(props?: {
   document.body.append(host);
   const fallbackModelSelection =
     props?.fallbackModelOptions !== undefined
-      ? ({
-          provider: "claudeAgent",
+      ? makeAppModelSelection(
+          "claudeAgent",
           model,
-          ...(props.fallbackModelOptions ? { options: props.fallbackModelOptions } : {}),
-        } satisfies ModelSelection)
+          typedOptionsToSelections(props.fallbackModelOptions),
+        )
       : null;
   const screen = await render(
     <ClaudeTraitsPickerHarness
@@ -364,7 +356,7 @@ describe("TraitsPicker (Claude)", () => {
 
 async function mountCodexPicker(props: { model?: string; options?: CodexModelOptions }) {
   const threadId = ThreadId.makeUnsafe("thread-codex-traits");
-  const model = props.model ?? DEFAULT_MODEL_BY_PROVIDER.codex;
+  const model = props.model ?? DEFAULT_MODEL;
   const draftsByThreadId: Record<ThreadId, ComposerThreadDraftState> = {
     [threadId]: {
       prompt: "",
@@ -373,11 +365,7 @@ async function mountCodexPicker(props: { model?: string; options?: CodexModelOpt
       persistedAttachments: [],
       terminalContexts: [],
       modelSelectionByProvider: {
-        codex: {
-          provider: "codex",
-          model,
-          ...(props.options ? { options: props.options } : {}),
-        },
+        codex: makeAppModelSelection("codex", model, typedOptionsToSelections(props.options)),
       },
       activeProvider: "codex",
       runtimeMode: null,
@@ -399,9 +387,9 @@ async function mountCodexPicker(props: { model?: string; options?: CodexModelOpt
       provider="codex"
       models={TEST_PROVIDERS[0]!.models}
       threadId={threadId}
-      model={props.model ?? DEFAULT_MODEL_BY_PROVIDER.codex}
+      model={props.model ?? DEFAULT_MODEL}
       prompt=""
-      modelOptions={props.options}
+      modelOptions={typedOptionsToSelections(props.options)}
       onPromptChange={() => {}}
     />,
     { container: host },

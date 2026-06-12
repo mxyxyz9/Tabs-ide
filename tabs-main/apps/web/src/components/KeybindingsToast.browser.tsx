@@ -10,7 +10,9 @@ import {
   type WsWelcomePayload,
   WS_CHANNELS,
   WS_METHODS,
+  DEFAULT_SERVER_SETTINGS,
 } from "@tabs/contracts";
+import { DEFAULT_CLIENT_SETTINGS } from "@tabs/contracts/settings";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { ws, http, HttpResponse } from "msw";
 import { setupWorker } from "msw/browser";
@@ -18,6 +20,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { render } from "vitest-browser-react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
+import { makeAppModelSelection } from "../modelSelection";
+import { makeTestServerProvider } from "../test/serverProviderFixture";
 import { getRouter } from "../router";
 import { useStore } from "../store";
 
@@ -43,27 +47,14 @@ function createBaseServerConfig(): ServerConfig {
     keybindingsConfigPath: "/repo/project/.tabs-keybindings.json",
     keybindings: [],
     issues: [],
-    providers: [
-      {
-        provider: "codex",
-        enabled: true,
-        installed: true,
-        version: "0.116.0",
-        status: "ready",
-        authStatus: "authenticated",
-        checkedAt: NOW_ISO,
-        models: [],
-      },
-    ],
+    providers: [makeTestServerProvider({ checkedAt: NOW_ISO })],
     availableEditors: [],
     settings: {
+      ...DEFAULT_SERVER_SETTINGS,
+      ...DEFAULT_CLIENT_SETTINGS,
       enableAssistantStreaming: false,
-      defaultThreadEnvMode: "local" as const,
-      textGenerationModelSelection: { provider: "codex" as const, model: "gpt-5.4-mini" },
-      providers: {
-        codex: { enabled: true, binaryPath: "", homePath: "", customModels: [] },
-        claudeAgent: { enabled: true, binaryPath: "", customModels: [] },
-      },
+      defaultThreadEnvMode: "local",
+      textGenerationModelSelection: makeAppModelSelection("codex", "gpt-5.4-mini"),
     },
   };
 }
@@ -76,10 +67,7 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         id: PROJECT_ID,
         title: "Project",
         workspaceRoot: "/repo/project",
-        defaultModelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        defaultModelSelection: makeAppModelSelection("codex", "gpt-5"),
         scripts: [],
         createdAt: NOW_ISO,
         updatedAt: NOW_ISO,
@@ -91,10 +79,7 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         id: THREAD_ID,
         projectId: PROJECT_ID,
         title: "Test thread",
-        modelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        modelSelection: makeAppModelSelection("codex", "gpt-5"),
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "main",

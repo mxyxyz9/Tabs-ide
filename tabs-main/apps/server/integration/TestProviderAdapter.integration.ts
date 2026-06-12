@@ -11,6 +11,7 @@ import {
   ThreadId,
   TurnId,
   ProviderKind,
+  ProviderDriverKind,
 } from "@tabs/contracts";
 import { Effect, Queue, Stream } from "effect";
 
@@ -178,7 +179,7 @@ function normalizeFixtureEvent(rawEvent: Record<string, unknown>): ProviderRunti
 
 export interface TestProviderAdapterHarness {
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
-  readonly provider: ProviderKind;
+  readonly provider: ProviderDriverKind;
   readonly queueTurnResponse: (
     threadId: ThreadId,
     response: TestTurnResponse,
@@ -210,7 +211,7 @@ function sessionNotFound(
   threadId: ThreadId,
 ): ProviderAdapterSessionNotFoundError {
   return new ProviderAdapterSessionNotFoundError({
-    provider,
+    provider: ProviderDriverKind.makeUnsafe(provider),
     threadId: String(threadId),
   });
 }
@@ -245,7 +246,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       Effect.gen(function* () {
         if (input.provider !== undefined && input.provider !== provider) {
           return yield* new ProviderAdapterValidationError({
-            provider,
+            provider: ProviderDriverKind.makeUnsafe(provider),
             operation: "startSession",
             issue: `Expected provider '${provider}' but received '${input.provider}'.`,
           });
@@ -256,7 +257,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
         const createdAt = nowIso();
 
         const session: ProviderSession = {
-          provider,
+          provider: ProviderDriverKind.makeUnsafe(provider),
           status: "ready",
           runtimeMode: input.runtimeMode,
           threadId,
@@ -294,7 +295,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
         const response = state.queuedResponses.shift();
         if (!response) {
           return yield* new ProviderAdapterValidationError({
-            provider,
+            provider: ProviderDriverKind.makeUnsafe(provider),
             operation: "sendTurn",
             issue: `No queued turn response for thread ${input.threadId}.`,
           });
@@ -306,7 +307,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           const rawEvent: Record<string, unknown> = {
             ...(fixtureEvent as Record<string, unknown>),
             eventId: randomUUID(),
-            provider,
+            provider: ProviderDriverKind.makeUnsafe(provider),
             sessionId: RuntimeSessionId.makeUnsafe(String(input.threadId)),
             createdAt: nowIso(),
           };
@@ -364,7 +365,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           yield* emit({
             type: "turn.completed",
             eventId: EventId.makeUnsafe(randomUUID()),
-            provider,
+            provider: ProviderDriverKind.makeUnsafe(provider),
             createdAt: nowIso(),
             threadId: state.snapshot.threadId,
             turnId,
@@ -449,7 +450,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       if (!Number.isInteger(numTurns) || numTurns < 0 || numTurns > state.snapshot.turns.length) {
         return Effect.fail(
           new ProviderAdapterValidationError({
-            provider,
+            provider: ProviderDriverKind.makeUnsafe(provider),
             operation: "rollbackThread",
             issue: "numTurns must be an integer between 0 and current turn count.",
           }),
@@ -473,7 +474,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
       });
 
     const adapter: ProviderAdapterShape<ProviderAdapterError> = {
-      provider,
+      provider: ProviderDriverKind.makeUnsafe(provider),
       capabilities: {
         sessionModelSwitch: "in-session",
       },
@@ -549,7 +550,7 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
     return {
       adapter,
-      provider,
+      provider: ProviderDriverKind.makeUnsafe(provider),
       queueTurnResponse,
       queueTurnResponseForNextSession,
       getStartCount,

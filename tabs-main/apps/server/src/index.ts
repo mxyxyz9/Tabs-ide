@@ -8,14 +8,14 @@ import { OpenLive } from "./open";
 import { Command } from "effect/unstable/cli";
 import { version } from "../package.json" with { type: "json" };
 import { ServerLive } from "./wsServer";
-import { NetService } from "@tabs/shared/Net";
+import { layer as netServiceLayer } from "@tabs/shared/Net";
 import { FetchHttpClient } from "effect/unstable/http";
 
 const RuntimeLayer = Layer.empty.pipe(
   Layer.provideMerge(CliConfig.layer),
   Layer.provideMerge(ServerLive),
   Layer.provideMerge(OpenLive),
-  Layer.provideMerge(NetService.layer),
+  Layer.provideMerge(netServiceLayer),
   Layer.provideMerge(NodeServices.layer),
   Layer.provideMerge(FetchHttpClient.layer),
 );

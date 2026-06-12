@@ -5,7 +5,13 @@
  *
  * @module ProviderSessionRuntimeRepository
  */
-import { IsoDateTime, ProviderSessionRuntimeStatus, RuntimeMode, ThreadId } from "@tabs/contracts";
+import {
+  IsoDateTime,
+  ProviderInstanceId,
+  ProviderSessionRuntimeStatus,
+  RuntimeMode,
+  ThreadId,
+} from "@tabs/contracts";
 import { Option, Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
@@ -14,6 +20,10 @@ import type { ProviderSessionRuntimeRepositoryError } from "../Errors.ts";
 export const ProviderSessionRuntime = Schema.Struct({
   threadId: ThreadId,
   providerName: Schema.String,
+  // Routing key for the configured provider instance. Nullable for rows
+  // written before the driver/instance split; promoted to a default instance
+  // id on read (see ProviderSessionDirectory).
+  providerInstanceId: Schema.NullOr(ProviderInstanceId),
   adapterKey: Schema.String,
   runtimeMode: RuntimeMode,
   status: ProviderSessionRuntimeStatus,

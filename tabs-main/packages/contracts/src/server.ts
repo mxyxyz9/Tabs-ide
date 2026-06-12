@@ -3,7 +3,7 @@ import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas";
 import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings";
 import { EditorId } from "./editor";
 import { ModelCapabilities } from "./model";
-import { ProviderKind } from "./orchestration";
+import { ProviderDriverKind, ProviderInstanceId } from "./providerInstance";
 import { ServerSettings } from "./settings";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
@@ -35,28 +35,139 @@ export const ServerProviderAuthStatus = Schema.Literals([
 ]);
 export type ServerProviderAuthStatus = typeof ServerProviderAuthStatus.Type;
 
+export const ServerProviderAuth = Schema.Struct({
+  status: ServerProviderAuthStatus,
+  type: Schema.optional(TrimmedNonEmptyString),
+  label: Schema.optional(TrimmedNonEmptyString),
+  email: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerProviderAuth = typeof ServerProviderAuth.Type;
+
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
+  shortName: Schema.optional(TrimmedNonEmptyString),
+  subProvider: Schema.optional(TrimmedNonEmptyString),
   isCustom: Schema.Boolean,
   capabilities: Schema.NullOr(ModelCapabilities),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
 
+export const ServerProviderSlashCommandInput = Schema.Struct({
+  hint: TrimmedNonEmptyString,
+});
+export type ServerProviderSlashCommandInput = typeof ServerProviderSlashCommandInput.Type;
+
+export const ServerProviderSlashCommand = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+  input: Schema.optional(ServerProviderSlashCommandInput),
+});
+export type ServerProviderSlashCommand = typeof ServerProviderSlashCommand.Type;
+
+export const ServerProviderSkill = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+  path: TrimmedNonEmptyString,
+  scope: Schema.optional(TrimmedNonEmptyString),
+  enabled: Schema.Boolean,
+  displayName: Schema.optional(TrimmedNonEmptyString),
+  shortDescription: Schema.optional(TrimmedNonEmptyString),
+});
+export type ServerProviderSkill = typeof ServerProviderSkill.Type;
+
+export const ServerProviderAvailability = Schema.Literals(["available", "unavailable"]);
+export type ServerProviderAvailability = typeof ServerProviderAvailability.Type;
+
+export const ServerProviderContinuation = Schema.Struct({
+  groupKey: TrimmedNonEmptyString,
+});
+export type ServerProviderContinuation = typeof ServerProviderContinuation.Type;
+
+export const ServerProviderVersionAdvisoryStatus = Schema.Literals([
+  "unknown",
+  "current",
+  "behind_latest",
+]);
+export type ServerProviderVersionAdvisoryStatus = typeof ServerProviderVersionAdvisoryStatus.Type;
+
+export const ServerProviderVersionAdvisory = Schema.Struct({
+  status: ServerProviderVersionAdvisoryStatus,
+  currentVersion: Schema.NullOr(TrimmedNonEmptyString),
+  latestVersion: Schema.NullOr(TrimmedNonEmptyString),
+  updateCommand: Schema.NullOr(TrimmedNonEmptyString),
+  canUpdate: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  checkedAt: Schema.NullOr(IsoDateTime),
+  message: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ServerProviderVersionAdvisory = typeof ServerProviderVersionAdvisory.Type;
+
+export const ServerProviderUpdateStatus = Schema.Literals([
+  "idle",
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "unchanged",
+]);
+export type ServerProviderUpdateStatus = typeof ServerProviderUpdateStatus.Type;
+
+export const ServerProviderUpdateState = Schema.Struct({
+  status: ServerProviderUpdateStatus,
+  startedAt: Schema.NullOr(IsoDateTime),
+  finishedAt: Schema.NullOr(IsoDateTime),
+  message: Schema.NullOr(TrimmedNonEmptyString),
+  output: Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000))),
+});
+export type ServerProviderUpdateState = typeof ServerProviderUpdateState.Type;
+
 export const ServerProvider = Schema.Struct({
-  provider: ProviderKind,
+  instanceId: ProviderInstanceId,
+  driver: ProviderDriverKind,
+  displayName: Schema.optional(TrimmedNonEmptyString),
+  accentColor: Schema.optional(TrimmedNonEmptyString),
+  badgeLabel: Schema.optional(TrimmedNonEmptyString),
+  continuation: Schema.optional(ServerProviderContinuation),
+  showInteractionModeToggle: Schema.optional(Schema.Boolean),
+  requiresNewThreadForModelChange: Schema.optional(Schema.Boolean),
   enabled: Schema.Boolean,
   installed: Schema.Boolean,
   version: Schema.NullOr(TrimmedNonEmptyString),
   status: ServerProviderState,
-  authStatus: ServerProviderAuthStatus,
+  auth: ServerProviderAuth,
   checkedAt: IsoDateTime,
   message: Schema.optional(TrimmedNonEmptyString),
+  availability: Schema.optional(ServerProviderAvailability),
+  unavailableReason: Schema.optional(TrimmedNonEmptyString),
   models: Schema.Array(ServerProviderModel),
+  slashCommands: Schema.Array(ServerProviderSlashCommand).pipe(
+    Schema.withDecodingDefault(() => []),
+  ),
+  skills: Schema.Array(ServerProviderSkill).pipe(Schema.withDecodingDefault(() => [])),
+  versionAdvisory: Schema.optionalKey(ServerProviderVersionAdvisory),
+  updateState: Schema.optionalKey(ServerProviderUpdateState),
 });
 export type ServerProvider = typeof ServerProvider.Type;
 
-const ServerProviders = Schema.Array(ServerProvider);
+export const ServerProviders = Schema.Array(ServerProvider);
+export type ServerProviders = typeof ServerProviders.Type;
+
+export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerProviderUpdateError>()(
+  "ServerProviderUpdateError",
+  {
+    provider: ProviderDriverKind,
+    reason: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect),
+  },
+) {
+  override get message(): string {
+    return `Provider update failed for ${this.provider}: ${this.reason}`;
+  }
+}
+
+/** Treat an absent `availability` as "available" (legacy producers omit it). */
+export const isProviderAvailable = (snapshot: ServerProvider): boolean =>
+  snapshot.availability !== "unavailable";
 
 export const ServerConfig = Schema.Struct({
   cwd: TrimmedNonEmptyString,

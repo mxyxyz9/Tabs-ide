@@ -12,6 +12,8 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
+  ProviderInstanceId,
+  ProviderDriverKind,
 } from "@tabs/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
@@ -59,7 +61,7 @@ function createProviderServiceHarness(
   cwd: string,
   hasSession = true,
   sessionCwd = cwd,
-  providerName: ProviderSession["provider"] = "codex",
+  providerName: ProviderSession["provider"] = ProviderDriverKind.makeUnsafe("codex"),
 ) {
   const now = new Date().toISOString();
   const runtimeEventPubSub = Effect.runSync(PubSub.unbounded<ProviderRuntimeEvent>());
@@ -93,6 +95,7 @@ function createProviderServiceHarness(
     listSessions,
     getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
     rollbackConversation,
+    getInstanceInfo: () => unsupported(),
     streamEvents: Stream.fromPubSub(runtimeEventPubSub),
   };
 
@@ -244,7 +247,7 @@ describe("CheckpointReactor", () => {
       cwd,
       options?.hasSession ?? true,
       options?.providerSessionCwd ?? cwd,
-      options?.providerName ?? "codex",
+      ProviderDriverKind.makeUnsafe(options?.providerName ?? "codex"),
     );
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionPipelineLive),
@@ -283,7 +286,7 @@ describe("CheckpointReactor", () => {
         title: "Test Project",
         workspaceRoot: options?.projectWorkspaceRoot ?? cwd,
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         createdAt,
@@ -297,7 +300,7 @@ describe("CheckpointReactor", () => {
         projectId: asProjectId("project-1"),
         title: "Thread",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,

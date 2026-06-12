@@ -22,6 +22,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { render } from "vitest-browser-react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
+import { makeAppModelSelection, typedOptionsToSelections } from "../modelSelection";
+import { makeTestServerProvider } from "../test/serverProviderFixture";
 import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   type TerminalContextDraft,
@@ -85,18 +87,7 @@ function createBaseServerConfig(): ServerConfig {
     keybindingsConfigPath: "/repo/project/.tabs-keybindings.json",
     keybindings: [],
     issues: [],
-    providers: [
-      {
-        provider: "codex",
-        enabled: true,
-        installed: true,
-        version: "0.116.0",
-        status: "ready",
-        authStatus: "authenticated",
-        checkedAt: NOW_ISO,
-        models: [],
-      },
-    ],
+    providers: [makeTestServerProvider({ checkedAt: NOW_ISO })],
     availableEditors: [],
     settings: {
       ...DEFAULT_SERVER_SETTINGS,
@@ -207,10 +198,7 @@ function createSnapshotForTargetUser(options: {
         id: PROJECT_ID,
         title: "Project",
         workspaceRoot: "/repo/project",
-        defaultModelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        defaultModelSelection: makeAppModelSelection("codex", "gpt-5"),
         scripts: [],
         createdAt: NOW_ISO,
         updatedAt: NOW_ISO,
@@ -222,10 +210,7 @@ function createSnapshotForTargetUser(options: {
         id: THREAD_ID,
         projectId: PROJECT_ID,
         title: "Browser test thread",
-        modelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        modelSelection: makeAppModelSelection("codex", "gpt-5"),
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "main",
@@ -359,10 +344,7 @@ function addThreadToSnapshot(
         id: threadId,
         projectId: PROJECT_ID,
         title: "New thread",
-        modelSelection: {
-          provider: "codex",
-          model: "gpt-5",
-        },
+        modelSelection: makeAppModelSelection("codex", "gpt-5"),
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "main",
@@ -1616,14 +1598,14 @@ describe("ChatView browser behavior (full app)", () => {
   it("snapshots sticky codex settings into a new draft thread", async () => {
     useComposerDraftStore.setState({
       stickyModelSelectionByProvider: {
-        codex: {
-          provider: "codex",
-          model: "gpt-5.3-codex",
-          options: {
+        codex: makeAppModelSelection(
+          "codex",
+          "gpt-5.3-codex",
+          typedOptionsToSelections({
             reasoningEffort: "medium",
             fastMode: true,
-          },
-        },
+          }),
+        ),
       },
       stickyActiveProvider: "codex",
     });
@@ -1651,13 +1633,13 @@ describe("ChatView browser behavior (full app)", () => {
 
       expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toMatchObject({
         modelSelectionByProvider: {
-          codex: {
-            provider: "codex",
-            model: "gpt-5.3-codex",
-            options: {
+          codex: makeAppModelSelection(
+            "codex",
+            "gpt-5.3-codex",
+            typedOptionsToSelections({
               fastMode: true,
-            },
-          },
+            }),
+          ),
         },
         activeProvider: "codex",
       });
@@ -1669,14 +1651,14 @@ describe("ChatView browser behavior (full app)", () => {
   it("hydrates the provider alongside a sticky claude model", async () => {
     useComposerDraftStore.setState({
       stickyModelSelectionByProvider: {
-        claudeAgent: {
-          provider: "claudeAgent",
-          model: "claude-opus-4-6",
-          options: {
+        claudeAgent: makeAppModelSelection(
+          "claudeAgent",
+          "claude-opus-4-6",
+          typedOptionsToSelections({
             effort: "max",
             fastMode: true,
-          },
-        },
+          }),
+        ),
       },
       stickyActiveProvider: "claudeAgent",
     });
@@ -1704,14 +1686,14 @@ describe("ChatView browser behavior (full app)", () => {
 
       expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toMatchObject({
         modelSelectionByProvider: {
-          claudeAgent: {
-            provider: "claudeAgent",
-            model: "claude-opus-4-6",
-            options: {
+          claudeAgent: makeAppModelSelection(
+            "claudeAgent",
+            "claude-opus-4-6",
+            typedOptionsToSelections({
               effort: "max",
               fastMode: true,
-            },
-          },
+            }),
+          ),
         },
         activeProvider: "claudeAgent",
       });
@@ -1751,14 +1733,14 @@ describe("ChatView browser behavior (full app)", () => {
   it("prefers draft state over sticky composer settings and defaults", async () => {
     useComposerDraftStore.setState({
       stickyModelSelectionByProvider: {
-        codex: {
-          provider: "codex",
-          model: "gpt-5.3-codex",
-          options: {
+        codex: makeAppModelSelection(
+          "codex",
+          "gpt-5.3-codex",
+          typedOptionsToSelections({
             reasoningEffort: "medium",
             fastMode: true,
-          },
-        },
+          }),
+        ),
       },
       stickyActiveProvider: "codex",
     });
@@ -1786,25 +1768,28 @@ describe("ChatView browser behavior (full app)", () => {
 
       expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toMatchObject({
         modelSelectionByProvider: {
-          codex: {
-            provider: "codex",
-            model: "gpt-5.3-codex",
-            options: {
+          codex: makeAppModelSelection(
+            "codex",
+            "gpt-5.3-codex",
+            typedOptionsToSelections({
               fastMode: true,
-            },
-          },
+            }),
+          ),
         },
         activeProvider: "codex",
       });
 
-      useComposerDraftStore.getState().setModelSelection(threadId, {
-        provider: "codex",
-        model: "gpt-5.4",
-        options: {
-          reasoningEffort: "low",
-          fastMode: true,
-        },
-      });
+      useComposerDraftStore.getState().setModelSelection(
+        threadId,
+        makeAppModelSelection(
+          "codex",
+          "gpt-5.4",
+          typedOptionsToSelections({
+            reasoningEffort: "low",
+            fastMode: true,
+          }),
+        ),
+      );
 
       await newThreadButton.click();
 
@@ -1815,14 +1800,14 @@ describe("ChatView browser behavior (full app)", () => {
       );
       expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toMatchObject({
         modelSelectionByProvider: {
-          codex: {
-            provider: "codex",
-            model: "gpt-5.4",
-            options: {
+          codex: makeAppModelSelection(
+            "codex",
+            "gpt-5.4",
+            typedOptionsToSelections({
               reasoningEffort: "low",
               fastMode: true,
-            },
-          },
+            }),
+          ),
         },
         activeProvider: "codex",
       });

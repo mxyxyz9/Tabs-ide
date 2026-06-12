@@ -2,12 +2,19 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  ArrowUpCircleIcon,
+  BotIcon,
   ChevronDownIcon,
+  DownloadIcon,
+  FolderIcon,
   InfoIcon,
+  KeyboardIcon,
   LoaderIcon,
+  LogInIcon,
   PlusIcon,
   RefreshCwIcon,
   RotateCcwIcon,
+  SlidersHorizontalIcon,
   Undo2Icon,
   XIcon,
 } from "lucide-react";
@@ -30,11 +37,32 @@ import {
 } from "../components/desktopUpdate.logic";
 import { normalizeModelSlug } from "@tabs/shared/model";
 import { useSettings, useUpdateSettings } from "../hooks/useSettings";
+import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { toastManager } from "../components/ui/toast";
+import {
+  ClaudeAI,
+  CursorIcon,
+  GrokIcon,
+  type Icon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../components/Icons";
+import { Badge } from "../components/ui/badge";
 import {
   getCustomModelOptionsByProvider,
+  makeAppModelSelection,
   MAX_CUSTOM_MODEL_LENGTH,
   resolveAppModelSelectionState,
+  selectionsToTypedOptions,
 } from "../modelSelection";
+import type { ProviderModelOptions } from "@tabs/contracts";
+
+// The wire carries model options as a `{ id, value }[]` array; the trait
+// controls read the legacy typed option object. Bridge at the call boundary.
+const asTypedOptions = (
+  options: ModelSelection["options"],
+): ProviderModelOptions[ProviderKind] | undefined =>
+  options ? (selectionsToTypedOptions(options) as ProviderModelOptions[ProviderKind]) : undefined;
 import { APP_VERSION } from "../branding";
 import { Button } from "../components/ui/button";
 import { Collapsible, CollapsibleContent } from "../components/ui/collapsible";
@@ -103,11 +131,15 @@ const TIMESTAMP_FORMAT_LABELS = {
 
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 
+type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode";
+
 type InstallProviderSettings = {
-  provider: ProviderKind;
+  provider: ProviderSettingsKey;
   title: string;
+  icon: Icon;
   binaryPlaceholder: string;
   binaryDescription: ReactNode;
+  installCommand?: string;
   homePathKey?: "codexHomePath";
   homePlaceholder?: string;
   homeDescription?: ReactNode;
@@ -117,8 +149,10 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
   {
     provider: "codex",
     title: "Codex",
+    icon: OpenAI,
     binaryPlaceholder: "Codex binary path",
     binaryDescription: "Path to the Codex binary",
+    installCommand: "npm install -g @openai/codex",
     homePathKey: "codexHomePath",
     homePlaceholder: "CODEX_HOME",
     homeDescription: "Optional custom Codex home and config directory.",
@@ -126,9 +160,58 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
   {
     provider: "claudeAgent",
     title: "Claude",
+    icon: ClaudeAI,
     binaryPlaceholder: "Claude binary path",
     binaryDescription: "Path to the Claude binary",
+    installCommand: "npm install -g @anthropic-ai/claude-code",
   },
+  {
+    provider: "cursor",
+    title: "Cursor",
+    icon: CursorIcon,
+    binaryPlaceholder: "Cursor Agent binary path",
+    binaryDescription: "Path to the Cursor Agent binary",
+    installCommand: "curl https://cursor.com/install -fsS | bash",
+  },
+  {
+    provider: "grok",
+    title: "Grok",
+    icon: GrokIcon,
+    binaryPlaceholder: "Grok binary path",
+    binaryDescription: "Path to the Grok CLI binary",
+  },
+  {
+    provider: "opencode",
+    title: "OpenCode",
+    icon: OpenCodeIcon,
+    binaryPlaceholder: "OpenCode binary path",
+    binaryDescription: "Path to the OpenCode binary",
+    installCommand: "npm install -g opencode-ai",
+  },
+];
+
+// Per-provider sign-in command. The server reports the auth *status* but not a
+// structured login command, so map the known CLI auth commands here.
+const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
+  codex: "codex login",
+  claudeAgent: "claude login",
+  cursor: "cursor-agent login",
+  grok: "grok login",
+  opencode: "opencode auth login",
+};
+
+type SettingsSectionId = "general" | "workspace" | "providers" | "keybindings" | "about";
+
+const SETTINGS_NAV: ReadonlyArray<{
+  id: SettingsSectionId;
+  label: string;
+  icon: typeof SlidersHorizontalIcon;
+}> = [
+  { id: "general", label: "General", icon: SlidersHorizontalIcon },
+  { id: "providers", label: "Providers", icon: BotIcon },
+  { id: "workspace", label: "Workspace", icon: FolderIcon },
+  { id: "keybindings", label: "Keybindings", icon: KeyboardIcon },
+  { id: "about", label: "About", icon: InfoIcon },
 ];
 
 const PROVIDER_STATUS_STYLES = {
@@ -173,13 +256,13 @@ function getProviderSummary(provider: ServerProvider | undefined): {
       detail: provider.message ?? "CLI not detected on PATH.",
     };
   }
-  if (provider.authStatus === "authenticated") {
+  if (provider.auth.status === "authenticated") {
     return {
       headline: "Authenticated",
       detail: provider.message ?? null,
     };
   }
-  if (provider.authStatus === "unauthenticated") {
+  if (provider.auth.status === "unauthenticated") {
     return {
       headline: "Not authenticated",
       detail: provider.message ?? null,
@@ -207,6 +290,30 @@ function getProviderSummary(provider: ServerProvider | undefined): {
 function getProviderVersionLabel(version: string | null | undefined): string | null {
   if (!version) return null;
   return version.startsWith("v") ? version : `v${version}`;
+}
+
+interface ProviderUpdatePrompt {
+  readonly headline: string;
+  readonly detail: string | null;
+  readonly command: string | null;
+}
+
+/**
+ * Presentation for a provider's CLI version advisory. Returns an update prompt
+ * only when the server reports the installed CLI is behind the latest release.
+ */
+function getProviderUpdatePrompt(
+  advisory: ServerProvider["versionAdvisory"] | undefined,
+): ProviderUpdatePrompt | null {
+  if (!advisory || advisory.status !== "behind_latest") {
+    return null;
+  }
+  const latest = getProviderVersionLabel(advisory.latestVersion);
+  const current = getProviderVersionLabel(advisory.currentVersion);
+  const headline = latest ? `Update available — ${latest}` : "Update available";
+  const detail =
+    advisory.message ?? (current && latest ? `Installed ${current}, latest ${latest}.` : null);
+  return { headline, detail, command: advisory.updateCommand };
 }
 
 /** Returns a timestamp that updates on an interval, forcing re-renders to keep relative times fresh. */
@@ -384,10 +491,22 @@ function SettingsRouteView() {
   const { theme, setTheme } = useTheme();
   const settings = useSettings();
   const { updateSettings, resetSettings } = useUpdateSettings();
+  const { copyToClipboard } = useCopyToClipboard<{ providerName: string }>({
+    onCopy: ({ providerName }) => {
+      toastManager.add({
+        type: "success",
+        title: `${providerName} command copied`,
+        description: "Run it in a terminal to finish.",
+      });
+    },
+  });
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
-  const [openProviderDetails, setOpenProviderDetails] = useState<Record<ProviderKind, boolean>>({
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("general");
+  const [openProviderDetails, setOpenProviderDetails] = useState<
+    Partial<Record<ProviderSettingsKey, boolean>>
+  >({
     codex: Boolean(
       settings.providers.codex.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.binaryPath ||
       settings.providers.codex.homePath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.homePath ||
@@ -400,13 +519,10 @@ function SettingsRouteView() {
     ),
   });
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
-    Record<ProviderKind, string>
-  >({
-    codex: "",
-    claudeAgent: "",
-  });
+    Partial<Record<ProviderSettingsKey, string>>
+  >({});
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
-    Partial<Record<ProviderKind, string | null>>
+    Partial<Record<ProviderSettingsKey, string | null>>
   >({});
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const refreshingRef = useRef(false);
@@ -430,7 +546,7 @@ function SettingsRouteView() {
       });
   }, [queryClient]);
 
-  const modelListRefs = useRef<Partial<Record<ProviderKind, HTMLDivElement | null>>>({});
+  const modelListRefs = useRef<Partial<Record<ProviderSettingsKey, HTMLDivElement | null>>>({});
 
   // Desktop software-update state (Electron only). The main process auto-checks
   // on launch and pushes state changes; we mirror it here for the About section.
@@ -473,7 +589,7 @@ function SettingsRouteView() {
   const serverProviders = serverConfigQuery.data?.providers ?? EMPTY_SERVER_PROVIDERS;
 
   const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
-  const textGenProvider = textGenerationModelSelection.provider;
+  const textGenProvider = textGenerationModelSelection.instanceId as ProviderKind;
   const textGenModel = textGenerationModelSelection.model;
   const textGenModelOptions = textGenerationModelSelection.options;
   const gitModelOptionsByProvider = getCustomModelOptionsByProvider(
@@ -487,17 +603,17 @@ function SettingsRouteView() {
   // right-aligned settings row. Trait controls are only rendered when the
   // selected model actually exposes them.
   const textGenModels =
-    serverProviders.find((entry) => entry.provider === textGenProvider)?.models ?? [];
+    serverProviders.find((entry) => entry.instanceId === textGenProvider)?.models ?? [];
   const textGenTraits = getSelectedTraits(
     textGenProvider,
     textGenModels,
     textGenModel,
     "",
-    textGenModelOptions,
+    asTypedOptions(textGenModelOptions),
     false,
   );
   const textGenProviderOptions = AVAILABLE_PROVIDER_OPTIONS.filter(
-    (option) => (gitModelOptionsByProvider[option.value]?.length ?? 0) > 0,
+    (option) => (gitModelOptionsByProvider[option.value as ProviderKind]?.length ?? 0) > 0,
   );
   const textGenModelLabel =
     (gitModelOptionsByProvider[textGenProvider] ?? []).find(
@@ -506,7 +622,7 @@ function SettingsRouteView() {
   const applyTextGenSelection = (provider: ProviderKind, model: ModelSlug) => {
     updateSettings({
       textGenerationModelSelection: resolveAppModelSelectionState(
-        { ...settings, textGenerationModelSelection: { provider, model } },
+        { ...settings, textGenerationModelSelection: makeAppModelSelection(provider, model) },
         serverProviders,
       ),
     });
@@ -583,7 +699,7 @@ function SettingsRouteView() {
   }, [availableEditors, keybindingsConfigPath]);
 
   const addCustomModel = useCallback(
-    (provider: ProviderKind) => {
+    (provider: ProviderSettingsKey) => {
       const customModelInput = customModelInputByProvider[provider];
       const customModels = settings.providers[provider].customModels;
       const normalized = normalizeModelSlug(customModelInput, provider);
@@ -596,7 +712,7 @@ function SettingsRouteView() {
       }
       if (
         serverProviders
-          .find((candidate) => candidate.provider === provider)
+          .find((candidate) => candidate.instanceId === provider)
           ?.models.some((option) => !option.isCustom && option.slug === normalized)
       ) {
         setCustomModelErrorByProvider((existing) => ({
@@ -657,7 +773,7 @@ function SettingsRouteView() {
   );
 
   const removeCustomModel = useCallback(
-    (provider: ProviderKind, slug: string) => {
+    (provider: ProviderSettingsKey, slug: string) => {
       const customModels = settings.providers[provider].customModels;
       updateSettings({
         providers: {
@@ -678,7 +794,7 @@ function SettingsRouteView() {
 
   const providerCards = PROVIDER_SETTINGS.map((providerSettings) => {
     const liveProvider = serverProviders.find(
-      (candidate) => candidate.provider === providerSettings.provider,
+      (candidate) => candidate.instanceId === providerSettings.provider,
     );
     const providerConfig = settings.providers[providerSettings.provider];
     const defaultProviderConfig = DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
@@ -699,6 +815,8 @@ function SettingsRouteView() {
     return {
       provider: providerSettings.provider,
       title: providerSettings.title,
+      icon: providerSettings.icon,
+      badgeLabel: liveProvider?.badgeLabel ?? null,
       binaryPlaceholder: providerSettings.binaryPlaceholder,
       binaryDescription: providerSettings.binaryDescription,
       homePathKey: providerSettings.homePathKey,
@@ -713,6 +831,11 @@ function SettingsRouteView() {
       statusStyle,
       summary,
       versionLabel: getProviderVersionLabel(liveProvider?.version),
+      updatePrompt: getProviderUpdatePrompt(liveProvider?.versionAdvisory),
+      needsInstall: liveProvider ? !liveProvider.installed : false,
+      installCommand: providerSettings.installCommand,
+      needsAuth: liveProvider?.installed === true && liveProvider.auth.status === "unauthenticated",
+      loginCommand: PROVIDER_LOGIN_COMMAND[providerSettings.provider] ?? null,
     };
   });
 
@@ -796,921 +919,1104 @@ function SettingsRouteView() {
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-6 sm:px-6">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-12">
-            <SettingsSection title="General">
-              <SettingsRow
-                title="Theme"
-                description="Choose how Tabs looks across the app."
-                resetAction={
-                  theme !== "system" ? (
-                    <SettingResetButton label="theme" onClick={() => setTheme("system")} />
-                  ) : null
-                }
-                control={
-                  <Select
-                    value={theme}
-                    onValueChange={(value) => {
-                      if (value !== "system" && value !== "light" && value !== "dark") return;
-                      setTheme(value);
-                    }}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="flex h-full w-full gap-6 px-6 sm:px-10 lg:px-16">
+            <nav className="w-44 shrink-0 space-y-0.5 py-6">
+              {SETTINGS_NAV.map((item) => {
+                const NavIcon = item.icon;
+                const active = activeSettingsSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setActiveSettingsSection(item.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
+                      active
+                        ? "bg-accent font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                    )}
                   >
-                    <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
-                      <SelectValue>
-                        {THEME_OPTIONS.find((option) => option.value === theme)?.label ?? "System"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup align="end" alignItemWithTrigger={false}>
-                      {THEME_OPTIONS.map((option) => (
-                        <SelectItem hideIndicator key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                }
-              />
-
-              <SettingsRow
-                title="Time format"
-                description="System default follows your browser or OS clock preference."
-                resetAction={
-                  settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
-                    <SettingResetButton
-                      label="time format"
-                      onClick={() =>
-                        updateSettings({
-                          timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
-                        })
+                    <NavIcon className="size-4 shrink-0" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
+            <div className="min-w-0 flex-1 overflow-y-auto overscroll-y-contain py-6">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
+                {activeSettingsSection === "general" ? (
+                  <SettingsSection title="General">
+                    <SettingsRow
+                      title="Theme"
+                      description="Choose how Tabs looks across the app."
+                      resetAction={
+                        theme !== "system" ? (
+                          <SettingResetButton label="theme" onClick={() => setTheme("system")} />
+                        ) : null
+                      }
+                      control={
+                        <Select
+                          value={theme}
+                          onValueChange={(value) => {
+                            if (value !== "system" && value !== "light" && value !== "dark") return;
+                            setTheme(value);
+                          }}
+                        >
+                          <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
+                            <SelectValue>
+                              {THEME_OPTIONS.find((option) => option.value === theme)?.label ??
+                                "System"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectPopup align="end" alignItemWithTrigger={false}>
+                            {THEME_OPTIONS.map((option) => (
+                              <SelectItem hideIndicator key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectPopup>
+                        </Select>
                       }
                     />
-                  ) : null
-                }
-                control={
-                  <Select
-                    value={settings.timestampFormat}
-                    onValueChange={(value) => {
-                      if (value !== "locale" && value !== "12-hour" && value !== "24-hour") {
-                        return;
-                      }
-                      updateSettings({
-                        timestampFormat: value,
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="w-full sm:w-40" aria-label="Timestamp format">
-                      <SelectValue>{TIMESTAMP_FORMAT_LABELS[settings.timestampFormat]}</SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup align="end" alignItemWithTrigger={false}>
-                      <SelectItem hideIndicator value="locale">
-                        {TIMESTAMP_FORMAT_LABELS.locale}
-                      </SelectItem>
-                      <SelectItem hideIndicator value="12-hour">
-                        {TIMESTAMP_FORMAT_LABELS["12-hour"]}
-                      </SelectItem>
-                      <SelectItem hideIndicator value="24-hour">
-                        {TIMESTAMP_FORMAT_LABELS["24-hour"]}
-                      </SelectItem>
-                    </SelectPopup>
-                  </Select>
-                }
-              />
 
-              {isElectron ? (
-                <SettingsRow
-                  title="Desktop icon"
-                  description="Choose which icon variant Tabs uses in the desktop shell and dock."
-                  resetAction={
-                    settings.desktopIconTheme !== DEFAULT_DESKTOP_ICON_THEME ? (
-                      <SettingResetButton
-                        label="desktop icon"
-                        onClick={() =>
-                          updateSettings({
-                            desktopIconTheme: DEFAULT_DESKTOP_ICON_THEME,
-                          })
+                    <SettingsRow
+                      title="Time format"
+                      description="System default follows your browser or OS clock preference."
+                      resetAction={
+                        settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
+                          <SettingResetButton
+                            label="time format"
+                            onClick={() =>
+                              updateSettings({
+                                timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Select
+                          value={settings.timestampFormat}
+                          onValueChange={(value) => {
+                            if (value !== "locale" && value !== "12-hour" && value !== "24-hour") {
+                              return;
+                            }
+                            updateSettings({
+                              timestampFormat: value,
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-full sm:w-40" aria-label="Timestamp format">
+                            <SelectValue>
+                              {TIMESTAMP_FORMAT_LABELS[settings.timestampFormat]}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectPopup align="end" alignItemWithTrigger={false}>
+                            <SelectItem hideIndicator value="locale">
+                              {TIMESTAMP_FORMAT_LABELS.locale}
+                            </SelectItem>
+                            <SelectItem hideIndicator value="12-hour">
+                              {TIMESTAMP_FORMAT_LABELS["12-hour"]}
+                            </SelectItem>
+                            <SelectItem hideIndicator value="24-hour">
+                              {TIMESTAMP_FORMAT_LABELS["24-hour"]}
+                            </SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      }
+                    />
+
+                    {isElectron ? (
+                      <SettingsRow
+                        title="Desktop icon"
+                        description="Choose which icon variant Tabs uses in the desktop shell and dock."
+                        resetAction={
+                          settings.desktopIconTheme !== DEFAULT_DESKTOP_ICON_THEME ? (
+                            <SettingResetButton
+                              label="desktop icon"
+                              onClick={() =>
+                                updateSettings({
+                                  desktopIconTheme: DEFAULT_DESKTOP_ICON_THEME,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Select
+                            value={settings.desktopIconTheme}
+                            onValueChange={(value) => {
+                              if (value !== "dark" && value !== "light") {
+                                return;
+                              }
+                              updateSettings({
+                                desktopIconTheme: value,
+                              });
+                            }}
+                          >
+                            <SelectTrigger
+                              className="w-full sm:w-44"
+                              aria-label="Desktop icon theme"
+                            >
+                              <SelectValue>
+                                {DESKTOP_ICON_OPTIONS.find(
+                                  (option) => option.value === settings.desktopIconTheme,
+                                )?.label ?? "Dark icon"}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectPopup align="end" alignItemWithTrigger={false}>
+                              {DESKTOP_ICON_OPTIONS.map((option) => (
+                                <SelectItem hideIndicator key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
                         }
                       />
-                    ) : null
-                  }
-                  control={
-                    <Select
-                      value={settings.desktopIconTheme}
-                      onValueChange={(value) => {
-                        if (value !== "dark" && value !== "light") {
-                          return;
-                        }
-                        updateSettings({
-                          desktopIconTheme: value,
-                        });
-                      }}
-                    >
-                      <SelectTrigger className="w-full sm:w-44" aria-label="Desktop icon theme">
-                        <SelectValue>
-                          {DESKTOP_ICON_OPTIONS.find(
-                            (option) => option.value === settings.desktopIconTheme,
-                          )?.label ?? "Dark icon"}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectPopup align="end" alignItemWithTrigger={false}>
-                        {DESKTOP_ICON_OPTIONS.map((option) => (
-                          <SelectItem hideIndicator key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                  }
-                />
-              ) : null}
-
-              <SettingsRow
-                title="Diff line wrapping"
-                description="Set the default wrap state when the diff panel opens. The in-panel wrap toggle only affects the current diff session."
-                resetAction={
-                  settings.diffWordWrap !== DEFAULT_UNIFIED_SETTINGS.diffWordWrap ? (
-                    <SettingResetButton
-                      label="diff line wrapping"
-                      onClick={() =>
-                        updateSettings({
-                          diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                control={
-                  <Switch
-                    checked={settings.diffWordWrap}
-                    onCheckedChange={(checked) =>
-                      updateSettings({
-                        diffWordWrap: Boolean(checked),
-                      })
-                    }
-                    aria-label="Wrap diff lines by default"
-                  />
-                }
-              />
-
-              <SettingsRow
-                title="Assistant output"
-                description="Show token-by-token output while a response is in progress."
-                resetAction={
-                  settings.enableAssistantStreaming !==
-                  DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming ? (
-                    <SettingResetButton
-                      label="assistant output"
-                      onClick={() =>
-                        updateSettings({
-                          enableAssistantStreaming:
-                            DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                control={
-                  <Switch
-                    checked={settings.enableAssistantStreaming}
-                    onCheckedChange={(checked) =>
-                      updateSettings({
-                        enableAssistantStreaming: Boolean(checked),
-                      })
-                    }
-                    aria-label="Stream assistant messages"
-                  />
-                }
-              />
-
-              <SettingsRow
-                title="New threads"
-                description="Pick the default workspace mode for newly created draft threads."
-                resetAction={
-                  settings.defaultThreadEnvMode !==
-                  DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode ? (
-                    <SettingResetButton
-                      label="new threads"
-                      onClick={() =>
-                        updateSettings({
-                          defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                control={
-                  <Select
-                    value={settings.defaultThreadEnvMode}
-                    onValueChange={(value) => {
-                      if (value !== "local" && value !== "worktree") return;
-                      updateSettings({
-                        defaultThreadEnvMode: value,
-                      });
-                    }}
-                  >
-                    <SelectTrigger className="w-full sm:w-44" aria-label="Default thread mode">
-                      <SelectValue>
-                        {settings.defaultThreadEnvMode === "worktree" ? "New worktree" : "Local"}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectPopup align="end" alignItemWithTrigger={false}>
-                      <SelectItem hideIndicator value="local">
-                        Local
-                      </SelectItem>
-                      <SelectItem hideIndicator value="worktree">
-                        New worktree
-                      </SelectItem>
-                    </SelectPopup>
-                  </Select>
-                }
-              />
-
-              <SettingsRow
-                title="Delete confirmation"
-                description="Ask before deleting a thread and its chat history."
-                resetAction={
-                  settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
-                    <SettingResetButton
-                      label="delete confirmation"
-                      onClick={() =>
-                        updateSettings({
-                          confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                control={
-                  <Switch
-                    checked={settings.confirmThreadDelete}
-                    onCheckedChange={(checked) =>
-                      updateSettings({
-                        confirmThreadDelete: Boolean(checked),
-                      })
-                    }
-                    aria-label="Confirm thread deletion"
-                  />
-                }
-              />
-              <SettingsRow
-                title="Confirm tab close"
-                description="Ask before closing a project tab (cmd/ctrl+W or the tab's × button)."
-                resetAction={
-                  settings.confirmTabClose !== DEFAULT_UNIFIED_SETTINGS.confirmTabClose ? (
-                    <SettingResetButton
-                      label="confirm tab close"
-                      onClick={() =>
-                        updateSettings({
-                          confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                control={
-                  <Switch
-                    checked={settings.confirmTabClose}
-                    onCheckedChange={(checked) =>
-                      updateSettings({
-                        confirmTabClose: Boolean(checked),
-                      })
-                    }
-                    aria-label="Confirm before closing a tab"
-                  />
-                }
-              />
-              <SettingsRow
-                title="Text generation model"
-                description="Configure the model used for text generation (commit messages, PR content etc.)"
-                resetAction={
-                  JSON.stringify(settings.textGenerationModelSelection ?? null) !==
-                  JSON.stringify(DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null) ? (
-                    <SettingResetButton
-                      label="text generation model"
-                      onClick={() => {
-                        updateSettings({
-                          textGenerationModelSelection:
-                            DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                        });
-                      }}
-                    />
-                  ) : null
-                }
-                control={
-                  <div className="flex w-full flex-wrap items-center justify-end gap-2">
-                    <Select
-                      value={textGenProvider}
-                      onValueChange={(value) => {
-                        const nextProvider = value as ProviderKind;
-                        const firstModel = gitModelOptionsByProvider[nextProvider]?.[0]?.slug;
-                        if (!firstModel) return;
-                        applyTextGenSelection(nextProvider, firstModel as ModelSlug);
-                      }}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-full sm:w-36"
-                        aria-label="Text generation provider"
-                      >
-                        <SelectValue>{PROVIDER_DISPLAY_NAMES[textGenProvider]}</SelectValue>
-                      </SelectTrigger>
-                      <SelectPopup align="end" alignItemWithTrigger={false}>
-                        {textGenProviderOptions.map((option) => (
-                          <SelectItem hideIndicator key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                    <Select
-                      value={textGenModel as string}
-                      onValueChange={(value) =>
-                        applyTextGenSelection(textGenProvider, value as ModelSlug)
-                      }
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-full sm:w-52"
-                        aria-label="Text generation model"
-                      >
-                        <SelectValue>{textGenModelLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectPopup align="end" alignItemWithTrigger={false}>
-                        {(gitModelOptionsByProvider[textGenProvider] ?? []).map((option) => (
-                          <SelectItem hideIndicator key={option.slug} value={option.slug}>
-                            {option.name}
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                    {textGenTraits.effort ? (
-                      <Select
-                        value={textGenTraits.effort}
-                        onValueChange={(value) => {
-                          if (typeof value !== "string" || !value) return;
-                          applyTextGenOptions(
-                            buildTraitModelOptions(textGenProvider, textGenModelOptions, {
-                              effort: value,
-                            }),
-                          );
-                        }}
-                      >
-                        <SelectTrigger
-                          size="sm"
-                          className="w-full sm:w-36"
-                          aria-label="Reasoning effort"
-                        >
-                          <SelectValue>
-                            {textGenTraits.effortLevels.find(
-                              (level) => level.value === textGenTraits.effort,
-                            )?.label ?? textGenTraits.effort}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectPopup align="end" alignItemWithTrigger={false}>
-                          {textGenTraits.effortLevels.map((level) => (
-                            <SelectItem hideIndicator key={level.value} value={level.value}>
-                              {level.label}
-                            </SelectItem>
-                          ))}
-                        </SelectPopup>
-                      </Select>
-                    ) : textGenTraits.thinkingEnabled !== null ? (
-                      <Select
-                        value={textGenTraits.thinkingEnabled ? "on" : "off"}
-                        onValueChange={(value) => {
-                          applyTextGenOptions(
-                            buildTraitModelOptions(textGenProvider, textGenModelOptions, {
-                              thinking: value === "on",
-                            }),
-                          );
-                        }}
-                      >
-                        <SelectTrigger size="sm" className="w-full sm:w-36" aria-label="Thinking">
-                          <SelectValue>
-                            {textGenTraits.thinkingEnabled ? "Thinking On" : "Thinking Off"}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectPopup align="end" alignItemWithTrigger={false}>
-                          <SelectItem hideIndicator value="on">
-                            Thinking On
-                          </SelectItem>
-                          <SelectItem hideIndicator value="off">
-                            Thinking Off
-                          </SelectItem>
-                        </SelectPopup>
-                      </Select>
                     ) : null}
-                    {textGenTraits.caps.supportsFastMode ? (
-                      <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-                        Fast mode
+
+                    <SettingsRow
+                      title="Diff line wrapping"
+                      description="Set the default wrap state when the diff panel opens. The in-panel wrap toggle only affects the current diff session."
+                      resetAction={
+                        settings.diffWordWrap !== DEFAULT_UNIFIED_SETTINGS.diffWordWrap ? (
+                          <SettingResetButton
+                            label="diff line wrapping"
+                            onClick={() =>
+                              updateSettings({
+                                diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
                         <Switch
-                          checked={textGenTraits.fastModeEnabled}
+                          checked={settings.diffWordWrap}
                           onCheckedChange={(checked) =>
-                            applyTextGenOptions(
-                              buildTraitModelOptions(textGenProvider, textGenModelOptions, {
-                                fastMode: Boolean(checked),
-                              }),
-                            )
+                            updateSettings({
+                              diffWordWrap: Boolean(checked),
+                            })
                           }
-                          aria-label="Fast mode"
+                          aria-label="Wrap diff lines by default"
                         />
-                      </label>
-                    ) : null}
-                  </div>
-                }
-              />
-            </SettingsSection>
+                      }
+                    />
 
-            <ProjectWorkspaceSettingsSection />
+                    <SettingsRow
+                      title="Assistant output"
+                      description="Show token-by-token output while a response is in progress."
+                      resetAction={
+                        settings.enableAssistantStreaming !==
+                        DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming ? (
+                          <SettingResetButton
+                            label="assistant output"
+                            onClick={() =>
+                              updateSettings({
+                                enableAssistantStreaming:
+                                  DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.enableAssistantStreaming}
+                          onCheckedChange={(checked) =>
+                            updateSettings({
+                              enableAssistantStreaming: Boolean(checked),
+                            })
+                          }
+                          aria-label="Stream assistant messages"
+                        />
+                      }
+                    />
 
-            <SettingsSection
-              title="Providers"
-              headerAction={
-                <div className="flex items-center gap-1.5">
-                  {serverProviders.length > 0 ? (
-                    <span className="text-[11px] text-muted-foreground/60">
-                      {(() => {
-                        const rel = formatRelativeTime(
-                          serverProviders.reduce(
-                            (latest, provider) =>
-                              provider.checkedAt > latest ? provider.checkedAt : latest,
-                            serverProviders[0]!.checkedAt,
-                          ),
-                        );
-                        return rel.suffix ? (
-                          <>
-                            Checked <span className="font-mono tabular-nums">{rel.value}</span>{" "}
-                            {rel.suffix}
-                          </>
-                        ) : (
-                          <>Checked {rel.value}</>
-                        );
-                      })()}
-                    </span>
-                  ) : null}
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          size="icon-xs"
-                          variant="ghost"
-                          className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
-                          disabled={isRefreshingProviders}
-                          onClick={() => void refreshProviders()}
-                          aria-label="Refresh provider status"
+                    <SettingsRow
+                      title="New threads"
+                      description="Pick the default workspace mode for newly created draft threads."
+                      resetAction={
+                        settings.defaultThreadEnvMode !==
+                        DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode ? (
+                          <SettingResetButton
+                            label="new threads"
+                            onClick={() =>
+                              updateSettings({
+                                defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Select
+                          value={settings.defaultThreadEnvMode}
+                          onValueChange={(value) => {
+                            if (value !== "local" && value !== "worktree") return;
+                            updateSettings({
+                              defaultThreadEnvMode: value,
+                            });
+                          }}
                         >
-                          {isRefreshingProviders ? (
-                            <LoaderIcon className="size-3 animate-spin" />
+                          <SelectTrigger
+                            className="w-full sm:w-44"
+                            aria-label="Default thread mode"
+                          >
+                            <SelectValue>
+                              {settings.defaultThreadEnvMode === "worktree"
+                                ? "New worktree"
+                                : "Local"}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectPopup align="end" alignItemWithTrigger={false}>
+                            <SelectItem hideIndicator value="local">
+                              Local
+                            </SelectItem>
+                            <SelectItem hideIndicator value="worktree">
+                              New worktree
+                            </SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      }
+                    />
+
+                    <SettingsRow
+                      title="Delete confirmation"
+                      description="Ask before deleting a thread and its chat history."
+                      resetAction={
+                        settings.confirmThreadDelete !==
+                        DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
+                          <SettingResetButton
+                            label="delete confirmation"
+                            onClick={() =>
+                              updateSettings({
+                                confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.confirmThreadDelete}
+                          onCheckedChange={(checked) =>
+                            updateSettings({
+                              confirmThreadDelete: Boolean(checked),
+                            })
+                          }
+                          aria-label="Confirm thread deletion"
+                        />
+                      }
+                    />
+                    <SettingsRow
+                      title="Confirm tab close"
+                      description="Ask before closing a project tab (cmd/ctrl+W or the tab's × button)."
+                      resetAction={
+                        settings.confirmTabClose !== DEFAULT_UNIFIED_SETTINGS.confirmTabClose ? (
+                          <SettingResetButton
+                            label="confirm tab close"
+                            onClick={() =>
+                              updateSettings({
+                                confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.confirmTabClose}
+                          onCheckedChange={(checked) =>
+                            updateSettings({
+                              confirmTabClose: Boolean(checked),
+                            })
+                          }
+                          aria-label="Confirm before closing a tab"
+                        />
+                      }
+                    />
+                    <SettingsRow
+                      title="Text generation model"
+                      description="Configure the model used for text generation (commit messages, PR content etc.)"
+                      resetAction={
+                        JSON.stringify(settings.textGenerationModelSelection ?? null) !==
+                        JSON.stringify(
+                          DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
+                        ) ? (
+                          <SettingResetButton
+                            label="text generation model"
+                            onClick={() => {
+                              updateSettings({
+                                textGenerationModelSelection:
+                                  DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+                              });
+                            }}
+                          />
+                        ) : null
+                      }
+                      control={
+                        <div className="flex w-full flex-wrap items-center justify-end gap-2">
+                          <Select
+                            value={textGenProvider}
+                            onValueChange={(value) => {
+                              const nextProvider = value as ProviderKind;
+                              const firstModel = gitModelOptionsByProvider[nextProvider]?.[0]?.slug;
+                              if (!firstModel) return;
+                              applyTextGenSelection(nextProvider, firstModel as ModelSlug);
+                            }}
+                          >
+                            <SelectTrigger
+                              size="sm"
+                              className="w-full sm:w-36"
+                              aria-label="Text generation provider"
+                            >
+                              <SelectValue>
+                                {
+                                  PROVIDER_DISPLAY_NAMES[
+                                    textGenProvider as keyof typeof PROVIDER_DISPLAY_NAMES
+                                  ]
+                                }
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectPopup align="end" alignItemWithTrigger={false}>
+                              {textGenProviderOptions.map((option) => (
+                                <SelectItem hideIndicator key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                          <Select
+                            value={textGenModel as string}
+                            onValueChange={(value) =>
+                              applyTextGenSelection(textGenProvider, value as ModelSlug)
+                            }
+                          >
+                            <SelectTrigger
+                              size="sm"
+                              className="w-full sm:w-52"
+                              aria-label="Text generation model"
+                            >
+                              <SelectValue>{textGenModelLabel}</SelectValue>
+                            </SelectTrigger>
+                            <SelectPopup align="end" alignItemWithTrigger={false}>
+                              {(gitModelOptionsByProvider[textGenProvider] ?? []).map((option) => (
+                                <SelectItem hideIndicator key={option.slug} value={option.slug}>
+                                  {option.name}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                          {textGenTraits.effort ? (
+                            <Select
+                              value={textGenTraits.effort}
+                              onValueChange={(value) => {
+                                if (typeof value !== "string" || !value) return;
+                                applyTextGenOptions(
+                                  buildTraitModelOptions(
+                                    textGenProvider,
+                                    asTypedOptions(textGenModelOptions),
+                                    {
+                                      effort: value,
+                                    },
+                                  ),
+                                );
+                              }}
+                            >
+                              <SelectTrigger
+                                size="sm"
+                                className="w-full sm:w-36"
+                                aria-label="Reasoning effort"
+                              >
+                                <SelectValue>
+                                  {textGenTraits.effortLevels.find(
+                                    (level) => level.value === textGenTraits.effort,
+                                  )?.label ?? textGenTraits.effort}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectPopup align="end" alignItemWithTrigger={false}>
+                                {textGenTraits.effortLevels.map((level) => (
+                                  <SelectItem hideIndicator key={level.value} value={level.value}>
+                                    {level.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectPopup>
+                            </Select>
+                          ) : textGenTraits.thinkingEnabled !== null ? (
+                            <Select
+                              value={textGenTraits.thinkingEnabled ? "on" : "off"}
+                              onValueChange={(value) => {
+                                applyTextGenOptions(
+                                  buildTraitModelOptions(
+                                    textGenProvider,
+                                    asTypedOptions(textGenModelOptions),
+                                    {
+                                      thinking: value === "on",
+                                    },
+                                  ),
+                                );
+                              }}
+                            >
+                              <SelectTrigger
+                                size="sm"
+                                className="w-full sm:w-36"
+                                aria-label="Thinking"
+                              >
+                                <SelectValue>
+                                  {textGenTraits.thinkingEnabled ? "Thinking On" : "Thinking Off"}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectPopup align="end" alignItemWithTrigger={false}>
+                                <SelectItem hideIndicator value="on">
+                                  Thinking On
+                                </SelectItem>
+                                <SelectItem hideIndicator value="off">
+                                  Thinking Off
+                                </SelectItem>
+                              </SelectPopup>
+                            </Select>
+                          ) : null}
+                          {textGenTraits.caps.supportsFastMode ? (
+                            <label className="flex items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
+                              Fast mode
+                              <Switch
+                                checked={textGenTraits.fastModeEnabled}
+                                onCheckedChange={(checked) =>
+                                  applyTextGenOptions(
+                                    buildTraitModelOptions(
+                                      textGenProvider,
+                                      asTypedOptions(textGenModelOptions),
+                                      {
+                                        fastMode: Boolean(checked),
+                                      },
+                                    ),
+                                  )
+                                }
+                                aria-label="Fast mode"
+                              />
+                            </label>
+                          ) : null}
+                        </div>
+                      }
+                    />
+                  </SettingsSection>
+                ) : null}
+                {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
+                {activeSettingsSection === "providers" ? (
+                  <SettingsSection
+                    title="Providers"
+                    headerAction={
+                      <div className="flex items-center gap-1.5">
+                        {serverProviders.length > 0 ? (
+                          <span className="text-[11px] text-muted-foreground/60">
+                            {(() => {
+                              const rel = formatRelativeTime(
+                                serverProviders.reduce(
+                                  (latest, provider) =>
+                                    provider.checkedAt > latest ? provider.checkedAt : latest,
+                                  serverProviders[0]!.checkedAt,
+                                ),
+                              );
+                              return rel.suffix ? (
+                                <>
+                                  Checked{" "}
+                                  <span className="font-mono tabular-nums">{rel.value}</span>{" "}
+                                  {rel.suffix}
+                                </>
+                              ) : (
+                                <>Checked {rel.value}</>
+                              );
+                            })()}
+                          </span>
+                        ) : null}
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="icon-xs"
+                                variant="ghost"
+                                className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+                                disabled={isRefreshingProviders}
+                                onClick={() => void refreshProviders()}
+                                aria-label="Refresh provider status"
+                              >
+                                {isRefreshingProviders ? (
+                                  <LoaderIcon className="size-3 animate-spin" />
+                                ) : (
+                                  <RefreshCwIcon className="size-3" />
+                                )}
+                              </Button>
+                            }
+                          />
+                          <TooltipPopup side="top">Refresh provider status</TooltipPopup>
+                        </Tooltip>
+                      </div>
+                    }
+                  >
+                    {providerCards.map((providerCard) => {
+                      const customModelInput = customModelInputByProvider[providerCard.provider];
+                      const customModelError =
+                        customModelErrorByProvider[providerCard.provider] ?? null;
+                      const providerDisplayName =
+                        PROVIDER_DISPLAY_NAMES[
+                          providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
+                        ] ?? providerCard.title;
+                      const RowIcon = providerCard.icon;
+
+                      return (
+                        <div
+                          key={providerCard.provider}
+                          className="border-t border-border first:border-t-0"
+                          data-slot="settings-row"
+                        >
+                          <div className="px-4 py-4 sm:px-5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex min-h-5 items-center gap-1.5">
+                                  <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                                    <RowIcon
+                                      aria-hidden="true"
+                                      className={cn(
+                                        "size-4",
+                                        providerCard.provider === "claudeAgent"
+                                          ? "text-[#d97757]"
+                                          : "text-muted-foreground/85",
+                                      )}
+                                    />
+                                    <span
+                                      className={cn(
+                                        "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-background",
+                                        providerCard.statusStyle.dot,
+                                      )}
+                                    />
+                                  </span>
+                                  <h3 className="text-sm font-medium text-foreground">
+                                    {providerDisplayName}
+                                  </h3>
+                                  {providerCard.versionLabel ? (
+                                    <code className="text-xs text-muted-foreground">
+                                      {providerCard.versionLabel}
+                                    </code>
+                                  ) : null}
+                                  {providerCard.updatePrompt ? (
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        render={
+                                          <button
+                                            type="button"
+                                            aria-label={`${providerDisplayName} update available`}
+                                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
+                                            onClick={() =>
+                                              providerCard.updatePrompt?.command &&
+                                              copyToClipboard(providerCard.updatePrompt.command, {
+                                                providerName: providerDisplayName,
+                                              })
+                                            }
+                                          />
+                                        }
+                                      >
+                                        <ArrowUpCircleIcon className="size-3.5" />
+                                      </TooltipTrigger>
+                                      <TooltipPopup>
+                                        {providerCard.updatePrompt.headline} — click to copy update
+                                        command
+                                      </TooltipPopup>
+                                    </Tooltip>
+                                  ) : null}
+                                  {providerCard.badgeLabel ? (
+                                    <Badge variant="warning" size="sm">
+                                      {providerCard.badgeLabel}
+                                    </Badge>
+                                  ) : null}
+                                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
+                                    {providerCard.isDirty ? (
+                                      <SettingResetButton
+                                        label={`${providerDisplayName} provider settings`}
+                                        onClick={() => {
+                                          updateSettings({
+                                            providers: {
+                                              ...settings.providers,
+                                              [providerCard.provider]:
+                                                DEFAULT_UNIFIED_SETTINGS.providers[
+                                                  providerCard.provider
+                                                ],
+                                            },
+                                          });
+                                          setCustomModelErrorByProvider((existing) => ({
+                                            ...existing,
+                                            [providerCard.provider]: null,
+                                          }));
+                                        }}
+                                      />
+                                    ) : null}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {providerCard.summary.headline}
+                                  {providerCard.summary.detail
+                                    ? ` — ${providerCard.summary.detail}`
+                                    : null}
+                                </p>
+                                {(providerCard.needsInstall && providerCard.installCommand) ||
+                                providerCard.updatePrompt?.command ||
+                                (providerCard.needsAuth && providerCard.loginCommand) ? (
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    {providerCard.needsInstall && providerCard.installCommand ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs"
+                                        onClick={() =>
+                                          copyToClipboard(providerCard.installCommand ?? "", {
+                                            providerName: providerDisplayName,
+                                          })
+                                        }
+                                      >
+                                        <DownloadIcon className="size-3.5" />
+                                        Install
+                                      </Button>
+                                    ) : null}
+                                    {providerCard.updatePrompt?.command ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs"
+                                        onClick={() =>
+                                          copyToClipboard(
+                                            providerCard.updatePrompt?.command ?? "",
+                                            {
+                                              providerName: providerDisplayName,
+                                            },
+                                          )
+                                        }
+                                      >
+                                        <ArrowUpCircleIcon className="size-3.5" />
+                                        Update
+                                      </Button>
+                                    ) : null}
+                                    {providerCard.needsAuth && providerCard.loginCommand ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs"
+                                        onClick={() =>
+                                          copyToClipboard(providerCard.loginCommand ?? "", {
+                                            providerName: providerDisplayName,
+                                          })
+                                        }
+                                      >
+                                        <LogInIcon className="size-3.5" />
+                                        Sign in
+                                      </Button>
+                                    ) : null}
+                                    <span className="text-[11px] text-muted-foreground/70">
+                                      Copies the command to run in your terminal.
+                                    </span>
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                  onClick={() =>
+                                    setOpenProviderDetails((existing) => ({
+                                      ...existing,
+                                      [providerCard.provider]: !existing[providerCard.provider],
+                                    }))
+                                  }
+                                  aria-label={`Toggle ${providerDisplayName} details`}
+                                >
+                                  <ChevronDownIcon
+                                    className={cn(
+                                      "size-3.5 transition-transform",
+                                      openProviderDetails[providerCard.provider] && "rotate-180",
+                                    )}
+                                  />
+                                </Button>
+                                <Switch
+                                  checked={providerCard.providerConfig.enabled}
+                                  onCheckedChange={(checked) => {
+                                    const isDisabling = !checked;
+                                    // The resolved provider accounts for both explicit
+                                    // selection and the implicit default (codex).
+                                    const resolvedProvider = textGenProvider;
+                                    // When disabling the provider that's currently used for
+                                    // text generation, clear the selection so it falls back to
+                                    // the next available provider's default model.
+                                    const shouldClearModelSelection =
+                                      isDisabling && resolvedProvider === providerCard.provider;
+                                    updateSettings({
+                                      providers: {
+                                        ...settings.providers,
+                                        [providerCard.provider]: {
+                                          ...settings.providers[providerCard.provider],
+                                          enabled: Boolean(checked),
+                                        },
+                                      },
+                                      ...(shouldClearModelSelection
+                                        ? {
+                                            textGenerationModelSelection:
+                                              DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+                                          }
+                                        : {}),
+                                    });
+                                  }}
+                                  aria-label={`Enable ${providerDisplayName}`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <Collapsible
+                            open={openProviderDetails[providerCard.provider]}
+                            onOpenChange={(open) =>
+                              setOpenProviderDetails((existing) => ({
+                                ...existing,
+                                [providerCard.provider]: open,
+                              }))
+                            }
+                          >
+                            <CollapsibleContent>
+                              <div className="space-y-0">
+                                {/* Binary path */}
+                                <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                  <label
+                                    htmlFor={`provider-install-${providerCard.provider}-binary-path`}
+                                    className="block"
+                                  >
+                                    <span className="text-xs font-medium text-foreground">
+                                      {providerDisplayName} binary path
+                                    </span>
+                                    <Input
+                                      id={`provider-install-${providerCard.provider}-binary-path`}
+                                      className="mt-1.5"
+                                      value={providerCard.binaryPathValue}
+                                      onChange={(event) =>
+                                        updateSettings({
+                                          providers: {
+                                            ...settings.providers,
+                                            [providerCard.provider]: {
+                                              ...settings.providers[providerCard.provider],
+                                              binaryPath: event.target.value,
+                                            },
+                                          },
+                                        })
+                                      }
+                                      placeholder={providerCard.binaryPlaceholder}
+                                      spellCheck={false}
+                                    />
+                                    <span className="mt-1 block text-xs text-muted-foreground">
+                                      {providerCard.binaryDescription}
+                                    </span>
+                                  </label>
+                                </div>
+
+                                {/* Home path (Codex only) */}
+                                {providerCard.homePathKey ? (
+                                  <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                    <label
+                                      htmlFor={`provider-install-${providerCard.homePathKey}`}
+                                      className="block"
+                                    >
+                                      <span className="text-xs font-medium text-foreground">
+                                        CODEX_HOME path
+                                      </span>
+                                      <Input
+                                        id={`provider-install-${providerCard.homePathKey}`}
+                                        className="mt-1.5"
+                                        value={codexHomePath}
+                                        onChange={(event) =>
+                                          updateSettings({
+                                            providers: {
+                                              ...settings.providers,
+                                              codex: {
+                                                ...settings.providers.codex,
+                                                homePath: event.target.value,
+                                              },
+                                            },
+                                          })
+                                        }
+                                        placeholder={providerCard.homePlaceholder}
+                                        spellCheck={false}
+                                      />
+                                      {providerCard.homeDescription ? (
+                                        <span className="mt-1 block text-xs text-muted-foreground">
+                                          {providerCard.homeDescription}
+                                        </span>
+                                      ) : null}
+                                    </label>
+                                  </div>
+                                ) : null}
+
+                                {/* Models */}
+                                <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                  <div className="text-xs font-medium text-foreground">Models</div>
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {providerCard.models.length} model
+                                    {providerCard.models.length === 1 ? "" : "s"} available.
+                                  </div>
+                                  <div
+                                    ref={(el) => {
+                                      modelListRefs.current[providerCard.provider] = el;
+                                    }}
+                                    className="mt-2 max-h-40 overflow-y-auto pb-1"
+                                  >
+                                    {providerCard.models.map((model) => {
+                                      const caps = model.capabilities;
+                                      const capLabels: string[] = [];
+                                      if (caps?.supportsFastMode) capLabels.push("Fast mode");
+                                      if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
+                                      if (
+                                        caps?.reasoningEffortLevels &&
+                                        caps.reasoningEffortLevels.length > 0
+                                      )
+                                        capLabels.push("Reasoning");
+                                      const hasDetails =
+                                        capLabels.length > 0 || model.name !== model.slug;
+
+                                      return (
+                                        <div
+                                          key={`${providerCard.provider}:${model.slug}`}
+                                          className="flex items-center gap-2 py-1"
+                                        >
+                                          <span className="min-w-0 truncate text-xs text-foreground/90">
+                                            {model.name}
+                                          </span>
+                                          {hasDetails ? (
+                                            <Tooltip>
+                                              <TooltipTrigger
+                                                render={
+                                                  <button
+                                                    type="button"
+                                                    className="shrink-0 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
+                                                    aria-label={`Details for ${model.name}`}
+                                                  />
+                                                }
+                                              >
+                                                <InfoIcon className="size-3" />
+                                              </TooltipTrigger>
+                                              <TooltipPopup side="top" className="max-w-56">
+                                                <div className="space-y-1">
+                                                  <code className="block text-[11px] text-foreground">
+                                                    {model.slug}
+                                                  </code>
+                                                  {capLabels.length > 0 ? (
+                                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                                                      {capLabels.map((label) => (
+                                                        <span
+                                                          key={label}
+                                                          className="text-[10px] text-muted-foreground"
+                                                        >
+                                                          {label}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  ) : null}
+                                                </div>
+                                              </TooltipPopup>
+                                            </Tooltip>
+                                          ) : null}
+                                          {model.isCustom ? (
+                                            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                                              <span className="text-[10px] text-muted-foreground">
+                                                custom
+                                              </span>
+                                              <button
+                                                type="button"
+                                                className="text-muted-foreground transition-colors hover:text-foreground"
+                                                aria-label={`Remove ${model.slug}`}
+                                                onClick={() =>
+                                                  removeCustomModel(
+                                                    providerCard.provider,
+                                                    model.slug,
+                                                  )
+                                                }
+                                              >
+                                                <XIcon className="size-3" />
+                                              </button>
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                    <Input
+                                      id={`custom-model-${providerCard.provider}`}
+                                      value={customModelInput ?? ""}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        setCustomModelInputByProvider((existing) => ({
+                                          ...existing,
+                                          [providerCard.provider]: value,
+                                        }));
+                                        if (customModelError) {
+                                          setCustomModelErrorByProvider((existing) => ({
+                                            ...existing,
+                                            [providerCard.provider]: null,
+                                          }));
+                                        }
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key !== "Enter") return;
+                                        event.preventDefault();
+                                        addCustomModel(providerCard.provider);
+                                      }}
+                                      placeholder={
+                                        providerCard.provider === "codex"
+                                          ? "gpt-6.7-codex-ultra-preview"
+                                          : "claude-sonnet-5-0"
+                                      }
+                                      spellCheck={false}
+                                    />
+                                    <Button
+                                      className="shrink-0"
+                                      variant="outline"
+                                      onClick={() => addCustomModel(providerCard.provider)}
+                                    >
+                                      <PlusIcon className="size-3.5" />
+                                      Add
+                                    </Button>
+                                  </div>
+                                  {customModelError ? (
+                                    <p className="mt-2 text-xs text-destructive">
+                                      {customModelError}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        </div>
+                      );
+                    })}
+                  </SettingsSection>
+                ) : null}
+                {activeSettingsSection === "keybindings" ? (
+                  <SettingsSection title="Keybindings">
+                    <SettingsRow
+                      title="Keybindings"
+                      description="Open the persisted `keybindings.json` file to edit advanced bindings directly."
+                      status={
+                        <>
+                          <span className="block break-all font-mono text-[11px] text-foreground">
+                            {keybindingsConfigPath ?? "Resolving keybindings path..."}
+                          </span>
+                          {openKeybindingsError ? (
+                            <span className="mt-1 block text-destructive">
+                              {openKeybindingsError}
+                            </span>
                           ) : (
-                            <RefreshCwIcon className="size-3" />
+                            <span className="mt-1 block">Opens in your preferred editor.</span>
                           )}
+                        </>
+                      }
+                      control={
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          disabled={!keybindingsConfigPath || isOpeningKeybindings}
+                          onClick={openKeybindingsFile}
+                        >
+                          {isOpeningKeybindings ? "Opening..." : "Open file"}
                         </Button>
                       }
                     />
-                    <TooltipPopup side="top">Refresh provider status</TooltipPopup>
-                  </Tooltip>
-                </div>
-              }
-            >
-              {providerCards.map((providerCard) => {
-                const customModelInput = customModelInputByProvider[providerCard.provider];
-                const customModelError = customModelErrorByProvider[providerCard.provider] ?? null;
-                const providerDisplayName =
-                  PROVIDER_DISPLAY_NAMES[providerCard.provider] ?? providerCard.title;
-
-                return (
-                  <div
-                    key={providerCard.provider}
-                    className="border-t border-border first:border-t-0"
-                    data-slot="settings-row"
-                  >
-                    <div className="px-4 py-4 sm:px-5">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex min-h-5 items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "size-2 shrink-0 rounded-full",
-                                providerCard.statusStyle.dot,
-                              )}
-                            />
-                            <h3 className="text-sm font-medium text-foreground">
-                              {providerDisplayName}
-                            </h3>
-                            {providerCard.versionLabel ? (
-                              <code className="text-xs text-muted-foreground">
-                                {providerCard.versionLabel}
-                              </code>
-                            ) : null}
-                            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
-                              {providerCard.isDirty ? (
-                                <SettingResetButton
-                                  label={`${providerDisplayName} provider settings`}
-                                  onClick={() => {
-                                    updateSettings({
-                                      providers: {
-                                        ...settings.providers,
-                                        [providerCard.provider]:
-                                          DEFAULT_UNIFIED_SETTINGS.providers[providerCard.provider],
-                                      },
-                                    });
-                                    setCustomModelErrorByProvider((existing) => ({
-                                      ...existing,
-                                      [providerCard.provider]: null,
-                                    }));
-                                  }}
-                                />
-                              ) : null}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {providerCard.summary.headline}
-                            {providerCard.summary.detail
-                              ? ` — ${providerCard.summary.detail}`
-                              : null}
-                          </p>
-                        </div>
-                        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                            onClick={() =>
-                              setOpenProviderDetails((existing) => ({
-                                ...existing,
-                                [providerCard.provider]: !existing[providerCard.provider],
-                              }))
-                            }
-                            aria-label={`Toggle ${providerDisplayName} details`}
-                          >
-                            <ChevronDownIcon
-                              className={cn(
-                                "size-3.5 transition-transform",
-                                openProviderDetails[providerCard.provider] && "rotate-180",
-                              )}
-                            />
-                          </Button>
-                          <Switch
-                            checked={providerCard.providerConfig.enabled}
-                            onCheckedChange={(checked) => {
-                              const isDisabling = !checked;
-                              // The resolved provider accounts for both explicit
-                              // selection and the implicit default (codex).
-                              const resolvedProvider = textGenProvider;
-                              // When disabling the provider that's currently used for
-                              // text generation, clear the selection so it falls back to
-                              // the next available provider's default model.
-                              const shouldClearModelSelection =
-                                isDisabling && resolvedProvider === providerCard.provider;
-                              updateSettings({
-                                providers: {
-                                  ...settings.providers,
-                                  [providerCard.provider]: {
-                                    ...settings.providers[providerCard.provider],
-                                    enabled: Boolean(checked),
-                                  },
-                                },
-                                ...(shouldClearModelSelection
-                                  ? {
-                                      textGenerationModelSelection:
-                                        DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                                    }
-                                  : {}),
-                              });
-                            }}
-                            aria-label={`Enable ${providerDisplayName}`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <Collapsible
-                      open={openProviderDetails[providerCard.provider]}
-                      onOpenChange={(open) =>
-                        setOpenProviderDetails((existing) => ({
-                          ...existing,
-                          [providerCard.provider]: open,
-                        }))
+                  </SettingsSection>
+                ) : null}
+                {activeSettingsSection === "about" ? (
+                  <SettingsSection title="About">
+                    <SettingsRow
+                      title="Version"
+                      description="The version of Tabs currently installed."
+                      control={
+                        <code className="text-xs font-medium text-muted-foreground">
+                          {APP_VERSION}
+                        </code>
                       }
-                    >
-                      <CollapsibleContent>
-                        <div className="space-y-0">
-                          {/* Binary path */}
-                          <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                            <label
-                              htmlFor={`provider-install-${providerCard.provider}-binary-path`}
-                              className="block"
-                            >
-                              <span className="text-xs font-medium text-foreground">
-                                {providerDisplayName} binary path
-                              </span>
-                              <Input
-                                id={`provider-install-${providerCard.provider}-binary-path`}
-                                className="mt-1.5"
-                                value={providerCard.binaryPathValue}
-                                onChange={(event) =>
-                                  updateSettings({
-                                    providers: {
-                                      ...settings.providers,
-                                      [providerCard.provider]: {
-                                        ...settings.providers[providerCard.provider],
-                                        binaryPath: event.target.value,
-                                      },
-                                    },
-                                  })
-                                }
-                                placeholder={providerCard.binaryPlaceholder}
-                                spellCheck={false}
+                    />
+
+                    {isElectron && updateState ? (
+                      <SettingsRow
+                        title="Software update"
+                        description={describeDesktopUpdate(updateState)}
+                        status={
+                          updateActionError ? (
+                            <span className="text-destructive">{updateActionError}</span>
+                          ) : updateState.status === "downloading" &&
+                            typeof updateState.downloadPercent === "number" ? (
+                            <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-border">
+                              <div
+                                className="h-full rounded-full bg-primary transition-[width]"
+                                style={{ width: `${Math.floor(updateState.downloadPercent)}%` }}
                               />
-                              <span className="mt-1 block text-xs text-muted-foreground">
-                                {providerCard.binaryDescription}
-                              </span>
-                            </label>
-                          </div>
-
-                          {/* Home path (Codex only) */}
-                          {providerCard.homePathKey ? (
-                            <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                              <label
-                                htmlFor={`provider-install-${providerCard.homePathKey}`}
-                                className="block"
-                              >
-                                <span className="text-xs font-medium text-foreground">
-                                  CODEX_HOME path
-                                </span>
-                                <Input
-                                  id={`provider-install-${providerCard.homePathKey}`}
-                                  className="mt-1.5"
-                                  value={codexHomePath}
-                                  onChange={(event) =>
-                                    updateSettings({
-                                      providers: {
-                                        ...settings.providers,
-                                        codex: {
-                                          ...settings.providers.codex,
-                                          homePath: event.target.value,
-                                        },
-                                      },
-                                    })
+                            </div>
+                          ) : null
+                        }
+                        control={(() => {
+                          const action = resolveDesktopUpdateButtonAction(updateState);
+                          if (action === "none") {
+                            // When auto-update is unavailable (e.g. unsigned macOS),
+                            // point the user to the GitHub releases page instead.
+                            if (
+                              updateState.status === "disabled" ||
+                              updateState.status === "error"
+                            ) {
+                              return (
+                                <Button
+                                  size="xs"
+                                  variant="outline"
+                                  onClick={() =>
+                                    void window.desktopBridge?.openExternal(TABS_RELEASES_URL)
                                   }
-                                  placeholder={providerCard.homePlaceholder}
-                                  spellCheck={false}
-                                />
-                                {providerCard.homeDescription ? (
-                                  <span className="mt-1 block text-xs text-muted-foreground">
-                                    {providerCard.homeDescription}
-                                  </span>
-                                ) : null}
-                              </label>
-                            </div>
-                          ) : null}
-
-                          {/* Models */}
-                          <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                            <div className="text-xs font-medium text-foreground">Models</div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {providerCard.models.length} model
-                              {providerCard.models.length === 1 ? "" : "s"} available.
-                            </div>
-                            <div
-                              ref={(el) => {
-                                modelListRefs.current[providerCard.provider] = el;
-                              }}
-                              className="mt-2 max-h-40 overflow-y-auto pb-1"
-                            >
-                              {providerCard.models.map((model) => {
-                                const caps = model.capabilities;
-                                const capLabels: string[] = [];
-                                if (caps?.supportsFastMode) capLabels.push("Fast mode");
-                                if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
-                                if (
-                                  caps?.reasoningEffortLevels &&
-                                  caps.reasoningEffortLevels.length > 0
-                                )
-                                  capLabels.push("Reasoning");
-                                const hasDetails =
-                                  capLabels.length > 0 || model.name !== model.slug;
-
-                                return (
-                                  <div
-                                    key={`${providerCard.provider}:${model.slug}`}
-                                    className="flex items-center gap-2 py-1"
-                                  >
-                                    <span className="min-w-0 truncate text-xs text-foreground/90">
-                                      {model.name}
-                                    </span>
-                                    {hasDetails ? (
-                                      <Tooltip>
-                                        <TooltipTrigger
-                                          render={
-                                            <button
-                                              type="button"
-                                              className="shrink-0 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-                                              aria-label={`Details for ${model.name}`}
-                                            />
-                                          }
-                                        >
-                                          <InfoIcon className="size-3" />
-                                        </TooltipTrigger>
-                                        <TooltipPopup side="top" className="max-w-56">
-                                          <div className="space-y-1">
-                                            <code className="block text-[11px] text-foreground">
-                                              {model.slug}
-                                            </code>
-                                            {capLabels.length > 0 ? (
-                                              <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                                                {capLabels.map((label) => (
-                                                  <span
-                                                    key={label}
-                                                    className="text-[10px] text-muted-foreground"
-                                                  >
-                                                    {label}
-                                                  </span>
-                                                ))}
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        </TooltipPopup>
-                                      </Tooltip>
-                                    ) : null}
-                                    {model.isCustom ? (
-                                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                                        <span className="text-[10px] text-muted-foreground">
-                                          custom
-                                        </span>
-                                        <button
-                                          type="button"
-                                          className="text-muted-foreground transition-colors hover:text-foreground"
-                                          aria-label={`Remove ${model.slug}`}
-                                          onClick={() =>
-                                            removeCustomModel(providerCard.provider, model.slug)
-                                          }
-                                        >
-                                          <XIcon className="size-3" />
-                                        </button>
-                                      </div>
-                                    ) : null}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                              <Input
-                                id={`custom-model-${providerCard.provider}`}
-                                value={customModelInput}
-                                onChange={(event) => {
-                                  const value = event.target.value;
-                                  setCustomModelInputByProvider((existing) => ({
-                                    ...existing,
-                                    [providerCard.provider]: value,
-                                  }));
-                                  if (customModelError) {
-                                    setCustomModelErrorByProvider((existing) => ({
-                                      ...existing,
-                                      [providerCard.provider]: null,
-                                    }));
-                                  }
-                                }}
-                                onKeyDown={(event) => {
-                                  if (event.key !== "Enter") return;
-                                  event.preventDefault();
-                                  addCustomModel(providerCard.provider);
-                                }}
-                                placeholder={
-                                  providerCard.provider === "codex"
-                                    ? "gpt-6.7-codex-ultra-preview"
-                                    : "claude-sonnet-5-0"
-                                }
-                                spellCheck={false}
-                              />
-                              <Button
-                                className="shrink-0"
-                                variant="outline"
-                                onClick={() => addCustomModel(providerCard.provider)}
-                              >
-                                <PlusIcon className="size-3.5" />
-                                Add
-                              </Button>
-                            </div>
-                            {customModelError ? (
-                              <p className="mt-2 text-xs text-destructive">{customModelError}</p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                );
-              })}
-            </SettingsSection>
-
-            <SettingsSection title="Advanced">
-              <SettingsRow
-                title="Keybindings"
-                description="Open the persisted `keybindings.json` file to edit advanced bindings directly."
-                status={
-                  <>
-                    <span className="block break-all font-mono text-[11px] text-foreground">
-                      {keybindingsConfigPath ?? "Resolving keybindings path..."}
-                    </span>
-                    {openKeybindingsError ? (
-                      <span className="mt-1 block text-destructive">{openKeybindingsError}</span>
-                    ) : (
-                      <span className="mt-1 block">Opens in your preferred editor.</span>
-                    )}
-                  </>
-                }
-                control={
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={!keybindingsConfigPath || isOpeningKeybindings}
-                    onClick={openKeybindingsFile}
-                  >
-                    {isOpeningKeybindings ? "Opening..." : "Open file"}
-                  </Button>
-                }
-              />
-            </SettingsSection>
-
-            <SettingsSection title="About">
-              <SettingsRow
-                title="Version"
-                description="The version of Tabs currently installed."
-                control={
-                  <code className="text-xs font-medium text-muted-foreground">{APP_VERSION}</code>
-                }
-              />
-
-              {isElectron && updateState ? (
-                <SettingsRow
-                  title="Software update"
-                  description={describeDesktopUpdate(updateState)}
-                  status={
-                    updateActionError ? (
-                      <span className="text-destructive">{updateActionError}</span>
-                    ) : updateState.status === "downloading" &&
-                      typeof updateState.downloadPercent === "number" ? (
-                      <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-border">
-                        <div
-                          className="h-full rounded-full bg-primary transition-[width]"
-                          style={{ width: `${Math.floor(updateState.downloadPercent)}%` }}
-                        />
-                      </div>
-                    ) : null
-                  }
-                  control={(() => {
-                    const action = resolveDesktopUpdateButtonAction(updateState);
-                    if (action === "none") {
-                      // When auto-update is unavailable (e.g. unsigned macOS),
-                      // point the user to the GitHub releases page instead.
-                      if (updateState.status === "disabled" || updateState.status === "error") {
-                        return (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() =>
-                              void window.desktopBridge?.openExternal(TABS_RELEASES_URL)
+                                >
+                                  View releases
+                                </Button>
+                              );
                             }
-                          >
-                            View releases
-                          </Button>
-                        );
-                      }
-                      return (
-                        <span className="text-xs text-muted-foreground">
-                          {updateState.status === "checking" ? "Checking…" : "Up to date"}
-                        </span>
-                      );
-                    }
-                    return (
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        disabled={isDesktopUpdateButtonDisabled(updateState)}
-                        title={getDesktopUpdateButtonTooltip(updateState)}
-                        onClick={() => runUpdateAction(action)}
-                      >
-                        {desktopUpdateButtonLabel(action)}
-                      </Button>
-                    );
-                  })()}
-                />
-              ) : null}
+                            return (
+                              <span className="text-xs text-muted-foreground">
+                                {updateState.status === "checking" ? "Checking…" : "Up to date"}
+                              </span>
+                            );
+                          }
+                          return (
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              disabled={isDesktopUpdateButtonDisabled(updateState)}
+                              title={getDesktopUpdateButtonTooltip(updateState)}
+                              onClick={() => runUpdateAction(action)}
+                            >
+                              {desktopUpdateButtonLabel(action)}
+                            </Button>
+                          );
+                        })()}
+                      />
+                    ) : null}
 
-              {isElectron ? (
-                <SettingsRow
-                  title="Uninstall Tabs"
-                  description="Remove Tabs from this computer."
-                  status={
-                    <ol className="ms-4 list-decimal space-y-0.5">
-                      {uninstallInstructions(detectDesktopOs()).map((step) => (
-                        <li key={step}>{step}</li>
-                      ))}
-                    </ol>
-                  }
-                />
-              ) : null}
-            </SettingsSection>
+                    {isElectron ? (
+                      <SettingsRow
+                        title="Uninstall Tabs"
+                        description="Remove Tabs from this computer."
+                        status={
+                          <ol className="ms-4 list-decimal space-y-0.5">
+                            {uninstallInstructions(detectDesktopOs()).map((step) => (
+                              <li key={step}>{step}</li>
+                            ))}
+                          </ol>
+                        }
+                      />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       </div>

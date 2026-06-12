@@ -1,5 +1,6 @@
 import { ProjectId, ThreadId } from "@tabs/contracts";
 import { describe, expect, it } from "vitest";
+import { makeAppModelSelection } from "./modelSelection";
 
 import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type Thread } from "./types";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "./worktreeCleanup";
@@ -10,10 +11,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     codexThreadId: null,
     projectId: ProjectId.makeUnsafe("project-1"),
     title: "Thread",
-    modelSelection: {
-      provider: "codex",
-      model: "gpt-5.3-codex",
-    },
+    modelSelection: makeAppModelSelection("codex", "gpt-5.3-codex"),
     runtimeMode: DEFAULT_RUNTIME_MODE,
     interactionMode: DEFAULT_INTERACTION_MODE,
     session: null,

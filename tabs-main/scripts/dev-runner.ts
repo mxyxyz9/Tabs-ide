@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { NetService } from "@tabs/shared/Net";
+import { NetService, layer as netServiceLayer } from "@tabs/shared/Net";
 import { Config, Data, Effect, Hash, Layer, Logger, Option, Path, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
@@ -565,7 +565,7 @@ const devRunnerCli = Command.make("dev-runner", {
 const cliRuntimeLayer = Layer.mergeAll(
   Logger.layer([Logger.consolePretty()]),
   NodeServices.layer,
-  NetService.layer,
+  netServiceLayer,
 );
 
 const runtimeProgram = Command.run(devRunnerCli, { version: "0.0.0" }).pipe(

@@ -655,6 +655,8 @@ interface ThreadTerminalDrawerProps {
   terminalGroups: ThreadTerminalGroup[];
   activeTerminalGroupId: string;
   focusRequestId: number;
+  /** Optional map of terminalId → display label (e.g. preset name). */
+  terminalLabels?: Record<string, string>;
   onSplitTerminal: () => void;
   onNewTerminal: () => void;
   splitShortcutLabel?: string | undefined;
@@ -707,6 +709,7 @@ export default function ThreadTerminalDrawer({
   terminalGroups,
   activeTerminalGroupId,
   focusRequestId,
+  terminalLabels,
   onSplitTerminal,
   onNewTerminal,
   splitShortcutLabel,
@@ -825,9 +828,12 @@ export default function ThreadTerminalDrawer({
   const terminalLabelById = useMemo(
     () =>
       new Map(
-        normalizedTerminalIds.map((terminalId, index) => [terminalId, `Terminal ${index + 1}`]),
+        normalizedTerminalIds.map((terminalId, index) => [
+          terminalId,
+          terminalLabels?.[terminalId] ?? `Terminal ${index + 1}`,
+        ]),
       ),
-    [normalizedTerminalIds],
+    [normalizedTerminalIds, terminalLabels],
   );
   const splitTerminalActionLabel = hasReachedSplitLimit
     ? `Split Terminal (max ${MAX_TERMINALS_PER_GROUP} per group)`
@@ -1106,7 +1112,8 @@ export default function ThreadTerminalDrawer({
                         >
                           {terminalGroup.terminalIds.length > 1
                             ? `Split ${groupIndex + 1}`
-                            : `Terminal ${groupIndex + 1}`}
+                            : (terminalLabelById.get(terminalGroup.terminalIds[0] ?? "") ??
+                              `Terminal ${groupIndex + 1}`)}
                         </button>
                       )}
 

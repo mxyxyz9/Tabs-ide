@@ -1,4 +1,12 @@
-import { CheckpointRef, EventId, MessageId, ProjectId, ThreadId, TurnId } from "@tabs/contracts";
+import {
+  CheckpointRef,
+  EventId,
+  MessageId,
+  ProjectId,
+  ThreadId,
+  TurnId,
+  ProviderInstanceId,
+} from "@tabs/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -235,7 +243,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           title: "Project 1",
           workspaceRoot: "/tmp/project-1",
           defaultModelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           scripts: [
@@ -258,7 +266,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           projectId: asProjectId("project-1"),
           title: "Thread 1",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           interactionMode: "default",

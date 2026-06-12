@@ -1,5 +1,6 @@
-import { DEFAULT_MODEL_BY_PROVIDER, ProjectId, ThreadId } from "@tabs/contracts";
+import { DEFAULT_MODEL, ProjectId, ThreadId } from "@tabs/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { makeAppModelSelection } from "./modelSelection";
 import { DEFAULT_INTERACTION_MODE, DEFAULT_RUNTIME_MODE, type Project, type Thread } from "./types";
 
 let createDefaultWorkspaceShellPersistedState: typeof import("./workspaceShellStore").createDefaultWorkspaceShellPersistedState;
@@ -12,10 +13,7 @@ function makeProject(id: string, cwd = `/tmp/${id}`): Project {
     id: ProjectId.makeUnsafe(id),
     name: id,
     cwd,
-    defaultModelSelection: {
-      provider: "codex",
-      model: DEFAULT_MODEL_BY_PROVIDER.codex,
-    },
+    defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
     expanded: true,
     scripts: [],
   };
@@ -27,10 +25,7 @@ function makeThread(id: string, projectId: Project["id"]): Thread {
     codexThreadId: null,
     projectId,
     title: id,
-    modelSelection: {
-      provider: "codex",
-      model: DEFAULT_MODEL_BY_PROVIDER.codex,
-    },
+    modelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
     runtimeMode: DEFAULT_RUNTIME_MODE,
     interactionMode: DEFAULT_INTERACTION_MODE,
     session: null,

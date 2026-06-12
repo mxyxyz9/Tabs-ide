@@ -1,6 +1,5 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, FileSystem, Layer, Path } from "effect";
-import * as SqlClient from "effect/unstable/sql/SqlClient";
+import { FetchHttpClient } from "effect/unstable/http";
 
 import { CheckpointDiffQueryLive } from "./checkpointing/Layers/CheckpointDiffQuery";
 import { CheckpointStoreLive } from "./checkpointing/Layers/CheckpointStore";
@@ -16,22 +15,22 @@ import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/Proj
 import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery";
 import { ProviderRuntimeIngestionLive } from "./orchestration/Layers/ProviderRuntimeIngestion";
 import { RuntimeReceiptBusLive } from "./orchestration/Layers/RuntimeReceiptBus";
-import { ProviderUnsupportedError } from "./provider/Errors";
-import { makeClaudeAdapterLive } from "./provider/Layers/ClaudeAdapter";
-import { makeCodexAdapterLive } from "./provider/Layers/CodexAdapter";
 import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRegistry";
-import { makeProviderServiceLive } from "./provider/Layers/ProviderService";
+import { ProviderRegistryLive } from "./provider/Layers/ProviderRegistry";
+import { ProviderServiceLive } from "./provider/Layers/ProviderService";
 import { ProviderSessionDirectoryLive } from "./provider/Layers/ProviderSessionDirectory";
+import { ProviderSessionReaperLive } from "./provider/Layers/ProviderSessionReaper";
+import { ProviderEventLoggersLive } from "./provider/Layers/ProviderEventLoggers";
+import { ProviderInstanceRegistryHydrationLive } from "./provider/Layers/ProviderInstanceRegistryHydration";
+import { OpenCodeRuntimeLive } from "./provider/opencodeRuntime";
 import { ProviderService } from "./provider/Services/ProviderService";
-import { makeEventNdjsonLogger } from "./provider/Layers/EventNdjsonLogger";
-import { ServerSettingsService } from "./serverSettings";
+import * as TextGeneration from "./textGeneration/TextGeneration";
 
 import { TerminalManagerLive } from "./terminal/Layers/Manager";
 import { KeybindingsLive } from "./keybindings";
 import { GitManagerLive } from "./git/Layers/GitManager";
 import { GitCoreLive } from "./git/Layers/GitCore";
 import { GitHubCliLive } from "./git/Layers/GitHubCli";
-import { RoutingTextGenerationLive } from "./git/Layers/RoutingTextGeneration";
 import { PtyAdapter } from "./terminal/Services/PTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 
@@ -52,45 +51,45 @@ const makeRuntimePtyAdapterLayer = () =>
     return ptyAdapterModule.layer;
   }).pipe(Layer.unwrap);
 
-export function makeServerProviderLayer(): Layer.Layer<
-  ProviderService,
-  ProviderUnsupportedError,
-  | SqlClient.SqlClient
-  | ServerConfig
-  | ServerSettingsService
-  | FileSystem.FileSystem
-  | AnalyticsService
-> {
-  return Effect.gen(function* () {
-    const { providerEventLogPath } = yield* ServerConfig;
-    const nativeEventLogger = yield* makeEventNdjsonLogger(providerEventLogPath, {
-      stream: "native",
-    });
-    const canonicalEventLogger = yield* makeEventNdjsonLogger(providerEventLogPath, {
-      stream: "canonical",
-    });
-    const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
-      Layer.provide(ProviderSessionRuntimeRepositoryLive),
-    );
-    const codexAdapterLayer = makeCodexAdapterLive(
-      nativeEventLogger ? { nativeEventLogger } : undefined,
-    );
-    const claudeAdapterLayer = makeClaudeAdapterLive(
-      nativeEventLogger ? { nativeEventLogger } : undefined,
-    );
-    const adapterRegistryLayer = ProviderAdapterRegistryLive.pipe(
-      Layer.provide(codexAdapterLayer),
-      Layer.provide(claudeAdapterLayer),
-      Layer.provideMerge(providerSessionDirectoryLayer),
-    );
-    return makeProviderServiceLive(
-      canonicalEventLogger ? { canonicalEventLogger } : undefined,
-    ).pipe(Layer.provide(adapterRegistryLayer), Layer.provide(providerSessionDirectoryLayer));
-  }).pipe(Layer.unwrap);
+// Provider runtime, rebuilt on t3code's driver/instance architecture.
+//
+// `ProviderInstanceRegistryHydrationLive` is the routing keystone: it
+// materializes one `ProviderInstance` per configured driver from
+// `BUILT_IN_DRIVERS` + `ServerSettings`. `ProviderAdapterRegistryLive` is now a
+// facade resolving driver kind → adapter off that registry, and
+// `ProviderEventLoggersLive` owns the shared native/canonical NDJSON writers
+// consumed by both `ProviderService` and the per-instance drivers.
+// `ProviderInstanceRegistry` is the routing keystone: it materializes one
+// `ProviderInstance` per configured driver from `BUILT_IN_DRIVERS` +
+// `ServerSettings`. It must be provided as an INNER layer so the snapshot
+// registry, adapter-registry facade, and per-driver text generation all
+// resolve `ProviderInstanceId` through it. Requires the driver env
+// (ChildProcessSpawner/FileSystem/Path via NodeServices, ServerConfig,
+// ServerSettingsService) which the outer composition supplies.
+export function makeProviderInstanceRegistryLayer() {
+  return ProviderInstanceRegistryHydrationLive.pipe(
+    Layer.provideMerge(ProviderEventLoggersLive),
+    Layer.provideMerge(OpenCodeRuntimeLive),
+    Layer.provideMerge(FetchHttpClient.layer),
+  );
+}
+
+// Provider service surface that depends on (but does NOT provide) the instance
+// registry. `ProviderAdapterRegistryLive` is a facade resolving driver kind →
+// adapter off the instance registry; `ProviderRegistryLive` builds snapshots
+// off it too. The instance registry is provided by the outer composition.
+export function makeServerProviderLayer() {
+  const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(ProviderSessionRuntimeRepositoryLive),
+  );
+  return Layer.mergeAll(
+    ProviderServiceLive.pipe(Layer.provide(ProviderAdapterRegistryLive)),
+    ProviderRegistryLive,
+  ).pipe(Layer.provideMerge(providerSessionDirectoryLayer));
 }
 
 export function makeServerRuntimeServicesLayer() {
-  const textGenerationLayer = RoutingTextGenerationLive;
+  const textGenerationLayer = TextGeneration.layer;
   const checkpointStoreLayer = CheckpointStoreLive.pipe(Layer.provide(GitCoreLive));
 
   const orchestrationLayer = OrchestrationEngineLive.pipe(
@@ -136,11 +135,22 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(textGenerationLayer),
   );
 
+  // The session reaper needs ProjectionSnapshotQuery (orchestration) alongside
+  // ProviderService/ProviderSessionDirectory (provided by the provider layer in
+  // the outer composition), so it lives here with the orchestration services.
+  const providerSessionReaperLayer = ProviderSessionReaperLive.pipe(
+    Layer.provideMerge(runtimeServicesLayer),
+  );
+
+  // NodeServices (FileSystem/Path/ChildProcessSpawner) is provided once, at the
+  // innermost level of the main composition, so the instance-registry drivers
+  // (which sit below this layer) can also see it.
   return Layer.mergeAll(
     orchestrationReactorLayer,
+    providerSessionReaperLayer,
     GitCoreLive,
     gitManagerLayer,
     terminalLayer,
     KeybindingsLive,
-  ).pipe(Layer.provideMerge(NodeServices.layer));
+  );
 }

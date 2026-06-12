@@ -26,6 +26,7 @@ export interface ServerDerivedPaths {
   readonly serverLogPath: string;
   readonly providerLogsDir: string;
   readonly providerEventLogPath: string;
+  readonly providerStatusCacheDir: string;
   readonly terminalLogsDir: string;
   readonly anonymousIdPath: string;
 }
@@ -68,6 +69,7 @@ export const deriveServerPaths = Effect.fn(function* (
     serverLogPath: join(logsDir, "server.log"),
     providerLogsDir,
     providerEventLogPath: join(providerLogsDir, "events.log"),
+    providerStatusCacheDir: join(stateDir, "provider-status-cache"),
     terminalLogsDir: join(logsDir, "terminals"),
     anonymousIdPath: join(stateDir, "anonymous-id"),
   };

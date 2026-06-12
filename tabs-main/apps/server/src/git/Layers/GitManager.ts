@@ -18,7 +18,7 @@ import {
 } from "../Services/GitManager.ts";
 import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli } from "../Services/GitHubCli.ts";
-import { TextGeneration } from "../Services/TextGeneration.ts";
+import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
 
 const COMMIT_TIMEOUT_MS = 10 * 60_000;

@@ -4,6 +4,7 @@ import {
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
+  ProviderDriverKind,
   ProviderKind,
   type OrchestrationSession,
   ThreadId,
@@ -17,7 +18,7 @@ import { makeDrainableWorker } from "@tabs/shared/DrainableWorker";
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { GitCore } from "../../git/Services/GitCore.ts";
 import { ProviderAdapterRequestError, ProviderServiceError } from "../../provider/Errors.ts";
-import { TextGeneration } from "../../git/Services/TextGeneration.ts";
+import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import {
@@ -224,19 +225,22 @@ const make = Effect.gen(function* () {
       ? thread.session.providerName
       : undefined;
     const requestedModelSelection = options?.modelSelection;
-    const threadProvider: ProviderKind = currentProvider ?? thread.modelSelection.provider;
+    // Routing is keyed on the configured provider INSTANCE id (the model
+    // selection's `instanceId`). For the built-in single-instance drivers the
+    // instance id equals the driver kind, so legacy threads route unchanged.
+    const threadInstanceId = thread.modelSelection.instanceId;
     if (
       requestedModelSelection !== undefined &&
-      requestedModelSelection.provider !== threadProvider
+      requestedModelSelection.instanceId !== threadInstanceId
     ) {
       return yield* new ProviderAdapterRequestError({
-        provider: threadProvider,
+        provider: ProviderDriverKind.makeUnsafe(threadInstanceId),
         method: "thread.turn.start",
-        detail: `Thread '${threadId}' is bound to provider '${threadProvider}' and cannot switch to '${requestedModelSelection.provider}'.`,
+        detail: `Thread '${threadId}' is bound to provider instance '${threadInstanceId}' and cannot switch to '${requestedModelSelection.instanceId}'.`,
       });
     }
-    const preferredProvider: ProviderKind = currentProvider ?? threadProvider;
     const desiredModelSelection = requestedModelSelection ?? thread.modelSelection;
+    const desiredInstanceId = desiredModelSelection.instanceId;
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
@@ -247,13 +251,10 @@ const make = Effect.gen(function* () {
         .listSessions()
         .pipe(Effect.map((sessions) => sessions.find((session) => session.threadId === threadId)));
 
-    const startProviderSession = (input?: {
-      readonly resumeCursor?: unknown;
-      readonly provider?: ProviderKind;
-    }) =>
+    const startProviderSession = (input?: { readonly resumeCursor?: unknown }) =>
       providerService.startSession(threadId, {
         threadId,
-        ...(preferredProvider ? { provider: preferredProvider } : {}),
+        providerInstanceId: desiredInstanceId,
         ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
         modelSelection: desiredModelSelection,
         ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
@@ -282,16 +283,18 @@ const make = Effect.gen(function* () {
       const runtimeModeChanged = thread.runtimeMode !== thread.session?.runtimeMode;
       const providerChanged =
         requestedModelSelection !== undefined &&
-        requestedModelSelection.provider !== currentProvider;
+        requestedModelSelection.instanceId !== threadInstanceId;
       const activeSession = yield* resolveActiveSession(existingSessionThreadId);
       const sessionModelSwitch =
         currentProvider === undefined
           ? "in-session"
-          : (yield* providerService.getCapabilities(currentProvider)).sessionModelSwitch;
+          : (yield* providerService.getCapabilities(threadInstanceId)).sessionModelSwitch;
       const modelChanged =
         requestedModelSelection !== undefined &&
         requestedModelSelection.model !== activeSession?.model;
-      const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "restart-session";
+      // The driver SPI collapsed "restart-session" into "unsupported": a model
+      // change the running session can't apply in place requires a restart.
+      const shouldRestartForModelChange = modelChanged && sessionModelSwitch === "unsupported";
       const previousModelSelection = threadModelSelections.get(threadId);
       const shouldRestartForModelSelectionChange =
         currentProvider === "claudeAgent" &&
@@ -315,7 +318,7 @@ const make = Effect.gen(function* () {
         threadId,
         existingSessionThreadId,
         currentProvider,
-        desiredProvider: desiredModelSelection.provider,
+        desiredProvider: desiredInstanceId,
         currentRuntimeMode: thread.session?.runtimeMode,
         desiredRuntimeMode: thread.runtimeMode,
         runtimeModeChanged,
@@ -374,7 +377,9 @@ const make = Effect.gen(function* () {
     const sessionModelSwitch =
       activeSession === undefined
         ? "in-session"
-        : (yield* providerService.getCapabilities(activeSession.provider)).sessionModelSwitch;
+        : (yield* providerService.getCapabilities(
+            activeSession.providerInstanceId ?? thread.modelSelection.instanceId,
+          )).sessionModelSwitch;
     const requestedModelSelection =
       input.modelSelection ?? threadModelSelections.get(input.threadId) ?? thread.modelSelection;
     const modelForTurn =

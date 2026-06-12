@@ -231,6 +231,7 @@ export interface IProductConfiguration {
 	readonly remoteDefaultExtensionsIfInstalledLocally?: string[];
 
 	readonly extensionConfigurationPolicy?: IStringDictionary<IPolicy>;
+	readonly configurationDefaults?: IStringDictionary<unknown>;
 }
 
 export interface ITunnelApplicationConfig {

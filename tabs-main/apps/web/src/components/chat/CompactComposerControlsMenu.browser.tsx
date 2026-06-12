@@ -1,4 +1,11 @@
-import { DEFAULT_MODEL_BY_PROVIDER, ModelSelection, ThreadId } from "@tabs/contracts";
+import {
+  DEFAULT_MODEL,
+  DEFAULT_MODEL_BY_PROVIDER,
+  ModelSelection,
+  type ProviderDriverKind,
+  type ProviderKind,
+  ThreadId,
+} from "@tabs/contracts";
 import "../../index.css";
 
 import { page } from "vitest/browser";
@@ -8,14 +15,18 @@ import { render } from "vitest-browser-react";
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { TraitsMenuContent } from "./TraitsPicker";
 import { useComposerDraftStore } from "../../composerDraftStore";
+import { makeAppModelSelection, typedOptionsToSelections } from "../../modelSelection";
 
 async function mountMenu(props?: { modelSelection?: ModelSelection; prompt?: string }) {
   const threadId = ThreadId.makeUnsafe("thread-compact-menu");
-  const provider = props?.modelSelection?.provider ?? "claudeAgent";
+  const provider = (props?.modelSelection?.instanceId ?? "claudeAgent") as ProviderKind;
   const draftsByThreadId = {} as ReturnType<
     typeof useComposerDraftStore.getState
   >["draftsByThreadId"];
-  const model = props?.modelSelection?.model ?? DEFAULT_MODEL_BY_PROVIDER[provider];
+  const model =
+    props?.modelSelection?.model ??
+    DEFAULT_MODEL_BY_PROVIDER[provider as ProviderDriverKind] ??
+    DEFAULT_MODEL;
 
   draftsByThreadId[threadId] = {
     prompt: props?.prompt ?? "",
@@ -24,11 +35,7 @@ async function mountMenu(props?: { modelSelection?: ModelSelection; prompt?: str
     persistedAttachments: [],
     terminalContexts: [],
     modelSelectionByProvider: {
-      [provider]: {
-        provider,
-        model,
-        ...(props?.modelSelection?.options ? { options: props.modelSelection.options } : {}),
-      },
+      [provider]: makeAppModelSelection(provider, model, props?.modelSelection?.options),
     },
     activeProvider: provider,
     runtimeMode: null,
@@ -155,7 +162,7 @@ describe("CompactComposerControlsMenu", () => {
 
   it("shows fast mode controls for Opus", async () => {
     await using _ = await mountMenu({
-      modelSelection: { provider: "claudeAgent", model: "claude-opus-4-6" },
+      modelSelection: makeAppModelSelection("claudeAgent", "claude-opus-4-6"),
     });
 
     await page.getByLabelText("More composer controls").click();
@@ -170,7 +177,7 @@ describe("CompactComposerControlsMenu", () => {
 
   it("hides fast mode controls for non-Opus Claude models", async () => {
     await using _ = await mountMenu({
-      modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      modelSelection: makeAppModelSelection("claudeAgent", "claude-sonnet-4-6"),
     });
 
     await page.getByLabelText("More composer controls").click();
@@ -182,7 +189,7 @@ describe("CompactComposerControlsMenu", () => {
 
   it("shows only the provided effort options", async () => {
     await using _ = await mountMenu({
-      modelSelection: { provider: "claudeAgent", model: "claude-sonnet-4-6" },
+      modelSelection: makeAppModelSelection("claudeAgent", "claude-sonnet-4-6"),
     });
 
     await page.getByLabelText("More composer controls").click();
@@ -199,11 +206,11 @@ describe("CompactComposerControlsMenu", () => {
 
   it("shows a Claude thinking on/off section for Haiku", async () => {
     await using _ = await mountMenu({
-      modelSelection: {
-        provider: "claudeAgent",
-        model: "claude-haiku-4-5",
-        options: { thinking: true },
-      },
+      modelSelection: makeAppModelSelection(
+        "claudeAgent",
+        "claude-haiku-4-5",
+        typedOptionsToSelections({ thinking: true }),
+      ),
     });
 
     await page.getByLabelText("More composer controls").click();
@@ -218,11 +225,11 @@ describe("CompactComposerControlsMenu", () => {
 
   it("shows prompt-controlled Ultrathink messaging with disabled effort controls", async () => {
     await using _ = await mountMenu({
-      modelSelection: {
-        provider: "claudeAgent",
-        model: "claude-opus-4-6",
-        options: { effort: "high" },
-      },
+      modelSelection: makeAppModelSelection(
+        "claudeAgent",
+        "claude-opus-4-6",
+        typedOptionsToSelections({ effort: "high" }),
+      ),
       prompt: "Ultrathink:\nInvestigate this",
     });
 

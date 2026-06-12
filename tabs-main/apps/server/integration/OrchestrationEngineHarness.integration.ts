@@ -26,7 +26,7 @@ import { CheckpointStoreLive } from "../src/checkpointing/Layers/CheckpointStore
 import { CheckpointStore } from "../src/checkpointing/Services/CheckpointStore.ts";
 import { GitCoreLive } from "../src/git/Layers/GitCore.ts";
 import { GitCore, type GitCoreShape } from "../src/git/Services/GitCore.ts";
-import { TextGeneration, type TextGenerationShape } from "../src/git/Services/TextGeneration.ts";
+import { TextGeneration, type TextGenerationShape } from "../src/textGeneration/TextGeneration";
 import { OrchestrationCommandReceiptRepositoryLive } from "../src/persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../src/persistence/Layers/OrchestrationEventStore.ts";
 import { ProjectionCheckpointRepositoryLive } from "../src/persistence/Layers/ProjectionCheckpoints.ts";
@@ -35,13 +35,17 @@ import { ProviderSessionRuntimeRepositoryLive } from "../src/persistence/Layers/
 import { makeSqlitePersistenceLive } from "../src/persistence/Layers/Sqlite.ts";
 import { ProjectionCheckpointRepository } from "../src/persistence/Services/ProjectionCheckpoints.ts";
 import { ProjectionPendingApprovalRepository } from "../src/persistence/Services/ProjectionPendingApprovals.ts";
-import { ProviderUnsupportedError } from "../src/provider/Errors.ts";
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
+import { ProviderAdapterRegistryLive } from "../src/provider/Layers/ProviderAdapterRegistry.ts";
+import {
+  NoOpProviderEventLoggers,
+  ProviderEventLoggers,
+} from "../src/provider/Layers/ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
-import { makeCodexAdapterLive } from "../src/provider/Layers/CodexAdapter.ts";
-import { CodexAdapter } from "../src/provider/Services/CodexAdapter.ts";
+import { makeProviderInstanceRegistryLayer } from "../src/serverLayers.ts";
+import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderService } from "../src/provider/Services/ProviderService.ts";
 import { AnalyticsService } from "../src/telemetry/Services/AnalyticsService.ts";
 import { CheckpointReactorLive } from "../src/orchestration/Layers/CheckpointReactor.ts";
@@ -228,13 +232,10 @@ export const makeOrchestrationIntegrationHarness = (
           provider,
         });
     const fakeRegistry = adapterHarness
-      ? Layer.succeed(ProviderAdapterRegistry, {
-          getByProvider: (resolvedProvider) =>
-            resolvedProvider === adapterHarness.provider
-              ? Effect.succeed(adapterHarness.adapter)
-              : Effect.fail(new ProviderUnsupportedError({ provider: resolvedProvider })),
-          listProviders: () => Effect.succeed([adapterHarness.provider]),
-        } as typeof ProviderAdapterRegistry.Service)
+      ? Layer.succeed(
+          ProviderAdapterRegistry,
+          makeAdapterRegistryMock({ [adapterHarness.provider]: adapterHarness.adapter }),
+        )
       : null;
     const rootDir = yield* fileSystem.makeTempDirectoryScoped({
       prefix: "tabs-orchestration-integration-",
@@ -256,23 +257,14 @@ export const makeOrchestrationIntegrationHarness = (
     const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
       Layer.provide(ProviderSessionRuntimeRepositoryLive),
     );
-    const realCodexRegistry = Layer.effect(
-      ProviderAdapterRegistry,
-      Effect.gen(function* () {
-        const codexAdapter = yield* CodexAdapter;
-        return {
-          getByProvider: (resolvedProvider) =>
-            resolvedProvider === "codex"
-              ? Effect.succeed(codexAdapter)
-              : Effect.fail(new ProviderUnsupportedError({ provider: resolvedProvider })),
-          listProviders: () => Effect.succeed(["codex"] as const),
-        } as typeof ProviderAdapterRegistry.Service;
-      }),
-    ).pipe(
-      Layer.provide(makeCodexAdapterLive()),
+    // Real codex path: resolve adapters through the production
+    // instance-registry-backed facade (the Codex driver materializes its
+    // adapter inside the instance registry from BUILT_IN_DRIVERS + settings).
+    const realCodexRegistry = ProviderAdapterRegistryLive.pipe(
+      Layer.provideMerge(makeProviderInstanceRegistryLayer()),
       Layer.provideMerge(ServerConfig.layerTest(workspaceDir, rootDir)),
+      Layer.provideMerge(ServerSettingsService.layerTest()),
       Layer.provideMerge(NodeServices.layer),
-      Layer.provideMerge(providerSessionDirectoryLayer),
     );
     const providerLayer = useRealCodex
       ? makeProviderServiceLive().pipe(
@@ -284,6 +276,7 @@ export const makeOrchestrationIntegrationHarness = (
           Layer.provide(providerSessionDirectoryLayer),
           Layer.provide(fakeRegistry!),
           Layer.provide(AnalyticsService.layerTest),
+          Layer.provide(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
         );
 
     const checkpointStoreLayer = CheckpointStoreLive.pipe(Layer.provide(GitCoreLive));

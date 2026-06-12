@@ -1,6 +1,7 @@
-import { type ProjectEntry, type ModelSlug, type ProviderKind } from "@tabs/contracts";
+import { type ProjectEntry, type ModelSlug } from "@tabs/contracts";
 import { memo } from "react";
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
+import { type ProviderPickerKind } from "../../session-logic";
 import { BotIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
@@ -26,7 +27,7 @@ export type ComposerCommandItem =
   | {
       id: string;
       type: "model";
-      provider: ProviderKind;
+      provider: ProviderPickerKind;
       model: ModelSlug;
       label: string;
       description: string;

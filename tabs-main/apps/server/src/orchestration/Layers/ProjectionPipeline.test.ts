@@ -7,6 +7,7 @@ import {
   ProjectId,
   ThreadId,
   TurnId,
+  ProviderInstanceId,
 } from "@tabs/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
@@ -90,7 +91,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           projectId: ProjectId.makeUnsafe("project-1"),
           title: "Thread 1",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -362,7 +363,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
             projectId: ProjectId.makeUnsafe("project-clear-attachments"),
             title: "Thread Clear Attachments",
             modelSelection: {
-              provider: "codex",
+              instanceId: ProviderInstanceId.makeUnsafe("codex"),
               model: "gpt-5-codex",
             },
             runtimeMode: "full-access",
@@ -490,7 +491,7 @@ it.layer(
           projectId: ProjectId.makeUnsafe("project-overwrite"),
           title: "Thread Overwrite",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -638,7 +639,7 @@ it.layer(
           projectId: ProjectId.makeUnsafe("project-rollback"),
           title: "Thread Rollback",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -767,7 +768,7 @@ it.layer(
           projectId: ProjectId.makeUnsafe("project-revert-files"),
           title: "Thread Revert Files",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -979,7 +980,7 @@ it.layer(
           projectId: ProjectId.makeUnsafe("project-delete-files"),
           title: "Thread Delete Files",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -1137,7 +1138,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           projectId: ProjectId.makeUnsafe("project-a"),
           title: "Thread A",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -1264,7 +1265,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           projectId: ProjectId.makeUnsafe("project-empty"),
           title: "Thread Empty",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -1404,7 +1405,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
             projectId: ProjectId.makeUnsafe("project-conflict"),
             title: "Thread Conflict",
             modelSelection: {
-              provider: "codex",
+              instanceId: ProviderInstanceId.makeUnsafe("codex"),
               model: "gpt-5-codex",
             },
             runtimeMode: "full-access",
@@ -1548,7 +1549,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
           projectId: ProjectId.makeUnsafe("project-revert"),
           title: "Thread Revert",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           runtimeMode: "full-access",
@@ -1867,7 +1868,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
         title: "Live Project",
         workspaceRoot: "/tmp/project-live",
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         createdAt,
@@ -1905,7 +1906,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
         title: "Scripts Project",
         workspaceRoot: "/tmp/project-scripts",
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         createdAt,
@@ -1925,7 +1926,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
           },
         ],
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5",
         },
       });

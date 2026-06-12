@@ -13,7 +13,7 @@ import {
   sortProjectsForSidebar,
   sortThreadsForSidebar,
 } from "./Sidebar.logic";
-import { ProjectId, ThreadId } from "@tabs/contracts";
+import { ProjectId, ProviderInstanceId, ThreadId } from "@tabs/contracts";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -350,10 +350,10 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     name: "Project",
     cwd: "/tmp/project",
     defaultModelSelection: {
-      provider: "codex",
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
       model: "gpt-5.4",
       ...defaultModelSelection,
-    },
+    } as Project["defaultModelSelection"],
     expanded: true,
     createdAt: "2026-03-09T10:00:00.000Z",
     updatedAt: "2026-03-09T10:00:00.000Z",
@@ -369,10 +369,10 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     projectId: ProjectId.makeUnsafe("project-1"),
     title: "Thread",
     modelSelection: {
-      provider: "codex",
+      instanceId: ProviderInstanceId.makeUnsafe("codex"),
       model: "gpt-5.4",
       ...overrides?.modelSelection,
-    },
+    } as Thread["modelSelection"],
     runtimeMode: DEFAULT_RUNTIME_MODE,
     interactionMode: DEFAULT_INTERACTION_MODE,
     session: null,

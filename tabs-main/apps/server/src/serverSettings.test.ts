@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_SERVER_SETTINGS, ServerSettingsPatch } from "@tabs/contracts";
+import { DEFAULT_SERVER_SETTINGS, ServerSettingsPatch, ProviderInstanceId } from "@tabs/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Schema } from "effect";
 import { ServerConfig } from "./config";
@@ -28,16 +28,14 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.deepEqual(
         decodePatch({
           textGenerationModelSelection: {
-            options: {
-              fastMode: false,
-            },
+            options: [{ id: "fastMode", value: false }],
           },
         }),
         {
           textGenerationModelSelection: {
-            options: {
-              fastMode: false,
-            },
+            // Legacy object option payloads decode to the canonical
+            // `ProviderOptionSelections` array shape.
+            options: [{ id: "fastMode", value: false }],
           },
         },
       );
@@ -60,12 +58,12 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         },
         textGenerationModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-          options: {
-            reasoningEffort: "high",
-            fastMode: true,
-          },
+          options: [
+            { id: "reasoningEffort", value: "high" },
+            { id: "fastMode", value: true },
+          ],
         },
       });
 
@@ -76,9 +74,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         },
         textGenerationModelSelection: {
-          options: {
-            fastMode: false,
-          },
+          options: [{ id: "fastMode", value: false }],
         },
       });
 
@@ -86,20 +82,22 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         enabled: true,
         binaryPath: "/opt/homebrew/bin/codex",
         homePath: "/Users/julius/.codex",
+        shadowHomePath: "",
         customModels: [],
       });
       assert.deepEqual(next.providers.claudeAgent, {
         enabled: true,
         binaryPath: "/usr/local/bin/claude",
+        homePath: "",
         customModels: ["claude-custom"],
+        launchArgs: "",
       });
+      // Option selections are replaced wholesale (not deep-merged) under the
+      // canonical array shape, so the prior reasoningEffort is dropped.
       assert.deepEqual(next.textGenerationModelSelection, {
-        provider: "codex",
+        instanceId: ProviderInstanceId.makeUnsafe("codex"),
         model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-        options: {
-          reasoningEffort: "high",
-          fastMode: false,
-        },
+        options: [{ id: "fastMode", value: false }],
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
@@ -110,23 +108,21 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-          options: {
-            reasoningEffort: "high",
-          },
+          options: [{ id: "reasoningEffort", value: "high" }],
         },
       });
 
       const next = yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          provider: "claudeAgent",
+          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
           model: "claude-sonnet-4-5",
         },
       });
 
       assert.deepEqual(next.textGenerationModelSelection, {
-        provider: "claudeAgent",
+        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
         model: "claude-sonnet-4-5",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
@@ -138,23 +134,21 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-          options: {
-            reasoningEffort: "high",
-          },
+          options: [{ id: "reasoningEffort", value: "high" }],
         },
       });
 
       const next = yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5.4",
         },
       });
 
       assert.deepEqual(next.textGenerationModelSelection, {
-        provider: "codex",
+        instanceId: ProviderInstanceId.makeUnsafe("codex"),
         model: "gpt-5.4",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
@@ -180,12 +174,15 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         enabled: true,
         binaryPath: "/opt/homebrew/bin/codex",
         homePath: "",
+        shadowHomePath: "",
         customModels: [],
       });
       assert.deepEqual(next.providers.claudeAgent, {
         enabled: true,
         binaryPath: "/opt/homebrew/bin/claude",
+        homePath: "",
         customModels: [],
+        launchArgs: "",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );

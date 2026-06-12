@@ -1,6 +1,5 @@
 import {
   type ApprovalRequestId,
-  DEFAULT_MODEL_BY_PROVIDER,
   type ClaudeCodeEffort,
   type MessageId,
   type ModelSelection,
@@ -19,6 +18,7 @@ import {
   OrchestrationThreadActivity,
   ProviderInteractionMode,
   RuntimeMode,
+  DEFAULT_MODEL,
 } from "@tabs/contracts";
 import { applyClaudePromptEffortPrefix, normalizeModelSlug } from "@tabs/shared/model";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -53,6 +53,7 @@ import {
   hasToolActivityForTurn,
   isLatestTurnSettled,
   formatElapsed,
+  type ProviderPickerKind,
 } from "../session-logic";
 import { isScrollContainerNearBottom } from "../chat-scroll";
 import {
@@ -116,7 +117,7 @@ import {
   resolveSelectableProvider,
 } from "../providerModels";
 import { useSettings } from "../hooks/useSettings";
-import { resolveAppModelSelection } from "../modelSelection";
+import { makeAppModelSelection, resolveAppModelSelection } from "../modelSelection";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import {
   type ComposerImageAttachment,
@@ -465,10 +466,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
         ? buildLocalDraftThread(
             threadId,
             draftThread,
-            fallbackDraftProject?.defaultModelSelection ?? {
-              provider: "codex",
-              model: DEFAULT_MODEL_BY_PROVIDER.codex,
-            },
+            fallbackDraftProject?.defaultModelSelection ??
+              makeAppModelSelection("codex", DEFAULT_MODEL),
             localDraftError,
           )
         : undefined,
@@ -593,7 +592,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const sessionProvider = activeThread?.session?.provider ?? null;
   const selectedProviderByThreadId = composerDraft.activeProvider ?? null;
   const threadProvider =
-    activeThread?.modelSelection.provider ?? activeProject?.defaultModelSelection?.provider ?? null;
+    activeThread?.modelSelection.instanceId ??
+    activeProject?.defaultModelSelection?.instanceId ??
+    null;
   const hasThreadStarted = Boolean(
     activeThread &&
     (activeThread.latestTurn !== null ||
@@ -601,7 +602,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
       activeThread.session !== null),
   );
   const lockedProvider: ProviderKind | null = hasThreadStarted
-    ? (sessionProvider ?? threadProvider ?? selectedProviderByThreadId ?? null)
+    ? ((sessionProvider ??
+        threadProvider ??
+        selectedProviderByThreadId ??
+        null) as ProviderKind | null)
     : null;
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const providerStatuses = serverConfigQuery.data?.providers ?? EMPTY_PROVIDERS;
@@ -609,7 +613,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
     providerStatuses,
     selectedProviderByThreadId ?? threadProvider ?? "codex",
   );
-  const selectedProvider: ProviderKind = lockedProvider ?? unlockedSelectedProvider;
+  const selectedProvider: ProviderKind = (lockedProvider ??
+    unlockedSelectedProvider) as ProviderKind;
   const { modelOptions: composerModelOptions, selectedModel } = useEffectiveComposerModelState({
     threadId,
     providers: providerStatuses,
@@ -626,18 +631,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
         model: selectedModel,
         models: selectedProviderModels,
         prompt,
-        modelOptions: composerModelOptions,
+        modelOptions: composerModelOptions?.[selectedProvider],
       }),
     [composerModelOptions, prompt, selectedModel, selectedProvider, selectedProviderModels],
   );
   const selectedPromptEffort = composerProviderState.promptEffort;
   const selectedModelOptionsForDispatch = composerProviderState.modelOptionsForDispatch;
   const selectedModelSelection = useMemo<ModelSelection>(
-    () => ({
-      provider: selectedProvider,
-      model: selectedModel,
-      ...(selectedModelOptionsForDispatch ? { options: selectedModelOptionsForDispatch } : {}),
-    }),
+    () => makeAppModelSelection(selectedProvider, selectedModel, selectedModelOptionsForDispatch),
     [selectedModel, selectedModelOptionsForDispatch, selectedProvider],
   );
   const selectedModelForPicker = selectedModel;
@@ -1011,16 +1012,18 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const branchesQuery = useQuery(gitBranchesQueryOptions(gitCwd));
   const keybindings = serverConfigQuery.data?.keybindings ?? EMPTY_KEYBINDINGS;
   const availableEditors = serverConfigQuery.data?.availableEditors ?? EMPTY_AVAILABLE_EDITORS;
-  const modelOptionsByProvider = useMemo(
-    () => ({
-      codex: providerStatuses.find((provider) => provider.provider === "codex")?.models ?? [],
-      claudeAgent:
-        providerStatuses.find((provider) => provider.provider === "claudeAgent")?.models ?? [],
-    }),
-    [providerStatuses],
-  );
+  const modelOptionsByProvider = useMemo(() => {
+    const result: Partial<
+      Record<ProviderPickerKind, ReadonlyArray<{ slug: string; name: string }>>
+    > = {};
+    for (const option of AVAILABLE_PROVIDER_OPTIONS) {
+      result[option.value] =
+        providerStatuses.find((provider) => provider.instanceId === option.value)?.models ?? [];
+    }
+    return result;
+  }, [providerStatuses]);
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
-    const currentOptions = modelOptionsByProvider[selectedProvider];
+    const currentOptions = modelOptionsByProvider[selectedProvider] ?? [];
     return currentOptions.some((option) => option.slug === selectedModelForPicker)
       ? selectedModelForPicker
       : (normalizeModelSlug(selectedModelForPicker, selectedProvider) ?? selectedModelForPicker);
@@ -1030,7 +1033,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       AVAILABLE_PROVIDER_OPTIONS.filter(
         (option) => lockedProvider === null || option.value === lockedProvider,
       ).flatMap((option) =>
-        modelOptionsByProvider[option.value].map(({ slug, name }) => ({
+        (modelOptionsByProvider[option.value] ?? []).map(({ slug, name }) => ({
           provider: option.value,
           providerLabel: option.label,
           slug,
@@ -1130,7 +1133,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     [nonPersistedComposerImageIds],
   );
   const activeProviderStatus = useMemo(
-    () => providerStatuses.find((status) => status.provider === selectedProvider) ?? null,
+    () => providerStatuses.find((status) => status.instanceId === selectedProvider) ?? null,
     [selectedProvider, providerStatuses],
   );
   const activeProjectCwd = activeProject?.cwd ?? null;
@@ -1501,7 +1504,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
       if (
         input.modelSelection !== undefined &&
         (input.modelSelection.model !== serverThread.modelSelection.model ||
-          input.modelSelection.provider !== serverThread.modelSelection.provider ||
+          input.modelSelection.instanceId !== serverThread.modelSelection.instanceId ||
           JSON.stringify(input.modelSelection.options ?? null) !==
             JSON.stringify(serverThread.modelSelection.options ?? null))
       ) {
@@ -2482,14 +2485,11 @@ export default function ChatView({ threadId }: ChatViewProps) {
         }
       }
       const title = truncateTitle(titleSeed);
-      const threadCreateModelSelection: ModelSelection = {
-        provider: selectedProvider,
-        model:
-          selectedModel ||
-          activeProject.defaultModelSelection?.model ||
-          DEFAULT_MODEL_BY_PROVIDER.codex,
-        ...(selectedModelSelection.options ? { options: selectedModelSelection.options } : {}),
-      };
+      const threadCreateModelSelection: ModelSelection = makeAppModelSelection(
+        selectedProvider,
+        selectedModel || activeProject.defaultModelSelection?.model || DEFAULT_MODEL,
+        selectedModelSelection.options,
+      );
 
       if (isLocalDraftThread) {
         await api.orchestration.dispatchCommand({
@@ -3019,7 +3019,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   ]);
 
   const onProviderModelSelect = useCallback(
-    (provider: ProviderKind, model: ModelSlug) => {
+    (provider: ProviderPickerKind, model: ModelSlug) => {
       if (!activeThread) return;
       if (lockedProvider !== null && provider !== lockedProvider) {
         scheduleComposerFocus();
@@ -3032,10 +3032,10 @@ export default function ChatView({ threadId }: ChatViewProps) {
         providerStatuses,
         model,
       );
-      const nextModelSelection: ModelSelection = {
-        provider: resolvedProvider,
-        model: resolvedModel,
-      };
+      const nextModelSelection: ModelSelection = makeAppModelSelection(
+        resolvedProvider,
+        resolvedModel,
+      );
       setComposerDraftModelSelection(activeThread.id, nextModelSelection);
       setStickyComposerModelSelection(nextModelSelection);
       scheduleComposerFocus();

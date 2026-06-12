@@ -10,7 +10,9 @@ import {
   ThreadId,
   type GitBranch,
   type GitStatusFile,
+  DEFAULT_MODEL,
 } from "@tabs/contracts";
+import { makeAppModelSelection } from "../modelSelection";
 import { type ProjectToolKind, type ProjectWorkspaceSettings } from "@tabs/contracts/settings";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
@@ -26,6 +28,7 @@ import {
   GitBranchIcon,
   GlobeIcon,
   LoaderIcon,
+  MoreHorizontalIcon,
   PlayIcon,
   PencilIcon,
   PlusIcon,
@@ -34,6 +37,7 @@ import {
   SearchIcon,
   ServerIcon,
   SettingsIcon,
+  Trash2Icon,
   PanelTopCloseIcon,
   PanelTopOpenIcon,
   TerminalSquareIcon,
@@ -92,6 +96,15 @@ import {
 } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import { ScrollArea } from "./ui/scroll-area";
 import {
   Select,
@@ -803,8 +816,10 @@ function AgentsThreadList(props: {
   activeThreadId: ThreadId | null;
   onSelectThread: (threadId: ThreadId) => void;
   onCreateThread: () => void;
+  onDeleteThread: (thread: Thread) => void | Promise<void>;
   children: ReactNode;
 }) {
+  const [threadPendingDelete, setThreadPendingDelete] = useState<Thread | null>(null);
   return (
     <div className="flex h-full min-h-0 min-w-0">
       <div className="flex w-72 shrink-0 flex-col border-r border-border/70 bg-card/40">
@@ -830,24 +845,50 @@ function AgentsThreadList(props: {
               props.threads.map((thread) => {
                 const active = props.activeThreadId === thread.id;
                 return (
-                  <button
+                  <div
                     key={thread.id}
-                    type="button"
-                    onClick={() => props.onSelectThread(thread.id)}
                     className={cn(
-                      "w-full rounded-xl border px-3 py-2 text-left transition-colors",
+                      "group relative flex items-center rounded-xl border transition-colors",
                       active
                         ? "border-primary/40 bg-primary/10"
                         : "border-transparent hover:border-border/70 hover:bg-accent/50",
                     )}
                   >
-                    <div className="truncate text-sm font-medium text-foreground">
-                      {thread.title}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {thread.modelSelection.provider} · {thread.runtimeMode}
-                    </div>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => props.onSelectThread(thread.id)}
+                      className="min-w-0 flex-1 px-3 py-2 text-left"
+                    >
+                      <div className="truncate text-sm font-medium text-foreground">
+                        {thread.title}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {thread.modelSelection.instanceId} · {thread.runtimeMode}
+                      </div>
+                    </button>
+                    <Menu>
+                      <MenuTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label={`Thread actions for ${thread.title}`}
+                            className="mr-1.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+                          />
+                        }
+                      >
+                        <MoreHorizontalIcon className="size-4" />
+                      </MenuTrigger>
+                      <MenuPopup align="end" side="bottom" className="min-w-40">
+                        <MenuItem
+                          variant="destructive"
+                          onClick={() => setThreadPendingDelete(thread)}
+                        >
+                          <Trash2Icon className="size-3.5" />
+                          Delete thread
+                        </MenuItem>
+                      </MenuPopup>
+                    </Menu>
+                  </div>
                 );
               })
             )}
@@ -857,6 +898,36 @@ function AgentsThreadList(props: {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {props.children}
       </div>
+      <AlertDialog
+        open={threadPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setThreadPendingDelete(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete thread?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {threadPendingDelete
+                ? `“${threadPendingDelete.title}” will be removed and its conversation history permanently cleared.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const target = threadPendingDelete;
+                setThreadPendingDelete(null);
+                if (target) void props.onDeleteThread(target);
+              }}
+            >
+              Delete thread
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 }
@@ -5862,6 +5933,7 @@ function ServerTool(props: {
   onOpenProcessTerminal: (processId: string) => void;
   onRevealTerminal: () => void;
   onHideTerminal: () => void;
+  onNewTerminal: () => void;
   onCloseAllTerminals: () => void;
   onSavePresets: (
     presets: Array<{
@@ -6114,6 +6186,18 @@ function ServerTool(props: {
           >
             <TerminalSquareIcon className="size-3.5" />
             {props.terminalVisible ? "Hide Terminal" : "Open Terminal"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              props.onRevealTerminal();
+              props.onNewTerminal();
+            }}
+          >
+            <PlusIcon className="size-3.5" />
+            New Terminal
           </Button>
           <Button
             type="button"
@@ -6738,10 +6822,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         projectId: newProjectId(),
         title: basenameOfPath(embeddedMode.workspaceRoot),
         workspaceRoot: embeddedMode.workspaceRoot,
-        defaultModelSelection: {
-          provider: "codex",
-          model: DEFAULT_MODEL_BY_PROVIDER.codex,
-        },
+        defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
         createdAt: new Date().toISOString(),
       })
       .catch((error) => {
@@ -6897,10 +6978,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       projectId,
       title: basenameOfPath(cwd),
       workspaceRoot: cwd,
-      defaultModelSelection: {
-        provider: "codex",
-        model: DEFAULT_MODEL_BY_PROVIDER.codex,
-      },
+      defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
       createdAt,
     });
     openProject(projectId);
@@ -6971,10 +7049,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         projectId,
         title: basenameOfPath(workspaceRoot),
         workspaceRoot,
-        defaultModelSelection: {
-          provider: "codex",
-          model: DEFAULT_MODEL_BY_PROVIDER.codex,
-        },
+        defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
         createdAt: new Date().toISOString(),
       });
       openProject(projectId);
@@ -7069,6 +7144,21 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       });
     },
     [handleNewThread, setActiveProject, setActiveTool, settings.defaultThreadEnvMode],
+  );
+
+  const handleDeleteThread = useCallback(
+    async (thread: Thread) => {
+      const api = readNativeApi() ?? ensureNativeApi();
+      await api.orchestration.dispatchCommand({
+        type: "thread.delete",
+        commandId: newCommandId(),
+        threadId: thread.id,
+      });
+      if (routeThreadId === thread.id) {
+        void navigate({ to: "/" });
+      }
+    },
+    [navigate, routeThreadId],
   );
 
   const handleSelectTool = useCallback(
@@ -7321,6 +7411,18 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       if (input.reveal) {
         storeSetTerminalOpen(input.threadId, true);
       }
+      // If the only terminal is the unused default placeholder and we're about
+      // to open a named process terminal, evict the placeholder so it doesn't
+      // show as a phantom extra terminal in the sidebar.
+      if (
+        terminalId !== DEFAULT_THREAD_TERMINAL_ID &&
+        input.terminalState &&
+        input.terminalState.terminalIds.length === 1 &&
+        input.terminalState.terminalIds[0] === DEFAULT_THREAD_TERMINAL_ID &&
+        input.terminalState.runningTerminalIds.length === 0
+      ) {
+        storeCloseTerminal(input.threadId, DEFAULT_THREAD_TERMINAL_ID);
+      }
       if (input.terminalState?.terminalIds.includes(terminalId)) {
         storeSetActiveTerminal(input.threadId, terminalId);
       } else {
@@ -7340,7 +7442,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         });
       }
     },
-    [activeProject, storeNewTerminal, storeSetActiveTerminal, storeSetTerminalOpen],
+    [
+      activeProject,
+      storeCloseTerminal,
+      storeNewTerminal,
+      storeSetActiveTerminal,
+      storeSetTerminalOpen,
+    ],
   );
   const closeThreadTerminal = useCallback(
     async (input: {
@@ -7576,6 +7684,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         onOpenProcessTerminal={focusServerProcessTerminal}
         onRevealTerminal={revealServerTerminal}
         onHideTerminal={hideServerTerminal}
+        onNewTerminal={createNewServerTerminal}
         onCloseAllTerminals={() => void closeAllServerTerminals()}
         onSavePresets={(presets) =>
           upsertProjectSettings(activeProject.id, (current) => {
@@ -7633,6 +7742,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               terminalGroups={serverTerminalState.terminalGroups}
               activeTerminalGroupId={serverTerminalState.activeTerminalGroupId}
               focusRequestId={shellTerminalFocusRequestId}
+              terminalLabels={Object.fromEntries(
+                activeProjectSettings.serverProcesses.map((p) => [p.id, p.label]),
+              )}
               onSplitTerminal={splitServerTerminal}
               onNewTerminal={createNewServerTerminal}
               onActiveTerminalChange={activateServerTerminal}
@@ -7850,6 +7962,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
             envMode: settings.defaultThreadEnvMode,
           })
         }
+        onDeleteThread={handleDeleteThread}
       >
         {props.agentsContent}
       </AgentsThreadList>

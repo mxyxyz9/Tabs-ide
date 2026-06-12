@@ -33,7 +33,7 @@ import type {
   DesktopCloneRepositoryInput,
   DesktopCloneRepositoryResult,
 } from "@tabs/contracts";
-import { NetService } from "@tabs/shared/Net";
+import { NetService, layer as netServiceLayer } from "@tabs/shared/Net";
 import { RotatingFileSink } from "@tabs/shared/logging";
 import { showDesktopConfirmDialog } from "./confirmDialog";
 import { syncShellEnvironment } from "./syncShellEnvironment";
@@ -2599,7 +2599,7 @@ async function bootstrap(): Promise<void> {
   ensureDownloadedCodeOssRuntime();
   backendPort = await Effect.service(NetService).pipe(
     Effect.flatMap((net) => net.reserveLoopbackPort()),
-    Effect.provide(NetService.layer),
+    Effect.provide(netServiceLayer),
     Effect.runPromise,
   );
   writeDesktopLogHeader(`reserved backend port via NetService port=${backendPort}`);

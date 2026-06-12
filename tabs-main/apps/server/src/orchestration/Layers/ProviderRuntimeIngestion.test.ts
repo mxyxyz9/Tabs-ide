@@ -19,6 +19,8 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
+  ProviderInstanceId,
+  ProviderDriverKind,
 } from "@tabs/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -81,6 +83,7 @@ function createProviderServiceHarness() {
     listSessions: () => Effect.succeed([...runtimeSessions]),
     getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
     rollbackConversation: () => unsupported(),
+    getInstanceInfo: () => unsupported(),
     streamEvents: Stream.fromPubSub(runtimeEventPubSub),
   };
 
@@ -195,7 +198,7 @@ describe("ProviderRuntimeIngestion", () => {
         title: "Provider Project",
         workspaceRoot,
         defaultModelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         createdAt,
@@ -209,7 +212,7 @@ describe("ProviderRuntimeIngestion", () => {
         projectId: asProjectId("project-1"),
         title: "Thread",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -237,7 +240,7 @@ describe("ProviderRuntimeIngestion", () => {
       }),
     );
     provider.setSession({
-      provider: "codex",
+      provider: ProviderDriverKind.makeUnsafe("codex"),
       status: "ready",
       runtimeMode: "approval-required",
       threadId: ThreadId.makeUnsafe("thread-1"),
@@ -738,7 +741,7 @@ describe("ProviderRuntimeIngestion", () => {
         projectId: asProjectId("project-1"),
         title: "Plan Source",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: "plan",
@@ -773,7 +776,7 @@ describe("ProviderRuntimeIngestion", () => {
         projectId: asProjectId("project-1"),
         title: "Plan Target",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -801,7 +804,7 @@ describe("ProviderRuntimeIngestion", () => {
       }),
     );
     harness.setProviderSession({
-      provider: "codex",
+      provider: ProviderDriverKind.makeUnsafe("codex"),
       status: "ready",
       runtimeMode: "approval-required",
       threadId: targetThreadId,
@@ -925,7 +928,7 @@ describe("ProviderRuntimeIngestion", () => {
         projectId: asProjectId("project-1"),
         title: "Plan Source",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: "plan",
@@ -953,7 +956,7 @@ describe("ProviderRuntimeIngestion", () => {
       }),
     );
     harness.setProviderSession({
-      provider: "codex",
+      provider: ProviderDriverKind.makeUnsafe("codex"),
       status: "running",
       runtimeMode: "approval-required",
       threadId: targetThreadId,
@@ -1078,7 +1081,7 @@ describe("ProviderRuntimeIngestion", () => {
         projectId: asProjectId("project-1"),
         title: "Plan Source",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: "plan",
@@ -1113,7 +1116,7 @@ describe("ProviderRuntimeIngestion", () => {
         projectId: asProjectId("project-1"),
         title: "Plan Target",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -1195,7 +1198,7 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.setProviderSession({
-      provider: "codex",
+      provider: ProviderDriverKind.makeUnsafe("codex"),
       status: "running",
       runtimeMode: "approval-required",
       threadId: targetThreadId,
@@ -2296,7 +2299,7 @@ describe("ProviderRuntimeIngestion", () => {
         streamKind: "assistant_text",
         delta: undefined,
       },
-    } as unknown as ProviderRuntimeEvent);
+    } as unknown as LegacyProviderRuntimeEvent);
 
     harness.emit({
       type: "runtime.error",

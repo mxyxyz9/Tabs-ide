@@ -5,6 +5,7 @@ import {
   MessageId,
   ProjectId,
   ThreadId,
+  ProviderInstanceId,
 } from "@tabs/contracts";
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
@@ -137,7 +138,7 @@ describe("decider project scripts", () => {
           projectId: asProjectId("project-1"),
           title: "Thread",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -163,12 +164,12 @@ describe("decider project scripts", () => {
             attachments: [],
           },
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5.3-codex",
-            options: {
-              reasoningEffort: "high",
-              fastMode: true,
-            },
+            options: [
+              { id: "reasoningEffort", value: "high" },
+              { id: "fastMode", value: true },
+            ],
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
           runtimeMode: "approval-required",
@@ -194,10 +195,10 @@ describe("decider project scripts", () => {
       modelSelection: {
         provider: "codex",
         model: "gpt-5.3-codex",
-        options: {
-          reasoningEffort: "high",
-          fastMode: true,
-        },
+        options: [
+          { id: "reasoningEffort", value: "high" },
+          { id: "fastMode", value: true },
+        ],
       },
       runtimeMode: "approval-required",
     });
@@ -246,7 +247,7 @@ describe("decider project scripts", () => {
           projectId: asProjectId("project-1"),
           title: "Thread",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -328,7 +329,7 @@ describe("decider project scripts", () => {
           projectId: asProjectId("project-1"),
           title: "Thread",
           modelSelection: {
-            provider: "codex",
+            instanceId: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,

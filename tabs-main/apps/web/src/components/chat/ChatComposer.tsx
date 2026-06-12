@@ -133,7 +133,7 @@ export function ChatComposer({
       )}
 
       {/* Provider Status */}
-      {availableProviders.find((p) => p.provider === provider && p.status !== "ready") && (
+      {availableProviders.find((p) => p.instanceId === provider && p.status !== "ready") && (
         <div className="pt-3 mx-auto max-w-3xl">
           <div className="rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm text-warning">
             Provider {provider} has limited availability
@@ -192,8 +192,8 @@ export function ChatComposer({
             className="rounded-md border border-input bg-background px-3 py-1 text-sm"
           >
             {availableProviders.map((p) => (
-              <option key={p.provider} value={p.provider}>
-                {p.provider}
+              <option key={p.instanceId} value={p.instanceId}>
+                {p.instanceId}
               </option>
             ))}
           </select>

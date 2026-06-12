@@ -12,7 +12,9 @@ export const ProviderStatusBanner = memo(function ProviderStatusBanner({
     return null;
   }
 
-  const providerLabel = PROVIDER_DISPLAY_NAMES[status.provider] ?? status.provider;
+  const providerLabel =
+    PROVIDER_DISPLAY_NAMES[status.instanceId as string as keyof typeof PROVIDER_DISPLAY_NAMES] ??
+    status.instanceId;
   const defaultMessage =
     status.status === "error"
       ? `${providerLabel} provider is unavailable.`

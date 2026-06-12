@@ -1,5 +1,7 @@
 import {
+  DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
+  type ProviderDriverKind,
   type ClaudeModelOptions,
   type CodexModelOptions,
   type ModelCapabilities,
@@ -23,40 +25,40 @@ const EMPTY_CAPABILITIES: ModelCapabilities = {
 
 export function getProviderModels(
   providers: ReadonlyArray<ServerProvider>,
-  provider: ProviderKind,
+  provider: string,
 ): ReadonlyArray<ServerProviderModel> {
-  return providers.find((candidate) => candidate.provider === provider)?.models ?? [];
+  return providers.find((candidate) => candidate.instanceId === provider)?.models ?? [];
 }
 
 export function getProviderSnapshot(
   providers: ReadonlyArray<ServerProvider>,
-  provider: ProviderKind,
+  provider: string,
 ): ServerProvider | undefined {
-  return providers.find((candidate) => candidate.provider === provider);
+  return providers.find((candidate) => candidate.instanceId === provider);
 }
 
 export function isProviderEnabled(
   providers: ReadonlyArray<ServerProvider>,
-  provider: ProviderKind,
+  provider: string,
 ): boolean {
   return getProviderSnapshot(providers, provider)?.enabled ?? true;
 }
 
 export function resolveSelectableProvider(
   providers: ReadonlyArray<ServerProvider>,
-  provider: ProviderKind | null | undefined,
-): ProviderKind {
+  provider: string | null | undefined,
+): string {
   const requested = provider ?? "codex";
   if (isProviderEnabled(providers, requested)) {
     return requested;
   }
-  return providers.find((candidate) => candidate.enabled)?.provider ?? requested;
+  return providers.find((candidate) => candidate.enabled)?.instanceId ?? requested;
 }
 
 export function getProviderModelCapabilities(
   models: ReadonlyArray<ServerProviderModel>,
   model: string | null | undefined,
-  provider: ProviderKind,
+  provider: string,
 ): ModelCapabilities {
   const slug = normalizeModelSlug(model, provider);
   return models.find((candidate) => candidate.slug === slug)?.capabilities ?? EMPTY_CAPABILITIES;
@@ -64,13 +66,14 @@ export function getProviderModelCapabilities(
 
 export function getDefaultServerModel(
   providers: ReadonlyArray<ServerProvider>,
-  provider: ProviderKind,
+  provider: string,
 ): string {
   const models = getProviderModels(providers, provider);
   return (
     models.find((model) => !model.isCustom)?.slug ??
     models[0]?.slug ??
-    DEFAULT_MODEL_BY_PROVIDER[provider]
+    DEFAULT_MODEL_BY_PROVIDER[provider as ProviderDriverKind] ??
+    DEFAULT_MODEL
   );
 }
 

@@ -19,6 +19,7 @@ import {
   ORCHESTRATION_WS_METHODS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   ProjectId,
+  ProviderInstanceId,
   ThreadId,
   WS_CHANNELS,
   WS_METHODS,
@@ -669,7 +670,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         bootstrapProjectId = ProjectId.makeUnsafe(crypto.randomUUID());
         const bootstrapProjectTitle = path.basename(cwd) || "project";
         bootstrapProjectDefaultModelSelection = {
-          provider: "codex" as const,
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          provider: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         };
         yield* orchestrationEngine.dispatch({
@@ -684,7 +686,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       } else {
         bootstrapProjectId = existingProject.id;
         bootstrapProjectDefaultModelSelection = existingProject.defaultModelSelection ?? {
-          provider: "codex" as const,
+          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          provider: ProviderInstanceId.makeUnsafe("codex"),
           model: "gpt-5-codex",
         };
       }

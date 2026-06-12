@@ -1,6 +1,7 @@
 export * from "./baseSchemas";
 export * from "./ipc";
 export * from "./terminal";
+export * from "./providerInstance";
 export * from "./provider";
 export * from "./providerRuntime";
 export * from "./model";

@@ -14,7 +14,7 @@ import {
   DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
   type ModelSelection,
-  type ProviderKind,
+  ProviderInstanceId,
   ServerSettings,
   type ServerSettingsPatch,
 } from "@tabs/contracts";
@@ -101,7 +101,14 @@ export class ServerSettingsService extends ServiceMap.Service<
 
 const ServerSettingsJson = fromLenientJson(ServerSettings);
 
-const PROVIDER_ORDER: readonly ProviderKind[] = ["codex", "claudeAgent"];
+type ProviderSettingsKey = keyof ServerSettings["providers"];
+const PROVIDER_ORDER: readonly ProviderSettingsKey[] = [
+  "codex",
+  "claudeAgent",
+  "cursor",
+  "grok",
+  "opencode",
+];
 
 function mergeServerSettingsPatch(
   current: typeof DEFAULT_SERVER_SETTINGS,
@@ -113,15 +120,15 @@ function mergeServerSettingsPatch(
     return next;
   }
 
-  const hasProvider = "provider" in selectionPatch && selectionPatch.provider !== undefined;
+  const hasInstance = "instanceId" in selectionPatch && selectionPatch.instanceId !== undefined;
   const hasModel = "model" in selectionPatch && selectionPatch.model !== undefined;
   const hasOptions = "options" in selectionPatch;
 
-  if (hasProvider || hasModel) {
+  if (hasInstance || hasModel) {
     return {
       ...next,
       textGenerationModelSelection: {
-        provider: selectionPatch.provider ?? current.textGenerationModelSelection.provider,
+        instanceId: selectionPatch.instanceId ?? current.textGenerationModelSelection.instanceId,
         model: selectionPatch.model ?? current.textGenerationModelSelection.model,
         ...(hasOptions && selectionPatch.options ? { options: selectionPatch.options } : {}),
       } as ModelSelection,
@@ -133,14 +140,10 @@ function mergeServerSettingsPatch(
       ...next,
       textGenerationModelSelection: {
         ...current.textGenerationModelSelection,
-        ...(selectionPatch.options
-          ? {
-              options: deepMerge(
-                current.textGenerationModelSelection.options ?? {},
-                selectionPatch.options,
-              ),
-            }
-          : {}),
+        // Provider option selections are a fully-formed array sent by the UI;
+        // replace rather than deep-merge (the legacy object-merge no longer
+        // applies to the canonical `ProviderOptionSelections` array shape).
+        ...(selectionPatch.options ? { options: selectionPatch.options } : {}),
       } as ModelSelection,
     };
   }
@@ -156,7 +159,8 @@ function mergeServerSettingsPatch(
  */
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
   const selection = settings.textGenerationModelSelection;
-  if (settings.providers[selection.provider].enabled) {
+  const selectedKey = selection.instanceId as ProviderSettingsKey;
+  if (settings.providers[selectedKey]?.enabled) {
     return settings;
   }
 
@@ -169,8 +173,10 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
   return {
     ...settings,
     textGenerationModelSelection: {
-      provider: fallback,
-      model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER[fallback],
+      instanceId: ProviderInstanceId.makeUnsafe(fallback),
+      provider: ProviderInstanceId.makeUnsafe(fallback),
+      model:
+        (DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER as Record<string, string>)[fallback] ?? "",
     } as ModelSelection,
   };
 }

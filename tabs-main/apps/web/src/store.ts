@@ -138,7 +138,7 @@ function mapProjectsFromReadModel(
           ? {
               ...project.defaultModelSelection,
               model: resolveModelSlugForProvider(
-                project.defaultModelSelection.provider,
+                project.defaultModelSelection.instanceId,
                 project.defaultModelSelection.model,
               ),
             }
@@ -193,10 +193,10 @@ function toLegacySessionStatus(
 }
 
 function toLegacyProvider(providerName: string | null): ProviderKind {
-  if (providerName === "codex" || providerName === "claudeAgent") {
-    return providerName;
-  }
-  return "codex";
+  // Preserve the actual driver slug (codex, claudeAgent, cursor, grok, opencode,
+  // …). Typed as the closed `ProviderKind` for legacy callers, but the runtime
+  // value carries the real provider so the composer routes/locks correctly.
+  return (providerName ?? "codex") as ProviderKind;
 }
 
 function resolveWsHttpOrigin(): string {
@@ -260,7 +260,7 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
         modelSelection: {
           ...thread.modelSelection,
           model: resolveModelSlugForProvider(
-            thread.modelSelection.provider,
+            thread.modelSelection.instanceId,
             thread.modelSelection.model,
           ),
         },

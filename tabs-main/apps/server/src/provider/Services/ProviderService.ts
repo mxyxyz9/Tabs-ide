@@ -13,7 +13,7 @@
  */
 import type {
   ProviderInterruptTurnInput,
-  ProviderKind,
+  ProviderInstanceId,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
   ProviderRuntimeEvent,
@@ -24,11 +24,13 @@ import type {
   ThreadId,
   ProviderTurnStartResult,
 } from "@tabs/contracts";
-import { ServiceMap } from "effect";
-import type { Effect, Stream } from "effect";
+import * as ServiceMap from "effect/ServiceMap";
+import type * as Effect from "effect/Effect";
+import type * as Stream from "effect/Stream";
 
-import type { ProviderServiceError } from "../Errors.ts";
-import type { ProviderAdapterCapabilities } from "./ProviderAdapter.ts";
+import type { ProviderServiceError } from "../Errors";
+import type { ProviderAdapterCapabilities } from "./ProviderAdapter";
+import type { ProviderInstanceRoutingInfo } from "./ProviderAdapterRegistry";
 
 /**
  * ProviderServiceShape - Service API for provider session and turn orchestration.
@@ -85,11 +87,15 @@ export interface ProviderServiceShape {
   readonly listSessions: () => Effect.Effect<ReadonlyArray<ProviderSession>>;
 
   /**
-   * Read static capabilities for a provider adapter.
+   * Read capabilities for the adapter bound to a configured provider instance.
    */
   readonly getCapabilities: (
-    provider: ProviderKind,
+    instanceId: ProviderInstanceId,
   ) => Effect.Effect<ProviderAdapterCapabilities, ProviderServiceError>;
+
+  readonly getInstanceInfo: (
+    instanceId: ProviderInstanceId,
+  ) => Effect.Effect<ProviderInstanceRoutingInfo, ProviderServiceError>;
 
   /**
    * Roll back provider conversation state by a number of turns.
@@ -111,5 +117,5 @@ export interface ProviderServiceShape {
  * ProviderService - Service tag for provider orchestration.
  */
 export class ProviderService extends ServiceMap.Service<ProviderService, ProviderServiceShape>()(
-  "tabs/provider/Services/ProviderService",
+  "t3/provider/Services/ProviderService",
 ) {}
