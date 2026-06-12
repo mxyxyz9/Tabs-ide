@@ -9,8 +9,10 @@ import * as Stream from "effect/Stream";
 import * as Ref from "effect/Ref";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
-import { it, assert } from "@effect/vitest";
+import { it, assert, describe } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 import * as AcpSchema from "./_generated/schema.gen.ts";
 import * as AcpProtocol from "./protocol.ts";
@@ -52,6 +54,7 @@ const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
   path.join(import.meta.dirname, "../test/fixtures/acp-mock-peer.ts"),
 );
 const mockPeerArgs = (path: string) => [path];
+const fixtureExists = existsSync(join(import.meta.dirname, "../test/fixtures/acp-mock-peer.ts"));
 
 const makeHandle = (env?: Record<string, string>) =>
   Effect.gen(function* () {
@@ -354,10 +357,12 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
             ok: true,
           },
         },
-      });
     }),
   );
+});
 
+describe.skipIf(!fixtureExists)("effect-acp protocol (child process)", () => {
+it.layer(NodeServices.layer)("child process integration", (it) => {
   it.effect("propagates the real child exit code when the input stream ends", () =>
     Effect.gen(function* () {
       const handle = yield* makeHandle({ ACP_MOCK_EXIT_IMMEDIATELY_CODE: "7" });
@@ -445,4 +450,5 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       assert.equal(error.code, 0);
     }),
   );
+});
 });

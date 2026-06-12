@@ -12,13 +12,17 @@ import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { it, assert } from "@effect/vitest";
+import { it, assert, describe } from "@effect/vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 import * as AcpClient from "./client.ts";
 import * as AcpSchema from "./_generated/schema.gen.ts";
 import * as AcpError from "./errors.ts";
 import { encodeJsonl, jsonRpcRequest, jsonRpcResponse } from "./_internal/shared.ts";
 import { makeInMemoryStdio } from "./_internal/stdio.ts";
+
+const fixtureExists = existsSync(join(import.meta.dirname, "../test/fixtures/acp-mock-peer.ts"));
 
 const InitializeRequest = jsonRpcRequest("initialize", AcpSchema.InitializeRequest);
 const InitializeResponse = jsonRpcResponse(AcpSchema.InitializeResponse);
@@ -29,7 +33,8 @@ const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
 );
 const mockPeerArgs = (path: string) => [path];
 
-it.layer(NodeServices.layer)("effect-acp client", (it) => {
+describe.skipIf(!fixtureExists)("effect-acp client", () => {
+it.layer(NodeServices.layer)("integration", (it) => {
   const makeHandle = (env?: Record<string, string>) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -446,4 +451,5 @@ it.layer(NodeServices.layer)("effect-acp client", (it) => {
       yield* Scope.close(scope, Exit.void);
     }),
   );
+});
 });
