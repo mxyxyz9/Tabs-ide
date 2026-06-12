@@ -179,6 +179,7 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     icon: GrokIcon,
     binaryPlaceholder: "Grok binary path",
     binaryDescription: "Path to the Grok CLI binary",
+    installCommand: "npm install -g @vibe-kit/grok-cli",
   },
   {
     provider: "opencode",

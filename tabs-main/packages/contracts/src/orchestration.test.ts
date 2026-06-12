@@ -93,6 +93,7 @@ it.effect("trims branded ids and command string fields at decode boundaries", ()
     assert.strictEqual(parsed.workspaceRoot, "/tmp/workspace");
     assert.deepStrictEqual(parsed.defaultModelSelection, {
       instanceId: "codex",
+      provider: "codex",
       model: "gpt-5.2",
     });
   }),
