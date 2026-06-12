@@ -7,7 +7,7 @@ import * as Scope from "effect/Scope";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { assert, it } from "@effect/vitest";
+import { assert, describe, it } from "@effect/vitest";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -22,7 +22,8 @@ const mockPeerPath = Effect.map(Effect.service(Path.Path), (path) =>
 );
 const mockPeerArgs = (path: string) => [path];
 
-it.layer(NodeServices.layer, { skip: !fixtureExists })("effect-codex-app-server client", (it) => {
+describe.skipIf(!fixtureExists)("effect-codex-app-server client", () => {
+it.layer(NodeServices.layer)("integration", (it) => {
   const makeHandle = () =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -158,4 +159,5 @@ it.layer(NodeServices.layer, { skip: !fixtureExists })("effect-codex-app-server 
       assert.equal(initialized.userAgent, "mock-codex-app-server");
     }),
   );
+});
 });
