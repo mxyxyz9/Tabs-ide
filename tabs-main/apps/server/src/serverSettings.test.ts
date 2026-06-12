@@ -96,6 +96,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       // canonical array shape, so the prior reasoningEffort is dropped.
       assert.deepEqual(next.textGenerationModelSelection, {
         instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        provider: ProviderInstanceId.makeUnsafe("codex"),
         model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
         options: [{ id: "fastMode", value: false }],
       });
@@ -123,6 +124,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       assert.deepEqual(next.textGenerationModelSelection, {
         instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        provider: ProviderInstanceId.makeUnsafe("claudeAgent"),
         model: "claude-sonnet-4-5",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
@@ -149,6 +151,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       assert.deepEqual(next.textGenerationModelSelection, {
         instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        provider: ProviderInstanceId.makeUnsafe("codex"),
         model: "gpt-5.4",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),

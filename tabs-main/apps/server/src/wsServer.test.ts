@@ -578,7 +578,12 @@ describe("WebSocket Server", () => {
       ),
       runtimeOverrides,
     );
-    const dependenciesLayer = Layer.empty.pipe(
+    // The runtime's internals (orchestration reactors) bind to the real
+    // `ProviderRegistry` bundled in `makeServerProviderLayer()` at build time.
+    // Merge the test stub last so the transport-facing `yield* ProviderRegistry`
+    // in `createServer` resolves to the stub (Layer.merge: second arg wins),
+    // while orchestration keeps the real registry it captured during build.
+    const dependenciesLayerBase = Layer.empty.pipe(
       Layer.provideMerge(runtimeLayer),
       Layer.provideMerge(providerRegistryLayer),
       Layer.provideMerge(openLayer),
@@ -587,6 +592,7 @@ describe("WebSocket Server", () => {
       Layer.provideMerge(AnalyticsService.layerTest),
       Layer.provideMerge(NodeServices.layer),
     );
+    const dependenciesLayer = Layer.merge(dependenciesLayerBase, providerRegistryLayer);
     const runtimeServices = await Effect.runPromise(
       Layer.build(dependenciesLayer).pipe(Scope.provide(scope)),
     );
@@ -770,6 +776,7 @@ describe("WebSocket Server", () => {
           workspaceRoot: "/test/bootstrap-workspace",
           title: "bootstrap-workspace",
           defaultModelSelection: {
+            instanceId: "codex",
             provider: "codex",
             model: "gpt-5-codex",
           },
@@ -783,6 +790,7 @@ describe("WebSocket Server", () => {
           projectId: bootstrapProjectId,
           title: "New thread",
           modelSelection: {
+            instanceId: "codex",
             provider: "codex",
             model: "gpt-5-codex",
           },

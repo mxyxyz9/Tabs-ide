@@ -25,6 +25,10 @@ export default defineConfig({
       // whereas the previous version of the plugin parsed all files with a .ts extension.
       // This is causing our packages/ directory to fail to parse, as they are not relative to the CWD.
       parserOpts: { plugins: ["typescript", "jsx"] },
+      // The React Compiler pass dominates build time. Skip its source-map
+      // generation whenever build sourcemaps are disabled (TABS_WEB_SOURCEMAP=0),
+      // which the plugin docs note "will improve performance".
+      sourceMap: buildSourcemap !== false,
       presets: [reactCompilerPreset()],
     }),
     tailwindcss(),

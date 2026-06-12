@@ -52,7 +52,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           'project-1',
           'Project 1',
           '/tmp/project-1',
-          '{"provider":"codex","model":"gpt-5-codex"}',
+          '{"instanceId":"codex","model":"gpt-5-codex"}',
           '[{"id":"script-1","name":"Build","command":"bun run build","icon":"build","runOnWorktreeCreate":false}]',
           '2026-02-24T00:00:00.000Z',
           '2026-02-24T00:00:01.000Z',
@@ -77,7 +77,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           'thread-1',
           'project-1',
           'Thread 1',
-          '{"provider":"codex","model":"gpt-5-codex"}',
+          '{"instanceId":"codex","model":"gpt-5-codex"}',
           NULL,
           NULL,
           'turn-1',
@@ -244,6 +244,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           workspaceRoot: "/tmp/project-1",
           defaultModelSelection: {
             instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            provider: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           scripts: [
@@ -267,6 +268,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           title: "Thread 1",
           modelSelection: {
             instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            provider: ProviderInstanceId.makeUnsafe("codex"),
             model: "gpt-5-codex",
           },
           interactionMode: "default",

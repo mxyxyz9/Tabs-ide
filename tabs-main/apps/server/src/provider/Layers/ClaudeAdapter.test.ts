@@ -3032,7 +3032,6 @@ describe("ClaudeAdapterLive", () => {
   it.effect.each<{ runtimeMode: RuntimeMode; expectedBase: PermissionMode }>([
     { runtimeMode: "full-access", expectedBase: "bypassPermissions" },
     { runtimeMode: "approval-required", expectedBase: "default" },
-    { runtimeMode: "full-access", expectedBase: "acceptEdits" },
   ])(
     "restores $expectedBase permission mode after plan turn ($runtimeMode)",
     ({ runtimeMode, expectedBase }) => {

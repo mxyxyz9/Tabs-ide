@@ -52,7 +52,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       assert.strictEqual(
         row.defaultModelSelection,
         JSON.stringify({
-          provider: "codex",
+          instanceId: "codex",
           model: "gpt-5.4",
         }),
       );
@@ -62,6 +62,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       });
       assert.deepStrictEqual(Option.getOrNull(persisted)?.defaultModelSelection, {
         instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        provider: ProviderInstanceId.makeUnsafe("codex"),
         model: "gpt-5.4",
       });
     }),
@@ -106,7 +107,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       assert.strictEqual(
         row.modelSelection,
         JSON.stringify({
-          provider: "claudeAgent",
+          instanceId: "claudeAgent",
           model: "claude-opus-4-6",
         }),
       );
@@ -116,6 +117,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       });
       assert.deepStrictEqual(Option.getOrNull(persisted)?.modelSelection, {
         instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        provider: ProviderInstanceId.makeUnsafe("claudeAgent"),
         model: "claude-opus-4-6",
       });
     }),

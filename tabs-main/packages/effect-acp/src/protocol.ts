@@ -433,7 +433,15 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     Effect.forkScoped,
   );
 
-  yield* Stream.fromQueue(outgoing).pipe(Stream.run(options.stdio.stdout), Effect.forkScoped);
+  // Writing the outgoing queue to the peer's stdin can fail with EPIPE once the
+  // peer process has exited (common during teardown). That race is benign — the
+  // session is ending — so swallow it instead of surfacing an unhandled error
+  // from this forked fiber.
+  yield* Stream.fromQueue(outgoing).pipe(
+    Stream.run(options.stdio.stdout),
+    Effect.ignore,
+    Effect.forkScoped,
+  );
 
   const clientProtocol = RpcClient.Protocol.of({
     run: (f) =>

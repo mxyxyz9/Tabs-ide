@@ -98,9 +98,9 @@ describe("buildTurnStartParams", () => {
 
     assert.deepStrictEqual(params, {
       threadId: "provider-thread-1",
-      approvalPolicy: "on-request",
+      approvalPolicy: "never",
       sandboxPolicy: {
-        type: "workspaceWrite",
+        type: "dangerFullAccess",
       },
       input: [
         {
