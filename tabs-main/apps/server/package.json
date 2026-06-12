@@ -1,6 +1,6 @@
 {
   "name": "tabs",
-  "version": "1.2.2",
+  "version": "1.2.9",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,7 +16,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "node scripts/cli.ts build",
+    "build": "bun scripts/cli.ts build",
     "start": "node dist/index.mjs",
     "prepare": "effect-language-service patch",
     "typecheck": "tsc --noEmit",

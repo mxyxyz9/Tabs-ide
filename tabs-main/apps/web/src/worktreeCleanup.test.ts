@@ -22,6 +22,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     error: null,
     createdAt: "2026-02-13T00:00:00.000Z",
     latestTurn: null,
+    archivedAt: null,
     branch: null,
     worktreePath: null,
     ...overrides,

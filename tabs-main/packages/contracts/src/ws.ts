@@ -128,6 +128,7 @@ export const WS_METHODS = {
   serverRefreshProviders: "server.refreshProviders",
   serverRunProviderMaintenance: "server.runProviderMaintenance",
   serverUpsertKeybinding: "server.upsertKeybinding",
+  serverRemoveKeybinding: "server.removeKeybinding",
   serverGetSettings: "server.getSettings",
   serverUpdateSettings: "server.updateSettings",
 } as const;
@@ -221,6 +222,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverRefreshProviders, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverRunProviderMaintenance, ServerRunProviderMaintenanceInput),
   tagRequestBody(WS_METHODS.serverUpsertKeybinding, KeybindingRule),
+  tagRequestBody(WS_METHODS.serverRemoveKeybinding, KeybindingRule),
   tagRequestBody(WS_METHODS.serverGetSettings, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverUpdateSettings, Schema.Struct({ patch: ServerSettingsPatch })),
 ]);

@@ -36,6 +36,10 @@
       "types": "./src/Struct.ts",
       "import": "./src/Struct.ts"
     },
+    "./keybindings": {
+      "types": "./src/keybindings.ts",
+      "import": "./src/keybindings.ts"
+    },
     "./semver": {
       "types": "./src/semver.ts",
       "import": "./src/semver.ts"

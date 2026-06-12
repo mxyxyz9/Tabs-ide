@@ -19,9 +19,12 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArchiveIcon,
+  ArchiveRestoreIcon,
   BugIcon,
   BotIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   ExternalLinkIcon,
   FolderSearchIcon,
@@ -662,10 +665,14 @@ function resolveProjectAgentThread(
   threads: ReadonlyArray<Thread>,
   rememberedThreadId: ThreadId | null,
 ): Thread | null {
+  // Archived threads are never auto-opened as a project's default thread.
+  const activeThreads = threads.filter((thread) => thread.archivedAt === null);
   const rememberedThread = rememberedThreadId
-    ? threads.find((thread) => thread.id === rememberedThreadId && thread.projectId === projectId)
+    ? activeThreads.find(
+        (thread) => thread.id === rememberedThreadId && thread.projectId === projectId,
+      )
     : null;
-  return rememberedThread ?? resolveMostRecentThreadForProject(projectId, threads);
+  return rememberedThread ?? resolveMostRecentThreadForProject(projectId, activeThreads);
 }
 
 function ProjectTabs(props: {
@@ -817,9 +824,14 @@ function AgentsThreadList(props: {
   onSelectThread: (threadId: ThreadId) => void;
   onCreateThread: () => void;
   onDeleteThread: (thread: Thread) => void | Promise<void>;
+  onArchiveThread: (thread: Thread) => void | Promise<void>;
+  onUnarchiveThread: (thread: Thread) => void | Promise<void>;
   children: ReactNode;
 }) {
   const [threadPendingDelete, setThreadPendingDelete] = useState<Thread | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const activeThreads = props.threads.filter((thread) => thread.archivedAt === null);
+  const archivedThreads = props.threads.filter((thread) => thread.archivedAt !== null);
   return (
     <div className="flex h-full min-h-0 min-w-0">
       <div className="flex w-72 shrink-0 flex-col border-r border-border/70 bg-card/40">
@@ -837,12 +849,12 @@ function AgentsThreadList(props: {
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-1 p-2">
-            {props.threads.length === 0 ? (
+            {activeThreads.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
                 No threads yet for this project.
               </div>
             ) : (
-              props.threads.map((thread) => {
+              activeThreads.map((thread) => {
                 const active = props.activeThreadId === thread.id;
                 return (
                   <div
@@ -879,6 +891,10 @@ function AgentsThreadList(props: {
                         <MoreHorizontalIcon className="size-4" />
                       </MenuTrigger>
                       <MenuPopup align="end" side="bottom" className="min-w-40">
+                        <MenuItem onClick={() => void props.onArchiveThread(thread)}>
+                          <ArchiveIcon className="size-3.5" />
+                          Archive thread
+                        </MenuItem>
                         <MenuItem
                           variant="destructive"
                           onClick={() => setThreadPendingDelete(thread)}
@@ -892,6 +908,80 @@ function AgentsThreadList(props: {
                 );
               })
             )}
+
+            {archivedThreads.length > 0 ? (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowArchived((value) => !value)}
+                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+                >
+                  {showArchived ? (
+                    <ChevronDownIcon className="size-3.5" />
+                  ) : (
+                    <ChevronRightIcon className="size-3.5" />
+                  )}
+                  Archived ({archivedThreads.length})
+                </button>
+                {showArchived ? (
+                  <div className="space-y-1 pt-1">
+                    {archivedThreads.map((thread) => {
+                      const active = props.activeThreadId === thread.id;
+                      return (
+                        <div
+                          key={thread.id}
+                          className={cn(
+                            "group relative flex items-center rounded-xl border transition-colors",
+                            active
+                              ? "border-primary/40 bg-primary/10"
+                              : "border-transparent hover:border-border/70 hover:bg-accent/50",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => props.onSelectThread(thread.id)}
+                            className="min-w-0 flex-1 px-3 py-2 text-left"
+                          >
+                            <div className="truncate text-sm font-medium text-muted-foreground">
+                              {thread.title}
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground/70">
+                              {thread.modelSelection.instanceId} · {thread.runtimeMode}
+                            </div>
+                          </button>
+                          <Menu>
+                            <MenuTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  aria-label={`Thread actions for ${thread.title}`}
+                                  className="mr-1.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+                                />
+                              }
+                            >
+                              <MoreHorizontalIcon className="size-4" />
+                            </MenuTrigger>
+                            <MenuPopup align="end" side="bottom" className="min-w-40">
+                              <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
+                                <ArchiveRestoreIcon className="size-3.5" />
+                                Unarchive thread
+                              </MenuItem>
+                              <MenuItem
+                                variant="destructive"
+                                onClick={() => setThreadPendingDelete(thread)}
+                              >
+                                <Trash2Icon className="size-3.5" />
+                                Delete thread
+                              </MenuItem>
+                            </MenuPopup>
+                          </Menu>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </ScrollArea>
       </div>
@@ -7161,6 +7251,30 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     [navigate, routeThreadId],
   );
 
+  const handleArchiveThread = useCallback(
+    async (thread: Thread) => {
+      const api = readNativeApi() ?? ensureNativeApi();
+      await api.orchestration.dispatchCommand({
+        type: "thread.archive",
+        commandId: newCommandId(),
+        threadId: thread.id,
+      });
+      if (routeThreadId === thread.id) {
+        void navigate({ to: "/" });
+      }
+    },
+    [navigate, routeThreadId],
+  );
+
+  const handleUnarchiveThread = useCallback(async (thread: Thread) => {
+    const api = readNativeApi() ?? ensureNativeApi();
+    await api.orchestration.dispatchCommand({
+      type: "thread.unarchive",
+      commandId: newCommandId(),
+      threadId: thread.id,
+    });
+  }, []);
+
   const handleSelectTool = useCallback(
     async (toolId: string) => {
       if (!activeProject || !activeToolSettings) {
@@ -7963,6 +8077,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           })
         }
         onDeleteThread={handleDeleteThread}
+        onArchiveThread={handleArchiveThread}
+        onUnarchiveThread={handleUnarchiveThread}
       >
         {props.agentsContent}
       </AgentsThreadList>

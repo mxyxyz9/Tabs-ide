@@ -104,6 +104,7 @@ export interface Thread {
   updatedAt?: string | undefined;
   latestTurn: OrchestrationLatestTurn | null;
   lastVisitedAt?: string | undefined;
+  archivedAt: string | null;
   branch: string | null;
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];

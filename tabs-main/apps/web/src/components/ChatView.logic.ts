@@ -37,6 +37,7 @@ export function buildLocalDraftThread(
     createdAt: draftThread.createdAt,
     latestTurn: null,
     lastVisitedAt: draftThread.createdAt,
+    archivedAt: null,
     branch: draftThread.branch,
     worktreePath: draftThread.worktreePath,
     turnDiffSummaries: [],

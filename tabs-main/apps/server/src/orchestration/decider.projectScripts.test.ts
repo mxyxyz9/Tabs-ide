@@ -193,7 +193,7 @@ describe("decider project scripts", () => {
       threadId: ThreadId.makeUnsafe("thread-1"),
       messageId: asMessageId("message-user-1"),
       modelSelection: {
-        provider: "codex",
+        instanceId: "codex",
         model: "gpt-5.3-codex",
         options: [
           { id: "reasoningEffort", value: "high" },

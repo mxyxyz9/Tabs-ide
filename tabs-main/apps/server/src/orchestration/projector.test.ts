@@ -71,6 +71,7 @@ describe("orchestration projector", () => {
         projectId: "project-1",
         title: "demo",
         modelSelection: {
+          instanceId: "codex",
           provider: "codex",
           model: "gpt-5-codex",
         },
@@ -82,6 +83,7 @@ describe("orchestration projector", () => {
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
+        archivedAt: null,
         messages: [],
         proposedPlans: [],
         activities: [],

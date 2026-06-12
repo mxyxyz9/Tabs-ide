@@ -189,6 +189,13 @@ export const ServerUpsertKeybindingResult = Schema.Struct({
 });
 export type ServerUpsertKeybindingResult = typeof ServerUpsertKeybindingResult.Type;
 
+/** Remove the custom override for a command, reverting it to its default. */
+export const ServerRemoveKeybindingInput = KeybindingRule;
+export type ServerRemoveKeybindingInput = typeof ServerRemoveKeybindingInput.Type;
+
+export const ServerRemoveKeybindingResult = ServerUpsertKeybindingResult;
+export type ServerRemoveKeybindingResult = typeof ServerRemoveKeybindingResult.Type;
+
 export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,
   settings: Schema.optional(ServerSettings),

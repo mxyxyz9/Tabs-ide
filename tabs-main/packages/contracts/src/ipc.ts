@@ -58,6 +58,7 @@ import type {
 import type {
   ServerConfig,
   ServerProviderUpdatedPayload,
+  ServerRemoveKeybindingResult,
   ServerUpsertKeybindingResult,
 } from "./server";
 import type {
@@ -70,7 +71,11 @@ import type {
   TerminalSessionSnapshot,
   TerminalWriteInput,
 } from "./terminal";
-import type { ServerRunProviderMaintenanceInput, ServerUpsertKeybindingInput } from "./server";
+import type {
+  ServerRemoveKeybindingInput,
+  ServerRunProviderMaintenanceInput,
+  ServerUpsertKeybindingInput,
+} from "./server";
 import type {
   ClientOrchestrationCommand,
   OrchestrationGetFullThreadDiffInput,
@@ -394,6 +399,7 @@ export interface NativeApi {
       input: ServerRunProviderMaintenanceInput,
     ) => Promise<ServerProviderUpdatedPayload>;
     upsertKeybinding: (input: ServerUpsertKeybindingInput) => Promise<ServerUpsertKeybindingResult>;
+    removeKeybinding: (input: ServerRemoveKeybindingInput) => Promise<ServerRemoveKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
   };

@@ -36,6 +36,7 @@ function makeThread(id: string, projectId: Project["id"]): Thread {
     updatedAt: "2026-03-27T00:00:00.000Z",
     latestTurn: null,
     lastVisitedAt: undefined,
+    archivedAt: null,
     branch: null,
     worktreePath: null,
     turnDiffSummaries: [],

@@ -101,6 +101,7 @@ describe("resolveThreadStatusPill", () => {
     interactionMode: "plan" as const,
     latestTurn: null,
     lastVisitedAt: undefined,
+    archivedAt: null,
     proposedPlans: [],
     session: {
       provider: "codex" as const,
@@ -382,6 +383,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     createdAt: "2026-03-09T10:00:00.000Z",
     updatedAt: "2026-03-09T10:00:00.000Z",
     latestTurn: null,
+    archivedAt: null,
     branch: null,
     worktreePath: null,
     turnDiffSummaries: [],

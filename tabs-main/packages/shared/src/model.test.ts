@@ -205,6 +205,7 @@ describe("descriptor helpers", () => {
       ]),
     ).toEqual({
       instanceId: "codex",
+      provider: "codex",
       model: "gpt-5.4",
       options: [
         { id: "reasoningEffort", value: "high" },

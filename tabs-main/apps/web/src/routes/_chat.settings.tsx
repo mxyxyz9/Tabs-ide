@@ -21,11 +21,13 @@ import {
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type DesktopUpdateState,
+  type KeybindingRule,
   type ModelSelection,
   type ModelSlug,
   PROVIDER_DISPLAY_NAMES,
   type ProviderInstanceId,
   type ProviderKind,
+  type ResolvedKeybindingsConfig,
   type ServerProvider,
   type ServerProviderModel,
 } from "@tabs/contracts";
@@ -65,6 +67,7 @@ const asTypedOptions = (
 ): ProviderModelOptions[ProviderKind] | undefined =>
   options ? (selectionsToTypedOptions(options) as ProviderModelOptions[ProviderKind]) : undefined;
 import { APP_VERSION } from "../branding";
+import { KeybindingsSettings } from "../components/settings/KeybindingsSettings";
 import { Button } from "../components/ui/button";
 import { Collapsible, CollapsibleContent } from "../components/ui/collapsible";
 import { Input } from "../components/ui/input";
@@ -131,6 +134,7 @@ const TIMESTAMP_FORMAT_LABELS = {
 } as const;
 
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
+const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 
 type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode";
 
@@ -731,6 +735,34 @@ function SettingsRouteView() {
     ...(isGitWritingModelDirty ? ["Git writing model"] : []),
     ...(areProviderSettingsDirty ? ["Providers"] : []),
   ];
+
+  const resolvedKeybindings = serverConfigQuery.data?.keybindings ?? EMPTY_KEYBINDINGS;
+
+  const applyKeybindingMutation = useCallback(
+    (run: Promise<unknown>) =>
+      run
+        .then(() => queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() }))
+        .catch((error: unknown) => {
+          toastManager.add({
+            type: "error",
+            title: "Couldn't update keybinding",
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        }),
+    [queryClient],
+  );
+
+  const handleUpsertKeybinding = useCallback(
+    (rule: KeybindingRule) =>
+      applyKeybindingMutation(ensureNativeApi().server.upsertKeybinding(rule)),
+    [applyKeybindingMutation],
+  );
+
+  const handleRemoveKeybinding = useCallback(
+    (rule: KeybindingRule) =>
+      applyKeybindingMutation(ensureNativeApi().server.removeKeybinding(rule)),
+    [applyKeybindingMutation],
+  );
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
@@ -1984,8 +2016,13 @@ function SettingsRouteView() {
                 ) : null}
                 {activeSettingsSection === "keybindings" ? (
                   <SettingsSection title="Keybindings">
+                    <KeybindingsSettings
+                      keybindings={resolvedKeybindings}
+                      onUpsert={handleUpsertKeybinding}
+                      onRemove={handleRemoveKeybinding}
+                    />
                     <SettingsRow
-                      title="Keybindings"
+                      title="Advanced"
                       description="Open the persisted `keybindings.json` file to edit advanced bindings directly."
                       status={
                         <>
