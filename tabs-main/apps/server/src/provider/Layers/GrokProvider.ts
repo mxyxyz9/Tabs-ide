@@ -43,7 +43,11 @@ const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
 });
 
 const VERSION_PROBE_TIMEOUT_MS = 4_000;
-const GROK_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
+// Grok's ACP `authenticate` call blocks indefinitely when the CLI is not signed
+// in, so an unauthenticated probe can only fail by hitting this timeout. Keep it
+// short so it doesn't stall provider startup; a signed-in Grok responds in well
+// under a second.
+const GROK_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 6_000;
 
 const GROK_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
   {
@@ -249,6 +253,10 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     Effect.exit,
   );
   if (Exit.isFailure(discoveryExit)) {
+    // Grok exposes an ACP entrypoint (`grok agent stdio`) but its ACP session
+    // requires the CLI to be signed in; an unauthenticated probe fails (or times
+    // out on the blocking `authenticate` call). Surface a clean, actionable status
+    // instead of the raw RpcClientDefect stack (kept in the logs for debugging).
     const detail = Cause.pretty(discoveryExit.cause);
     yield* Effect.logWarning("Grok ACP model discovery failed", { cause: detail });
     return buildServerProvider({
@@ -261,7 +269,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
         version,
         status: "error",
         auth: { status: "unknown" },
-        message: `Grok CLI is installed but ACP startup failed. ${detail}`,
+        message:
+          "Grok CLI is installed but Tabs couldn't start an ACP session. " +
+          "Sign in with `grok login` (or set XAI_API_KEY), then retry.",
       },
     });
   }
@@ -279,7 +289,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
         version,
         status: "error",
         auth: { status: "unknown" },
-        message: `Grok CLI is installed but ACP startup timed out after ${GROK_ACP_MODEL_DISCOVERY_TIMEOUT_MS}ms.`,
+        message:
+          `Grok CLI is installed but ACP startup timed out after ${GROK_ACP_MODEL_DISCOVERY_TIMEOUT_MS}ms, ` +
+          "which usually means it isn't signed in. Run `grok login` (or set XAI_API_KEY), then retry.",
       },
     });
   }

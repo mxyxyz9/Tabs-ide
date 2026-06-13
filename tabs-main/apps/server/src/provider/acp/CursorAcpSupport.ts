@@ -85,14 +85,22 @@ export function applyCursorAcpModelSelection<E>(input: {
   readonly mapError: (context: CursorAcpModelSelectionErrorContext) => E;
 }): Effect.Effect<void, E> {
   return Effect.gen(function* () {
-    yield* input.runtime.setModel(resolveCursorAcpBaseModelId(input.model)).pipe(
-      Effect.mapError((cause) =>
-        input.mapError({
-          cause,
-          step: "set-model",
-        }),
-      ),
-    );
+    // `resolveCursorAcpBaseModelId` returns the "default" sentinel when no model
+    // was selected. Cursor's model config option rejects that id ("Invalid value
+    // 'default' for session config option"), which aborts the turn — so only set
+    // the model when we have a concrete one and otherwise keep Cursor's current
+    // model.
+    const baseModelId = resolveCursorAcpBaseModelId(input.model);
+    if (baseModelId !== "default") {
+      yield* input.runtime.setModel(baseModelId).pipe(
+        Effect.mapError((cause) =>
+          input.mapError({
+            cause,
+            step: "set-model",
+          }),
+        ),
+      );
+    }
 
     const configUpdates = resolveCursorAcpConfigUpdates(
       yield* input.runtime.getConfigOptions,

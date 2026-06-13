@@ -15,22 +15,45 @@ const buildSourcemap =
       ? "hidden"
       : true;
 
-export default defineConfig({
+// The React Compiler (run via @rolldown/plugin-babel below) is ~90% of build
+// time. This knob controls it:
+//   "infer"      – default; auto-memoize all components/hooks (best runtime perf)
+//   "annotation" – only compile functions tagged "use memo" (near-zero build cost,
+//                  but also near-zero memoization — opt-in only)
+//   "off"        – skip the compiler entirely (fastest build, no memoization)
+// Per CLAUDE.md "performance first", the default keeps full memoization.
+const compilerMode = (process.env.TABS_WEB_COMPILER?.trim().toLowerCase() ?? "infer") as
+  | "infer"
+  | "annotation"
+  | "off";
+
+export default defineConfig(({ command }) => ({
   plugins: [
     tanstackRouter(),
     react(),
-    babel({
-      // We need to be explicit about the parser options after moving to @vitejs/plugin-react v6.0.0
-      // This is because the babel plugin only automatically parses typescript and jsx based on relative paths (e.g. "**/*.ts")
-      // whereas the previous version of the plugin parsed all files with a .ts extension.
-      // This is causing our packages/ directory to fail to parse, as they are not relative to the CWD.
-      parserOpts: { plugins: ["typescript", "jsx"] },
-      // The React Compiler pass dominates build time. Skip its source-map
-      // generation whenever build sourcemaps are disabled (TABS_WEB_SOURCEMAP=0),
-      // which the plugin docs note "will improve performance".
-      sourceMap: buildSourcemap !== false,
-      presets: [reactCompilerPreset()],
-    }),
+    // Gate the compiler to production builds only: dev relies on react()'s fast
+    // refresh, so skipping the babel pass keeps dev-server startup and HMR snappy.
+    command === "build" && compilerMode !== "off"
+      ? babel({
+          // We need to be explicit about the parser options after moving to @vitejs/plugin-react v6.0.0
+          // This is because the babel plugin only automatically parses typescript and jsx based on relative paths (e.g. "**/*.ts")
+          // whereas the previous version of the plugin parsed all files with a .ts extension.
+          // This is causing our packages/ directory to fail to parse, as they are not relative to the CWD.
+          parserOpts: { plugins: ["typescript", "jsx"] },
+          // Skip the compiler's source-map generation when build sourcemaps are
+          // disabled (TABS_WEB_SOURCEMAP=0); the plugin docs note this "will
+          // improve performance".
+          sourceMap: buildSourcemap !== false,
+          // Cast: the preset's option type is the fully-resolved PluginOptions
+          // (all fields required), but it accepts a partial at runtime and fills
+          // defaults via zod, so a single-field object is safe here.
+          presets: [
+            reactCompilerPreset({ compilationMode: compilerMode } as Parameters<
+              typeof reactCompilerPreset
+            >[0]),
+          ],
+        })
+      : null,
     tailwindcss(),
   ],
   optimizeDeps: {
@@ -60,4 +83,4 @@ export default defineConfig({
     emptyOutDir: true,
     sourcemap: buildSourcemap,
   },
-});
+}));

@@ -20,3 +20,6 @@ apps/web/src/components/__screenshots__
 .vitest-*
 __screenshots__/
 .tanstack
+
+# Provider CLIs write per-project runtime state into the cwd Tabs launches them in.
+.grok/
