@@ -946,6 +946,18 @@ const runCursorCommand = (
       { concurrency: "unbounded" },
     );
 
+    // TEMP DEBUG (remove): why does `agent` work in a terminal but fail in-app?
+    yield* Effect.logWarning("CURSOR_DEBUG runCursorCommand", {
+      binaryPath: cursorSettings.binaryPath,
+      args: [...args],
+      code: exitCode,
+      stdoutHead: stdout.slice(0, 300),
+      stderrHead: stderr.slice(0, 300),
+      HOME: environment.HOME,
+      pathHasLocalBin: (environment.PATH ?? "").includes("/.local/bin"),
+      PATH: (environment.PATH ?? "").slice(0, 400),
+    });
+
     return { stdout, stderr, code: exitCode } satisfies CommandResult;
   }).pipe(Effect.scoped);
 
