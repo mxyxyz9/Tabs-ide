@@ -1065,10 +1065,19 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     });
   }
 
+  // Drop `workspace:*` deps (e.g. `effect-acp`, `effect-codex-app-server`): they
+  // are bundled into the server output by tsdown's `noExternal`, so they must
+  // not appear in the staged package.json — the staged install has no workspace
+  // and would fail to resolve them.
+  const externalServerDependencies = Object.fromEntries(
+    Object.entries(serverDependencies).filter(
+      ([, spec]) => typeof spec !== "string" || !spec.startsWith("workspace:"),
+    ),
+  );
   const resolvedServerDependencies = yield* Effect.try({
     try: () =>
       resolveCatalogDependencies(
-        serverDependencies,
+        externalServerDependencies,
         rootPackageJson.workspaces.catalog,
         "apps/server",
       ),

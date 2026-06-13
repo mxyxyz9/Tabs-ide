@@ -9,7 +9,16 @@ export default defineConfig({
   outDir: "dist",
   sourcemap: true,
   clean: true,
-  noExternal: (id) => id.startsWith("@tabs/"),
+  // Bundle internal workspace packages into the server output so the packaged
+  // desktop app doesn't need to resolve `workspace:*` deps at runtime. This
+  // covers the `@tabs/*` packages plus the (unscoped) `effect-acp` and
+  // `effect-codex-app-server` workspace packages.
+  noExternal: (id) =>
+    id.startsWith("@tabs/") ||
+    id === "effect-acp" ||
+    id.startsWith("effect-acp/") ||
+    id === "effect-codex-app-server" ||
+    id.startsWith("effect-codex-app-server/"),
   inlineOnly: false,
   banner: {
     js: "#!/usr/bin/env node\n",
