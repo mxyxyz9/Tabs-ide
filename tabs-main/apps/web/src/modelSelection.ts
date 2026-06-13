@@ -5,6 +5,7 @@ import {
   type ServerProvider,
 } from "@tabs/contracts";
 import { normalizeModelSlug, resolveSelectableModel } from "@tabs/shared/model";
+import { type ProviderPickerKind } from "./session-logic";
 import { getComposerProviderState } from "./components/chat/composerProviderRegistry";
 import { UnifiedSettings } from "@tabs/contracts/settings";
 import {
@@ -202,26 +203,35 @@ export function resolveAppModelSelection(
   );
 }
 
+// Every provider that can back text generation server-side (commit messages,
+// PR content, …). The server `TextGenerationProvider` covers all of these and
+// routes on `instanceId`, so the picker must offer them all — not just the two
+// legacy `ProviderKind` values. Providers with no resolvable models are filtered
+// out by the caller, so unauthenticated/uninstalled ones simply don't appear.
+const TEXT_GEN_PROVIDER_KEYS = [
+  "codex",
+  "claudeAgent",
+  "cursor",
+  "grok",
+  "opencode",
+] as const satisfies ReadonlyArray<ProviderPickerKind & keyof UnifiedSettings["providers"]>;
+
 export function getCustomModelOptionsByProvider(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
-  selectedProvider?: ProviderKind | null,
+  selectedProvider?: string | null,
   selectedModel?: string | null,
-): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
-  return {
-    codex: getAppModelOptions(
+): Record<ProviderPickerKind, ReadonlyArray<{ slug: string; name: string }>> {
+  const result = {} as Record<ProviderPickerKind, AppModelOption[]>;
+  for (const provider of TEXT_GEN_PROVIDER_KEYS) {
+    result[provider] = getAppModelOptions(
       settings,
       providers,
-      "codex",
-      selectedProvider === "codex" ? selectedModel : undefined,
-    ),
-    claudeAgent: getAppModelOptions(
-      settings,
-      providers,
-      "claudeAgent",
-      selectedProvider === "claudeAgent" ? selectedModel : undefined,
-    ),
-  };
+      provider,
+      selectedProvider === provider ? selectedModel : undefined,
+    );
+  }
+  return result;
 }
 
 export function resolveAppModelSelectionState(

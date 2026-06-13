@@ -63,6 +63,12 @@ const latestVersionCache = new Map<string, LatestVersionCacheEntry>();
 const NpmLatestVersionResponse = Schema.Struct({
   version: Schema.optional(Schema.String),
 });
+const HomebrewCaskResponse = Schema.Struct({
+  version: Schema.optional(Schema.String),
+});
+const HomebrewFormulaResponse = Schema.Struct({
+  versions: Schema.optional(Schema.Struct({ stable: Schema.optional(Schema.String) })),
+});
 
 export function clearLatestProviderVersionCacheForTests(): void {
   latestVersionCache.clear();
@@ -422,22 +428,111 @@ const fetchNpmLatestVersion = Effect.fn("fetchNpmLatestVersion")(function* (pack
   return payload ? nonEmptyString(payload.version) : null;
 });
 
-export const resolveLatestProviderVersion = Effect.fn("resolveLatestProviderVersion")(function* (
-  maintenanceCapabilities: ProviderMaintenanceCapabilities,
+// Homebrew cask/formula versions lag the npm registry, so a Homebrew-managed
+// install must be compared against what `brew upgrade` can actually deliver —
+// otherwise the advisory pins an unreachable npm version and the update prompt
+// never clears. Tapped formulae (e.g. `tap/owner/name`) aren't served by the
+// public API; those resolve to null (status "unknown", no false prompt).
+function homebrewVersionToSemver(raw: string | null | undefined): string | null {
+  const value = nonEmptyString(raw ?? null);
+  if (!value) {
+    return null;
+  }
+  // Cask versions can carry a revision/build suffix like "2.1.153,abc123".
+  const [head] = value.split(/[,_:]/, 1);
+  return nonEmptyString(head ?? null);
+}
+
+const fetchHomebrewLatestVersion = Effect.fn("fetchHomebrewLatestVersion")(function* (
+  token: string,
 ) {
-  const packageName = maintenanceCapabilities.packageName;
+  const client = yield* HttpClient.HttpClient;
+  const requestJson = (url: string) =>
+    client
+      .execute(
+        HttpClientRequest.get(url).pipe(HttpClientRequest.setHeader("accept", "application/json")),
+      )
+      .pipe(
+        Effect.timeoutOption(LATEST_VERSION_TIMEOUT_MS),
+        Effect.orElseSucceed(() => Option.none()),
+      );
+
+  const encoded = encodeURIComponent(token);
+  const caskResponse = yield* requestJson(`https://formulae.brew.sh/api/cask/${encoded}.json`);
+  if (Option.isSome(caskResponse)) {
+    const httpResponse = caskResponse.value;
+    if (httpResponse.status >= 200 && httpResponse.status < 300) {
+      const payload = yield* httpResponse.json.pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(HomebrewCaskResponse)),
+        Effect.orElseSucceed(() => null),
+      );
+      const version = homebrewVersionToSemver(payload?.version);
+      if (version) {
+        return version;
+      }
+    }
+  }
+
+  const formulaResponse = yield* requestJson(
+    `https://formulae.brew.sh/api/formula/${encoded}.json`,
+  );
+  if (Option.isSome(formulaResponse)) {
+    const httpResponse = formulaResponse.value;
+    if (httpResponse.status >= 200 && httpResponse.status < 300) {
+      const payload = yield* httpResponse.json.pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(HomebrewFormulaResponse)),
+        Effect.orElseSucceed(() => null),
+      );
+      const version = homebrewVersionToSemver(payload?.versions?.stable);
+      if (version) {
+        return version;
+      }
+    }
+  }
+
+  return null;
+});
+
+interface LatestVersionSource {
+  readonly cacheKey: string;
+  readonly fetch: Effect.Effect<string | null, never, HttpClient.HttpClient>;
+}
+
+function resolveLatestVersionSource(
+  capabilities: ProviderMaintenanceCapabilities,
+): LatestVersionSource | null {
+  const update = capabilities.update;
+  if (update?.executable === "brew") {
+    const token = update.args[update.args.length - 1];
+    if (!token) {
+      return null;
+    }
+    return { cacheKey: `brew:${token}`, fetch: fetchHomebrewLatestVersion(token) };
+  }
+
+  const packageName = capabilities.packageName;
   if (!packageName) {
     return null;
   }
+  return { cacheKey: `npm:${packageName}`, fetch: fetchNpmLatestVersion(packageName) };
+}
 
-  const cached = latestVersionCache.get(packageName);
+export const resolveLatestProviderVersion = Effect.fn("resolveLatestProviderVersion")(function* (
+  maintenanceCapabilities: ProviderMaintenanceCapabilities,
+) {
+  const source = resolveLatestVersionSource(maintenanceCapabilities);
+  if (!source) {
+    return null;
+  }
+
+  const cached = latestVersionCache.get(source.cacheKey);
   const now = DateTime.toEpochMillis(yield* DateTime.now);
   if (cached && cached.expiresAt > now) {
     return cached.version;
   }
 
-  const version = yield* fetchNpmLatestVersion(packageName);
-  latestVersionCache.set(packageName, {
+  const version = yield* source.fetch;
+  latestVersionCache.set(source.cacheKey, {
     expiresAt: now + LATEST_VERSION_CACHE_TTL_MS,
     version,
   });

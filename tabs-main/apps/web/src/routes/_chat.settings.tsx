@@ -25,11 +25,11 @@ import {
   type ModelSelection,
   type ModelSlug,
   PROVIDER_DISPLAY_NAMES,
-  type ProviderInstanceId,
   type ProviderKind,
   type ResolvedKeybindingsConfig,
   type ServerProvider,
   type ServerProviderModel,
+  ThreadId,
 } from "@tabs/contracts";
 import {
   type DesktopUpdateButtonAction,
@@ -57,6 +57,7 @@ import {
   MAX_CUSTOM_MODEL_LENGTH,
   resolveAppModelSelectionState,
   selectionsToTypedOptions,
+  typedOptionsToSelections,
 } from "../modelSelection";
 import type { ProviderModelOptions } from "@tabs/contracts";
 
@@ -68,6 +69,8 @@ const asTypedOptions = (
   options ? (selectionsToTypedOptions(options) as ProviderModelOptions[ProviderKind]) : undefined;
 import { APP_VERSION } from "../branding";
 import { KeybindingsSettings } from "../components/settings/KeybindingsSettings";
+import ThreadTerminalDrawer from "../components/ThreadTerminalDrawer";
+import { DEFAULT_THREAD_TERMINAL_HEIGHT, DEFAULT_THREAD_TERMINAL_ID } from "../types";
 import { Button } from "../components/ui/button";
 import { Collapsible, CollapsibleContent } from "../components/ui/collapsible";
 import { Input } from "../components/ui/input";
@@ -552,60 +555,83 @@ function SettingsRouteView() {
       });
   }, [queryClient]);
 
-  const [providerMaintenancePending, setProviderMaintenancePending] = useState<
-    Partial<Record<ProviderSettingsKey, "install" | "update">>
-  >({});
-  const providerMaintenanceRef = useRef<Set<string>>(new Set());
+  // Provider Install / Update / Sign in all run in an embedded PTY terminal
+  // docked at the bottom of the settings page, rather than as a headless server
+  // child process. The PTY spawns the user's real login shell, so it inherits a
+  // full PATH (npm / brew / curl resolve) and the CLI's OAuth browser redirect
+  // works. The session is keyed by a synthetic, settings-scoped thread id (the
+  // server treats threadId as an opaque session key).
+  type ProviderActionKind = "login" | "install" | "update";
+  const [providerActionSession, setProviderActionSession] = useState<{
+    provider: ProviderSettingsKey;
+    providerName: string;
+    command: string;
+    kind: ProviderActionKind;
+    threadId: ThreadId;
+  } | null>(null);
+  // Guards the one-time auto-run of the command per session: we write it once the
+  // PTY emits its first output/started event (shell is ready).
+  const providerActionCommandSentRef = useRef<string | null>(null);
 
-  // Run an Install / Update silently on the server. The command itself is
-  // resolved server-side (the web never ships a shell string), progress streams
-  // back via the provider snapshot push, and we refetch config on completion.
-  const runProviderMaintenance = useCallback(
+  const startProviderAction = useCallback(
     (input: {
-      instanceId: ProviderInstanceId;
-      providerKey: ProviderSettingsKey;
-      action: "install" | "update";
+      provider: ProviderSettingsKey;
       providerName: string;
+      command: string;
+      kind: ProviderActionKind;
     }) => {
-      const { instanceId, providerKey, action, providerName } = input;
-      if (providerMaintenanceRef.current.has(instanceId)) return;
-      providerMaintenanceRef.current.add(instanceId);
-      setProviderMaintenancePending((prev) => ({ ...prev, [providerKey]: action }));
-      const api = ensureNativeApi();
-      api.server
-        .runProviderMaintenance({ instanceId, action })
-        .then(() => {
-          void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
-          toastManager.add({
-            type: "success",
-            title: action === "install" ? `${providerName} installed` : `${providerName} updated`,
-            description:
-              action === "install"
-                ? "The provider is ready to use."
-                : "The provider is up to date.",
-          });
-        })
-        .catch((error: unknown) => {
-          toastManager.add({
-            type: "error",
-            title:
-              action === "install"
-                ? `${providerName} install failed`
-                : `${providerName} update failed`,
-            description: error instanceof Error ? error.message : "Please try again.",
-          });
-        })
-        .finally(() => {
-          providerMaintenanceRef.current.delete(instanceId);
-          setProviderMaintenancePending((prev) => {
-            const next = { ...prev };
-            delete next[providerKey];
-            return next;
-          });
-        });
+      if (input.command.trim().length === 0) return;
+      providerActionCommandSentRef.current = null;
+      setProviderActionSession({
+        provider: input.provider,
+        providerName: input.providerName,
+        command: input.command,
+        kind: input.kind,
+        threadId: ThreadId.makeUnsafe(`settings-${input.kind}-${input.provider}`),
+      });
     },
-    [queryClient],
+    [],
   );
+
+  const closeProviderAction = useCallback(() => {
+    setProviderActionSession((current) => {
+      if (current) {
+        const api = readNativeApi();
+        void api?.terminal.close({ threadId: current.threadId }).catch(() => undefined);
+      }
+      return null;
+    });
+    providerActionCommandSentRef.current = null;
+    // Re-read provider status so a completed install/update/sign-in is reflected
+    // (version bump, installed/authenticated) and the action button clears.
+    refreshProviders();
+  }, [refreshProviders]);
+
+  // Auto-run the command once the embedded terminal session is live. The
+  // TerminalViewport opens the PTY itself, so we listen for its first runtime
+  // event rather than racing the open call.
+  useEffect(() => {
+    if (!providerActionSession) return;
+    const api = readNativeApi();
+    if (!api) return;
+    const { threadId, command } = providerActionSession;
+    const sendOnce = () => {
+      if (providerActionCommandSentRef.current === threadId) return;
+      providerActionCommandSentRef.current = threadId;
+      void api.terminal
+        .write({ threadId, terminalId: DEFAULT_THREAD_TERMINAL_ID, data: `${command}\r` })
+        .catch(() => undefined);
+    };
+    const unsubscribe = api.terminal.onEvent((event) => {
+      if (event.threadId !== threadId || event.terminalId !== DEFAULT_THREAD_TERMINAL_ID) return;
+      if (event.type === "output" || event.type === "started" || event.type === "restarted") {
+        sendOnce();
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [providerActionSession]);
 
   const modelListRefs = useRef<Partial<Record<ProviderSettingsKey, HTMLDivElement | null>>>({});
 
@@ -646,6 +672,7 @@ function SettingsRouteView() {
 
   const codexHomePath = settings.providers.codex.homePath;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
+  const loginCwd = serverConfigQuery.data?.cwd ?? null;
   const availableEditors = serverConfigQuery.data?.availableEditors;
   const serverProviders = serverConfigQuery.data?.providers ?? EMPTY_SERVER_PROVIDERS;
 
@@ -693,11 +720,16 @@ function SettingsRouteView() {
       textGenerationModelSelection: resolveAppModelSelectionState(
         {
           ...settings,
-          textGenerationModelSelection: {
-            provider: textGenProvider,
-            model: textGenModel,
-            options,
-          } as ModelSelection,
+          // `makeAppModelSelection` is required here: it sets the `instanceId`
+          // the selection routes on and stores `options` in the wire array form.
+          // Building the object inline (provider-only, typed-object options) lost
+          // the instanceId — so the selection fell back to Codex and the trait
+          // reset instead of persisting.
+          textGenerationModelSelection: makeAppModelSelection(
+            textGenProvider,
+            textGenModel,
+            typedOptionsToSelections(options),
+          ),
         },
         serverProviders,
       ),
@@ -1554,12 +1586,8 @@ function SettingsRouteView() {
                           providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
                         ] ?? providerCard.title;
                       const RowIcon = providerCard.icon;
-                      const maintenanceInstanceId =
-                        providerCard.liveProvider?.instanceId ??
-                        (providerCard.provider as ProviderInstanceId);
-                      const pendingMaintenance =
-                        providerMaintenancePending[providerCard.provider] ?? null;
-                      const canRunMaintenance = providerCard.liveProvider != null;
+                      // A provider action terminal is already open (this row or another).
+                      const providerActionBusy = providerActionSession !== null;
 
                       return (
                         <div
@@ -1658,80 +1686,69 @@ function SettingsRouteView() {
                                 {(providerCard.needsInstall && providerCard.installCommand) ||
                                 providerCard.updatePrompt?.command ||
                                 (providerCard.needsAuth && providerCard.loginCommand) ? (
-                                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    {providerCard.needsInstall && providerCard.installCommand ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 gap-1.5 px-2.5 text-xs"
-                                        disabled={!canRunMaintenance || pendingMaintenance !== null}
-                                        onClick={() =>
-                                          runProviderMaintenance({
-                                            instanceId: maintenanceInstanceId,
-                                            providerKey: providerCard.provider,
-                                            action: "install",
-                                            providerName: providerDisplayName,
-                                          })
-                                        }
-                                      >
-                                        {pendingMaintenance === "install" ? (
-                                          <LoaderIcon className="size-3.5 animate-spin" />
-                                        ) : (
+                                  <div className="mt-2 flex flex-col gap-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {providerCard.needsInstall && providerCard.installCommand ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 gap-1.5 px-2.5 text-xs"
+                                          disabled={providerActionBusy}
+                                          onClick={() =>
+                                            startProviderAction({
+                                              provider: providerCard.provider,
+                                              providerName: providerDisplayName,
+                                              command: providerCard.installCommand ?? "",
+                                              kind: "install",
+                                            })
+                                          }
+                                        >
                                           <DownloadIcon className="size-3.5" />
-                                        )}
-                                        {pendingMaintenance === "install"
-                                          ? "Installing…"
-                                          : "Install"}
-                                      </Button>
-                                    ) : null}
-                                    {providerCard.updatePrompt?.command ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 gap-1.5 px-2.5 text-xs"
-                                        disabled={!canRunMaintenance || pendingMaintenance !== null}
-                                        onClick={() =>
-                                          runProviderMaintenance({
-                                            instanceId: maintenanceInstanceId,
-                                            providerKey: providerCard.provider,
-                                            action: "update",
-                                            providerName: providerDisplayName,
-                                          })
-                                        }
-                                      >
-                                        {pendingMaintenance === "update" ? (
-                                          <LoaderIcon className="size-3.5 animate-spin" />
-                                        ) : (
+                                          Install
+                                        </Button>
+                                      ) : null}
+                                      {providerCard.updatePrompt?.command ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 gap-1.5 px-2.5 text-xs"
+                                          disabled={providerActionBusy}
+                                          onClick={() =>
+                                            startProviderAction({
+                                              provider: providerCard.provider,
+                                              providerName: providerDisplayName,
+                                              command: providerCard.updatePrompt?.command ?? "",
+                                              kind: "update",
+                                            })
+                                          }
+                                        >
                                           <ArrowUpCircleIcon className="size-3.5" />
-                                        )}
-                                        {pendingMaintenance === "update" ? "Updating…" : "Update"}
-                                      </Button>
-                                    ) : null}
-                                    {providerCard.needsAuth && providerCard.loginCommand ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 gap-1.5 px-2.5 text-xs"
-                                        onClick={() =>
-                                          copyToClipboard(providerCard.loginCommand ?? "", {
-                                            providerName: providerDisplayName,
-                                          })
-                                        }
-                                      >
-                                        <LogInIcon className="size-3.5" />
-                                        Sign in
-                                      </Button>
-                                    ) : null}
-                                    {providerCard.needsAuth && providerCard.loginCommand ? (
-                                      <span className="text-[11px] text-muted-foreground/70">
-                                        Install and update run automatically. Sign in copies the
-                                        login command to run in your terminal.
-                                      </span>
-                                    ) : (
-                                      <span className="text-[11px] text-muted-foreground/70">
-                                        Runs automatically — no terminal needed.
-                                      </span>
-                                    )}
+                                          Update
+                                        </Button>
+                                      ) : null}
+                                      {providerCard.needsAuth && providerCard.loginCommand ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 gap-1.5 px-2.5 text-xs"
+                                          disabled={providerActionBusy}
+                                          onClick={() =>
+                                            startProviderAction({
+                                              provider: providerCard.provider,
+                                              providerName: providerDisplayName,
+                                              command: providerCard.loginCommand ?? "",
+                                              kind: "login",
+                                            })
+                                          }
+                                        >
+                                          <LogInIcon className="size-3.5" />
+                                          Sign in
+                                        </Button>
+                                      ) : null}
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground/70">
+                                      Opens a terminal below and runs the command.
+                                    </span>
                                   </div>
                                 ) : null}
                               </div>
@@ -2141,6 +2158,60 @@ function SettingsRouteView() {
             </div>
           </div>
         </div>
+
+        {providerActionSession && loginCwd ? (
+          <div className="flex shrink-0 flex-col border-t border-border bg-background">
+            <div className="flex items-center gap-2 px-4 py-1.5 sm:px-5">
+              {providerActionSession.kind === "install" ? (
+                <DownloadIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              ) : providerActionSession.kind === "update" ? (
+                <ArrowUpCircleIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <LogInIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span className="shrink-0 text-xs font-medium text-foreground">
+                {providerActionSession.kind === "install"
+                  ? `Installing ${providerActionSession.providerName}`
+                  : providerActionSession.kind === "update"
+                    ? `Updating ${providerActionSession.providerName}`
+                    : `Signing in to ${providerActionSession.providerName}`}
+              </span>
+              <code className="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                {providerActionSession.command}
+              </code>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="ms-auto h-6 shrink-0 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={closeProviderAction}
+              >
+                <XIcon className="size-3.5" />
+                Close
+              </Button>
+            </div>
+            <ThreadTerminalDrawer
+              variant="drawer"
+              showControls={false}
+              threadId={providerActionSession.threadId}
+              cwd={loginCwd}
+              height={DEFAULT_THREAD_TERMINAL_HEIGHT}
+              terminalIds={[DEFAULT_THREAD_TERMINAL_ID]}
+              activeTerminalId={DEFAULT_THREAD_TERMINAL_ID}
+              terminalGroups={[{ id: "action", terminalIds: [DEFAULT_THREAD_TERMINAL_ID] }]}
+              activeTerminalGroupId="action"
+              focusRequestId={0}
+              terminalLabels={{
+                [DEFAULT_THREAD_TERMINAL_ID]: providerActionSession.providerName,
+              }}
+              onSplitTerminal={() => {}}
+              onNewTerminal={() => {}}
+              onActiveTerminalChange={() => {}}
+              onCloseTerminal={closeProviderAction}
+              onHeightChange={() => {}}
+              onAddTerminalContext={() => {}}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

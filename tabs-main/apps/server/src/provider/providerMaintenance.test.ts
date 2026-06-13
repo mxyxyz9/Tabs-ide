@@ -7,6 +7,8 @@ import path from "node:path";
 import { ProviderDriverKind } from "@tabs/contracts";
 import { randomUUID as nodeRandomUUID } from "node:crypto";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import {
   clearLatestProviderVersionCacheForTests,
   createProviderVersionAdvisory,
@@ -14,8 +16,32 @@ import {
   makeProviderMaintenanceCapabilities,
   makeStaticProviderMaintenanceResolver,
   normalizeCommandPath,
+  resolveLatestProviderVersion,
   resolveProviderMaintenanceCapabilitiesEffect,
 } from "./providerMaintenance";
+
+// Returns distinct versions for the Homebrew formulae API vs the npm registry so
+// a test can prove which source `resolveLatestProviderVersion` consulted.
+const brewVsNpmHttpClient = () =>
+  Layer.succeed(
+    HttpClient.HttpClient,
+    HttpClient.make((request) =>
+      Effect.succeed(
+        HttpClientResponse.fromWeb(
+          request,
+          request.url.includes("/api/cask/") || request.url.includes("/api/formula/")
+            ? Response.json(
+                { version: "2.1.153" },
+                { headers: { "content-type": "application/json" } },
+              )
+            : Response.json(
+                { version: "2.1.177" },
+                { headers: { "content-type": "application/json" } },
+              ),
+        ),
+      ),
+    ),
+  );
 
 const driver = (value: string) => ProviderDriverKind.makeUnsafe(value);
 const makeTempDir = (name: string) =>
@@ -113,6 +139,42 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
       message: "Install the update now or review provider settings.",
     });
   });
+
+  it.effect(
+    "sources the latest version from Homebrew (not npm) for Homebrew-managed installs",
+    () =>
+      Effect.gen(function* () {
+        const capabilities = makeProviderMaintenanceCapabilities({
+          provider: driver("claudeAgent"),
+          packageName: "@anthropic-ai/claude-code",
+          updateExecutable: "brew",
+          updateArgs: ["upgrade", "claude-code"],
+          updateLockKey: "homebrew",
+        });
+        const latest = yield* resolveLatestProviderVersion(capabilities).pipe(
+          Effect.provide(brewVsNpmHttpClient()),
+        );
+        // The Homebrew cask version wins; the (newer) npm version is ignored so
+        // the advisory reflects what `brew upgrade` can actually deliver.
+        expect(latest).toBe("2.1.153");
+      }),
+  );
+
+  it.effect("sources the latest version from npm for npm-managed installs", () =>
+    Effect.gen(function* () {
+      const capabilities = makeProviderMaintenanceCapabilities({
+        provider: driver("claudeAgent"),
+        packageName: "@anthropic-ai/claude-code",
+        updateExecutable: "npm",
+        updateArgs: ["install", "-g", "@anthropic-ai/claude-code@latest"],
+        updateLockKey: "npm-global",
+      });
+      const latest = yield* resolveLatestProviderVersion(capabilities).pipe(
+        Effect.provide(brewVsNpmHttpClient()),
+      );
+      expect(latest).toBe("2.1.177");
+    }),
+  );
 
   it("keeps update commands owned by provider maintenance capabilities", () => {
     expect(staticToolUpdate.resolve()).toEqual({
