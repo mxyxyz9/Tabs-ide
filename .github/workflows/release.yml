@@ -179,25 +179,70 @@ jobs:
           # `compile-build` fails on the protected-fields mangler check.
           npm run gulp compile-build-without-mangling
 
-      # The embedded workbench activates these built-in extensions at startup
-      # (git-base → git, configuration-editing). compile-client above skips ALL
-      # extensions, and the root install used --ignore-scripts (to dodge the
-      # postinstall OOM), so they had neither node_modules nor a compile — at
-      # runtime that throws "Cannot find module .../<ext>/out/..." and cascades
-      # to dependents (e.g. CodeRabbit needs git). Install each one's deps and
-      # compile it to extensions/<ext>/out (the dev built-in layout the runtime
-      # falls back to). Run unconditionally so the out/ build cache above can't
-      # mask a missing extension compile. Keep this list in sync with the
-      # compiled-runtime guard in tabs-main/scripts/build-desktop-artifact.ts.
+      # The embedded workbench activates these built-in extensions at startup or
+      # on file-open. compile-client above skips ALL extensions, and the root
+      # install used --ignore-scripts (to dodge the postinstall OOM), so they had
+      # neither node_modules nor a compile — at runtime that throws "Cannot find
+      # module .../<ext>/out/..." and cascades to dependents (e.g. CodeRabbit
+      # needs git, json/emmet/typescript/github/merge-conflict all fail). Install
+      # each one's deps and compile it to extensions/<ext>/out (the dev built-in
+      # layout the runtime falls back to). Run unconditionally so the out/ build
+      # cache above can't mask a missing extension compile. Keep this list in sync
+      # with the compiled-runtime guard in
+      # tabs-main/scripts/build-desktop-artifact.ts.
       - name: Compile required built-in extensions
         working-directory: tabs-code-main
         shell: bash
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
         run: |
-          for ext in git-base git configuration-editing; do
+          set -euo pipefail
+          # Install deps so each extension's TS compiles and its node_modules
+          # ship in the runtime.
+          exts=(
+            git-base git github github-authentication configuration-editing
+            json-language-features html-language-features css-language-features
+            typescript-language-features markdown-language-features emmet merge-conflict
+          )
+          for ext in "${exts[@]}"; do
             (cd "extensions/$ext" && npm install --no-audit --no-fund --ignore-scripts)
-            npm run gulp "compile-extension:$ext"
+          done
+          # json/html/css language features keep a SEPARATE server/ package with
+          # its own node_modules — install those too or the server compile + the
+          # runtime language server fail on missing deps.
+          for ext in json-language-features html-language-features css-language-features; do
+            (cd "extensions/$ext/server" && npm install --no-audit --no-fund --ignore-scripts)
+          done
+
+          # git's native fs helper (@vscode/fs-copyfile) must be built AND match
+          # Tabs' Electron 40 ABI (the Code-OSS server runs under
+          # ELECTRON_RUN_AS_NODE), else git throws "Cannot find module
+          # .../build/Release/vscode_fs.node" and cascades to dependents.
+          npx --yes @electron/rebuild -v 40.6.0 --arch "${{ matrix.arch }}" \
+            --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
+
+          # Compile each extension to extensions/<ext>/out. Language-feature
+          # extensions have separate client/ and server/ tsconfigs (gulp task
+          # name = path under extensions/ with '/' replaced by '-').
+          tasks=(
+            compile-extension:git-base
+            compile-extension:git
+            compile-extension:github
+            compile-extension:github-authentication
+            compile-extension:configuration-editing
+            compile-extension:json-language-features-client
+            compile-extension:json-language-features-server
+            compile-extension:html-language-features-client
+            compile-extension:html-language-features-server
+            compile-extension:css-language-features-client
+            compile-extension:css-language-features-server
+            compile-extension:typescript-language-features
+            compile-extension:markdown-language-features
+            compile-extension:emmet
+            compile-extension:merge-conflict
+          )
+          for t in "${tasks[@]}"; do
+            npm run gulp "$t"
           done
 
       # Cache electron-builder's downloaded NSIS/7zip/winCodeSign toolchain so a

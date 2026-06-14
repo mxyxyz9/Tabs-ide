@@ -17,8 +17,10 @@ import { type ProjectToolKind, type ProjectWorkspaceSettings } from "@tabs/contr
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
+  ArrowDownIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
+  ArrowUpIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
   BugIcon,
@@ -72,10 +74,14 @@ import {
   gitBranchesQueryOptions,
   gitConflictSnapshotQueryOptions,
   gitDiffQueryOptions,
+  gitEnvironmentQueryOptions,
   gitHistoryQueryOptions,
+  gitInitMutationOptions,
   gitStashListQueryOptions,
   gitStatusQueryOptions,
 } from "../lib/gitReactQuery";
+import { GitAccountMenu } from "./git/GitAccountMenu";
+import { GitEnvironmentGate } from "./git/GitEnvironmentGate";
 import {
   buildSingleHunkPatch,
   getRenderablePatch,
@@ -1897,6 +1903,7 @@ function GitTool(props: {
   onToggleTerminal: () => void;
   onOpenAgents: () => void | Promise<void>;
   onCreateAgentsThread: () => void | Promise<void>;
+  onRunGitHubLogin: () => void | Promise<void>;
 }) {
   const {
     project,
@@ -1906,11 +1913,14 @@ function GitTool(props: {
     onToggleTerminal,
     onOpenAgents,
     onCreateAgentsThread,
+    onRunGitHubLogin,
   } = props;
   const api = readNativeApi();
   const queryClient = useQueryClient();
   const gitStatusQuery = useQuery(gitStatusQueryOptions(project.cwd));
+  const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(project.cwd));
   const branchesQuery = useQuery(gitBranchesQueryOptions(project.cwd));
+  const gitInitMutation = useMutation(gitInitMutationOptions({ cwd: project.cwd, queryClient }));
   const historyQuery = useQuery(gitHistoryQueryOptions({ cwd: project.cwd, limit: 40 }));
   const stashQuery = useQuery(gitStashListQueryOptions(project.cwd));
   const [branchDraft, setBranchDraft] = useState("");
@@ -2052,6 +2062,17 @@ function GitTool(props: {
   const branchSubline = gitStatusQuery.data?.hasUpstream
     ? `Tracking upstream · Ahead ${gitStatusQuery.data.aheadCount} · Behind ${gitStatusQuery.data.behindCount}`
     : "No upstream configured";
+  const aheadCount = gitStatusQuery.data?.aheadCount ?? 0;
+  const behindCount = gitStatusQuery.data?.behindCount ?? 0;
+  const syncStatusLabel = !gitStatusQuery.data?.hasUpstream
+    ? "No upstream — push to publish this branch"
+    : aheadCount > 0 && behindCount > 0
+      ? `${aheadCount} to push · ${behindCount} to pull`
+      : aheadCount > 0
+        ? `${aheadCount} commit${aheadCount === 1 ? "" : "s"} to push`
+        : behindCount > 0
+          ? `${behindCount} commit${behindCount === 1 ? "" : "s"} to pull`
+          : "Up to date with remote";
   const currentOperation = gitStatusQuery.data?.operation ?? null;
   const historyCommits = historyQuery.data?.commits ?? [];
   const stashEntries = stashQuery.data?.entries ?? [];
@@ -2925,8 +2946,6 @@ function GitTool(props: {
     : "No upstream";
   const diffSummary = `+${gitTotals?.insertions ?? 0} / -${gitTotals?.deletions ?? 0}`;
   const overviewSection = getGitWorkspaceLayoutSection("overview");
-  const changesSection = getGitWorkspaceLayoutSection("changes");
-  const diffSection = getGitWorkspaceLayoutSection("diff");
   const branchesSection = getGitWorkspaceLayoutSection("branches");
   const advancedActionsSection = getGitWorkspaceLayoutSection("advanced-actions");
   const historySection = getGitWorkspaceLayoutSection("history");
@@ -3020,868 +3039,866 @@ function GitTool(props: {
   ]);
 
   return (
-    <div className="grid h-full min-h-0 min-w-0 grid-cols-1 content-start gap-6 overflow-x-hidden overflow-y-auto px-6 py-8 max-w-[1700px] mx-auto">
-      <div className="flex flex-col min-h-0 min-w-0 gap-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0 space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
-              <GitBranchIcon className="size-6 text-primary" />
-              Git Workspace
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Manage your repository, commit changes, and sync with remotes.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="rounded-full shadow-sm"
-              onClick={() => {
-                emitGitWorkspaceTelemetry("git_terminal_dock_toggled", {
-                  open: !terminalOpen,
-                });
-                onToggleTerminal();
-              }}
-              disabled={!terminalAvailable}
-            >
-              {terminalOpen ? "Hide Terminal" : "Show Terminal"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="rounded-full shadow-sm"
-              onClick={() => {
-                const nextMode = isBasicMode ? "advanced" : "basic";
-                if (nextMode === "advanced") {
-                  emitGitWorkspaceTelemetry("git_advanced_drawer_opened");
-                }
-                handleWorkspaceModeChange(nextMode);
-              }}
-            >
-              {isBasicMode ? "Advanced" : "Close Advanced"}
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Current Branch
-              </div>
-              {gitStatusQuery.data?.pr ? (
-                <Badge size="sm" variant="outline" className="shadow-none text-[10px] py-0 h-5">
-                  PR #{gitStatusQuery.data.pr.number}
-                </Badge>
-              ) : null}
-            </div>
-            <h2 className="mt-1 text-xl font-semibold text-foreground truncate">
-              {branchHeadline}
-            </h2>
-            <div className="mt-1 text-xs text-muted-foreground truncate">{branchSubline}</div>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-3">
-            <div className="flex flex-wrap items-center gap-2 border-r border-border/40 pr-4 mr-1">
-              <span
-                className={cn(
-                  "text-xs font-medium px-2 py-1 rounded-md",
-                  stagedFiles.length > 0 ? "bg-primary/10 text-primary" : "text-muted-foreground",
-                )}
-              >
-                {stagedFiles.length} staged
-              </span>
-              <span
-                className={cn(
-                  "text-xs font-medium px-2 py-1 rounded-md",
-                  hasWorkingTreeChanges
-                    ? "bg-amber-500/10 text-amber-500"
-                    : "text-muted-foreground",
-                )}
-              >
-                {changedFiles.length} changed
-              </span>
-              <span
-                className={cn(
-                  "text-xs font-medium px-2 py-1 rounded-md",
-                  hasBlockingConflicts
-                    ? "bg-destructive/10 text-destructive"
-                    : "text-muted-foreground",
-                )}
-              >
-                {conflictedFiles.length} conflicts
-              </span>
-              <span className="text-xs font-medium px-2 py-1 rounded-md text-muted-foreground">
-                ↑ {gitStatusQuery.data?.aheadCount ?? 0}
-              </span>
-              <span className="text-xs font-medium px-2 py-1 rounded-md text-muted-foreground">
-                ↓ {gitStatusQuery.data?.behindCount ?? 0}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="rounded-full shadow-sm"
-                disabled={syncActionsDisabled}
-                onClick={handleFetchLatest}
-              >
-                Fetch
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="rounded-full bg-background"
-                disabled={syncActionsDisabled}
-                onClick={handlePullLatest}
-              >
-                Pull
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="rounded-full bg-background"
-                disabled={syncActionsDisabled}
-                onClick={handlePushCurrentBranch}
-              >
-                Push
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {currentOperation ? (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <GitEnvironmentGate
+        environment={gitEnvironmentQuery.data}
+        isRepo={branchesQuery.data?.isRepo}
+        isLoading={branchesQuery.isLoading}
+        initPending={gitInitMutation.isPending}
+        onInitRepo={() => gitInitMutation.mutate()}
+      >
+        <div className="grid h-full min-h-0 min-w-0 w-full grid-cols-1 content-start gap-6 overflow-x-hidden overflow-y-auto px-6 py-8 max-w-[1700px] mx-auto">
+          <div className="flex flex-col min-h-0 min-w-0 gap-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-foreground">
-                  {currentOperation.kind === "merge" ? "Merge in progress" : "Rebase in progress"}
+              <div className="min-w-0 flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <GitBranchIcon className="size-5" />
                 </div>
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {currentOperation.status === "conflicted"
-                    ? `Resolve the ${conflictedFiles.length} conflicted file${conflictedFiles.length === 1 ? "" : "s"}, then continue or abort.`
-                    : "Git is waiting for the next step. Continue when the working tree is ready."}
+                <div className="min-w-0">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    Source Control
+                  </h1>
+                  <p className="text-sm text-muted-foreground truncate">
+                    Commit, branch, and sync — no terminal required.
+                  </p>
                 </div>
               </div>
-              <Badge
-                size="sm"
-                variant={currentOperation.status === "conflicted" ? "error" : "secondary"}
-                className="shadow-none"
-              >
-                {currentOperation.status === "conflicted" ? "Needs attention" : "In progress"}
-              </Badge>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                className="rounded-full"
-                disabled={gitTaskInFlight !== null}
-                onClick={handleContinueOperation}
-              >
-                Continue
-              </Button>
-              {currentOperation.kind === "rebase" ? (
+              <div className="flex items-center gap-2">
+                <GitAccountMenu cwd={project.cwd} onSignIn={onRunGitHubLogin} />
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="rounded-full"
-                  disabled={gitTaskInFlight !== null}
-                  onClick={handleSkipRebase}
+                  className="rounded-full gap-1.5"
+                  onClick={() => {
+                    emitGitWorkspaceTelemetry("git_terminal_dock_toggled", {
+                      open: !terminalOpen,
+                    });
+                    onToggleTerminal();
+                  }}
+                  disabled={!terminalAvailable}
                 >
-                  Skip
+                  {terminalOpen ? "Hide Terminal" : "Terminal"}
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="rounded-full text-destructive hover:text-destructive"
-                disabled={gitTaskInFlight !== null}
-                onClick={() => void handleAbortOperation()}
-              >
-                Abort
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        <GitCommitComposer
-          gitCwd={project.cwd}
-          activeThreadId={activeThreadId}
-          gitStatus={gitStatusQuery.data ?? null}
-          branchList={branchesQuery.data ?? null}
-          stagedFiles={stagedFiles}
-          externalBusy={gitTaskInFlight !== null}
-          workspaceMode={gitWorkspaceMode}
-        />
-
-        <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(320px,0.82fr)_minmax(0,1fr)]">
-          <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5">
-            <div className="flex min-w-0 flex-wrap items-start justify-between gap-4 border-b border-border/40 pb-4 mb-4">
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                  {changesSection.title}
-                </h3>
-                <p className="mt-1 break-words text-sm text-muted-foreground">
-                  {changesSection.description}
-                </p>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                {conflictedFiles.length > 0 && (
-                  <Badge size="sm" variant="error" className="shadow-none">
-                    {conflictedFiles.length} conflicts
-                  </Badge>
-                )}
-                {untrackedFiles.length > 0 && (
-                  <Badge size="sm" variant="outline" className="shadow-none">
-                    {untrackedFiles.length} untracked
-                  </Badge>
-                )}
-                {unstagedFiles.length > 0 && (
-                  <Badge size="sm" variant="outline" className="shadow-none">
-                    {unstagedFiles.length} unstaged
-                  </Badge>
-                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={isBasicMode ? "outline" : "default"}
+                  className="rounded-full"
+                  onClick={() => {
+                    const nextMode = isBasicMode ? "advanced" : "basic";
+                    if (nextMode === "advanced") {
+                      emitGitWorkspaceTelemetry("git_advanced_drawer_opened");
+                    }
+                    handleWorkspaceModeChange(nextMode);
+                  }}
+                >
+                  {isBasicMode ? "Advanced" : "Close Advanced"}
+                </Button>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <GitChangeSection
-                title="Conflicts"
-                description="Files blocked by merge or rebase conflicts."
-                files={conflictedFiles}
-                selectedPath={selectedPath}
-                emptyLabel="No conflicts."
-                selectLabel="Resolve"
-                actionDisabled={gitTaskInFlight !== null}
-                onSelectFile={selectWorkingTreeFile}
-                onResolveFile={(file) => openConflictResolver(file.path, "manual")}
-                onFixWithAi={(file) => openConflictResolver(file.path, "ai")}
-                onOpenFile={openFileInEditor}
-                onStageFile={handleStageFile}
-                onUseOurs={(file) => void handleResolveConflictSide(file, "ours")}
-                onUseTheirs={(file) => void handleResolveConflictSide(file, "theirs")}
-                onDiscardFile={handleDiscardFile}
-              />
-              <GitChangeSection
-                title="Staged"
-                description="Included in the next commit."
-                files={stagedFiles}
-                selectedPath={selectedPath}
-                emptyLabel="Nothing staged."
-                selectLabel="Review"
-                actionDisabled={gitTaskInFlight !== null}
-                onSelectFile={selectWorkingTreeFile}
-                onUnstageFile={handleUnstageFile}
-                onDiscardFile={handleDiscardFile}
-              />
-              <GitChangeSection
-                title="Unstaged"
-                description="Modified files not yet added to the index."
-                files={unstagedFiles}
-                selectedPath={selectedPath}
-                emptyLabel="No unstaged tracked files."
-                selectLabel="Review"
-                actionDisabled={gitTaskInFlight !== null}
-                onSelectFile={selectWorkingTreeFile}
-                onStageFile={handleStageFile}
-                onDiscardFile={handleDiscardFile}
-              />
-              <GitChangeSection
-                title="Untracked"
-                description="New files not yet added to Git."
-                files={untrackedFiles}
-                selectedPath={selectedPath}
-                emptyLabel="No untracked files."
-                selectLabel="Review"
-                actionDisabled={gitTaskInFlight !== null}
-                onSelectFile={selectWorkingTreeFile}
-                onStageFile={handleStageFile}
-                onDiscardFile={handleDiscardFile}
-              />
-              {!hasWorkingTreeChanges ? (
-                <div className="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
-                  {gitStatusQuery.isLoading ? "Loading changes..." : "Working tree is clean."}
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/40 bg-background/50 px-5 py-4 shadow-sm backdrop-blur-xl">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 rounded-full border border-border/50 bg-background/70 px-3 py-1.5">
+                  <GitBranchIcon className="size-4 shrink-0 text-primary" />
+                  <span className="max-w-[220px] truncate text-sm font-semibold text-foreground">
+                    {branchHeadline}
+                  </span>
                 </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5 flex flex-col min-h-[500px]">
-            <div className="flex min-w-0 flex-row items-start justify-between gap-4 border-b border-border/40 pb-4 mb-4">
-              <div className="min-w-0">
-                <h3 className="text-lg font-semibold tracking-tight text-foreground">
-                  {diffSection.title}
-                </h3>
-                <p className="mt-1 break-words text-sm text-muted-foreground">
-                  {resolverFilePath
-                    ? resolverMode === "manual"
-                      ? "Resolve this conflicted file directly inside the Git workspace."
-                      : "Review the conflicted file in the shared resolver surface before accepting an AI fix."
-                    : selectedPath
-                      ? "Live working-tree diff for the selected file."
-                      : activeHistoryCommit
-                        ? "Unified patch for the selected commit."
-                        : "Select a changed file or commit to inspect its patch."}
-                </p>
+                {gitStatusQuery.data?.pr ? (
+                  <Badge size="sm" variant="outline" className="shadow-none">
+                    PR #{gitStatusQuery.data.pr.number}
+                  </Badge>
+                ) : null}
+                <span className="min-w-0 truncate text-sm text-muted-foreground">
+                  {syncStatusLabel}
+                </span>
               </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {resolverFilePath ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full gap-1.5"
+                  disabled={syncActionsDisabled}
+                  onClick={handlePullLatest}
+                >
+                  <ArrowDownIcon className="size-3.5" />
+                  Pull
+                  {behindCount > 0 ? (
+                    <span className="rounded-full bg-primary/15 px-1.5 text-[11px] font-semibold text-primary">
+                      {behindCount}
+                    </span>
+                  ) : null}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="rounded-full gap-1.5"
+                  disabled={syncActionsDisabled}
+                  onClick={handlePushCurrentBranch}
+                >
+                  <ArrowUpIcon className="size-3.5" />
+                  Push
+                  {aheadCount > 0 ? (
+                    <span className="rounded-full bg-primary-foreground/20 px-1.5 text-[11px] font-semibold">
+                      {aheadCount}
+                    </span>
+                  ) : null}
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="rounded-full"
+                  disabled={syncActionsDisabled}
+                  onClick={handleFetchLatest}
+                  aria-label="Fetch latest"
+                  title="Fetch from remote"
+                >
+                  <RefreshCwIcon className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {currentOperation ? (
+              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">
+                      {currentOperation.kind === "merge"
+                        ? "Merge in progress"
+                        : "Rebase in progress"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {currentOperation.status === "conflicted"
+                        ? `Resolve the ${conflictedFiles.length} conflicted file${conflictedFiles.length === 1 ? "" : "s"}, then continue or abort.`
+                        : "Git is waiting for the next step. Continue when the working tree is ready."}
+                    </div>
+                  </div>
                   <Badge
                     size="sm"
-                    variant={resolverMode === "manual" ? "secondary" : "outline"}
+                    variant={currentOperation.status === "conflicted" ? "error" : "secondary"}
                     className="shadow-none"
                   >
-                    {resolverMode === "manual" ? "Manual Resolver" : "AI Conflict Fix"}
+                    {currentOperation.status === "conflicted" ? "Needs attention" : "In progress"}
                   </Badge>
-                ) : selectedPath ? (
-                  <Badge size="sm" variant="secondary" className="shadow-none">
-                    Working tree
-                  </Badge>
-                ) : activeHistoryCommit ? (
-                  <Badge size="sm" variant="outline" className="shadow-none">
-                    Commit patch
-                  </Badge>
-                ) : null}
-                {!resolverFilePath && diffQuery.data ? (
-                  <>
-                    <Badge size="sm" variant="success" className="shadow-none">
-                      +{diffQuery.data.stats.insertions}
-                    </Badge>
-                    <Badge size="sm" variant="error" className="shadow-none">
-                      -{diffQuery.data.stats.deletions}
-                    </Badge>
-                    <Badge size="sm" variant="outline" className="shadow-none">
-                      {diffQuery.data.stats.filesChanged} file
-                      {diffQuery.data.stats.filesChanged === 1 ? "" : "s"}
-                    </Badge>
-                  </>
-                ) : null}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-full"
+                    disabled={gitTaskInFlight !== null}
+                    onClick={handleContinueOperation}
+                  >
+                    Continue
+                  </Button>
+                  {currentOperation.kind === "rebase" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full"
+                      disabled={gitTaskInFlight !== null}
+                      onClick={handleSkipRebase}
+                    >
+                      Skip
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full text-destructive hover:text-destructive"
+                    disabled={gitTaskInFlight !== null}
+                    onClick={() => void handleAbortOperation()}
+                  >
+                    Abort
+                  </Button>
+                </div>
               </div>
-            </div>
-            <div className="flex min-h-0 flex-col gap-4 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                {resolverFilePath ? (
-                  <>
-                    <Badge size="sm" variant="outline">
-                      Conflicts {activeConflictedFileIndex >= 0 ? activeConflictedFileIndex + 1 : 1}{" "}
-                      / {Math.max(totalConflictCount, 1)}
-                    </Badge>
-                    <Badge size="sm" variant="secondary">
-                      {resolverFilePath}
-                    </Badge>
-                    {totalConflictCount > 1 ? (
-                      <>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigateConflictResolver(-1)}
-                        >
-                          Previous
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigateConflictResolver(1)}
-                        >
-                          Next
-                        </Button>
-                      </>
-                    ) : null}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={!api || !resolverFilePath}
-                      onClick={() => {
-                        if (!api || !resolverFilePath) return;
-                        void openInPreferredEditor(api, `${project.cwd}/${resolverFilePath}`).catch(
-                          () => undefined,
-                        );
-                      }}
-                    >
-                      Open In Editor
-                    </Button>
-                    <Button type="button" size="sm" variant="ghost" onClick={closeConflictResolver}>
-                      Close Resolver
-                    </Button>
-                  </>
-                ) : selectedPath ? (
-                  <>
-                    <Badge size="sm" variant="secondary">
-                      {selectedPath}
-                    </Badge>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        if (!api || !selectedPath) return;
-                        void openInPreferredEditor(api, `${project.cwd}/${selectedPath}`).catch(
-                          () => undefined,
-                        );
-                      }}
-                    >
-                      Open In Editor
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setSelectedPath(project.id, null)}
-                    >
-                      Clear File
-                    </Button>
-                  </>
-                ) : activeHistoryCommit ? (
-                  <>
-                    <Badge size="sm" variant="outline">
-                      {activeHistoryCommit.shortSha}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {activeHistoryCommit.subject}
-                    </span>
-                  </>
-                ) : null}
+            ) : null}
+
+            <GitCommitComposer
+              gitCwd={project.cwd}
+              activeThreadId={activeThreadId}
+              gitStatus={gitStatusQuery.data ?? null}
+              branchList={branchesQuery.data ?? null}
+              stagedFiles={stagedFiles}
+              externalBusy={gitTaskInFlight !== null}
+              workspaceMode={gitWorkspaceMode}
+            />
+
+            <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(320px,0.82fr)_minmax(0,1fr)]">
+              <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5">
+                <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+                  <h3 className="text-base font-semibold text-foreground">Changes</h3>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    {conflictedFiles.length > 0 && (
+                      <Badge size="sm" variant="error" className="shadow-none">
+                        {conflictedFiles.length} conflicts
+                      </Badge>
+                    )}
+                    {stagedFiles.length > 0 && (
+                      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
+                        {stagedFiles.length} staged
+                      </span>
+                    )}
+                    {unstagedFiles.length + untrackedFiles.length > 0 && (
+                      <span className="rounded-full bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {unstagedFiles.length + untrackedFiles.length} to stage
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <GitChangeSection
+                    title="Conflicts"
+                    description="Files blocked by merge or rebase conflicts."
+                    files={conflictedFiles}
+                    selectedPath={selectedPath}
+                    emptyLabel="No conflicts."
+                    selectLabel="Resolve"
+                    actionDisabled={gitTaskInFlight !== null}
+                    onSelectFile={selectWorkingTreeFile}
+                    onResolveFile={(file) => openConflictResolver(file.path, "manual")}
+                    onFixWithAi={(file) => openConflictResolver(file.path, "ai")}
+                    onOpenFile={openFileInEditor}
+                    onStageFile={handleStageFile}
+                    onUseOurs={(file) => void handleResolveConflictSide(file, "ours")}
+                    onUseTheirs={(file) => void handleResolveConflictSide(file, "theirs")}
+                    onDiscardFile={handleDiscardFile}
+                  />
+                  <GitChangeSection
+                    title="Staged"
+                    description="Included in the next commit."
+                    files={stagedFiles}
+                    selectedPath={selectedPath}
+                    emptyLabel="Nothing staged."
+                    selectLabel="Review"
+                    actionDisabled={gitTaskInFlight !== null}
+                    onSelectFile={selectWorkingTreeFile}
+                    onUnstageFile={handleUnstageFile}
+                    onDiscardFile={handleDiscardFile}
+                  />
+                  <GitChangeSection
+                    title="Unstaged"
+                    description="Modified files not yet added to the index."
+                    files={unstagedFiles}
+                    selectedPath={selectedPath}
+                    emptyLabel="No unstaged tracked files."
+                    selectLabel="Review"
+                    actionDisabled={gitTaskInFlight !== null}
+                    onSelectFile={selectWorkingTreeFile}
+                    onStageFile={handleStageFile}
+                    onDiscardFile={handleDiscardFile}
+                  />
+                  <GitChangeSection
+                    title="Untracked"
+                    description="New files not yet added to Git."
+                    files={untrackedFiles}
+                    selectedPath={selectedPath}
+                    emptyLabel="No untracked files."
+                    selectLabel="Review"
+                    actionDisabled={gitTaskInFlight !== null}
+                    onSelectFile={selectWorkingTreeFile}
+                    onStageFile={handleStageFile}
+                    onDiscardFile={handleDiscardFile}
+                  />
+                  {!hasWorkingTreeChanges ? (
+                    <div className="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                      {gitStatusQuery.isLoading ? "Loading changes..." : "Working tree is clean."}
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
-              {resolverFilePath ? (
-                <div className="grid min-h-0 flex-1 gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                  <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-border/70 bg-background/40 p-4">
-                    {conflictedFiles.length > 1 ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            Conflicted Files
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge size="sm" variant="outline">
-                              {activeConflictedFileIndex >= 0 ? activeConflictedFileIndex + 1 : 1} /{" "}
-                              {conflictedFiles.length}
-                            </Badge>
+              <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5 flex flex-col min-h-[500px]">
+                <div className="flex min-w-0 flex-row items-start justify-between gap-4 border-b border-border/40 pb-4 mb-4">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-semibold text-foreground">Diff</h3>
+                    <p className="mt-1 break-words text-xs text-muted-foreground">
+                      {resolverFilePath
+                        ? resolverMode === "manual"
+                          ? "Resolve this conflicted file directly inside the Git workspace."
+                          : "Review the conflicted file in the shared resolver surface before accepting an AI fix."
+                        : selectedPath
+                          ? "Live working-tree diff for the selected file."
+                          : activeHistoryCommit
+                            ? "Unified patch for the selected commit."
+                            : "Select a changed file or commit to inspect its patch."}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {resolverFilePath ? (
+                      <Badge
+                        size="sm"
+                        variant={resolverMode === "manual" ? "secondary" : "outline"}
+                        className="shadow-none"
+                      >
+                        {resolverMode === "manual" ? "Manual Resolver" : "AI Conflict Fix"}
+                      </Badge>
+                    ) : selectedPath ? (
+                      <Badge size="sm" variant="secondary" className="shadow-none">
+                        Working tree
+                      </Badge>
+                    ) : activeHistoryCommit ? (
+                      <Badge size="sm" variant="outline" className="shadow-none">
+                        Commit patch
+                      </Badge>
+                    ) : null}
+                    {!resolverFilePath && diffQuery.data ? (
+                      <>
+                        <Badge size="sm" variant="success" className="shadow-none">
+                          +{diffQuery.data.stats.insertions}
+                        </Badge>
+                        <Badge size="sm" variant="error" className="shadow-none">
+                          -{diffQuery.data.stats.deletions}
+                        </Badge>
+                        <Badge size="sm" variant="outline" className="shadow-none">
+                          {diffQuery.data.stats.filesChanged} file
+                          {diffQuery.data.stats.filesChanged === 1 ? "" : "s"}
+                        </Badge>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex min-h-0 flex-col gap-4 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {resolverFilePath ? (
+                      <>
+                        <Badge size="sm" variant="outline">
+                          Conflicts{" "}
+                          {activeConflictedFileIndex >= 0 ? activeConflictedFileIndex + 1 : 1} /{" "}
+                          {Math.max(totalConflictCount, 1)}
+                        </Badge>
+                        <Badge size="sm" variant="secondary">
+                          {resolverFilePath}
+                        </Badge>
+                        {totalConflictCount > 1 ? (
+                          <>
                             <Button
                               type="button"
-                              size="icon-xs"
+                              size="sm"
                               variant="outline"
                               onClick={() => navigateConflictResolver(-1)}
-                              aria-label="Previous conflicted file"
                             >
-                              <ChevronUpIcon className="size-3.5" />
+                              Previous
                             </Button>
                             <Button
                               type="button"
-                              size="icon-xs"
+                              size="sm"
                               variant="outline"
                               onClick={() => navigateConflictResolver(1)}
-                              aria-label="Next conflicted file"
                             >
-                              <ChevronDownIcon className="size-3.5" />
+                              Next
                             </Button>
-                          </div>
-                        </div>
-                        <ScrollArea className="max-h-28 rounded-xl border border-border/70 bg-background/60">
-                          <div className="flex gap-2 p-2">
-                            {conflictedFiles.map((file) => (
-                              <Button
-                                key={`resolver-switch:${file.path}`}
-                                type="button"
-                                size="sm"
-                                variant={resolverFilePath === file.path ? "secondary" : "outline"}
-                                className="max-w-60 justify-start truncate"
-                                onClick={() => openConflictResolver(file.path, resolverMode)}
-                              >
-                                {basenameOfPath(file.path)}
-                              </Button>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      </div>
+                          </>
+                        ) : null}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={!api || !resolverFilePath}
+                          onClick={() => {
+                            if (!api || !resolverFilePath) return;
+                            void openInPreferredEditor(
+                              api,
+                              `${project.cwd}/${resolverFilePath}`,
+                            ).catch(() => undefined);
+                          }}
+                        >
+                          Open In Editor
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={closeConflictResolver}
+                        >
+                          Close Resolver
+                        </Button>
+                      </>
+                    ) : selectedPath ? (
+                      <>
+                        <Badge size="sm" variant="secondary">
+                          {selectedPath}
+                        </Badge>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            if (!api || !selectedPath) return;
+                            void openInPreferredEditor(api, `${project.cwd}/${selectedPath}`).catch(
+                              () => undefined,
+                            );
+                          }}
+                        >
+                          Open In Editor
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSelectedPath(project.id, null)}
+                        >
+                          Clear File
+                        </Button>
+                      </>
+                    ) : activeHistoryCommit ? (
+                      <>
+                        <Badge size="sm" variant="outline">
+                          {activeHistoryCommit.shortSha}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">
+                          {activeHistoryCommit.subject}
+                        </span>
+                      </>
                     ) : null}
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-medium text-foreground">
-                          {resolverMode === "manual"
-                            ? "Manual conflict resolver"
-                            : "AI conflict fix"}
+                  </div>
+
+                  {resolverFilePath ? (
+                    <div className="grid min-h-0 flex-1 gap-4 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                      <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-border/70 bg-background/40 p-4">
+                        {conflictedFiles.length > 1 ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                Conflicted Files
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge size="sm" variant="outline">
+                                  {activeConflictedFileIndex >= 0
+                                    ? activeConflictedFileIndex + 1
+                                    : 1}{" "}
+                                  / {conflictedFiles.length}
+                                </Badge>
+                                <Button
+                                  type="button"
+                                  size="icon-xs"
+                                  variant="outline"
+                                  onClick={() => navigateConflictResolver(-1)}
+                                  aria-label="Previous conflicted file"
+                                >
+                                  <ChevronUpIcon className="size-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon-xs"
+                                  variant="outline"
+                                  onClick={() => navigateConflictResolver(1)}
+                                  aria-label="Next conflicted file"
+                                >
+                                  <ChevronDownIcon className="size-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            <ScrollArea className="max-h-28 rounded-xl border border-border/70 bg-background/60">
+                              <div className="flex gap-2 p-2">
+                                {conflictedFiles.map((file) => (
+                                  <Button
+                                    key={`resolver-switch:${file.path}`}
+                                    type="button"
+                                    size="sm"
+                                    variant={
+                                      resolverFilePath === file.path ? "secondary" : "outline"
+                                    }
+                                    className="max-w-60 justify-start truncate"
+                                    onClick={() => openConflictResolver(file.path, resolverMode)}
+                                  >
+                                    {basenameOfPath(file.path)}
+                                  </Button>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        ) : null}
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-medium text-foreground">
+                              {resolverMode === "manual"
+                                ? "Manual conflict resolver"
+                                : "AI conflict fix"}
+                            </div>
+                            {resolverMode === "manual" ? (
+                              <Badge size="sm" variant={resolverDirty ? "outline" : "secondary"}>
+                                {resolverDirty ? "Editing" : "Ready"}
+                              </Badge>
+                            ) : aiConflictState.status === "waiting" ? (
+                              <Badge size="sm" variant="outline">
+                                Waiting for Agents
+                              </Badge>
+                            ) : aiConflictState.proposal ? (
+                              <Badge size="sm" variant="secondary">
+                                Proposal Ready
+                              </Badge>
+                            ) : aiConflictState.status === "error" ? (
+                              <Badge size="sm" variant="error">
+                                Error
+                              </Badge>
+                            ) : (
+                              <Badge size="sm" variant="outline">
+                                Ready to Generate
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            {resolverMode === "manual"
+                              ? "Compare the base, ours, and theirs versions, then edit the final resolved file here before marking it resolved."
+                              : "Generate an AI proposal into this same resolver, review the patch on the right, then accept or reject it."}
+                          </p>
                         </div>
                         {resolverMode === "manual" ? (
-                          <Badge size="sm" variant={resolverDirty ? "outline" : "secondary"}>
-                            {resolverDirty ? "Editing" : "Ready"}
-                          </Badge>
-                        ) : aiConflictState.status === "waiting" ? (
-                          <Badge size="sm" variant="outline">
-                            Waiting for Agents
-                          </Badge>
-                        ) : aiConflictState.proposal ? (
-                          <Badge size="sm" variant="secondary">
-                            Proposal Ready
-                          </Badge>
-                        ) : aiConflictState.status === "error" ? (
-                          <Badge size="sm" variant="error">
-                            Error
-                          </Badge>
-                        ) : (
-                          <Badge size="sm" variant="outline">
-                            Ready to Generate
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {resolverMode === "manual"
-                          ? "Compare the base, ours, and theirs versions, then edit the final resolved file here before marking it resolved."
-                          : "Generate an AI proposal into this same resolver, review the patch on the right, then accept or reject it."}
-                      </p>
-                    </div>
-                    {resolverMode === "manual" ? (
-                      conflictSnapshotQuery.isLoading ? (
-                        <div className="rounded-xl border border-border/70 bg-background/60 px-3 py-4 text-sm text-muted-foreground">
-                          Loading base / ours / theirs…
-                        </div>
-                      ) : (
-                        <div className="grid gap-3 2xl:grid-cols-3">
-                          <GitConflictTextPane
-                            title="Base"
-                            description="Shared ancestor"
-                            contents={conflictSnapshotQuery.data?.baseContents}
-                          />
-                          <GitConflictTextPane
-                            title="Ours"
-                            description="Current branch"
-                            contents={conflictSnapshotQuery.data?.oursContents}
-                          />
-                          <GitConflictTextPane
-                            title="Theirs"
-                            description="Incoming change"
-                            contents={conflictSnapshotQuery.data?.theirsContents}
-                          />
-                        </div>
-                      )
-                    ) : null}
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={gitTaskInFlight !== null}
-                        onClick={() => {
-                          if (activeConflictedFile) {
-                            void handleResolveConflictSide(activeConflictedFile, "ours");
-                          }
-                        }}
-                      >
-                        Use Ours
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={gitTaskInFlight !== null}
-                        onClick={() => {
-                          if (activeConflictedFile) {
-                            void handleResolveConflictSide(activeConflictedFile, "theirs");
-                          }
-                        }}
-                      >
-                        Use Theirs
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={
-                          resolverMode === "ai" ||
-                          gitTaskInFlight !== null ||
-                          conflictFileQuery.isLoading ||
-                          resolverFilePath === null
-                        }
-                        onClick={() => void handleSaveResolverDraft(false)}
-                      >
-                        Save Draft
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={
-                          resolverMode === "ai" ||
-                          gitTaskInFlight !== null ||
-                          conflictFileQuery.isLoading ||
-                          resolverFilePath === null
-                        }
-                        onClick={() => void handleSaveResolverDraft(true)}
-                      >
-                        Save & Mark Resolved
-                      </Button>
-                      {resolverMode === "ai" ? (
-                        <>
+                          conflictSnapshotQuery.isLoading ? (
+                            <div className="rounded-xl border border-border/70 bg-background/60 px-3 py-4 text-sm text-muted-foreground">
+                              Loading base / ours / theirs…
+                            </div>
+                          ) : (
+                            <div className="grid gap-3 2xl:grid-cols-3">
+                              <GitConflictTextPane
+                                title="Base"
+                                description="Shared ancestor"
+                                contents={conflictSnapshotQuery.data?.baseContents}
+                              />
+                              <GitConflictTextPane
+                                title="Ours"
+                                description="Current branch"
+                                contents={conflictSnapshotQuery.data?.oursContents}
+                              />
+                              <GitConflictTextPane
+                                title="Theirs"
+                                description="Incoming change"
+                                contents={conflictSnapshotQuery.data?.theirsContents}
+                              />
+                            </div>
+                          )
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={gitTaskInFlight !== null}
+                            onClick={() => {
+                              if (activeConflictedFile) {
+                                void handleResolveConflictSide(activeConflictedFile, "ours");
+                              }
+                            }}
+                          >
+                            Use Ours
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={gitTaskInFlight !== null}
+                            onClick={() => {
+                              if (activeConflictedFile) {
+                                void handleResolveConflictSide(activeConflictedFile, "theirs");
+                              }
+                            }}
+                          >
+                            Use Theirs
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={
+                              resolverMode === "ai" ||
+                              gitTaskInFlight !== null ||
+                              conflictFileQuery.isLoading ||
+                              resolverFilePath === null
+                            }
+                            onClick={() => void handleSaveResolverDraft(false)}
+                          >
+                            Save Draft
+                          </Button>
                           <Button
                             type="button"
                             size="sm"
                             disabled={
-                              aiConflictState.status === "sending" ||
-                              aiConflictState.status === "waiting" ||
-                              !activeAgentsThread ||
-                              conflictFileQuery.isLoading
+                              resolverMode === "ai" ||
+                              gitTaskInFlight !== null ||
+                              conflictFileQuery.isLoading ||
+                              resolverFilePath === null
                             }
-                            onClick={() => void handleGenerateAiConflictFix()}
+                            onClick={() => void handleSaveResolverDraft(true)}
                           >
-                            {aiConflictState.status === "sending" ||
-                            aiConflictState.status === "waiting"
-                              ? "Generating..."
-                              : "Generate Fix"}
+                            Save & Mark Resolved
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={!aiConflictState.proposal}
-                            onClick={handleAcceptAiConflictFix}
-                          >
-                            Accept Fix
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={!aiConflictState.proposal}
-                            onClick={handleRejectAiConflictFix}
-                          >
-                            Reject
-                          </Button>
-                          {!activeAgentsThread ? (
+                          {resolverMode === "ai" ? (
                             <>
                               <Button
                                 type="button"
                                 size="sm"
-                                variant="outline"
-                                onClick={() => void onOpenAgents()}
+                                disabled={
+                                  aiConflictState.status === "sending" ||
+                                  aiConflictState.status === "waiting" ||
+                                  !activeAgentsThread ||
+                                  conflictFileQuery.isLoading
+                                }
+                                onClick={() => void handleGenerateAiConflictFix()}
                               >
-                                Open Agents
+                                {aiConflictState.status === "sending" ||
+                                aiConflictState.status === "waiting"
+                                  ? "Generating..."
+                                  : "Generate Fix"}
                               </Button>
                               <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
-                                onClick={() => void onCreateAgentsThread()}
+                                disabled={!aiConflictState.proposal}
+                                onClick={handleAcceptAiConflictFix}
                               >
-                                Create Thread
+                                Accept Fix
                               </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                disabled={!aiConflictState.proposal}
+                                onClick={handleRejectAiConflictFix}
+                              >
+                                Reject
+                              </Button>
+                              {!activeAgentsThread ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void onOpenAgents()}
+                                  >
+                                    Open Agents
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void onCreateAgentsThread()}
+                                  >
+                                    Create Thread
+                                  </Button>
+                                </>
+                              ) : null}
                             </>
                           ) : null}
-                        </>
-                      ) : null}
-                    </div>
-                    {resolverMode === "ai" ? (
-                      <div className="rounded-xl border border-dashed border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
-                        {!activeAgentsThread
-                          ? "AI conflict fix uses this project's Agents runtime. Open Agents or create a thread, then generate the fix from this same panel."
-                          : aiConflictState.status === "waiting"
-                            ? "The conflict was sent to the current Agents thread. Waiting for the assistant to return a fully resolved file."
-                            : aiConflictState.status === "error"
-                              ? (aiConflictState.error ?? "Could not generate an AI conflict fix.")
-                              : aiConflictState.proposal
-                                ? "AI produced a proposed resolution. Review the patch on the right, then accept or reject it."
-                                : "Use Generate Fix to send this conflicted file to the current Agents thread and review the returned proposal here."}
-                      </div>
-                    ) : conflictFileQuery.isLoading ? (
-                      <div className="rounded-xl border border-border/70 p-4 text-sm text-muted-foreground">
-                        Loading conflicted file...
-                      </div>
-                    ) : (
-                      <div className="flex min-h-0 flex-1 flex-col gap-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                            Resolved Output
+                        </div>
+                        {resolverMode === "ai" ? (
+                          <div className="rounded-xl border border-dashed border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
+                            {!activeAgentsThread
+                              ? "AI conflict fix uses this project's Agents runtime. Open Agents or create a thread, then generate the fix from this same panel."
+                              : aiConflictState.status === "waiting"
+                                ? "The conflict was sent to the current Agents thread. Waiting for the assistant to return a fully resolved file."
+                                : aiConflictState.status === "error"
+                                  ? (aiConflictState.error ??
+                                    "Could not generate an AI conflict fix.")
+                                  : aiConflictState.proposal
+                                    ? "AI produced a proposed resolution. Review the patch on the right, then accept or reject it."
+                                    : "Use Generate Fix to send this conflicted file to the current Agents thread and review the returned proposal here."}
                           </div>
-                          <Badge size="sm" variant={resolverDirty ? "outline" : "secondary"}>
-                            {resolverDirty ? "Editing" : "Synced"}
-                          </Badge>
-                        </div>
-                        <Textarea
-                          value={resolverDraft}
-                          onChange={(event) => {
-                            setResolverDraft(event.target.value);
-                            setResolverDirty(true);
-                          }}
-                          className="min-h-[22rem] flex-1 resize-none font-mono text-xs leading-6"
-                          placeholder="Conflicted file contents will load here."
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex min-h-0 flex-col rounded-xl border border-border/70 bg-background/40">
-                    <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium text-foreground">Patch Preview</div>
-                        <div className="text-xs text-muted-foreground">
-                          {resolverPatch
-                            ? resolverMode === "ai"
-                              ? "AI resolution preview."
-                              : "Unsaved resolution preview."
-                            : "Current working-tree diff for this conflicted file."}
-                        </div>
-                      </div>
-                      {resolverMode === "manual" && resolverDirty ? (
-                        <Badge size="sm" variant="outline">
-                          Unsaved changes
-                        </Badge>
-                      ) : null}
-                    </div>
-                    {resolverPatch ? (
-                      <PatchViewer patch={resolverPatch} onOpenFile={openFileInEditor} />
-                    ) : diffQuery.isLoading ? (
-                      <div className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
-                        Loading diff...
-                      </div>
-                    ) : diffQuery.data ? (
-                      <PatchViewer patch={diffQuery.data.patch} onOpenFile={openFileInEditor} />
-                    ) : (
-                      <div className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
-                        No patch available yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : diffQuery.isLoading ? (
-                <div className="rounded-xl border border-border/70 p-4 text-sm text-muted-foreground">
-                  Loading diff...
-                </div>
-              ) : diffQuery.data ? (
-                <div className="flex min-h-0 flex-1 flex-col gap-3">
-                  {selectedPath ? (
-                    <div className="rounded-xl border border-border/70 bg-background/40 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">Hunk Actions</div>
-                          <div className="text-xs text-muted-foreground">
-                            Apply hunks from the current diff without dropping to the CLI.
+                        ) : conflictFileQuery.isLoading ? (
+                          <div className="rounded-xl border border-border/70 p-4 text-sm text-muted-foreground">
+                            Loading conflicted file...
                           </div>
-                        </div>
-                        {hunkActionState.unavailableReason ? (
-                          <Badge size="sm" variant="outline">
-                            Disabled
-                          </Badge>
                         ) : (
-                          <Badge size="sm" variant="secondary">
-                            {selectedPatchHunks.length} hunk
-                            {selectedPatchHunks.length === 1 ? "" : "s"}
-                          </Badge>
+                          <div className="flex min-h-0 flex-1 flex-col gap-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                Resolved Output
+                              </div>
+                              <Badge size="sm" variant={resolverDirty ? "outline" : "secondary"}>
+                                {resolverDirty ? "Editing" : "Synced"}
+                              </Badge>
+                            </div>
+                            <Textarea
+                              value={resolverDraft}
+                              onChange={(event) => {
+                                setResolverDraft(event.target.value);
+                                setResolverDirty(true);
+                              }}
+                              className="min-h-[22rem] flex-1 resize-none font-mono text-xs leading-6"
+                              placeholder="Conflicted file contents will load here."
+                            />
+                          </div>
                         )}
                       </div>
-                      {hunkActionState.unavailableReason ? (
-                        <div className="mt-3 rounded-lg border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
-                          {hunkActionState.unavailableReason}
+                      <div className="flex min-h-0 flex-col rounded-xl border border-border/70 bg-background/40">
+                        <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-3">
+                          <div>
+                            <div className="text-sm font-medium text-foreground">Patch Preview</div>
+                            <div className="text-xs text-muted-foreground">
+                              {resolverPatch
+                                ? resolverMode === "ai"
+                                  ? "AI resolution preview."
+                                  : "Unsaved resolution preview."
+                                : "Current working-tree diff for this conflicted file."}
+                            </div>
+                          </div>
+                          {resolverMode === "manual" && resolverDirty ? (
+                            <Badge size="sm" variant="outline">
+                              Unsaved changes
+                            </Badge>
+                          ) : null}
                         </div>
-                      ) : selectedPatchHunks.length === 0 ? (
-                        <div className="mt-3 rounded-lg border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
-                          No hunks were parsed from this diff.
-                        </div>
-                      ) : (
-                        <ScrollArea className="mt-3 h-36 rounded-lg border border-border/70">
-                          <div className="space-y-2 p-2">
-                            {selectedPatchHunks.map((hunk, index) => (
-                              <div
-                                key={`${selectedPath}:hunk:${hunk.deletionStart}:${hunk.additionStart}:${hunk.deletionLineIndex}:${hunk.additionLineIndex}`}
-                                className="rounded-lg border border-border/70 bg-card/40 px-3 py-2"
-                              >
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div>
-                                    <div className="text-sm font-medium text-foreground">
-                                      Hunk {index + 1}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {hunk.hunkSpecs ??
-                                        `-${hunk.deletionStart} +${hunk.additionStart}`}
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {hunkActionState.modes.includes("stage") ? (
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="outline"
-                                        disabled={gitTaskInFlight !== null}
-                                        onClick={() => handleApplyHunk(hunk, "stage")}
-                                      >
-                                        Stage Hunk
-                                      </Button>
-                                    ) : null}
-                                    {hunkActionState.modes.includes("unstage") ? (
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="outline"
-                                        disabled={gitTaskInFlight !== null}
-                                        onClick={() => handleApplyHunk(hunk, "unstage")}
-                                      >
-                                        Unstage Hunk
-                                      </Button>
-                                    ) : null}
-                                    {hunkActionState.modes.includes("discard") ? (
-                                      <Button
-                                        type="button"
-                                        size="xs"
-                                        variant="ghost"
-                                        disabled={gitTaskInFlight !== null}
-                                        onClick={() => handleApplyHunk(hunk, "discard")}
-                                      >
-                                        Discard Hunk
-                                      </Button>
-                                    ) : null}
-                                  </div>
-                                </div>
+                        {resolverPatch ? (
+                          <PatchViewer patch={resolverPatch} onOpenFile={openFileInEditor} />
+                        ) : diffQuery.isLoading ? (
+                          <div className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
+                            Loading diff...
+                          </div>
+                        ) : diffQuery.data ? (
+                          <PatchViewer patch={diffQuery.data.patch} onOpenFile={openFileInEditor} />
+                        ) : (
+                          <div className="flex flex-1 items-center justify-center px-4 text-sm text-muted-foreground">
+                            No patch available yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : diffQuery.isLoading ? (
+                    <div className="rounded-xl border border-border/70 p-4 text-sm text-muted-foreground">
+                      Loading diff...
+                    </div>
+                  ) : diffQuery.data ? (
+                    <div className="flex min-h-0 flex-1 flex-col gap-3">
+                      {selectedPath ? (
+                        <div className="rounded-xl border border-border/70 bg-background/40 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-foreground">
+                                Hunk Actions
                               </div>
+                              <div className="text-xs text-muted-foreground">
+                                Apply hunks from the current diff without dropping to the CLI.
+                              </div>
+                            </div>
+                            {hunkActionState.unavailableReason ? (
+                              <Badge size="sm" variant="outline">
+                                Disabled
+                              </Badge>
+                            ) : (
+                              <Badge size="sm" variant="secondary">
+                                {selectedPatchHunks.length} hunk
+                                {selectedPatchHunks.length === 1 ? "" : "s"}
+                              </Badge>
+                            )}
+                          </div>
+                          {hunkActionState.unavailableReason ? (
+                            <div className="mt-3 rounded-lg border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
+                              {hunkActionState.unavailableReason}
+                            </div>
+                          ) : selectedPatchHunks.length === 0 ? (
+                            <div className="mt-3 rounded-lg border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
+                              No hunks were parsed from this diff.
+                            </div>
+                          ) : (
+                            <ScrollArea className="mt-3 h-36 rounded-lg border border-border/70">
+                              <div className="space-y-2 p-2">
+                                {selectedPatchHunks.map((hunk, index) => (
+                                  <div
+                                    key={`${selectedPath}:hunk:${hunk.deletionStart}:${hunk.additionStart}:${hunk.deletionLineIndex}:${hunk.additionLineIndex}`}
+                                    className="rounded-lg border border-border/70 bg-card/40 px-3 py-2"
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div>
+                                        <div className="text-sm font-medium text-foreground">
+                                          Hunk {index + 1}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {hunk.hunkSpecs ??
+                                            `-${hunk.deletionStart} +${hunk.additionStart}`}
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {hunkActionState.modes.includes("stage") ? (
+                                          <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            disabled={gitTaskInFlight !== null}
+                                            onClick={() => handleApplyHunk(hunk, "stage")}
+                                          >
+                                            Stage Hunk
+                                          </Button>
+                                        ) : null}
+                                        {hunkActionState.modes.includes("unstage") ? (
+                                          <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="outline"
+                                            disabled={gitTaskInFlight !== null}
+                                            onClick={() => handleApplyHunk(hunk, "unstage")}
+                                          >
+                                            Unstage Hunk
+                                          </Button>
+                                        ) : null}
+                                        {hunkActionState.modes.includes("discard") ? (
+                                          <Button
+                                            type="button"
+                                            size="xs"
+                                            variant="ghost"
+                                            disabled={gitTaskInFlight !== null}
+                                            onClick={() => handleApplyHunk(hunk, "discard")}
+                                          >
+                                            Discard Hunk
+                                          </Button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          )}
+                        </div>
+                      ) : null}
+                      <PatchViewer
+                        patch={diffQuery.data.patch}
+                        onOpenFile={selectedPath ? openFileInEditor : undefined}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-3 rounded-xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
+                      {changedFiles.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                            Quick Open Changed File
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {changedFiles.slice(0, 8).map((file) => (
+                              <Button
+                                key={`diff-quick-open:${file.path}`}
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="max-w-80 justify-start truncate"
+                                onClick={() => selectWorkingTreeFile(file.path)}
+                              >
+                                {file.path}
+                              </Button>
                             ))}
                           </div>
-                        </ScrollArea>
-                      )}
-                    </div>
-                  ) : null}
-                  <PatchViewer
-                    patch={diffQuery.data.patch}
-                    onOpenFile={selectedPath ? openFileInEditor : undefined}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-3 rounded-xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
-                  {changedFiles.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                        Quick Open Changed File
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {changedFiles.slice(0, 8).map((file) => (
-                          <Button
-                            key={`diff-quick-open:${file.path}`}
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="max-w-80 justify-start truncate"
-                            onClick={() => selectWorkingTreeFile(file.path)}
-                          >
-                            {file.path}
-                          </Button>
-                        ))}
+                        </div>
+                      ) : null}
+                      <div>
+                        Select a changed file for a live working-tree diff, or choose a commit from
+                        the history list to inspect its patch here.
                       </div>
                     </div>
-                  ) : null}
-                  <div>
-                    Select a changed file for a live working-tree diff, or choose a commit from the
-                    history list to inspect its patch here.
-                  </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </GitEnvironmentGate>
 
       {!isBasicMode ? (
         <>
@@ -4618,140 +4635,152 @@ function GitChangeSection(props: {
   onUseTheirs?: (file: GitStatusFile) => void;
   onDiscardFile: (file: GitStatusFile) => void;
 }) {
+  const toneDot =
+    props.title === "Conflicts"
+      ? "bg-destructive"
+      : props.title === "Staged"
+        ? "bg-emerald-500"
+        : props.title === "Untracked"
+          ? "bg-sky-500"
+          : "bg-amber-500";
+  if (props.files.length === 0) {
+    return null;
+  }
   return (
-    <div className="space-y-2">
-      <div>
-        <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 px-1">
+        <span className={cn("size-1.5 rounded-full", toneDot)} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           {props.title}
-        </div>
-        <div className="mt-1 text-xs text-muted-foreground">{props.description}</div>
+        </span>
+        <span className="text-[11px] text-muted-foreground/60">{props.files.length}</span>
       </div>
-      {props.files.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border/70 px-3 py-2 text-sm text-muted-foreground">
-          {props.emptyLabel}
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {props.files.map((file) => (
+      <div className="space-y-0.5">
+        {props.files.map((file) => {
+          const lastSlash = file.path.lastIndexOf("/");
+          const dir = lastSlash >= 0 ? file.path.slice(0, lastSlash + 1) : "";
+          const base = lastSlash >= 0 ? file.path.slice(lastSlash + 1) : file.path;
+          const isSelected = props.selectedPath === file.path;
+          return (
             <div
               key={`${props.title}:${file.path}`}
               className={cn(
-                "rounded-lg border px-3 py-2",
-                props.selectedPath === file.path
+                "group flex items-center gap-2.5 rounded-lg border px-2.5 py-1.5 transition-colors",
+                isSelected
                   ? "border-primary/40 bg-primary/10"
-                  : "border-border/70 bg-background/40",
+                  : "border-transparent hover:border-border/50 hover:bg-muted/30",
               )}
             >
-              <div className="flex items-start justify-between gap-3">
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => props.onSelectFile(file.path)}
-                >
-                  <div className="truncate text-sm font-medium text-foreground">{file.path}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span>+{file.insertions}</span>
-                    <span>-{file.deletions}</span>
-                    {props.selectedPath === file.path ? (
-                      <Badge size="sm" variant="secondary">
-                        {props.selectLabel}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </button>
-                <div className="flex shrink-0 flex-wrap gap-1.5">
-                  {props.onResolveFile ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => props.onResolveFile?.(file)}
-                    >
-                      Resolve
-                    </Button>
-                  ) : null}
-                  {props.onFixWithAi ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => props.onFixWithAi?.(file)}
-                    >
-                      Fix with AI
-                    </Button>
-                  ) : null}
-                  {props.onOpenFile ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => void props.onOpenFile?.(file.path)}
-                    >
-                      Open
-                    </Button>
-                  ) : null}
-                  {props.onUseOurs ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => props.onUseOurs?.(file)}
-                    >
-                      Use Ours
-                    </Button>
-                  ) : null}
-                  {props.onUseTheirs ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => props.onUseTheirs?.(file)}
-                    >
-                      Use Theirs
-                    </Button>
-                  ) : null}
-                  {props.onStageFile ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => props.onStageFile?.(file)}
-                    >
-                      {props.title === "Conflicts" ? "Mark Resolved" : "Stage"}
-                    </Button>
-                  ) : null}
-                  {props.onUnstageFile ? (
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      disabled={props.actionDisabled}
-                      onClick={() => props.onUnstageFile?.(file)}
-                    >
-                      Unstage
-                    </Button>
-                  ) : null}
+              <span className={cn("size-1.5 shrink-0 rounded-full", toneDot)} />
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left text-sm"
+                onClick={() => props.onSelectFile(file.path)}
+                title={file.path}
+              >
+                {dir ? <span className="text-muted-foreground/70">{dir}</span> : null}
+                <span className="font-medium text-foreground">{base}</span>
+              </button>
+              <div className="flex shrink-0 items-center gap-1.5 font-mono text-[11px]">
+                {file.insertions > 0 ? (
+                  <span className="text-emerald-500/90">+{file.insertions}</span>
+                ) : null}
+                {file.deletions > 0 ? (
+                  <span className="text-rose-500/90">-{file.deletions}</span>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                {props.onResolveFile ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={props.actionDisabled}
+                    onClick={() => props.onResolveFile?.(file)}
+                  >
+                    Resolve
+                  </Button>
+                ) : null}
+                {props.onFixWithAi ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={props.actionDisabled}
+                    onClick={() => props.onFixWithAi?.(file)}
+                  >
+                    Fix with AI
+                  </Button>
+                ) : null}
+                {props.onOpenFile ? (
                   <Button
                     type="button"
                     size="xs"
                     variant="ghost"
                     disabled={props.actionDisabled}
-                    onClick={() => props.onDiscardFile(file)}
+                    onClick={() => void props.onOpenFile?.(file.path)}
                   >
-                    Discard
+                    Open
                   </Button>
-                </div>
+                ) : null}
+                {props.onUseOurs ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={props.actionDisabled}
+                    onClick={() => props.onUseOurs?.(file)}
+                  >
+                    Ours
+                  </Button>
+                ) : null}
+                {props.onUseTheirs ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={props.actionDisabled}
+                    onClick={() => props.onUseTheirs?.(file)}
+                  >
+                    Theirs
+                  </Button>
+                ) : null}
+                {props.onStageFile ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    disabled={props.actionDisabled}
+                    onClick={() => props.onStageFile?.(file)}
+                  >
+                    {props.title === "Conflicts" ? "Mark Resolved" : "Stage"}
+                  </Button>
+                ) : null}
+                {props.onUnstageFile ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    disabled={props.actionDisabled}
+                    onClick={() => props.onUnstageFile?.(file)}
+                  >
+                    Unstage
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-destructive"
+                  disabled={props.actionDisabled}
+                  onClick={() => props.onDiscardFile(file)}
+                >
+                  Discard
+                </Button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -7643,6 +7672,47 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [gitTerminalState, gitTerminalThreadId, storeCloseTerminal],
   );
+  const runGitHubLoginInGitTerminal = useCallback(async () => {
+    const api = readNativeApi();
+    if (!gitTerminalThreadId || !api || !activeProject) return;
+    setGitTerminalOpen(true);
+    setShellTerminalFocusRequestId((value) => value + 1);
+    const terminalId =
+      gitTerminalState?.activeTerminalId ??
+      gitTerminalState?.terminalIds[0] ??
+      DEFAULT_THREAD_TERMINAL_ID;
+    if (gitTerminalState?.terminalIds.includes(terminalId)) {
+      storeSetActiveTerminal(gitTerminalThreadId, terminalId);
+    } else {
+      storeNewTerminal(gitTerminalThreadId, terminalId);
+    }
+    try {
+      await api.terminal.open({
+        threadId: gitTerminalThreadId,
+        terminalId,
+        cwd: activeProject.cwd,
+      });
+      await api.terminal.write({
+        threadId: gitTerminalThreadId,
+        terminalId,
+        data: "gh auth login\r",
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not start GitHub sign-in",
+        description:
+          error instanceof Error ? error.message : "Failed to launch the terminal for gh auth.",
+      });
+    }
+  }, [
+    activeProject,
+    gitTerminalState,
+    gitTerminalThreadId,
+    setGitTerminalOpen,
+    storeNewTerminal,
+    storeSetActiveTerminal,
+  ]);
   const setServerTerminalOpen = useCallback(
     (open: boolean) => {
       if (!serverThreadId) return;
@@ -7974,6 +8044,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       onToggleTerminal={toggleGitTerminalVisibility}
       onOpenAgents={() => openAgentsForProject(activeProject.id)}
       onCreateAgentsThread={() => createAgentsThreadForProject(activeProject.id)}
+      onRunGitHubLogin={() => void runGitHubLoginInGitTerminal()}
     />
   ) : null;
   const browserTool =

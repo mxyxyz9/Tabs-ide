@@ -46,6 +46,9 @@ import {
   GitStatusInput,
   GitRebaseInput,
   GitUnstageFilesInput,
+  GitEnvironmentInput,
+  GitHubSwitchAccountInput,
+  GitHubLogoutInput,
 } from "./git";
 import {
   TerminalClearInput,
@@ -114,6 +117,9 @@ export const WS_METHODS = {
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
   gitPush: "git.push",
+  gitEnvironment: "git.environment",
+  gitHubSwitchAccount: "git.gitHubSwitchAccount",
+  gitHubLogout: "git.gitHubLogout",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -208,6 +214,9 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitResolvePullRequest, GitPullRequestRefInput),
   tagRequestBody(WS_METHODS.gitPreparePullRequestThread, GitPreparePullRequestThreadInput),
   tagRequestBody(WS_METHODS.gitPush, GitPushInput),
+  tagRequestBody(WS_METHODS.gitEnvironment, GitEnvironmentInput),
+  tagRequestBody(WS_METHODS.gitHubSwitchAccount, GitHubSwitchAccountInput),
+  tagRequestBody(WS_METHODS.gitHubLogout, GitHubLogoutInput),
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),

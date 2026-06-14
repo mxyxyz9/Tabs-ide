@@ -10,7 +10,6 @@ import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-quer
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { CloudUploadIcon, GitCommitIcon } from "lucide-react";
 
-import { openInPreferredEditor } from "../editorPreferences";
 import {
   gitInitMutationOptions,
   gitMutationKeys,
@@ -19,7 +18,6 @@ import {
 } from "../lib/gitReactQuery";
 import { cn, randomUUID } from "../lib/utils";
 import { readNativeApi } from "../nativeApi";
-import { resolvePathLinkTarget } from "../terminal-links";
 import { GitHubIcon } from "./Icons";
 import {
   buildGitActionProgressStages,
@@ -29,10 +27,8 @@ import {
   summarizeGitResult,
 } from "./GitActionsControl.logic";
 import { buildGitCommitComposerState } from "./GitCommitComposer.logic";
-import { getGitWorkspaceLayoutSection } from "./GitToolLayout.logic";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import {
   Dialog,
   DialogDescription,
@@ -41,7 +37,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "./ui/dialog";
-import { ScrollArea } from "./ui/scroll-area";
 import { Textarea } from "./ui/textarea";
 import { toastManager } from "./ui/toast";
 
@@ -118,7 +113,6 @@ export default function GitCommitComposer(props: GitCommitComposerProps) {
     externalBusy = false,
     workspaceMode = "basic",
   } = props;
-  const composerSection = getGitWorkspaceLayoutSection("composer");
   const threadToastData = useMemo(
     () => (activeThreadId ? { threadId: activeThreadId } : undefined),
     [activeThreadId],
@@ -497,249 +491,144 @@ export default function GitCommitComposer(props: GitCommitComposerProps) {
     [commitMessage, runGitActionWithToast, stagedFiles],
   );
 
-  const openStagedFileInEditor = useCallback(
-    (filePath: string) => {
-      const api = readNativeApi();
-      if (!api || !gitCwd) return;
-      const target = resolvePathLinkTarget(filePath, gitCwd);
-      void openInPreferredEditor(api, target).catch((error) => {
-        toastManager.add({
-          type: "error",
-          title: "Unable to open file",
-          description: error instanceof Error ? error.message : "An error occurred.",
-          data: threadToastData,
-        });
-      });
-    },
-    [gitCwd, threadToastData],
-  );
-
   const primaryAction = composerState.actions.find((action) => action.kind !== "open_pr") ?? null;
   const secondaryActions = composerState.actions.filter((action) => action !== primaryAction);
 
   return (
     <>
-      <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5">
-        <div className="min-w-0 flex flex-wrap items-start justify-between gap-4 border-b border-border/40 pb-4 mb-4">
-          <div className="min-w-0">
-            <h3 className="text-lg font-semibold tracking-tight text-foreground">
-              Commit & Pull Request
-            </h3>
-            <p className="mt-1 break-words text-sm text-muted-foreground">
-              Write a message, then run one primary action.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Badge
-              size="sm"
-              variant={stagedFiles.length > 0 ? "secondary" : "outline"}
-              className="shadow-none"
-            >
-              {stagedFiles.length} staged
-            </Badge>
-            <Badge
-              size="sm"
-              variant={(gitStatusForActions?.aheadCount ?? 0) > 0 ? "secondary" : "outline"}
-              className="shadow-none"
-            >
-              Ahead {gitStatusForActions?.aheadCount ?? 0}
-            </Badge>
-            <Badge
-              size="sm"
-              variant={(gitStatusForActions?.behindCount ?? 0) > 0 ? "warning" : "outline"}
-              className="shadow-none"
-            >
-              Behind {gitStatusForActions?.behindCount ?? 0}
-            </Badge>
-            {gitStatusForActions?.pr ? (
-              <Badge size="sm" variant="outline" className="shadow-none">
-                PR #{gitStatusForActions.pr.number}
-              </Badge>
-            ) : null}
-          </div>
-        </div>
-
-        <div className={cn("grid min-w-0 gap-5", "xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]")}>
-          {!branchList?.isRepo ? (
-            <div className="min-w-0 rounded-2xl border border-dashed border-border/60 bg-muted/20 p-6 text-sm text-muted-foreground flex flex-col items-center justify-center text-center">
-              <div className="space-y-2">
-                <div className="font-medium text-foreground text-base">
-                  Initialize Git for this project
-                </div>
-                <p className="break-words max-w-sm mx-auto">
-                  This workspace is not a Git repository yet. Initialize it here, then the full Git
-                  dashboard will become active.
-                </p>
+      <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 p-5 shadow-sm backdrop-blur-xl">
+        {!branchList?.isRepo ? (
+          <div className="flex min-w-0 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+            <div className="space-y-1.5">
+              <div className="text-base font-medium text-foreground">
+                Initialize Git for this project
               </div>
-              <div className="mt-6">
+              <p className="mx-auto max-w-sm break-words">
+                This workspace is not a Git repository yet. Initialize it to unlock commits,
+                branches, and syncing.
+              </p>
+            </div>
+            <Button
+              type="button"
+              className="rounded-full shadow-sm"
+              disabled={initMutation.isPending}
+              onClick={() => initMutation.mutate()}
+            >
+              {initMutation.isPending ? "Initializing..." : "Initialize Git"}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <GitCommitIcon className="size-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-foreground">Commit changes</h3>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {stagedFiles.length > 0
+                      ? `${stagedFiles.length} file${stagedFiles.length === 1 ? "" : "s"} ready to commit`
+                      : "Stage files below to include them"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {composerState.isDefaultBranch && gitStatusForActions?.branch ? (
+                  <Badge size="sm" variant="warning" className="shadow-none">
+                    Default branch
+                  </Badge>
+                ) : null}
+                {stagedFiles.length > 0 ? (
+                  <span className="rounded-md bg-muted/40 px-2 py-1 font-mono text-xs font-medium">
+                    <span className="text-emerald-500/90">+{stagedInsertions}</span>
+                    <span className="px-1 text-muted-foreground/40">/</span>
+                    <span className="text-rose-500/90">-{stagedDeletions}</span>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            <Textarea
+              value={commitMessage}
+              onChange={(event) => setCommitMessage(event.target.value)}
+              placeholder="Summarize your change — or leave empty to auto-generate one"
+              className="min-h-24 resize-none border-border/40 bg-background/50 shadow-inner focus-visible:ring-1 focus-visible:ring-primary/50"
+            />
+
+            {isGitStatusOutOfSync ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="size-1.5 animate-pulse rounded-full bg-primary/60" />
+                Refreshing Git status…
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-4">
+              <div
+                className={cn(
+                  "min-w-0 text-xs",
+                  primaryAction?.disabledReason ? "text-warning" : "text-muted-foreground",
+                )}
+              >
+                {primaryAction?.disabledReason ??
+                  primaryAction?.description ??
+                  "Leave the message empty to auto-generate one."}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {secondaryActions.map((action) => (
+                  <Button
+                    key={action.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full gap-1.5"
+                    disabled={action.disabled}
+                    onClick={() => {
+                      if (action.kind === "open_pr") {
+                        void openExistingPr();
+                        return;
+                      }
+                      if (action.action) {
+                        runComposerAction(action.action);
+                      }
+                    }}
+                  >
+                    <GitComposerActionIcon
+                      actionId={action.kind === "open_pr" ? "open_pr" : (action.action ?? "commit")}
+                    />
+                    {action.label}
+                  </Button>
+                ))}
                 <Button
                   type="button"
-                  size="default"
-                  className="rounded-full shadow-sm"
-                  disabled={initMutation.isPending}
-                  onClick={() => initMutation.mutate()}
+                  className="rounded-full gap-1.5 px-5 shadow-sm active:scale-95"
+                  disabled={!primaryAction || primaryAction.disabled}
+                  onClick={() => {
+                    if (!primaryAction) return;
+                    if (primaryAction.kind === "open_pr") {
+                      void openExistingPr();
+                      return;
+                    }
+                    if (primaryAction.action) {
+                      runComposerAction(primaryAction.action);
+                    }
+                  }}
                 >
-                  {initMutation.isPending ? "Initializing..." : "Initialize Git"}
+                  {primaryAction ? (
+                    <GitComposerActionIcon
+                      actionId={
+                        primaryAction.kind === "open_pr"
+                          ? "open_pr"
+                          : (primaryAction.action ?? "commit")
+                      }
+                    />
+                  ) : null}
+                  {primaryAction?.label ?? "Commit"}
                 </Button>
               </div>
             </div>
-          ) : (
-            <>
-              <div className="min-w-0 space-y-4">
-                <div className="group rounded-xl border border-border/40 bg-card/40 p-4 transition-colors hover:bg-card/60">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Commit Message
-                      </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground/70">
-                        Optional. Leave empty for auto-generated message.
-                      </div>
-                    </div>
-                    {composerState.isDefaultBranch && gitStatusForActions?.branch ? (
-                      <Badge size="sm" variant="warning" className="shadow-none">
-                        Default branch
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <Textarea
-                    value={commitMessage}
-                    onChange={(event) => setCommitMessage(event.target.value)}
-                    placeholder="Describe your change..."
-                    className="mt-3 min-h-24 resize-none border-border/40 bg-background/50 focus-visible:ring-1 focus-visible:ring-primary/50 shadow-inner"
-                  />
-                  {isGitStatusOutOfSync ? (
-                    <div className="mt-3 text-xs text-muted-foreground animate-pulse flex items-center gap-2">
-                      <span className="size-1.5 rounded-full bg-primary/60"></span> Refreshing Git
-                      status…
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="group rounded-xl border border-border/40 bg-card/40 p-4 transition-colors hover:bg-card/60">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Staged Summary
-                      </div>
-                      <div className="mt-1 text-[11px] text-muted-foreground/70">
-                        Actions apply only to staged files.
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 font-mono text-xs font-medium">
-                      <span className="text-emerald-500/90">+{stagedInsertions}</span>
-                      <span className="text-muted-foreground/40">/</span>
-                      <span className="text-rose-500/90">-{stagedDeletions}</span>
-                    </div>
-                  </div>
-                  {stagedFiles.length > 0 ? (
-                    <ScrollArea className="mt-4 h-40 rounded-lg border border-border/40 bg-background/40">
-                      <div className="p-1.5 space-y-0.5">
-                        {stagedFiles.map((file) => (
-                          <button
-                            key={`composer-staged:${file.path}`}
-                            type="button"
-                            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-muted/50"
-                            onClick={() => openStagedFileInEditor(file.path)}
-                          >
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium text-foreground/90">
-                                {file.path}
-                              </div>
-                            </div>
-                            <div className="shrink-0 font-mono text-xs font-medium">
-                              <span className="text-emerald-500/80">+{file.insertions}</span>
-                              <span className="text-muted-foreground/40 px-0.5">/</span>
-                              <span className="text-rose-500/80">-{file.deletions}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  ) : (
-                    <div className="mt-4 rounded-lg border border-dashed border-border/40 bg-background/20 px-4 py-6 text-center text-sm text-muted-foreground">
-                      {gitStatusForActions?.hasWorkingTreeChanges
-                        ? "Nothing is staged yet. Use the Changes panel to stage files."
-                        : "No staged files right now."}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid min-w-0 gap-4 content-start">
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-sm">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-primary/70">
-                    Primary Action
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="truncate text-base font-semibold text-foreground">
-                        {primaryAction?.label ?? "No action available"}
-                      </div>
-                      <div
-                        className={cn(
-                          "mt-1 text-xs",
-                          primaryAction?.disabledReason ? "text-warning" : "text-muted-foreground",
-                        )}
-                      >
-                        {primaryAction?.disabledReason ??
-                          primaryAction?.description ??
-                          "Select files and commit."}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      size="default"
-                      className="rounded-full px-6 shadow-md transition-all hover:shadow-lg active:scale-95"
-                      disabled={!primaryAction || primaryAction.disabled}
-                      onClick={() => {
-                        if (!primaryAction) return;
-                        if (primaryAction.kind === "open_pr") {
-                          void openExistingPr();
-                          return;
-                        }
-                        if (primaryAction.action) {
-                          runComposerAction(primaryAction.action);
-                        }
-                      }}
-                    >
-                      {primaryAction?.label ?? "Run"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-border/40 bg-card/30 p-4">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                    More Actions
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {secondaryActions.map((action) => (
-                      <Button
-                        key={action.id}
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        className="rounded-full shadow-none bg-background/50 hover:bg-background/80 border border-border/40 text-muted-foreground hover:text-foreground transition-colors"
-                        disabled={action.disabled}
-                        onClick={() => {
-                          if (action.kind === "open_pr") {
-                            void openExistingPr();
-                            return;
-                          }
-                          if (action.action) {
-                            runComposerAction(action.action);
-                          }
-                        }}
-                      >
-                        {action.label}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <Dialog

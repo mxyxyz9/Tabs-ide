@@ -2,6 +2,7 @@ import { type GitStackedAction } from "@tabs/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/react-query";
 import { ensureNativeApi } from "../nativeApi";
 
+const GIT_ENVIRONMENT_STALE_TIME_MS = 30_000;
 const GIT_STATUS_STALE_TIME_MS = 5_000;
 const GIT_STATUS_REFETCH_INTERVAL_MS = 15_000;
 const GIT_BRANCHES_STALE_TIME_MS = 15_000;
@@ -13,6 +14,7 @@ const GIT_WORKING_TREE_DIFF_REFETCH_INTERVAL_MS = 15_000;
 
 export const gitQueryKeys = {
   all: ["git"] as const,
+  environment: (cwd: string | null) => ["git", "environment", cwd] as const,
   status: (cwd: string | null) => ["git", "status", cwd] as const,
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
   history: (cwd: string | null, limit: number) => ["git", "history", cwd, limit] as const,
@@ -34,6 +36,53 @@ export const gitMutationKeys = {
 
 export function invalidateGitQueries(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: gitQueryKeys.all });
+}
+
+export function gitEnvironmentQueryOptions(cwd: string | null) {
+  return queryOptions({
+    queryKey: gitQueryKeys.environment(cwd),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd) throw new Error("Git environment is unavailable.");
+      return api.git.environment({ cwd });
+    },
+    enabled: cwd !== null,
+    staleTime: GIT_ENVIRONMENT_STALE_TIME_MS,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+  });
+}
+
+export function gitHubSwitchAccountMutationOptions(input: {
+  cwd: string | null;
+  queryClient: QueryClient;
+}) {
+  return mutationOptions({
+    mutationKey: ["git", "mutation", "github-switch-account", input.cwd] as const,
+    mutationFn: async (account: { host: string; login: string }) => {
+      const api = ensureNativeApi();
+      return api.git.gitHubSwitchAccount(account);
+    },
+    onSuccess: async () => {
+      await invalidateGitQueries(input.queryClient);
+    },
+  });
+}
+
+export function gitHubLogoutMutationOptions(input: {
+  cwd: string | null;
+  queryClient: QueryClient;
+}) {
+  return mutationOptions({
+    mutationKey: ["git", "mutation", "github-logout", input.cwd] as const,
+    mutationFn: async (account: { host: string; login: string }) => {
+      const api = ensureNativeApi();
+      return api.git.gitHubLogout(account);
+    },
+    onSuccess: async () => {
+      await invalidateGitQueries(input.queryClient);
+    },
+  });
 }
 
 export function gitStatusQueryOptions(cwd: string | null) {

@@ -46,6 +46,10 @@ import type {
   GitRebaseInput,
   GitSetBranchUpstreamInput,
   GitUnstageFilesInput,
+  GitEnvironmentInput,
+  GitEnvironmentResult,
+  GitHubSwitchAccountInput,
+  GitHubLogoutInput,
 } from "./git";
 import type {
   ProjectReadFileInput,
@@ -397,6 +401,10 @@ export interface NativeApi {
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
     onActionProgress: (callback: (event: GitActionProgressEvent) => void) => () => void;
+    // Environment + GitHub account management
+    environment: (input: GitEnvironmentInput) => Promise<GitEnvironmentResult>;
+    gitHubSwitchAccount: (input: GitHubSwitchAccountInput) => Promise<GitEnvironmentResult>;
+    gitHubLogout: (input: GitHubLogoutInput) => Promise<GitEnvironmentResult>;
   };
   contextMenu: {
     show: <T extends string>(

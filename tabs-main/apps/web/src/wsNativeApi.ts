@@ -225,6 +225,10 @@ export function createWsNativeApi(): NativeApi {
       preparePullRequestThread: (input) =>
         transport.request(WS_METHODS.gitPreparePullRequestThread, input),
       push: (input) => transport.request(WS_METHODS.gitPush, input),
+      environment: (input) => transport.request(WS_METHODS.gitEnvironment, input),
+      gitHubSwitchAccount: (input) =>
+        transport.request(WS_METHODS.gitHubSwitchAccount, input, { timeoutMs: null }),
+      gitHubLogout: (input) => transport.request(WS_METHODS.gitHubLogout, input),
       onActionProgress: (callback) => {
         gitActionProgressListeners.add(callback);
         return () => {

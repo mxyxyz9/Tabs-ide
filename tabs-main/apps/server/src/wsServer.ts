@@ -63,6 +63,7 @@ import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
 import { ServerConfig } from "./config";
 import { GitCore } from "./git/Services/GitCore.ts";
+import { GitEnvironment } from "./git/Services/GitEnvironment.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
 import {
   ATTACHMENTS_ROUTE_PREFIX,
@@ -226,6 +227,7 @@ export type ServerRuntimeServices =
   | ServerCoreRuntimeServices
   | GitManager
   | GitCore
+  | GitEnvironment
   | TerminalManager
   | Keybindings
   | ServerSettingsService
@@ -270,6 +272,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providerRegistry = yield* ProviderRegistry;
   const providerMaintenanceRunner = yield* ProviderMaintenanceRunner;
   const git = yield* GitCore;
+  const gitEnvironment = yield* GitEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
 
@@ -1018,6 +1021,21 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.gitPush: {
         const body = stripRequestTag(request.body);
         return yield* git.pushCurrentBranch(body.cwd, null);
+      }
+
+      case WS_METHODS.gitEnvironment: {
+        const body = stripRequestTag(request.body);
+        return yield* gitEnvironment.detect(body);
+      }
+
+      case WS_METHODS.gitHubSwitchAccount: {
+        const body = stripRequestTag(request.body);
+        return yield* gitEnvironment.switchAccount(body);
+      }
+
+      case WS_METHODS.gitHubLogout: {
+        const body = stripRequestTag(request.body);
+        return yield* gitEnvironment.logout(body);
       }
 
       case WS_METHODS.terminalOpen: {

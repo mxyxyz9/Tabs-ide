@@ -361,6 +361,48 @@ export const GitListBranchesResult = Schema.Struct({
 });
 export type GitListBranchesResult = typeof GitListBranchesResult.Type;
 
+// Environment + GitHub account management
+
+export const GitEnvironmentInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitEnvironmentInput = typeof GitEnvironmentInput.Type;
+
+export const GitHubAccount = Schema.Struct({
+  host: TrimmedNonEmptyStringSchema,
+  login: TrimmedNonEmptyStringSchema,
+  active: Schema.Boolean,
+  scopes: Schema.Array(Schema.String),
+});
+export type GitHubAccount = typeof GitHubAccount.Type;
+
+export const GitEnvironmentResult = Schema.Struct({
+  git: Schema.Struct({
+    installed: Schema.Boolean,
+    version: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
+  }),
+  gitHub: Schema.Struct({
+    cliInstalled: Schema.Boolean,
+    version: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
+    authenticated: Schema.Boolean,
+    accounts: Schema.Array(GitHubAccount),
+    activeLogin: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
+  }),
+});
+export type GitEnvironmentResult = typeof GitEnvironmentResult.Type;
+
+export const GitHubSwitchAccountInput = Schema.Struct({
+  host: TrimmedNonEmptyStringSchema,
+  login: TrimmedNonEmptyStringSchema,
+});
+export type GitHubSwitchAccountInput = typeof GitHubSwitchAccountInput.Type;
+
+export const GitHubLogoutInput = Schema.Struct({
+  host: TrimmedNonEmptyStringSchema,
+  login: TrimmedNonEmptyStringSchema,
+});
+export type GitHubLogoutInput = typeof GitHubLogoutInput.Type;
+
 export const GitCreateWorktreeResult = Schema.Struct({
   worktree: GitWorktree,
 });
