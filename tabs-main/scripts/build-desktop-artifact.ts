@@ -864,11 +864,33 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   // cascade of failed activations (git-base → git → CodeRabbit, etc.) and a
   // stale-looking workbench. Fail loudly here instead of packaging a half-built
   // runtime (or uploading a broken runtime zip that thin installers download).
+  // Cover EVERY built-in extension that ships a compiled `out/` and a node main.
+  // The previous list only checked git/git-base/configuration-editing, so a tree
+  // where those compiled but the language features / emmet / github / merge did
+  // NOT still passed — and shipped a runtime whose extension host cascade-failed
+  // ("Cannot find module .../json-language-features/client/out/node/...", emmet,
+  // typescript-language-features, github, merge-conflict, …), which also kills
+  // the workbench buttons. Marker paths mirror each extension's package.json
+  // `main`.
   const compiledMarkers = [
     "out/vs/code/electron-browser/workbench/workbench-dev.html",
     "extensions/git/out",
     "extensions/git-base/out",
+    "extensions/github/out",
+    "extensions/github-authentication/out",
     "extensions/configuration-editing/out",
+    "extensions/json-language-features/client/out",
+    "extensions/json-language-features/server/out",
+    "extensions/html-language-features/client/out",
+    "extensions/css-language-features/client/out",
+    "extensions/typescript-language-features/out",
+    "extensions/markdown-language-features/out",
+    "extensions/emmet/out",
+    "extensions/merge-conflict/out",
+    // git's native fs helper (@vscode/fs-copyfile) must be built for the target —
+    // missing it throws "Cannot find module .../build/Debug/vscode_fs.node" and
+    // takes down git (and anything depending on it, e.g. CodeRabbit).
+    "extensions/git/node_modules/@vscode/fs-copyfile/build",
   ];
   const missingMarkers: string[] = [];
   for (const marker of compiledMarkers) {
