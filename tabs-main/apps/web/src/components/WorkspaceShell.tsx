@@ -94,6 +94,7 @@ import {
   projectSearchEntriesQueryOptions,
 } from "../lib/projectReactQuery";
 import { cn, isWindowsPlatform, newCommandId, newProjectId, randomUUID } from "../lib/utils";
+import { APP_VERSION } from "../branding";
 
 // On Windows the native title bar is hidden and the caption buttons are overlaid
 // (Window Controls Overlay) at the top-right, so the top bar reserves space on
@@ -3264,7 +3265,7 @@ function GitTool(props: {
                   variant="outline"
                   className="rounded-full gap-1.5"
                   onClick={() => {
-                    setReleaseVersion("");
+                    setReleaseVersion(APP_VERSION && APP_VERSION !== "0.0.0" ? APP_VERSION : "");
                     setReleaseDialogOpen(true);
                   }}
                   title="Trigger the release workflow on GitHub Actions"
@@ -5029,19 +5030,26 @@ function GitTool(props: {
                 installers for this version. Needs the GitHub CLI signed in.
               </DialogDescription>
             </DialogHeader>
-            <Input
-              autoFocus
-              value={releaseVersion}
-              onChange={(event) => setReleaseVersion(event.target.value)}
-              placeholder="1.2.16"
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && releaseVersion.trim().length > 0) {
-                  event.preventDefault();
-                  onDispatchRelease(releaseVersion);
-                  setReleaseDialogOpen(false);
-                }
-              }}
-            />
+            <div className="space-y-2">
+              <Input
+                autoFocus
+                value={releaseVersion}
+                onChange={(event) => setReleaseVersion(event.target.value)}
+                placeholder="e.g. 1.2.16"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && releaseVersion.trim().length > 0) {
+                    event.preventDefault();
+                    onDispatchRelease(releaseVersion);
+                    setReleaseDialogOpen(false);
+                  }
+                }}
+              />
+              <div className="rounded-md bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
+                {releaseVersion.trim().length > 0
+                  ? `gh workflow run release.yml --field version=${releaseVersion.trim().replace(/^v/, "")}`
+                  : "Type a version above to enable the release."}
+              </div>
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setReleaseDialogOpen(false)}>
                 Cancel
