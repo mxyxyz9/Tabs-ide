@@ -488,7 +488,15 @@ function startCodeControlChannel(context) {
       state.activityBarItems = activityBarItems;
       pushState();
     } catch (err) {
-      log(`refreshContainers error: ${err && err.message ? err.message : err}`);
+      const message = err && err.message ? err.message : String(err);
+      // "Canceled" is VS Code's expected response when the command is superseded
+      // (workbench busy / shutting down) — the interval re-runs it, so don't log
+      // it as an error.
+      if (message === "Canceled" || message === "Cancelled") {
+        trace(`control: refreshContainers canceled (will retry)`);
+      } else {
+        log(`refreshContainers error: ${message}`);
+      }
     }
   };
 
@@ -503,7 +511,18 @@ function startCodeControlChannel(context) {
       try {
         if (fs.existsSync(activeContainerFile)) {
           const content = fs.readFileSync(activeContainerFile, "utf8");
-          const data = JSON.parse(content);
+          // The writer is non-atomic, so fs.watch can fire mid-write and hand us
+          // empty or truncated content. Skip it silently rather than logging a
+          // bogus "Unexpected end of JSON input" — the watcher fires again once
+          // the complete file lands.
+          const trimmed = content.trim();
+          if (!trimmed) return;
+          let data;
+          try {
+            data = JSON.parse(trimmed);
+          } catch {
+            return;
+          }
           if (data && typeof data.id === "string") {
             const newActiveId = data.id || null;
             let mappedId = newActiveId;
@@ -691,7 +710,23 @@ function startCodeControlChannel(context) {
     });
     sock.on("error", (error) => {
       clearTimeout(connectTimeout);
-      log(`control channel error: ${error && error.message ? error.message : "unknown"}`);
+      // EPIPE/ECONNREFUSED/ECONNRESET/ETIMEDOUT are the EXPECTED shape of the
+      // broker (Electron main) restarting or the socket tearing down — the
+      // channel reconnects on its own (scheduleReconnect below). Log those at
+      // trace level so they don't masquerade as real errors in the console; only
+      // genuinely unexpected failures go to the error log.
+      const code = error && error.code;
+      const expected =
+        code === "EPIPE" ||
+        code === "ECONNREFUSED" ||
+        code === "ECONNRESET" ||
+        code === "ETIMEDOUT";
+      const message = error && error.message ? error.message : "unknown";
+      if (expected) {
+        trace(`control: channel disconnected (${message}); will reconnect`);
+      } else {
+        log(`control channel error: ${message}`);
+      }
       try {
         sock.destroy();
       } catch {
