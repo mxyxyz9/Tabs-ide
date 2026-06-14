@@ -138,6 +138,12 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=6144"
         run: |
           set -euo pipefail
+          # Shared extensions package (extensions/package.json → vscode-extensions)
+          # provides extensions/node_modules/typescript, which
+          # typescript-language-features compiles against (referenced literally as
+          # ../../../../node_modules/typescript). Without it tsgo can't resolve
+          # typescript and the compile fails with ~48 cascading type errors.
+          (cd extensions && npm install --no-audit --no-fund --ignore-scripts)
           # Install deps so each extension's TS compiles and its node_modules
           # ship in the runtime.
           exts=(

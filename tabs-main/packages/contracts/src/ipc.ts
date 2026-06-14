@@ -50,6 +50,11 @@ import type {
   GitEnvironmentResult,
   GitHubSwitchAccountInput,
   GitHubLogoutInput,
+  GitAmendCommitInput,
+  GitUndoLastCommitInput,
+  GitRevertCommitInput,
+  GitCherryPickInput,
+  GitCreateTagInput,
 } from "./git";
 import type {
   ProjectReadFileInput,
@@ -405,6 +410,11 @@ export interface NativeApi {
     environment: (input: GitEnvironmentInput) => Promise<GitEnvironmentResult>;
     gitHubSwitchAccount: (input: GitHubSwitchAccountInput) => Promise<GitEnvironmentResult>;
     gitHubLogout: (input: GitHubLogoutInput) => Promise<GitEnvironmentResult>;
+    amendCommit: (input: GitAmendCommitInput) => Promise<void>;
+    undoLastCommit: (input: GitUndoLastCommitInput) => Promise<void>;
+    revertCommit: (input: GitRevertCommitInput) => Promise<void>;
+    cherryPick: (input: GitCherryPickInput) => Promise<void>;
+    createTag: (input: GitCreateTagInput) => Promise<void>;
   };
   contextMenu: {
     show: <T extends string>(

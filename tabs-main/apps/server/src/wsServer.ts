@@ -1038,6 +1038,31 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* gitEnvironment.logout(body);
       }
 
+      case WS_METHODS.gitAmendCommit: {
+        const body = stripRequestTag(request.body);
+        return yield* git.amendCommit(body);
+      }
+
+      case WS_METHODS.gitUndoLastCommit: {
+        const body = stripRequestTag(request.body);
+        return yield* git.undoLastCommit(body);
+      }
+
+      case WS_METHODS.gitRevertCommit: {
+        const body = stripRequestTag(request.body);
+        return yield* git.revertCommit(body);
+      }
+
+      case WS_METHODS.gitCherryPick: {
+        const body = stripRequestTag(request.body);
+        return yield* git.cherryPick(body);
+      }
+
+      case WS_METHODS.gitCreateTag: {
+        const body = stripRequestTag(request.body);
+        return yield* git.createTag(body);
+      }
+
       case WS_METHODS.terminalOpen: {
         const body = stripRequestTag(request.body);
         return yield* terminalManager.open(body);

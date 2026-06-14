@@ -1816,6 +1816,31 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
     const skipRebase: GitCoreShape["skipRebase"] = (input) =>
       runGitNoEditor("GitCore.skipRebase", input.cwd, ["rebase", "--skip"]);
 
+    const amendCommit: GitCoreShape["amendCommit"] = (input) =>
+      runGitNoEditor(
+        "GitCore.amendCommit",
+        input.cwd,
+        input.message
+          ? ["commit", "--amend", "-m", input.message]
+          : ["commit", "--amend", "--no-edit"],
+      );
+
+    const undoLastCommit: GitCoreShape["undoLastCommit"] = (input) =>
+      runGit("GitCore.undoLastCommit", input.cwd, ["reset", "--soft", "HEAD~1"]);
+
+    const revertCommit: GitCoreShape["revertCommit"] = (input) =>
+      runGitNoEditor("GitCore.revertCommit", input.cwd, ["revert", "--no-edit", input.sha]);
+
+    const cherryPick: GitCoreShape["cherryPick"] = (input) =>
+      runGitNoEditor("GitCore.cherryPick", input.cwd, ["cherry-pick", input.sha]);
+
+    const createTag: GitCoreShape["createTag"] = (input) =>
+      runGit(
+        "GitCore.createTag",
+        input.cwd,
+        input.sha ? ["tag", input.name, input.sha] : ["tag", input.name],
+      );
+
     const prepareCommitContext: GitCoreShape["prepareCommitContext"] = (cwd, filePaths) =>
       Effect.gen(function* () {
         if (filePaths && filePaths.length > 0) {
@@ -2500,6 +2525,11 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       stageFiles,
       unstageFiles,
       discardChanges,
+      amendCommit,
+      undoLastCommit,
+      revertCommit,
+      cherryPick,
+      createTag,
       saveStash,
       listStashes,
       applyStash,

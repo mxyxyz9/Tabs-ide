@@ -42,6 +42,11 @@ import type {
   GitStatusResult,
   GitStageFilesInput,
   GitUnstageFilesInput,
+  GitAmendCommitInput,
+  GitUndoLastCommitInput,
+  GitRevertCommitInput,
+  GitCherryPickInput,
+  GitCreateTagInput,
 } from "@tabs/contracts";
 
 import type { GitCommandError } from "../Errors.ts";
@@ -199,6 +204,32 @@ export interface GitCoreShape {
    * Discard staged/unstaged/untracked changes for selected files or the whole repository.
    */
   readonly discardChanges: (input: GitDiscardChangesInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Amend the most recent commit, optionally replacing its message. Uses
+   * currently-staged changes.
+   */
+  readonly amendCommit: (input: GitAmendCommitInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Undo the most recent commit, keeping its changes staged (soft reset).
+   */
+  readonly undoLastCommit: (input: GitUndoLastCommitInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Revert a commit by creating a new commit that undoes its changes.
+   */
+  readonly revertCommit: (input: GitRevertCommitInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Apply the changes of an existing commit onto the current branch.
+   */
+  readonly cherryPick: (input: GitCherryPickInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Create a lightweight tag at a commit (defaults to HEAD).
+   */
+  readonly createTag: (input: GitCreateTagInput) => Effect.Effect<void, GitCommandError>;
 
   /**
    * Save a stash entry.

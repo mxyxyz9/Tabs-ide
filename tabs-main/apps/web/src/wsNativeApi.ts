@@ -229,6 +229,11 @@ export function createWsNativeApi(): NativeApi {
       gitHubSwitchAccount: (input) =>
         transport.request(WS_METHODS.gitHubSwitchAccount, input, { timeoutMs: null }),
       gitHubLogout: (input) => transport.request(WS_METHODS.gitHubLogout, input),
+      amendCommit: (input) => transport.request(WS_METHODS.gitAmendCommit, input),
+      undoLastCommit: (input) => transport.request(WS_METHODS.gitUndoLastCommit, input),
+      revertCommit: (input) => transport.request(WS_METHODS.gitRevertCommit, input),
+      cherryPick: (input) => transport.request(WS_METHODS.gitCherryPick, input),
+      createTag: (input) => transport.request(WS_METHODS.gitCreateTag, input),
       onActionProgress: (callback) => {
         gitActionProgressListeners.add(callback);
         return () => {

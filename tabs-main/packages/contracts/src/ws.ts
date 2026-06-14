@@ -49,6 +49,11 @@ import {
   GitEnvironmentInput,
   GitHubSwitchAccountInput,
   GitHubLogoutInput,
+  GitAmendCommitInput,
+  GitUndoLastCommitInput,
+  GitRevertCommitInput,
+  GitCherryPickInput,
+  GitCreateTagInput,
 } from "./git";
 import {
   TerminalClearInput,
@@ -120,6 +125,11 @@ export const WS_METHODS = {
   gitEnvironment: "git.environment",
   gitHubSwitchAccount: "git.gitHubSwitchAccount",
   gitHubLogout: "git.gitHubLogout",
+  gitAmendCommit: "git.amendCommit",
+  gitUndoLastCommit: "git.undoLastCommit",
+  gitRevertCommit: "git.revertCommit",
+  gitCherryPick: "git.cherryPick",
+  gitCreateTag: "git.createTag",
 
   // Terminal methods
   terminalOpen: "terminal.open",
@@ -217,6 +227,11 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitEnvironment, GitEnvironmentInput),
   tagRequestBody(WS_METHODS.gitHubSwitchAccount, GitHubSwitchAccountInput),
   tagRequestBody(WS_METHODS.gitHubLogout, GitHubLogoutInput),
+  tagRequestBody(WS_METHODS.gitAmendCommit, GitAmendCommitInput),
+  tagRequestBody(WS_METHODS.gitUndoLastCommit, GitUndoLastCommitInput),
+  tagRequestBody(WS_METHODS.gitRevertCommit, GitRevertCommitInput),
+  tagRequestBody(WS_METHODS.gitCherryPick, GitCherryPickInput),
+  tagRequestBody(WS_METHODS.gitCreateTag, GitCreateTagInput),
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),

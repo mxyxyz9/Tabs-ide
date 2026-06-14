@@ -22,6 +22,7 @@ import {
   ArrowRightIcon,
   ArrowUpIcon,
   ArchiveIcon,
+  CheckIcon,
   ArchiveRestoreIcon,
   BugIcon,
   BotIcon,
@@ -39,6 +40,7 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
+  RocketIcon,
   RotateCwIcon,
   SearchIcon,
   ServerIcon,
@@ -116,7 +118,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -1904,6 +1906,8 @@ function GitTool(props: {
   onOpenAgents: () => void | Promise<void>;
   onCreateAgentsThread: () => void | Promise<void>;
   onRunGitHubLogin: () => void | Promise<void>;
+  onOpenFileInCode: (relativePath: string) => void;
+  onDispatchRelease: (version: string) => void;
 }) {
   const {
     project,
@@ -1914,6 +1918,8 @@ function GitTool(props: {
     onOpenAgents,
     onCreateAgentsThread,
     onRunGitHubLogin,
+    onOpenFileInCode,
+    onDispatchRelease,
   } = props;
   const api = readNativeApi();
   const queryClient = useQueryClient();
@@ -1924,6 +1930,12 @@ function GitTool(props: {
   const historyQuery = useQuery(gitHistoryQueryOptions({ cwd: project.cwd, limit: 40 }));
   const stashQuery = useQuery(gitStashListQueryOptions(project.cwd));
   const [branchDraft, setBranchDraft] = useState("");
+  const [createBranchOpen, setCreateBranchOpen] = useState(false);
+  const [createBranchName, setCreateBranchName] = useState("");
+  const [commitToolSha, setCommitToolSha] = useState("");
+  const [tagNameDraft, setTagNameDraft] = useState("");
+  const [releaseDialogOpen, setReleaseDialogOpen] = useState(false);
+  const [releaseVersion, setReleaseVersion] = useState("");
   const [branchToolsTarget, setBranchToolsTarget] = useState("");
   const [branchToolsSearch, setBranchToolsSearch] = useState("");
   const [renameDraft, setRenameDraft] = useState("");
@@ -2048,7 +2060,6 @@ function GitTool(props: {
     [operationBranchSearchQuery, remoteOperationBranchOptions],
   );
   const changedFiles = gitStatusQuery.data?.workingTree.files ?? [];
-  const gitTotals = gitStatusQuery.data?.workingTree ?? null;
   const stagedFiles = gitStatusQuery.data?.staged?.files ?? [];
   const conflictedFiles = useMemo(
     () => gitStatusQuery.data?.conflicted?.files ?? [],
@@ -2059,9 +2070,6 @@ function GitTool(props: {
     gitStatusQuery.data?.unstaged?.files.filter((file) => !file.conflicted && !file.untracked) ??
     [];
   const branchHeadline = activeBranch?.name ?? gitStatusQuery.data?.branch ?? "Detached HEAD";
-  const branchSubline = gitStatusQuery.data?.hasUpstream
-    ? `Tracking upstream · Ahead ${gitStatusQuery.data.aheadCount} · Behind ${gitStatusQuery.data.behindCount}`
-    : "No upstream configured";
   const aheadCount = gitStatusQuery.data?.aheadCount ?? 0;
   const behindCount = gitStatusQuery.data?.behindCount ?? 0;
   const syncStatusLabel = !gitStatusQuery.data?.hasUpstream
@@ -2408,12 +2416,25 @@ function GitTool(props: {
     },
   });
 
+  const handleCreateAndCheckoutBranch = useCallback(async () => {
+    const branch = createBranchName.trim();
+    if (branch.length === 0) return;
+    try {
+      await branchCreateMutation.mutateAsync(branch);
+      await branchCheckoutMutation.mutateAsync(branch);
+      setCreateBranchOpen(false);
+      setCreateBranchName("");
+    } catch {
+      // Errors surface via the mutations' own toasts.
+    }
+  }, [branchCheckoutMutation, branchCreateMutation, createBranchName]);
+
   const openFileInEditor = useCallback(
-    async (relativePath: string) => {
-      if (!api) return;
-      await openInPreferredEditor(api, `${project.cwd}/${relativePath}`);
+    (relativePath: string) => {
+      // Hand the file off to the embedded Code tab instead of an external editor.
+      onOpenFileInCode(relativePath);
     },
-    [api, project.cwd],
+    [onOpenFileInCode],
   );
 
   const selectWorkingTreeFile = useCallback(
@@ -2482,6 +2503,107 @@ function GitTool(props: {
         title: "Could not stage file",
         successTitle: `Staged ${basenameOfPath(file.path)}`,
         task: () => api.git.stageFiles({ cwd: project.cwd, paths: [file.path] }),
+      });
+    },
+    [api, project.cwd, runGitTask],
+  );
+
+  const handleStageAll = useCallback(
+    (files: ReadonlyArray<GitStatusFile>) => {
+      if (!api) return;
+      const paths = files.map((file) => file.path);
+      if (paths.length === 0) return;
+      void runGitTask({
+        id: "stage-all",
+        title: "Could not stage changes",
+        successTitle: `Staged ${paths.length} file${paths.length === 1 ? "" : "s"}`,
+        task: () => api.git.stageFiles({ cwd: project.cwd, paths }),
+      });
+    },
+    [api, project.cwd, runGitTask],
+  );
+
+  const handleUnstageAll = useCallback(
+    (files: ReadonlyArray<GitStatusFile>) => {
+      if (!api) return;
+      const paths = files.map((file) => file.path);
+      if (paths.length === 0) return;
+      void runGitTask({
+        id: "unstage-all",
+        title: "Could not unstage changes",
+        successTitle: "Unstaged all files",
+        task: () => api.git.unstageFiles({ cwd: project.cwd, paths }),
+      });
+    },
+    [api, project.cwd, runGitTask],
+  );
+
+  const handleAmendCommit = useCallback(() => {
+    if (!api) return;
+    void runGitTask({
+      id: "amend-commit",
+      title: "Could not amend commit",
+      successTitle: "Amended the last commit",
+      task: () => api.git.amendCommit({ cwd: project.cwd }),
+    });
+  }, [api, project.cwd, runGitTask]);
+
+  const handleUndoLastCommit = useCallback(() => {
+    if (!api) return;
+    void runGitTask({
+      id: "undo-commit",
+      title: "Could not undo commit",
+      successTitle: "Undid the last commit — its changes are staged",
+      task: () => api.git.undoLastCommit({ cwd: project.cwd }),
+    });
+  }, [api, project.cwd, runGitTask]);
+
+  const handleRevertCommit = useCallback(
+    (sha: string) => {
+      if (!api) return;
+      const trimmed = sha.trim();
+      if (trimmed.length === 0) return;
+      void runGitTask({
+        id: `revert:${trimmed}`,
+        title: "Could not revert commit",
+        successTitle: `Reverted ${trimmed.slice(0, 7)}`,
+        task: () => api.git.revertCommit({ cwd: project.cwd, sha: trimmed }),
+      });
+    },
+    [api, project.cwd, runGitTask],
+  );
+
+  const handleCherryPick = useCallback(
+    (sha: string) => {
+      if (!api) return;
+      const trimmed = sha.trim();
+      if (trimmed.length === 0) return;
+      void runGitTask({
+        id: `cherry-pick:${trimmed}`,
+        title: "Could not cherry-pick commit",
+        successTitle: `Cherry-picked ${trimmed.slice(0, 7)}`,
+        task: () => api.git.cherryPick({ cwd: project.cwd, sha: trimmed }),
+      });
+    },
+    [api, project.cwd, runGitTask],
+  );
+
+  const handleCreateTag = useCallback(
+    (name: string, sha?: string) => {
+      if (!api) return;
+      const trimmedName = name.trim();
+      if (trimmedName.length === 0) return;
+      const trimmedSha = sha?.trim();
+      void runGitTask({
+        id: `tag:${trimmedName}`,
+        title: "Could not create tag",
+        successTitle: `Created tag ${trimmedName}`,
+        task: () =>
+          api.git.createTag({
+            cwd: project.cwd,
+            name: trimmedName,
+            ...(trimmedSha ? { sha: trimmedSha } : {}),
+          }),
       });
     },
     [api, project.cwd, runGitTask],
@@ -2708,6 +2830,82 @@ function GitTool(props: {
       });
     },
     [api, project.cwd, runGitTask],
+  );
+
+  const handleResolveAllWithAi = useCallback(async () => {
+    if (!api || conflictedFiles.length === 0) return;
+    if (!activeAgentsThread) {
+      toastManager.add({
+        type: "error",
+        title: "No Agents thread",
+        description: "Open or create an Agents thread for this project, then try again.",
+      });
+      void onOpenAgents();
+      return;
+    }
+    const fileList = conflictedFiles.map((file) => `- ${file.path}`).join("\n");
+    const prompt = [
+      `Resolve ALL of the following merge conflicts in the repository at ${project.cwd}.`,
+      "",
+      "For each file, edit it directly to a clean, correct, fully-merged state that keeps the",
+      "intent of BOTH sides. Remove every conflict marker (`<<<<<<<`, `=======`, `>>>>>>>`).",
+      "Do not leave any file half-resolved. When done, briefly list what you changed.",
+      "",
+      "Conflicted files:",
+      fileList,
+    ].join("\n");
+
+    const commandId = newCommandId();
+    const messageId = MessageId.makeUnsafe(randomUUID());
+    const createdAt = new Date().toISOString();
+    try {
+      await api.orchestration.dispatchCommand({
+        type: "thread.turn.start",
+        commandId,
+        threadId: activeAgentsThread.id,
+        message: { messageId, role: "user", text: prompt, attachments: [] },
+        modelSelection: activeAgentsThread.modelSelection,
+        runtimeMode: activeAgentsThread.runtimeMode,
+        interactionMode: activeAgentsThread.interactionMode,
+        createdAt,
+      });
+      toastManager.add({
+        type: "success",
+        title: `Sent ${conflictedFiles.length} conflict${conflictedFiles.length === 1 ? "" : "s"} to your agent`,
+        description:
+          "Watch it resolve them in the Agents tab, then return here to review the diff.",
+      });
+      void onOpenAgents();
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not start AI resolution",
+        description: error instanceof Error ? error.message : "Failed to message the agent.",
+      });
+    }
+  }, [api, activeAgentsThread, conflictedFiles, onOpenAgents, project.cwd]);
+
+  const handleResolveAllConflicts = useCallback(
+    async (side: "ours" | "theirs") => {
+      if (!api || conflictedFiles.length === 0) return;
+      const sideLabel = side === "ours" ? "your current branch's" : "the incoming";
+      const confirmed = await api.dialogs.confirm(
+        `Resolve all ${conflictedFiles.length} conflicted file${conflictedFiles.length === 1 ? "" : "s"} using ${sideLabel} version? Each file is replaced and marked resolved.`,
+      );
+      if (!confirmed) return;
+      const files = conflictedFiles;
+      void runGitTask({
+        id: `conflict-all:${side}`,
+        title: `Could not resolve all with ${side}`,
+        successTitle: `Resolved ${files.length} conflict${files.length === 1 ? "" : "s"} with ${side}`,
+        task: async () => {
+          for (const file of files) {
+            await api.git.resolveConflict({ cwd: project.cwd, path: file.path, side });
+          }
+        },
+      });
+    },
+    [api, conflictedFiles, project.cwd, runGitTask],
   );
 
   const handleSaveResolverDraft = useCallback(
@@ -2941,11 +3139,6 @@ function GitTool(props: {
         : detachedHeadBlockedBasic
           ? "detached_head_blocked"
           : null;
-  const syncSummary = gitStatusQuery.data?.hasUpstream
-    ? `Ahead ${gitStatusQuery.data.aheadCount} · Behind ${gitStatusQuery.data.behindCount}`
-    : "No upstream";
-  const diffSummary = `+${gitTotals?.insertions ?? 0} / -${gitTotals?.deletions ?? 0}`;
-  const overviewSection = getGitWorkspaceLayoutSection("overview");
   const branchesSection = getGitWorkspaceLayoutSection("branches");
   const advancedActionsSection = getGitWorkspaceLayoutSection("advanced-actions");
   const historySection = getGitWorkspaceLayoutSection("history");
@@ -3047,7 +3240,7 @@ function GitTool(props: {
         initPending={gitInitMutation.isPending}
         onInitRepo={() => gitInitMutation.mutate()}
       >
-        <div className="grid h-full min-h-0 min-w-0 w-full grid-cols-1 content-start gap-6 overflow-x-hidden overflow-y-auto px-6 py-8 max-w-[1700px] mx-auto">
+        <div className="grid h-full min-h-0 min-w-0 w-full grid-cols-1 content-start gap-6 overflow-x-hidden overflow-y-auto px-6 py-8 max-w-[1400px] mx-auto sm:px-10 lg:px-14">
           <div className="flex flex-col min-h-0 min-w-0 gap-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0 flex items-center gap-3">
@@ -3065,6 +3258,20 @@ function GitTool(props: {
               </div>
               <div className="flex items-center gap-2">
                 <GitAccountMenu cwd={project.cwd} onSignIn={onRunGitHubLogin} />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="rounded-full gap-1.5"
+                  onClick={() => {
+                    setReleaseVersion("");
+                    setReleaseDialogOpen(true);
+                  }}
+                  title="Trigger the release workflow on GitHub Actions"
+                >
+                  <RocketIcon className="size-3.5" />
+                  Release
+                </Button>
                 <Button
                   type="button"
                   size="sm"
@@ -3100,12 +3307,71 @@ function GitTool(props: {
 
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border/40 bg-background/50 px-5 py-4 shadow-sm backdrop-blur-xl">
               <div className="flex min-w-0 flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 rounded-full border border-border/50 bg-background/70 px-3 py-1.5">
-                  <GitBranchIcon className="size-4 shrink-0 text-primary" />
-                  <span className="max-w-[220px] truncate text-sm font-semibold text-foreground">
-                    {branchHeadline}
-                  </span>
-                </div>
+                <Menu highlightItemOnHover={false}>
+                  <MenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded-full border border-border/50 bg-background/70 px-3 py-1.5 transition-colors hover:border-border hover:bg-background"
+                      />
+                    }
+                  >
+                    <GitBranchIcon className="size-4 shrink-0 text-primary" />
+                    <span className="max-w-[220px] truncate text-sm font-semibold text-foreground">
+                      {branchHeadline}
+                    </span>
+                    <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                  </MenuTrigger>
+                  <MenuPopup align="start" className="max-h-[60vh] min-w-[280px] overflow-y-auto">
+                    <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Switch branch
+                    </div>
+                    {localBranches.length === 0 ? (
+                      <div className="px-3 pb-2 text-sm text-muted-foreground">
+                        No local branches.
+                      </div>
+                    ) : (
+                      localBranches.map((branch) => (
+                        <MenuItem
+                          key={`switch:${branch.name}`}
+                          className="flex items-center gap-2"
+                          disabled={branch.current || branchCheckoutMutation.isPending}
+                          onClick={() => {
+                            if (!branch.current) branchCheckoutMutation.mutate(branch.name);
+                          }}
+                        >
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center",
+                              branch.current ? "text-primary" : "text-transparent",
+                            )}
+                          >
+                            <CheckIcon className="size-4" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                            {branch.name}
+                          </span>
+                          {branch.isDefault ? (
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              default
+                            </span>
+                          ) : null}
+                        </MenuItem>
+                      ))
+                    )}
+                    <MenuSeparator />
+                    <MenuItem
+                      className="flex items-center gap-2"
+                      onClick={() => {
+                        setCreateBranchName("");
+                        setCreateBranchOpen(true);
+                      }}
+                    >
+                      <PlusIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="text-sm">Create new branch…</span>
+                    </MenuItem>
+                  </MenuPopup>
+                </Menu>
                 {gitStatusQuery.data?.pr ? (
                   <Badge size="sm" variant="outline" className="shadow-none">
                     PR #{gitStatusQuery.data.pr.number}
@@ -3123,6 +3389,7 @@ function GitTool(props: {
                   className="rounded-full gap-1.5"
                   disabled={syncActionsDisabled}
                   onClick={handlePullLatest}
+                  title="Download commits from the remote and merge them into your branch"
                 >
                   <ArrowDownIcon className="size-3.5" />
                   Pull
@@ -3138,6 +3405,7 @@ function GitTool(props: {
                   className="rounded-full gap-1.5"
                   disabled={syncActionsDisabled}
                   onClick={handlePushCurrentBranch}
+                  title="Upload your local commits to the remote (e.g. GitHub)"
                 >
                   <ArrowUpIcon className="size-3.5" />
                   Push
@@ -3233,9 +3501,9 @@ function GitTool(props: {
 
             <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(320px,0.82fr)_minmax(0,1fr)]">
               <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 backdrop-blur-xl shadow-sm p-5">
-                <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
-                  <h3 className="text-base font-semibold text-foreground">Changes</h3>
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-semibold text-foreground">Changes</h3>
                     {conflictedFiles.length > 0 && (
                       <Badge size="sm" variant="error" className="shadow-none">
                         {conflictedFiles.length} conflicts
@@ -3246,15 +3514,82 @@ function GitTool(props: {
                         {stagedFiles.length} staged
                       </span>
                     )}
-                    {unstagedFiles.length + untrackedFiles.length > 0 && (
-                      <span className="rounded-full bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        {unstagedFiles.length + untrackedFiles.length} to stage
-                      </span>
-                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {stagedFiles.length > 0 ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="ghost"
+                        disabled={gitTaskInFlight !== null}
+                        onClick={() => handleUnstageAll(stagedFiles)}
+                      >
+                        Unstage all
+                      </Button>
+                    ) : null}
+                    {unstagedFiles.length + untrackedFiles.length > 0 ? (
+                      <Button
+                        type="button"
+                        size="xs"
+                        disabled={gitTaskInFlight !== null}
+                        onClick={() => handleStageAll([...unstagedFiles, ...untrackedFiles])}
+                      >
+                        Stage all ({unstagedFiles.length + untrackedFiles.length})
+                      </Button>
+                    ) : null}
                   </div>
                 </div>
 
                 <div className="space-y-4">
+                  {conflictedFiles.length > 0 ? (
+                    <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                      <div className="text-sm font-semibold text-foreground">
+                        {conflictedFiles.length} merge conflict
+                        {conflictedFiles.length === 1 ? "" : "s"} to resolve
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Git couldn&apos;t automatically combine two versions of these files. Pick a
+                        strategy below, or open a file and use <strong>Resolve</strong> (edit it
+                        yourself) or <strong>Fix with AI</strong> (let your agent resolve it).
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={gitTaskInFlight !== null}
+                          onClick={() => void handleResolveAllWithAi()}
+                          title="Send all conflicts to your agent to resolve them by editing the files"
+                        >
+                          <BotIcon className="size-3.5" />
+                          Resolve all with AI
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={gitTaskInFlight !== null}
+                          onClick={() => void handleResolveAllConflicts("ours")}
+                          title="Keep your current branch's version for every conflicted file"
+                        >
+                          Use ours for all
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={gitTaskInFlight !== null}
+                          onClick={() => void handleResolveAllConflicts("theirs")}
+                          title="Keep the incoming version for every conflicted file"
+                        >
+                          Use theirs for all
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground/70">
+                        “Ours” = the branch you&apos;re on. “Theirs” = the branch/commit being
+                        merged in.
+                      </p>
+                    </div>
+                  ) : null}
                   <GitChangeSection
                     title="Conflicts"
                     description="Files blocked by merge or rebase conflicts."
@@ -3402,13 +3737,9 @@ function GitTool(props: {
                           type="button"
                           size="sm"
                           variant="outline"
-                          disabled={!api || !resolverFilePath}
+                          disabled={!resolverFilePath}
                           onClick={() => {
-                            if (!api || !resolverFilePath) return;
-                            void openInPreferredEditor(
-                              api,
-                              `${project.cwd}/${resolverFilePath}`,
-                            ).catch(() => undefined);
+                            if (resolverFilePath) openFileInEditor(resolverFilePath);
                           }}
                         >
                           Open In Editor
@@ -3432,10 +3763,7 @@ function GitTool(props: {
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            if (!api || !selectedPath) return;
-                            void openInPreferredEditor(api, `${project.cwd}/${selectedPath}`).catch(
-                              () => undefined,
-                            );
+                            if (selectedPath) openFileInEditor(selectedPath);
                           }}
                         >
                           Open In Editor
@@ -3896,6 +4224,97 @@ function GitTool(props: {
                 </div>
               </div>
             </div>
+
+            <div className="min-w-0 rounded-2xl border border-border/40 bg-background/50 p-5 shadow-sm backdrop-blur-xl">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="text-base font-semibold text-foreground">History</h3>
+                <div className="flex items-center gap-2">
+                  {historyCommits.length > 0 ? (
+                    <>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={gitTaskInFlight !== null}
+                        onClick={handleAmendCommit}
+                        title="Add staged changes to the last commit (keeps its message)"
+                      >
+                        Amend last
+                      </Button>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={gitTaskInFlight !== null}
+                        onClick={handleUndoLastCommit}
+                        title="Undo the last commit, keeping its changes staged"
+                      >
+                        Undo last
+                      </Button>
+                    </>
+                  ) : null}
+                  <span className="text-xs text-muted-foreground">
+                    {historyCommits.length} recent
+                  </span>
+                </div>
+              </div>
+              {historyCommits.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/40 bg-muted/10 px-4 py-8 text-center text-sm text-muted-foreground">
+                  {historyQuery.isLoading ? "Loading commits…" : "No commits yet."}
+                </div>
+              ) : (
+                <ScrollArea className="max-h-[440px] rounded-xl border border-border/40">
+                  <div className="space-y-0.5 p-2">
+                    {historyCommits.map((commit, index) => (
+                      <button
+                        key={commit.sha}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPath(project.id, null);
+                          setSelectedCommit(
+                            project.id,
+                            selectedCommit === commit.sha && !selectedPath ? null : commit.sha,
+                          );
+                        }}
+                        className={cn(
+                          "flex w-full gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
+                          activeHistoryCommit?.sha === commit.sha &&
+                            !selectedPath &&
+                            "bg-primary/10",
+                        )}
+                      >
+                        <div className="relative flex w-4 shrink-0 justify-center pt-1">
+                          {index < historyCommits.length - 1 ? (
+                            <span className="absolute top-4 h-[calc(100%-0.25rem)] w-px bg-border/60" />
+                          ) : null}
+                          <span
+                            className={cn(
+                              "relative z-10 mt-0.5 size-2 rounded-full border bg-card",
+                              commit.isHead ? "border-primary bg-primary" : "border-primary/40",
+                            )}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-foreground">
+                            {commit.subject}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-mono">{commit.shortSha}</span>
+                            <span>{commit.authorName}</span>
+                            <span>{formatGitTimestamp(commit.authoredAt)}</span>
+                          </div>
+                        </div>
+                        {commit.isHead ? (
+                          <Badge size="sm" variant="secondary" className="shrink-0 self-start">
+                            HEAD
+                          </Badge>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
           </div>
         </div>
       </GitEnvironmentGate>
@@ -3906,21 +4325,22 @@ function GitTool(props: {
             className="fixed inset-0 z-30 bg-black/35 backdrop-blur-[1px]"
             onClick={() => handleWorkspaceModeChange("basic")}
           />
-          <div className="fixed right-0 top-0 z-40 grid h-full w-[min(30rem,92vw)] min-h-0 min-w-0 gap-4 overflow-y-auto border-l border-border/70 bg-background/96 p-4 xl:grid-rows-[auto_auto_minmax(0,1fr)]">
-            <Card className="min-h-0 min-w-0 overflow-hidden">
+          <div className="fixed right-0 top-0 z-40 flex h-full w-full max-w-[40rem] min-h-0 min-w-0 flex-col gap-4 overflow-y-auto overflow-x-hidden border-l border-border/70 bg-background/96 p-5 sm:p-6">
+            <Card className="min-w-0">
               <CardHeader className="min-w-0 border-b border-border/60 pb-4">
                 <CardTitle>{branchesSection.title}</CardTitle>
                 <CardDescription className="break-words">
                   {branchesSection.description}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex min-h-0 flex-1 flex-col gap-4 pt-6">
+              <CardContent className="flex flex-col gap-4 pt-6">
                 <div className="space-y-2 rounded-xl border border-border/70 bg-background/70 p-3">
                   <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     New Branch
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex min-w-0 gap-2">
                     <Input
+                      className="min-w-0 flex-1"
                       value={branchDraft}
                       onChange={(event) => setBranchDraft(event.target.value)}
                       placeholder="new-branch-name"
@@ -3934,6 +4354,7 @@ function GitTool(props: {
                     <Button
                       type="button"
                       size="sm"
+                      className="shrink-0"
                       disabled={branchDraft.trim().length === 0 || branchCreateMutation.isPending}
                       onClick={() => branchCreateMutation.mutate(branchDraft.trim())}
                     >
@@ -3960,7 +4381,7 @@ function GitTool(props: {
                     </div>
                   </div>
                 </div>
-                <ScrollArea className="min-h-0 flex-1 rounded-xl border border-border/70">
+                <ScrollArea className="max-h-72 rounded-xl border border-border/70">
                   <div className="space-y-1 p-2">
                     {branchesQuery.data?.branches.length ? (
                       branchesQuery.data.branches.map((branch: GitBranch) => (
@@ -4321,6 +4742,90 @@ function GitTool(props: {
               </CardContent>
             </Card>
 
+            <Card className="min-w-0">
+              <CardHeader className="min-w-0 border-b border-border/60 pb-4">
+                <CardTitle>Commit tools</CardTitle>
+                <CardDescription className="break-words">
+                  Revert or cherry-pick a commit by its hash, or tag a point in history.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2 rounded-xl border border-border/70 bg-background/70 p-3">
+                  <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    Revert / Cherry-pick
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    Paste a commit hash (or use the selected commit). <strong>Revert</strong> makes
+                    a new commit that undoes it; <strong>cherry-pick</strong> copies it onto this
+                    branch.
+                  </p>
+                  <div className="flex min-w-0 gap-2">
+                    <Input
+                      className="min-w-0 flex-1 font-mono"
+                      value={commitToolSha}
+                      onChange={(event) => setCommitToolSha(event.target.value)}
+                      placeholder={selectedCommit ? selectedCommit.slice(0, 12) : "commit hash"}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={gitTaskInFlight !== null}
+                      onClick={() => handleRevertCommit(commitToolSha || (selectedCommit ?? ""))}
+                    >
+                      Revert
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={gitTaskInFlight !== null}
+                      onClick={() => handleCherryPick(commitToolSha || (selectedCommit ?? ""))}
+                    >
+                      Cherry-pick
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2 rounded-xl border border-border/70 bg-background/70 p-3">
+                  <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    Create tag
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/80">
+                    A tag is a named bookmark for a commit (e.g. a release like <code>v1.0.0</code>
+                    ). Tags the selected commit, or HEAD if none is selected.
+                  </p>
+                  <div className="flex min-w-0 gap-2">
+                    <Input
+                      className="min-w-0 flex-1"
+                      value={tagNameDraft}
+                      onChange={(event) => setTagNameDraft(event.target.value)}
+                      placeholder="v1.0.0"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleCreateTag(tagNameDraft, selectedCommit ?? undefined);
+                          setTagNameDraft("");
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="shrink-0"
+                      disabled={tagNameDraft.trim().length === 0 || gitTaskInFlight !== null}
+                      onClick={() => {
+                        handleCreateTag(tagNameDraft, selectedCommit ?? undefined);
+                        setTagNameDraft("");
+                      }}
+                    >
+                      Create tag
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="min-h-0 min-w-0">
               <CardHeader className="min-w-0 border-b border-border/60 pb-4">
                 <CardTitle>{historySection.title}</CardTitle>
@@ -4328,8 +4833,8 @@ function GitTool(props: {
                   {historySection.description}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid min-h-0 gap-4 pt-6">
-                <ScrollArea className="min-h-0 rounded-xl border border-border/70">
+              <CardContent className="grid gap-4 pt-6">
+                <ScrollArea className="max-h-80 rounded-xl border border-border/70">
                   <div className="space-y-1 p-2">
                     {historyCommits.length ? (
                       historyCommits.map((commit, index) => (
@@ -4513,6 +5018,90 @@ function GitTool(props: {
           </div>
         </>
       ) : null}
+
+      <Dialog open={releaseDialogOpen} onOpenChange={setReleaseDialogOpen}>
+        <DialogPopup>
+          <DialogPanel>
+            <DialogHeader>
+              <DialogTitle>Trigger a release</DialogTitle>
+              <DialogDescription>
+                Runs <code>gh workflow run release.yml</code> in the terminal to build and publish
+                installers for this version. Needs the GitHub CLI signed in.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              autoFocus
+              value={releaseVersion}
+              onChange={(event) => setReleaseVersion(event.target.value)}
+              placeholder="1.2.16"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && releaseVersion.trim().length > 0) {
+                  event.preventDefault();
+                  onDispatchRelease(releaseVersion);
+                  setReleaseDialogOpen(false);
+                }
+              }}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setReleaseDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={releaseVersion.trim().length === 0}
+                onClick={() => {
+                  onDispatchRelease(releaseVersion);
+                  setReleaseDialogOpen(false);
+                }}
+              >
+                <RocketIcon className="size-4" />
+                Trigger release
+              </Button>
+            </DialogFooter>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
+
+      <Dialog open={createBranchOpen} onOpenChange={setCreateBranchOpen}>
+        <DialogPopup>
+          <DialogPanel>
+            <DialogHeader>
+              <DialogTitle>Create a new branch</DialogTitle>
+              <DialogDescription>
+                Branches off the current branch ({branchHeadline}) and switches to it.
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              autoFocus
+              value={createBranchName}
+              onChange={(event) => setCreateBranchName(event.target.value)}
+              placeholder="feature/my-change"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleCreateAndCheckoutBranch();
+                }
+              }}
+            />
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateBranchOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={
+                  createBranchName.trim().length === 0 ||
+                  branchCreateMutation.isPending ||
+                  branchCheckoutMutation.isPending
+                }
+                onClick={() => void handleCreateAndCheckoutBranch()}
+              >
+                Create & switch
+              </Button>
+            </DialogFooter>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
 
       <Dialog open={discardAllConfirmOpen} onOpenChange={setDiscardAllConfirmOpen}>
         <DialogPopup>
@@ -7672,47 +8261,64 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [gitTerminalState, gitTerminalThreadId, storeCloseTerminal],
   );
-  const runGitHubLoginInGitTerminal = useCallback(async () => {
-    const api = readNativeApi();
-    if (!gitTerminalThreadId || !api || !activeProject) return;
-    setGitTerminalOpen(true);
-    setShellTerminalFocusRequestId((value) => value + 1);
-    const terminalId =
-      gitTerminalState?.activeTerminalId ??
-      gitTerminalState?.terminalIds[0] ??
-      DEFAULT_THREAD_TERMINAL_ID;
-    if (gitTerminalState?.terminalIds.includes(terminalId)) {
-      storeSetActiveTerminal(gitTerminalThreadId, terminalId);
-    } else {
-      storeNewTerminal(gitTerminalThreadId, terminalId);
-    }
-    try {
-      await api.terminal.open({
-        threadId: gitTerminalThreadId,
-        terminalId,
-        cwd: activeProject.cwd,
-      });
-      await api.terminal.write({
-        threadId: gitTerminalThreadId,
-        terminalId,
-        data: "gh auth login\r",
-      });
-    } catch (error) {
-      toastManager.add({
-        type: "error",
-        title: "Could not start GitHub sign-in",
-        description:
-          error instanceof Error ? error.message : "Failed to launch the terminal for gh auth.",
-      });
-    }
-  }, [
-    activeProject,
-    gitTerminalState,
-    gitTerminalThreadId,
-    setGitTerminalOpen,
-    storeNewTerminal,
-    storeSetActiveTerminal,
-  ]);
+  const runCommandInGitTerminal = useCallback(
+    async (command: string, errorTitle: string) => {
+      const api = readNativeApi();
+      if (!gitTerminalThreadId || !api || !activeProject) return;
+      setGitTerminalOpen(true);
+      setShellTerminalFocusRequestId((value) => value + 1);
+      const terminalId =
+        gitTerminalState?.activeTerminalId ??
+        gitTerminalState?.terminalIds[0] ??
+        DEFAULT_THREAD_TERMINAL_ID;
+      if (gitTerminalState?.terminalIds.includes(terminalId)) {
+        storeSetActiveTerminal(gitTerminalThreadId, terminalId);
+      } else {
+        storeNewTerminal(gitTerminalThreadId, terminalId);
+      }
+      try {
+        await api.terminal.open({
+          threadId: gitTerminalThreadId,
+          terminalId,
+          cwd: activeProject.cwd,
+        });
+        await api.terminal.write({
+          threadId: gitTerminalThreadId,
+          terminalId,
+          data: `${command}\r`,
+        });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: errorTitle,
+          description: error instanceof Error ? error.message : "Failed to launch the terminal.",
+        });
+      }
+    },
+    [
+      activeProject,
+      gitTerminalState,
+      gitTerminalThreadId,
+      setGitTerminalOpen,
+      storeNewTerminal,
+      storeSetActiveTerminal,
+    ],
+  );
+  const runGitHubLoginInGitTerminal = useCallback(
+    () => runCommandInGitTerminal("gh auth login", "Could not start GitHub sign-in"),
+    [runCommandInGitTerminal],
+  );
+  const dispatchReleaseInGitTerminal = useCallback(
+    (version: string) => {
+      const trimmed = version.trim().replace(/^v/, "");
+      if (trimmed.length === 0) return;
+      void runCommandInGitTerminal(
+        `gh workflow run release.yml --field version=${trimmed}`,
+        "Could not trigger release",
+      );
+    },
+    [runCommandInGitTerminal],
+  );
   const setServerTerminalOpen = useCallback(
     (open: boolean) => {
       if (!serverThreadId) return;
@@ -8045,6 +8651,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       onOpenAgents={() => openAgentsForProject(activeProject.id)}
       onCreateAgentsThread={() => createAgentsThreadForProject(activeProject.id)}
       onRunGitHubLogin={() => void runGitHubLoginInGitTerminal()}
+      onOpenFileInCode={(relativePath) => {
+        setCodeFocusedPath(activeProject.id, relativePath);
+        setActiveTool(activeProject.id, "code");
+        void navigate({ to: "/" });
+      }}
+      onDispatchRelease={dispatchReleaseInGitTerminal}
     />
   ) : null;
   const browserTool =

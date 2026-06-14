@@ -403,6 +403,36 @@ export const GitHubLogoutInput = Schema.Struct({
 });
 export type GitHubLogoutInput = typeof GitHubLogoutInput.Type;
 
+export const GitAmendCommitInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  message: Schema.optional(TrimmedNonEmptyStringSchema),
+});
+export type GitAmendCommitInput = typeof GitAmendCommitInput.Type;
+
+export const GitUndoLastCommitInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitUndoLastCommitInput = typeof GitUndoLastCommitInput.Type;
+
+export const GitRevertCommitInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  sha: TrimmedNonEmptyStringSchema,
+});
+export type GitRevertCommitInput = typeof GitRevertCommitInput.Type;
+
+export const GitCherryPickInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  sha: TrimmedNonEmptyStringSchema,
+});
+export type GitCherryPickInput = typeof GitCherryPickInput.Type;
+
+export const GitCreateTagInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  name: TrimmedNonEmptyStringSchema,
+  sha: Schema.optional(TrimmedNonEmptyStringSchema),
+});
+export type GitCreateTagInput = typeof GitCreateTagInput.Type;
+
 export const GitCreateWorktreeResult = Schema.Struct({
   worktree: GitWorktree,
 });
