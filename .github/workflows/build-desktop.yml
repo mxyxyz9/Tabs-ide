@@ -141,9 +141,17 @@ jobs:
           # Shared extensions package (extensions/package.json → vscode-extensions)
           # provides extensions/node_modules/typescript, which
           # typescript-language-features compiles against (referenced literally as
-          # ../../../../node_modules/typescript). Without it tsgo can't resolve
-          # typescript and the compile fails with ~48 cascading type errors.
-          (cd extensions && npm install --no-audit --no-fund --ignore-scripts)
+          # ../../../../node_modules/typescript). The parent tabs-code-main install
+          # already has typescript 6.0.0-dev at the root, which npm can dedupe
+          # against — leaving extensions/node_modules/typescript MISSING and the
+          # compile failing with ~48 cascading type errors. Use `npm ci` for the
+          # exact locked version, then hard-guarantee the local copy exists.
+          (cd extensions && (npm ci --no-audit --no-fund --ignore-scripts || npm install --no-audit --no-fund --ignore-scripts))
+          if [ ! -f extensions/node_modules/typescript/lib/typescript.js ]; then
+            echo "::warning::typescript not present in extensions/node_modules — forcing a nested local install"
+            (cd extensions && npm install typescript@6.0.2 --no-save --no-audit --no-fund --ignore-scripts --install-strategy=nested)
+          fi
+          test -f extensions/node_modules/typescript/lib/typescript.js
           # Install deps so each extension's TS compiles and its node_modules
           # ship in the runtime.
           exts=(

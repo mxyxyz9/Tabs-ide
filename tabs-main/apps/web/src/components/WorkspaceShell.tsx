@@ -3265,7 +3265,12 @@ function GitTool(props: {
                   variant="outline"
                   className="rounded-full gap-1.5"
                   onClick={() => {
-                    setReleaseVersion(APP_VERSION && APP_VERSION !== "0.0.0" ? APP_VERSION : "");
+                    // Suggest the next patch version (e.g. 1.2.15 → 1.2.16) so a
+                    // release is one click; still editable for minor/major bumps.
+                    const match = APP_VERSION.match(/^(\d+)\.(\d+)\.(\d+)$/);
+                    setReleaseVersion(
+                      match ? `${match[1]}.${match[2]}.${Number(match[3]) + 1}` : "",
+                    );
                     setReleaseDialogOpen(true);
                   }}
                   title="Trigger the release workflow on GitHub Actions"
