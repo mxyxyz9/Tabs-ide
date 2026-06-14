@@ -150,6 +150,22 @@ function defaultGitToolState(): ProjectGitToolState {
   };
 }
 
+/**
+ * Stable, frozen singletons used as the fallback when a project has no per-tool
+ * state yet. Zustand selectors compare the returned snapshot by reference, so a
+ * fresh `{}` fallback would make the component re-render on EVERY store update
+ * (until the project's state exists). Returning these constants keeps the
+ * reference stable, so the component only re-renders when the real state changes.
+ */
+export const EMPTY_PROJECT_CODE_TOOL_STATE: ProjectCodeToolState = Object.freeze({
+  lastFocusedPath: null,
+  navigationNonce: 0,
+});
+export const EMPTY_PROJECT_GIT_TOOL_STATE: ProjectGitToolState = Object.freeze({
+  selectedPath: null,
+  selectedCommit: null,
+});
+
 function defaultServerToolState(): ProjectServerToolState {
   return {
     logQueryByProcessId: {},

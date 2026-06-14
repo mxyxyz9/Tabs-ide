@@ -30,6 +30,7 @@ import {
   FolderSearchIcon,
   GitBranchIcon,
   GlobeIcon,
+  HistoryIcon,
   LoaderIcon,
   MoreHorizontalIcon,
   PlayIcon,
@@ -43,15 +44,26 @@ import {
   Trash2Icon,
   PanelTopCloseIcon,
   PanelTopOpenIcon,
+  MessageSquareIcon,
   TerminalSquareIcon,
   WorkflowIcon,
   XIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useStore } from "../store";
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useComposerDraftStore } from "../composerDraftStore";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { isElectron } from "../env";
@@ -128,6 +140,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { getGitWorkspaceLayoutSection } from "./GitToolLayout.logic";
 import type { GitWorkspaceMode, GitWorkspaceSwitchReason } from "./GitToolLayout.logic";
 import {
+  EMPTY_PROJECT_CODE_TOOL_STATE,
+  EMPTY_PROJECT_GIT_TOOL_STATE,
   resolveProjectTools,
   useProjectWorkspaceSettings,
   useWorkspaceShellStore,
@@ -137,11 +151,14 @@ import { type ProjectBrowserToolState } from "../workspaceShellStore";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
+// Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
+// @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
+// chat is actually opened, so keep it out of the always-loaded shell bundle.
+const ChatView = lazy(() => import("./ChatView"));
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { getCodeHostUnavailableMessage } from "./codeHost.logic";
 import { CodeActivityRail } from "./code/CodeActivityRail";
 import { CodeHeaderBar } from "./code/CodeHeaderBar";
-import { CodeStatusBar } from "./code/CodeStatusBar";
 import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
 
 const BROWSER_DEVICE_PRESETS = [
@@ -315,6 +332,10 @@ const CODE_HOST_OVERLAY_SELECTOR = [
   "[data-slot='alert-dialog-popup']",
   "[data-slot='command-dialog-backdrop']",
   "[data-slot='command-dialog-popup']",
+  // While the AI side chat is being resized, this transparent overlay is mounted
+  // so the embedded BrowserView hides and the drag's pointer events reach the
+  // React window instead of being swallowed by the native editor view.
+  "[data-slot='code-resize-overlay']",
 ].join(", ");
 
 type EmbeddedWorkspaceMode = {
@@ -1028,8 +1049,7 @@ function FallbackCodeTool(props: { project: Project }) {
   const [query, setQuery] = useState("");
   const setCodeFocusedPath = useWorkspaceShellStore((state) => state.setCodeFocusedPath);
   const codeState = useWorkspaceShellStore(
-    (state) =>
-      state.codeStateByProjectId[props.project.id] ?? { lastFocusedPath: null, navigationNonce: 0 },
+    (state) => state.codeStateByProjectId[props.project.id] ?? EMPTY_PROJECT_CODE_TOOL_STATE,
   );
   const trimmedQuery = query.trim();
   const focusedRelativePath = codeState.lastFocusedPath;
@@ -1357,14 +1377,85 @@ function DesktopCodeTool(props: { project: Project }) {
   const [hostReady, setHostReady] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
   const codeState = useWorkspaceShellStore(
-    (state) =>
-      state.codeStateByProjectId[props.project.id] ?? { lastFocusedPath: null, navigationNonce: 0 },
+    (state) => state.codeStateByProjectId[props.project.id] ?? EMPTY_PROJECT_CODE_TOOL_STATE,
   );
   // Native-chrome state pushed from the embedded workbench through the desktop
   // bridge (the integration extension reports view/panel/scm state over the
   // loopback control channel). Clicks forward allowlisted workbench commands.
   const [chromeState, setChromeState] = useState<CodeChromeState>(DEFAULT_CODE_CHROME_STATE);
   const projectId = props.project.id;
+  // Native AI side chat (Antigravity-style): a compact embed of the project's
+  // Agents chat docked to the right of the editor, toggled from the header. It
+  // replaces VS Code's secondary sidebar / GitHub Copilot panel (which is hidden
+  // in the embed). A lightweight quick-chat — its own resizable width, a thread
+  // history switcher and a new-thread button; the full Agents tab stays the place
+  // for everything else.
+  const [sideChatOpen, setSideChatOpen] = useState(false);
+  // Local thread override so switching/creating from the side chat doesn't
+  // navigate the whole app (the full Agents tab is route-driven; this isn't).
+  const [sideChatThreadIdOverride, setSideChatThreadIdOverride] = useState<ThreadId | null>(null);
+  const [sideChatWidth, setSideChatWidth] = useState(() => {
+    const saved = Number(window.localStorage?.getItem("tabs.sideChatWidth"));
+    return Number.isFinite(saved) && saved >= 300 ? Math.min(saved, 760) : 380;
+  });
+  const sideChatWidthRef = useRef(sideChatWidth);
+  sideChatWidthRef.current = sideChatWidth;
+  const [isResizingSideChat, setIsResizingSideChat] = useState(false);
+  const rememberedThreadId = useWorkspaceShellStore(
+    (state) => state.session.rememberedThreadIdByProjectId[projectId] ?? null,
+  );
+  // Select the stable threads array, then derive the sorted project list in a
+  // memo. Deriving INSIDE the selector would return a new array on every
+  // getSnapshot, which makes useSyncExternalStore re-render infinitely
+  // ("Maximum update depth exceeded").
+  const allThreads = useStore((state) => state.threads);
+  const projectThreads = useMemo(
+    () => sortProjectThreads(allThreads.filter((thread) => thread.projectId === projectId)),
+    [allThreads, projectId],
+  );
+  const defaultSideChatThread = useMemo(
+    () => resolveProjectAgentThread(projectId, allThreads, rememberedThreadId),
+    [allThreads, projectId, rememberedThreadId],
+  );
+  const [showSideChatHistory, setShowSideChatHistory] = useState(false);
+  // The thread the side chat renders: the user's explicit pick (which may be a
+  // brand-new DRAFT thread not yet in `projectThreads`) else the project default.
+  // Render by id directly so a freshly created draft shows immediately (the "+").
+  const sideChatThreadId = sideChatThreadIdOverride ?? defaultSideChatThread?.id ?? null;
+  const sideChatThreadTitle =
+    projectThreads.find((thread) => thread.id === sideChatThreadId)?.title ||
+    (sideChatThreadId ? "New chat" : "Chat");
+  // Drag-to-resize the side chat from its left edge (BrowserView follows via the
+  // bounds ResizeObserver). Persist the chosen width across sessions.
+  const startSideChatResize = useCallback((event: React.PointerEvent) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = sideChatWidthRef.current;
+    // Mount the resize overlay → the BrowserView hides → pointer events flow to
+    // the window even as the cursor crosses the editor area while widening.
+    setIsResizingSideChat(true);
+    const onMove = (moveEvent: PointerEvent) => {
+      const next = Math.min(760, Math.max(300, startWidth + (startX - moveEvent.clientX)));
+      setSideChatWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.localStorage?.setItem("tabs.sideChatWidth", String(sideChatWidthRef.current));
+      setIsResizingSideChat(false);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+  const { handleNewThread: createThread } = useHandleNewThread();
+  const onNewSideChatThread = useCallback(async () => {
+    await createThread(projectId);
+    const draft = useComposerDraftStore.getState().getDraftThreadByProjectId(projectId);
+    if (draft) {
+      setSideChatThreadIdOverride(draft.threadId);
+    }
+    setShowSideChatHistory(false);
+  }, [createThread, projectId]);
   const runCodeCommand = useCallback(
     (commandId: string) => {
       void window.desktopBridge?.runCodeCommand(projectId, commandId).catch(() => undefined);
@@ -1635,13 +1726,20 @@ function DesktopCodeTool(props: { project: Project }) {
       <CodeHeaderBar
         workspaceName={props.project.name}
         activeFilePath={codeState.lastFocusedPath}
+        branch={chromeState.branch}
+        panelMaximized={chromeState.panelMaximized}
+        sideChatOpen={sideChatOpen}
+        onToggleSideChat={() => setSideChatOpen((open) => !open)}
         onRunCommand={runCodeCommand}
       />
       <div className="flex min-h-0 min-w-0 flex-1">
         <CodeActivityRail chromeState={chromeState} onRunCommand={runCodeCommand} />
         {/* The BrowserView is positioned to exactly cover this host node (see the
             ResizeObserver effect above), so leaving it as a flex child inset by
-            the rail/header/status bar automatically insets the native view. */}
+            the rail/header/status bar automatically insets the native view. When
+            the AI side chat opens, this host shrinks and the BrowserView follows
+            (the ResizeObserver republishes the smaller bounds), freeing the gutter
+            for the React chat panel beside it. */}
         <div className="relative min-h-0 min-w-0 flex-1">
           <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0 bg-background" />
           {!hostReady ? (
@@ -1652,8 +1750,105 @@ function DesktopCodeTool(props: { project: Project }) {
             </div>
           ) : null}
         </div>
+        {sideChatOpen ? (
+          <aside
+            style={{ width: sideChatWidth }}
+            className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-border/70 bg-background text-foreground"
+          >
+            {/* Drag-to-resize handle on the chat's left edge. */}
+            <div
+              onPointerDown={startSideChatResize}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize chat"
+              className="absolute inset-y-0 left-0 z-20 w-1.5 cursor-col-resize hover:bg-primary/40"
+            />
+            {/* Compact header: current thread, a history toggle (opens a full
+                in-panel thread list), and new thread. Threads are shared with the
+                Agents tab (same store), so anything started here shows there too. */}
+            <header className="flex h-9 shrink-0 items-center gap-1 border-b border-border/70 pl-3 pr-1.5">
+              <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                {showSideChatHistory ? "History" : sideChatThreadTitle}
+              </span>
+              <button
+                type="button"
+                aria-label="Thread history"
+                aria-pressed={showSideChatHistory}
+                onClick={() => setShowSideChatHistory((open) => !open)}
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                  showSideChatHistory && "bg-accent text-foreground",
+                )}
+              >
+                <HistoryIcon className="size-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="New chat thread"
+                onClick={() => void onNewSideChatThread()}
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <PlusIcon className="size-4" />
+              </button>
+            </header>
+            <div className="flex min-h-0 flex-1 flex-col">
+              {showSideChatHistory ? (
+                <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+                  {projectThreads.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                      No threads yet. Hit + to start one.
+                    </div>
+                  ) : (
+                    projectThreads.map((thread) => (
+                      <button
+                        key={thread.id}
+                        type="button"
+                        onClick={() => {
+                          setSideChatThreadIdOverride(thread.id);
+                          setShowSideChatHistory(false);
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-xs outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
+                          thread.id === sideChatThreadId
+                            ? "bg-accent/60 text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        <MessageSquareIcon className="size-3.5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {thread.title || "Untitled"}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : sideChatThreadId ? (
+                <Suspense
+                  fallback={
+                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                      Loading chat…
+                    </div>
+                  }
+                >
+                  <ChatView key={sideChatThreadId} threadId={sideChatThreadId} compact />
+                </Suspense>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                  <MessageSquareIcon className="size-6 text-muted-foreground" />
+                  <div className="text-sm font-medium text-foreground">No chat yet</div>
+                  <div className="text-xs text-muted-foreground">
+                    Hit + to start a thread, or open one from history.
+                  </div>
+                </div>
+              )}
+            </div>
+          </aside>
+        ) : null}
       </div>
-      <CodeStatusBar chrome={chromeState} onRunCommand={runCodeCommand} />
+      {isResizingSideChat ? (
+        <div data-slot="code-resize-overlay" className="fixed inset-0 z-50 cursor-col-resize" />
+      ) : null}
     </div>
   );
 }
@@ -1750,8 +1945,7 @@ function GitTool(props: {
     error: null,
   });
   const gitToolState = useWorkspaceShellStore(
-    (state) =>
-      state.gitStateByProjectId[project.id] ?? { selectedPath: null, selectedCommit: null },
+    (state) => state.gitStateByProjectId[project.id] ?? EMPTY_PROJECT_GIT_TOOL_STATE,
   );
   const selectedPath = gitToolState.selectedPath;
   const selectedCommit = gitToolState.selectedCommit;

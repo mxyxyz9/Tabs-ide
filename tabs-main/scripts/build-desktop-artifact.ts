@@ -782,6 +782,19 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: target === "dmg" ? ["zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      // Hardened Runtime ONLY when we can actually sign + notarize with a
+      // Developer ID. electron-builder defaults it to `true`, but our unsigned
+      // CI build is only AD-HOC signed (no Developer ID, no notarization).
+      // Hardened Runtime on an ad-hoc, un-notarized bundle is what makes the
+      // launched .app fail to set up its inter-process mach ports
+      // ("bootstrap_look_up …MachPortRendezvousServer: Permission denied") and
+      // crash the GPU / network / renderer helpers — the "ton of errors" users
+      // see when opening the DMG. Disabling it lets the ad-hoc bundle run
+      // cleanly; the signed release path keeps it on (Apple requires it).
+      hardenedRuntime: signed,
+      // Don't run Gatekeeper assessment during the build (the ad-hoc bundle
+      // would fail it); the signed/notarized release passes it at runtime.
+      gatekeeperAssess: false,
     };
   }
 

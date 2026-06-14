@@ -90,7 +90,41 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
     expect(parsed).toEqual({
       type: "chromeState",
       projectId: "p2",
-      state: { activeViewId: "scm", panelOpen: true, dirtyCount: 2, branch: "main" },
+      state: {
+        activeViewId: "scm",
+        panelOpen: true,
+        panelMaximized: false,
+        dirtyCount: 2,
+        branch: "main",
+        languageId: null,
+        cursor: null,
+      },
+    });
+  });
+  it("parses editor state (language + cursor) folded into chromeState", () => {
+    const parsed = parseCodeControlClientMessage(
+      JSON.stringify({
+        type: "chromeState",
+        projectId: "p3",
+        state: {
+          activeViewId: "explorer",
+          languageId: "typescript",
+          cursor: { line: 12.7, col: 4.2 },
+        },
+      }),
+    );
+    expect(parsed).toEqual({
+      type: "chromeState",
+      projectId: "p3",
+      state: {
+        activeViewId: "explorer",
+        panelOpen: false,
+        panelMaximized: false,
+        dirtyCount: 0,
+        branch: null,
+        languageId: "typescript",
+        cursor: { line: 12, col: 4 },
+      },
     });
   });
   it("falls back to defaults for junk state", () => {
@@ -98,8 +132,11 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
     expect(coerceChromeState({ activeViewId: "bogus", dirtyCount: -5 })).toEqual({
       activeViewId: null,
       panelOpen: false,
+      panelMaximized: false,
       dirtyCount: 0,
       branch: null,
+      languageId: null,
+      cursor: null,
     });
   });
   it("rejects malformed JSON", () => {

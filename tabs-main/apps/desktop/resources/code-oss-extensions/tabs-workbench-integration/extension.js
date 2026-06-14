@@ -6,27 +6,61 @@ const PANEL_VIEW_TYPE = "tabs.shell";
 const TOOL_IDS = ["code", "agents", "server", "git", "browser"];
 const EMBEDDED_TOOL_IDS = new Set(["agents", "server", "browser"]);
 const EMBED_CHROME_DEFAULTS = {
+  // Suppress every piece of stock VS Code chrome — Tabs renders its own native
+  // React rail / header / status bar around this embedded view, so the editor
+  // surface must read as a custom IDE, not a reskinned VS Code (see Section 2 of
+  // the embed-UI spec; cosmetic restyling lives in codeOssThemeCss.ts).
   "workbench.activityBar.location": "hidden",
   "workbench.activityBar.visible": false,
-  "workbench.statusBar.visible": false,
+  // The native status bar stays VISIBLE: it is the only surface that can render
+  // extension-contributed status items (Live Server "Go Live", Prettier, ESLint,
+  // …) — VS Code exposes no API to mirror those into the React chrome. It is
+  // themed to match the app in codeOssThemeCss.ts, so it reads as custom.
+  "workbench.statusBar.visible": true,
   "window.menuBarVisibility": "hidden",
-  "window.titleBarStyle": "native",
+  "window.titleBarStyle": "custom",
   "window.customTitleBarVisibility": "never",
   "workbench.layoutControl.enabled": false,
   "window.commandCenter": false,
   "workbench.startupEditor": "none",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,
   "workbench.welcome.enabled": false,
-  // Show the editor-group watermark (the "Show All Commands / Go to File / Open
-  // File…" key tips) when NO editor is open. The editor area is a native
-  // BrowserView painting above the DOM, so a React overlay can't cover it — and
-  // the sidebar shares that same view, so we can't hide it to show one. The
-  // watermark is therefore the only way to signal "idle, not crashed" in that
-  // empty space. Gated entirely on this setting (see editorGroupWatermark.ts).
-  "workbench.tips.enabled": true,
-  // Also keep the hint for an open-but-empty editor (e.g. a new untitled file).
-  "workbench.editor.empty.hint": "text",
+  // No watermark / key-tips in the empty editor: the native chrome already
+  // signals state, and the spec requires the VS Code logo/watermark gone with no
+  // trace (codeOssThemeCss.ts also hides it as a CSS backstop).
+  "workbench.tips.enabled": false,
+  "workbench.editor.empty.hint": "hidden",
   "security.workspace.trust.enabled": false,
+  // Don't nag about recommended extensions inside the embed.
+  "extensions.ignoreRecommendations": true,
+  // Editor tab bar: shrink tabs, close button on the right (the React header owns
+  // window controls), no breadcrumbs / secondary side bar.
+  "workbench.editor.showTabs": "multiple",
+  "workbench.editor.tabActionLocation": "right",
+  "workbench.editor.tabSizing": "shrink",
+  "breadcrumbs.enabled": false,
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  // Keep view-header actions (Explorer's new file / new folder / refresh /
+  // collapse, etc.) always visible rather than hover-only, so the sidebar is
+  // easier to work with (matches the Cursor reference).
+  "workbench.view.alwaysShowHeaderActions": true,
+  // Editor surface: Tabs typography + a thin accent line cursor, calm minimap,
+  // thin scrollbars, smooth scrolling everywhere.
+  "editor.fontFamily": '"Geist Mono", "Fira Code", monospace',
+  "editor.fontSize": 13,
+  "editor.lineHeight": 1.6,
+  "editor.cursorStyle": "line",
+  "editor.cursorWidth": 2,
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.smoothScrolling": true,
+  "workbench.list.smoothScrolling": true,
+  "editor.minimap.autohide": true,
+  "editor.minimap.scale": 1,
+  "editor.scrollbar.verticalScrollbarSize": 4,
+  "editor.scrollbar.horizontalScrollbarSize": 4,
+  "editor.renderLineHighlight": "gutter",
+  "editor.overviewRulerBorder": false,
+  "editor.hideCursorInOverviewRuler": true,
 };
 
 // Allowlist of workbench commands the native Tabs chrome (activity rail /
@@ -45,8 +79,17 @@ const CHROME_COMMAND_ALLOWLIST = new Set([
   "workbench.action.toggleSidebarVisibility",
   "workbench.action.togglePanel",
   "workbench.action.terminal.toggleTerminal",
+  "workbench.action.toggleMaximizedPanel",
+  "workbench.action.toggleAuxiliaryBar",
   "workbench.action.quickOpen",
   "workbench.action.openSettings",
+  "workbench.action.tasks.runTask",
+  // Native status-bar pickers (language / indentation / EOL / encoding). Mirror
+  // of CODE_STATUS_BAR_COMMANDS in packages/shared/src/codeChrome.ts.
+  "workbench.action.editor.changeLanguageMode",
+  "editor.action.indentationToSpaces",
+  "workbench.action.editor.changeEOL",
+  "workbench.action.editor.changeEncoding",
   // Application menu-bar commands (the native ≡ menu in the rail). Mirror of
   // CODE_MENU_COMMAND_IDS in packages/shared/src/codeChrome.ts — keep in sync.
   "workbench.action.files.newUntitledFile",
@@ -296,10 +339,11 @@ function startCodeControlChannel(context) {
   // commands/state to the right editor when multiple projects are open.
   const projectId = process.env.TABS_PROJECT_ID || "";
 
-  /** @type {{ activeViewId: string | null, panelOpen: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean }} */
+  /** @type {{ activeViewId: string | null, panelOpen: boolean, panelMaximized: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean }} */
   const state = {
     activeViewId: null,
     panelOpen: false,
+    panelMaximized: false,
     dirtyCount: 0,
     branch: null,
     activityBarItems: [],
@@ -542,6 +586,14 @@ function startCodeControlChannel(context) {
       commandId === "workbench.action.terminal.toggleTerminal"
     ) {
       state.panelOpen = !state.panelOpen;
+      // Closing the panel also exits its maximised state.
+      if (!state.panelOpen) {
+        state.panelMaximized = false;
+      }
+    } else if (commandId === "workbench.action.toggleMaximizedPanel") {
+      // Maximising opens the panel if it was closed; restoring keeps it open.
+      state.panelMaximized = !state.panelMaximized;
+      state.panelOpen = true;
     }
     pushState();
   };

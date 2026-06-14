@@ -13,6 +13,11 @@ export function getRouter(history: RouterHistory) {
   return createRouter({
     routeTree,
     history,
+    // Preload a route's (now code-split) chunk + data on hover/touch intent, so
+    // by the time the user clicks it's already in memory — kills the "first click
+    // is slow" delay for navigations without eagerly bundling every screen.
+    defaultPreload: "intent",
+    defaultPreloadStaleTime: 0,
     context: {
       queryClient,
     },

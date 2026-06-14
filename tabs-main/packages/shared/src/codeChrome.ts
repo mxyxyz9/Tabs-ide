@@ -17,9 +17,14 @@
  * from every layer.
  */
 
-import type { CodeActivityViewId, CodeChromeState, CustomActivityBarItem } from "@tabs/contracts";
+import type {
+  CodeActivityViewId,
+  CodeChromeState,
+  CodeCursorPosition,
+  CustomActivityBarItem,
+} from "@tabs/contracts";
 
-export type { CodeActivityViewId, CodeChromeState, CustomActivityBarItem };
+export type { CodeActivityViewId, CodeChromeState, CodeCursorPosition, CustomActivityBarItem };
 
 /** lucide-react icon names (resolved to components in the web layer). */
 export type CodeActivityIcon = "files" | "search" | "git-branch" | "bug" | "puzzle";
@@ -52,8 +57,25 @@ export const CODE_CHROME_COMMANDS = {
   toggleSidebar: "workbench.action.toggleSidebarVisibility",
   togglePanel: "workbench.action.togglePanel",
   toggleTerminal: "workbench.action.terminal.toggleTerminal",
+  /** Toggle the secondary (right) side bar — the third layout-control icon. */
+  toggleAuxiliaryBar: "workbench.action.toggleAuxiliaryBar",
+  /** Maximise the bottom panel to fill the editor area (and restore). */
+  toggleMaximizedPanel: "workbench.action.toggleMaximizedPanel",
   quickOpen: "workbench.action.quickOpen",
   settings: "workbench.action.openSettings",
+  runTask: "workbench.action.tasks.runTask",
+} as const;
+
+/**
+ * Commands driven by the native status bar's clickable items (language /
+ * indentation / end-of-line pickers). Kept separate from CODE_CHROME_COMMANDS so
+ * the header/rail surface stays focused, but folded into the allowlist below.
+ */
+export const CODE_STATUS_BAR_COMMANDS = {
+  changeLanguageMode: "workbench.action.editor.changeLanguageMode",
+  changeIndentation: "editor.action.indentationToSpaces",
+  changeEol: "workbench.action.editor.changeEOL",
+  changeEncoding: "workbench.action.editor.changeEncoding",
 } as const;
 
 // ----------------------------------------------------------------------------
@@ -409,6 +431,7 @@ export const CODE_CHROME_COMMAND_ALLOWLIST: readonly string[] = [
   ...new Set([
     ...CODE_ACTIVITY_ITEMS.map((item) => item.commandId),
     ...Object.values(CODE_CHROME_COMMANDS),
+    ...Object.values(CODE_STATUS_BAR_COMMANDS),
     ...CODE_MENU_COMMAND_IDS,
   ]),
 ];
@@ -420,8 +443,11 @@ export function isAllowedChromeCommand(commandId: string): boolean {
 export const DEFAULT_CODE_CHROME_STATE: CodeChromeState = {
   activeViewId: null,
   panelOpen: false,
+  panelMaximized: false,
   dirtyCount: 0,
   branch: null,
+  languageId: null,
+  cursor: null,
 };
 
 // ----------------------------------------------------------------------------
@@ -555,6 +581,7 @@ export function coerceChromeState(value: unknown): CodeChromeState {
   const state: CodeChromeState = {
     activeViewId,
     panelOpen: record.panelOpen === true,
+    panelMaximized: record.panelMaximized === true,
     dirtyCount:
       typeof record.dirtyCount === "number" && Number.isFinite(record.dirtyCount)
         ? Math.max(0, Math.floor(record.dirtyCount))
@@ -567,7 +594,29 @@ export function coerceChromeState(value: unknown): CodeChromeState {
   if (typeof record.autoSaveEnabled === "boolean") {
     state.autoSaveEnabled = record.autoSaveEnabled;
   }
+  state.languageId =
+    typeof record.languageId === "string" && record.languageId.length > 0
+      ? record.languageId
+      : null;
+  state.cursor = coerceCursorPosition(record.cursor);
   return state;
+}
+
+/** Coerce an untrusted value into a 1-based CodeCursorPosition, or null. */
+function coerceCursorPosition(value: unknown): CodeCursorPosition | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const line = record.line;
+  const col = record.col;
+  if (
+    typeof line === "number" &&
+    Number.isFinite(line) &&
+    typeof col === "number" &&
+    Number.isFinite(col)
+  ) {
+    return { line: Math.max(1, Math.floor(line)), col: Math.max(1, Math.floor(col)) };
+  }
+  return null;
 }
 
 /**

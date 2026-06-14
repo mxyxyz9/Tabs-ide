@@ -189,14 +189,26 @@ export interface CustomActivityBarItem {
   order?: number;
 }
 
+/** Active-editor cursor position (1-based) surfaced to the native status bar. */
+export interface CodeCursorPosition {
+  line: number;
+  col: number;
+}
+
 export interface CodeChromeState {
   activeViewId: string | null;
   panelOpen: boolean;
+  /** Whether the bottom panel is maximised to fill the editor area. */
+  panelMaximized: boolean;
   dirtyCount: number;
   branch: string | null;
   activityBarItems?: readonly CustomActivityBarItem[];
   /** Whether `files.autoSave` is on — drives the Auto Save menu checkmark. */
   autoSaveEnabled?: boolean;
+  /** Language id of the active editor (e.g. "typescript"); null when no editor. */
+  languageId?: string | null;
+  /** 1-based cursor position of the active editor; null when no editor. */
+  cursor?: CodeCursorPosition | null;
 }
 
 export interface DesktopBrowserHostState {

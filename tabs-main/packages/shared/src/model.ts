@@ -48,7 +48,14 @@ function getRawSelectionValueById(
   selections: ReadonlyArray<ProviderOptionSelection> | null | undefined,
   id: string,
 ): string | boolean | undefined {
-  const selection = selections?.find((candidate) => candidate.id === id);
+  // Defensive: although typed as an array, persisted/migrated draft state can
+  // carry the legacy object-map shape of model options. Treat anything that
+  // isn't an array as "no selections" rather than throwing
+  // (`selections.find is not a function`) during composer render.
+  if (!Array.isArray(selections)) {
+    return undefined;
+  }
+  const selection = selections.find((candidate) => candidate.id === id);
   return selection?.value;
 }
 

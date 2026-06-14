@@ -120,7 +120,7 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
   return (
     <nav
       aria-label="Code views"
-      className="flex h-full w-12 shrink-0 flex-col items-center gap-1 border-r border-border/70 bg-background py-2"
+      className="flex h-full w-11 shrink-0 flex-col items-center gap-1 border-r border-border/70 bg-background py-2"
     >
       <Menu>
         <MenuTrigger
@@ -130,7 +130,7 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
               aria-label="Application menu"
               className="flex size-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-foreground"
             >
-              <MenuIcon className="size-5" />
+              <MenuIcon className="size-[18px]" />
             </button>
           }
         />
@@ -177,29 +177,35 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
       {CODE_ACTIVITY_ITEMS.map((item) => {
         const Icon = ICONS[item.icon];
         const active = props.chromeState.activeViewId === item.id;
+        // Divider between navigation (Explorer / Search / Source Control) and the
+        // tool views (Run and Debug / Extensions) — "debug" is the first tool.
+        const divider = item.id === "debug";
         return (
-          <Tooltip key={item.id}>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  aria-label={item.label}
-                  aria-pressed={active}
-                  onClick={() => props.onRunCommand(item.commandId)}
-                  className={cn(
-                    "relative flex size-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                    active && "text-foreground",
-                  )}
-                >
-                  {active ? (
-                    <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
-                  ) : null}
-                  <Icon className="size-5" />
-                </button>
-              }
-            />
-            <TooltipPopup side="right">{item.label}</TooltipPopup>
-          </Tooltip>
+          <Fragment key={item.id}>
+            {divider ? <span className="my-1 h-px w-5 bg-border/70" /> : null}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={item.label}
+                    aria-pressed={active}
+                    onClick={() => props.onRunCommand(item.commandId)}
+                    className={cn(
+                      "group relative flex size-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                      active && "text-foreground",
+                    )}
+                  >
+                    {active ? (
+                      <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
+                    ) : null}
+                    <Icon className="relative size-[18px]" />
+                  </button>
+                }
+              />
+              <TooltipPopup side="right">{item.label}</TooltipPopup>
+            </Tooltip>
+          </Fragment>
         );
       })}
 
@@ -225,17 +231,17 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
                   {item.resolvedIcon?.type === "codicon" ? (
                     <span
                       aria-hidden
-                      className={cn("codicon", `codicon-${item.resolvedIcon.id}`)}
-                      style={{ fontSize: "20px" }}
+                      className={cn("codicon relative", `codicon-${item.resolvedIcon.id}`)}
+                      style={{ fontSize: "18px" }}
                     />
                   ) : item.resolvedIcon?.type === "mask" ? (
                     <span
                       aria-hidden
-                      className="size-5 bg-current"
+                      className="relative size-[18px] bg-current"
                       style={maskStyle(item.resolvedIcon.url)}
                     />
                   ) : (
-                    <PuzzleIcon className="size-5" />
+                    <PuzzleIcon className="relative size-[18px]" />
                   )}
                 </button>
               }
@@ -255,7 +261,7 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
                 onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.settings)}
                 className="flex size-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <SettingsIcon className="size-5" />
+                <SettingsIcon className="size-[18px]" />
               </button>
             }
           />

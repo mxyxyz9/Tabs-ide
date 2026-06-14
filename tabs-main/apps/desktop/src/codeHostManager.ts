@@ -26,6 +26,7 @@ import type {
 } from "@tabs/contracts";
 
 import { CODE_OSS_THEME_CSS } from "./codeOssThemeCss";
+import { GEIST_MONO_FONT_CSS } from "./geistMonoFontCss";
 
 const CODE_OSS_SERVER_HOST = "127.0.0.1";
 const CODE_OSS_SERVER_START_TIMEOUT_MS = 20_000;
@@ -1129,7 +1130,7 @@ export class CodeHostManager {
           : null),
       },
     });
-    view.setBackgroundColor("#121212");
+    view.setBackgroundColor("#141414");
 
     const allowedPermissions = new Set([
       "clipboard-read",
@@ -1161,12 +1162,23 @@ export class CodeHostManager {
       return { action: "deny" };
     });
 
-    // Theme the embedded Code-OSS workbench to match the Tabs shell. The
-    // managed-server runtime loads the workbench over http into this view, so
-    // we inject our CSS host-side (no VS Code fork edits needed). insertCSS is
-    // cleared on navigation, so re-apply on every load.
-    if (!desktopRuntime) {
+    // Theme the embedded Code-OSS workbench to match the Tabs shell. We inject
+    // our CSS host-side (no VS Code fork edits needed) for BOTH runtimes — the
+    // managed-server workbench loads over http and the desktop-renderer over a
+    // custom protocol, but `insertCSS` applies to either webContents and is the
+    // single source of truth so neither path can drift to stock styling.
+    // insertCSS is cleared on navigation, so re-apply on every load.
+    {
+      // Inject the editor font FIRST, then the theme — both via insertCSS, which
+      // applies as an Electron user stylesheet above the workbench's CSP (a plain
+      // <link> to Google Fonts is blocked by that CSP, and Geist Mono isn't
+      // installed on the host, so the font must be embedded; see
+      // geistMonoFontCss.ts). insertCSS is cleared on navigation, so re-apply on
+      // every load.
       const applyThemeCss = () => {
+        void view.webContents.insertCSS(GEIST_MONO_FONT_CSS).catch(() => {
+          /* view may have been torn down */
+        });
         void view.webContents.insertCSS(CODE_OSS_THEME_CSS).catch(() => {
           /* view may have been torn down */
         });

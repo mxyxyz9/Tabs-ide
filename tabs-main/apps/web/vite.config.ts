@@ -29,7 +29,11 @@ const compilerMode = (process.env.TABS_WEB_COMPILER?.trim().toLowerCase() ?? "in
 
 export default defineConfig(({ command }) => ({
   plugins: [
-    tanstackRouter(),
+    // autoCodeSplitting: split each route's component/loader into its own chunk
+    // so the initial bundle no longer eagerly pulls the heaviest screens
+    // (settings ~2.2k LOC, the chat thread view → ChatView + react-markdown +
+    // @pierre/diffs). Routes load on navigation; see defaultPreload in router.ts.
+    tanstackRouter({ autoCodeSplitting: true }),
     react(),
     // Gate the compiler to production builds only: dev relies on react()'s fast
     // refresh, so skipping the babel pass keeps dev-server startup and HMR snappy.
@@ -57,7 +61,17 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
   ],
   optimizeDeps: {
-    include: ["@pierre/diffs", "@pierre/diffs/react", "@pierre/diffs/worker/worker.js"],
+    // Pre-bundle the heavy deps up front. Without this, the FIRST time a screen
+    // that uses one of these is opened, Vite discovers the dep, re-optimizes, and
+    // forces a full page reload — the "first click takes a few seconds" stall.
+    include: [
+      "@pierre/diffs",
+      "@pierre/diffs/react",
+      "@pierre/diffs/worker/worker.js",
+      "react-markdown",
+      "@xterm/xterm",
+      "@xterm/addon-fit",
+    ],
   },
   define: {
     // In dev mode, tell the web app where the WebSocket server lives
