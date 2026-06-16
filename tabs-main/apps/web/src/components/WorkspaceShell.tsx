@@ -1913,7 +1913,7 @@ function GitTool(props: {
   onCreateAgentsThread: () => void | Promise<void>;
   onRunGitHubLogin: () => void | Promise<void>;
   onOpenFileInCode: (relativePath: string) => void;
-  onDispatchRelease: (version: string) => void;
+  onDispatchRelease: (version: string, branch: string) => void;
 }) {
   const {
     project,
@@ -1942,6 +1942,10 @@ function GitTool(props: {
   const [tagNameDraft, setTagNameDraft] = useState("");
   const [releaseDialogOpen, setReleaseDialogOpen] = useState(false);
   const [releaseVersion, setReleaseVersion] = useState("");
+  // The branch the release workflow runs from (release.yml `--ref`). Defaults to
+  // the current branch when the dialog opens; editable so you can cut a release
+  // from any local branch.
+  const [releaseBranch, setReleaseBranch] = useState("");
   const [branchToolsTarget, setBranchToolsTarget] = useState("");
   const [branchToolsSearch, setBranchToolsSearch] = useState("");
   const [renameDraft, setRenameDraft] = useState("");
@@ -3276,6 +3280,7 @@ function GitTool(props: {
                     setReleaseVersion(
                       match ? `${match[1]}.${match[2]}.${Number(match[3]) + 1}` : "",
                     );
+                    setReleaseBranch(activeBranch?.name ?? localBranches[0]?.name ?? "main");
                     setReleaseDialogOpen(true);
                   }}
                   title="Trigger the release workflow on GitHub Actions"
@@ -5047,17 +5052,39 @@ function GitTool(props: {
                 onChange={(event) => setReleaseVersion(event.target.value)}
                 placeholder="e.g. 1.2.16"
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && releaseVersion.trim().length > 0) {
+                  if (
+                    event.key === "Enter" &&
+                    releaseVersion.trim().length > 0 &&
+                    releaseBranch.trim().length > 0
+                  ) {
                     event.preventDefault();
-                    onDispatchRelease(releaseVersion);
+                    onDispatchRelease(releaseVersion, releaseBranch);
                     setReleaseDialogOpen(false);
                   }
                 }}
               />
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                Release from branch
+                <select
+                  value={releaseBranch}
+                  onChange={(event) => setReleaseBranch(event.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {localBranches.length === 0 ? (
+                    <option value={releaseBranch}>{releaseBranch || "main"}</option>
+                  ) : (
+                    localBranches.map((branch) => (
+                      <option key={branch.name} value={branch.name}>
+                        {branch.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
               <div className="rounded-md bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
-                {releaseVersion.trim().length > 0
-                  ? `gh workflow run release.yml --field version=${releaseVersion.trim().replace(/^v/, "")}`
-                  : "Type a version above to enable the release."}
+                {releaseVersion.trim().length > 0 && releaseBranch.trim().length > 0
+                  ? `gh workflow run release.yml --ref ${releaseBranch.trim()} --field version=${releaseVersion.trim().replace(/^v/, "")}`
+                  : "Type a version and pick a branch to enable the release."}
               </div>
             </div>
             <DialogFooter>
@@ -5066,9 +5093,9 @@ function GitTool(props: {
               </Button>
               <Button
                 type="button"
-                disabled={releaseVersion.trim().length === 0}
+                disabled={releaseVersion.trim().length === 0 || releaseBranch.trim().length === 0}
                 onClick={() => {
-                  onDispatchRelease(releaseVersion);
+                  onDispatchRelease(releaseVersion, releaseBranch);
                   setReleaseDialogOpen(false);
                 }}
               >
@@ -8327,11 +8354,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     [runCommandInGitTerminal],
   );
   const dispatchReleaseInGitTerminal = useCallback(
-    (version: string) => {
+    (version: string, branch: string) => {
       const trimmed = version.trim().replace(/^v/, "");
-      if (trimmed.length === 0) return;
+      const branchRef = branch.trim();
+      if (trimmed.length === 0 || branchRef.length === 0) return;
+      // `--ref` selects the branch the release workflow runs from; release.yml
+      // builds and tags from that ref.
       void runCommandInGitTerminal(
-        `gh workflow run release.yml --field version=${trimmed}`,
+        `gh workflow run release.yml --ref ${branchRef} --field version=${trimmed}`,
         "Could not trigger release",
       );
     },
@@ -8413,22 +8443,27 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       if (input.reveal) {
         storeSetTerminalOpen(input.threadId, true);
       }
-      // If the only terminal is the unused default placeholder and we're about
-      // to open a named process terminal, evict the placeholder so it doesn't
-      // show as a phantom extra terminal in the sidebar.
-      if (
-        terminalId !== DEFAULT_THREAD_TERMINAL_ID &&
-        input.terminalState &&
-        input.terminalState.terminalIds.length === 1 &&
-        input.terminalState.terminalIds[0] === DEFAULT_THREAD_TERMINAL_ID &&
-        input.terminalState.runningTerminalIds.length === 0
-      ) {
-        storeCloseTerminal(input.threadId, DEFAULT_THREAD_TERMINAL_ID);
-      }
+      // Create/activate the named process terminal FIRST, so the thread already
+      // has this real terminal before we evict the placeholder below.
       if (input.terminalState?.terminalIds.includes(terminalId)) {
         storeSetActiveTerminal(input.threadId, terminalId);
       } else {
         storeNewTerminal(input.threadId, terminalId);
+      }
+      // Every terminal thread is seeded with a default placeholder ("Terminal
+      // 1"). When opening a named process terminal, evict that unused placeholder
+      // so it doesn't linger as a phantom extra terminal in the sidebar. This
+      // MUST run after creating the process terminal above: closeTerminal
+      // re-seeds the default whenever the thread would otherwise become empty, so
+      // evicting the lone placeholder first would just recreate it. Only evict
+      // when the placeholder is genuinely unused (no live session) and isn't the
+      // terminal we're opening.
+      if (
+        terminalId !== DEFAULT_THREAD_TERMINAL_ID &&
+        input.terminalState?.terminalIds.includes(DEFAULT_THREAD_TERMINAL_ID) &&
+        !input.terminalState.runningTerminalIds.includes(DEFAULT_THREAD_TERMINAL_ID)
+      ) {
+        storeCloseTerminal(input.threadId, DEFAULT_THREAD_TERMINAL_ID);
       }
       setShellTerminalFocusRequestId((value) => value + 1);
       try {
@@ -8551,18 +8586,19 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       revealServerTerminal();
       await openProcessTerminal({
         threadId: serverThreadId,
-        terminalState: serverTerminalState,
+        // Read the LIVE terminal state (not the rendered `serverTerminalState`
+        // snapshot) so running several presets in quick succession each see the
+        // terminals the previous run just created — otherwise the placeholder
+        // eviction and dedupe work off stale data.
+        terminalState: selectThreadTerminalState(
+          useTerminalStateStore.getState().terminalStateByThreadId,
+          serverThreadId,
+        ),
         process,
         reveal: true,
       });
     },
-    [
-      activeProjectSettings,
-      openProcessTerminal,
-      revealServerTerminal,
-      serverTerminalState,
-      serverThreadId,
-    ],
+    [activeProjectSettings, openProcessTerminal, revealServerTerminal, serverThreadId],
   );
   const restartServerProcess = useCallback(
     async (processId: string) => {
