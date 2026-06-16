@@ -179,18 +179,20 @@ jobs:
           # `compile-build` fails on the protected-fields mangler check.
           npm run gulp compile-build-without-mangling
 
-      # The embedded workbench activates these built-in extensions at startup or
-      # on file-open. compile-client above skips ALL extensions, and the root
-      # install used --ignore-scripts (to dodge the postinstall OOM), so they had
-      # neither node_modules nor a compile — at runtime that throws "Cannot find
-      # module .../<ext>/out/..." and cascades to dependents (e.g. CodeRabbit
-      # needs git, json/emmet/typescript/github/merge-conflict all fail). Install
-      # each one's deps and compile it to extensions/<ext>/out (the dev built-in
-      # layout the runtime falls back to). Run unconditionally so the out/ build
-      # cache above can't mask a missing extension compile. Keep this list in sync
-      # with the compiled-runtime guard in
-      # tabs-main/scripts/build-desktop-artifact.ts.
-      - name: Compile required built-in extensions
+      # The embedded workbench activates ALL built-in extensions at startup or on
+      # file-open, not a curated few. compile-client above skips EVERY extension,
+      # and the root install used --ignore-scripts (to dodge the postinstall OOM),
+      # so without this step the built-ins ship with neither node_modules nor a
+      # compiled out/ — at runtime the extension host throws "Cannot find module
+      # .../<ext>/out/..." for each (debug-auto-launch, references-view, npm,
+      # ipynb, simple-browser, …) and cascades to dependents (e.g. CodeRabbit
+      # needs git; the language features need each other). Install every
+      # extension's deps and run the full `compile-extensions` gulp task, which
+      # compiles all built-ins to extensions/<ext>/out (the dev built-in layout
+      # the runtime uses). Run unconditionally so the out/ build cache above can't
+      # mask a missing extension compile. The compiled-runtime guard in
+      # tabs-main/scripts/build-desktop-artifact.ts verifies the result.
+      - name: Compile built-in extensions
         working-directory: tabs-code-main
         shell: bash
         env:
@@ -211,21 +213,18 @@ jobs:
             (cd extensions && npm install typescript@6.0.2 --no-save --no-audit --no-fund --ignore-scripts --install-strategy=nested)
           fi
           test -f extensions/node_modules/typescript/lib/typescript.js
-          # Install deps so each extension's TS compiles and its node_modules
-          # ship in the runtime.
-          exts=(
-            git-base git github github-authentication configuration-editing
-            json-language-features html-language-features css-language-features
-            typescript-language-features markdown-language-features emmet merge-conflict
-          )
-          for ext in "${exts[@]}"; do
-            (cd "extensions/$ext" && npm install --no-audit --no-fund --ignore-scripts)
-          done
-          # json/html/css language features keep a SEPARATE server/ package with
-          # its own node_modules — install those too or the server compile + the
-          # runtime language server fail on missing deps.
-          for ext in json-language-features html-language-features css-language-features; do
-            (cd "extensions/$ext/server" && npm install --no-audit --no-fund --ignore-scripts)
+          # Install deps for EVERY built-in extension (plus any nested client/ and
+          # server/ packages, e.g. the language features) so each one's TypeScript
+          # compiles and its node_modules ship in the runtime. Dep-less extensions
+          # (themes, grammars) are a fast no-op. Tolerate a standalone-install
+          # hiccup here — the `compile-extensions` gate below is the real failure
+          # check. Skip node_modules.
+          for pkg in extensions/*/package.json extensions/*/client/package.json extensions/*/server/package.json; do
+            [ -f "$pkg" ] || continue
+            dir="$(dirname "$pkg")"
+            case "$dir" in */node_modules*) continue;; esac
+            (cd "$dir" && npm install --no-audit --no-fund --ignore-scripts) || \
+              echo "::warning::npm install failed for $dir (continuing; compile-extensions will catch real breakage)"
           done
 
           # git's native fs helper (@vscode/fs-copyfile) must be built AND match
@@ -235,29 +234,10 @@ jobs:
           npx --yes @electron/rebuild -v 40.6.0 --arch "${{ matrix.arch }}" \
             --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
 
-          # Compile each extension to extensions/<ext>/out. Language-feature
-          # extensions have separate client/ and server/ tsconfigs (gulp task
-          # name = path under extensions/ with '/' replaced by '-').
-          tasks=(
-            compile-extension:git-base
-            compile-extension:git
-            compile-extension:github
-            compile-extension:github-authentication
-            compile-extension:configuration-editing
-            compile-extension:json-language-features-client
-            compile-extension:json-language-features-server
-            compile-extension:html-language-features-client
-            compile-extension:html-language-features-server
-            compile-extension:css-language-features-client
-            compile-extension:css-language-features-server
-            compile-extension:typescript-language-features
-            compile-extension:markdown-language-features
-            compile-extension:emmet
-            compile-extension:merge-conflict
-          )
-          for t in "${tasks[@]}"; do
-            npm run gulp "$t"
-          done
+          # Compile ALL built-in extensions to extensions/<ext>/out (and
+          # client/out, server/out for the language features). This is the
+          # canonical full-extension compile — no curated allowlist to drift.
+          npm run gulp compile-extensions
 
       # Cache electron-builder's downloaded NSIS/7zip/winCodeSign toolchain so a
       # populated run never re-downloads it. The download host (GitHub's

@@ -479,6 +479,39 @@ function parseHdiutilMountPoint(output: string): string | undefined {
     .find((line): line is string => Boolean(line));
 }
 
+/**
+ * Given a built-in extension's package.json `main` (e.g. `./out/extension`,
+ * `./client/out/node/cssClientMain`, `./out/main.js`), return the relative
+ * compiled-output directory the runtime needs present (e.g. `out`,
+ * `client/out`). Returns null when the entry doesn't point into a compiled
+ * `out`/`dist` dir (e.g. a hand-written `./extension.js`), so such extensions
+ * are not falsely required to have a compiled tree.
+ */
+export function compiledOutputDir(main: string): string | null {
+  const segments = main.replace(/^\.\//, "").replace(/\\/g, "/").split("/").filter(Boolean);
+  const index = segments.findIndex((segment) => segment === "out" || segment === "dist");
+  if (index < 0) {
+    return null;
+  }
+  return segments.slice(0, index + 1).join("/");
+}
+
+/**
+ * Extract the string `main` field from a package.json's text, or null if the
+ * text is empty/unparseable or `main` isn't a string.
+ */
+export function readPackageMain(text: string): string | null {
+  if (!text) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(text) as { main?: unknown };
+    return typeof parsed.main === "string" ? parsed.main : null;
+  } catch {
+    return null;
+  }
+}
+
 function getRequiredMacArtifactPaths(productName: string, thin = false): readonly string[] {
   const appRoot = `${productName}.app`;
   const appLevel = [
@@ -860,38 +893,42 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   // Guard: the source must be FULLY compiled before we stage/zip it. A common
   // failure mode is a tree where the core `out/` exists but the built-in
   // extensions were never compiled (no `extensions/<name>/out`). At runtime that
-  // surfaces as "Cannot find module .../configuration-editing/out/..." plus a
-  // cascade of failed activations (git-base → git → CodeRabbit, etc.) and a
-  // stale-looking workbench. Fail loudly here instead of packaging a half-built
-  // runtime (or uploading a broken runtime zip that thin installers download).
-  // Cover EVERY built-in extension that ships a compiled `out/` and a node main.
-  // The previous list only checked git/git-base/configuration-editing, so a tree
-  // where those compiled but the language features / emmet / github / merge did
-  // NOT still passed — and shipped a runtime whose extension host cascade-failed
-  // ("Cannot find module .../json-language-features/client/out/node/...", emmet,
-  // typescript-language-features, github, merge-conflict, …), which also kills
-  // the workbench buttons. Marker paths mirror each extension's package.json
-  // `main`.
-  const compiledMarkers = [
-    "out/vs/code/electron-browser/workbench/workbench-dev.html",
-    "extensions/git/out",
-    "extensions/git-base/out",
-    "extensions/github/out",
-    "extensions/github-authentication/out",
-    "extensions/configuration-editing/out",
-    "extensions/json-language-features/client/out",
-    "extensions/json-language-features/server/out",
-    "extensions/html-language-features/client/out",
-    "extensions/css-language-features/client/out",
-    "extensions/typescript-language-features/out",
-    "extensions/markdown-language-features/out",
-    "extensions/emmet/out",
-    "extensions/merge-conflict/out",
-    // git's native fs helper (@vscode/fs-copyfile) must be built for the target —
-    // missing it throws "Cannot find module .../build/Debug/vscode_fs.node" and
-    // takes down git (and anything depending on it, e.g. CodeRabbit).
-    "extensions/git/node_modules/@vscode/fs-copyfile/build",
-  ];
+  // surfaces as "Cannot find module .../<ext>/out/..." plus a cascade of failed
+  // activations (debug-auto-launch, references-view, npm, git-base → git →
+  // CodeRabbit, …) and a stale-looking workbench with dead buttons. Fail loudly
+  // here instead of packaging a half-built runtime (or uploading a broken
+  // runtime zip that thin installers download).
+  //
+  // Markers are derived DYNAMICALLY from each built-in's package.json `main`, so
+  // this guard can never drift out of sync with the extension set (a previous
+  // hardcoded allowlist silently passed when newly-added or previously-skipped
+  // built-ins shipped without an `out/`). For every extension that declares a
+  // node `main` pointing into a compiled output dir, require that dir to exist.
+  const compiledMarkers = ["out/vs/code/electron-browser/workbench/workbench-dev.html"];
+  const extensionsDir = path.join(vsCodeSourceDir, "extensions");
+  if (yield* fs.exists(extensionsDir)) {
+    for (const entry of yield* fs.readDirectory(extensionsDir)) {
+      if (entry === "node_modules") continue;
+      const extDir = path.join(extensionsDir, entry);
+      const stat = yield* fs.stat(extDir).pipe(Effect.catch(() => Effect.succeed(null)));
+      if (!stat || stat.type !== "Directory") continue;
+      const pkgPath = path.join(extDir, "package.json");
+      if (!(yield* fs.exists(pkgPath))) continue;
+      const pkgText = yield* fs
+        .readFileString(pkgPath)
+        .pipe(Effect.catch(() => Effect.succeed("")));
+      const main = readPackageMain(pkgText);
+      const outputDir = main ? compiledOutputDir(main) : null;
+      if (outputDir) {
+        compiledMarkers.push(path.join("extensions", entry, outputDir));
+      }
+    }
+  }
+  // git's native fs helper (@vscode/fs-copyfile) must be built for the target —
+  // missing it throws "Cannot find module .../build/Debug/vscode_fs.node" and
+  // takes down git (and anything depending on it, e.g. CodeRabbit).
+  compiledMarkers.push("extensions/git/node_modules/@vscode/fs-copyfile/build");
+
   const missingMarkers: string[] = [];
   for (const marker of compiledMarkers) {
     if (!(yield* fs.exists(path.join(vsCodeSourceDir, marker)))) {
