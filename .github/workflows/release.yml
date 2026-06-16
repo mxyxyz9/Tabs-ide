@@ -216,10 +216,13 @@ jobs:
           # Install deps for EVERY built-in extension (plus any nested client/ and
           # server/ packages, e.g. the language features) so each one's TypeScript
           # compiles and its node_modules ship in the runtime. Dep-less extensions
-          # (themes, grammars) are a fast no-op. Tolerate a standalone-install
-          # hiccup here — the `compile-extensions` gate below is the real failure
-          # check. Skip node_modules.
-          for pkg in extensions/*/package.json extensions/*/client/package.json extensions/*/server/package.json; do
+          # (themes, grammars) are a fast no-op. The .vscode/extensions/* dev/
+          # self-host tooling is also compiled by `compile-extensions` and needs
+          # its deps too (it's stripped from the staged runtime, but the compile
+          # gate still runs it). Tolerate a standalone-install hiccup here — the
+          # `compile-extensions` gate below is the real failure check. Skip
+          # node_modules.
+          for pkg in extensions/*/package.json extensions/*/client/package.json extensions/*/server/package.json .vscode/extensions/*/package.json; do
             [ -f "$pkg" ] || continue
             dir="$(dirname "$pkg")"
             case "$dir" in */node_modules*) continue;; esac
