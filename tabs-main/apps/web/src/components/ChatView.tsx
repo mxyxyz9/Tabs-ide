@@ -242,9 +242,18 @@ interface ChatViewProps {
    * full Agents tab. The conversation + composer stay.
    */
   compact?: boolean;
+  /**
+   * Compact-mode thread router. When the embed needs to switch the rendered
+   * thread (e.g. a draft was promoted to a new thread id), it calls this instead
+   * of navigating the app to the `/$threadId` route. This keeps the side chat in
+   * the Code tab and decoupled from the Agents tab — so it keeps working even
+   * when the Agents tool is toggled off in settings (its route would be hidden).
+   * Ignored unless `compact` is set; the full Agents tab navigates as normal.
+   */
+  onRequestThread?: (threadId: ThreadId) => void;
 }
 
-export default function ChatView({ threadId, compact = false }: ChatViewProps) {
+export default function ChatView({ threadId, compact = false, onRequestThread }: ChatViewProps) {
   const threads = useStore((store) => store.threads);
   const projects = useStore((store) => store.projects);
   const markThreadVisited = useStore((store) => store.markThreadVisited);
@@ -257,6 +266,21 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
   );
   const timestampFormat = settings.timestampFormat;
   const navigate = useNavigate();
+  // Route to a thread. In the full Agents tab this navigates the app to the
+  // thread's `/$threadId` route; in the compact Code-tab side chat it asks the
+  // host to swap the rendered thread instead, so the embed never leaves the Code
+  // tab and never depends on the Agents route (which can be hidden via the
+  // project's tool-visibility settings).
+  const routeToThread = useCallback(
+    (nextThreadId: ThreadId): Promise<unknown> | void => {
+      if (compact) {
+        onRequestThread?.(nextThreadId);
+        return;
+      }
+      return navigate({ to: "/$threadId", params: { threadId: nextThreadId } });
+    },
+    [compact, navigate, onRequestThread],
+  );
   const rawSearch = useSearch({
     strict: false,
     select: (params) => parseDiffRouteSearch(params),
@@ -525,10 +549,7 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
         setDraftThreadContext(storedDraftThread.threadId, input);
         setProjectDraftThreadId(activeProject.id, storedDraftThread.threadId, input);
         if (storedDraftThread.threadId !== threadId) {
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: storedDraftThread.threadId },
-          });
+          await routeToThread(storedDraftThread.threadId);
         }
         return;
       }
@@ -548,16 +569,14 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
         interactionMode: DEFAULT_INTERACTION_MODE,
         ...input,
       });
-      await navigate({
-        to: "/$threadId",
-        params: { threadId: nextThreadId },
-      });
+      await routeToThread(nextThreadId);
     },
     [
       activeProject,
       clearProjectDraftThreadId,
       getDraftThread,
       getDraftThreadByProjectId,
+      routeToThread,
       isServerThread,
       navigate,
       setDraftThreadContext,
@@ -1176,6 +1195,9 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
     [keybindings],
   );
   const onToggleDiff = useCallback(() => {
+    // The diff panel is a full Agents-tab feature driven by route search params.
+    // The compact side chat has no diff route, so don't navigate the app there.
+    if (compact) return;
     void navigate({
       to: "/$threadId",
       params: { threadId },
@@ -1185,7 +1207,7 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
         return diffOpen ? { ...rest, diff: undefined } : { ...rest, diff: "1" };
       },
     });
-  }, [diffOpen, navigate, threadId]);
+  }, [compact, diffOpen, navigate, threadId]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -2978,10 +3000,7 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
         syncServerReadModel(snapshot);
         // Signal that the plan sidebar should open on the new thread.
         planSidebarOpenOnNextThreadRef.current = true;
-        return navigate({
-          to: "/$threadId",
-          params: { threadId: nextThreadId },
-        });
+        return routeToThread(nextThreadId);
       })
       .catch(async (err) => {
         await api.orchestration
@@ -3013,7 +3032,7 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
     isConnecting,
     isSendBusy,
     isServerThread,
-    navigate,
+    routeToThread,
     resetSendPhase,
     runtimeMode,
     selectedPromptEffort,
@@ -3363,6 +3382,9 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
   const expandedImageItem = expandedImage ? expandedImage.images[expandedImage.index] : null;
   const onOpenTurnDiff = useCallback(
     (turnId: TurnId, filePath?: string) => {
+      // The diff panel is a full Agents-tab feature driven by route search
+      // params; the compact side chat has no diff route, so don't navigate there.
+      if (compact) return;
       void navigate({
         to: "/$threadId",
         params: { threadId },
@@ -3374,7 +3396,7 @@ export default function ChatView({ threadId, compact = false }: ChatViewProps) {
         },
       });
     },
-    [navigate, threadId],
+    [compact, navigate, threadId],
   );
   const onRevertUserMessage = (messageId: MessageId) => {
     const targetTurnCount = revertTurnCountByUserMessageId.get(messageId);
