@@ -186,12 +186,12 @@ jobs:
       # compiled out/ — at runtime the extension host throws "Cannot find module
       # .../<ext>/out/..." for each (debug-auto-launch, references-view, npm,
       # ipynb, simple-browser, …) and cascades to dependents (e.g. CodeRabbit
-      # needs git; the language features need each other). Install every
-      # extension's deps and run the full `compile-extensions` gulp task, which
-      # compiles all built-ins to extensions/<ext>/out (the dev built-in layout
-      # the runtime uses). Run unconditionally so the out/ build cache above can't
-      # mask a missing extension compile. The compiled-runtime guard in
-      # tabs-main/scripts/build-desktop-artifact.ts verifies the result.
+      # needs git; the language features need each other). Install every product
+      # extension's deps and compile every product built-in to extensions/<ext>/
+      # out (the dev built-in layout the runtime uses). Run unconditionally so the
+      # out/ build cache above can't mask a missing extension compile. The
+      # compiled-runtime guard in tabs-main/scripts/build-desktop-artifact.ts
+      # verifies the result.
       - name: Compile built-in extensions
         working-directory: tabs-code-main
         shell: bash
@@ -213,21 +213,17 @@ jobs:
             (cd extensions && npm install typescript@6.0.2 --no-save --no-audit --no-fund --ignore-scripts --install-strategy=nested)
           fi
           test -f extensions/node_modules/typescript/lib/typescript.js
-          # Install deps for EVERY built-in extension (plus any nested client/ and
-          # server/ packages, e.g. the language features) so each one's TypeScript
-          # compiles and its node_modules ship in the runtime. Dep-less extensions
-          # (themes, grammars) are a fast no-op. The .vscode/extensions/* dev/
-          # self-host tooling is also compiled by `compile-extensions` and needs
-          # its deps too (it's stripped from the staged runtime, but the compile
-          # gate still runs it). Tolerate a standalone-install hiccup here — the
-          # `compile-extensions` gate below is the real failure check. Skip
+          # Install deps for every PRODUCT built-in extension (plus any nested
+          # client/ and server/ packages, e.g. the language features) so each
+          # one's TypeScript compiles and its node_modules ship in the runtime.
+          # Dep-less extensions (themes, grammars) are a fast no-op. Skip
           # node_modules.
-          for pkg in extensions/*/package.json extensions/*/client/package.json extensions/*/server/package.json .vscode/extensions/*/package.json; do
+          for pkg in extensions/*/package.json extensions/*/client/package.json extensions/*/server/package.json; do
             [ -f "$pkg" ] || continue
             dir="$(dirname "$pkg")"
             case "$dir" in */node_modules*) continue;; esac
             (cd "$dir" && npm install --no-audit --no-fund --ignore-scripts) || \
-              echo "::warning::npm install failed for $dir (continuing; compile-extensions will catch real breakage)"
+              echo "::warning::npm install failed for $dir (continuing; the compile below is the real check)"
           done
 
           # git's native fs helper (@vscode/fs-copyfile) must be built AND match
@@ -237,10 +233,28 @@ jobs:
           npx --yes @electron/rebuild -v 40.6.0 --arch "${{ matrix.arch }}" \
             --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
 
-          # Compile ALL built-in extensions to extensions/<ext>/out (and
-          # client/out, server/out for the language features). This is the
-          # canonical full-extension compile — no curated allowlist to drift.
-          npm run gulp compile-extensions
+          # Compile every PRODUCT built-in extension to extensions/<ext>/out (and
+          # client/out, server/out for the language features). We deliberately do
+          # NOT use the stock `compile-extensions` gulp task: it ALSO compiles the
+          # three .vscode/extensions/* self-host dev tools (vscode-selfhost-*,
+          # vscode-extras), which are not shipped (.vscode is stripped from the
+          # staged runtime) and whose deps (cockatiel, istanbul-to-vscode) aren't
+          # installed here — so it fails the build. Instead derive the product
+          # task list from the gulpfile's own `compilations` array (entries whose
+          # quoted path starts with `extensions/`, excluding `.vscode/...`), so the
+          # names always match real `compile-extension:<name>` tasks and the set
+          # can't drift, then run them in one gulp invocation.
+          tasks=()
+          while IFS= read -r name; do
+            tasks+=("compile-extension:$name")
+          done < <(grep -oE "'extensions/[^']+/tsconfig.json'" build/gulpfile.extensions.ts \
+            | tr -d "'" | sed -E 's#^extensions/##; s#/tsconfig.json$##; s#/#-#g')
+          if [ "${#tasks[@]}" -eq 0 ]; then
+            echo "::error::No product extension compile tasks derived from build/gulpfile.extensions.ts"
+            exit 1
+          fi
+          echo "Compiling ${#tasks[@]} product built-in extensions"
+          npm run gulp -- "${tasks[@]}"
 
       # Cache electron-builder's downloaded NSIS/7zip/winCodeSign toolchain so a
       # populated run never re-downloads it. The download host (GitHub's
