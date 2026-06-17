@@ -31,6 +31,11 @@ export interface ProjectBrowserToolState {
 export interface ProjectCodeToolState {
   lastFocusedPath: string | null;
   navigationNonce: number;
+  // The Code-tab AI side chat's open state and selected thread, persisted per
+  // project so switching tools/projects (which unmounts the Code tool) doesn't
+  // lose the side chat — the running task stays visible and continuous on return.
+  sideChatOpen: boolean;
+  sideChatThreadId: ThreadId | null;
 }
 
 export interface ProjectGitToolState {
@@ -79,6 +84,8 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
     },
   ) => void;
   setCodeFocusedPath: (projectId: ProjectId, path: string | null) => void;
+  setSideChatOpen: (projectId: ProjectId, open: boolean) => void;
+  setSideChatThread: (projectId: ProjectId, threadId: ThreadId | null) => void;
   setGitSelectedPath: (projectId: ProjectId, path: string | null) => void;
   setGitSelectedCommit: (projectId: ProjectId, commit: string | null) => void;
   setServerLogQuery: (projectId: ProjectId, processId: string, query: string) => void;
@@ -140,6 +147,8 @@ function defaultCodeToolState(): ProjectCodeToolState {
   return {
     lastFocusedPath: null,
     navigationNonce: 0,
+    sideChatOpen: false,
+    sideChatThreadId: null,
   };
 }
 
@@ -160,6 +169,8 @@ function defaultGitToolState(): ProjectGitToolState {
 export const EMPTY_PROJECT_CODE_TOOL_STATE: ProjectCodeToolState = Object.freeze({
   lastFocusedPath: null,
   navigationNonce: 0,
+  sideChatOpen: false,
+  sideChatThreadId: null,
 });
 export const EMPTY_PROJECT_GIT_TOOL_STATE: ProjectGitToolState = Object.freeze({
   selectedPath: null,
@@ -520,6 +531,28 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
               ...(state.codeStateByProjectId[projectId] ?? defaultCodeToolState()),
               lastFocusedPath: path,
               navigationNonce: (state.codeStateByProjectId[projectId]?.navigationNonce ?? 0) + 1,
+            },
+          },
+        })),
+      setSideChatOpen: (projectId, open) =>
+        set((state) => ({
+          ...state,
+          codeStateByProjectId: {
+            ...state.codeStateByProjectId,
+            [projectId]: {
+              ...(state.codeStateByProjectId[projectId] ?? defaultCodeToolState()),
+              sideChatOpen: open,
+            },
+          },
+        })),
+      setSideChatThread: (projectId, threadId) =>
+        set((state) => ({
+          ...state,
+          codeStateByProjectId: {
+            ...state.codeStateByProjectId,
+            [projectId]: {
+              ...(state.codeStateByProjectId[projectId] ?? defaultCodeToolState()),
+              sideChatThreadId: threadId,
             },
           },
         })),

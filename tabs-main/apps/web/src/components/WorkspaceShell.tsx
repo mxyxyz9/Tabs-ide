@@ -1399,10 +1399,24 @@ function DesktopCodeTool(props: { project: Project }) {
   // in the embed). A lightweight quick-chat — its own resizable width, a thread
   // history switcher and a new-thread button; the full Agents tab stays the place
   // for everything else.
-  const [sideChatOpen, setSideChatOpen] = useState(false);
-  // Local thread override so switching/creating from the side chat doesn't
-  // navigate the whole app (the full Agents tab is route-driven; this isn't).
-  const [sideChatThreadIdOverride, setSideChatThreadIdOverride] = useState<ThreadId | null>(null);
+  // Side chat open-state + selected thread are persisted per project in the
+  // workspace store (not local component state), so switching tools/projects —
+  // which unmounts this Code tool — keeps the side chat open on the same running
+  // thread instead of resetting and "losing" the in-flight task. The thread is
+  // an override so switching/creating from the side chat doesn't navigate the
+  // whole app (the full Agents tab is route-driven; this isn't).
+  const sideChatOpen = codeState.sideChatOpen;
+  const sideChatThreadIdOverride = codeState.sideChatThreadId;
+  const setSideChatOpenStore = useWorkspaceShellStore((state) => state.setSideChatOpen);
+  const setSideChatThreadStore = useWorkspaceShellStore((state) => state.setSideChatThread);
+  const setSideChatOpen = useCallback(
+    (open: boolean) => setSideChatOpenStore(projectId, open),
+    [projectId, setSideChatOpenStore],
+  );
+  const setSideChatThreadIdOverride = useCallback(
+    (threadId: ThreadId | null) => setSideChatThreadStore(projectId, threadId),
+    [projectId, setSideChatThreadStore],
+  );
   const [sideChatWidth, setSideChatWidth] = useState(() => {
     const saved = Number(window.localStorage?.getItem("tabs.sideChatWidth"));
     return Number.isFinite(saved) && saved >= 300 ? Math.min(saved, 760) : 380;
@@ -1741,7 +1755,7 @@ function DesktopCodeTool(props: { project: Project }) {
         branch={chromeState.branch}
         panelMaximized={chromeState.panelMaximized}
         sideChatOpen={sideChatOpen}
-        onToggleSideChat={() => setSideChatOpen((open) => !open)}
+        onToggleSideChat={() => setSideChatOpen(!sideChatOpen)}
         onRunCommand={runCodeCommand}
       />
       <div className="flex min-h-0 min-w-0 flex-1">
