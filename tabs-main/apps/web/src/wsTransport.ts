@@ -203,8 +203,24 @@ export class WsTransport {
     }
 
     this.state = this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
-    this.url = this.resolveUrl();
-    const ws = new WebSocket(this.url);
+    // Resolving the URL (a sync IPC to the desktop main) or constructing the
+    // socket can throw — e.g. during a fresh `dev:desktop` launch when the
+    // backend hasn't started yet. Those throw OUTSIDE the socket's event
+    // listeners, so without this guard `scheduleReconnect` (only called from the
+    // `close` listener below) would never run and the reconnect loop would die
+    // permanently — leaving the renderer stuck until a manual refresh.
+    let ws: WebSocket;
+    try {
+      this.url = this.resolveUrl();
+      ws = new WebSocket(this.url);
+    } catch (error) {
+      console.warn("WebSocket failed to initialize; scheduling reconnect", {
+        error,
+        url: this.url,
+      });
+      this.scheduleReconnect();
+      return;
+    }
 
     ws.addEventListener("open", () => {
       this.ws = ws;
@@ -238,8 +254,15 @@ export class WsTransport {
     });
 
     ws.addEventListener("error", (event) => {
-      // Log WebSocket errors for debugging (close event will follow)
+      // Log WebSocket errors for debugging. A `close` normally follows and
+      // drives the reconnect, but a failed connection doesn't always deliver a
+      // reliable `close` in every runtime — so schedule a reconnect here too.
+      // `scheduleReconnect` is idempotent (guards on an in-flight timer), so the
+      // subsequent `close` (if any) won't double-connect.
       console.warn("WebSocket connection error", { type: event.type, url: this.url });
+      if (this.ws !== ws && !this.disposed) {
+        this.scheduleReconnect();
+      }
     });
   }
 

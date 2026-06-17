@@ -1458,7 +1458,10 @@ function DesktopCodeTool(props: { project: Project }) {
   }, []);
   const { handleNewThread: createThread } = useHandleNewThread();
   const onNewSideChatThread = useCallback(async () => {
-    await createThread(projectId);
+    // Create the draft WITHOUT navigating to its thread route — navigating would
+    // trip the "thread route → force Agents tool" effect and yank the user out of
+    // the Code tab. The side chat renders the draft locally via the override.
+    await createThread(projectId, { skipNavigation: true });
     const draft = useComposerDraftStore.getState().getDraftThreadByProjectId(projectId);
     if (draft) {
       setSideChatThreadIdOverride(draft.threadId);

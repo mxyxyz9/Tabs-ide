@@ -32,6 +32,11 @@ export function useHandleNewThread() {
         branch?: string | null;
         worktreePath?: string | null;
         envMode?: DraftThreadEnvMode;
+        // When true, create/select the draft thread WITHOUT navigating the app to
+        // its `/$threadId` route. The Code-tab side chat uses this so starting a
+        // new chat there stays in the Code tab instead of being thrown into the
+        // Agents tab (a thread route force-switches the active tool to "agents").
+        skipNavigation?: boolean;
       },
     ): Promise<void> => {
       const {
@@ -59,7 +64,7 @@ export function useHandleNewThread() {
             });
           }
           setProjectDraftThreadId(projectId, storedDraftThread.threadId);
-          if (routeThreadId === storedDraftThread.threadId) {
+          if (options?.skipNavigation || routeThreadId === storedDraftThread.threadId) {
             return;
           }
           await navigate({
@@ -99,6 +104,9 @@ export function useHandleNewThread() {
         });
         applyStickyState(threadId);
 
+        if (options?.skipNavigation) {
+          return;
+        }
         await navigate({
           to: "/$threadId",
           params: { threadId },
