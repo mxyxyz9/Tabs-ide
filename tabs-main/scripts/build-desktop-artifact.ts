@@ -790,6 +790,12 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // Only referenced when the hook was actually staged (see below) — otherwise
     // electron-builder would abort trying to resolve a missing module.
     ...(afterPackHook ? { afterPack: "./build/afterPack.cjs" } : {}),
+    // Unpack the integration extension from the asar onto real disk so
+    // `FS.cpSync` in `installManagedServerControlExtension` can read it.
+    // Electron's asar layer does NOT patch `cpSync`, so a source path inside
+    // `app.asar` silently fails with ENOENT. The unpacked copy lands at
+    // `app.asar.unpacked/apps/desktop/prod-resources/…` where cpSync works.
+    asarUnpack: ["apps/desktop/prod-resources/code-oss-extensions/tabs-workbench-integration/**"],
     // Thin builds ship without the VS Code runtime (it's downloaded on first
     // run from the emitted tabs-code-runtime-*.zip asset).
     extraFiles: thin

@@ -412,13 +412,22 @@ const CONTROL_EXTENSION_VERSION = "0.0.1";
 const CONTROL_EXTENSION_FOLDER = `${CONTROL_EXTENSION_ID}-${CONTROL_EXTENSION_VERSION}`;
 
 function resolveBundledIntegrationExtensionSource(baseDir: string): string | null {
-  // Mirror main.ts resolveResourcePath's candidate order: in packaged builds
-  // the resources may live under `prod-resources` or `process.resourcesPath`
-  // rather than `../resources`. Return the first directory that exists.
+  // In packaged builds the extension lives inside `app.asar` under
+  // `prod-resources/`. Electron's asar layer patches reads (existsSync,
+  // statSync, readFileSync) but NOT `cpSync` — so a source path inside
+  // `app.asar` silently fails the copy. The build config's `asarUnpack`
+  // places a real-disk copy at `app.asar.unpacked/…`; check that first.
   const relative = Path.join("code-oss-extensions", "tabs-workbench-integration");
   const candidates = [
-    Path.resolve(baseDir, CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH),
+    // Packaged app — asar-unpacked path (real disk, cpSync works)
+    Path.resolve(baseDir, "..", "prod-resources", relative).replace(
+      "app.asar",
+      "app.asar.unpacked",
+    ),
+    // Packaged app — prod-resources inside asar (fallback; reads work, cpSync may not)
     Path.resolve(baseDir, "..", "prod-resources", relative),
+    // Dev mode — resources next to source
+    Path.resolve(baseDir, CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH),
     ...(process.resourcesPath
       ? [
           Path.join(process.resourcesPath, "resources", relative),
@@ -426,7 +435,16 @@ function resolveBundledIntegrationExtensionSource(baseDir: string): string | nul
         ]
       : []),
   ];
-  return candidates.find((candidate) => isDirectory(candidate, FS)) ?? null;
+  for (const candidate of candidates) {
+    try {
+      if (FS.statSync(candidate).isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return null;
 }
 
 /**
@@ -540,8 +558,9 @@ function installManagedServerControlExtension(baseDir: string, vscodeRoot: strin
         force: true,
       });
     }
-  } catch {
-    // Non-fatal.
+  } catch (err) {
+    // Non-fatal — but log so it's visible in desktop-dev.log.
+    console.error("[code-host] installManagedServerControlExtension failed:", err);
   }
 }
 

@@ -353,14 +353,21 @@ function startCodeControlChannel(context) {
   let disposed = false;
   let reconnectTimer = null;
   let reconnectDelay = 1000;
+  // Gates all outbound messages except `hello` until the handshake completes.
+  // Without this, event watchers (fs.watch, VS Code subscriptions) can fire
+  // `pushState()` in the window between TCP connect and the async
+  // `refreshContainers().then(…)` that sends `hello` — the server sees a
+  // `chromeState` as the first message, fails auth, and destroys the socket.
+  let authenticated = false;
 
   const send = (message) => {
-    if (socket && !socket.destroyed && socket.writable) {
-      try {
-        socket.write(`${JSON.stringify(message)}\n`);
-      } catch {
-        /* ignore */
-      }
+    if (!socket || socket.destroyed || !socket.writable) return;
+    // Block all messages except hello until the handshake completes.
+    if (!authenticated && message.type !== "hello") return;
+    try {
+      socket.write(`${JSON.stringify(message)}\n`);
+    } catch {
+      /* ignore */
     }
   };
   const pushState = () => send({ type: "chromeState", projectId, state: { ...state } });
@@ -670,12 +677,14 @@ function startCodeControlChannel(context) {
       settled = true;
       clearTimeout(connectTimeout);
       reconnectDelay = 1000;
+      authenticated = false;
       log(`control channel connected (port=${target.port})`);
       refreshBranch();
       state.dirtyCount = computeDirtyCount();
       state.autoSaveEnabled = computeAutoSaveEnabled();
       void refreshContainers().then(() => {
         send({ type: "hello", projectId, token: target.token });
+        authenticated = true;
         pushState();
       });
     });
@@ -702,6 +711,7 @@ function startCodeControlChannel(context) {
     sock.on("close", () => {
       clearTimeout(connectTimeout);
       settled = true;
+      authenticated = false;
       if (socket === sock) {
         socket = null;
       }
