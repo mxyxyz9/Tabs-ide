@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo/light mode icon.svg" width="120" alt="Tabs Logo" />
+  <img src="logo/dark mode icon.svg" width="120" alt="Tabs Logo" />
 </p>
 
 <h1 align="center">Tabs IDE</h1>

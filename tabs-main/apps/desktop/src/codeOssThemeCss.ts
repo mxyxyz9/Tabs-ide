@@ -389,11 +389,12 @@ export const CODE_OSS_THEME_CSS =
 }
 
 /* ============================================================ SIDEBAR === */
-.monaco-workbench .part.sidebar {
-  /* The native React rail sits to the left of this view, so the sidebar reads as
-     the first column — give it a touch more breathing room at the top. */
-  padding-top: 6px;
-}
+/* NOTE: Do NOT add padding or margin to .part.sidebar itself — VS Code's JS
+   Part.layout() computes the content area from the allocated grid height using
+   hardcoded constants; it never reads the DOM. Any CSS padding/margin on the
+   part pushes content outside the JS-allocated clip area, causing bottom
+   overflow (the proven root cause of the OUTLINE/TIMELINE occlusion bug). Any
+   visual breathing room must go on CHILD elements (e.g. .title) instead. */
 /* Section headers (EXPLORER, SEARCH, …) — match the shell's section-label style. */
 .monaco-workbench .pane-header {
   text-transform: uppercase;
@@ -408,12 +409,15 @@ export const CODE_OSS_THEME_CSS =
 /* NOTE on the viewlet title bar ("EXPLORER" / "SEARCH" / …): VS Code reserves a
    FIXED title-bar height in JS layout — Part.layout computes the content area as
    (height − titleSize) with titleSize = constant when hasTitle is true, NOT from
-   the DOM. So CSS-hiding .composite.title does NOT reclaim that space; it just
-   leaves an equal-height empty gap at the BOTTOM of the sidebar. We therefore
-   keep it visible (no gap) and only quiet it down. Fully removing it would need a
-   fork change (constructing the sidebar part with hasTitle:false). */
+   the DOM. This height MUST match that constant (35px) — making it shorter via
+   CSS over-allocates the content area by the difference, pushing the bottom of
+   the split-view outside the visible clip boundary (the proven root cause of the
+   OUTLINE/TIMELINE occlusion bug). The 6px padding-top provides the visual
+   breathing room previously on .part.sidebar (which can't carry padding — see
+   the note above). */
 .monaco-workbench .part.sidebar > .title {
-  height: 30px;
+  height: 35px;
+  padding-top: 6px;
 }
 .monaco-workbench .part.sidebar > .title > .title-label h2 {
   font-size: 11px;
