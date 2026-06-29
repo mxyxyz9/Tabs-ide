@@ -735,6 +735,11 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
         ...commandOutputOptions(input.verbose),
       })`codesign --force --deep --sign - --timestamp=none ${appPath}`,
     );
+    // After codesigning, give macOS system services (Spotlight/mds, XProtect,
+    // syspolicyd) a moment to release file handles on the freshly-signed
+    // bundle. Without this pause the subsequent `hdiutil create -srcfolder`
+    // often fails with "Resource busy" on CI runners.
+    yield* Effect.sleep(Duration.seconds(5));
   }
 
   yield* assertRequiredPaths(
@@ -757,10 +762,11 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
   }
 
   yield* fs.remove(dmgPath, { force: true }).pipe(Effect.ignore({ log: true }));
-  yield* runCommand(
+  yield* runCommandWithRetry(
     ChildProcess.make({
       ...commandOutputOptions(input.verbose),
     })`hdiutil create -volname ${input.productName} -srcfolder ${dmgRoot} -ov -format UDZO ${dmgPath}`,
+    { attempts: 3, baseDelaySeconds: 10, label: "hdiutil create (DMG)" },
   );
   // The smoke test runs the bundled server; thin builds don't bundle it.
   if (!input.thin) {
