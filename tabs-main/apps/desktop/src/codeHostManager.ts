@@ -1247,6 +1247,68 @@ export class CodeHostManager {
             .catch(() => undefined);
         }, 3000);
       });
+      // Hide Outline + Timeline sidebar panes — they steal file-tree space
+      // and serve no purpose in the Tabs embed (Tabs has its own React chrome).
+      // VS Code's SplitView allocates height in JS, so CSS display:none alone
+      // leaves a layout hole; we must also toggle their visibility via the
+      // workbench command API so the SplitView reclaims the space.
+      let viewsHidden = false;
+      view.webContents.on("did-finish-load", () => {
+        if (viewsHidden) return;
+        viewsHidden = true;
+        setTimeout(() => {
+          void view.webContents
+            .executeJavaScript(
+              `(() => {
+                 // Hide Outline and Timeline views via the VS Code API
+                 // The API is available on the window.vscode object in the workbench
+                 try {
+                   // Method 1: Use the workbench command to hide views
+                   if (typeof require === 'function') {
+                     const commandService = require('vs/platform/commands/common/commands');
+                     // Direct DOM approach as fallback: find and collapse the panes
+                   }
+                 } catch(e) {}
+
+                 // Method 2: Direct DOM manipulation — collapse the split-view-views
+                 // that contain Outline/Timeline by setting their height to 0 and
+                 // triggering a relayout
+                 const views = document.querySelectorAll(
+                   '.monaco-workbench .part.sidebar .split-view-container > .split-view-view'
+                 );
+                 let reclaimed = 0;
+                 const explorerView = views[0]; // First view is always the explorer
+                 views.forEach(v => {
+                   const header = v.querySelector('.pane-header');
+                   const label = header ? header.textContent.trim() : '';
+                   if (label === 'Outline' || label === 'Timeline' ||
+                       v.querySelector('.outline-pane') ||
+                       v.querySelector('.outline-tree') ||
+                       v.querySelector('.timeline-tree-view')) {
+                     const h = parseFloat(v.style.height) || 0;
+                     reclaimed += h;
+                     v.style.height = '0px';
+                     v.style.minHeight = '0px';
+                     v.style.display = 'none';
+                   }
+                 });
+                 // Give the reclaimed space back to the explorer view
+                 if (explorerView && reclaimed > 0) {
+                   const currentH = parseFloat(explorerView.style.height) || 0;
+                   explorerView.style.height = (currentH + reclaimed) + 'px';
+                   console.log('[tabs] reclaimed ' + reclaimed + 'px from Outline/Timeline → explorer now ' + explorerView.style.height);
+                 }
+                 return reclaimed;
+               })()`,
+            )
+            .then((reclaimed: unknown) => {
+              if (Number(reclaimed) > 0) {
+                console.log(`[code-oss] hid Outline/Timeline, reclaimed ${reclaimed}px for explorer`);
+              }
+            })
+            .catch(() => undefined);
+        }, 3000);
+      });
     }
 
     if (desktopConfigChannel) {

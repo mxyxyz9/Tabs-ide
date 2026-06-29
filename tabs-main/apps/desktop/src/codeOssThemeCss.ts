@@ -390,11 +390,9 @@ export const CODE_OSS_THEME_CSS =
 
 /* ============================================================ SIDEBAR === */
 /* NOTE: Do NOT add padding or margin to .part.sidebar itself — VS Code's JS
-   Part.layout() computes the content area from the allocated grid height using
-   hardcoded constants; it never reads the DOM. Any CSS padding/margin on the
-   part pushes content outside the JS-allocated clip area, causing bottom
-   overflow (the proven root cause of the OUTLINE/TIMELINE occlusion bug). Any
-   visual breathing room must go on CHILD elements (e.g. .title) instead. */
+   layout computes the content area from the allocated grid height and never
+   reads CSS box-model properties. Padding/margin would push content outside
+   the JS-allocated clip area. Visual spacing goes on CHILD elements. */
 /* Section headers (EXPLORER, SEARCH, …) — match the shell's section-label style. */
 .monaco-workbench .pane-header {
   text-transform: uppercase;
@@ -406,15 +404,10 @@ export const CODE_OSS_THEME_CSS =
   opacity: 0.45;
   color: var(--tabs-text);
 }
-/* NOTE on the viewlet title bar ("EXPLORER" / "SEARCH" / …): VS Code reserves a
-   FIXED title-bar height in JS layout — Part.layout computes the content area as
-   (height − titleSize) with titleSize = constant when hasTitle is true, NOT from
-   the DOM. This height MUST match that constant (35px) — making it shorter via
-   CSS over-allocates the content area by the difference, pushing the bottom of
-   the split-view outside the visible clip boundary (the proven root cause of the
-   OUTLINE/TIMELINE occlusion bug). The 6px padding-top provides the visual
-   breathing room previously on .part.sidebar (which can't carry padding — see
-   the note above). */
+/* Defensive rule for the viewlet title bar ("EXPLORER" / "SEARCH" / ...).
+   In the current embed configuration, .part.sidebar > .title is NOT rendered
+   (the sidebar has hasTitle = false). This rule is kept as a defensive
+   fallback in case a future VS Code build re-enables the title element. */
 .monaco-workbench .part.sidebar > .title {
   height: 35px;
   padding-top: 6px;
@@ -961,10 +954,20 @@ export const CODE_OSS_THEME_CSS =
 }
 
 /* ============================================ SIDE PANES (OUTLINE/TIMELINE) === */
-.monaco-workbench .outline-pane .monaco-list-row.selected,
-.monaco-workbench .timeline-tree-view .monaco-list-row.selected {
-  background: var(--tabs-accent-soft) !important;
-  color: var(--tabs-text) !important;
+/* The VS Code Outline and Timeline panes serve no purpose in the Tabs embed
+   and steal file-tree space. VS Code's JS SplitView sets inline height/top on
+   each .split-view-view, so display:none alone is not enough -- the explorer's
+   inline height stays at its JS-allocated value (total - outline - timeline).
+   Fix: hide every split-view-view except the first (explorer is always first)
+   and force the explorer to fill 100% of the container height. */
+.monaco-workbench .part.sidebar .split-view-container > .split-view-view:not(:first-child) {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.monaco-workbench .part.sidebar .split-view-container > .split-view-view:first-child {
+  height: 100% !important;
 }
 
 /* ============================================ MODAL DIALOGS === */
