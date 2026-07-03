@@ -4,7 +4,6 @@ import path from "node:path";
 
 import type {
   OrchestrationReadModel,
-  ProviderKind,
   ProviderRuntimeEvent,
   ProviderSession,
 } from "@tabs/contracts";
@@ -58,7 +57,7 @@ const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
 type LegacyProviderRuntimeEvent = {
   readonly type: string;
   readonly eventId: EventId;
-  readonly provider: ProviderKind;
+  readonly provider: string;
   readonly createdAt: string;
   readonly threadId: ThreadId;
   readonly turnId?: string | undefined;
@@ -2195,6 +2194,112 @@ describe("ProviderRuntimeIngestion", () => {
 
     expect(turnTaskStarted?.kind).toBe("task.started");
     expect(itemTaskStarted?.kind).toBe("task.started");
+    expect(itemTaskCompleted?.kind).toBe("task.completed");
+  });
+
+  it("synthesizes task lifecycle activities for OpenCode when always-create-tasks is enabled", async () => {
+    const harness = await createHarness({ serverSettings: { alwaysCreateTasks: true } });
+    const now = new Date().toISOString();
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-opencode-turn-started"),
+      provider: "opencode",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-1"),
+      payload: {},
+    });
+
+    harness.emit({
+      type: "item.started",
+      eventId: asEventId("evt-opencode-item-started"),
+      provider: "opencode",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-1"),
+      itemId: asItemId("item-opencode-1"),
+      payload: {
+        itemType: "dynamic_tool_call",
+        title: "Run tool",
+      },
+    });
+
+    harness.emit({
+      type: "item.updated",
+      eventId: asEventId("evt-opencode-item-updated"),
+      provider: "opencode",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-1"),
+      itemId: asItemId("item-opencode-1"),
+      payload: {
+        itemType: "dynamic_tool_call",
+        title: "Run tool",
+        detail: "Executing OpenCode tool call",
+      },
+    });
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-opencode-item-completed"),
+      provider: "opencode",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-1"),
+      itemId: asItemId("item-opencode-1"),
+      payload: {
+        itemType: "dynamic_tool_call",
+        status: "completed",
+        title: "Run tool",
+        detail: "OpenCode tool call completed",
+      },
+    });
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-opencode-turn-completed"),
+      provider: "opencode",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-opencode-1"),
+      payload: {
+        state: "completed",
+      },
+    });
+
+    const thread = await waitForThread(
+      harness.engine,
+      (entry) =>
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) =>
+            activity.id === "evt-opencode-turn-started:synthetic-task-started",
+        ) &&
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) =>
+            activity.id === "evt-opencode-item-updated:synthetic-item-task-progress",
+        ) &&
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) =>
+            activity.id === "evt-opencode-turn-completed:synthetic-task-completed",
+        ),
+    );
+
+    const turnTaskStarted = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.id === "evt-opencode-turn-started:synthetic-task-started",
+    );
+    const itemTaskProgress = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.id === "evt-opencode-item-updated:synthetic-item-task-progress",
+    );
+    const itemTaskCompleted = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.id === "evt-opencode-item-completed:synthetic-item-task-completed",
+    );
+
+    expect(turnTaskStarted?.kind).toBe("task.started");
+    expect(itemTaskProgress?.kind).toBe("task.progress");
     expect(itemTaskCompleted?.kind).toBe("task.completed");
   });
 
