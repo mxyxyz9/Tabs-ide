@@ -1,6 +1,7 @@
 import { type MessageId, type TurnId } from "@tabs/contracts";
 import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
-import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
+import { deriveTimelineEntries, formatElapsed, type TaskNode } from "../../session-logic";
+import { TaskProgressCard } from "./TaskProgressCard";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
 import ChatMarkdown from "../ChatMarkdown";
@@ -63,6 +64,8 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  latestTaskDescription: string | null;
+  activeTaskNodes: ReadonlyArray<TaskNode>;
 }
 
 export const MessagesTimeline = memo(function MessagesTimeline({
@@ -87,6 +90,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   resolvedTheme,
   timestampFormat,
   workspaceRoot,
+  latestTaskDescription,
+  activeTaskNodes,
 }: MessagesTimelineProps) {
   const rows = useMemo<TimelineRow[]>(() => {
     const nextRows: TimelineRow[] = [];
@@ -174,40 +179,61 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           const groupId = row.id;
           const groupedEntries = row.groupedEntries;
           const isExpanded = expandedWorkGroups[groupId] ?? false;
-          const hasOverflow = groupedEntries.length > MAX_VISIBLE_WORK_LOG_ENTRIES;
+
+          // Split entries into task lifecycle entries and regular tool entries
+          const taskActivityKinds = new Set(["task.started", "task.progress", "task.completed"]);
+          const regularEntries = groupedEntries.filter(
+            (entry) =>
+              !entry.taskId &&
+              !taskActivityKinds.has(
+                (entry as unknown as { activityKind?: string }).activityKind ?? "",
+              ),
+          );
+          const hasTaskEntries = activeTaskNodes.length > 0;
+
+          const hasOverflow = regularEntries.length > MAX_VISIBLE_WORK_LOG_ENTRIES;
           const visibleEntries =
             hasOverflow && !isExpanded
-              ? groupedEntries.slice(-MAX_VISIBLE_WORK_LOG_ENTRIES)
-              : groupedEntries;
-          const hiddenCount = groupedEntries.length - visibleEntries.length;
-          const onlyToolEntries = groupedEntries.every((entry) => entry.tone === "tool");
+              ? regularEntries.slice(-MAX_VISIBLE_WORK_LOG_ENTRIES)
+              : regularEntries;
+          const hiddenCount = regularEntries.length - visibleEntries.length;
+          const onlyToolEntries = regularEntries.every((entry) => entry.tone === "tool");
           const showHeader = hasOverflow || !onlyToolEntries;
           const groupLabel = onlyToolEntries ? "Tool calls" : "Work log";
 
           return (
-            <div className="rounded-xl border border-border/45 bg-card/25 px-2 py-1.5">
-              {showHeader && (
-                <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
-                  <p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground/55">
-                    {groupLabel} ({groupedEntries.length})
-                  </p>
-                  {hasOverflow && (
-                    <button
-                      type="button"
-                      className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/55 transition-colors duration-150 hover:text-foreground/75"
-                      onClick={() => onToggleWorkGroup(groupId)}
-                    >
-                      {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
-                    </button>
-                  )}
+            <>
+              {hasTaskEntries && (
+                <div className="mb-1">
+                  <TaskProgressCard tasks={activeTaskNodes} />
                 </div>
               )}
-              <div className="space-y-0.5">
-                {visibleEntries.map((workEntry) => (
-                  <SimpleWorkEntryRow key={`work-row:${workEntry.id}`} workEntry={workEntry} />
-                ))}
-              </div>
-            </div>
+              {regularEntries.length > 0 && (
+                <div className="rounded-xl border border-border/45 bg-card/25 px-2 py-1.5">
+                  {showHeader && (
+                    <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
+                      <p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground/55">
+                        {groupLabel} ({regularEntries.length})
+                      </p>
+                      {hasOverflow && (
+                        <button
+                          type="button"
+                          className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/55 transition-colors duration-150 hover:text-foreground/75"
+                          onClick={() => onToggleWorkGroup(groupId)}
+                        >
+                          {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="space-y-0.5">
+                    {visibleEntries.map((workEntry) => (
+                      <SimpleWorkEntryRow key={`work-row:${workEntry.id}`} workEntry={workEntry} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           );
         })()}
 
@@ -400,9 +426,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:400ms]" />
             </span>
             <span>
-              {row.createdAt
-                ? `Working for ${formatWorkingTimer(row.createdAt, nowIso) ?? "0s"}`
-                : "Working..."}
+              {latestTaskDescription
+                ? row.createdAt
+                  ? `${latestTaskDescription} for ${formatWorkingTimer(row.createdAt, nowIso) ?? "0s"}`
+                  : latestTaskDescription
+                : row.createdAt
+                  ? `Working for ${formatWorkingTimer(row.createdAt, nowIso) ?? "0s"}`
+                  : "Working..."}
             </span>
           </div>
         </div>

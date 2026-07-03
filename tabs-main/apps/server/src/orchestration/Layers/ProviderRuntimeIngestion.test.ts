@@ -2107,6 +2107,138 @@ describe("ProviderRuntimeIngestion", () => {
     expect(activity?.tone).toBe("info");
   });
 
+  it("synthesizes task lifecycle activities for Codex when always-create-tasks is enabled", async () => {
+    const harness = await createHarness({ serverSettings: { alwaysCreateTasks: true } });
+    const now = new Date().toISOString();
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started"),
+      provider: "codex",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-synth-1"),
+      payload: {},
+    });
+
+    harness.emit({
+      type: "item.started",
+      eventId: asEventId("evt-item-started"),
+      provider: "codex",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-synth-1"),
+      itemId: asItemId("item-cmd-1"),
+      payload: {
+        itemType: "command_execution",
+        title: "Run tests",
+      },
+    });
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-item-completed"),
+      provider: "codex",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-synth-1"),
+      itemId: asItemId("item-cmd-1"),
+      payload: {
+        itemType: "command_execution",
+        status: "completed",
+        title: "Run tests",
+        detail: "bun run test",
+      },
+    });
+
+    harness.emit({
+      type: "turn.completed",
+      eventId: asEventId("evt-turn-completed"),
+      provider: "codex",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-synth-1"),
+      payload: {
+        state: "completed",
+      },
+    });
+
+    const thread = await waitForThread(
+      harness.engine,
+      (entry) =>
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) =>
+            activity.id === "evt-turn-started:synthetic-task-started",
+        ) &&
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) =>
+            activity.id === "evt-item-completed:synthetic-item-task-completed",
+        ) &&
+        entry.activities.some(
+          (activity: ProviderRuntimeTestActivity) =>
+            activity.id === "evt-turn-completed:synthetic-task-completed",
+        ),
+    );
+
+    const turnTaskStarted = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.id === "evt-turn-started:synthetic-task-started",
+    );
+    const itemTaskStarted = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.id === "evt-item-started:synthetic-item-task-started",
+    );
+    const itemTaskCompleted = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.id === "evt-item-completed:synthetic-item-task-completed",
+    );
+
+    expect(turnTaskStarted?.kind).toBe("task.started");
+    expect(itemTaskStarted?.kind).toBe("task.started");
+    expect(itemTaskCompleted?.kind).toBe("task.completed");
+  });
+
+  it("does not synthesize duplicate task activities for Claude when always-create-tasks is enabled", async () => {
+    const harness = await createHarness({ serverSettings: { alwaysCreateTasks: true } });
+    const now = new Date().toISOString();
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-claude-turn-started"),
+      provider: "claudeAgent",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-claude-1"),
+      payload: {},
+    });
+
+    harness.emit({
+      type: "task.started",
+      eventId: asEventId("evt-claude-task-started"),
+      provider: "claudeAgent",
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-claude-1"),
+      payload: {
+        taskId: "claude-task-1",
+        description: "Thinking",
+      },
+    });
+
+    const thread = await waitForThread(harness.engine, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) => activity.id === "evt-claude-task-started",
+      ),
+    );
+
+    expect(
+      thread.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.id === "evt-claude-turn-started:synthetic-task-started",
+      ),
+    ).toBe(false);
+  });
+
   it("projects Codex task lifecycle chunks into thread activities", async () => {
     const harness = await createHarness();
     const now = new Date().toISOString();

@@ -1,4 +1,4 @@
-import { Deferred, Effect } from "effect";
+import { Deferred, Duration, Effect, Option } from "effect";
 
 export interface ServerReadiness {
   readonly awaitServerReady: Effect.Effect<void>;
@@ -8,6 +8,8 @@ export interface ServerReadiness {
   readonly markTerminalSubscriptionsReady: Effect.Effect<void>;
   readonly markOrchestrationSubscriptionsReady: Effect.Effect<void>;
 }
+
+const READINESS_TIMEOUT = Duration.minutes(1);
 
 export const makeServerReadiness = Effect.gen(function* () {
   const httpListening = yield* Deferred.make<void>();
@@ -19,13 +21,21 @@ export const makeServerReadiness = Effect.gen(function* () {
   const complete = (deferred: Deferred.Deferred<void>) =>
     Deferred.succeed(deferred, undefined).pipe(Effect.orDie);
 
+  const readyOrTimeout = (name: string, deferred: Deferred.Deferred<void>) =>
+    Deferred.await(deferred).pipe(
+      Effect.timeoutOption(READINESS_TIMEOUT),
+      Effect.flatMap((option) =>
+        Option.isNone(option) ? Effect.logWarning(`readiness timed out: ${name}`) : Effect.void,
+      ),
+    );
+
   return {
     awaitServerReady: Effect.all([
-      Deferred.await(httpListening),
-      Deferred.await(pushBusReady),
-      Deferred.await(keybindingsReady),
-      Deferred.await(terminalSubscriptionsReady),
-      Deferred.await(orchestrationSubscriptionsReady),
+      readyOrTimeout("httpListening", httpListening),
+      readyOrTimeout("pushBusReady", pushBusReady),
+      readyOrTimeout("keybindingsReady", keybindingsReady),
+      readyOrTimeout("terminalSubscriptionsReady", terminalSubscriptionsReady),
+      readyOrTimeout("orchestrationSubscriptionsReady", orchestrationSubscriptionsReady),
     ]).pipe(Effect.asVoid),
     markHttpListening: complete(httpListening),
     markPushBusReady: complete(pushBusReady),

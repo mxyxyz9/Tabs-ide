@@ -23,7 +23,7 @@ export const readBootstrapEnvelope = Effect.fn("readBootstrapEnvelope")(function
 
   const stream = yield* makeBootstrapInputStream(fd);
 
-  const timeoutMs = options?.timeoutMs ?? 1000;
+  const timeoutMs = options?.timeoutMs ?? 10_000;
 
   return yield* Effect.callback<Option.Option<A>, BootstrapError>((resume) => {
     const input = readline.createInterface({

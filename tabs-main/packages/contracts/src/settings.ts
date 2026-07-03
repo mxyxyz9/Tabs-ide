@@ -283,6 +283,7 @@ export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 
 export const ServerSettings = Schema.Struct({
   enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  alwaysCreateTasks: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
   // Stored as plain milliseconds (not DurationFromMillis) so the decoded shape
   // equals the encoded shape — the settings-patch flow re-decodes a merged,
   // already-decoded `ServerSettings`, which a Duration transform would break.
@@ -388,6 +389,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
 
 export const ServerSettingsPatch = Schema.Struct({
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
+  alwaysCreateTasks: Schema.optionalKey(Schema.Boolean),
   automaticGitFetchInterval: Schema.optionalKey(Schema.Number),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),

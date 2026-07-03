@@ -563,7 +563,7 @@ describe("deriveWorkLogEntries", () => {
     expect(entries.map((entry) => entry.id)).toEqual(["tool-complete"]);
   });
 
-  it("omits task start and completion lifecycle entries", () => {
+  it("includes task lifecycle entries (started, progress, completed) in the work log for the Task UI", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({
         id: "task-start",
@@ -589,7 +589,13 @@ describe("deriveWorkLogEntries", () => {
     ];
 
     const entries = deriveWorkLogEntries(activities, undefined);
-    expect(entries.map((entry) => entry.id)).toEqual(["task-progress"]);
+    // All three lifecycle events are now surfaced for the Task UI.
+    // The TaskProgressCard component reads these to build structured task nodes.
+    expect(entries.map((entry) => entry.id)).toEqual([
+      "task-start",
+      "task-progress",
+      "task-complete",
+    ]);
   });
 
   it("filters by turn id when provided", () => {

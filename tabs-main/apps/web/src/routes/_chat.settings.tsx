@@ -755,6 +755,9 @@ function SettingsRouteView() {
     ...(settings.enableAssistantStreaming !== DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming
       ? ["Assistant output"]
       : []),
+    ...(settings.alwaysCreateTasks !== DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks
+      ? ["Always create tasks"]
+      : []),
     ...(settings.defaultThreadEnvMode !== DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode
       ? ["New thread mode"]
       : []),
@@ -1252,6 +1255,35 @@ function SettingsRouteView() {
                             })
                           }
                           aria-label="Stream assistant messages"
+                        />
+                      }
+                    />
+
+                    <SettingsRow
+                      title="Always create tasks"
+                      description="Synthesize task progress for providers that do not emit native task events."
+                      resetAction={
+                        settings.alwaysCreateTasks !==
+                        DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks ? (
+                          <SettingResetButton
+                            label="always create tasks"
+                            onClick={() =>
+                              updateSettings({
+                                alwaysCreateTasks: DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.alwaysCreateTasks}
+                          onCheckedChange={(checked) =>
+                            updateSettings({
+                              alwaysCreateTasks: Boolean(checked),
+                            })
+                          }
+                          aria-label="Always create tasks"
                         />
                       }
                     />

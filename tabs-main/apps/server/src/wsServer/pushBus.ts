@@ -63,8 +63,13 @@ export const makeServerPushBus = (input: {
             if (client.readyState !== client.OPEN) {
               continue;
             }
-            client.send(message);
-            recipientCount += 1;
+            try {
+              client.send(message);
+              recipientCount += 1;
+            } catch {
+              // Individual client send failure must not drop message for
+              // remaining recipients in the batch.
+            }
           }
 
           input.logOutgoingPush(push, recipientCount);

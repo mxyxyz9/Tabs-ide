@@ -31,10 +31,12 @@ import {
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {
   Cause,
+  Deferred,
   Effect,
   Exit,
   FileSystem,
   Layer,
+  Option,
   Path,
   Ref,
   Result,
@@ -447,7 +449,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     void Effect.runPromise(
       Effect.gen(function* () {
         const url = new URL(req.url ?? "/", `http://localhost:${port}`);
-        if (tryHandleProjectFaviconRequest(url, res)) {
+        if (!authToken && tryHandleProjectFaviconRequest(url, res)) {
           return;
         }
 
@@ -598,7 +600,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   });
 
   // WebSocket server — upgrades from the HTTP server
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 10 * 1024 * 1024 });
 
   const closeWebSocketServer = Effect.callback<void, ServerLifecycleError>((resume) => {
     wss.close((error) => {
@@ -1193,9 +1195,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
     const result = yield* Effect.exit(routeRequest(ws, request.success));
     if (Exit.isFailure(result)) {
+      const failure = Cause.findErrorOption(result.cause);
+      const userMessage =
+        Option.isSome(failure) &&
+        typeof failure.value === "object" &&
+        failure.value !== null &&
+        "message" in failure.value
+          ? String(failure.value.message)
+          : "Internal server error";
       return yield* sendWsResponse({
         id: request.success.id,
-        error: { message: Cause.pretty(result.cause) },
+        error: { message: userMessage },
       });
     }
 
@@ -1276,7 +1286,28 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   return httpServer;
 });
 
-export const ServerLive = Layer.succeed(Server, {
-  start: createServer(),
-  stopSignal: Effect.never,
-} satisfies ServerShape);
+export const ServerLive = Layer.effect(
+  Server,
+  Effect.gen(function* () {
+    const stopSignalDeferred = yield* Deferred.make<void>();
+
+    const handler = () => {
+      Effect.runFork(Deferred.succeed(stopSignalDeferred, undefined).pipe(Effect.orDie));
+    };
+
+    process.on("SIGTERM", handler);
+    process.on("SIGINT", handler);
+
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        process.off("SIGTERM", handler);
+        process.off("SIGINT", handler);
+      }),
+    );
+
+    return {
+      start: createServer(),
+      stopSignal: Deferred.await(stopSignalDeferred).pipe(Effect.orDie),
+    } satisfies ServerShape;
+  }),
+);

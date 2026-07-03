@@ -1303,7 +1303,9 @@ export class CodeHostManager {
             )
             .then((reclaimed: unknown) => {
               if (Number(reclaimed) > 0) {
-                console.log(`[code-oss] hid Outline/Timeline, reclaimed ${reclaimed}px for explorer`);
+                console.log(
+                  `[code-oss] hid Outline/Timeline, reclaimed ${reclaimed}px for explorer`,
+                );
               }
             })
             .catch(() => undefined);

@@ -45,6 +45,12 @@ export interface WorkLogEntry {
   toolTitle?: string;
   itemType?: ToolLifecycleItemType;
   requestKind?: PendingApproval["requestKind"];
+  // Task lifecycle fields
+  taskId?: string;
+  taskStatus?: "started" | "running" | "completed" | "failed" | "stopped";
+  taskType?: string;
+  toolName?: string;
+  usage?: unknown;
 }
 
 interface DerivedWorkLogEntry extends WorkLogEntry {
@@ -464,7 +470,7 @@ export function deriveWorkLogEntries(
   const entries = ordered
     .filter((activity) => (latestTurnId ? activity.turnId === latestTurnId : true))
     .filter((activity) => activity.kind !== "tool.started")
-    .filter((activity) => activity.kind !== "task.started" && activity.kind !== "task.completed")
+    // task.started and task.completed are now surfaced for the Task UI
     .filter((activity) => activity.kind !== "context-window.updated")
     .filter((activity) => activity.summary !== "Checkpoint captured")
     .filter((activity) => !isPlanBoundaryToolActivity(activity))
@@ -523,6 +529,27 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
   }
   if (requestKind) {
     entry.requestKind = requestKind;
+  }
+  // Extract task lifecycle fields
+  if (payload && typeof payload.taskId === "string") {
+    entry.taskId = payload.taskId;
+  }
+  if (payload && typeof payload.status === "string") {
+    const status = payload.status as WorkLogEntry["taskStatus"];
+    if (status) {
+      entry.taskStatus = status;
+    }
+  }
+  if (payload && typeof payload.taskType === "string") {
+    entry.taskType = payload.taskType;
+  }
+  if (payload && typeof payload.lastToolName === "string") {
+    entry.toolName = payload.lastToolName;
+  } else if (payload && typeof payload.toolName === "string") {
+    entry.toolName = payload.toolName;
+  }
+  if (payload && payload.usage !== undefined) {
+    entry.usage = payload.usage;
   }
   const collapseKey = deriveToolLifecycleCollapseKey(entry);
   if (collapseKey) {
@@ -872,4 +899,115 @@ export function derivePhase(session: ThreadSession | null): SessionPhase {
   if (session.status === "connecting") return "connecting";
   if (session.status === "running") return "running";
   return "ready";
+}
+
+// ---------------------------------------------------------------------------
+// Task Node derivation — groups task lifecycle activities into structured nodes
+// ---------------------------------------------------------------------------
+
+export interface TaskNode {
+  taskId: string;
+  description: string;
+  taskType?: string;
+  status: "running" | "completed" | "failed" | "stopped";
+  lastToolName?: string;
+  usage?: unknown;
+  latestDetail?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export function deriveActiveTaskNodes(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  latestTurnId: TurnId | undefined,
+): TaskNode[] {
+  const turnActivities = latestTurnId
+    ? activities.filter((a) => a.turnId === latestTurnId)
+    : activities;
+
+  const taskMap = new Map<string, TaskNode>();
+
+  for (const activity of turnActivities) {
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const taskId = payload && typeof payload.taskId === "string" ? payload.taskId : null;
+    if (!taskId || !payload) continue;
+
+    if (activity.kind === "task.started") {
+      taskMap.set(taskId, {
+        taskId,
+        description: typeof payload.detail === "string" ? payload.detail : activity.summary,
+        ...(typeof payload.taskType === "string" ? { taskType: payload.taskType } : {}),
+        status: "running",
+        startedAt: activity.createdAt,
+      });
+    } else if (activity.kind === "task.progress") {
+      const existing = taskMap.get(taskId);
+      if (existing) {
+        if (typeof payload.detail === "string") {
+          existing.latestDetail = payload.detail;
+        }
+        if (typeof payload.summary === "string") {
+          existing.description = payload.summary;
+        }
+        if (typeof payload.lastToolName === "string") {
+          existing.lastToolName = payload.lastToolName;
+        }
+        if (payload.usage !== undefined) {
+          existing.usage = payload.usage;
+        }
+      } else {
+        // Progress without a preceding started event — create a node anyway
+        const lastToolName =
+          typeof payload.lastToolName === "string" ? payload.lastToolName : undefined;
+        taskMap.set(taskId, {
+          taskId,
+          description: typeof payload.detail === "string" ? payload.detail : activity.summary,
+          status: "running",
+          ...(lastToolName ? { lastToolName } : {}),
+          ...(payload.usage !== undefined ? { usage: payload.usage } : {}),
+          startedAt: activity.createdAt,
+        });
+      }
+    } else if (activity.kind === "task.completed") {
+      const existing = taskMap.get(taskId);
+      const status =
+        typeof payload.status === "string" ? (payload.status as TaskNode["status"]) : "completed";
+      if (existing) {
+        existing.status = status;
+        existing.completedAt = activity.createdAt;
+        if (typeof payload.detail === "string") {
+          existing.latestDetail = payload.detail;
+        }
+        if (payload.usage !== undefined) {
+          existing.usage = payload.usage;
+        }
+      } else {
+        taskMap.set(taskId, {
+          taskId,
+          description: typeof payload.detail === "string" ? payload.detail : activity.summary,
+          status,
+          startedAt: activity.createdAt,
+          completedAt: activity.createdAt,
+          ...(payload.usage !== undefined ? { usage: payload.usage } : {}),
+        });
+      }
+    }
+  }
+
+  return [...taskMap.values()].toSorted((a, b) => a.startedAt.localeCompare(b.startedAt));
+}
+
+/**
+ * Returns the most recent task description for use in the "Working..." indicator.
+ * Falls back to null when no task progress is available.
+ */
+export function deriveLatestTaskDescription(taskNodes: ReadonlyArray<TaskNode>): string | null {
+  const running = taskNodes.filter((t) => t.status === "running");
+  if (running.length === 0) return null;
+  const latest = running[running.length - 1];
+  if (!latest) return null;
+  return latest.latestDetail ?? latest.lastToolName ?? latest.description;
 }

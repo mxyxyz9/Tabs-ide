@@ -46,6 +46,8 @@ import {
   deriveTimelineEntries,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
+  deriveActiveTaskNodes,
+  deriveLatestTaskDescription,
   findSidebarProposedPlan,
   findLatestProposedPlan,
   deriveWorkLogEntries,
@@ -151,6 +153,7 @@ import { CompactComposerControlsMenu } from "./chat/CompactComposerControlsMenu"
 import { ComposerPendingApprovalPanel } from "./chat/ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./chat/ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./chat/ComposerPlanFollowUpBanner";
+import { TaskListPanel } from "./chat/TaskListPanel";
 import {
   getComposerProviderState,
   renderProviderTraitsMenuContent,
@@ -681,6 +684,14 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const workLogEntries = useMemo(
     () => deriveWorkLogEntries(threadActivities, activeLatestTurn?.turnId ?? undefined),
     [activeLatestTurn?.turnId, threadActivities],
+  );
+  const activeTaskNodes = useMemo(
+    () => deriveActiveTaskNodes(threadActivities, activeLatestTurn?.turnId ?? undefined),
+    [activeLatestTurn?.turnId, threadActivities],
+  );
+  const latestTaskDescription = useMemo(
+    () => deriveLatestTaskDescription(activeTaskNodes),
+    [activeTaskNodes],
   );
   const latestTurnHasToolActivity = useMemo(
     () => hasToolActivityForTurn(threadActivities, activeLatestTurn?.turnId),
@@ -1804,6 +1815,15 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   }, [phase, scheduleStickToBottom, timelineEntries]);
 
   useEffect(() => {
+    // Reset send-in-flight flag so the send button is never permanently stuck
+    // after switching away from a thread mid-send.
+    sendInFlightRef.current = false;
+    setSendPhase("idle");
+    setSendStartedAt(null);
+
+    // Clear optimistic messages — they belong to the previous thread.
+    setOptimisticUserMessages([]);
+
     setExpandedWorkGroups({});
     setPullRequestDialogState(null);
     if (planSidebarOpenOnNextThreadRef.current) {
@@ -1813,6 +1833,15 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       setPlanSidebarOpen(false);
     }
     planSidebarDismissedForTurnRef.current = null;
+
+    // On cleanup (when switching away from this thread), remove its entry
+    // from the terminal-open tracking ref to prevent unbounded growth.
+    const threadIdForCleanup = activeThread?.id;
+    return () => {
+      if (threadIdForCleanup) {
+        delete terminalOpenByThreadRef.current[threadIdForCleanup];
+      }
+    };
   }, [activeThread?.id]);
 
   useEffect(() => {
@@ -3440,6 +3469,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   });
   const composerSection = (
     <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
+      {activeTaskNodes.length > 0 && <TaskListPanel tasks={activeTaskNodes} />}
       <form
         ref={composerFormRef}
         onSubmit={onSend}
@@ -4005,6 +4035,8 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                   resolvedTheme={resolvedTheme}
                   timestampFormat={timestampFormat}
                   workspaceRoot={activeProject?.cwd ?? undefined}
+                  latestTaskDescription={latestTaskDescription}
+                  activeTaskNodes={activeTaskNodes}
                 />
               </div>
 

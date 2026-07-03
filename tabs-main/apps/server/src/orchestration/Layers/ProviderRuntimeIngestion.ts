@@ -2,6 +2,7 @@ import {
   ApprovalRequestId,
   type AssistantDeliveryMode,
   CommandId,
+  EventId,
   MessageId,
   type OrchestrationEvent,
   type OrchestrationProposedPlanId,
@@ -150,6 +151,276 @@ function runtimeErrorMessageFromEvent(event: ProviderRuntimeEvent): string | und
   return payloadMessage;
 }
 
+function providerSupportsNativeTaskEvents(provider: ProviderRuntimeEvent["provider"]): boolean {
+  return provider === "claudeAgent";
+}
+
+function syntheticTurnTaskId(
+  threadId: ThreadId,
+  turnId: TurnId | undefined,
+  eventId: string,
+): string {
+  return `synthetic:task:turn:${threadId}:${turnId ?? eventId}`;
+}
+
+function syntheticItemTaskId(threadId: ThreadId, itemId: string): string {
+  return `synthetic:task:item:${threadId}:${itemId}`;
+}
+
+function syntheticTaskSummaryForItemType(itemType: string): string {
+  switch (itemType) {
+    case "command_execution":
+      return "Running command";
+    case "file_change":
+      return "Editing files";
+    case "mcp_tool_call":
+      return "Calling MCP tool";
+    case "dynamic_tool_call":
+      return "Running tool";
+    case "collab_agent_tool_call":
+      return "Running subagent";
+    case "web_search":
+      return "Searching the web";
+    case "image_view":
+      return "Inspecting image";
+    default:
+      return "Working";
+  }
+}
+
+function syntheticTaskDetailFromItemEvent(event: ProviderRuntimeEvent): string | undefined {
+  if (
+    (event.type !== "item.started" &&
+      event.type !== "item.updated" &&
+      event.type !== "item.completed") ||
+    !isToolLifecycleItemType(event.payload.itemType)
+  ) {
+    return undefined;
+  }
+
+  return (
+    event.payload.detail ??
+    event.payload.title ??
+    syntheticTaskSummaryForItemType(event.payload.itemType)
+  );
+}
+
+function runtimeEventSequence(
+  event: ProviderRuntimeEvent,
+): { sequence: number } | Record<string, never> {
+  const eventWithSequence = event as ProviderRuntimeEvent & { sessionSequence?: number };
+  return eventWithSequence.sessionSequence !== undefined
+    ? { sequence: eventWithSequence.sessionSequence }
+    : {};
+}
+
+function syntheticActivityId(event: ProviderRuntimeEvent, suffix: string): EventId {
+  return EventId.makeUnsafe(`${event.eventId}:${suffix}`);
+}
+
+function syntheticTaskActivitiesFromRuntimeEvent(input: {
+  event: ProviderRuntimeEvent;
+  activeTurnId: TurnId | null;
+  enabled: boolean;
+}): ReadonlyArray<OrchestrationThreadActivity> {
+  const { event, activeTurnId, enabled } = input;
+  if (!enabled || providerSupportsNativeTaskEvents(event.provider)) {
+    return [];
+  }
+
+  const maybeSequence = runtimeEventSequence(event);
+
+  switch (event.type) {
+    case "turn.started": {
+      const turnId = toTurnId(event.turnId);
+      if (!turnId) {
+        return [];
+      }
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-task-started"),
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "task.started",
+          summary: "Task started",
+          payload: {
+            taskId: syntheticTurnTaskId(event.threadId, turnId, event.eventId),
+            taskType: "turn",
+            detail: "Analyzing prompt and planning steps",
+          },
+          turnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "turn.completed": {
+      const turnId = toTurnId(event.turnId) ?? activeTurnId ?? undefined;
+      if (!turnId) {
+        return [];
+      }
+      const state = runtimeTurnState(event);
+      const status =
+        state === "failed"
+          ? "failed"
+          : state === "interrupted" || state === "cancelled"
+            ? "stopped"
+            : "completed";
+      const detail =
+        runtimeTurnErrorMessage(event) ??
+        event.payload.stopReason ??
+        (status === "completed" ? "Response completed" : undefined);
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-task-completed"),
+          createdAt: event.createdAt,
+          tone: status === "failed" ? "error" : "info",
+          kind: "task.completed",
+          summary:
+            status === "failed"
+              ? "Task failed"
+              : status === "stopped"
+                ? "Task stopped"
+                : "Task completed",
+          payload: {
+            taskId: syntheticTurnTaskId(event.threadId, turnId, event.eventId),
+            status,
+            ...(detail ? { detail: truncateDetail(detail) } : {}),
+            ...(event.payload.usage !== undefined ? { usage: event.payload.usage } : {}),
+          },
+          turnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "runtime.error": {
+      const turnId = toTurnId(event.turnId) ?? activeTurnId ?? undefined;
+      if (!turnId) {
+        return [];
+      }
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-task-failed"),
+          createdAt: event.createdAt,
+          tone: "error",
+          kind: "task.completed",
+          summary: "Task failed",
+          payload: {
+            taskId: syntheticTurnTaskId(event.threadId, turnId, event.eventId),
+            status: "failed",
+            ...(runtimeErrorMessageFromEvent(event)
+              ? { detail: truncateDetail(runtimeErrorMessageFromEvent(event)!) }
+              : {}),
+          },
+          turnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "session.exited": {
+      const turnId = activeTurnId ?? toTurnId(event.turnId) ?? undefined;
+      if (!turnId) {
+        return [];
+      }
+      const status = event.payload.exitKind === "error" ? "failed" : "stopped";
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-task-session-exited"),
+          createdAt: event.createdAt,
+          tone: status === "failed" ? "error" : "info",
+          kind: "task.completed",
+          summary: status === "failed" ? "Task failed" : "Task stopped",
+          payload: {
+            taskId: syntheticTurnTaskId(event.threadId, turnId, event.eventId),
+            status,
+            ...(event.payload.reason ? { detail: truncateDetail(event.payload.reason) } : {}),
+          },
+          turnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "item.started": {
+      if (!isToolLifecycleItemType(event.payload.itemType) || !event.itemId) {
+        return [];
+      }
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-item-task-started"),
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "task.started",
+          summary: "Task started",
+          payload: {
+            taskId: syntheticItemTaskId(event.threadId, event.itemId),
+            taskType: event.payload.itemType,
+            detail: truncateDetail(syntheticTaskDetailFromItemEvent(event) ?? "Working"),
+          },
+          turnId: toTurnId(event.turnId) ?? activeTurnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "item.updated": {
+      if (!isToolLifecycleItemType(event.payload.itemType) || !event.itemId) {
+        return [];
+      }
+      const detail = syntheticTaskDetailFromItemEvent(event) ?? "Working";
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-item-task-progress"),
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "task.progress",
+          summary: "Reasoning update",
+          payload: {
+            taskId: syntheticItemTaskId(event.threadId, event.itemId),
+            detail: truncateDetail(detail),
+            summary: truncateDetail(detail),
+            ...(event.payload.title ? { lastToolName: truncateDetail(event.payload.title) } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? activeTurnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "item.completed": {
+      if (!isToolLifecycleItemType(event.payload.itemType) || !event.itemId) {
+        return [];
+      }
+      const status =
+        event.payload.status === "failed" || event.payload.status === "declined"
+          ? "failed"
+          : "completed";
+      const detail = syntheticTaskDetailFromItemEvent(event);
+      return [
+        {
+          id: syntheticActivityId(event, "synthetic-item-task-completed"),
+          createdAt: event.createdAt,
+          tone: status === "failed" ? "error" : "info",
+          kind: "task.completed",
+          summary: status === "failed" ? "Task failed" : "Task completed",
+          payload: {
+            taskId: syntheticItemTaskId(event.threadId, event.itemId),
+            status,
+            ...(detail ? { detail: truncateDetail(detail) } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? activeTurnId,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    default:
+      return [];
+  }
+}
+
 function orchestrationSessionStatusFromRuntimeState(
   state: "starting" | "running" | "waiting" | "ready" | "interrupted" | "stopped" | "error",
 ): "starting" | "running" | "ready" | "interrupted" | "stopped" | "error" {
@@ -190,12 +461,7 @@ function requestKindFromCanonicalRequestType(
 function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
 ): ReadonlyArray<OrchestrationThreadActivity> {
-  const maybeSequence = (() => {
-    const eventWithSequence = event as ProviderRuntimeEvent & { sessionSequence?: number };
-    return eventWithSequence.sessionSequence !== undefined
-      ? { sequence: eventWithSequence.sessionSequence }
-      : {};
-  })();
+  const maybeSequence = runtimeEventSequence(event);
   switch (event.type) {
     case "request.opened": {
       if (event.payload.requestType === "tool_user_input") {
@@ -519,6 +785,113 @@ function runtimeEventToActivities(
           payload: {
             itemType: event.payload.itemType,
             ...(event.payload.detail ? { detail: truncateDetail(event.payload.detail) } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "hook.started": {
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "hook.started",
+          summary: `Hook: ${event.payload.hookName}`,
+          payload: {
+            hookId: event.payload.hookId,
+            hookName: event.payload.hookName,
+            hookEvent: event.payload.hookEvent,
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "hook.progress": {
+      const hookOutput = event.payload.output ?? event.payload.stdout ?? event.payload.stderr;
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "hook.progress",
+          summary: "Hook progress",
+          payload: {
+            hookId: event.payload.hookId,
+            ...(hookOutput ? { detail: truncateDetail(hookOutput) } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "hook.completed": {
+      const hookCompletedOutput =
+        event.payload.output ?? event.payload.stdout ?? event.payload.stderr;
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: event.payload.outcome === "error" ? "error" : "info",
+          kind: "hook.completed",
+          summary:
+            event.payload.outcome === "error"
+              ? "Hook failed"
+              : event.payload.outcome === "cancelled"
+                ? "Hook cancelled"
+                : "Hook completed",
+          payload: {
+            hookId: event.payload.hookId,
+            outcome: event.payload.outcome,
+            ...(hookCompletedOutput ? { detail: truncateDetail(hookCompletedOutput) } : {}),
+            ...(event.payload.exitCode !== undefined ? { exitCode: event.payload.exitCode } : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "tool.progress": {
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "tool",
+          kind: "tool.progress",
+          summary: event.payload.toolName ?? "Tool progress",
+          payload: {
+            ...(event.payload.toolUseId ? { toolUseId: event.payload.toolUseId } : {}),
+            ...(event.payload.toolName ? { toolName: event.payload.toolName } : {}),
+            ...(event.payload.summary ? { detail: truncateDetail(event.payload.summary) } : {}),
+            ...(event.payload.elapsedSeconds !== undefined
+              ? { elapsedSeconds: event.payload.elapsedSeconds }
+              : {}),
+          },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "tool.summary": {
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "tool",
+          kind: "tool.summary",
+          summary: "Tool summary",
+          payload: {
+            detail: truncateDetail(event.payload.summary),
+            ...(event.payload.precedingToolUseIds
+              ? { precedingToolUseIds: event.payload.precedingToolUseIds }
+              : {}),
           },
           turnId: toTurnId(event.turnId) ?? null,
           ...maybeSequence,
@@ -914,6 +1287,10 @@ const make = Effect.gen(function* () {
       const now = event.createdAt;
       const eventTurnId = toTurnId(event.turnId);
       const activeTurnId = thread.session?.activeTurnId ?? null;
+      const alwaysCreateTasks = yield* Effect.map(
+        serverSettingsService.getSettings,
+        (settings) => settings.alwaysCreateTasks,
+      );
 
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
@@ -1244,7 +1621,14 @@ const make = Effect.gen(function* () {
         }
       }
 
-      const activities = runtimeEventToActivities(event);
+      const activities = [
+        ...runtimeEventToActivities(event),
+        ...syntheticTaskActivitiesFromRuntimeEvent({
+          event,
+          activeTurnId,
+          enabled: alwaysCreateTasks,
+        }),
+      ];
       yield* Effect.forEach(activities, (activity) =>
         orchestrationEngine.dispatch({
           type: "thread.activity.append",

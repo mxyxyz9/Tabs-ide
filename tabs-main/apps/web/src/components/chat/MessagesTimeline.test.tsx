@@ -92,6 +92,8 @@ describe("MessagesTimeline", () => {
         resolvedTheme="light"
         timestampFormat="locale"
         workspaceRoot={undefined}
+        latestTaskDescription={null}
+        activeTaskNodes={[]}
       />,
     );
 
@@ -137,6 +139,8 @@ describe("MessagesTimeline", () => {
         resolvedTheme="light"
         timestampFormat="locale"
         workspaceRoot={undefined}
+        latestTaskDescription={null}
+        activeTaskNodes={[]}
       />,
     );
 

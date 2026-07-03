@@ -5,10 +5,20 @@ import {
   DEFAULT_PROJECT_TOOL_ORDER,
   ProjectWorkspaceSessionState,
   ProjectWorkspaceSettings,
+  ServerSettings,
 } from "./settings";
 
 const decodeProjectWorkspaceSettings = Schema.decodeUnknownSync(ProjectWorkspaceSettings);
 const decodeProjectWorkspaceSessionState = Schema.decodeUnknownSync(ProjectWorkspaceSessionState);
+const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
+
+describe("ServerSettings", () => {
+  it("defaults always-create-tasks to false", () => {
+    const parsed = decodeServerSettings({});
+
+    expect(parsed.alwaysCreateTasks).toBe(false);
+  });
+});
 
 describe("ProjectWorkspaceSettings", () => {
   it("provides the default shell tool order with visible tabs", () => {
