@@ -1404,6 +1404,32 @@ const make = Effect.gen(function* () {
             createdAt: now,
           });
         }
+
+        // If a turn.completed was rejected by the lifecycle guard but the
+        // session is still "running" with an activeTurnId that no longer
+        // matches any provider turn, transition to "ready" to prevent
+        // the session from being stuck in "running" indefinitely.
+        if (
+          !shouldApplyThreadLifecycle &&
+          event.type === "turn.completed" &&
+          thread.session?.status === "running"
+        ) {
+          yield* orchestrationEngine.dispatch({
+            type: "thread.session.set",
+            commandId: providerCommandId(event, "turn-completed-fallback-ready"),
+            threadId: thread.id,
+            session: {
+              threadId: thread.id,
+              status: "ready",
+              providerName: event.provider,
+              runtimeMode: thread.session.runtimeMode ?? "full-access",
+              activeTurnId: null,
+              lastError: null,
+              updatedAt: now,
+            },
+            createdAt: now,
+          });
+        }
       }
 
       const assistantDelta =

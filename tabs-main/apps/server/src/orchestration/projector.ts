@@ -460,7 +460,22 @@ export function projectEvent(
                         ? thread.latestTurn.assistantMessageId
                         : null,
                   }
-                : thread.latestTurn,
+                : // Settle orphaned turns: if the session is no longer running
+                  // but the latest turn never received a completedAt, fill it
+                  // in so the client-side `isLatestTurnSettled` returns true
+                  // and the "Working for …" timer stops.
+                  thread.latestTurn && !thread.latestTurn.completedAt
+                  ? {
+                      ...thread.latestTurn,
+                      state:
+                        session.status === "error"
+                          ? "error"
+                          : session.status === "stopped" || session.status === "interrupted"
+                            ? "interrupted"
+                            : "completed",
+                      completedAt: session.updatedAt,
+                    }
+                  : thread.latestTurn,
             updatedAt: event.occurredAt,
           }),
         };

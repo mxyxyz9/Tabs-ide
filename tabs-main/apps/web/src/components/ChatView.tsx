@@ -2677,6 +2677,9 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       type: "thread.turn.interrupt",
       commandId: newCommandId(),
       threadId: activeThread.id,
+      ...(activeThread.session?.activeTurnId
+        ? { turnId: activeThread.session.activeTurnId }
+        : {}),
       createdAt: new Date().toISOString(),
     });
   };
