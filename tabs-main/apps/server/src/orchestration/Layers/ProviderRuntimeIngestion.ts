@@ -1409,10 +1409,15 @@ const make = Effect.gen(function* () {
         // session is still "running" with an activeTurnId that no longer
         // matches any provider turn, transition to "ready" to prevent
         // the session from being stuck in "running" indefinitely.
+        // Only apply this fallback for the missing-turnId case (where the
+        // runtime omits threadId/turnId entirely). Do NOT apply it when the
+        // completed turn explicitly conflicts with the active turn — that is an
+        // auxiliary completion that should be ignored without changing state.
         if (
           !shouldApplyThreadLifecycle &&
           event.type === "turn.completed" &&
-          thread.session?.status === "running"
+          thread.session?.status === "running" &&
+          !conflictsWithActiveTurn
         ) {
           yield* orchestrationEngine.dispatch({
             type: "thread.session.set",
