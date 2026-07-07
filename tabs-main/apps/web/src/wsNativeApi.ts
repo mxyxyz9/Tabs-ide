@@ -261,6 +261,7 @@ export function createWsNativeApi(): NativeApi {
       removeKeybinding: (input) => transport.request(WS_METHODS.serverRemoveKeybinding, input),
       getSettings: () => transport.request(WS_METHODS.serverGetSettings),
       updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, { patch }),
+      discoverSourceControl: () => transport.request(WS_METHODS.serverDiscoverSourceControl),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

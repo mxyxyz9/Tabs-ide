@@ -49,9 +49,7 @@ export function collectActiveTerminalThreadIds(
     const customProcessIds = input.customProcessIdsByProjectId?.get(projectId);
     if (customProcessIds) {
       for (const processId of customProcessIds) {
-        activeThreadIds.add(
-          ThreadId.makeUnsafe(`server:${projectId}:custom:${processId}`),
-        );
+        activeThreadIds.add(ThreadId.makeUnsafe(`server:${projectId}:custom:${processId}`));
       }
     }
   }

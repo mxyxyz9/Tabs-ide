@@ -84,6 +84,7 @@ import { expandHomePath } from "./os-jank.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@tabs/shared/schemaJson";
+import { discoverSourceControl } from "./sourceControl/discovery";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -1159,6 +1160,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.serverUpdateSettings: {
         const body = stripRequestTag(request.body);
         return yield* serverSettingsManager.updateSettings(body.patch);
+      }
+
+      case WS_METHODS.serverDiscoverSourceControl: {
+        return yield* Effect.promise(() => discoverSourceControl());
       }
 
       default: {

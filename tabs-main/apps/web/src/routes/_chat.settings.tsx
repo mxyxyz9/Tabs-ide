@@ -17,6 +17,8 @@ import {
   SlidersHorizontalIcon,
   Undo2Icon,
   XIcon,
+  GitBranchIcon,
+  Link2Icon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -95,6 +97,8 @@ import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../timestampFormat";
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { DEFAULT_DESKTOP_ICON_THEME, DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
+import { SourceControlSettingsPanel } from "../components/settings/SourceControlSettings";
+import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
@@ -209,7 +213,14 @@ const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
   opencode: "opencode auth login",
 };
 
-type SettingsSectionId = "general" | "workspace" | "providers" | "keybindings" | "about";
+type SettingsSectionId =
+  | "general"
+  | "workspace"
+  | "providers"
+  | "source-control"
+  | "connections"
+  | "keybindings"
+  | "about";
 
 const SETTINGS_NAV: ReadonlyArray<{
   id: SettingsSectionId;
@@ -218,6 +229,8 @@ const SETTINGS_NAV: ReadonlyArray<{
 }> = [
   { id: "general", label: "General", icon: SlidersHorizontalIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
+  { id: "source-control", label: "Source Control", icon: GitBranchIcon },
+  { id: "connections", label: "Connections", icon: Link2Icon },
   { id: "workspace", label: "Workspace", icon: FolderIcon },
   { id: "keybindings", label: "Keybindings", icon: KeyboardIcon },
   { id: "about", label: "About", icon: InfoIcon },
@@ -335,7 +348,7 @@ function useRelativeTimeTick(intervalMs = 1_000): number {
   return tick;
 }
 
-function SettingsSection({
+export function SettingsSection({
   title,
   headerAction,
   children,
@@ -1558,6 +1571,8 @@ function SettingsRouteView() {
                   </SettingsSection>
                 ) : null}
                 {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
+                {activeSettingsSection === "source-control" ? <SourceControlSettingsPanel /> : null}
+                {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
                 {activeSettingsSection === "providers" ? (
                   <SettingsSection
                     title="Providers"

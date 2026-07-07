@@ -142,4 +142,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   removePersistedItem: (key: string) => {
     return ipcRenderer.invoke(REMOVE_PERSISTED_ITEM_CHANNEL, key);
   },
+
+  getTailscaleStatus: () => {
+    return ipcRenderer.invoke("get-tailscale-status");
+  },
 } satisfies DesktopBridge);

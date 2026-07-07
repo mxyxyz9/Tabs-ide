@@ -97,6 +97,7 @@ import type {
 import { EditorId } from "./editor";
 import type { DesktopIconTheme } from "./settings";
 import { ServerSettings, ServerSettingsPatch } from "./settings";
+import { SourceControlDiscoveryResult } from "./sourceControl";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;
@@ -337,6 +338,12 @@ export interface DesktopBridge {
   setBrowserBounds: (input: DesktopBrowserHostSetBoundsInput) => Promise<void>;
   syncBrowserSessions: (projectIds: readonly string[]) => Promise<void>;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
+  getTailscaleStatus: () => Promise<{
+    available: boolean;
+    running: boolean;
+    magicDnsName: string | null;
+    ipv4: string | null;
+  }>;
 }
 
 export interface NativeApi {
@@ -432,6 +439,7 @@ export interface NativeApi {
     removeKeybinding: (input: ServerRemoveKeybindingInput) => Promise<ServerRemoveKeybindingResult>;
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
+    discoverSourceControl: () => Promise<SourceControlDiscoveryResult>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

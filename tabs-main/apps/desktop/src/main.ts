@@ -68,6 +68,7 @@ import {
   type RuntimeInstallProgress,
 } from "./codeOssRuntimeInstaller";
 import { CodeControlChannel } from "./codeControlChannel";
+import { getTailscaleStatus } from "./tailscale";
 import type { CodeChromeState } from "@tabs/shared/codeChrome";
 
 syncShellEnvironment();
@@ -1725,6 +1726,11 @@ function registerIpcHandlers(): void {
   ipcMain.removeAllListeners(GET_WS_URL_CHANNEL);
   ipcMain.on(GET_WS_URL_CHANNEL, (event) => {
     event.returnValue = backendWsUrl;
+  });
+
+  ipcMain.removeHandler("get-tailscale-status");
+  ipcMain.handle("get-tailscale-status", async () => {
+    return getTailscaleStatus();
   });
 
   ipcMain.removeHandler(PICK_FOLDER_CHANNEL);
