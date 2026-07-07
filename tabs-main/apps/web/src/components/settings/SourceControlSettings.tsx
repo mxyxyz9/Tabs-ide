@@ -3,7 +3,7 @@ import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
 import { useSourceControlDiscovery } from "~/lib/sourceControlReactQuery";
-import { ChevronDownIcon, RefreshCwIcon, GitBranchIcon } from "lucide-react";
+import { ChevronDownIcon, RefreshCwIcon } from "lucide-react";
 import {
   GitHubIcon,
   GitLabIcon,

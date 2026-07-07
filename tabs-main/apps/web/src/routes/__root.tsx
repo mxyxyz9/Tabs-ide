@@ -26,6 +26,7 @@ import { migrateLocalSettingsToServer } from "../hooks/useSettings";
 import { providerQueryKeys } from "../lib/providerReactQuery";
 import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
+import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -56,6 +57,7 @@ function RootRouteView() {
         <EventRouter />
         <DesktopProjectBootstrap />
         <Outlet />
+        <GlobalConfirmDialog />
       </AnchoredToastProvider>
     </ToastProvider>
   );

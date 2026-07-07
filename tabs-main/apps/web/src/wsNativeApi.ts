@@ -13,6 +13,7 @@ import {
 
 import { showContextMenuFallback } from "./contextMenuFallback";
 import { WsTransport } from "./wsTransport";
+import { showCustomConfirm } from "./lib/customConfirm";
 
 let instance: { api: NativeApi; transport: WsTransport } | null = null;
 const welcomeListeners = new Set<(payload: WsWelcomePayload) => void>();
@@ -143,10 +144,7 @@ export function createWsNativeApi(): NativeApi {
         return window.desktopBridge.pickFile();
       },
       confirm: async (message) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.confirm(message);
-        }
-        return window.confirm(message);
+        return showCustomConfirm(message);
       },
     },
     terminal: {
