@@ -35,7 +35,7 @@ import {
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { createDebouncedStorage, createMemoryStorage } from "./lib/storage";
-import { getDefaultServerModel } from "./providerModels";
+
 import { UnifiedSettings } from "@tabs/contracts/settings";
 
 export const COMPOSER_DRAFT_STORAGE_KEY = "tabs:composer-drafts:v1";
@@ -657,11 +657,19 @@ export function deriveEffectiveComposerModelState(input: {
   projectModelSelection: ModelSelection | null | undefined;
   settings: UnifiedSettings;
 }): EffectiveComposerModelState {
-  const baseModel =
-    normalizeModelSlug(
-      input.threadModelSelection?.model ?? input.projectModelSelection?.model,
-      input.selectedProvider,
-    ) ?? getDefaultServerModel(input.providers, input.selectedProvider);
+  // Resolve the base model respecting the settings custom-model lists so that
+  // when a thread/project provides a model slug, it normalises against the
+  // available options for that provider.  When neither thread nor project
+  // provides a model, fall back to the settings-configured default model for
+  // the selected provider (mirrors T3's resolveAppModelSelection behaviour).
+  const candidateModel =
+    input.threadModelSelection?.model ?? input.projectModelSelection?.model ?? null;
+  const baseModel = resolveAppModelSelection(
+    input.selectedProvider,
+    input.settings,
+    input.providers,
+    candidateModel,
+  );
   const activeSelection = input.draft?.modelSelectionByProvider?.[input.selectedProvider];
   const selectedModel = activeSelection?.model
     ? resolveAppModelSelection(

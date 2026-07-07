@@ -637,9 +637,11 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     : null;
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const providerStatuses = serverConfigQuery.data?.providers ?? EMPTY_PROVIDERS;
+  // For new threads, default to the provider the user configured in Settings.
+  const settingsDefaultProvider = settings.textGenerationModelSelection?.instanceId ?? "codex";
   const unlockedSelectedProvider = resolveSelectableProvider(
     providerStatuses,
-    selectedProviderByThreadId ?? threadProvider ?? "codex",
+    selectedProviderByThreadId ?? threadProvider ?? settingsDefaultProvider,
   );
   const selectedProvider: ProviderKind = (lockedProvider ??
     unlockedSelectedProvider) as ProviderKind;

@@ -13,6 +13,7 @@ import {
   getProviderModels,
   resolveSelectableProvider,
 } from "./providerModels";
+import { deriveProviderInstanceEntries } from "./providerInstances";
 
 const MAX_CUSTOM_MODEL_COUNT = 32;
 export const MAX_CUSTOM_MODEL_LENGTH = 256;
@@ -255,4 +256,30 @@ export function resolveAppModelSelectionState(
   });
 
   return makeAppModelSelection(provider, model, modelOptionsForDispatch);
+}
+
+/**
+ * Instance-keyed model options map. Each configured instance gets its own
+ * option list so the model picker can show the same driver's built-in and
+ * custom instances side by side without collapsing them.
+ */
+export function getCustomModelOptionsByInstance(
+  settings: UnifiedSettings,
+  providers: ReadonlyArray<ServerProvider>,
+  _selectedInstanceId?: ProviderInstanceId | null,
+  _selectedModel?: string | null,
+): ReadonlyMap<ProviderInstanceId, ReadonlyArray<AppModelOption>> {
+  const out = new Map<ProviderInstanceId, ReadonlyArray<AppModelOption>>();
+  for (const entry of deriveProviderInstanceEntries(providers)) {
+    out.set(
+      entry.instanceId,
+      getAppModelOptions(
+        settings,
+        providers,
+        entry.driverKind as string,
+        _selectedInstanceId === entry.instanceId ? _selectedModel : undefined,
+      ),
+    );
+  }
+  return out;
 }
