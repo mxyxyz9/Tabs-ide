@@ -1,4 +1,4 @@
-import { ThreadId } from "@tabs/contracts";
+import { ProjectId, ThreadId } from "@tabs/contracts";
 import {
   Outlet,
   createRootRouteWithContext,
@@ -19,6 +19,7 @@ import { readNativeApi } from "../nativeApi";
 import { clearPromotedDraftThreads, useComposerDraftStore } from "../composerDraftStore";
 import { useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
+import { useWorkspaceShellStore } from "../workspaceShellStore";
 import { terminalRunningSubprocessFromEvent } from "../terminalActivity";
 import { onServerConfigUpdated, onServerProvidersUpdated, onServerWelcome } from "../wsNativeApi";
 import { migrateLocalSettingsToServer } from "../hooks/useSettings";
@@ -197,9 +198,29 @@ function EventRouter() {
       const draftThreadIds = Object.keys(
         useComposerDraftStore.getState().draftThreadsByThreadId,
       ) as ThreadId[];
+      // Collect custom-process IDs per project from the workspace store so
+      // their isolated terminal threads (server:<projectId>:custom:<processId>)
+      // are also retained by the orphan cleanup.
+      const projectSettingsByProjectId =
+        useWorkspaceShellStore.getState().projectSettingsByProjectId;
+      const customProcessIdsByProjectId = new Map<ProjectId, string[]>();
+      for (const project of snapshot.projects) {
+        const settings = projectSettingsByProjectId[project.id];
+        if (!settings) continue;
+        const customIds = settings.tools.flatMap((tool) =>
+          tool.kind === "custom_process" && tool.serverProcessId != null
+            ? [tool.serverProcessId]
+            : [],
+        );
+        if (customIds.length > 0) {
+          customProcessIdsByProjectId.set(project.id, customIds);
+        }
+      }
       const activeThreadIds = collectActiveTerminalThreadIds({
         snapshotThreads: snapshot.threads,
         draftThreadIds,
+        projectIds: snapshot.projects.map((p) => p.id),
+        customProcessIdsByProjectId,
       });
       removeOrphanedTerminalStates(activeThreadIds);
       if (pending) {
