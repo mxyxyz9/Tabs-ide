@@ -35,6 +35,9 @@ It supports multiple AI providers:
 - 💻 **Integrated Terminals** — Embedded terminal sessions with PTY support
 - 🌐 **Browser Tooling** — Built-in browser surfaces for web development
 - 🔀 **Git Controls** — Full git workflow: branches, commits, diffs, stash, merge, rebase, PRs
+- 🛡️ **Tailscale & Connections** — Secure remote network access and Tailscale VPN status integration
+- ⚙️ **Source Control Settings** — Discover and configure Git/source control repositories and credentials
+- 🎛️ **Model Picker Settings** — Select, configure, and switch between provider models directly from settings
 - ⌨️ **Custom Keybindings** — Configurable keyboard shortcuts
 - 🔄 **Session Checkpointing** — Git-based session state persistence
 - 📦 **Cross-Platform** — macOS (DMG), Windows (NSIS), Linux (AppImage)

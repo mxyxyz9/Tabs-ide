@@ -30,6 +30,9 @@ It combines:
 - project-specific custom browser tabs and terminal tabs
 - git and server controls inside the workspace shell
 - desktop app with an embedded Code tab powered by a local VS Code build
+- Tailscale status monitoring & network connection options
+- Source control / Git credentials configuration
+- Multi-provider model configuration picker in settings
 
 ## Prerequisites
 
