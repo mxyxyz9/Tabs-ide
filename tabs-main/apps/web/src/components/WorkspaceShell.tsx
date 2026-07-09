@@ -93,7 +93,14 @@ import {
   projectReadFileQueryOptions,
   projectSearchEntriesQueryOptions,
 } from "../lib/projectReactQuery";
-import { cn, isWindowsPlatform, newCommandId, newProjectId, randomUUID } from "../lib/utils";
+import {
+  cn,
+  isWindowsPlatform,
+  newCommandId,
+  newProjectId,
+  randomUUID,
+  newThreadId,
+} from "../lib/utils";
 import { APP_VERSION } from "../branding";
 
 // On Windows the native title bar is hidden and the caption buttons are overlaid
@@ -155,7 +162,13 @@ import {
   useProjectWorkspaceSettings,
   useWorkspaceShellStore,
 } from "../workspaceShellStore";
-import { DEFAULT_THREAD_TERMINAL_ID, type Project, type Thread } from "../types";
+import {
+  DEFAULT_THREAD_TERMINAL_ID,
+  DEFAULT_INTERACTION_MODE,
+  DEFAULT_RUNTIME_MODE,
+  type Project,
+  type Thread,
+} from "../types";
 import { type ProjectBrowserToolState } from "../workspaceShellStore";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { projectScriptRuntimeEnv } from "../projectScripts";
@@ -1380,6 +1393,7 @@ function FallbackCodeTool(props: { project: Project }) {
 function DesktopCodeTool(props: { project: Project }) {
   const api = readNativeApi();
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const scheduleBoundsRef = useRef<(() => void) | null>(null);
   const [codeHostState, setCodeHostState] = useState<DesktopCodeHostState>(
     DEFAULT_DESKTOP_CODE_HOST_STATE,
   );
@@ -1448,6 +1462,34 @@ function DesktopCodeTool(props: { project: Project }) {
   const sideChatThreadTitle =
     projectThreads.find((thread) => thread.id === sideChatThreadId)?.title ||
     (sideChatThreadId ? "New chat" : "Chat");
+
+  // Fix 1: Auto-create a thread when side chat opens with no thread
+  useEffect(() => {
+    if (!sideChatOpen) return;
+    if (sideChatThreadId) return; // already has a thread
+
+    const { getDraftThreadByProjectId, setProjectDraftThreadId } = useComposerDraftStore.getState();
+
+    // Get existing draft thread for this project, or create one
+    const existingDraft = getDraftThreadByProjectId(projectId);
+    if (existingDraft) {
+      setSideChatThreadIdOverride(existingDraft.threadId);
+    } else {
+      const nextThreadId = newThreadId();
+      setProjectDraftThreadId(projectId, nextThreadId, {
+        createdAt: new Date().toISOString(),
+        runtimeMode: DEFAULT_RUNTIME_MODE,
+        interactionMode: DEFAULT_INTERACTION_MODE,
+      });
+      setSideChatThreadIdOverride(nextThreadId);
+    }
+  }, [sideChatOpen, sideChatThreadId, projectId, setSideChatThreadIdOverride]);
+
+  // Fix 3: Bounds update when side chat opens/closes/resizes
+  useEffect(() => {
+    scheduleBoundsRef.current?.();
+  }, [sideChatOpen, sideChatWidth]);
+
   // Drag-to-resize the side chat from its left edge (BrowserView follows via the
   // bounds ResizeObserver). Persist the chosen width across sessions.
   const startSideChatResize = useCallback((event: React.PointerEvent) => {
@@ -1470,18 +1512,17 @@ function DesktopCodeTool(props: { project: Project }) {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   }, []);
-  const { handleNewThread: createThread } = useHandleNewThread();
-  const onNewSideChatThread = useCallback(async () => {
-    // Create the draft WITHOUT navigating to its thread route — navigating would
-    // trip the "thread route → force Agents tool" effect and yank the user out of
-    // the Code tab. The side chat renders the draft locally via the override.
-    await createThread(projectId, { skipNavigation: true });
-    const draft = useComposerDraftStore.getState().getDraftThreadByProjectId(projectId);
-    if (draft) {
-      setSideChatThreadIdOverride(draft.threadId);
-    }
+  const onNewSideChatThread = useCallback(() => {
+    const { setProjectDraftThreadId } = useComposerDraftStore.getState();
+    const nextThreadId = newThreadId();
+    setProjectDraftThreadId(projectId, nextThreadId, {
+      createdAt: new Date().toISOString(),
+      runtimeMode: DEFAULT_RUNTIME_MODE,
+      interactionMode: DEFAULT_INTERACTION_MODE,
+    });
+    setSideChatThreadIdOverride(nextThreadId);
     setShowSideChatHistory(false);
-  }, [createThread, projectId]);
+  }, [projectId, setSideChatThreadIdOverride]);
   const runCodeCommand = useCallback(
     (commandId: string) => {
       void window.desktopBridge?.runCodeCommand(projectId, commandId).catch(() => undefined);
@@ -1634,6 +1675,8 @@ function DesktopCodeTool(props: { project: Project }) {
       frameId = window.requestAnimationFrame(publishBounds);
     };
 
+    scheduleBoundsRef.current = scheduleBounds;
+
     const resizeObserver = new ResizeObserver(() => {
       scheduleBounds();
     });
@@ -1642,6 +1685,7 @@ function DesktopCodeTool(props: { project: Project }) {
     scheduleBounds();
 
     return () => {
+      scheduleBoundsRef.current = null;
       resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleBounds);
       if (frameId !== 0) {
@@ -1821,12 +1865,16 @@ function DesktopCodeTool(props: { project: Project }) {
             <div className="flex min-h-0 flex-1 flex-col">
               {showSideChatHistory ? (
                 <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-                  {projectThreads.length === 0 ? (
-                    <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                      No threads yet. Hit + to start one.
-                    </div>
-                  ) : (
-                    projectThreads.map((thread) => (
+                  {(() => {
+                    const sideChatThreads = projectThreads;
+                    if (sideChatThreads.length === 0) {
+                      return (
+                        <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                          No threads yet. Hit + to start one.
+                        </div>
+                      );
+                    }
+                    return sideChatThreads.map((thread) => (
                       <button
                         key={thread.id}
                         type="button"
@@ -1846,8 +1894,8 @@ function DesktopCodeTool(props: { project: Project }) {
                           {thread.title || "Untitled"}
                         </span>
                       </button>
-                    ))
-                  )}
+                    ));
+                  })()}
                 </div>
               ) : sideChatThreadId ? (
                 <Suspense
