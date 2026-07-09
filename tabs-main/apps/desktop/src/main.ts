@@ -2645,15 +2645,34 @@ async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap main window created");
 }
 
-app.on("before-quit", () => {
+let isCleanupFinished = false;
+
+app.on("before-quit", (event) => {
+  if (isCleanupFinished) {
+    return;
+  }
+
+  event.preventDefault(); // Hold the quit to perform async cleanup
   isQuitting = true;
-  writeDesktopLogHeader("before-quit received");
+  writeDesktopLogHeader("before-quit received, performing async cleanup");
+
   clearUpdatePollTimer();
   codeHostManager.dispose();
   browserHostManager.dispose();
   codeControlChannel.dispose();
-  stopBackend();
-  restoreStdIoCapture?.();
+
+  void (async () => {
+    try {
+      await stopBackendAndWaitForExit(5000);
+    } catch (error) {
+      writeDesktopLogHeader(`stopBackendAndWaitForExit failed: ${error}`);
+    } finally {
+      isCleanupFinished = true;
+      restoreStdIoCapture?.();
+      writeDesktopLogHeader("cleanup finished, exiting app");
+      app.exit(0);
+    }
+  })();
 });
 
 if (hasSingleInstanceLock) {
@@ -2695,34 +2714,21 @@ if (hasSingleInstanceLock) {
     });
 }
 
+// Window-all-closed unconditionally calls app.quit() on all platforms (including darwin).
+// This is intentional IDE behavior (exits the app when the main editor window is closed,
+// rather than leaving a headless backend process running).
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  app.quit();
 });
 
 if (process.platform !== "win32") {
   process.on("SIGINT", () => {
-    if (isQuitting) return;
-    isQuitting = true;
     writeDesktopLogHeader("SIGINT received");
-    clearUpdatePollTimer();
-    codeHostManager.dispose();
-    browserHostManager.dispose();
-    stopBackend();
-    restoreStdIoCapture?.();
     app.quit();
   });
 
   process.on("SIGTERM", () => {
-    if (isQuitting) return;
-    isQuitting = true;
     writeDesktopLogHeader("SIGTERM received");
-    clearUpdatePollTimer();
-    codeHostManager.dispose();
-    browserHostManager.dispose();
-    stopBackend();
-    restoreStdIoCapture?.();
     app.quit();
   });
 }

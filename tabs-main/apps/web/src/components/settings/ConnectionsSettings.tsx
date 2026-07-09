@@ -5,7 +5,18 @@ import { Input } from "~/components/ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { SettingsSection } from "~/routes/_chat.settings";
 import { toastManager } from "~/components/ui/toast";
-import { Link2Icon, MonitorIcon, ShieldCheckIcon, InfoIcon, LockIcon, ChevronLeftIcon, ChevronRightIcon, TerminalIcon, PlusIcon, TriangleAlertIcon } from "lucide-react";
+import {
+  Link2Icon,
+  MonitorIcon,
+  ShieldCheckIcon,
+  InfoIcon,
+  LockIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  TerminalIcon,
+  PlusIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import {
   Dialog,
   DialogTrigger,
@@ -94,9 +105,10 @@ export function ConnectionsSettings() {
     toastManager.add({
       type: "success",
       title: "Connecting to environment...",
-      description: addMode === "remote"
-        ? `Attempting connection to remote link at ${remoteHost}`
-        : `Connecting via SSH to ${sshHost}:${sshPort}`,
+      description:
+        addMode === "remote"
+          ? `Attempting connection to remote link at ${remoteHost}`
+          : `Connecting via SSH to ${sshHost}:${sshPort}`,
     });
     setIsAddOpen(false);
     setRemoteHost("");
@@ -161,12 +173,22 @@ export function ConnectionsSettings() {
                     Tailscale HTTPS
                   </span>
                 </div>
-                <Dialog onOpenChange={(open) => { if (open) setHttpsStep(1); }}>
-                  <DialogTrigger render={
-                    <Button size="icon-xs" variant="ghost" className="size-6 text-muted-foreground hover:text-foreground p-0 rounded-full flex items-center justify-center">
-                      <InfoIcon className="size-4" />
-                    </Button>
-                  } />
+                <Dialog
+                  onOpenChange={(open) => {
+                    if (open) setHttpsStep(1);
+                  }}
+                >
+                  <DialogTrigger
+                    render={
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        className="size-6 text-muted-foreground hover:text-foreground p-0 rounded-full flex items-center justify-center"
+                      >
+                        <InfoIcon className="size-4" />
+                      </Button>
+                    }
+                  />
                   <DialogContent className="max-w-[520px]">
                     <DialogHeader>
                       <DialogTitle className="flex items-center gap-2 text-[18px]">
@@ -184,9 +206,13 @@ export function ConnectionsSettings() {
                             <ShieldCheckIcon className="size-8" />
                           </div>
                           <div className="space-y-2">
-                            <h4 className="text-[16px] font-bold text-foreground">1. Private Mesh Network (Tailnet)</h4>
+                            <h4 className="text-[16px] font-bold text-foreground">
+                              1. Private Mesh Network (Tailnet)
+                            </h4>
                             <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                              Tailscale links your devices together in a secure peer-to-peer virtual private network. All connections are end-to-end encrypted using WireGuard.
+                              Tailscale links your devices together in a secure peer-to-peer virtual
+                              private network. All connections are end-to-end encrypted using
+                              WireGuard.
                             </p>
                           </div>
                         </div>
@@ -198,9 +224,16 @@ export function ConnectionsSettings() {
                             <MonitorIcon className="size-8" />
                           </div>
                           <div className="space-y-2">
-                            <h4 className="text-[16px] font-bold text-foreground">2. MagicDNS Mapping</h4>
+                            <h4 className="text-[16px] font-bold text-foreground">
+                              2. MagicDNS Mapping
+                            </h4>
                             <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                              MagicDNS automatically translates dynamic IP addresses into clean, stable, human-readable hostnames (e.g. <code className="bg-muted px-1.5 py-0.5 rounded text-[12px] font-mono text-foreground font-semibold">my-server.ts.net</code>).
+                              MagicDNS automatically translates dynamic IP addresses into clean,
+                              stable, human-readable hostnames (e.g.{" "}
+                              <code className="bg-muted px-1.5 py-0.5 rounded text-[12px] font-mono text-foreground font-semibold">
+                                my-server.ts.net
+                              </code>
+                              ).
                             </p>
                           </div>
                         </div>
@@ -212,9 +245,13 @@ export function ConnectionsSettings() {
                             <LockIcon className="size-8" />
                           </div>
                           <div className="space-y-2">
-                            <h4 className="text-[16px] font-bold text-foreground">3. Private SSL Certificates</h4>
+                            <h4 className="text-[16px] font-bold text-foreground">
+                              3. Private SSL Certificates
+                            </h4>
                             <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                              Tailscale provisions trusted Let's Encrypt certificates directly for your MagicDNS domain name. This enables fully verified, private HTTPS inside your browser.
+                              Tailscale provisions trusted Let's Encrypt certificates directly for
+                              your MagicDNS domain name. This enables fully verified, private HTTPS
+                              inside your browser.
                             </p>
                           </div>
                         </div>
@@ -226,7 +263,10 @@ export function ConnectionsSettings() {
                           size="sm"
                           variant="ghost"
                           onClick={() => setHttpsStep((s) => Math.max(1, s - 1))}
-                          className={cn("text-xs h-8 gap-1 pl-1.5 pr-2.5", httpsStep === 1 && "invisible")}
+                          className={cn(
+                            "text-xs h-8 gap-1 pl-1.5 pr-2.5",
+                            httpsStep === 1 && "invisible",
+                          )}
                         >
                           <ChevronLeftIcon className="size-4" />
                           Back
@@ -240,7 +280,9 @@ export function ConnectionsSettings() {
                               onClick={() => setHttpsStep(step)}
                               className={cn(
                                 "size-1.5 rounded-full transition-all cursor-pointer",
-                                httpsStep === step ? "bg-primary scale-125" : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                                httpsStep === step
+                                  ? "bg-primary scale-125"
+                                  : "bg-muted-foreground/30 hover:bg-muted-foreground/50",
                               )}
                             />
                           ))}
@@ -257,11 +299,13 @@ export function ConnectionsSettings() {
                             <ChevronRightIcon className="size-4" />
                           </Button>
                         ) : (
-                          <DialogClose render={
-                            <Button size="sm" variant="secondary" className="text-xs h-8">
-                              Finish
-                            </Button>
-                          } />
+                          <DialogClose
+                            render={
+                              <Button size="sm" variant="secondary" className="text-xs h-8">
+                                Finish
+                              </Button>
+                            }
+                          />
                         )}
                       </div>
                     </DialogPanel>
@@ -272,10 +316,10 @@ export function ConnectionsSettings() {
                 {isLoadingTailscale
                   ? "Checking Tailscale status..."
                   : !tailscaleStatus.available
-                  ? "Install Tailscale to enable secure peer-to-peer HTTPS access."
-                  : !tailscaleStatus.running
-                  ? "Start Tailscale to activate secure HTTPS routing."
-                  : "Securely connected to Tailnet via MagicDNS. Domain: "}
+                    ? "Install Tailscale to enable secure peer-to-peer HTTPS access."
+                    : !tailscaleStatus.running
+                      ? "Start Tailscale to activate secure HTTPS routing."
+                      : "Securely connected to Tailnet via MagicDNS. Domain: "}
                 {tailscaleStatus.running && tailscaleStatus.magicDnsName && (
                   <code className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono font-semibold">
                     {tailscaleStatus.magicDnsName}
@@ -318,12 +362,22 @@ export function ConnectionsSettings() {
       <SettingsSection
         title="Remote Environments"
         headerAction={
-          <Dialog onOpenChange={(open) => { if (open) setGuideStep(1); }}>
-            <DialogTrigger render={
-              <Button size="icon-xs" variant="ghost" className="size-5 text-muted-foreground hover:text-foreground">
-                <InfoIcon className="size-3.5" />
-              </Button>
-            } />
+          <Dialog
+            onOpenChange={(open) => {
+              if (open) setGuideStep(1);
+            }}
+          >
+            <DialogTrigger
+              render={
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  className="size-5 text-muted-foreground hover:text-foreground"
+                >
+                  <InfoIcon className="size-3.5" />
+                </Button>
+              }
+            />
             <DialogContent className="max-w-[520px]">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 text-[18px]">
@@ -341,9 +395,13 @@ export function ConnectionsSettings() {
                       <MonitorIcon className="size-8" />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-[16px] font-bold text-foreground">1. Expose Host Environment</h4>
+                      <h4 className="text-[16px] font-bold text-foreground">
+                        1. Expose Host Environment
+                      </h4>
                       <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                        Navigate to the target remote server's settings panel, switch to <strong>Connections</strong>, and enable the <strong>Network Access</strong> toggle.
+                        Navigate to the target remote server's settings panel, switch to{" "}
+                        <strong>Connections</strong>, and enable the <strong>Network Access</strong>{" "}
+                        toggle.
                       </p>
                     </div>
                   </div>
@@ -355,9 +413,12 @@ export function ConnectionsSettings() {
                       <ShieldCheckIcon className="size-8" />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-[16px] font-bold text-foreground">2. Configure Secure Mesh (Tailscale)</h4>
+                      <h4 className="text-[16px] font-bold text-foreground">
+                        2. Configure Secure Mesh (Tailscale)
+                      </h4>
                       <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                        Ensure Tailscale is installed and running on both devices to map a secure encrypted connection without firewall modifications.
+                        Ensure Tailscale is installed and running on both devices to map a secure
+                        encrypted connection without firewall modifications.
                       </p>
                     </div>
                   </div>
@@ -369,9 +430,12 @@ export function ConnectionsSettings() {
                       <Link2Icon className="size-8" />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-[16px] font-bold text-foreground">3. Connect on Client Editor</h4>
+                      <h4 className="text-[16px] font-bold text-foreground">
+                        3. Connect on Client Editor
+                      </h4>
                       <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                        On your local machine, choose <strong>Add environment</strong>, enter the remote server IP or MagicDNS address, and press connect.
+                        On your local machine, choose <strong>Add environment</strong>, enter the
+                        remote server IP or MagicDNS address, and press connect.
                       </p>
                     </div>
                   </div>
@@ -383,9 +447,12 @@ export function ConnectionsSettings() {
                       <LockIcon className="size-8" />
                     </div>
                     <div className="space-y-2">
-                      <h4 className="text-[16px] font-bold text-foreground">4. Authorize Session</h4>
+                      <h4 className="text-[16px] font-bold text-foreground">
+                        4. Authorize Session
+                      </h4>
                       <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                        Input the pairing authorization codes to complete credentials exchange. Connections are end-to-end encrypted.
+                        Input the pairing authorization codes to complete credentials exchange.
+                        Connections are end-to-end encrypted.
                       </p>
                     </div>
                   </div>
@@ -397,7 +464,10 @@ export function ConnectionsSettings() {
                     size="sm"
                     variant="ghost"
                     onClick={() => setGuideStep((s) => Math.max(1, s - 1))}
-                    className={cn("text-xs h-8 gap-1 pl-1.5 pr-2.5", guideStep === 1 && "invisible")}
+                    className={cn(
+                      "text-xs h-8 gap-1 pl-1.5 pr-2.5",
+                      guideStep === 1 && "invisible",
+                    )}
                   >
                     <ChevronLeftIcon className="size-4" />
                     Back
@@ -411,7 +481,9 @@ export function ConnectionsSettings() {
                         onClick={() => setGuideStep(step)}
                         className={cn(
                           "size-1.5 rounded-full transition-all cursor-pointer",
-                          guideStep === step ? "bg-primary scale-125" : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                          guideStep === step
+                            ? "bg-primary scale-125"
+                            : "bg-muted-foreground/30 hover:bg-muted-foreground/50",
                         )}
                       />
                     ))}
@@ -428,11 +500,13 @@ export function ConnectionsSettings() {
                       <ChevronRightIcon className="size-4" />
                     </Button>
                   ) : (
-                    <DialogClose render={
-                      <Button size="sm" variant="secondary" className="text-xs h-8">
-                        Finish
-                      </Button>
-                    } />
+                    <DialogClose
+                      render={
+                        <Button size="sm" variant="secondary" className="text-xs h-8">
+                          Finish
+                        </Button>
+                      }
+                    />
                   )}
                 </div>
               </DialogPanel>
@@ -449,12 +523,18 @@ export function ConnectionsSettings() {
             </p>
             <div className="pt-2">
               <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogTrigger render={
-                  <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 font-semibold">
-                    <PlusIcon className="size-3.5" />
-                    Add environment
-                  </Button>
-                } />
+                <DialogTrigger
+                  render={
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-8 gap-1.5 font-semibold"
+                    >
+                      <PlusIcon className="size-3.5" />
+                      Add environment
+                    </Button>
+                  }
+                />
                 <DialogContent className="max-w-[520px]">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-[18px]">
@@ -462,7 +542,9 @@ export function ConnectionsSettings() {
                       Add Environment
                     </DialogTitle>
                     <DialogDescription className="text-[13px]">
-                      {!isTailscaleReady ? "Prerequisite Required" : "Pair another environment to this client."}
+                      {!isTailscaleReady
+                        ? "Prerequisite Required"
+                        : "Pair another environment to this client."}
                     </DialogDescription>
                   </DialogHeader>
                   <DialogPanel className="space-y-6 pt-2 pb-3">
@@ -472,18 +554,23 @@ export function ConnectionsSettings() {
                           <TriangleAlertIcon className="size-8 text-amber-500" />
                         </div>
                         <div className="space-y-2">
-                          <h4 className="text-[16px] font-bold text-foreground">Tailscale Connection Required</h4>
+                          <h4 className="text-[16px] font-bold text-foreground">
+                            Tailscale Connection Required
+                          </h4>
                           <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
                             Connecting to remote environments requires an active mesh network.
-                            Please install and connect Tailscale under **This Environment** before continuing.
+                            Please install and connect Tailscale under **This Environment** before
+                            continuing.
                           </p>
                         </div>
                         <div className="flex items-center justify-center gap-2 pt-4 border-t border-border/40 w-full">
-                          <DialogClose render={
-                            <Button size="sm" variant="ghost" className="text-xs h-8">
-                              Cancel
-                            </Button>
-                          } />
+                          <DialogClose
+                            render={
+                              <Button size="sm" variant="ghost" className="text-xs h-8">
+                                Cancel
+                              </Button>
+                            }
+                          />
                           <Button
                             size="sm"
                             variant="default"
@@ -508,7 +595,7 @@ export function ConnectionsSettings() {
                               "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
                               addMode === "remote"
                                 ? "bg-background text-foreground shadow-xs border border-border/40"
-                                : "text-muted-foreground hover:text-foreground"
+                                : "text-muted-foreground hover:text-foreground",
                             )}
                           >
                             <Link2Icon className="size-3.5" />
@@ -521,7 +608,7 @@ export function ConnectionsSettings() {
                               "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
                               addMode === "ssh"
                                 ? "bg-background text-foreground shadow-xs border border-border/40"
-                                : "text-muted-foreground hover:text-foreground"
+                                : "text-muted-foreground hover:text-foreground",
                             )}
                           >
                             <TerminalIcon className="size-3.5" />
@@ -533,7 +620,9 @@ export function ConnectionsSettings() {
                         {addMode === "remote" ? (
                           <div className="space-y-4 text-left">
                             <div className="space-y-1">
-                              <label className="text-xs font-semibold text-foreground">Backend Host Address</label>
+                              <label className="text-xs font-semibold text-foreground">
+                                Backend Host Address
+                              </label>
                               <Input
                                 value={remoteHost}
                                 onChange={(e) => setRemoteHost(e.target.value)}
@@ -546,7 +635,9 @@ export function ConnectionsSettings() {
                             </div>
 
                             <div className="space-y-1">
-                              <label className="text-xs font-semibold text-foreground">Pairing Code</label>
+                              <label className="text-xs font-semibold text-foreground">
+                                Pairing Code
+                              </label>
                               <Input
                                 type="password"
                                 value={pairingCode}
@@ -563,7 +654,9 @@ export function ConnectionsSettings() {
                           <div className="space-y-4 text-left">
                             <div className="grid grid-cols-3 gap-3">
                               <div className="col-span-2 space-y-1">
-                                <label className="text-xs font-semibold text-foreground">SSH Host / Alias</label>
+                                <label className="text-xs font-semibold text-foreground">
+                                  SSH Host / Alias
+                                </label>
                                 <Input
                                   value={sshHost}
                                   onChange={(e) => setSshHost(e.target.value)}
@@ -572,7 +665,9 @@ export function ConnectionsSettings() {
                                 />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-xs font-semibold text-foreground">Port</label>
+                                <label className="text-xs font-semibold text-foreground">
+                                  Port
+                                </label>
                                 <Input
                                   value={sshPort}
                                   disabled
@@ -582,18 +677,21 @@ export function ConnectionsSettings() {
                               </div>
                             </div>
                             <span className="text-[11px] text-muted-foreground block">
-                              Uses local SSH config files, credentials, and secure port-forwarding tunnels.
+                              Uses local SSH config files, credentials, and secure port-forwarding
+                              tunnels.
                             </span>
                           </div>
                         )}
 
                         {/* Footer Actions */}
                         <div className="flex items-center justify-end gap-2 pt-5 border-t border-border/40">
-                          <DialogClose render={
-                            <Button size="sm" variant="ghost" className="text-xs h-8">
-                              Cancel
-                            </Button>
-                          } />
+                          <DialogClose
+                            render={
+                              <Button size="sm" variant="ghost" className="text-xs h-8">
+                                Cancel
+                              </Button>
+                            }
+                          />
                           <Button
                             size="sm"
                             variant="default"

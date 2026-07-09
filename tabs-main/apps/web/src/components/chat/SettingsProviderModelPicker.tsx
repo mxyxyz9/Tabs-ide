@@ -90,14 +90,23 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
         }
       >
         <span className="flex min-w-0 flex-1 items-center gap-1.5">
-          {activeEntry ? (() => {
-            const DriverIcon = DRIVER_ICON[activeEntry.driverKind];
-            return DriverIcon ? (
-              <DriverIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/80" />
-            ) : null;
-          })() : null}
+          {activeEntry
+            ? (() => {
+                const DriverIcon = DRIVER_ICON[activeEntry.driverKind];
+                return DriverIcon ? (
+                  <DriverIcon
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 text-muted-foreground/80"
+                  />
+                ) : null;
+              })()
+            : null}
           <Tooltip>
-            <TooltipTrigger render={<span className="min-w-0 flex-1 overflow-hidden truncate text-xs font-medium text-foreground/90" />}>
+            <TooltipTrigger
+              render={
+                <span className="min-w-0 flex-1 overflow-hidden truncate text-xs font-medium text-foreground/90" />
+              }
+            >
               {triggerModelName}
             </TooltipTrigger>
             <TooltipPopup side="top">
@@ -107,14 +116,8 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
         </span>
         <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-55" />
       </PopoverTrigger>
-      <PopoverPopup
-        align="end"
-        className="w-72 shadow-xl"
-      >
-        <div
-          className="max-h-80 overflow-y-auto p-1.5"
-          data-model-picker-content="true"
-        >
+      <PopoverPopup align="end" className="w-72 shadow-xl">
+        <div className="max-h-80 overflow-y-auto p-1.5" data-model-picker-content="true">
           {enabledEntries.length === 0 ? (
             <div className="px-3 py-4 text-center text-xs text-muted-foreground">
               No providers available
@@ -125,7 +128,13 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
               const DriverIcon = DRIVER_ICON[entry.driverKind];
               if (models.length === 0) return null;
               return (
-                <div key={entry.instanceId} className={cn("space-y-0.5", entryIndex > 0 && "mt-1.5 pt-1.5 border-t border-border/40")}>
+                <div
+                  key={entry.instanceId}
+                  className={cn(
+                    "space-y-0.5",
+                    entryIndex > 0 && "mt-1.5 pt-1.5 border-t border-border/40",
+                  )}
+                >
                   <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 select-none">
                     {DriverIcon ? (
                       <DriverIcon aria-hidden="true" className="size-3 shrink-0 opacity-70" />
@@ -163,4 +172,3 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
     </Popover>
   );
 });
-

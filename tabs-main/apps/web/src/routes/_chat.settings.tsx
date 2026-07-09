@@ -1390,7 +1390,10 @@ function SettingsRouteView() {
                                 textGenerationModelSelection: resolveAppModelSelectionState(
                                   {
                                     ...settings,
-                                    textGenerationModelSelection: createModelSelection(instanceId, model),
+                                    textGenerationModelSelection: createModelSelection(
+                                      instanceId,
+                                      model,
+                                    ),
                                   },
                                   serverProviders,
                                 ),

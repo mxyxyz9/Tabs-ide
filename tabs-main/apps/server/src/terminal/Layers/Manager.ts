@@ -254,6 +254,15 @@ function capHistory(history: string, maxLines: number): string {
   return hasTrailingNewline ? `${capped}\n` : capped;
 }
 
+function shouldSkipHistory(threadId: string, terminalId: string): boolean {
+  return (
+    threadId.startsWith("server:") ||
+    threadId.startsWith("preset:") ||
+    terminalId.startsWith("server:") ||
+    terminalId.startsWith("preset:")
+  );
+}
+
 function isCsiFinalByte(codePoint: number): boolean {
   return codePoint >= 0x40 && codePoint <= 0x7e;
 }
@@ -542,7 +551,9 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
       const existing = this.sessions.get(sessionKey);
       if (!existing) {
         await this.flushPersistQueue(input.threadId, input.terminalId);
-        const history = await this.readHistory(input.threadId, input.terminalId);
+        const history = shouldSkipHistory(input.threadId, input.terminalId)
+          ? ""
+          : await this.readHistory(input.threadId, input.terminalId);
         const cols = input.cols ?? DEFAULT_OPEN_COLS;
         const rows = input.rows ?? DEFAULT_OPEN_ROWS;
         const session: TerminalSessionState = {
@@ -947,40 +958,81 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
   }
 
   private killProcessWithEscalation(
-    process: PtyProcess,
+    ptyProcess: PtyProcess,
     threadId: string,
     terminalId: string,
   ): void {
-    this.clearKillEscalationTimer(process);
-    try {
-      process.kill("SIGTERM");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.warn("failed to kill terminal process", {
-        threadId,
-        terminalId,
-        signal: "SIGTERM",
-        error: message,
-      });
-      return;
+    const pid = ptyProcess.pid;
+    this.clearKillEscalationTimer(ptyProcess);
+
+    const isWin = globalThis.process.platform === "win32";
+
+    if (typeof pid === "number" && pid > 0 && !isWin) {
+      try {
+        globalThis.process.kill(-pid, "SIGTERM");
+      } catch (error) {
+        try {
+          ptyProcess.kill("SIGTERM");
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn("failed to kill terminal process", {
+            threadId,
+            terminalId,
+            signal: "SIGTERM",
+            error: message,
+          });
+          return;
+        }
+      }
+    } else {
+      try {
+        ptyProcess.kill("SIGTERM");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn("failed to kill terminal process", {
+          threadId,
+          terminalId,
+          signal: "SIGTERM",
+          error: message,
+        });
+        return;
+      }
     }
 
     const timer = setTimeout(() => {
-      this.killEscalationTimers.delete(process);
-      try {
-        process.kill("SIGKILL");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logger.warn("failed to force-kill terminal process", {
-          threadId,
-          terminalId,
-          signal: "SIGKILL",
-          error: message,
-        });
+      this.killEscalationTimers.delete(ptyProcess);
+      if (typeof pid === "number" && pid > 0 && !isWin) {
+        try {
+          globalThis.process.kill(-pid, "SIGKILL");
+        } catch (error) {
+          try {
+            ptyProcess.kill("SIGKILL");
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            this.logger.warn("failed to force-kill terminal process", {
+              threadId,
+              terminalId,
+              signal: "SIGKILL",
+              error: message,
+            });
+          }
+        }
+      } else {
+        try {
+          ptyProcess.kill("SIGKILL");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logger.warn("failed to force-kill terminal process", {
+            threadId,
+            terminalId,
+            signal: "SIGKILL",
+            error: message,
+          });
+        }
       }
     }, this.processKillGraceMs);
     timer.unref?.();
-    this.killEscalationTimers.set(process, timer);
+    this.killEscalationTimers.set(ptyProcess, timer);
   }
 
   private evictInactiveSessionsIfNeeded(): void {
@@ -1009,6 +1061,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
   }
 
   private queuePersist(threadId: string, terminalId: string, history: string): void {
+    if (shouldSkipHistory(threadId, terminalId)) return;
     const persistenceKey = toSessionKey(threadId, terminalId);
     this.pendingPersistHistory.set(persistenceKey, history);
     this.schedulePersist(threadId, terminalId);
@@ -1019,6 +1072,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
     terminalId: string,
     history: string,
   ): Promise<void> {
+    if (shouldSkipHistory(threadId, terminalId)) return;
     const persistenceKey = toSessionKey(threadId, terminalId);
     this.clearPersistTimer(threadId, terminalId);
     this.pendingPersistHistory.delete(persistenceKey);
