@@ -4922,17 +4922,9 @@ export type V2ModelListResponse__ReasoningEffort =
   | "medium"
   | "high"
   | "xhigh";
-export const V2ModelListResponse__ReasoningEffort = Schema.Literals([
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-]).annotate({
-  description:
-    "See https://platform.openai.com/docs/guides/reasoning?api-mode=responses#get-started-with-reasoning",
-});
+export const V2ModelListResponse__ReasoningEffort = Schema.String.annotate({
+  description: "A non-empty reasoning effort value advertised by the model.",
+}).check(Schema.isMinLength(1)) as Schema.Schema<V2ModelListResponse__ReasoningEffort>;
 
 export type V2ModelReroutedNotification__ModelRerouteReason = "highRiskCyberActivity";
 export const V2ModelReroutedNotification__ModelRerouteReason =
