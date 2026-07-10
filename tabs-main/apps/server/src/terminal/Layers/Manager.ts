@@ -44,7 +44,9 @@ const decodeTerminalResizeInput = Schema.decodeUnknownSync(TerminalResizeInput);
 const decodeTerminalClearInput = Schema.decodeUnknownSync(TerminalClearInput);
 const decodeTerminalCloseInput = Schema.decodeUnknownSync(TerminalCloseInput);
 
-type TerminalSubprocessChecker = (terminalPid: number) => Promise<boolean>;
+type TerminalSubprocessChecker = (
+  terminalPid: number,
+) => Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }>;
 
 function defaultShellResolver(): string {
   if (process.platform === "win32") {
@@ -165,12 +167,39 @@ function isRetryableShellSpawnError(error: unknown): boolean {
   );
 }
 
-async function checkWindowsSubprocessActivity(terminalPid: number): Promise<boolean> {
-  const command = [
-    `$children = Get-CimInstance Win32_Process -Filter "ParentProcessId = ${terminalPid}" -ErrorAction SilentlyContinue`,
-    "if ($children) { exit 0 }",
-    "exit 1",
-  ].join("; ");
+function parseFirstChildPidFromPgrep(stdout: string): number | null {
+  for (const line of stdout.split(/\r?\n/g)) {
+    const n = Number.parseInt(line.trim(), 10);
+    if (Number.isInteger(n) && n > 0) {
+      return n;
+    }
+  }
+  return null;
+}
+
+function normalizeChildCommandName(raw: string, platform: NodeJS.Platform): string | null {
+  let trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+  if (
+    (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+    (trimmed.startsWith("(") && trimmed.endsWith(")"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  const firstToken = (trimmed.split(/\s+/)[0] ?? trimmed).trim();
+  if (firstToken.length === 0) return null;
+  const separators = platform === "win32" ? /[\\/]/ : /\//;
+  const base = firstToken.split(separators).at(-1) ?? firstToken;
+  const withoutExe =
+    platform === "win32" && base.toLowerCase().endsWith(".exe") ? base.slice(0, -4) : base;
+  return withoutExe.length > 0 ? withoutExe : null;
+}
+
+async function checkWindowsSubprocessActivity(
+  terminalPid: number
+): Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }> {
+  const command =
+    'Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { Write-Output "$($_.ProcessId)|$($_.ParentProcessId)|$($_.Name)" }';
   try {
     const result = await runProcess(
       "powershell.exe",
@@ -180,15 +209,42 @@ async function checkWindowsSubprocessActivity(terminalPid: number): Promise<bool
         allowNonZeroExit: true,
         maxBufferBytes: 32_768,
         outputMode: "truncate",
-      },
+      }
     );
-    return result.code === 0;
+    if (result.code !== 0) {
+      return { hasRunningSubprocess: false, childCommand: null };
+    }
+    const processNameById = new Map<number, string>();
+    const childrenByParent = new Map<number, number[]>();
+    for (const line of result.stdout.split(/\r?\n/g)) {
+      const [pidRaw, parentPidRaw, nameRaw] = line.trim().split("|", 3);
+      const pid = Number(pidRaw);
+      const parentPid = Number(parentPidRaw);
+      if (!Number.isInteger(pid) || !Number.isInteger(parentPid)) continue;
+      processNameById.set(pid, nameRaw?.trim() ?? "");
+      const children = childrenByParent.get(parentPid) ?? [];
+      children.push(pid);
+      childrenByParent.set(parentPid, children);
+    }
+    const directChildren = childrenByParent.get(terminalPid) ?? [];
+    const childPid = directChildren[0];
+    if (childPid === undefined) {
+      return { hasRunningSubprocess: false, childCommand: null };
+    }
+    const normalized = normalizeChildCommandName(processNameById.get(childPid) ?? "", "win32");
+    return {
+      hasRunningSubprocess: true,
+      childCommand: normalized,
+    };
   } catch {
-    return false;
+    return { hasRunningSubprocess: false, childCommand: null };
   }
 }
 
-async function checkPosixSubprocessActivity(terminalPid: number): Promise<boolean> {
+async function checkPosixSubprocessActivity(
+  terminalPid: number
+): Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }> {
+  let childPid: number | null = null;
   try {
     const pgrepResult = await runProcess("pgrep", ["-P", String(terminalPid)], {
       timeoutMs: 1_000,
@@ -197,44 +253,87 @@ async function checkPosixSubprocessActivity(terminalPid: number): Promise<boolea
       outputMode: "truncate",
     });
     if (pgrepResult.code === 0) {
-      return pgrepResult.stdout.trim().length > 0;
-    }
-    if (pgrepResult.code === 1) {
-      return false;
+      childPid = parseFirstChildPidFromPgrep(pgrepResult.stdout);
+    } else if (pgrepResult.code === 1) {
+      return { hasRunningSubprocess: false, childCommand: null };
     }
   } catch {
-    // Fall back to ps when pgrep is unavailable.
+    // ignore
   }
 
+  if (childPid === null) {
+    try {
+      const psResult = await runProcess("ps", ["-eo", "pid=,ppid="], {
+        timeoutMs: 1_000,
+        allowNonZeroExit: true,
+        maxBufferBytes: 262_144,
+        outputMode: "truncate",
+      });
+      if (psResult.code === 0) {
+        for (const line of psResult.stdout.split(/\r?\n/g)) {
+          const [pidRaw, ppidRaw] = line.trim().split(/\s+/g);
+          const pid = Number(pidRaw);
+          const ppid = Number(ppidRaw);
+          if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue;
+          if (ppid === terminalPid) {
+            childPid = pid;
+            break;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (childPid === null) {
+    return { hasRunningSubprocess: false, childCommand: null };
+  }
+
+  let rawComm: string | null = null;
   try {
-    const psResult = await runProcess("ps", ["-eo", "pid=,ppid="], {
+    const commResult = await runProcess("ps", ["-p", String(childPid), "-o", "comm="], {
       timeoutMs: 1_000,
       allowNonZeroExit: true,
-      maxBufferBytes: 262_144,
+      maxBufferBytes: 8_192,
       outputMode: "truncate",
     });
-    if (psResult.code !== 0) {
-      return false;
+    if (commResult.code === 0) {
+      rawComm = commResult.stdout.trim();
     }
-
-    for (const line of psResult.stdout.split(/\r?\n/g)) {
-      const [pidRaw, ppidRaw] = line.trim().split(/\s+/g);
-      const pid = Number(pidRaw);
-      const ppid = Number(ppidRaw);
-      if (!Number.isInteger(pid) || !Number.isInteger(ppid)) continue;
-      if (ppid === terminalPid) {
-        return true;
-      }
-    }
-    return false;
   } catch {
-    return false;
+    // ignore
   }
+
+  if (!rawComm || rawComm.length === 0) {
+    try {
+      const argsResult = await runProcess("ps", ["-p", String(childPid), "-o", "args="], {
+        timeoutMs: 1_000,
+        allowNonZeroExit: true,
+        maxBufferBytes: 16_384,
+        outputMode: "truncate",
+      });
+      if (argsResult.code === 0) {
+        const first = argsResult.stdout.trim().split(/\s+/)[0] ?? "";
+        rawComm = first.length > 0 ? first : null;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const normalized = rawComm ? normalizeChildCommandName(rawComm, process.platform) : null;
+  return {
+    hasRunningSubprocess: true,
+    childCommand: normalized,
+  };
 }
 
-async function defaultSubprocessChecker(terminalPid: number): Promise<boolean> {
+async function defaultSubprocessChecker(
+  terminalPid: number
+): Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }> {
   if (!Number.isInteger(terminalPid) || terminalPid <= 0) {
-    return false;
+    return { hasRunningSubprocess: false, childCommand: null };
   }
   if (process.platform === "win32") {
     return checkWindowsSubprocessActivity(terminalPid);
@@ -573,6 +672,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
           unsubscribeData: null,
           unsubscribeExit: null,
           hasRunningSubprocess: false,
+          childCommandLabel: null,
           runtimeEnv: normalizedRuntimeEnv(input.env),
         };
         this.sessions.set(sessionKey, session);
@@ -696,6 +796,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
           unsubscribeData: null,
           unsubscribeExit: null,
           hasRunningSubprocess: false,
+          childCommandLabel: null,
           runtimeEnv: normalizedRuntimeEnv(input.env),
         };
         this.sessions.set(sessionKey, session);
@@ -743,13 +844,107 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
     });
   }
 
-  dispose(): void {
+  async list(): Promise<TerminalSessionSnapshot[]> {
+    return [...this.sessions.values()].map((session) => this.snapshot(session));
+  }
+
+  private async killProcessWithEscalationPromise(
+    ptyProcess: PtyProcess,
+    threadId: string,
+    terminalId: string,
+  ): Promise<void> {
+    const pid = ptyProcess.pid;
+    this.clearKillEscalationTimer(ptyProcess);
+
+    const isWin = globalThis.process.platform === "win32";
+    let killed = false;
+
+    if (typeof pid === "number" && pid > 0 && !isWin) {
+      try {
+        globalThis.process.kill(-pid, "SIGTERM");
+        killed = true;
+      } catch (error) {
+        try {
+          ptyProcess.kill("SIGTERM");
+          killed = true;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this.logger.warn("failed to kill terminal process", {
+            threadId,
+            terminalId,
+            signal: "SIGTERM",
+            error: message,
+          });
+        }
+      }
+    } else {
+      try {
+        ptyProcess.kill("SIGTERM");
+        killed = true;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.warn("failed to kill terminal process", {
+          threadId,
+          terminalId,
+          signal: "SIGTERM",
+          error: message,
+        });
+      }
+    }
+
+    if (!killed) return;
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      
+      setTimeout(() => {
+        if (typeof pid === "number" && pid > 0 && !isWin) {
+          try {
+            globalThis.process.kill(-pid, "SIGKILL");
+          } catch (error) {
+            try {
+              ptyProcess.kill("SIGKILL");
+            } catch (err) {
+              // ignore
+            }
+          }
+        } else {
+          try {
+            ptyProcess.kill("SIGKILL");
+          } catch (error) {
+            // ignore
+          }
+        }
+        done();
+      }, this.processKillGraceMs);
+    });
+  }
+
+  async dispose(): Promise<void> {
     this.stopSubprocessPolling();
     const sessions = [...this.sessions.values()];
     this.sessions.clear();
-    for (const session of sessions) {
-      this.stopProcess(session);
-    }
+
+    const stopPromises = sessions.map(async (session) => {
+      const process = session.process;
+      if (!process) return;
+      this.cleanupProcessHandles(session);
+      session.process = null;
+      session.pid = null;
+      session.hasRunningSubprocess = false;
+      session.status = "exited";
+      session.pendingHistoryControlSequence = "";
+      session.updatedAt = new Date().toISOString();
+      await this.killProcessWithEscalationPromise(process, session.threadId, session.terminalId);
+    });
+
+    await Promise.all(stopPromises);
+
     for (const timer of this.persistTimers.values()) {
       clearTimeout(timer);
     }
@@ -1258,9 +1453,9 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
       await Promise.all(
         runningSessions.map(async (session) => {
           const terminalPid = session.pid;
-          let hasRunningSubprocess = false;
+          let checkResult = { hasRunningSubprocess: false, childCommand: null as string | null };
           try {
-            hasRunningSubprocess = await this.subprocessChecker(terminalPid);
+            checkResult = await this.subprocessChecker(terminalPid);
           } catch (error) {
             this.logger.warn("failed to check terminal subprocess activity", {
               threadId: session.threadId,
@@ -1275,18 +1470,23 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
           if (!liveSession || liveSession.status !== "running" || liveSession.pid !== terminalPid) {
             return;
           }
-          if (liveSession.hasRunningSubprocess === hasRunningSubprocess) {
+          if (
+            liveSession.hasRunningSubprocess === checkResult.hasRunningSubprocess &&
+            liveSession.childCommandLabel === checkResult.childCommand
+          ) {
             return;
           }
 
-          liveSession.hasRunningSubprocess = hasRunningSubprocess;
+          liveSession.hasRunningSubprocess = checkResult.hasRunningSubprocess;
+          liveSession.childCommandLabel = checkResult.childCommand;
           liveSession.updatedAt = new Date().toISOString();
           this.emitEvent({
             type: "activity",
             threadId: liveSession.threadId,
             terminalId: liveSession.terminalId,
             createdAt: new Date().toISOString(),
-            hasRunningSubprocess,
+            hasRunningSubprocess: checkResult.hasRunningSubprocess,
+            label: this.snapshot(liveSession).label,
           });
         }),
       );
@@ -1364,6 +1564,29 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
   }
 
   private snapshot(session: TerminalSessionState): TerminalSessionSnapshot {
+    const getTerminalLabel = (terminalId: string): string => {
+      const numericSuffix = /^term(?:inal)?-(\d+)$/i.exec(terminalId)?.[1];
+      if (numericSuffix) {
+        return `Terminal ${numericSuffix}`;
+      }
+      return terminalId;
+    };
+
+    const truncateTerminalWireLabel = (value: string): string => {
+      if (value.length <= 128) return value;
+      return value.slice(0, 128);
+    };
+
+    const terminalWireLabel = (s: TerminalSessionState): string => {
+      if (s.hasRunningSubprocess && s.childCommandLabel) {
+        const trimmed = s.childCommandLabel.trim();
+        if (trimmed.length > 0) {
+          return truncateTerminalWireLabel(trimmed);
+        }
+      }
+      return truncateTerminalWireLabel(getTerminalLabel(s.terminalId));
+    };
+
     return {
       threadId: session.threadId,
       terminalId: session.terminalId,
@@ -1373,6 +1596,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
       history: session.history,
       exitCode: session.exitCode,
       exitSignal: session.exitSignal,
+      label: terminalWireLabel(session),
       updatedAt: session.updatedAt,
     };
   }
@@ -1420,7 +1644,7 @@ export const TerminalManagerLive = Layer.effect(
     const ptyAdapter = yield* PtyAdapter;
     const runtime = yield* Effect.acquireRelease(
       Effect.sync(() => new TerminalManagerRuntime({ logsDir: terminalLogsDir, ptyAdapter })),
-      (r) => Effect.sync(() => r.dispose()),
+      (r) => Effect.promise(() => r.dispose()),
     );
 
     return {
@@ -1428,6 +1652,11 @@ export const TerminalManagerLive = Layer.effect(
         Effect.tryPromise({
           try: () => runtime.open(input),
           catch: (cause) => new TerminalError({ message: "Failed to open terminal", cause }),
+        }),
+      list: () =>
+        Effect.tryPromise({
+          try: () => runtime.list(),
+          catch: (cause) => new TerminalError({ message: "Failed to list terminals", cause }),
         }),
       write: (input) =>
         Effect.tryPromise({
@@ -1461,7 +1690,7 @@ export const TerminalManagerLive = Layer.effect(
             runtime.off("event", listener);
           };
         }),
-      dispose: Effect.sync(() => runtime.dispose()),
+      dispose: Effect.promise(() => runtime.dispose()),
     } satisfies TerminalManagerShape;
   }),
 );

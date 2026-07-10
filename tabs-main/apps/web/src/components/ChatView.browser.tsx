@@ -535,6 +535,9 @@ function resolveWsRpc(body: WsRequestEnvelope["body"]): unknown {
       updatedAt: NOW_ISO,
     };
   }
+  if (tag === WS_METHODS.terminalList) {
+    return [];
+  }
   return {};
 }
 

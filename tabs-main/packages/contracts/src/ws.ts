@@ -66,6 +66,7 @@ import {
 } from "./terminal";
 import { KeybindingRule } from "./keybindings";
 import { ProjectReadFileInput, ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
+import { FilesystemBrowseInput } from "./filesystem";
 import { OpenInEditorInput } from "./editor";
 import {
   ServerConfigUpdatedPayload,
@@ -84,6 +85,7 @@ export const WS_METHODS = {
   projectsSearchEntries: "projects.searchEntries",
   projectsReadFile: "projects.readFile",
   projectsWriteFile: "projects.writeFile",
+  filesystemBrowse: "filesystem.browse",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -133,6 +135,7 @@ export const WS_METHODS = {
 
   // Terminal methods
   terminalOpen: "terminal.open",
+  terminalList: "terminal.list",
   terminalWrite: "terminal.write",
   terminalResize: "terminal.resize",
   terminalClear: "terminal.clear",
@@ -187,6 +190,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),
   tagRequestBody(WS_METHODS.projectsReadFile, ProjectReadFileInput),
   tagRequestBody(WS_METHODS.projectsWriteFile, ProjectWriteFileInput),
+  tagRequestBody(WS_METHODS.filesystemBrowse, FilesystemBrowseInput),
 
   // Shell methods
   tagRequestBody(WS_METHODS.shellOpenInEditor, OpenInEditorInput),
@@ -236,6 +240,7 @@ const WebSocketRequestBody = Schema.Union([
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),
+  tagRequestBody(WS_METHODS.terminalList, Schema.Struct({})),
   tagRequestBody(WS_METHODS.terminalWrite, TerminalWriteInput),
   tagRequestBody(WS_METHODS.terminalResize, TerminalResizeInput),
   tagRequestBody(WS_METHODS.terminalClear, TerminalClearInput),

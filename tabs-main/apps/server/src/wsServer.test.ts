@@ -121,6 +121,9 @@ class MockTerminalManager implements TerminalManagerShape {
     return this.listeners.size;
   }
 
+  readonly list: TerminalManagerShape["list"] = () =>
+    Effect.sync(() => [...this.sessions.values()]);
+
   readonly open: TerminalManagerShape["open"] = (input: TerminalOpenInput) =>
     Effect.sync(() => {
       const now = new Date().toISOString();
@@ -134,6 +137,7 @@ class MockTerminalManager implements TerminalManagerShape {
         history: "",
         exitCode: null,
         exitSignal: null,
+        label: terminalId,
         updatedAt: now,
       };
       this.sessions.set(this.key(input.threadId, terminalId), snapshot);
@@ -195,6 +199,7 @@ class MockTerminalManager implements TerminalManagerShape {
         history: "",
         exitCode: null,
         exitSignal: null,
+        label: terminalId,
         updatedAt: now,
       };
       this.sessions.set(this.key(input.threadId, terminalId), snapshot);

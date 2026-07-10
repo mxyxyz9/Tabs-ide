@@ -36,6 +36,7 @@ import {
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
 } from "@tabs/shared/model";
+import { getCodexServiceTierOptionValue } from "../codexModelOptions";
 
 const CODEX_GIT_TEXT_GENERATION_REASONING_EFFORT = "low";
 const CODEX_TIMEOUT_MS = 180_000;
@@ -193,8 +194,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
           modelSelection.model,
           "--config",
           `model_reasoning_effort="${reasoningEffort}"`,
-          ...(getModelSelectionBooleanOptionValue(modelSelection, "fastMode") === true
-            ? ["--config", `service_tier="fast"`]
+          ...(getCodexServiceTierOptionValue(modelSelection)
+            ? ["--config", `service_tier="${getCodexServiceTierOptionValue(modelSelection)}"`]
             : []),
           "--output-schema",
           schemaPath,

@@ -26,6 +26,22 @@ export interface KeybindingRow {
   readonly conflicts: ReadonlyArray<string>;
 }
 
+export type WhenVariableOption = string;
+export type KeybindingCommandOption = KeybindingCommand;
+
+const CORE_WHEN_VARIABLES = ["terminalFocus", "terminalOpen", "true", "false"] as const;
+
+const DEFAULT_WHEN_VARIABLES = new Set<string>(CORE_WHEN_VARIABLES);
+for (const binding of DEFAULT_RESOLVED_KEYBINDINGS) {
+  collectWhenIdentifiersFromNode(binding.whenAst, DEFAULT_WHEN_VARIABLES);
+}
+
+export const DEFAULT_WHEN_VARIABLE =
+  [...DEFAULT_WHEN_VARIABLES].find(
+    (identifier) => identifier !== "true" && identifier !== "false",
+  ) ?? "terminalFocus";
+const KNOWN_WHEN_VARIABLES = new Set(DEFAULT_WHEN_VARIABLES);
+
 export function shortcutToKeybindingInput(shortcut: KeybindingShortcut): string {
   const parts: string[] = [];
   if (shortcut.modKey) parts.push("mod");
@@ -93,18 +109,26 @@ function sourceForBinding(binding: ResolvedKeybindingRule): KeybindingSource {
 function defaultBindingForBinding(
   binding: ResolvedKeybindingRule,
 ): ResolvedKeybindingRule | undefined {
+  const bindingKey = shortcutToKeybindingInput(binding.shortcut);
   const bindingWhen = whenAstToExpression(binding.whenAst);
 
   return (
     DEFAULT_RESOLVED_KEYBINDINGS.find(
       (entry) =>
+        entry.command === binding.command &&
+        shortcutToKeybindingInput(entry.shortcut) === bindingKey &&
+        whenAstToExpression(entry.whenAst) === bindingWhen,
+    ) ??
+    DEFAULT_RESOLVED_KEYBINDINGS.find(
+      (entry) =>
         entry.command === binding.command && whenAstToExpression(entry.whenAst) === bindingWhen,
-    ) ?? DEFAULT_RESOLVED_KEYBINDINGS.find((entry) => entry.command === binding.command)
+    ) ??
+    DEFAULT_RESOLVED_KEYBINDINGS.find((entry) => entry.command === binding.command)
   );
 }
 
 function keybindingRowId(command: KeybindingCommand, key: string, when: string): string {
-  return `${command}${key}${when}`;
+  return `${command}\u0000${key}\u0000${when}`;
 }
 
 function conflictsWithWhen(leftWhen: string, rightWhen: string): boolean {
@@ -139,7 +163,7 @@ export function buildKeybindingRows(
     const key = shortcutToKeybindingInput(binding.shortcut);
     const when = whenAstToExpression(binding.whenAst);
     return {
-      id: `${keybindingRowId(binding.command, key, when)}${index}`,
+      id: `${keybindingRowId(binding.command, key, when)}\u0000${index}`,
       command: binding.command,
       key,
       when,
@@ -175,12 +199,72 @@ export function buildKeybindingRows(
   return rowsWithConflicts.filter((row) => {
     return (
       row.command.toLowerCase().includes(normalizedQuery) ||
-      commandLabel(row.command).toLowerCase().includes(normalizedQuery) ||
       row.key.toLowerCase().includes(normalizedQuery) ||
       row.when.toLowerCase().includes(normalizedQuery) ||
       row.source.toLowerCase().includes(normalizedQuery)
     );
   });
+}
+
+function collectWhenIdentifiersFromNode(
+  node: KeybindingWhenNode | undefined,
+  identifiers: Set<string>,
+): void {
+  if (!node) return;
+  switch (node.type) {
+    case "identifier":
+      identifiers.add(node.name);
+      return;
+    case "not":
+      collectWhenIdentifiersFromNode(node.node, identifiers);
+      return;
+    case "and":
+    case "or":
+      collectWhenIdentifiersFromNode(node.left, identifiers);
+      collectWhenIdentifiersFromNode(node.right, identifiers);
+      return;
+  }
+}
+
+export function isKnownWhenVariable(identifier: string): boolean {
+  return KNOWN_WHEN_VARIABLES.has(identifier);
+}
+
+export function unknownWhenVariables(node: KeybindingWhenNode | undefined): ReadonlyArray<string> {
+  const identifiers = new Set<string>();
+  collectWhenIdentifiersFromNode(node, identifiers);
+  return [...identifiers].filter((identifier) => !isKnownWhenVariable(identifier)).toSorted();
+}
+
+export function buildWhenVariableOptions(): ReadonlyArray<WhenVariableOption> {
+  return [...KNOWN_WHEN_VARIABLES].toSorted((left, right) => {
+    const leftCoreIndex = CORE_WHEN_VARIABLES.indexOf(left as (typeof CORE_WHEN_VARIABLES)[number]);
+    const rightCoreIndex = CORE_WHEN_VARIABLES.indexOf(
+      right as (typeof CORE_WHEN_VARIABLES)[number],
+    );
+    if (leftCoreIndex !== -1 || rightCoreIndex !== -1) {
+      return (
+        (leftCoreIndex === -1 ? Number.MAX_SAFE_INTEGER : leftCoreIndex) -
+        (rightCoreIndex === -1 ? Number.MAX_SAFE_INTEGER : rightCoreIndex)
+      );
+    }
+    return left.localeCompare(right);
+  });
+}
+
+export function buildKeybindingCommandOptions(
+  keybindings: ResolvedKeybindingsConfig,
+): ReadonlyArray<KeybindingCommandOption> {
+  const commands = new Set<KeybindingCommand>();
+  for (const binding of DEFAULT_RESOLVED_KEYBINDINGS) {
+    commands.add(binding.command);
+  }
+  for (const binding of keybindings) {
+    commands.add(binding.command);
+  }
+  return [...commands].toSorted((left, right) =>
+    commandLabel(left).localeCompare(commandLabel(right)),
+  );
 }
 
 export function commandLabel(command: KeybindingCommand): string {
@@ -215,14 +299,10 @@ export function normalizeShortcutKeyToken(key: string): string | null {
   }
   if (normalized === " ") return "space";
   if (normalized === "escape") return "esc";
-  if (
-    normalized === "arrowup" ||
-    normalized === "arrowdown" ||
-    normalized === "arrowleft" ||
-    normalized === "arrowright"
-  ) {
-    return normalized;
-  }
+  if (normalized === "arrowup") return "arrowup";
+  if (normalized === "arrowdown") return "arrowdown";
+  if (normalized === "arrowleft") return "arrowleft";
+  if (normalized === "arrowright") return "arrowright";
   if (normalized.length === 1) return normalized;
   if (/^f\d{1,2}$/.test(normalized)) return normalized;
   if (normalized === "enter" || normalized === "tab" || normalized === "backspace") {

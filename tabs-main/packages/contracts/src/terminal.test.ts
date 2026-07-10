@@ -162,6 +162,7 @@ describe("TerminalSessionSnapshot", () => {
         history: "hello\n",
         exitCode: null,
         exitSignal: null,
+        label: "Terminal 1",
         updatedAt: new Date().toISOString(),
       }),
     ).toBe(true);
@@ -202,6 +203,7 @@ describe("TerminalEvent", () => {
         terminalId: DEFAULT_TERMINAL_ID,
         createdAt: new Date().toISOString(),
         hasRunningSubprocess: true,
+        label: "Terminal 1",
       }),
     ).toBe(true);
   });

@@ -1937,41 +1937,13 @@ function SettingsRouteView() {
                   </SettingsSection>
                 ) : null}
                 {activeSettingsSection === "keybindings" ? (
-                  <SettingsSection title="Keybindings">
-                    <KeybindingsSettings
-                      keybindings={resolvedKeybindings}
-                      onUpsert={handleUpsertKeybinding}
-                      onRemove={handleRemoveKeybinding}
-                    />
-                    <SettingsRow
-                      title="Advanced"
-                      description="Open the persisted `keybindings.json` file to edit advanced bindings directly."
-                      status={
-                        <>
-                          <span className="block break-all font-mono text-[11px] text-foreground">
-                            {keybindingsConfigPath ?? "Resolving keybindings path..."}
-                          </span>
-                          {openKeybindingsError ? (
-                            <span className="mt-1 block text-destructive">
-                              {openKeybindingsError}
-                            </span>
-                          ) : (
-                            <span className="mt-1 block">Opens in your preferred editor.</span>
-                          )}
-                        </>
-                      }
-                      control={
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          disabled={!keybindingsConfigPath || isOpeningKeybindings}
-                          onClick={openKeybindingsFile}
-                        >
-                          {isOpeningKeybindings ? "Opening..." : "Open file"}
-                        </Button>
-                      }
-                    />
-                  </SettingsSection>
+                  <KeybindingsSettings
+                    keybindings={resolvedKeybindings}
+                    onUpsert={handleUpsertKeybinding}
+                    onRemove={handleRemoveKeybinding}
+                    keybindingsConfigPath={keybindingsConfigPath}
+                    availableEditors={availableEditors}
+                  />
                 ) : null}
                 {activeSettingsSection === "about" ? (
                   <SettingsSection title="About">

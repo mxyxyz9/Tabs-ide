@@ -12,6 +12,7 @@ const snapshot: TerminalSessionSnapshot = {
   history: "",
   exitCode: null,
   exitSignal: null,
+  label: "default",
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
@@ -29,11 +30,13 @@ describe("terminalRunningSubprocessFromEvent", () => {
       ...eventBase(),
       type: "activity",
       hasRunningSubprocess: true,
+      label: "default",
     });
     const idle = terminalRunningSubprocessFromEvent({
       ...eventBase(),
       type: "activity",
       hasRunningSubprocess: false,
+      label: "default",
     });
 
     expect(active).toBe(true);

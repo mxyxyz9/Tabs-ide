@@ -40,6 +40,7 @@ import {
   getModelSelectionBooleanOptionValue,
   getModelSelectionStringOptionValue,
 } from "@tabs/shared/model";
+import { getCodexServiceTierOptionValue } from "../../codexModelOptions";
 
 import {
   ProviderAdapterRequestError,
@@ -1395,9 +1396,8 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           ...(input.modelSelection?.instanceId === boundInstanceId
             ? { model: input.modelSelection.model }
             : {}),
-          ...(input.modelSelection?.instanceId === boundInstanceId &&
-          getModelSelectionBooleanOptionValue(input.modelSelection, "fastMode") === true
-            ? { serviceTier: "fast" }
+          ...(input.modelSelection?.instanceId === boundInstanceId
+            ? { serviceTier: getCodexServiceTierOptionValue(input.modelSelection) }
             : {}),
         };
         const sessionScope = yield* Scope.make("sequential");
@@ -1513,9 +1513,9 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
       input.modelSelection?.instanceId === boundInstanceId
         ? getModelSelectionStringOptionValue(input.modelSelection, "reasoningEffort")
         : undefined;
-    const fastMode =
+    const serviceTier =
       input.modelSelection?.instanceId === boundInstanceId
-        ? getModelSelectionBooleanOptionValue(input.modelSelection, "fastMode")
+        ? getCodexServiceTierOptionValue(input.modelSelection)
         : undefined;
     return yield* session.runtime
       .sendTurn({
@@ -1528,7 +1528,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
               effort: reasoningEffort as EffectCodexSchema.V2TurnStartParams__ReasoningEffort,
             }
           : {}),
-        ...(fastMode === true ? { serviceTier: "fast" } : {}),
+        ...(serviceTier ? { serviceTier } : {}),
         ...(input.interactionMode !== undefined ? { interactionMode: input.interactionMode } : {}),
         ...(codexAttachments.length > 0 ? { attachments: codexAttachments } : {}),
       })

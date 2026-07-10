@@ -149,6 +149,7 @@ export function createWsNativeApi(): NativeApi {
     },
     terminal: {
       open: (input) => transport.request(WS_METHODS.terminalOpen, input),
+      list: () => transport.request(WS_METHODS.terminalList, {}),
       write: (input) => transport.request(WS_METHODS.terminalWrite, input),
       resize: (input) => transport.request(WS_METHODS.terminalResize, input),
       clear: (input) => transport.request(WS_METHODS.terminalClear, input),
@@ -161,6 +162,7 @@ export function createWsNativeApi(): NativeApi {
       searchEntries: (input) => transport.request(WS_METHODS.projectsSearchEntries, input),
       readFile: (input) => transport.request(WS_METHODS.projectsReadFile, input),
       writeFile: (input) => transport.request(WS_METHODS.projectsWriteFile, input),
+      filesystemBrowse: (input) => transport.request(WS_METHODS.filesystemBrowse, input),
     },
     repositories: {
       clone: async (input) => {

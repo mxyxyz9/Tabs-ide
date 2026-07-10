@@ -7,6 +7,8 @@
  * @module Server
  */
 import http from "node:http";
+import fs from "node:fs";
+import os from "node:os";
 import type { Duplex } from "node:stream";
 
 import Mime from "@effect/platform-node/Mime";
@@ -797,6 +799,54 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.filesystemBrowse: {
+        const body = stripRequestTag(request.body);
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const expandHomePath = (input: string): string => {
+              if (input === "~") {
+                return os.homedir();
+              }
+              if (input.startsWith("~/") || input.startsWith("~\\")) {
+                return path.join(os.homedir(), input.slice(2));
+              }
+              return input;
+            };
+
+            let resolvedInputPath = "";
+            const isAbsolute = path.isAbsolute(body.partialPath) || body.partialPath.startsWith("~/") || body.partialPath === "~";
+            if (isAbsolute) {
+              resolvedInputPath = path.resolve(expandHomePath(body.partialPath));
+            } else {
+              if (!body.cwd) {
+                throw new Error("cwd is required for relative path browsing");
+              }
+              resolvedInputPath = path.resolve(expandHomePath(body.cwd), body.partialPath);
+            }
+
+            const endsWithSeparator = /[\\/]$/.test(body.partialPath) || body.partialPath === "~";
+            const parentPath = endsWithSeparator ? resolvedInputPath : path.dirname(resolvedInputPath);
+
+            const dirents = await fs.promises.readdir(parentPath, { withFileTypes: true });
+            const entries = dirents
+              .filter((dirent) => dirent.isDirectory())
+              .map((dirent) => ({
+                name: dirent.name,
+                fullPath: path.join(parentPath, dirent.name),
+              }));
+
+            return {
+              parentPath,
+              entries,
+            };
+          },
+          catch: (cause) =>
+            new RouteRequestError({
+              message: `Failed to browse path '${body.partialPath}': ${String(cause)}`,
+            }),
+        });
+      }
+
       case WS_METHODS.projectsWriteFile: {
         const body = stripRequestTag(request.body);
         const target = yield* resolveWorkspaceWritePath({
@@ -1069,6 +1119,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.terminalOpen: {
         const body = stripRequestTag(request.body);
         return yield* terminalManager.open(body);
+      }
+
+      case WS_METHODS.terminalList: {
+        return yield* terminalManager.list();
       }
 
       case WS_METHODS.terminalWrite: {

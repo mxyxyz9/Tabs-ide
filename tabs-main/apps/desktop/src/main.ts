@@ -36,6 +36,7 @@ import type {
 import { NetService, layer as netServiceLayer } from "@tabs/shared/Net";
 import { RotatingFileSink } from "@tabs/shared/logging";
 import { showDesktopConfirmDialog } from "./confirmDialog";
+import { DesktopShutdown, layer as shutdownLayer } from "./app/DesktopShutdown";
 import { syncShellEnvironment } from "./syncShellEnvironment";
 import { getAutoUpdateDisabledReason, shouldBroadcastDownloadProgress } from "./updateState";
 import {
@@ -1440,7 +1441,12 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
   isQuitting = true;
   clearUpdatePollTimer();
   try {
-    await stopBackendAndWaitForExit();
+    const shutdown = await Effect.runPromise(
+      Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer))
+    );
+    await Effect.runPromise(shutdown.request);
+    await shutdownPromise;
+    await Effect.runPromise(shutdown.awaitComplete);
     autoUpdater.quitAndInstall();
     return { accepted: true, completed: true };
   } catch (error: unknown) {
@@ -1671,17 +1677,8 @@ function stopBackend(): void {
   }
 }
 
-async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
-  if (restartTimer) {
-    clearTimeout(restartTimer);
-    restartTimer = null;
-  }
-
-  const child = backendProcess;
-  backendProcess = null;
-  if (!child) return;
-  const backendChild = child;
-  if (backendChild.exitCode !== null || backendChild.signalCode !== null) return;
+async function stopBackendProcessAndWait(child: ChildProcess.ChildProcess, timeoutMs = 5_000): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
 
   await new Promise<void>((resolve) => {
     let settled = false;
@@ -1691,7 +1688,7 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
     function settle(): void {
       if (settled) return;
       settled = true;
-      backendChild.off("exit", onExit);
+      child.off("exit", onExit);
       if (forceKillTimer) {
         clearTimeout(forceKillTimer);
       }
@@ -1705,12 +1702,12 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
       settle();
     }
 
-    backendChild.once("exit", onExit);
-    backendChild.kill("SIGTERM");
+    child.once("exit", onExit);
+    child.kill("SIGTERM");
 
     forceKillTimer = setTimeout(() => {
-      if (backendChild.exitCode === null && backendChild.signalCode === null) {
-        backendChild.kill("SIGKILL");
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
       }
     }, 2_000);
     forceKillTimer.unref();
@@ -1721,6 +1718,49 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
     exitTimeoutTimer.unref();
   });
 }
+
+async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
+  if (restartTimer) {
+    clearTimeout(restartTimer);
+    restartTimer = null;
+  }
+
+  const child = backendProcess;
+  backendProcess = null;
+  if (!child) return;
+  await stopBackendProcessAndWait(child, timeoutMs);
+}
+
+const performShutdownEffect = Effect.gen(function* () {
+  const shutdown = yield* DesktopShutdown;
+
+  yield* Effect.addFinalizer(() =>
+    Effect.gen(function* () {
+      writeDesktopLogHeader("shutdown finalizer running: stopping active backends");
+      const activeInstances = backendProcess ? [backendProcess] : [];
+      yield* Effect.forEach(
+        activeInstances,
+        (child) =>
+          Effect.tryPromise({
+            try: () => stopBackendProcessAndWait(child, 5000),
+            catch: (error) => error,
+          }).pipe(Effect.catch(() => Effect.void)),
+        { concurrency: "unbounded" }
+      );
+      backendProcess = null;
+      writeDesktopLogHeader("shutdown finalizer finished: backends stopped");
+    }).pipe(Effect.ensuring(shutdown.markComplete))
+  );
+
+  yield* shutdown.awaitRequest;
+}).pipe(
+  Effect.provide(shutdownLayer),
+  Effect.scoped
+);
+
+const shutdownPromise = Effect.runPromise(
+  performShutdownEffect.pipe(Effect.catch(() => Effect.void))
+);
 
 function registerIpcHandlers(): void {
   ipcMain.removeAllListeners(GET_WS_URL_CHANNEL);
@@ -2663,9 +2703,14 @@ app.on("before-quit", (event) => {
 
   void (async () => {
     try {
-      await stopBackendAndWaitForExit(5000);
+      const shutdown = await Effect.runPromise(
+        Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer))
+      );
+      await Effect.runPromise(shutdown.request);
+      await shutdownPromise;
+      await Effect.runPromise(shutdown.awaitComplete);
     } catch (error) {
-      writeDesktopLogHeader(`stopBackendAndWaitForExit failed: ${error}`);
+      writeDesktopLogHeader(`shutdown failed: ${error}`);
     } finally {
       isCleanupFinished = true;
       restoreStdIoCapture?.();

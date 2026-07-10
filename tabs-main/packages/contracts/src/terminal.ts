@@ -87,6 +87,7 @@ export const TerminalSessionSnapshot = Schema.Struct({
   history: Schema.String,
   exitCode: Schema.NullOr(Schema.Int),
   exitSignal: Schema.NullOr(Schema.Int),
+  label: Schema.String.check(Schema.isMaxLength(128)),
   updatedAt: Schema.String,
 });
 export type TerminalSessionSnapshot = typeof TerminalSessionSnapshot.Type;
@@ -137,6 +138,7 @@ const TerminalActivityEvent = Schema.Struct({
   ...TerminalEventBaseSchema.fields,
   type: Schema.Literal("activity"),
   hasRunningSubprocess: Schema.Boolean,
+  label: Schema.String.check(Schema.isMaxLength(128)),
 });
 
 export const TerminalEvent = Schema.Union([

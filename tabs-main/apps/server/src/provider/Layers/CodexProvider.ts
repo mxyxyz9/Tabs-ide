@@ -17,6 +17,7 @@ import type {
   ServerProvider,
   ServerProviderState,
   ModelCapabilities,
+  ProviderOptionDescriptor,
   ServerProviderModel,
   ServerProviderSkill,
 } from "@tabs/contracts";
@@ -31,6 +32,8 @@ import {
 import { expandHomePath } from "../../pathExpansion";
 import packageJson from "../../../package.json" with { type: "json" };
 const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
+const CODEX_APP_SERVER_PROBE_FORCE_KILL_AFTER = "2 seconds" as const;
+const DEFAULT_SERVICE_TIER_ID = "default";
 
 const CODEX_PRESENTATION = {
   displayName: "Codex",
@@ -44,13 +47,15 @@ export interface CodexAppServerProviderSnapshot {
   readonly skills: ReadonlyArray<ServerProviderSkill>;
 }
 
-const REASONING_EFFORT_LABELS: Record<CodexSchema.V2ModelListResponse__ReasoningEffort, string> = {
+const REASONING_EFFORT_LABELS: Readonly<Record<string, string>> = {
   none: "None",
   minimal: "Minimal",
   low: "Low",
   medium: "Medium",
   high: "High",
   xhigh: "Extra High",
+  max: "Max",
+  ultra: "Ultra",
 };
 
 function codexAccountAuthLabel(account: CodexSchema.V2GetAccountResponse["account"]) {
@@ -93,46 +98,72 @@ function codexAccountEmail(account: CodexSchema.V2GetAccountResponse["account"])
   return account.email;
 }
 
-function mapCodexModelCapabilities(
+export function mapCodexModelCapabilities(
   model: CodexSchema.V2ModelListResponse__Model,
 ): ModelCapabilities {
   const reasoningOptions = model.supportedReasoningEfforts.map(({ reasoningEffort }) =>
     reasoningEffort === model.defaultReasoningEffort
       ? {
           id: reasoningEffort,
-          label: REASONING_EFFORT_LABELS[reasoningEffort],
+          label: REASONING_EFFORT_LABELS[reasoningEffort] ?? reasoningEffort,
           isDefault: true,
         }
       : {
           id: reasoningEffort,
-          label: REASONING_EFFORT_LABELS[reasoningEffort],
+          label: REASONING_EFFORT_LABELS[reasoningEffort] ?? reasoningEffort,
         },
   );
   const defaultReasoning = reasoningOptions.find((option) => option.isDefault)?.id;
-  const supportsFastMode = (model.additionalSpeedTiers ?? []).includes("fast");
+  const serviceTiers =
+    model.serviceTiers && model.serviceTiers.length > 0
+      ? model.serviceTiers
+      : (model.additionalSpeedTiers ?? []).map((id) => ({
+          id,
+          name: id === "fast" ? "Fast" : id,
+          description: "",
+        }));
+  const defaultServiceTierFromModel = (model as any).defaultServiceTier;
+  const catalogDefaultServiceTier =
+    typeof defaultServiceTierFromModel === "string" &&
+    serviceTiers.some((tier) => tier.id === defaultServiceTierFromModel)
+      ? defaultServiceTierFromModel
+      : null;
+  const defaultServiceTier = catalogDefaultServiceTier ?? DEFAULT_SERVICE_TIER_ID;
+  const optionDescriptors: ProviderOptionDescriptor[] = [];
+
+  if (reasoningOptions.length > 0) {
+    optionDescriptors.push({
+      id: "reasoningEffort",
+      label: "Reasoning",
+      type: "select" as const,
+      options: reasoningOptions,
+      ...(defaultReasoning ? { currentValue: defaultReasoning } : {}),
+    });
+  }
+  if (serviceTiers.length > 0) {
+    optionDescriptors.push({
+      id: "serviceTier",
+      label: "Service Tier",
+      type: "select" as const,
+      options: [
+        {
+          id: DEFAULT_SERVICE_TIER_ID,
+          label: "Standard",
+          ...(defaultServiceTier === DEFAULT_SERVICE_TIER_ID ? { isDefault: true } : {}),
+        },
+        ...serviceTiers.map((tier) => ({
+          id: tier.id,
+          label: tier.name,
+          ...(tier.description ? { description: tier.description } : {}),
+          ...(defaultServiceTier === tier.id ? { isDefault: true } : {}),
+        })),
+      ],
+      currentValue: defaultServiceTier,
+    });
+  }
+
   return createModelCapabilities({
-    optionDescriptors: [
-      ...(reasoningOptions.length > 0
-        ? [
-            {
-              id: "reasoningEffort",
-              label: "Reasoning",
-              type: "select" as const,
-              options: reasoningOptions,
-              ...(defaultReasoning ? { currentValue: defaultReasoning } : {}),
-            },
-          ]
-        : []),
-      ...(supportsFastMode
-        ? [
-            {
-              id: "fastMode",
-              label: "Fast Mode",
-              type: "boolean" as const,
-            },
-          ]
-        : []),
-    ],
+    optionDescriptors,
   });
 }
 

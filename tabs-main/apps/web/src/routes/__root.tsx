@@ -27,6 +27,7 @@ import { providerQueryKeys } from "../lib/providerReactQuery";
 import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
 import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
+import { CommandPalette } from "../components/CommandPalette";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -56,7 +57,9 @@ function RootRouteView() {
       <AnchoredToastProvider>
         <EventRouter />
         <DesktopProjectBootstrap />
-        <Outlet />
+        <CommandPalette>
+          <Outlet />
+        </CommandPalette>
         <GlobalConfirmDialog />
       </AnchoredToastProvider>
     </ToastProvider>
@@ -279,12 +282,14 @@ function EventRouter() {
       if (hasRunningSubprocess === null) {
         return;
       }
+      const label = event.type === "activity" ? event.label : undefined;
       useTerminalStateStore
         .getState()
         .setTerminalActivity(
           ThreadId.makeUnsafe(event.threadId),
           event.terminalId,
           hasRunningSubprocess,
+          label,
         );
     });
     const unsubWelcome = onServerWelcome((payload) => {
@@ -294,6 +299,22 @@ function EventRouter() {
         await syncSnapshot();
         if (disposed) {
           return;
+        }
+
+        // Reconcile terminal state
+        try {
+          const activeSessions = await api.terminal.list();
+          const activeIds = new Set(activeSessions.map((s) => s.terminalId));
+          const state = useTerminalStateStore.getState();
+          const cleared = Object.fromEntries(
+            Object.entries(state.terminalStateByThreadId).map(([k, v]) => {
+              const nextRunning = v.runningTerminalIds.filter((id) => activeIds.has(id));
+              return [k, { ...v, runningTerminalIds: nextRunning }];
+            }),
+          );
+          useTerminalStateStore.setState({ terminalStateByThreadId: cleared });
+        } catch (e) {
+          console.error("Failed to reconcile terminal states", e);
         }
 
         if (!payload.bootstrapProjectId || !payload.bootstrapThreadId) {

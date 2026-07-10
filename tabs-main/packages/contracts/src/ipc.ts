@@ -65,6 +65,10 @@ import type {
   ProjectWriteFileResult,
 } from "./project";
 import type {
+  FilesystemBrowseInput,
+  FilesystemBrowseResult,
+} from "./filesystem";
+import type {
   ServerConfig,
   ServerProviderUpdatedPayload,
   ServerRemoveKeybindingResult,
@@ -354,6 +358,7 @@ export interface NativeApi {
   };
   terminal: {
     open: (input: TerminalOpenInput) => Promise<TerminalSessionSnapshot>;
+    list: () => Promise<ReadonlyArray<TerminalSessionSnapshot>>;
     write: (input: TerminalWriteInput) => Promise<void>;
     resize: (input: TerminalResizeInput) => Promise<void>;
     clear: (input: TerminalClearInput) => Promise<void>;
@@ -365,6 +370,7 @@ export interface NativeApi {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     readFile: (input: ProjectReadFileInput) => Promise<ProjectReadFileResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
+    filesystemBrowse: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

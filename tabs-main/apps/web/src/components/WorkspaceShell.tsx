@@ -8844,9 +8844,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               terminalGroups={serverTerminalState.terminalGroups}
               activeTerminalGroupId={serverTerminalState.activeTerminalGroupId}
               focusRequestId={shellTerminalFocusRequestId}
-              terminalLabels={Object.fromEntries(
-                activeProjectSettings.serverProcesses.map((p) => [p.id, p.label]),
-              )}
+              terminalLabels={{
+                ...Object.fromEntries(
+                  activeProjectSettings.serverProcesses.map((p) => [p.id, p.label]),
+                ),
+                ...serverTerminalState.terminalLabels,
+              }}
               onSplitTerminal={splitServerTerminal}
               onNewTerminal={createNewServerTerminal}
               onActiveTerminalChange={activateServerTerminal}
@@ -9146,6 +9149,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           terminalGroups={gitTerminalState.terminalGroups}
           activeTerminalGroupId={gitTerminalState.activeTerminalGroupId}
           focusRequestId={shellTerminalFocusRequestId}
+          terminalLabels={gitTerminalState.terminalLabels}
           onSplitTerminal={splitGitTerminal}
           onNewTerminal={createNewGitTerminal}
           onActiveTerminalChange={activateGitTerminal}

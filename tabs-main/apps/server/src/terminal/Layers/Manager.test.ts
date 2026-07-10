@@ -182,7 +182,9 @@ describe("TerminalManager", () => {
     historyLineLimit = 5,
     options: {
       shellResolver?: () => string;
-      subprocessChecker?: (terminalPid: number) => Promise<boolean>;
+      subprocessChecker?: (
+        terminalPid: number,
+      ) => Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }>;
       subprocessPollIntervalMs?: number;
       processKillGraceMs?: number;
       maxRetainedInactiveSessions?: number;
@@ -423,7 +425,10 @@ describe("TerminalManager", () => {
   it("emits subprocess activity events when child-process state changes", async () => {
     let hasRunningSubprocess = false;
     const { manager } = makeManager(5, {
-      subprocessChecker: async () => hasRunningSubprocess,
+      subprocessChecker: async () => ({
+        hasRunningSubprocess,
+        childCommand: hasRunningSubprocess ? "node" : null,
+      }),
       subprocessPollIntervalMs: 20,
     });
     const events: TerminalEvent[] = [];

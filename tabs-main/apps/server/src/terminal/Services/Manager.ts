@@ -42,6 +42,7 @@ export interface TerminalSessionState {
   unsubscribeData: (() => void) | null;
   unsubscribeExit: (() => void) | null;
   hasRunningSubprocess: boolean;
+  childCommandLabel: string | null;
   runtimeEnv: Record<string, string> | null;
 }
 
@@ -68,6 +69,11 @@ export interface TerminalManagerShape {
   readonly open: (
     input: TerminalOpenInput,
   ) => Effect.Effect<TerminalSessionSnapshot, TerminalError>;
+
+  /**
+   * List all active terminal session snapshots.
+   */
+  readonly list: () => Effect.Effect<ReadonlyArray<TerminalSessionSnapshot>, TerminalError>;
 
   /**
    * Write input bytes to a terminal session.

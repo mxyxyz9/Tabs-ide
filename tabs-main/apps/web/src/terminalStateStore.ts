@@ -23,6 +23,7 @@ interface ThreadTerminalState {
   activeTerminalId: string;
   terminalGroups: ThreadTerminalGroup[];
   activeTerminalGroupId: string;
+  terminalLabels: Record<string, string>;
 }
 
 const TERMINAL_STATE_STORAGE_KEY = "tabs:terminal-state:v1";
@@ -138,6 +139,16 @@ function terminalGroupsEqual(left: ThreadTerminalGroup[], right: ThreadTerminalG
   return true;
 }
 
+function labelsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
 function threadTerminalStateEqual(left: ThreadTerminalState, right: ThreadTerminalState): boolean {
   return (
     left.terminalOpen === right.terminalOpen &&
@@ -146,7 +157,8 @@ function threadTerminalStateEqual(left: ThreadTerminalState, right: ThreadTermin
     left.activeTerminalGroupId === right.activeTerminalGroupId &&
     arraysEqual(left.terminalIds, right.terminalIds) &&
     arraysEqual(left.runningTerminalIds, right.runningTerminalIds) &&
-    terminalGroupsEqual(left.terminalGroups, right.terminalGroups)
+    terminalGroupsEqual(left.terminalGroups, right.terminalGroups) &&
+    labelsEqual(left.terminalLabels ?? {}, right.terminalLabels ?? {})
   );
 }
 
@@ -163,6 +175,7 @@ const DEFAULT_THREAD_TERMINAL_STATE: ThreadTerminalState = Object.freeze({
     },
   ],
   activeTerminalGroupId: fallbackGroupId(DEFAULT_THREAD_TERMINAL_ID),
+  terminalLabels: {},
 });
 
 function createDefaultThreadTerminalState(): ThreadTerminalState {
@@ -171,6 +184,7 @@ function createDefaultThreadTerminalState(): ThreadTerminalState {
     terminalIds: [...DEFAULT_THREAD_TERMINAL_STATE.terminalIds],
     runningTerminalIds: [...DEFAULT_THREAD_TERMINAL_STATE.runningTerminalIds],
     terminalGroups: copyTerminalGroups(DEFAULT_THREAD_TERMINAL_STATE.terminalGroups),
+    terminalLabels: {},
   };
 }
 
@@ -209,6 +223,7 @@ function normalizeThreadTerminalState(state: ThreadTerminalState): ThreadTermina
       activeGroupIdFromTerminal ??
       terminalGroups[0]?.id ??
       fallbackGroupId(DEFAULT_THREAD_TERMINAL_ID),
+    terminalLabels: state.terminalLabels ?? {},
   };
   return threadTerminalStateEqual(state, normalized) ? state : normalized;
 }
@@ -402,6 +417,7 @@ function closeThreadTerminal(state: ThreadTerminalState, terminalId: string): Th
     activeTerminalId: nextActiveTerminalId,
     terminalGroups,
     activeTerminalGroupId: nextActiveTerminalGroupId,
+    terminalLabels: normalized.terminalLabels,
   });
 }
 
@@ -409,13 +425,15 @@ function setThreadTerminalActivity(
   state: ThreadTerminalState,
   terminalId: string,
   hasRunningSubprocess: boolean,
+  label?: string,
 ): ThreadTerminalState {
   const normalized = normalizeThreadTerminalState(state);
   if (!normalized.terminalIds.includes(terminalId)) {
     return normalized;
   }
   const alreadyRunning = normalized.runningTerminalIds.includes(terminalId);
-  if (hasRunningSubprocess === alreadyRunning) {
+  const currentLabel = normalized.terminalLabels?.[terminalId];
+  if (hasRunningSubprocess === alreadyRunning && (!label || label === currentLabel)) {
     return normalized;
   }
   const runningTerminalIds = new Set(normalized.runningTerminalIds);
@@ -424,7 +442,15 @@ function setThreadTerminalActivity(
   } else {
     runningTerminalIds.delete(terminalId);
   }
-  return { ...normalized, runningTerminalIds: [...runningTerminalIds] };
+  const terminalLabels = { ...normalized.terminalLabels };
+  if (label) {
+    terminalLabels[terminalId] = label;
+  }
+  return {
+    ...normalized,
+    runningTerminalIds: [...runningTerminalIds],
+    terminalLabels,
+  };
 }
 
 export function selectThreadTerminalState(
@@ -478,6 +504,7 @@ interface TerminalStateStoreState {
     threadId: ThreadId,
     terminalId: string,
     hasRunningSubprocess: boolean,
+    label?: string,
   ) => void;
   clearTerminalState: (threadId: ThreadId) => void;
   removeOrphanedTerminalStates: (activeThreadIds: Set<ThreadId>) => void;
@@ -519,9 +546,9 @@ export const useTerminalStateStore = create<TerminalStateStoreState>()(
           updateTerminal(threadId, (state) => setThreadActiveTerminal(state, terminalId)),
         closeTerminal: (threadId, terminalId) =>
           updateTerminal(threadId, (state) => closeThreadTerminal(state, terminalId)),
-        setTerminalActivity: (threadId, terminalId, hasRunningSubprocess) =>
+        setTerminalActivity: (threadId, terminalId, hasRunningSubprocess, label) =>
           updateTerminal(threadId, (state) =>
-            setThreadTerminalActivity(state, terminalId, hasRunningSubprocess),
+            setThreadTerminalActivity(state, terminalId, hasRunningSubprocess, label),
           ),
         clearTerminalState: (threadId) =>
           updateTerminal(threadId, () => createDefaultThreadTerminalState()),
