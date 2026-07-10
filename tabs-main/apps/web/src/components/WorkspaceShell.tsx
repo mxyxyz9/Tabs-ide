@@ -7315,11 +7315,7 @@ function ServerTool(props: {
                         <span
                           className={cn(
                             "inline-block size-2 rounded-full",
-                            status === "running"
-                              ? "bg-success"
-                              : status === "stopped"
-                                ? "bg-warning"
-                                : "bg-muted-foreground/50",
+                            status === "running" ? "bg-success" : "bg-muted-foreground/30",
                           )}
                         />
                         <span className="truncate">{process.label}</span>
@@ -7351,11 +7347,7 @@ function ServerTool(props: {
                             <span
                               className={cn(
                                 "inline-block size-1.5 rounded-full",
-                                status === "running"
-                                  ? "bg-success"
-                                  : status === "stopped"
-                                    ? "bg-warning"
-                                    : "bg-muted-foreground/50",
+                                status === "running" ? "bg-success" : "bg-muted-foreground/30",
                               )}
                             />
                             {badgeLabel}

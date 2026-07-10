@@ -544,8 +544,30 @@ export const useTerminalStateStore = create<TerminalStateStoreState>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        terminalStateByThreadId: state.terminalStateByThreadId,
+        // Persist everything EXCEPT running state
+        terminalStateByThreadId: Object.fromEntries(
+          Object.entries(state.terminalStateByThreadId).map(([k, v]) => [
+            k,
+            { ...v, runningTerminalIds: [] },
+          ]),
+        ),
       }),
     },
   ),
 );
+
+// Clear runningTerminalIds on store creation (initialization step)
+try {
+  const currentState = useTerminalStateStore.getState();
+  if (currentState && currentState.terminalStateByThreadId) {
+    const cleared = Object.fromEntries(
+      Object.entries(currentState.terminalStateByThreadId).map(([k, v]) => [
+        k,
+        { ...v, runningTerminalIds: [] },
+      ]),
+    );
+    useTerminalStateStore.setState({ terminalStateByThreadId: cleared });
+  }
+} catch (e) {
+  console.error("Failed to clear runningTerminalIds on store initialization", e);
+}
