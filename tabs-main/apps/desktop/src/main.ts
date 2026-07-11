@@ -1441,12 +1441,16 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
   isQuitting = true;
   clearUpdatePollTimer();
   try {
-    const shutdown = await Effect.runPromise(
-      Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer))
-    );
-    await Effect.runPromise(shutdown.request);
-    await shutdownPromise;
-    await Effect.runPromise(shutdown.awaitComplete);
+    await Effect.runPromise(resolvedShutdown.request);
+    await Promise.race([
+      (async () => {
+        await shutdownPromise;
+        await Effect.runPromise(resolvedShutdown.awaitComplete);
+      })(),
+      new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("Update install shutdown timed out after 10 seconds")), 10000)
+      ),
+    ]);
     autoUpdater.quitAndInstall();
     return { accepted: true, completed: true };
   } catch (error: unknown) {
@@ -1731,6 +1735,10 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
   await stopBackendProcessAndWait(child, timeoutMs);
 }
 
+const resolvedShutdown = Effect.runSync(
+  Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer))
+);
+
 const performShutdownEffect = Effect.gen(function* () {
   const shutdown = yield* DesktopShutdown;
 
@@ -1754,7 +1762,7 @@ const performShutdownEffect = Effect.gen(function* () {
 
   yield* shutdown.awaitRequest;
 }).pipe(
-  Effect.provide(shutdownLayer),
+  Effect.provideService(DesktopShutdown, resolvedShutdown),
   Effect.scoped
 );
 
@@ -2686,12 +2694,18 @@ async function bootstrap(): Promise<void> {
 }
 
 let isCleanupFinished = false;
+let isCleaningUp = false;
 
 app.on("before-quit", (event) => {
   if (isCleanupFinished) {
     return;
   }
+  if (isCleaningUp) {
+    event.preventDefault();
+    return;
+  }
 
+  isCleaningUp = true;
   event.preventDefault(); // Hold the quit to perform async cleanup
   isQuitting = true;
   writeDesktopLogHeader("before-quit received, performing async cleanup");
@@ -2703,14 +2717,18 @@ app.on("before-quit", (event) => {
 
   void (async () => {
     try {
-      const shutdown = await Effect.runPromise(
-        Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer))
-      );
-      await Effect.runPromise(shutdown.request);
-      await shutdownPromise;
-      await Effect.runPromise(shutdown.awaitComplete);
+      await Effect.runPromise(resolvedShutdown.request);
+      await Promise.race([
+        (async () => {
+          await shutdownPromise;
+          await Effect.runPromise(resolvedShutdown.awaitComplete);
+        })(),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("App shutdown timed out after 10 seconds")), 10000)
+        ),
+      ]);
     } catch (error) {
-      writeDesktopLogHeader(`shutdown failed: ${error}`);
+      writeDesktopLogHeader(`shutdown failed or timed out: ${error}`);
     } finally {
       isCleanupFinished = true;
       restoreStdIoCapture?.();

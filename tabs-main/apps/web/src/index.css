@@ -232,7 +232,7 @@
   --foreground: var(--color-neutral-800);
   --card: var(--color-white);
   --card-foreground: var(--color-neutral-800);
-  --popover: var(--color-white);
+  --popover: color-mix(in srgb, var(--color-white) 80%, transparent);
   --popover-foreground: var(--color-neutral-800);
   --primary: oklch(0.488 0.217 264);
   --primary-foreground: var(--color-white);
@@ -261,7 +261,7 @@
     --foreground: var(--color-neutral-100);
     --card: color-mix(in srgb, var(--background) 98%, var(--color-white));
     --card-foreground: var(--color-neutral-100);
-    --popover: color-mix(in srgb, var(--background) 98%, var(--color-white));
+    --popover: color-mix(in srgb, var(--background) 80%, transparent);
     --popover-foreground: var(--color-neutral-100);
     --primary: oklch(0.588 0.217 264);
     --primary-foreground: var(--color-white);
@@ -923,3 +923,26 @@ label:has(> select#reasoning-effort) select {
 .dark .model-picker-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* Glassmorphism for dialog overlays / backdrops */
+[data-slot="dialog-backdrop"],
+[data-slot="alert-dialog-backdrop"],
+[data-slot="sheet-backdrop"] {
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+/* Glassmorphism for all floating popup panels */
+:where(
+  [data-slot="dialog-popup"],
+  [data-slot="alert-dialog-popup"],
+  [data-slot="sheet-popup"],
+  [data-slot="popover-popup"],
+  [data-slot="menu-popup"],
+  [data-slot="select-popup"],
+  [data-slot="tooltip-popup"]
+) {
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+

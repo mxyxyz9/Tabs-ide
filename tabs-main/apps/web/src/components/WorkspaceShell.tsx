@@ -722,14 +722,24 @@ function ProjectTabs(props: {
   projects: ReadonlyArray<Project>;
   openProjects: ReadonlyArray<Project>;
   activeProjectId: ProjectId | null;
+  pendingTabIds: ReadonlyArray<string>;
+  activePendingTabId: string | null;
   onActivateProject: (projectId: ProjectId) => void;
   onCloseProject: (projectId: ProjectId) => void;
-  onCreateProject: () => void;
-  onOpenProject: (projectId: ProjectId) => void;
+  onNewTab: () => void;
+  onActivatePendingTab: (pendingId: string) => void;
+  onClosePendingTab: (pendingId: string) => void;
 }) {
-  const closedProjects = props.projects.filter(
-    (project) => !props.openProjects.some((openProject) => openProject.id === project.id),
-  );
+  // Merge real + pending tabs in a stable order: real projects first (as ordered
+  // in openProjects), then pending slots appended at the end.
+  type TabEntry =
+    | { kind: "project"; project: Project }
+    | { kind: "pending"; pendingId: string };
+
+  const tabs: TabEntry[] = [
+    ...props.openProjects.map((project): TabEntry => ({ kind: "project", project })),
+    ...(props.pendingTabIds ?? []).map((pendingId): TabEntry => ({ kind: "pending", pendingId })),
+  ];
 
   return (
     <div
@@ -741,11 +751,50 @@ function ProjectTabs(props: {
       )}
     >
       <div className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {props.openProjects.map((project) => {
-          const active = project.id === props.activeProjectId;
+        {tabs.map((entry) => {
+          if (entry.kind === "project") {
+            const { project } = entry;
+            const active = project.id === props.activeProjectId && !props.activePendingTabId;
+            return (
+              <div
+                key={project.id}
+                className={cn(
+                  "drag-region inline-flex min-w-[10rem] max-w-[15rem] items-center gap-3 rounded-t-[18px] border border-b-0 px-5 py-3 text-base transition-all",
+                  active
+                    ? "relative -mb-px border-border/90 bg-card text-foreground shadow-[0_-1px_0_rgba(255,255,255,0.05)]"
+                    : "border-transparent bg-black/16 text-muted-foreground/90 hover:bg-black/24 hover:text-foreground dark:bg-white/[0.04] dark:hover:bg-white/[0.07]",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => props.onActivateProject(project.id)}
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-left leading-none",
+                    active ? "font-semibold" : "font-medium",
+                  )}
+                >
+                  {project.name}
+                </button>
+                <button
+                  type="button"
+                  className="no-drag rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-black/10 hover:text-foreground dark:hover:bg-white/8"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onCloseProject(project.id);
+                  }}
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              </div>
+            );
+          }
+
+          // Pending tab chip
+          const { pendingId } = entry;
+          const active = props.activePendingTabId === pendingId;
           return (
             <div
-              key={project.id}
+              key={pendingId}
               className={cn(
                 "drag-region inline-flex min-w-[10rem] max-w-[15rem] items-center gap-3 rounded-t-[18px] border border-b-0 px-5 py-3 text-base transition-all",
                 active
@@ -755,20 +804,20 @@ function ProjectTabs(props: {
             >
               <button
                 type="button"
-                onClick={() => props.onActivateProject(project.id)}
+                onClick={() => props.onActivatePendingTab(pendingId)}
                 className={cn(
                   "min-w-0 flex-1 truncate text-left leading-none",
                   active ? "font-semibold" : "font-medium",
                 )}
               >
-                {project.name}
+                New Tab
               </button>
               <button
                 type="button"
                 className="no-drag rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-black/10 hover:text-foreground dark:hover:bg-white/8"
                 onClick={(event) => {
                   event.stopPropagation();
-                  props.onCloseProject(project.id);
+                  props.onClosePendingTab(pendingId);
                 }}
               >
                 <XIcon className="size-3.5" />
@@ -777,45 +826,20 @@ function ProjectTabs(props: {
           );
         })}
 
-        <Menu>
-          <MenuTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="no-drag mb-2 shrink-0 rounded-full border border-border/60 bg-background/70 text-muted-foreground hover:bg-card hover:text-foreground"
-              />
-            }
-          >
-            <PlusIcon className="size-4" />
-          </MenuTrigger>
-          <MenuPopup align="start" side="bottom" className="min-w-56">
-            <MenuItem onClick={props.onCreateProject}>Add Project From Folder</MenuItem>
-            {closedProjects.length > 0 ? (
-              <MenuItem
-                disabled
-                className="pointer-events-none mt-1 text-[11px] uppercase tracking-[0.12em] text-muted-foreground"
-              >
-                Reopen Project
-              </MenuItem>
-            ) : null}
-            {closedProjects.length > 0 ? <Separator className="my-1" /> : null}
-            {closedProjects.length === 0 ? (
-              <MenuItem disabled>All projects already open</MenuItem>
-            ) : (
-              closedProjects.map((project) => (
-                <MenuItem key={project.id} onClick={() => props.onOpenProject(project.id)}>
-                  {project.name}
-                </MenuItem>
-              ))
-            )}
-          </MenuPopup>
-        </Menu>
+        {/* Plain "+" button — no dropdown, creates a pending tab immediately */}
+        <button
+          type="button"
+          className="no-drag mb-2 shrink-0 rounded-full border border-border/60 bg-background/70 p-1 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+          aria-label="New tab"
+          onClick={props.onNewTab}
+        >
+          <PlusIcon className="size-4" />
+        </button>
       </div>
     </div>
   );
 }
+
 
 function ProjectToolBar(props: {
   activeToolId: string;
@@ -7746,6 +7770,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const setCodeFocusedPath = useWorkspaceShellStore((state) => state.setCodeFocusedPath);
   const rememberThread = useWorkspaceShellStore((state) => state.rememberThread);
   const upsertProjectSettings = useWorkspaceShellStore((state) => state.upsertProjectSettings);
+  const openPendingTab = useWorkspaceShellStore((state) => state.openPendingTab);
+  const resolvePendingTab = useWorkspaceShellStore((state) => state.resolvePendingTab);
+  const closePendingTab = useWorkspaceShellStore((state) => state.closePendingTab);
+  const activePendingTabId = workspaceState.session.activePendingTabId ?? null;
+  const pendingTabIds = workspaceState.session.pendingTabIds ?? [];
+  const isActivePendingTab = Boolean(activePendingTabId);
   const settings = useSettings();
   // Close a project tab, optionally asking for confirmation first. Gated by the
   // "Confirm before closing a tab" setting (Settings → General).
@@ -7925,8 +7955,81 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     void bridge.hideBrowserSession().catch(() => undefined);
   }, [activeTool?.kind]);
 
+  const verifyProjectExists = useCallback(
+    async (projectId: ProjectId): Promise<boolean> => {
+      const project = projects.find((p) => p.id === projectId);
+      if (!project) return false;
+      const api = readNativeApi();
+      if (!api) return true; // Offline or no API, assume true to avoid breaking state
+      try {
+        await api.projects.filesystemBrowse({
+          partialPath: project.cwd.endsWith("/") || project.cwd.endsWith("\\")
+            ? project.cwd
+            : project.cwd + "/",
+        });
+        return true;
+      } catch (err) {
+        toastManager.add({
+          type: "error",
+          title: "Project folder not found",
+          description: `The folder at "${project.cwd}" does not exist. Removing it from recents.`,
+        });
+        void api.orchestration.dispatchCommand({
+          type: "project.delete",
+          commandId: newCommandId(),
+          projectId,
+        }).catch(() => undefined);
+        closeProject(projectId);
+        return false;
+      }
+    },
+    [closeProject, projects],
+  );
+
+  // Periodically verify existence of recent projects every 30 seconds while welcome screen is open
+  useEffect(() => {
+    const isShowingWelcome = isActivePendingTab || (!activeProject || !activeProjectSettings);
+    if (!isShowingWelcome || !threadsHydrated) {
+      return;
+    }
+
+    const checkRecentProjects = async () => {
+      const recentProjectsList = projects
+        .toSorted((left, right) =>
+          (right.updatedAt ?? right.createdAt ?? "").localeCompare(
+            left.updatedAt ?? left.createdAt ?? "",
+          ),
+        )
+        .slice(0, 6);
+
+      for (const project of recentProjectsList) {
+        await verifyProjectExists(project.id);
+      }
+    };
+
+    // Run immediately when welcome screen mounts/becomes active
+    void checkRecentProjects();
+
+    const interval = setInterval(() => {
+      void checkRecentProjects();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [
+    activeProject,
+    activeProjectSettings,
+    isActivePendingTab,
+    projects,
+    threadsHydrated,
+    verifyProjectExists,
+  ]);
+
+
   const focusProject = useCallback(
     async (projectId: ProjectId) => {
+      const exists = await verifyProjectExists(projectId);
+      if (!exists) return;
+
       openProject(projectId);
       if (location.pathname === "/settings") {
         return;
@@ -7970,7 +8073,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     if (!cwd) return;
     const existing = projects.find((project) => project.cwd === cwd);
     if (existing) {
-      await focusProject(existing.id);
+      if (activePendingTabId) {
+        // Resolve the pending tab into the existing project at the same slot.
+        resolvePendingTab(activePendingTabId, existing.id);
+        setActiveTool(existing.id, "agents");
+        await navigate({ to: "/" });
+      } else {
+        await focusProject(existing.id);
+      }
       return;
     }
 
@@ -7985,11 +8095,19 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
       createdAt,
     });
-    openProject(projectId);
-    setActiveProject(projectId);
-    setActiveTool(projectId, "code");
-    await navigate({ to: "/" });
-  }, [focusProject, navigate, openProject, projects, setActiveProject, setActiveTool]);
+    if (activePendingTabId) {
+      // Convert the pending slot into a real project tab.
+      resolvePendingTab(activePendingTabId, projectId);
+      setActiveTool(projectId, "code");
+      await navigate({ to: "/" });
+    } else {
+      openProject(projectId);
+      setActiveProject(projectId);
+      setActiveTool(projectId, "code");
+      await navigate({ to: "/" });
+    }
+  }, [activePendingTabId, focusProject, navigate, openProject, projects, resolvePendingTab, setActiveProject, setActiveTool]);
+
 
   // Browser-like tab keyboard shortcuts, driven by application-menu accelerators
   // (cmd/ctrl + T / W / 1..9 / shift+[ ] / ctrl+Tab). Using menu accelerators —
@@ -8016,7 +8134,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       const base = currentIndex < 0 ? 0 : currentIndex;
       switch (action) {
         case "tab-new":
-          void handleCreateProject();
+          void (() => {
+            const pendingId = randomUUID();
+            openPendingTab(pendingId);
+          })();
           return;
         case "tab-close":
           if (activeProjectId) void requestCloseProject(activeProjectId);
@@ -8036,7 +8157,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         }
       }
     });
-  }, [handleCreateProject, requestCloseProject, setActiveProject]);
+  }, [openPendingTab, requestCloseProject, setActiveProject]);
 
   const ensureProjectForWorkspaceRoot = useCallback(
     async (workspaceRoot: string): Promise<ProjectId> => {
@@ -8066,11 +8187,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const handleClonedRepository = useCallback(
     async (clonedPath: string) => {
       const projectId = await ensureProjectForWorkspaceRoot(clonedPath);
+      if (activePendingTabId) {
+        resolvePendingTab(activePendingTabId, projectId);
+      }
       setActiveProject(projectId);
       setActiveTool(projectId, "code");
       await navigate({ to: "/" });
     },
-    [ensureProjectForWorkspaceRoot, navigate, setActiveProject, setActiveTool],
+    [activePendingTabId, ensureProjectForWorkspaceRoot, navigate, resolvePendingTab, setActiveProject, setActiveTool],
   );
 
   const handleOpenProjectFile = useCallback(async () => {
@@ -8927,6 +9051,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         })()
       : null;
 
+  // The content area renders the landing/welcome screen specifically when the
+  // active tab is a pending (unassigned) tab. A pending-active tab takes
+  // priority over any activeProject — they cannot both be non-null simultaneously
+  // (openPendingTab clears activeProjectId), but the explicit check here makes
+  // intent clear and guards against any unexpected state.
+
   const isSettingsRoute = location.pathname === "/settings";
   const shouldHideShellChrome = embeddedMode.enabled;
   const isEmbeddedWorkspacePending =
@@ -8954,7 +9084,118 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     );
   } else if (isSettingsRoute) {
     content = props.settingsContent;
+  } else if (isActivePendingTab) {
+    // The focused tab is a pending/unassigned "New Tab" — show the landing
+    // screen inside that tab's content area so the user can pick a project.
+    // We reuse the existing Welcome JSX exactly; only the activation condition
+    // has changed (was: !activeProject globally; now: active tab is pending).
+    const recentProjects = projects
+      .toSorted((left, right) =>
+        (right.updatedAt ?? right.createdAt ?? "").localeCompare(
+          left.updatedAt ?? left.createdAt ?? "",
+        ),
+      )
+      .slice(0, 6);
+    const handleRecentProject = async (project: Project) => {
+      const exists = await verifyProjectExists(project.id);
+      if (!exists) return;
+
+      if (activePendingTabId) {
+        resolvePendingTab(activePendingTabId, project.id);
+        void focusProject(project.id);
+      } else {
+        void focusProject(project.id);
+      }
+    };
+    content = (
+      <div className="flex h-full min-h-0 overflow-auto bg-background px-10 py-12">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-10">
+          <div className="space-y-2">
+            <h1 className="text-4xl font-medium tracking-tight text-foreground">Welcome</h1>
+            <p className="text-base text-muted-foreground">
+              Open a local project to start using the workspace shell.
+            </p>
+          </div>
+
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+            <div className="space-y-5">
+              <div>
+                <div className="text-xl font-medium text-foreground">Start</div>
+              </div>
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
+                  onClick={() => void handleCreateProject()}
+                >
+                  <PlusIcon className="size-4 text-muted-foreground" />
+                  <span>Add Project...</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
+                  onClick={() => void handleOpenProjectFile()}
+                >
+                  <FolderSearchIcon className="size-4 text-muted-foreground" />
+                  <span>Open File...</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
+                  onClick={() => setCloneDialogOpen(true)}
+                >
+                  <GitBranchIcon className="size-4 text-muted-foreground" />
+                  <span>Clone from Git...</span>
+                </button>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
+                  onClick={() => void navigate({ to: "/settings" })}
+                >
+                  <SettingsIcon className="size-4 text-muted-foreground" />
+                  <span>Workspace Settings</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <div className="text-xl font-medium text-foreground">Recent</div>
+              </div>
+              {recentProjects.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/70 px-4 py-5 text-sm text-muted-foreground">
+                  No recent projects yet.
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {recentProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      className="flex w-full items-start justify-between gap-4 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent/40"
+                      onClick={() => handleRecentProject(project)}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {project.name}
+                        </div>
+                        <div className="truncate text-xs text-muted-foreground">{project.cwd}</div>
+                      </div>
+                      <div className="shrink-0 pt-0.5 text-[11px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                        Open
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   } else if (!activeProject || !activeProjectSettings) {
+    // No pending tab is active, but still no real project resolved — this is the
+    // old global fallback (e.g. on first launch before any project is added).
     const recentProjects = projects
       .toSorted((left, right) =>
         (right.updatedAt ?? right.createdAt ?? "").localeCompare(
@@ -9095,11 +9336,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         onOpenChange={setCloneDialogOpen}
         onCloned={handleClonedRepository}
       />
-      {shouldHideShellChrome ? null : (
+      {!threadsHydrated || shouldHideShellChrome ? null : (
         <ProjectTabs
           projects={projects}
           openProjects={openProjects}
           activeProjectId={activeProject?.id ?? null}
+          pendingTabIds={pendingTabIds}
+          activePendingTabId={activePendingTabId}
           onActivateProject={(projectId) => void focusProject(projectId)}
           onCloseProject={(projectId) => {
             const wasActive = workspaceState.session.activeProjectId === projectId;
@@ -9114,8 +9357,16 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               }
             });
           }}
-          onCreateProject={() => void handleCreateProject()}
-          onOpenProject={(projectId) => void focusProject(projectId)}
+          onNewTab={() => {
+            const pendingId = randomUUID();
+            openPendingTab(pendingId);
+          }}
+          onActivatePendingTab={(pendingId) => {
+            openPendingTab(pendingId);
+          }}
+          onClosePendingTab={(pendingId) => {
+            closePendingTab(pendingId);
+          }}
         />
       )}
 

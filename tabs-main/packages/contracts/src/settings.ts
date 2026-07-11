@@ -522,6 +522,14 @@ export type ProjectWorkspaceSettings = typeof ProjectWorkspaceSettings.Type;
 export const ProjectWorkspaceSessionState = Schema.Struct({
   openProjectIds: Schema.Array(ProjectId).pipe(Schema.withDecodingDefault(() => [])),
   activeProjectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(() => null)),
+  // Ordered list of pending (unassigned) tab IDs. Each is a stable random string,
+  // never a ProjectId. A pending tab shows the Welcome/landing screen until the
+  // user picks a folder or recent project to resolve it into a real project tab.
+  pendingTabIds: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(() => [])),
+  // Which slot is focused: either a real project ID or a pending tab ID. When
+  // both activeProjectId and activePendingTabId are set, activePendingTabId wins
+  // for determining what to render in the content area.
+  activePendingTabId: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefault(() => null)),
   activeToolIdByProjectId: Schema.Record(ProjectId, ProjectSettingId).pipe(
     Schema.withDecodingDefault(() => ({})),
   ),
@@ -530,3 +538,4 @@ export const ProjectWorkspaceSessionState = Schema.Struct({
   ),
 });
 export type ProjectWorkspaceSessionState = typeof ProjectWorkspaceSessionState.Type;
+

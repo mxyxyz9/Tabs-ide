@@ -89,6 +89,10 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
   setGitSelectedPath: (projectId: ProjectId, path: string | null) => void;
   setGitSelectedCommit: (projectId: ProjectId, commit: string | null) => void;
   setServerLogQuery: (projectId: ProjectId, processId: string, query: string) => void;
+  // Pending-tab actions
+  openPendingTab: (pendingId: string) => void;
+  resolvePendingTab: (pendingId: string, projectId: ProjectId) => void;
+  closePendingTab: (pendingId: string) => void;
 }
 
 function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSettingsType {
@@ -301,6 +305,9 @@ export function syncWorkspaceShellState(
   const openProjectIds = input.session.openProjectIds.filter((projectId) =>
     projectIds.has(projectId),
   );
+  // Preserve pending tab IDs as-is — they have no server-side project to
+  // resolve against, so the existing "resolve or drop" filter must not touch them.
+  const pendingTabIds = [...(input.session.pendingTabIds ?? [])];
   const nextOpenProjectIds = openProjectIds;
   const activeProjectId =
     input.session.activeProjectId &&
@@ -308,6 +315,12 @@ export function syncWorkspaceShellState(
     nextOpenProjectIds.includes(input.session.activeProjectId)
       ? input.session.activeProjectId
       : (nextOpenProjectIds[0] ?? null);
+  // Preserve activePendingTabId only if the pending tab still exists.
+  const activePendingTabId =
+    input.session.activePendingTabId &&
+    pendingTabIds.includes(input.session.activePendingTabId)
+      ? input.session.activePendingTabId
+      : null;
   const rememberedThreadIdByProjectId: Record<ProjectId, ThreadId> = {};
   const threadIds = new Set(threads.map((thread) => thread.id));
   for (const [projectId, threadId] of Object.entries(
@@ -330,6 +343,8 @@ export function syncWorkspaceShellState(
   nextState.session = {
     openProjectIds: nextOpenProjectIds,
     activeProjectId,
+    pendingTabIds,
+    activePendingTabId,
     activeToolIdByProjectId,
     rememberedThreadIdByProjectId,
   };
@@ -362,6 +377,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
                 ...state.session,
                 openProjectIds,
                 activeProjectId: projectId,
+                activePendingTabId: null,
                 activeToolIdByProjectId: {
                   ...state.session.activeToolIdByProjectId,
                   [projectId]: resolveActiveToolId(
@@ -377,25 +393,36 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
       closeProject: (projectId) =>
         set((state) => {
           const openProjectIds = state.session.openProjectIds.filter((id) => id !== projectId);
-          const nextActiveProjectId =
-            state.session.activeProjectId === projectId
-              ? (openProjectIds[openProjectIds.length - 1] ?? null)
-              : state.session.activeProjectId;
+          const wasActive = state.session.activeProjectId === projectId;
+          // When closing the active project, fall back to: another real project
+          // first, then a pending tab (setting activePendingTabId, not activeProjectId),
+          // then null if all tabs are gone.
+          const nextActiveProjectId = wasActive
+            ? (openProjectIds[openProjectIds.length - 1] ?? null)
+            : state.session.activeProjectId;
+          const nextActivePendingTabId =
+            wasActive && !nextActiveProjectId
+              ? (state.session.pendingTabIds[state.session.pendingTabIds.length - 1] ??
+                 state.session.activePendingTabId)
+              : state.session.activePendingTabId;
           return {
             ...state,
             session: {
               ...state.session,
               openProjectIds,
               activeProjectId: nextActiveProjectId,
+              activePendingTabId: nextActivePendingTabId,
             },
           };
         }),
+
       setActiveProject: (projectId) =>
         set((state) => ({
           ...state,
           session: {
             ...state.session,
             activeProjectId: projectId,
+            activePendingTabId: null,
             openProjectIds:
               projectId && !state.session.openProjectIds.includes(projectId)
                 ? [...state.session.openProjectIds, projectId]
@@ -598,6 +625,82 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             },
           },
         })),
+
+      // ── Pending-tab actions ──────────────────────────────────────────────────
+
+      openPendingTab: (pendingId) =>
+        set((state) => ({
+          ...state,
+          session: {
+            ...state.session,
+            // Append the new pending tab to the end of the tab strip, but only
+            // if it isn't already there (idempotent).
+            pendingTabIds: state.session.pendingTabIds.includes(pendingId)
+              ? state.session.pendingTabIds
+              : [...state.session.pendingTabIds, pendingId],
+            activePendingTabId: pendingId,
+            // Clear the real active project so the content area shows the landing
+            // screen for this pending tab.
+            activeProjectId: null,
+          },
+        })),
+
+      resolvePendingTab: (pendingId, projectId) =>
+        set((state) => {
+          // Replace the pending slot with the real project ID at the same position
+          // in the combined tab strip (pending tabs interleave with real tabs).
+          const pendingTabIds = state.session.pendingTabIds.filter((id) => id !== pendingId);
+          const openProjectIds = state.session.openProjectIds.includes(projectId)
+            ? state.session.openProjectIds
+            : [...state.session.openProjectIds, projectId];
+          const projectSettings =
+            state.projectSettingsByProjectId[projectId] ?? createDefaultProjectWorkspaceSettings();
+          return ensureProjectDefaults(
+            {
+              ...state,
+              session: {
+                ...state.session,
+                pendingTabIds,
+                activePendingTabId: null,
+                openProjectIds,
+                activeProjectId: projectId,
+                activeToolIdByProjectId: {
+                  ...state.session.activeToolIdByProjectId,
+                  [projectId]: resolveActiveToolId(
+                    projectSettings,
+                    state.session.activeToolIdByProjectId[projectId],
+                  ),
+                },
+              },
+            },
+            projectId,
+          );
+        }),
+
+      closePendingTab: (pendingId) =>
+        set((state) => {
+          const pendingTabIds = state.session.pendingTabIds.filter((id) => id !== pendingId);
+          const wasActive = state.session.activePendingTabId === pendingId;
+          // On close, fall back to the last real open project, or the last
+          // remaining pending tab, or null (all tabs gone).
+          const nextActivePendingTabId = wasActive
+            ? (pendingTabIds[pendingTabIds.length - 1] ?? null)
+            : state.session.activePendingTabId;
+          const nextActiveProjectId = wasActive
+            ? (nextActivePendingTabId
+                ? null
+                : (state.session.openProjectIds[state.session.openProjectIds.length - 1] ?? null))
+            : state.session.activeProjectId;
+          return {
+            ...state,
+            session: {
+              ...state.session,
+              pendingTabIds,
+              activePendingTabId: nextActivePendingTabId,
+              activeProjectId: nextActiveProjectId,
+            },
+          };
+        }),
     }),
     {
       name: WORKSPACE_SHELL_STORAGE_KEY,
@@ -612,6 +715,15 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
         gitStateByProjectId: state.gitStateByProjectId,
         serverStateByProjectId: state.serverStateByProjectId,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state && state.session) {
+          state.session = {
+            ...state.session,
+            pendingTabIds: state.session.pendingTabIds ?? [],
+            activePendingTabId: state.session.activePendingTabId ?? null,
+          };
+        }
+      },
     },
   ),
 );
