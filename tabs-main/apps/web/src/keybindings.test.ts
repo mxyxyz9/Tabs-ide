@@ -373,6 +373,49 @@ describe("resolveShortcutCommand", () => {
       "script.setup.run",
     );
   });
+
+  it("resolves chat.new and chat.newLocal commands when !terminalFocus", () => {
+    const keybindings = compile([
+      { shortcut: modShortcut("n"), command: "chat.new", whenAst: whenNot(whenIdentifier("terminalFocus")) },
+      { shortcut: modShortcut("o", { shiftKey: true }), command: "chat.new", whenAst: whenNot(whenIdentifier("terminalFocus")) },
+      { shortcut: modShortcut("l", { shiftKey: true }), command: "chat.newLocal", whenAst: whenNot(whenIdentifier("terminalFocus")) },
+    ]);
+
+    // Matches chat.new with mod+n when terminalFocus is false
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "n", ctrlKey: true }), keybindings, {
+        platform: "Linux",
+        context: { terminalFocus: false },
+      }),
+      "chat.new",
+    );
+
+    // Matches chat.new with mod+shift+o when terminalFocus is false
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "o", ctrlKey: true, shiftKey: true }), keybindings, {
+        platform: "Linux",
+        context: { terminalFocus: false },
+      }),
+      "chat.new",
+    );
+
+    // Matches chat.newLocal with mod+shift+l when terminalFocus is false
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "l", ctrlKey: true, shiftKey: true }), keybindings, {
+        platform: "Linux",
+        context: { terminalFocus: false },
+      }),
+      "chat.newLocal",
+    );
+
+    // Does not match when terminalFocus is true
+    assert.isNull(
+      resolveShortcutCommand(event({ key: "n", ctrlKey: true }), keybindings, {
+        platform: "Linux",
+        context: { terminalFocus: true },
+      }),
+    );
+  });
 });
 
 describe("formatShortcutLabel", () => {

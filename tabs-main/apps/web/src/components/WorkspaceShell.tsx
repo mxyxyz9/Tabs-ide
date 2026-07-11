@@ -8102,6 +8102,17 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         void navigate({ to: "/" });
         return;
       }
+
+      if (command === "chat.new" || command === "chat.newLocal") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (workspaceState.session.activeProjectId) {
+          void handleNewThread(workspaceState.session.activeProjectId, {
+            envMode: command === "chat.newLocal" ? "local" : settings.defaultThreadEnvMode,
+          });
+        }
+        return;
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -8111,6 +8122,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     terminalOpen,
     openPendingTab,
     navigate,
+    handleNewThread,
+    workspaceState.session.activeProjectId,
+    settings.defaultThreadEnvMode,
   ]);
 
   const handleCreateProject = useCallback(async () => {
