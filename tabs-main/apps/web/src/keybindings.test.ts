@@ -98,8 +98,8 @@ const DEFAULT_BINDINGS = compile([
     whenAst: whenNot(whenIdentifier("terminalFocus")),
   },
   { shortcut: modShortcut("o", { shiftKey: true }), command: "chat.new" },
-  { shortcut: modShortcut("n", { shiftKey: true }), command: "chat.newLocal" },
-  { shortcut: modShortcut("o"), command: "editor.openFavorite" },
+  { shortcut: modShortcut("l", { shiftKey: true }), command: "chat.newLocal" },
+  { shortcut: modShortcut("f", { shiftKey: true }), command: "editor.openFavorite" },
 ]);
 
 describe("isTerminalToggleShortcut", () => {
@@ -239,7 +239,7 @@ describe("shortcutLabelForCommand", () => {
     assert.strictEqual(shortcutLabelForCommand(DEFAULT_BINDINGS, "diff.toggle", "Linux"), "Ctrl+D");
     assert.strictEqual(
       shortcutLabelForCommand(DEFAULT_BINDINGS, "editor.openFavorite", "Linux"),
-      "Ctrl+O",
+      "Ctrl+Shift+F",
     );
   });
 });
@@ -260,12 +260,12 @@ describe("chat/editor shortcuts", () => {
 
   it("matches chat.newLocal shortcut", () => {
     assert.isTrue(
-      isChatNewLocalShortcut(event({ key: "n", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+      isChatNewLocalShortcut(event({ key: "l", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
       }),
     );
     assert.isTrue(
-      isChatNewLocalShortcut(event({ key: "n", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
+      isChatNewLocalShortcut(event({ key: "l", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "Linux",
       }),
     );
@@ -273,12 +273,12 @@ describe("chat/editor shortcuts", () => {
 
   it("matches editor.openFavorite shortcut", () => {
     assert.isTrue(
-      isOpenFavoriteEditorShortcut(event({ key: "o", metaKey: true }), DEFAULT_BINDINGS, {
+      isOpenFavoriteEditorShortcut(event({ key: "f", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
       }),
     );
     assert.isTrue(
-      isOpenFavoriteEditorShortcut(event({ key: "o", ctrlKey: true }), DEFAULT_BINDINGS, {
+      isOpenFavoriteEditorShortcut(event({ key: "f", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
         platform: "Linux",
       }),
     );

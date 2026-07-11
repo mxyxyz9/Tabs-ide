@@ -800,11 +800,6 @@ function configureApplicationMenu(): void {
       label: "Tabs",
       submenu: [
         {
-          label: "New Project Tab",
-          accelerator: "CmdOrCtrl+T",
-          click: () => dispatchMenuAction("tab-new"),
-        },
-        {
           label: "Close Tab",
           accelerator: "CmdOrCtrl+W",
           click: () => dispatchMenuAction("tab-close"),

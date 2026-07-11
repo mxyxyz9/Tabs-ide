@@ -16,6 +16,17 @@ const STATIC_KEYBINDING_COMMANDS = [
   "chat.new",
   "chat.newLocal",
   "editor.openFavorite",
+  "tab.new",
+  "tab.close",
+  "tab.jumpTo1",
+  "tab.jumpTo2",
+  "tab.jumpTo3",
+  "tab.jumpTo4",
+  "tab.jumpTo5",
+  "tab.jumpTo6",
+  "tab.jumpTo7",
+  "tab.jumpTo8",
+  "tab.jumpTo9",
 ] as const;
 
 export const SCRIPT_RUN_COMMAND_PATTERN = Schema.TemplateLiteral([

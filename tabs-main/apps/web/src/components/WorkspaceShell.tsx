@@ -182,6 +182,9 @@ import { getCodeHostUnavailableMessage } from "./codeHost.logic";
 import { CodeActivityRail } from "./code/CodeActivityRail";
 import { CodeHeaderBar } from "./code/CodeHeaderBar";
 import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
+import { resolveShortcutCommand } from "../keybindings";
+import { isTerminalFocused } from "../lib/terminalFocus";
+import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 
 const BROWSER_DEVICE_PRESETS = [
   { id: "project-default", label: "Project", width: null, height: null },
@@ -7796,6 +7799,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const embeddedMode = useMemo(() => resolveEmbeddedWorkspaceMode(), []);
   const embeddedProjectCreateRequestedRef = useRef<string | null>(null);
 
+
+
   useEffect(() => {
     // Wait for the server read model to actually arrive before syncing. Until
     // then `projects` is the empty initial state, and syncing against it would
@@ -7926,6 +7931,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     kind: tool.kind,
     label: tool.label,
   }));
+
+
 
   useEffect(() => {
     const bridge = window.desktopBridge;
@@ -8066,6 +8073,46 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     ],
   );
 
+  const { data: serverConfig } = useQuery(serverConfigQueryOptions());
+  const keybindings = serverConfig?.keybindings ?? [];
+
+  const terminalOpen = useTerminalStateStore((state) => {
+    if (!routeThreadId) return false;
+    const threadState = state.terminalStateByThreadId[routeThreadId];
+    return threadState ? threadState.terminalOpen : false;
+  });
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const command = resolveShortcutCommand(event, keybindings, {
+        context: {
+          terminalFocus: isTerminalFocused(),
+          terminalOpen,
+          shellChromeFocus: document.hasFocus(),
+        },
+      });
+      if (!command) return;
+
+      if (command === "tab.new") {
+        event.preventDefault();
+        event.stopPropagation();
+        const pendingId = randomUUID();
+        openPendingTab(pendingId);
+        void navigate({ to: "/" });
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    keybindings,
+    terminalOpen,
+    openPendingTab,
+    navigate,
+  ]);
+
   const handleCreateProject = useCallback(async () => {
     const api = readNativeApi();
     if (!api) return;
@@ -8114,50 +8161,89 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   // not a window keydown listener — means they fire even when focus is inside an
   // embedded Code-OSS or Browser BrowserView, so they work everywhere in Tabs.
   const tabShortcutStateRef = useRef({
-    openProjects,
+    openProjectIds: workspaceState.session.openProjectIds,
+    pendingTabIds: workspaceState.session.pendingTabIds,
     activeProjectId: workspaceState.session.activeProjectId,
+    activePendingTabId: workspaceState.session.activePendingTabId,
   });
   tabShortcutStateRef.current = {
-    openProjects,
+    openProjectIds: workspaceState.session.openProjectIds,
+    pendingTabIds: workspaceState.session.pendingTabIds,
     activeProjectId: workspaceState.session.activeProjectId,
+    activePendingTabId: workspaceState.session.activePendingTabId,
   };
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!bridge) return;
     return bridge.onMenuAction((action) => {
-      const { openProjects: tabs, activeProjectId } = tabShortcutStateRef.current;
+      const {
+        openProjectIds,
+        pendingTabIds,
+        activeProjectId,
+        activePendingTabId,
+      } = tabShortcutStateRef.current;
+
+      const tabsList = [
+        ...openProjectIds.map(id => ({ kind: "project" as const, id })),
+        ...pendingTabIds.map(id => ({ kind: "pending" as const, id })),
+      ];
+
       const activate = (index: number) => {
-        const target = tabs[index];
-        if (target) setActiveProject(target.id);
+        const targetTab = tabsList[index];
+        if (targetTab) {
+          if (targetTab.kind === "project") {
+            void focusProject(targetTab.id);
+          } else {
+            openPendingTab(targetTab.id);
+            void navigate({ to: "/" });
+          }
+        }
       };
-      const currentIndex = tabs.findIndex((project) => project.id === activeProjectId);
+
+      const getCurrentIndex = () => {
+        if (activePendingTabId) {
+          return tabsList.findIndex(t => t.kind === "pending" && t.id === activePendingTabId);
+        }
+        if (activeProjectId) {
+          return tabsList.findIndex(t => t.kind === "project" && t.id === activeProjectId);
+        }
+        return -1;
+      };
+
+      const currentIndex = getCurrentIndex();
       const base = currentIndex < 0 ? 0 : currentIndex;
+
       switch (action) {
         case "tab-new":
           void (() => {
             const pendingId = randomUUID();
             openPendingTab(pendingId);
+            void navigate({ to: "/" });
           })();
           return;
         case "tab-close":
-          if (activeProjectId) void requestCloseProject(activeProjectId);
+          if (activePendingTabId) {
+            closePendingTab(activePendingTabId);
+          } else if (activeProjectId) {
+            void requestCloseProject(activeProjectId);
+          }
           return;
         case "tab-next":
-          if (tabs.length > 0) activate((base + 1) % tabs.length);
+          if (tabsList.length > 0) activate((base + 1) % tabsList.length);
           return;
         case "tab-prev":
-          if (tabs.length > 0) activate((base - 1 + tabs.length) % tabs.length);
+          if (tabsList.length > 0) activate((base - 1 + tabsList.length) % tabsList.length);
           return;
         default: {
           const goMatch = /^tab-go-([1-9])$/.exec(action);
-          if (goMatch && tabs.length > 0) {
+          if (goMatch && tabsList.length > 0) {
             const requested = Number(goMatch[1]);
-            activate(requested === 9 ? tabs.length - 1 : Math.min(requested - 1, tabs.length - 1));
+            activate(requested === 9 ? tabsList.length - 1 : Math.min(requested - 1, tabsList.length - 1));
           }
         }
       }
     });
-  }, [openPendingTab, requestCloseProject, setActiveProject]);
+  }, [openPendingTab, closePendingTab, requestCloseProject, focusProject, navigate]);
 
   const ensureProjectForWorkspaceRoot = useCallback(
     async (workspaceRoot: string): Promise<ProjectId> => {
@@ -9360,9 +9446,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           onNewTab={() => {
             const pendingId = randomUUID();
             openPendingTab(pendingId);
+            void navigate({ to: "/" });
           }}
           onActivatePendingTab={(pendingId) => {
             openPendingTab(pendingId);
+            void navigate({ to: "/" });
           }}
           onClosePendingTab={(pendingId) => {
             closePendingTab(pendingId);

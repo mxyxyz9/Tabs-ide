@@ -32,8 +32,19 @@ export const DEFAULT_KEYBINDINGS: ReadonlyArray<KeybindingRule> = [
   { key: "mod+d", command: "diff.toggle", when: "!terminalFocus" },
   { key: "mod+n", command: "chat.new", when: "!terminalFocus" },
   { key: "mod+shift+o", command: "chat.new", when: "!terminalFocus" },
-  { key: "mod+shift+n", command: "chat.newLocal", when: "!terminalFocus" },
-  { key: "mod+o", command: "editor.openFavorite" },
+  { key: "mod+shift+l", command: "chat.newLocal", when: "!terminalFocus" },
+  { key: "mod+shift+f", command: "editor.openFavorite" },
+  { key: "mod+shift+n", command: "tab.new", when: "shellChromeFocus" },
+  { key: "mod+w", command: "tab.close", when: "!terminalFocus && shellChromeFocus" },
+  { key: "mod+1", command: "tab.jumpTo1", when: "shellChromeFocus" },
+  { key: "mod+2", command: "tab.jumpTo2", when: "shellChromeFocus" },
+  { key: "mod+3", command: "tab.jumpTo3", when: "shellChromeFocus" },
+  { key: "mod+4", command: "tab.jumpTo4", when: "shellChromeFocus" },
+  { key: "mod+5", command: "tab.jumpTo5", when: "shellChromeFocus" },
+  { key: "mod+6", command: "tab.jumpTo6", when: "shellChromeFocus" },
+  { key: "mod+7", command: "tab.jumpTo7", when: "shellChromeFocus" },
+  { key: "mod+8", command: "tab.jumpTo8", when: "shellChromeFocus" },
+  { key: "mod+9", command: "tab.jumpTo9", when: "shellChromeFocus" },
 ];
 
 function normalizeKeyToken(token: string): string {

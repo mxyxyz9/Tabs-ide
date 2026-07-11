@@ -320,6 +320,24 @@ function writeMergedJsonFile(pathname: string, patch: Record<string, unknown>): 
   FS.writeFileSync(pathname, `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`, "utf8");
 }
 
+function writeKeybindingsJsonFile(pathname: string, rules: Array<Record<string, unknown>>): void {
+  FS.mkdirSync(Path.dirname(pathname), { recursive: true });
+  let current: Array<Record<string, unknown>> = [];
+  if (isFile(pathname, FS)) {
+    try {
+      current = JSON.parse(FS.readFileSync(pathname, "utf8")) as Array<Record<string, unknown>>;
+      if (!Array.isArray(current)) {
+        current = [];
+      }
+    } catch {
+      current = [];
+    }
+  }
+  const targetKeys = new Set(rules.map(r => r.key));
+  const filtered = current.filter(item => !targetKeys.has(item.key));
+  FS.writeFileSync(pathname, `${JSON.stringify([...filtered, ...rules], null, 2)}\n`, "utf8");
+}
+
 export function buildMountedWorkspaceDescriptor(workspaceRoot: string): {
   mountRoot: string;
   workspaceUri: string;
@@ -348,6 +366,26 @@ function ensureCodeOssWebServerDefaultSettings(): void {
     console.log(`[code-oss] embed settings written (managed-server) → ${settingsPath}`);
   } catch {
     // Non-fatal.
+  }
+}
+
+function ensureCodeOssWebServerDefaultKeybindings(): void {
+  const userDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "data", "User");
+  const keybindingsPath = Path.join(userDir, "keybindings.json");
+  try {
+    writeKeybindingsJsonFile(keybindingsPath, [
+      {
+        key: "cmd+shift+n",
+        command: "-workbench.action.newWindow",
+      },
+      {
+        key: "ctrl+shift+n",
+        command: "-workbench.action.newWindow",
+      },
+    ]);
+    console.log(`[code-oss] embed keybindings written (managed-server) → ${keybindingsPath}`);
+  } catch (err) {
+    console.error("[code-oss] failed to write embed keybindings (managed-server)", err);
   }
 }
 
@@ -1646,6 +1684,7 @@ export class CodeHostManager {
     ensureCodeOssWebServerNlsMessages(runtime.vscodeRoot);
     FS.mkdirSync(CODE_OSS_WEB_SERVER_DATA_DIR, { recursive: true });
     ensureCodeOssWebServerDefaultSettings();
+    ensureCodeOssWebServerDefaultKeybindings();
 
     const mountedWorkspace = buildMountedWorkspaceDescriptor(session.workspaceRoot);
 
@@ -2151,6 +2190,23 @@ export class CodeHostManager {
       console.log(`[code-oss] embed settings written (desktop-renderer) → ${desktopSettingsPath}`);
     } catch {
       // Non-fatal. The integration extension also enforces these settings.
+    }
+
+    try {
+      const desktopKeybindingsPath = Path.join(location, "keybindings.json");
+      writeKeybindingsJsonFile(desktopKeybindingsPath, [
+        {
+          key: "cmd+shift+n",
+          command: "-workbench.action.newWindow",
+        },
+        {
+          key: "ctrl+shift+n",
+          command: "-workbench.action.newWindow",
+        },
+      ]);
+      console.log(`[code-oss] embed keybindings written (desktop-renderer) → ${desktopKeybindingsPath}`);
+    } catch {
+      // Non-fatal.
     }
 
     return {
