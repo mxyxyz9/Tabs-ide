@@ -1,6 +1,6 @@
 {
   "name": "@tabs/contracts",
-  "version": "1.2.49",
+  "version": "1.2.50",
   "private": true,
   "files": [
     "dist"
@@ -24,7 +24,7 @@
   "scripts": {
     "dev": "tsdown src/index.ts --format esm,cjs --dts --watch --clean",
     "build": "tsdown src/index.ts --format esm,cjs --dts --clean",
-    "prepare": "effect-language-service patch",
+    "prepare": "effect-language-service patch || true",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
