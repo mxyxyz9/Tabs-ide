@@ -101,7 +101,13 @@ import type {
 import { EditorId } from "./editor";
 import type { DesktopIconTheme } from "./settings";
 import { ServerSettings, ServerSettingsPatch } from "./settings";
-import { SourceControlDiscoveryResult } from "./sourceControl";
+import {
+  SourceControlDiscoveryResult,
+  SourceControlCloneRepositoryInput,
+  SourceControlCloneRepositoryResult,
+  SourceControlRepositoryLookupInput,
+  SourceControlRepositoryInfo,
+} from "./sourceControl";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;
@@ -446,6 +452,8 @@ export interface NativeApi {
     getSettings: () => Promise<ServerSettings>;
     updateSettings: (patch: ServerSettingsPatch) => Promise<ServerSettings>;
     discoverSourceControl: () => Promise<SourceControlDiscoveryResult>;
+    cloneRepository: (input: SourceControlCloneRepositoryInput) => Promise<SourceControlCloneRepositoryResult>;
+    lookupRepository: (input: SourceControlRepositoryLookupInput) => Promise<SourceControlRepositoryInfo>;
   };
   orchestration: {
     getSnapshot: () => Promise<OrchestrationReadModel>;

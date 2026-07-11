@@ -3,7 +3,7 @@ import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
 import { useSourceControlDiscovery } from "~/lib/sourceControlReactQuery";
-import { ChevronDownIcon, RefreshCwIcon } from "lucide-react";
+import { ChevronDownIcon, RefreshCwIcon, DownloadIcon, LogInIcon } from "lucide-react";
 import {
   GitHubIcon,
   GitLabIcon,
@@ -14,6 +14,35 @@ import {
 } from "~/components/Icons";
 import { cn } from "~/lib/utils";
 import { SettingsSection } from "~/routes/_chat.settings";
+
+const SOURCE_CONTROL_COMMANDS: Record<
+  string,
+  { name: string; install?: string; login?: string }
+> = {
+  github: {
+    name: "GitHub CLI",
+    install: "brew install gh",
+    login: "gh auth login",
+  },
+  gitlab: {
+    name: "GitLab CLI",
+    install: "brew install glab",
+    login: "glab auth login",
+  },
+  "azure-devops": {
+    name: "Azure CLI",
+    install: "brew install azure-cli && az extension add --name azure-devops",
+    login: "az login",
+  },
+  git: {
+    name: "Git",
+    install: "brew install git",
+  },
+  jujutsu: {
+    name: "Jujutsu",
+    install: "brew install jujutsu",
+  },
+};
 
 const SOURCE_CONTROL_PROVIDER_ICONS = {
   github: GitHubIcon,
@@ -38,7 +67,20 @@ function itemStatusDot(item: {
   return "bg-success";
 }
 
-export function SourceControlSettingsPanel() {
+interface SourceControlSettingsPanelProps {
+  readonly startProviderAction: (input: {
+    provider: any;
+    providerName: string;
+    command: string;
+    kind: "install" | "login" | "update";
+  }) => void;
+  readonly providerActionBusy: boolean;
+}
+
+export function SourceControlSettingsPanel({
+  startProviderAction,
+  providerActionBusy,
+}: SourceControlSettingsPanelProps) {
   const { data, isLoading, error, refetch, isFetching } = useSourceControlDiscovery();
   const [isJjExpanded, setIsJjExpanded] = useState(false);
 
@@ -139,6 +181,25 @@ export function SourceControlSettingsPanel() {
                     </p>
                   </div>
                   <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+                    {!item.available && SOURCE_CONTROL_COMMANDS[item.system]?.install && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 px-2.5 text-xs"
+                        disabled={providerActionBusy}
+                        onClick={() =>
+                          startProviderAction({
+                            provider: item.system,
+                            providerName: SOURCE_CONTROL_COMMANDS[item.system]!.name,
+                            command: SOURCE_CONTROL_COMMANDS[item.system]!.install!,
+                            kind: "install",
+                          })
+                        }
+                      >
+                        <DownloadIcon className="size-3.5" />
+                        Install
+                      </Button>
+                    )}
                     {hasDetails && (
                       <Button
                         size="sm"
@@ -231,6 +292,44 @@ export function SourceControlSettingsPanel() {
                     </div>
                   </div>
                   <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+                    {!item.cliAvailable && SOURCE_CONTROL_COMMANDS[item.provider]?.install && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 px-2.5 text-xs"
+                        disabled={providerActionBusy}
+                        onClick={() =>
+                          startProviderAction({
+                            provider: item.provider,
+                            providerName: SOURCE_CONTROL_COMMANDS[item.provider]!.name,
+                            command: SOURCE_CONTROL_COMMANDS[item.provider]!.install!,
+                            kind: "install",
+                          })
+                        }
+                      >
+                        <DownloadIcon className="size-3.5" />
+                        Install
+                      </Button>
+                    )}
+                    {item.cliAvailable && !item.authenticated && SOURCE_CONTROL_COMMANDS[item.provider]?.login && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 px-2.5 text-xs"
+                        disabled={providerActionBusy}
+                        onClick={() =>
+                          startProviderAction({
+                            provider: item.provider,
+                            providerName: SOURCE_CONTROL_COMMANDS[item.provider]!.name,
+                            command: SOURCE_CONTROL_COMMANDS[item.provider]!.login!,
+                            kind: "login",
+                          })
+                        }
+                      >
+                        <LogInIcon className="size-3.5" />
+                        Sign in
+                      </Button>
+                    )}
                     <Switch checked={item.cliAvailable && item.authenticated} disabled />
                   </div>
                 </div>

@@ -552,7 +552,10 @@ function SettingsRouteView() {
     const api = ensureNativeApi();
     api.server
       .refreshProviders()
-      .then(() => queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() }))
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
+        void queryClient.invalidateQueries({ queryKey: ["source-control-discovery"] });
+      })
       .catch((error: unknown) => {
         console.warn("Failed to refresh providers", error);
       })
@@ -1432,7 +1435,12 @@ function SettingsRouteView() {
                   </SettingsSection>
                 ) : null}
                 {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
-                {activeSettingsSection === "source-control" ? <SourceControlSettingsPanel /> : null}
+                {activeSettingsSection === "source-control" ? (
+                  <SourceControlSettingsPanel
+                    startProviderAction={startProviderAction}
+                    providerActionBusy={providerActionSession !== null}
+                  />
+                ) : null}
                 {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
                 {activeSettingsSection === "providers" ? (
                   <SettingsSection

@@ -30,9 +30,10 @@ function CommandDialogBackdrop({ className, ...props }: CommandDialogPrimitive.B
   return (
     <CommandDialogPrimitive.Backdrop
       className={cn(
-        "fixed inset-0 z-50 bg-black/45 backdrop-blur-md transition-all duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
+        "fixed inset-0 z-50 bg-black/45 transition-all duration-200 data-ending-style:opacity-0 data-starting-style:opacity-0",
         className,
       )}
+      style={{ backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}
       data-slot="command-dialog-backdrop"
       {...props}
     />

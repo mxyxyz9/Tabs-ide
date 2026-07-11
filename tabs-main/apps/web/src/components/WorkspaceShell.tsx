@@ -71,6 +71,7 @@ import { useComposerDraftStore } from "../composerDraftStore";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { isElectron } from "../env";
+import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
 import { toGitUserFacingErrorMessage } from "../lib/gitErrorMessages";
 import {
   gitBranchesQueryOptions,
@@ -7755,6 +7756,7 @@ function ServerTool(props: {
 
 export function WorkspaceShell(props: { agentsContent: ReactNode; settingsContent: ReactNode }) {
   useDesktopIconThemeSync();
+  const openAddProjectCommandPalette = useOpenAddProjectCommandPalette();
   const navigate = useNavigate();
   const location = useLocation();
   const routeThreadId = useParams({
@@ -9242,7 +9244,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
-                  onClick={() => setCloneDialogOpen(true)}
+                  onClick={() => openAddProjectCommandPalette()}
                 >
                   <GitBranchIcon className="size-4 text-muted-foreground" />
                   <span>Clone from Git...</span>
@@ -9338,7 +9340,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-accent/40"
-                  onClick={() => setCloneDialogOpen(true)}
+                  onClick={() => openAddProjectCommandPalette()}
                 >
                   <GitBranchIcon className="size-4 text-muted-foreground" />
                   <span>Clone from Git...</span>

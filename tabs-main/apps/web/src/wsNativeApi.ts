@@ -262,6 +262,8 @@ export function createWsNativeApi(): NativeApi {
       getSettings: () => transport.request(WS_METHODS.serverGetSettings),
       updateSettings: (patch) => transport.request(WS_METHODS.serverUpdateSettings, { patch }),
       discoverSourceControl: () => transport.request(WS_METHODS.serverDiscoverSourceControl),
+      cloneRepository: (input) => transport.request(WS_METHODS.serverCloneRepository, input),
+      lookupRepository: (input) => transport.request(WS_METHODS.serverLookupRepository, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

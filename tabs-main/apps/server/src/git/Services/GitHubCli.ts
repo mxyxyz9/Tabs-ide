@@ -93,6 +93,13 @@ export interface GitHubCliShape {
     readonly reference: string;
     readonly force?: boolean;
   }) => Effect.Effect<void, GitHubCliError>;
+
+  /**
+   * Get GitHub CLI auth status.
+   */
+  readonly getAuthStatus: (input: {
+    readonly cwd: string;
+  }) => Effect.Effect<string, GitHubCliError>;
 }
 
 /**

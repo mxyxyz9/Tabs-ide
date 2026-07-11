@@ -11,6 +11,7 @@ import {
   FolderPlusIcon,
   SettingsIcon,
   SquarePenIcon,
+  GitBranchIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -21,9 +22,18 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { Badge } from "~/components/ui/badge";
+import { toastManager } from "~/components/ui/toast";
+import {
+  GitHubIcon,
+  GitLabIcon,
+  AzureDevOpsIcon,
+  BitbucketIcon,
+} from "~/components/Icons";
 import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import { useSourceControlDiscovery } from "~/lib/sourceControlReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
@@ -157,6 +167,30 @@ function OpenCommandPaletteDialog(props: {
 
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
+
+  const [addProjectCloneFlow, setAddProjectCloneFlow] = useState<{
+    step: "repository" | "confirm";
+    provider: "github" | "gitlab" | "azure-devops" | "bitbucket" | "git-url";
+    repositoryInput?: string | undefined;
+    remoteUrl?: string | undefined;
+    repository?: any | undefined;
+  } | null>(null);
+
+  const { data: sourceControlDiscovery } = useSourceControlDiscovery();
+
+  const getProviderBadge = useCallback((providerKind: string) => {
+    if (!sourceControlDiscovery) return null;
+    const provider = sourceControlDiscovery.providers.find((p) => p.provider === providerKind);
+    if (!provider) return null;
+    if (provider.cliAvailable && provider.authenticated) return null;
+    if (providerKind === "bitbucket" && provider.authenticated) return null;
+
+    return (
+      <Badge variant="warning" className="ml-2 py-0 h-4 text-[10px]">
+        Setup Required
+      </Badge>
+    );
+  }, [sourceControlDiscovery]);
 
   // Filesystem browse states
   const [browseEntries, setBrowseEntries] = useState<FilesystemBrowseEntry[]>([]);
@@ -355,12 +389,246 @@ function OpenCommandPaletteDialog(props: {
     }
   }, [addProjectFromPath, setOpen]);
 
+  const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
+  const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  const getProviderIcon = (provider: string) => {
+    switch (provider) {
+      case "github":
+        return <GitHubIcon className={ITEM_ICON_CLASS} />;
+      case "gitlab":
+        return <GitLabIcon className={ITEM_ICON_CLASS} />;
+      case "azure-devops":
+        return <AzureDevOpsIcon className={ITEM_ICON_CLASS} />;
+      case "bitbucket":
+        return <BitbucketIcon className={ITEM_ICON_CLASS} />;
+      default:
+        return <FolderIcon className={ITEM_ICON_CLASS} />;
+    }
+  };
+
+  const remoteProjectContext = useMemo(() => {
+    if (!addProjectCloneFlow || addProjectCloneFlow.step !== "confirm") {
+      return null;
+    }
+    return {
+      title: addProjectCloneFlow.repository?.nameWithOwner ?? addProjectCloneFlow.repositoryInput,
+      description: addProjectCloneFlow.remoteUrl ?? addProjectCloneFlow.repositoryInput,
+      icon: getProviderIcon(addProjectCloneFlow.provider),
+    };
+  }, [addProjectCloneFlow]);
+
+  const handleLookupRepository = useCallback(async () => {
+    if (!addProjectCloneFlow || addProjectCloneFlow.step !== "repository" || isRemoteProjectLookingUp) {
+      return;
+    }
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length === 0) return;
+
+    if (addProjectCloneFlow.provider === "git-url") {
+      let repoName = "cloned-repo";
+      const parts = trimmedQuery.split("/");
+      const lastPart = parts.pop() || "";
+      repoName = lastPart.replace(/\.git$/, "") || "cloned-repo";
+
+      setAddProjectCloneFlow({
+        step: "confirm",
+        provider: "git-url",
+        repositoryInput: trimmedQuery,
+        remoteUrl: trimmedQuery,
+      });
+      setQuery(`~/projects/${repoName}`);
+      setLookupError(null);
+      return;
+    }
+
+    const api = readNativeApi();
+    if (!api) return;
+
+    setIsRemoteProjectLookingUp(true);
+    setLookupError(null);
+    try {
+      const result = await api.server.lookupRepository({
+        provider: addProjectCloneFlow.provider,
+        repository: trimmedQuery,
+      });
+      setIsRemoteProjectLookingUp(false);
+      
+      let repoName = "cloned-repo";
+      const parts = result.nameWithOwner.split("/");
+      repoName = parts.pop() || "cloned-repo";
+
+      setAddProjectCloneFlow({
+        step: "confirm",
+        provider: addProjectCloneFlow.provider,
+        repositoryInput: trimmedQuery,
+        remoteUrl: result.sshUrl || result.url,
+        repository: result,
+      });
+      setQuery(`~/projects/${repoName}`);
+    } catch (err: any) {
+      setIsRemoteProjectLookingUp(false);
+      setLookupError(err?.message || "Repository lookup failed. Make sure the repository exists and you are authenticated.");
+    }
+  }, [addProjectCloneFlow, query]);
+
+  const triggerClone = useCallback(async (
+    provider: string,
+    repository: string | undefined,
+    destinationPath: string,
+    remoteUrl?: string
+  ) => {
+    toastManager.add({
+      type: "info",
+      title: "[DIAG] triggerClone Invoked",
+      description: `args: provider=${provider}, repository=${repository}, destinationPath=${destinationPath}, remoteUrl=${remoteUrl}`,
+    });
+    console.log("[DIAG] triggerClone invoked:", { provider, repository, destinationPath, remoteUrl });
+    const api = readNativeApi();
+    if (!api) {
+      toastManager.add({
+        type: "error",
+        title: "[DIAG] triggerClone Failed",
+        description: "api (readNativeApi) not found",
+      });
+      return;
+    }
+    setIsRemoteProjectCloning(true);
+    setLookupError(null);
+    try {
+      const input = {
+        provider: provider === "git-url" ? "unknown" as const : provider as any,
+        repository: provider === "git-url" ? undefined : repository,
+        remoteUrl: remoteUrl || (provider === "git-url" ? repository : undefined),
+        destinationPath,
+      };
+      toastManager.add({
+        type: "info",
+        title: "[DIAG] Calling cloneRepository",
+        description: `input: ${JSON.stringify(input)}`,
+      });
+      console.log("[DIAG] Calling api.server.cloneRepository input:", input);
+      const result = await api.server.cloneRepository(input);
+      toastManager.add({
+        type: "success",
+        title: "[DIAG] Received clone result",
+        description: `result: ${JSON.stringify(result)}`,
+      });
+      console.log("[DIAG] Received clone result:", result);
+      setIsRemoteProjectCloning(false);
+      if (result && result.cwd) {
+        setOpen(false);
+        setAddProjectCloneFlow(null);
+        await addProjectFromPath(result.cwd);
+      }
+    } catch (err: any) {
+      setIsRemoteProjectCloning(false);
+      const errMsg = err?.message || String(err);
+      const errStack = err?.stack || "";
+      toastManager.add({
+        type: "error",
+        title: "[DIAG] cloneRepository Failed",
+        description: `${errMsg}\n${errStack}`,
+      });
+      console.error("[DIAG] api.server.cloneRepository error:", err);
+      setLookupError(errMsg || "Clone failed. Please try again.");
+    }
+  }, [addProjectFromPath]);
+
+  const openAddProjectSourcesView = useCallback(() => {
+    setViewStack((prev) => [
+      ...prev,
+      {
+        addonIcon: <GitBranchIcon className={ADDON_ICON_CLASS} />,
+        groups: [
+          {
+            value: "sources",
+            label: "Clone Repository",
+            items: [
+              {
+                kind: "action" as const,
+                value: "action:add-project:git-url",
+                searchTerms: ["git", "url", "clone", "remote"],
+                title: "Git URL",
+                description: "Clone from a remote URL",
+                icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+                keepOpen: true,
+                run: async () => {
+                  setAddProjectCloneFlow({ step: "repository", provider: "git-url" });
+                  setQuery("");
+                },
+              },
+              {
+                kind: "action" as const,
+                value: "action:add-project:github",
+                searchTerms: ["github", "gh", "clone"],
+                title: "GitHub repository",
+                description: "Clone GitHub owner/repo",
+                icon: <GitHubIcon className={ITEM_ICON_CLASS} />,
+                titleTrailingContent: getProviderBadge("github"),
+                keepOpen: true,
+                run: async () => {
+                  setAddProjectCloneFlow({ step: "repository", provider: "github" });
+                  setQuery("");
+                },
+              },
+              {
+                kind: "action" as const,
+                value: "action:add-project:azure-devops",
+                searchTerms: ["azure", "devops", "az", "clone"],
+                title: "Azure DevOps repository",
+                description: "Clone Azure DevOps project/repository",
+                icon: <AzureDevOpsIcon className={ITEM_ICON_CLASS} />,
+                titleTrailingContent: getProviderBadge("azure-devops"),
+                keepOpen: true,
+                run: async () => {
+                  setAddProjectCloneFlow({ step: "repository", provider: "azure-devops" });
+                  setQuery("");
+                },
+              },
+              {
+                kind: "action" as const,
+                value: "action:add-project:bitbucket",
+                searchTerms: ["bitbucket", "clone"],
+                title: "Bitbucket repository",
+                description: "Clone Bitbucket workspace/repository",
+                icon: <BitbucketIcon className={ITEM_ICON_CLASS} />,
+                titleTrailingContent: getProviderBadge("bitbucket"),
+                keepOpen: true,
+                run: async () => {
+                  setAddProjectCloneFlow({ step: "repository", provider: "bitbucket" });
+                  setQuery("");
+                },
+              },
+              {
+                kind: "action" as const,
+                value: "action:add-project:gitlab",
+                searchTerms: ["gitlab", "glab", "clone"],
+                title: "GitLab repository",
+                description: "Clone GitLab group/project",
+                icon: <GitLabIcon className={ITEM_ICON_CLASS} />,
+                titleTrailingContent: getProviderBadge("gitlab"),
+                keepOpen: true,
+                run: async () => {
+                  setAddProjectCloneFlow({ step: "repository", provider: "gitlab" });
+                  setQuery("");
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    setQuery("");
+  }, [openAddProjectFlow, getProviderBadge]);
+
   useEffect(() => {
     if (openIntent?.kind === "add-project") {
       clearOpenIntent();
-      void openAddProjectFlow();
+      void openAddProjectSourcesView();
     }
-  }, [clearOpenIntent, openAddProjectFlow, openIntent]);
+  }, [clearOpenIntent, openAddProjectSourcesView, openIntent]);
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
@@ -413,7 +681,7 @@ function OpenCommandPaletteDialog(props: {
     icon: <FolderPlusIcon className={ITEM_ICON_CLASS} />,
     keepOpen: true,
     run: async () => {
-      await openAddProjectFlow();
+      openAddProjectSourcesView();
     },
   });
 
@@ -431,6 +699,9 @@ function OpenCommandPaletteDialog(props: {
   const rootGroups = buildRootGroups({ actionItems, recentThreadItems });
 
   const activeGroups = useMemo(() => {
+    if (addProjectCloneFlow) {
+      return [];
+    }
     if (currentView) {
       return currentView.groups;
     }
@@ -468,15 +739,19 @@ function OpenCommandPaletteDialog(props: {
   ]);
 
   const filteredGroups = useMemo(
-    () =>
-      filterCommandPaletteGroups({
+    () => {
+      if (addProjectCloneFlow) {
+        return [];
+      }
+      return filterCommandPaletteGroups({
         activeGroups,
         query,
         isInSubmenu: currentView !== null,
         projectSearchItems,
         threadSearchItems: [],
-      }),
-    [activeGroups, query, currentView, projectSearchItems]
+      });
+    },
+    [activeGroups, query, currentView, projectSearchItems, addProjectCloneFlow]
   );
 
   const flatItems = useMemo(
@@ -525,6 +800,46 @@ function OpenCommandPaletteDialog(props: {
       setHighlightedItemValue(flatItems[prevIdx]?.value ?? null);
     } else if (event.key === "Enter") {
       event.preventDefault();
+      console.log("[DIAG] handleKeyDown: Enter key pressed. addProjectCloneFlow =", addProjectCloneFlow, "query =", query);
+      toastManager.add({
+        type: "info",
+        title: "[DIAG] Enter Pressed",
+        description: `flow active: ${!!addProjectCloneFlow}, query: "${query}"`,
+      });
+      if (addProjectCloneFlow) {
+        const trimmedQuery = query.trim();
+        toastManager.add({
+          type: "info",
+          title: `[DIAG] step is: ${addProjectCloneFlow.step}`,
+          description: `trimmedQuery: "${trimmedQuery}"`,
+        });
+        if (trimmedQuery.length > 0) {
+          if (addProjectCloneFlow.step === "repository") {
+            console.log("[DIAG] handleKeyDown: Enter in repository step. Invoking handleLookupRepository.");
+            toastManager.add({
+              type: "info",
+              title: "[DIAG] Triggering Lookup",
+              description: `Calling handleLookupRepository for "${trimmedQuery}"`,
+            });
+            void handleLookupRepository();
+          } else if (addProjectCloneFlow.step === "confirm") {
+            console.log("[DIAG] handleKeyDown: Enter in confirm step. Invoking triggerClone.");
+            toastManager.add({
+              type: "info",
+              title: "[DIAG] Triggering Clone",
+              description: `Calling triggerClone for provider=${addProjectCloneFlow.provider}, destinationPath="${trimmedQuery}"`,
+            });
+            void triggerClone(
+              addProjectCloneFlow.provider,
+              addProjectCloneFlow.repositoryInput,
+              trimmedQuery,
+              addProjectCloneFlow.remoteUrl
+            );
+          }
+        }
+        return;
+      }
+
       // If browsing filesystem and press Enter on an exact match or query path, add it as project
       if (isBrowsing && !isBrowsePending) {
         const exactMatch = flatItems.find(
@@ -545,6 +860,20 @@ function OpenCommandPaletteDialog(props: {
         void handleExecuteItem(highlightedItem);
       }
     } else if (event.key === "Escape") {
+      if (addProjectCloneFlow) {
+        event.preventDefault();
+        if (addProjectCloneFlow.step === "confirm") {
+          setAddProjectCloneFlow({
+            step: "repository",
+            provider: addProjectCloneFlow.provider,
+          });
+          setQuery(addProjectCloneFlow.repositoryInput ?? "");
+        } else {
+          setAddProjectCloneFlow(null);
+          setQuery("");
+        }
+        return;
+      }
       if (currentView) {
         event.preventDefault();
         setViewStack((prev) => prev.slice(0, -1));
@@ -552,6 +881,20 @@ function OpenCommandPaletteDialog(props: {
         setHighlightedItemValue(null);
       }
     } else if (event.key === "Backspace" && query.length === 0) {
+      if (addProjectCloneFlow) {
+        event.preventDefault();
+        if (addProjectCloneFlow.step === "confirm") {
+          setAddProjectCloneFlow({
+            step: "repository",
+            provider: addProjectCloneFlow.provider,
+          });
+          setQuery(addProjectCloneFlow.repositoryInput ?? "");
+        } else {
+          setAddProjectCloneFlow(null);
+          setQuery("");
+        }
+        return;
+      }
       if (currentView) {
         event.preventDefault();
         setViewStack((prev) => prev.slice(0, -1));
@@ -562,18 +905,43 @@ function OpenCommandPaletteDialog(props: {
   };
 
   const mode = getCommandPaletteMode({ currentView, isBrowsing });
-  const placeholder = getCommandPaletteInputPlaceholder(mode);
+  let placeholder = getCommandPaletteInputPlaceholder(mode);
+  if (addProjectCloneFlow) {
+    if (addProjectCloneFlow.step === "repository") {
+      placeholder = addProjectCloneFlow.provider === "git-url"
+        ? "Enter Git repository clone URL..."
+        : `Enter repository (e.g. owner/repo) for ${addProjectCloneFlow.provider === "azure-devops" ? "Azure DevOps" : addProjectCloneFlow.provider}...`;
+    } else if (addProjectCloneFlow.step === "confirm") {
+      placeholder = "Enter absolute clone destination path (e.g. ~/projects/my-app)...";
+    }
+  }
 
   return (
     <CommandDialogPopup data-command-palette>
       <Command>
         <div className="flex items-center border-b px-3">
-          {currentView && (
+          {(currentView || addProjectCloneFlow) && (
             <button
               onClick={() => {
-                setViewStack((prev) => prev.slice(0, -1));
-                setQuery("");
-                setHighlightedItemValue(null);
+                if (addProjectCloneFlow) {
+                  if (addProjectCloneFlow.step === "confirm") {
+                    setAddProjectCloneFlow({
+                      step: "repository",
+                      provider: addProjectCloneFlow.provider,
+                      repositoryInput: addProjectCloneFlow.repositoryInput,
+                    });
+                    setQuery(addProjectCloneFlow.repositoryInput ?? "");
+                    setLookupError(null);
+                  } else {
+                    setAddProjectCloneFlow(null);
+                    setQuery("");
+                    setLookupError(null);
+                  }
+                } else {
+                  setViewStack((prev) => prev.slice(0, -1));
+                  setQuery("");
+                  setHighlightedItemValue(null);
+                }
               }}
               className="mr-2 flex size-6 items-center justify-center rounded-sm hover:bg-muted"
             >
@@ -585,12 +953,63 @@ function OpenCommandPaletteDialog(props: {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            {...(addProjectCloneFlow?.step === "repository" && query.trim().length > 0
+              ? {
+                  endAddon: (
+                    <button
+                      type="button"
+                      disabled={isRemoteProjectLookingUp}
+                      className="flex items-center gap-1.5 rounded-sm bg-accent border border-border/40 px-2 py-1 text-[10px] font-medium text-foreground hover:bg-accent/80 transition-colors pointer-events-auto"
+                      onClick={() => void handleLookupRepository()}
+                    >
+                      {isRemoteProjectLookingUp ? "Looking up..." : addProjectCloneFlow.provider === "git-url" ? "Continue" : "Lookup"}
+                      <kbd className="opacity-75 text-[9px] font-sans">Enter</kbd>
+                    </button>
+                  ),
+                }
+              : {})}
           />
         </div>
         <CommandPanel className="max-h-[300px] overflow-y-auto">
-          {isBrowsePending ? (
+          {remoteProjectContext ? (
+            <div className="p-2 pb-0">
+              <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">
+                Repository
+              </div>
+              <div className="flex min-h-8 items-center gap-2 rounded-sm px-2 py-1.5 bg-accent/30 border border-border/40">
+                {remoteProjectContext.icon}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-foreground text-sm font-medium">
+                    {remoteProjectContext.title}
+                  </span>
+                  <span className="truncate text-muted-foreground/70 text-xs">
+                    {remoteProjectContext.description}
+                  </span>
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          {isRemoteProjectLookingUp ? (
+            <div className="py-12 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+              <span className="animate-spin text-lg">⌛</span>
+              <span>Looking up repository on {addProjectCloneFlow?.provider === "azure-devops" ? "Azure DevOps" : addProjectCloneFlow?.provider}...</span>
+            </div>
+          ) : isRemoteProjectCloning ? (
+            <div className="py-12 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+              <span className="animate-spin text-lg">⚡</span>
+              <span>Cloning repository to destination...</span>
+            </div>
+          ) : isBrowsePending ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               Loading directories...
+            </div>
+          ) : lookupError ? (
+            <div className="p-6 text-center">
+              <p className="text-sm font-medium text-destructive">{lookupError}</p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Press Backspace or Esc to go back and try again.
+              </p>
             </div>
           ) : (
             <CommandPaletteResults
@@ -599,22 +1018,45 @@ function OpenCommandPaletteDialog(props: {
               isActionsOnly={query.startsWith(">")}
               keybindings={keybindings}
               onExecuteItem={handleExecuteItem}
+              {...(addProjectCloneFlow?.step === "repository"
+                ? {
+                    emptyStateMessage:
+                      addProjectCloneFlow.provider === "git-url"
+                        ? "Enter a Git clone URL and press Enter to continue."
+                        : `Enter a repository path (e.g. owner/repo) and press Enter to look it up on ${addProjectCloneFlow.provider === "azure-devops" ? "Azure DevOps" : addProjectCloneFlow.provider}.`,
+                  }
+                : addProjectCloneFlow?.step === "confirm"
+                  ? { emptyStateMessage: "Choose a destination path and press Enter to clone." }
+                  : {})}
             />
           )}
         </CommandPanel>
         <CommandFooter>
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1">
+            <span className="flex items-center gap-1 text-xs">
               <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">↑↓</kbd> Navigate
             </span>
-            <span className="flex items-center gap-1">
-              <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Enter</kbd> Select
-            </span>
-            {currentView && (
-              <span className="flex items-center gap-1">
-                <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Esc</kbd> Back
+            {addProjectCloneFlow?.step === "repository" ? (
+              <span className="flex items-center gap-1 text-xs">
+                <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Enter</kbd> {addProjectCloneFlow.provider === "git-url" ? "Continue" : "Lookup"}
+              </span>
+            ) : addProjectCloneFlow?.step === "confirm" ? (
+              <span className="flex items-center gap-1 text-xs">
+                <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Enter</kbd> Clone
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-xs">
+                <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Enter</kbd> Select
               </span>
             )}
+            {(currentView || addProjectCloneFlow) && (
+              <span className="flex items-center gap-1 text-xs">
+                <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Backspace</kbd> Back
+              </span>
+            )}
+            <span className="flex items-center gap-1 text-xs">
+              <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-sans">Esc</kbd> Close
+            </span>
           </div>
         </CommandFooter>
       </Command>

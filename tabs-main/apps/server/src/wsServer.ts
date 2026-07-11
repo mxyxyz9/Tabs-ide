@@ -87,6 +87,7 @@ import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@tabs/shared/schemaJson";
 import { discoverSourceControl } from "./sourceControl/discovery";
+import { runProcess } from "./processRunner";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -246,6 +247,14 @@ export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycl
     cause: Schema.optional(Schema.Defect),
   },
 ) {}
+
+function tryParseJson(text: string): any {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 class RouteRequestError extends Schema.TaggedErrorClass<RouteRequestError>()("RouteRequestError", {
   message: Schema.String,
@@ -1218,6 +1227,213 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.serverDiscoverSourceControl: {
         return yield* Effect.promise(() => discoverSourceControl());
+      }
+
+      case WS_METHODS.serverCloneRepository: {
+        const body = stripRequestTag(request.body);
+        console.log("[DIAG-SERVER] serverCloneRepository received request body:", body);
+        let remoteUrl = body.remoteUrl ?? "";
+        if (!remoteUrl && body.repository) {
+          const repo = body.repository;
+          if (
+            repo.startsWith("http://") ||
+            repo.startsWith("https://") ||
+            repo.startsWith("git@") ||
+            repo.startsWith("ssh://")
+          ) {
+            remoteUrl = repo;
+          } else if (body.provider) {
+            switch (body.provider) {
+              case "github": {
+                const result = yield* Effect.promise(() =>
+                  runProcess("gh", ["repo", "view", repo, "--json", "url,sshUrl"], {
+                    timeoutMs: 15000,
+                    allowNonZeroExit: true,
+                  })
+                );
+                if (result.code === 0) {
+                  const parsed = tryParseJson(result.stdout);
+                  remoteUrl = parsed?.sshUrl || parsed?.url || `https://github.com/${repo}.git`;
+                } else {
+                  remoteUrl = `https://github.com/${repo}.git`;
+                }
+                break;
+              }
+              case "gitlab": {
+                const result = yield* Effect.promise(() =>
+                  runProcess("glab", ["api", `projects/${encodeURIComponent(repo)}`], {
+                    timeoutMs: 15000,
+                    allowNonZeroExit: true,
+                  })
+                );
+                if (result.code === 0) {
+                  const parsed = tryParseJson(result.stdout);
+                  remoteUrl = parsed?.ssh_url_to_repo || parsed?.http_url_to_repo || `https://gitlab.com/${repo}.git`;
+                } else {
+                  remoteUrl = `https://gitlab.com/${repo}.git`;
+                }
+                break;
+              }
+              case "azure-devops": {
+                const result = yield* Effect.promise(() =>
+                  runProcess("az", ["repos", "show", "--detect", "true", "--repository", repo], {
+                    timeoutMs: 15000,
+                    allowNonZeroExit: true,
+                  })
+                );
+                if (result.code === 0) {
+                  const parsed = tryParseJson(result.stdout);
+                  remoteUrl = parsed?.sshUrl || parsed?.remoteUrl || `https://dev.azure.com/${repo}`;
+                } else {
+                  remoteUrl = repo.startsWith("http") ? repo : `https://dev.azure.com/${repo}`;
+                }
+                break;
+              }
+              case "bitbucket": {
+                const email = process.env.T3CODE_BITBUCKET_EMAIL;
+                const apiToken = process.env.T3CODE_BITBUCKET_API_TOKEN;
+                const accessToken = process.env.T3CODE_BITBUCKET_ACCESS_TOKEN;
+                if (accessToken) {
+                  remoteUrl = `https://x-token-auth:${encodeURIComponent(accessToken)}@bitbucket.org/${repo}.git`;
+                } else if (email && apiToken) {
+                  remoteUrl = `https://${encodeURIComponent(email)}:${encodeURIComponent(apiToken)}@bitbucket.org/${repo}.git`;
+                } else {
+                  remoteUrl = `https://bitbucket.org/${repo}.git`;
+                }
+                break;
+              }
+              default:
+                remoteUrl = repo;
+            }
+          } else {
+            remoteUrl = repo;
+          }
+        }
+        console.log("[DIAG-SERVER] serverCloneRepository resolved remoteUrl:", remoteUrl);
+        if (!remoteUrl) {
+          console.log("[DIAG-SERVER] serverCloneRepository error: remoteUrl is empty");
+          return yield* new RouteRequestError({
+            message: "No remote URL or repository specified.",
+          });
+        }
+        let dest = body.destinationPath;
+        if (dest.startsWith("~/")) {
+          const home = process.env.HOME || process.env.USERPROFILE || "";
+          dest = dest.replace(/^~\//, home + "/");
+        }
+        console.log("[DIAG-SERVER] serverCloneRepository resolved dest path:", dest);
+        const git = yield* GitCore;
+        console.log("[DIAG-SERVER] serverCloneRepository running git clone command...");
+        const cloneResult = yield* git.execute({
+          operation: "clone",
+          cwd: process.cwd(),
+          args: ["clone", remoteUrl, dest],
+        });
+        console.log("[DIAG-SERVER] serverCloneRepository clone succeeded, cloneResult:", cloneResult);
+        return {
+          cwd: dest,
+          remoteUrl,
+          repository: body.repository
+            ? {
+                provider: body.provider ?? "unknown",
+                nameWithOwner: body.repository,
+                url: remoteUrl,
+                sshUrl: remoteUrl,
+              }
+            : null,
+        };
+      }
+
+      case WS_METHODS.serverLookupRepository: {
+        const body = stripRequestTag(request.body);
+        const { provider, repository } = body;
+        switch (provider) {
+          case "github": {
+            const result = yield* Effect.promise(() =>
+              runProcess("gh", ["repo", "view", repository, "--json", "nameWithOwner,url,sshUrl"], {
+                timeoutMs: 15000,
+                allowNonZeroExit: true,
+              })
+            );
+            if (result.code === 0) {
+              const parsed = tryParseJson(result.stdout);
+              if (parsed && parsed.url && parsed.sshUrl) {
+                return {
+                  provider: "github" as const,
+                  nameWithOwner: parsed.nameWithOwner,
+                  url: parsed.url,
+                  sshUrl: parsed.sshUrl,
+                };
+              }
+            }
+            return yield* new RouteRequestError({
+              message: `Failed to find GitHub repository "${repository}". Make sure it exists and you are authenticated in the GitHub CLI.`,
+            });
+          }
+          case "gitlab": {
+            const result = yield* Effect.promise(() =>
+              runProcess("glab", ["api", `projects/${encodeURIComponent(repository)}`], {
+                timeoutMs: 15000,
+                allowNonZeroExit: true,
+              })
+            );
+            if (result.code === 0) {
+              const parsed = tryParseJson(result.stdout);
+              if (parsed && (parsed.web_url || parsed.ssh_url_to_repo)) {
+                return {
+                  provider: "gitlab" as const,
+                  nameWithOwner: parsed.path_with_namespace || repository,
+                  url: parsed.web_url || `https://gitlab.com/${repository}`,
+                  sshUrl: parsed.ssh_url_to_repo || `git@gitlab.com:${repository}.git`,
+                };
+              }
+            }
+            return yield* new RouteRequestError({
+              message: `Failed to find GitLab repository "${repository}". Make sure it exists and you are authenticated in the GitLab CLI.`,
+            });
+          }
+          case "azure-devops": {
+            const result = yield* Effect.promise(() =>
+              runProcess("az", ["repos", "show", "--detect", "true", "--repository", repository], {
+                timeoutMs: 15000,
+                allowNonZeroExit: true,
+              })
+            );
+            if (result.code === 0) {
+              const parsed = tryParseJson(result.stdout);
+              if (parsed && (parsed.remoteUrl || parsed.sshUrl)) {
+                return {
+                  provider: "azure-devops" as const,
+                  nameWithOwner: parsed.name,
+                  url: parsed.remoteUrl,
+                  sshUrl: parsed.sshUrl,
+                };
+              }
+            }
+            return yield* new RouteRequestError({
+              message: `Failed to find Azure DevOps repository "${repository}". Make sure it exists and you are authenticated in the Azure CLI.`,
+            });
+          }
+          case "bitbucket": {
+            return {
+              provider: "bitbucket" as const,
+              nameWithOwner: repository,
+              url: `https://bitbucket.org/${repository}.git`,
+              sshUrl: `git@bitbucket.org:${repository}.git`,
+            };
+          }
+          case "unknown": {
+            return yield* new RouteRequestError({
+              message: "Cannot lookup repository with unknown provider.",
+            });
+          }
+          default: {
+            const _exhaustiveCheck: never = provider;
+            return yield* new RouteRequestError({
+              message: `Unsupported provider: ${String(_exhaustiveCheck)}`,
+            });
+          }
+        }
       }
 
       default: {

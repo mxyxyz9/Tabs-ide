@@ -58,10 +58,38 @@ export class GitManagerError extends Schema.TaggedErrorClass<GitManagerError>()(
 }
 
 /**
+ * GitLabCliError - GitLab CLI execution or authentication failed.
+ */
+export class GitLabCliError extends Schema.TaggedErrorClass<GitLabCliError>()("GitLabCliError", {
+  operation: Schema.String,
+  detail: Schema.String,
+  cause: Schema.optional(Schema.Defect),
+}) {
+  override get message(): string {
+    return `GitLab CLI failed in ${this.operation}: ${this.detail}`;
+  }
+}
+
+/**
+ * AzureDevOpsCliError - Azure DevOps CLI execution or authentication failed.
+ */
+export class AzureDevOpsCliError extends Schema.TaggedErrorClass<AzureDevOpsCliError>()("AzureDevOpsCliError", {
+  operation: Schema.String,
+  detail: Schema.String,
+  cause: Schema.optional(Schema.Defect),
+}) {
+  override get message(): string {
+    return `Azure DevOps CLI failed in ${this.operation}: ${this.detail}`;
+  }
+}
+
+/**
  * GitManagerServiceError - Errors emitted by stacked Git workflow orchestration.
  */
 export type GitManagerServiceError =
   | GitManagerError
   | GitCommandError
   | GitHubCliError
+  | GitLabCliError
+  | AzureDevOpsCliError
   | TextGenerationError;

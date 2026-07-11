@@ -442,6 +442,11 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
           cwd: input.cwd,
           args: ["pr", "checkout", input.reference, ...(input.force ? ["--force"] : [])],
         }).pipe(Effect.asVoid),
+      getAuthStatus: (input) =>
+        execute({
+          cwd: input.cwd,
+          args: ["auth", "status", "--json", "hosts"],
+        }).pipe(Effect.map((result) => result.stdout)),
     },
     ghCalls,
   };

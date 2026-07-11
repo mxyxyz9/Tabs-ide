@@ -272,6 +272,24 @@ const makeGitHubCli = Effect.sync(() => {
         cwd: input.cwd,
         args: ["pr", "checkout", input.reference, ...(input.force ? ["--force"] : [])],
       }).pipe(Effect.asVoid),
+    getAuthStatus: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: ["auth", "status", "--json", "hosts"],
+      }).pipe(
+        Effect.map((result) => result.stdout),
+        Effect.catch((err) => {
+          // If gh auth status exits with an error code (e.g. 1 when not logged in),
+          // check if we can still extract stdout.
+          if (err && typeof err === "object" && "cause" in err) {
+            const cause = err.cause;
+            if (cause && typeof cause === "object" && "stdout" in cause && typeof cause.stdout === "string") {
+              return Effect.succeed(cause.stdout);
+            }
+          }
+          return Effect.fail(err);
+        })
+      ),
   } satisfies GitHubCliShape;
 
   return service;
