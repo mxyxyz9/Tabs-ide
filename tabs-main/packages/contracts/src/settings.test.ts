@@ -130,6 +130,8 @@ describe("ProjectWorkspaceSessionState", () => {
       activeProjectId: null,
       activeToolIdByProjectId: {},
       rememberedThreadIdByProjectId: {},
+      activePendingTabId: null,
+      pendingTabIds: [],
     });
   });
 });
