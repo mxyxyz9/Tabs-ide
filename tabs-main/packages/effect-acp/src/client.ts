@@ -1,4 +1,4 @@
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Stdio from "effect/Stdio";
 import * as Layer from "effect/Layer";
@@ -262,7 +262,7 @@ export interface AcpClientShape {
   ) => Effect.Effect<void>;
 }
 
-export class AcpClient extends ServiceMap.Service<AcpClient, AcpClientShape>()(
+export class AcpClient extends Context.Service<AcpClient, AcpClientShape>()(
   "effect-acp/client/AcpClient",
 ) {}
 
@@ -456,7 +456,8 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
     generateRequestId: () => nextRpcRequestId++ as never,
   }).pipe(Effect.provideService(RpcClient.Protocol, transport.clientProtocol));
 
-  return AcpClient.of({
+  return {
+
     raw: {
       notifications: transport.incoming,
       request: transport.request,
@@ -556,7 +557,8 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
         );
         return Effect.void;
       }),
-  });
+  
+};
 });
 
 export const layerChildProcess = (

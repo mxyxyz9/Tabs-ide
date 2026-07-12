@@ -1,6 +1,6 @@
-import { Effect, Layer, Ref, Deferred, ServiceMap } from "effect";
+import { Effect, Layer, Ref, Deferred, Context } from "effect";
 
-export class DesktopShutdown extends ServiceMap.Service<
+export class DesktopShutdown extends Context.Service<
   DesktopShutdown,
   {
     readonly request: Effect.Effect<void>;

@@ -3,7 +3,7 @@ import * as NodeNet from "node:net";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Predicate from "effect/Predicate";
 
 export class NetError extends Data.TaggedError("NetError")<{
@@ -87,9 +87,9 @@ export interface NetServiceShape {
 /**
  * NetService - Service tag for startup networking helpers.
  */
-export class NetService extends ServiceMap.Service<NetService, NetServiceShape>()(
-  "@tabs/shared/Net/NetService",
-) {}
+export class NetService extends Context.Service<NetService, NetServiceShape>()("@tabs/shared/Net/NetService") {
+//
+  }
 
 export const make = () => {
   /**

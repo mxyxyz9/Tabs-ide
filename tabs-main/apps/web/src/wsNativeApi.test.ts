@@ -193,6 +193,7 @@ describe("wsNativeApi", () => {
           message: "Entry at index 1 is invalid.",
         },
       ],
+      providers: [],
     } as const;
     emitPush(WS_CHANNELS.serverConfigUpdated, payload);
 
@@ -214,14 +215,17 @@ describe("wsNativeApi", () => {
 
     emitPush(WS_CHANNELS.serverConfigUpdated, {
       issues: [{ kind: "keybindings.malformed-config", message: "bad json" }],
+      providers: [],
     });
     emitPush(WS_CHANNELS.serverConfigUpdated, {
       issues: [],
+      providers: [],
     });
 
     expect(listener).toHaveBeenCalledTimes(2);
     expect(listener).toHaveBeenLastCalledWith({
       issues: [],
+      providers: [],
     });
   });
 

@@ -95,64 +95,98 @@ const discoveryEffect = Effect.gen(function* () {
   const bbAccount = Option.getOrNull(bbAuth.account);
 
   const result: SourceControlDiscoveryResult = {
-    vcs: [
+    versionControlSystems: [
       {
-        system: "git",
-        available: gitVersion !== null && gitVersion.code === 0,
-        version: gitVersion ? firstLine(gitVersion.stdout) : null,
+        kind: "git",
+        implemented: true,
+        label: "Git",
+        executable: "git",
+        status: (gitVersion !== null && gitVersion.code === 0) ? "available" : "missing",
+        version: gitVersion ? Option.fromNullishOr(firstLine(gitVersion.stdout)) : Option.none(),
+        installHint: "Install Git from https://git-scm.com/downloads or with your package manager.",
+        detail: Option.none(),
       },
       {
-        system: "jujutsu",
-        available: false,
-        version: null,
+        kind: "jj",
+        implemented: false,
+        label: "Jujutsu",
+        executable: "jj",
+        status: "missing",
+        version: Option.none(),
+        installHint: "Install Jujutsu with `brew install jj` or from https://github.com/jj-vcs/jj.",
+        detail: Option.none(),
       },
     ],
-    providers: [
+    sourceControlProviders: [
       {
-        provider: "github",
-        cliAvailable: ghVersion !== null && ghVersion.code === 0,
-        version: ghVersion ? firstLine(ghVersion.stdout) : null,
-        authenticated: ghAuth.authenticated,
-        authenticatedAs: ghAuth.username,
-        installInstructions:
-          ghVersion === null
-            ? "Install the GitHub CLI (`gh`) from https://cli.github.com or your package manager."
-            : null,
-        enabled: true,
+        kind: "github",
+        label: "GitHub",
+        executable: "gh",
+        status: (ghVersion !== null && ghVersion.code === 0) ? "available" : "missing",
+        version: ghVersion ? Option.fromNullishOr(firstLine(ghVersion.stdout)) : Option.none(),
+        installHint: "Install the GitHub CLI (`gh`) from https://cli.github.com or your package manager.",
+        detail: Option.none(),
+        auth: ghAuth.authenticated ? {
+          status: "authenticated" as const,
+          account: Option.fromNullishOr(ghAuth.username),
+          host: Option.some("github.com"),
+          detail: Option.none(),
+        } : {
+          status: "unauthenticated" as const,
+          account: Option.none(),
+          host: Option.none(),
+          detail: Option.none(),
+        },
       },
       {
-        provider: "gitlab",
-        cliAvailable: glabVersion !== null && glabVersion.code === 0,
-        version: glabVersion ? firstLine(glabVersion.stdout) : null,
-        authenticated: glabAuth.authenticated,
-        authenticatedAs: glabAuth.username,
-        installInstructions:
-          glabVersion === null
-            ? "Install the GitLab CLI (`glab`) from https://gitlab.com/gitlab-org/cli or your package manager (e.g. `brew install glab`)."
-            : null,
-        enabled: true,
+        kind: "gitlab",
+        label: "GitLab",
+        executable: "glab",
+        status: (glabVersion !== null && glabVersion.code === 0) ? "available" : "missing",
+        version: glabVersion ? Option.fromNullishOr(firstLine(glabVersion.stdout)) : Option.none(),
+        installHint: "Install the GitLab CLI (`glab`) from https://gitlab.com/gitlab-org/cli or your package manager (e.g. `brew install glab`).",
+        detail: Option.none(),
+        auth: glabAuth.authenticated ? {
+          status: "authenticated" as const,
+          account: Option.fromNullishOr(glabAuth.username),
+          host: Option.some("gitlab.com"),
+          detail: Option.none(),
+        } : {
+          status: "unauthenticated" as const,
+          account: Option.none(),
+          host: Option.none(),
+          detail: Option.none(),
+        },
       },
       {
-        provider: "azure-devops",
-        cliAvailable: azVersion !== null && azVersion.code === 0,
-        version: azVersion ? firstLine(azVersion.stdout) : null,
-        authenticated: azAuth.authenticated,
-        authenticatedAs: azAuth.username,
-        installInstructions:
-          azVersion === null
-            ? "Install the Azure command-line tools (`az`), then enable Azure DevOps support with `az extension add --name azure-devops`."
-            : null,
-        enabled: true,
+        kind: "azure-devops",
+        label: "Azure DevOps",
+        executable: "az",
+        status: (azVersion !== null && azVersion.code === 0) ? "available" : "missing",
+        version: azVersion ? Option.fromNullishOr(firstLine(azVersion.stdout)) : Option.none(),
+        installHint: "Install the Azure command-line tools (`az`), then enable Azure DevOps support with `az extension add --name azure-devops`.",
+        detail: Option.none(),
+        auth: azAuth.authenticated ? {
+          status: "authenticated" as const,
+          account: Option.fromNullishOr(azAuth.username),
+          host: Option.some("dev.azure.com"),
+          detail: Option.none(),
+        } : {
+          status: "unauthenticated" as const,
+          account: Option.none(),
+          host: Option.none(),
+          detail: Option.none(),
+        },
       },
       {
-        provider: "bitbucket",
-        cliAvailable: false,
-        version: null,
-        authenticated: bbAuthenticated,
-        authenticatedAs: bbAccount,
-        installInstructions:
-          "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN on the server (use a Bitbucket API token with pull request and repository scopes).",
-        enabled: true,
+        kind: "bitbucket",
+        label: "Bitbucket",
+        executable: undefined,
+        status: bbAuthenticated ? "available" : "missing",
+        version: Option.none(),
+        installHint: "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN on the server (use a Bitbucket API token with pull request and repository scopes).",
+        detail: Option.none(),
+        auth: bbAuth,
       },
     ],
   };

@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * Server - HTTP/WebSocket server service interface.
  *
@@ -31,23 +32,7 @@ import {
   type WsPushEnvelopeBase,
 } from "@tabs/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  FileSystem,
-  Layer,
-  Option,
-  Path,
-  Ref,
-  Result,
-  Schema,
-  Scope,
-  ServiceMap,
-  Stream,
-  Struct,
-} from "effect";
+import { Cause, Deferred, Effect, Exit, FileSystem, Layer, Option, Path, Ref, Result, Schema, Scope, Stream, Struct,  } from "effect";
 import { WebSocketServer, type WebSocket } from "ws";
 
 import { createLogger } from "./logger";
@@ -111,7 +96,7 @@ export interface ServerShape {
 /**
  * Server - Service tag for HTTP/WebSocket lifecycle management.
  */
-export class Server extends ServiceMap.Service<Server, ServerShape>()("tabs/wsServer/Server") {}
+export class Server extends Context.Service<Server, ServerShape>()("tabs/wsServer/Server") {}
 
 const isServerNotRunningError = (error: Error): boolean => {
   const maybeCode = (error as NodeJS.ErrnoException).code;
@@ -244,7 +229,7 @@ export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycl
   "ServerLifecycleError",
   {
     operation: Schema.String,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Unknown),
   },
 ) {}
 
@@ -447,6 +432,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     } satisfies OrchestrationCommand;
   });
 
+  const runtimeServices = yield* Effect.context<
+    ServerRuntimeServices | ServerConfig | FileSystem.FileSystem | Path.Path
+  >();
+  const runPromise = Effect.runPromiseWith(runtimeServices);
+
   // HTTP server — serves static files or redirects to Vite dev server
   const httpServer = http.createServer((req, res) => {
     const respond = (
@@ -458,7 +448,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       res.end(body);
     };
 
-    void Effect.runPromise(
+    void runPromise(
       Effect.gen(function* () {
         const url = new URL(req.url ?? "/", `http://localhost:${port}`);
         if (!authToken && tryHandleProjectFaviconRequest(url, res)) {
@@ -649,15 +639,23 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Stream.runForEach(keybindingsManager.streamChanges, (event) =>
-    pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
-      issues: event.issues,
+    Effect.gen(function* () {
+      const providers = yield* Ref.get(providersRef);
+      yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+        issues: event.issues,
+        providers,
+      });
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Stream.runForEach(serverSettingsManager.streamChanges, (settings) =>
-    pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
-      issues: [],
-      settings,
+    Effect.gen(function* () {
+      const providers = yield* Ref.get(providersRef);
+      yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+        issues: [],
+        providers,
+        settings,
+      });
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
@@ -670,7 +668,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
-  yield* Scope.provide(orchestrationReactor.start, subscriptionsScope);
+  yield* Scope.provide(subscriptionsScope)(orchestrationReactor.start);
   yield* readiness.markOrchestrationSubscriptionsReady;
 
   let welcomeBootstrapProjectId: ProjectId | undefined;
@@ -680,23 +678,22 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     yield* Effect.gen(function* () {
       const snapshot = yield* projectionReadModelQuery.getSnapshot();
       const existingProject = snapshot.projects.find(
-        (project) => project.workspaceRoot === cwd && project.deletedAt === null,
+        (project: any) => project.workspaceRoot === cwd && project.deletedAt === null,
       );
       let bootstrapProjectId: ProjectId;
       let bootstrapProjectDefaultModelSelection;
 
       if (!existingProject) {
         const createdAt = new Date().toISOString();
-        bootstrapProjectId = ProjectId.makeUnsafe(crypto.randomUUID());
+        bootstrapProjectId = crypto.randomUUID() as ProjectId;
         const bootstrapProjectTitle = path.basename(cwd) || "project";
         bootstrapProjectDefaultModelSelection = {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
-          provider: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         };
         yield* orchestrationEngine.dispatch({
           type: "project.create",
-          commandId: CommandId.makeUnsafe(crypto.randomUUID()),
+          commandId: crypto.randomUUID() as CommandId,
           projectId: bootstrapProjectId,
           title: bootstrapProjectTitle,
           workspaceRoot: cwd,
@@ -706,21 +703,20 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       } else {
         bootstrapProjectId = existingProject.id;
         bootstrapProjectDefaultModelSelection = existingProject.defaultModelSelection ?? {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
-          provider: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         };
       }
 
       const existingThread = snapshot.threads.find(
-        (thread) => thread.projectId === bootstrapProjectId && thread.deletedAt === null,
+        (thread: any) => thread.projectId === bootstrapProjectId && thread.deletedAt === null,
       );
       if (!existingThread) {
         const createdAt = new Date().toISOString();
-        const threadId = ThreadId.makeUnsafe(crypto.randomUUID());
+        const threadId = crypto.randomUUID() as ThreadId;
         yield* orchestrationEngine.dispatch({
           type: "thread.create",
-          commandId: CommandId.makeUnsafe(crypto.randomUUID()),
+          commandId: crypto.randomUUID() as CommandId,
           threadId,
           projectId: bootstrapProjectId,
           title: "New thread",
@@ -744,13 +740,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     );
   }
 
-  const runtimeServices = yield* Effect.services<
-    ServerRuntimeServices | ServerConfig | FileSystem.FileSystem | Path.Path
-  >();
-  const runPromise = Effect.runPromiseWith(runtimeServices);
-
   const unsubscribeTerminalEvents = yield* terminalManager.subscribe(
-    (event) => void Effect.runPromise(pushBus.publishAll(WS_CHANNELS.terminalEvent, event)),
+    (event: any) => void runPromise(pushBus.publishAll(WS_CHANNELS.terminalEvent, event)),
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => unsubscribeTerminalEvents()));
   yield* readiness.markTerminalSubscriptionsReady;
@@ -1199,7 +1190,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                 provider: target.driver,
                 instanceId: body.instanceId,
               })
-        ).pipe(Effect.mapError((error) => new RouteRequestError({ message: error.reason })));
+        ).pipe(Effect.mapError((error: any) => new RouteRequestError({ message: error.reason })));
         yield* Ref.set(providersRef, result.providers);
         return result;
       }
@@ -1565,9 +1556,11 @@ export const ServerLive = Layer.effect(
   Server,
   Effect.gen(function* () {
     const stopSignalDeferred = yield* Deferred.make<void>();
+    const runtimeServices = yield* Effect.context();
+    const runFork = Effect.runForkWith(runtimeServices);
 
     const handler = () => {
-      Effect.runFork(Deferred.succeed(stopSignalDeferred, undefined).pipe(Effect.orDie));
+      runFork(Deferred.succeed(stopSignalDeferred, undefined).pipe(Effect.orDie));
     };
 
     process.on("SIGTERM", handler);

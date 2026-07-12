@@ -378,7 +378,6 @@ async function buildWorkspaceIndexFromGit(cwd: string): Promise<WorkspaceIndex |
       (directoryPath): ProjectEntry => ({
         path: directoryPath,
         kind: "directory",
-        parentPath: parentPathOf(directoryPath),
       }),
     )
     .map(toSearchableWorkspaceEntry);
@@ -388,7 +387,6 @@ async function buildWorkspaceIndexFromGit(cwd: string): Promise<WorkspaceIndex |
       (filePath): ProjectEntry => ({
         path: filePath,
         kind: "file",
-        parentPath: parentPathOf(filePath),
       }),
     )
     .map(toSearchableWorkspaceEntry);
@@ -479,7 +477,6 @@ async function buildWorkspaceIndex(cwd: string): Promise<WorkspaceIndex> {
         const entry = toSearchableWorkspaceEntry({
           path: candidate.relativePath,
           kind: candidate.dirent.isDirectory() ? "directory" : "file",
-          parentPath: parentPathOf(candidate.relativePath),
         });
         entries.push(entry);
 

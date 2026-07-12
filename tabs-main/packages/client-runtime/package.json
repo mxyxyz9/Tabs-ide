@@ -1,0 +1,24 @@
+{
+  "name": "@tabs/client-runtime",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./state": {
+      "types": "./src/state.ts",
+      "default": "./src/state.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@tabs/contracts": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

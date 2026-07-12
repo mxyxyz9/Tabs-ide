@@ -215,6 +215,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           archivedAt: occurredAt,
+          updatedAt: occurredAt,
         },
       };
     }
@@ -236,6 +237,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "thread.unarchived",
         payload: {
           threadId: command.threadId,
+          updatedAt: occurredAt,
         },
       };
     }

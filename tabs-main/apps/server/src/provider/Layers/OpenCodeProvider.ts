@@ -25,7 +25,7 @@ import {
 } from "../opencodeRuntime";
 import type { Agent, ProviderListResponse } from "@opencode-ai/sdk/v2";
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("opencode");
+const PROVIDER = "opencode" as ProviderDriverKind;
 const OPENCODE_PRESENTATION = {
   displayName: "OpenCode",
   showInteractionModeToggle: false,

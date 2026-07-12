@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * GitManager - Effect service contract for stacked Git workflows.
  *
@@ -17,7 +18,6 @@ import {
   GitStatusInput,
   GitStatusResult,
 } from "@tabs/contracts";
-import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 import type { GitManagerServiceError } from "../Errors.ts";
 
@@ -56,7 +56,7 @@ export interface GitManagerShape {
   ) => Effect.Effect<GitPreparePullRequestThreadResult, GitManagerServiceError>;
 
   /**
-   * Run a stacked Git action (`commit`, `commit_push`, `commit_push_pr`).
+   * Run a stacked Git action (`commit`, `push`, `create_pr`, `commit_push`, or `commit_push_pr`).
    * When `featureBranch` is set, creates and checks out a feature branch first.
    */
   readonly runStackedAction: (
@@ -68,6 +68,6 @@ export interface GitManagerShape {
 /**
  * GitManager - Service tag for stacked Git workflow orchestration.
  */
-export class GitManager extends ServiceMap.Service<GitManager, GitManagerShape>()(
+export class GitManager extends Context.Service<GitManager, GitManagerShape>()(
   "tabs/git/Services/GitManager",
 ) {}

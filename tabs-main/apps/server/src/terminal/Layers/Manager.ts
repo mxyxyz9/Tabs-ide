@@ -764,7 +764,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
         type: "cleared",
         threadId: input.threadId,
         terminalId: input.terminalId,
-        createdAt: new Date().toISOString(),
       });
     });
   }
@@ -1048,7 +1047,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
         type: eventType,
         threadId: session.threadId,
         terminalId: session.terminalId,
-        createdAt: new Date().toISOString(),
         snapshot: this.snapshot(session),
       });
     } catch (error) {
@@ -1067,7 +1065,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
         type: "error",
         threadId: session.threadId,
         terminalId: session.terminalId,
-        createdAt: new Date().toISOString(),
         message,
       });
       this.logger.error("failed to start terminal", {
@@ -1094,7 +1091,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
       type: "output",
       threadId: session.threadId,
       terminalId: session.terminalId,
-      createdAt: new Date().toISOString(),
       data,
     });
   }
@@ -1114,7 +1110,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
       type: "exited",
       threadId: session.threadId,
       terminalId: session.terminalId,
-      createdAt: new Date().toISOString(),
       exitCode: session.exitCode,
       exitSignal: session.exitSignal,
     });
@@ -1484,7 +1479,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
             type: "activity",
             threadId: liveSession.threadId,
             terminalId: liveSession.terminalId,
-            createdAt: new Date().toISOString(),
             hasRunningSubprocess: checkResult.hasRunningSubprocess,
             label: this.snapshot(liveSession).label,
           });
@@ -1588,6 +1582,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
     };
 
     return {
+      worktreePath: null,
       threadId: session.threadId,
       terminalId: session.terminalId,
       cwd: session.cwd,

@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionSnapshotQuery - Read-model snapshot query service interface.
  *
@@ -7,7 +8,7 @@
  * @module ProjectionSnapshotQuery
  */
 import type { OrchestrationReadModel } from "@tabs/contracts";
-import { ServiceMap } from "effect";
+import {  } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
@@ -28,7 +29,7 @@ export interface ProjectionSnapshotQueryShape {
 /**
  * ProjectionSnapshotQuery - Service tag for projection snapshot queries.
  */
-export class ProjectionSnapshotQuery extends ServiceMap.Service<
+export class ProjectionSnapshotQuery extends Context.Service<
   ProjectionSnapshotQuery,
   ProjectionSnapshotQueryShape
 >()("tabs/orchestration/Services/ProjectionSnapshotQuery") {}

@@ -324,7 +324,7 @@ it.layer(NodeServices.layer)("effect-acp protocol", (it) => {
       const lateResponse = yield* Deferred.make<unknown>();
 
       yield* transport.clientProtocol
-        .run((message) => Deferred.succeed(lateResponse, message).pipe(Effect.asVoid))
+        .run(0, (message: any) => Deferred.succeed(lateResponse, message).pipe(Effect.asVoid))
         .pipe(Effect.forkScoped);
 
       const response = yield* transport
@@ -383,7 +383,7 @@ describe.skipIf(!fixtureExists)("effect-acp protocol (child process)", () => {
         });
 
         yield* transport.clientProtocol
-          .run((message) => Deferred.succeed(firstMessage, message).pipe(Effect.asVoid))
+          .run(0, (message: any) => Deferred.succeed(firstMessage, message).pipe(Effect.asVoid))
           .pipe(Effect.forkScoped);
 
         const message = yield* Deferred.await(firstMessage);
@@ -418,7 +418,7 @@ describe.skipIf(!fixtureExists)("effect-acp protocol (child process)", () => {
         });
 
         yield* transport.clientProtocol
-          .run((message) => Deferred.succeed(firstMessage, message).pipe(Effect.asVoid))
+          .run(0, (message: any) => Deferred.succeed(firstMessage, message).pipe(Effect.asVoid))
           .pipe(Effect.forkScoped);
 
         const message = yield* Deferred.await(firstMessage);

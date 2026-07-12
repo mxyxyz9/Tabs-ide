@@ -65,15 +65,15 @@ import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMoc
 
 const defaultServerSettingsLayer = ServerSettingsService.layerTest();
 
-const asRequestId = (value: string): ApprovalRequestId => ApprovalRequestId.makeUnsafe(value);
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asThreadId = (value: string): ThreadId => ThreadId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
-const codexInstanceId = ProviderInstanceId.makeUnsafe("codex");
-const claudeAgentInstanceId = ProviderInstanceId.makeUnsafe("claudeAgent");
-const CODEX_DRIVER = ProviderDriverKind.makeUnsafe("codex");
-const CLAUDE_AGENT_DRIVER = ProviderDriverKind.makeUnsafe("claudeAgent");
-const CURSOR_DRIVER = ProviderDriverKind.makeUnsafe("cursor");
+const asRequestId = (value: string): ApprovalRequestId => value as ApprovalRequestId;
+const asEventId = (value: string): EventId => value as EventId;
+const asThreadId = (value: string): ThreadId => value as ThreadId;
+const asTurnId = (value: string): TurnId => value as TurnId;
+const codexInstanceId = "codex" as ProviderInstanceId;
+const claudeAgentInstanceId = "claudeAgent" as ProviderInstanceId;
+const CODEX_DRIVER = "codex" as ProviderDriverKind;
+const CLAUDE_AGENT_DRIVER = "claudeAgent" as ProviderDriverKind;
+const CURSOR_DRIVER = "cursor" as ProviderDriverKind;
 
 type LegacyProviderRuntimeEvent = {
   readonly type: string;
@@ -130,7 +130,7 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
 
       return Effect.succeed({
         threadId: input.threadId,
-        turnId: TurnId.makeUnsafe(`turn-${String(input.threadId)}`),
+        turnId: `turn-${String(input.threadId)}` as TurnId,
       });
     },
   );
@@ -276,9 +276,9 @@ function makeProviderServiceLayer() {
   const claude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
   const cursor = makeFakeCodexAdapter(CURSOR_DRIVER);
   const registry = makeAdapterRegistryMock({
-    [ProviderDriverKind.makeUnsafe("codex")]: codex.adapter,
-    [ProviderDriverKind.makeUnsafe("claudeAgent")]: claude.adapter,
-    [ProviderDriverKind.makeUnsafe("cursor")]: cursor.adapter,
+    ["codex" as ProviderDriverKind]: codex.adapter,
+    ["claudeAgent" as ProviderDriverKind]: claude.adapter,
+    ["cursor" as ProviderDriverKind]: cursor.adapter,
   });
 
   const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry, registry);
@@ -346,9 +346,7 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
     const scope = yield* Scope.make();
     const runtimeServices = yield* Layer.build(providerLayer).pipe(Scope.provide(scope));
 
-    yield* Effect.gen(function* () {
-      yield* ProviderService;
-    }).pipe(Effect.provideServices(runtimeServices));
+    yield* ProviderService.pipe(Effect.provideContext(runtimeServices));
     const closeExit = yield* Scope.close(scope, Exit.void).pipe(Effect.exit);
 
     assert.equal(Exit.isSuccess(closeExit), true);
@@ -397,7 +395,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
       Effect.gen(function* () {
         const provider = yield* ProviderService;
         return yield* provider.startSession(asThreadId("thread-disabled"), {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           providerInstanceId: claudeAgentInstanceId,
           threadId: asThreadId("thread-disabled"),
           runtimeMode: "full-access",
@@ -415,7 +413,7 @@ it.effect(
   "ProviderServiceLive allows enabled custom instances when legacy driver is disabled",
   () =>
     Effect.gen(function* () {
-      const instanceId = ProviderInstanceId.makeUnsafe("codex_personal");
+      const instanceId = "codex_personal" as ProviderInstanceId;
       const driverKind = CODEX_DRIVER;
       const codex = makeFakeCodexAdapter();
       const unsupported = () =>
@@ -486,12 +484,12 @@ it.effect(
 
 it.effect("ProviderServiceLive rejects new sessions for disabled custom instances", () =>
   Effect.gen(function* () {
-    const instanceId = ProviderInstanceId.makeUnsafe("codex_personal");
-    const driverKind = ProviderDriverKind.makeUnsafe("codex");
+    const instanceId = "codex_personal" as ProviderInstanceId;
+    const driverKind = "codex" as ProviderDriverKind;
     const codex = makeFakeCodexAdapter();
     const unsupported = () =>
       new ProviderUnsupportedError({
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
       });
     const registry: ProviderAdapterRegistryShape = {
       getByInstance: (requestedInstanceId) =>
@@ -535,7 +533,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
       Effect.gen(function* () {
         const provider = yield* ProviderService;
         return yield* provider.startSession(asThreadId("thread-disabled-instance"), {
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           providerInstanceId: instanceId,
           threadId: asThreadId("thread-disabled-instance"),
           runtimeMode: "full-access",
@@ -557,7 +555,7 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
     const canonicalEvents: ProviderRuntimeEvent[] = [];
     const canonicalThreadIds: Array<string | null> = [];
     const registry = makeAdapterRegistryMock({
-      [ProviderDriverKind.makeUnsafe("codex")]: codex.adapter,
+      ["codex" as ProviderDriverKind]: codex.adapter,
     });
     const runtimeRepositoryLayer = ProviderSessionRuntimeRepositoryLive.pipe(
       Layer.provide(SqlitePersistenceMemory),
@@ -586,7 +584,7 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
       yield* advanceTestClock(10);
       codex.emit({
         eventId: asEventId("evt-canonical-thread-segment"),
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         threadId: asThreadId("thread-canonical-thread-segment"),
         createdAt: "2026-01-01T00:00:00.000Z",
         type: "turn.completed",
@@ -610,7 +608,7 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
 
     const codex = makeFakeCodexAdapter();
     const registry = makeAdapterRegistryMock({
-      [ProviderDriverKind.makeUnsafe("codex")]: codex.adapter,
+      ["codex" as ProviderDriverKind]: codex.adapter,
     });
 
     const persistenceLayer = makeSqlitePersistenceLive(dbPath);
@@ -622,9 +620,9 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
     yield* Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory;
       yield* directory.upsert({
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
-        threadId: ThreadId.makeUnsafe("thread-stale"),
+        threadId: "thread-stale" as ThreadId,
       });
     }).pipe(Effect.provide(directoryLayer));
 
@@ -636,9 +634,7 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
       Layer.provide(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
     );
 
-    yield* Effect.gen(function* () {
-      yield* ProviderService;
-    }).pipe(Effect.provide(providerLayer));
+    yield* ProviderService.pipe(Effect.provide(providerLayer));
 
     const persistedProvider = yield* Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory;
@@ -681,7 +677,7 @@ it.effect(
 
       const firstCodex = makeFakeCodexAdapter();
       const firstRegistry = makeAdapterRegistryMock({
-        [ProviderDriverKind.makeUnsafe("codex")]: firstCodex.adapter,
+        ["codex" as ProviderDriverKind]: firstCodex.adapter,
       });
 
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
@@ -705,7 +701,7 @@ it.effect(
         const provider = yield* ProviderService;
         const threadId = asThreadId("thread-1");
         const session = yield* provider.startSession(threadId, {
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           providerInstanceId: codexInstanceId,
           cwd: "/tmp/project",
           runtimeMode: "full-access",
@@ -734,7 +730,7 @@ it.effect(
 
       const secondCodex = makeFakeCodexAdapter();
       const secondRegistry = makeAdapterRegistryMock({
-        [ProviderDriverKind.makeUnsafe("codex")]: secondCodex.adapter,
+        ["codex" as ProviderDriverKind]: secondCodex.adapter,
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
@@ -788,7 +784,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const provider = yield* ProviderService;
 
       const session = yield* provider.startSession(asThreadId("thread-1"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         cwd: "/tmp/project",
@@ -874,7 +870,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const provider = yield* ProviderService;
 
       const initial = yield* provider.startSession(asThreadId("thread-1"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         cwd: "/tmp/project",
@@ -916,7 +912,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const runtimeRepository = yield* ProviderSessionRuntimeRepository;
 
       const initial = yield* provider.startSession(asThreadId("thread-reap-preserve"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-reap-preserve"),
         cwd: "/tmp/project-reap-preserve",
@@ -967,7 +963,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const provider = yield* ProviderService;
 
       const session = yield* provider.startSession(asThreadId("thread-claude"), {
-        provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+        provider: "claudeAgent" as ProviderDriverKind,
         providerInstanceId: claudeAgentInstanceId,
         threadId: asThreadId("thread-claude"),
         cwd: "/tmp/project-claude",
@@ -998,7 +994,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const threadId = asThreadId("thread-binding-mismatch");
 
       yield* provider.startSession(threadId, {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId,
         cwd: "/tmp/project-binding-mismatch",
@@ -1006,7 +1002,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       yield* directory.upsert({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+        provider: "claudeAgent" as ProviderDriverKind,
         providerInstanceId: claudeAgentInstanceId,
         runtimeMode: "full-access",
       });
@@ -1015,7 +1011,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.equal(Exit.hasDies(exit), true);
       yield* directory.upsert({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         runtimeMode: "full-access",
       });
@@ -1028,7 +1024,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const threadId = asThreadId("thread-provider-replacement");
 
       const codexSession = yield* provider.startSession(threadId, {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId,
         cwd: "/tmp/project-provider-replacement",
@@ -1039,7 +1035,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       routing.claude.stopSession.mockClear();
 
       const claudeSession = yield* provider.startSession(threadId, {
-        provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+        provider: "claudeAgent" as ProviderDriverKind,
         providerInstanceId: claudeAgentInstanceId,
         threadId,
         cwd: "/tmp/project-provider-replacement",
@@ -1066,7 +1062,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const provider = yield* ProviderService;
 
       const initial = yield* provider.startSession(asThreadId("thread-1"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         cwd: "/tmp/project-send-turn",
@@ -1107,12 +1103,12 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const provider = yield* ProviderService;
 
       const initial = yield* provider.startSession(asThreadId("thread-claude-send-turn"), {
-        provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+        provider: "claudeAgent" as ProviderDriverKind,
         providerInstanceId: claudeAgentInstanceId,
         threadId: asThreadId("thread-claude-send-turn"),
         cwd: "/tmp/project-claude-send-turn",
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("claudeAgent"),
+          "claudeAgent" as ProviderInstanceId,
           "claude-opus-4-6",
           [{ id: "effort", value: "max" }],
         ),
@@ -1144,7 +1140,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         assert.equal(startPayload.cwd, "/tmp/project-claude-send-turn");
         assert.deepEqual(
           startPayload.modelSelection,
-          createModelSelection(ProviderInstanceId.makeUnsafe("claudeAgent"), "claude-opus-4-6", [
+          createModelSelection("claudeAgent" as ProviderInstanceId, "claude-opus-4-6", [
             { id: "effort", value: "max" },
           ]),
         );
@@ -1160,13 +1156,13 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const provider = yield* ProviderService;
 
       yield* provider.startSession(asThreadId("thread-1"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
       });
       yield* provider.startSession(asThreadId("thread-2"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-2"),
         runtimeMode: "full-access",
@@ -1187,7 +1183,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       const threadId = asThreadId("thread-runtime-status");
       const session = yield* provider.startSession(threadId, {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId,
         runtimeMode: "full-access",
@@ -1236,7 +1232,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       const firstClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
       const firstRegistry = makeAdapterRegistryMock({
-        [ProviderDriverKind.makeUnsafe("claudeAgent")]: firstClaude.adapter,
+        ["claudeAgent" as ProviderDriverKind]: firstClaude.adapter,
       });
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
@@ -1252,7 +1248,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const initial = yield* Effect.gen(function* () {
         const provider = yield* ProviderService;
         return yield* provider.startSession(asThreadId("thread-claude-start"), {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           providerInstanceId: claudeAgentInstanceId,
           threadId: asThreadId("thread-claude-start"),
           cwd: "/tmp/project-claude-start",
@@ -1267,7 +1263,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       const secondClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
       const secondRegistry = makeAdapterRegistryMock({
-        [ProviderDriverKind.makeUnsafe("claudeAgent")]: secondClaude.adapter,
+        ["claudeAgent" as ProviderDriverKind]: secondClaude.adapter,
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
@@ -1285,7 +1281,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       yield* Effect.gen(function* () {
         const provider = yield* ProviderService;
         yield* provider.startSession(initial.threadId, {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           providerInstanceId: claudeAgentInstanceId,
           threadId: initial.threadId,
           cwd: "/tmp/project-claude-start",
@@ -1326,7 +1322,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
         const firstClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
         const firstRegistry = makeAdapterRegistryMock({
-          [ProviderDriverKind.makeUnsafe("claudeAgent")]: firstClaude.adapter,
+          ["claudeAgent" as ProviderDriverKind]: firstClaude.adapter,
         });
         const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
@@ -1342,7 +1338,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         const initial = yield* Effect.gen(function* () {
           const provider = yield* ProviderService;
           return yield* provider.startSession(asThreadId("thread-claude-cwd"), {
-            provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+            provider: "claudeAgent" as ProviderDriverKind,
             providerInstanceId: claudeAgentInstanceId,
             threadId: asThreadId("thread-claude-cwd"),
             cwd: "/tmp/project-claude-cwd",
@@ -1352,7 +1348,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
         const secondClaude = makeFakeCodexAdapter(CLAUDE_AGENT_DRIVER);
         const secondRegistry = makeAdapterRegistryMock({
-          [ProviderDriverKind.makeUnsafe("claudeAgent")]: secondClaude.adapter,
+          ["claudeAgent" as ProviderDriverKind]: secondClaude.adapter,
         });
         const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
@@ -1370,7 +1366,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         yield* Effect.gen(function* () {
           const provider = yield* ProviderService;
           yield* provider.startSession(initial.threadId, {
-            provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+            provider: "claudeAgent" as ProviderDriverKind,
             providerInstanceId: claudeAgentInstanceId,
             threadId: initial.threadId,
             runtimeMode: "full-access",
@@ -1404,7 +1400,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
     Effect.gen(function* () {
       const provider = yield* ProviderService;
       const session = yield* provider.startSession(asThreadId("thread-1"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
@@ -1419,7 +1415,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       const completedEvent: LegacyProviderRuntimeEvent = {
         type: "turn.completed",
         eventId: asEventId("evt-1"),
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
         turnId: asTurnId("turn-1"),
@@ -1450,7 +1446,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
     Effect.gen(function* () {
       const provider = yield* ProviderService;
       const session = yield* provider.startSession(asThreadId("thread-seq"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-seq"),
         runtimeMode: "full-access",
@@ -1466,7 +1462,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       fanout.codex.emit({
         type: "tool.started",
         eventId: asEventId("evt-seq-1"),
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
         turnId: asTurnId("turn-1"),
@@ -1476,7 +1472,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       fanout.codex.emit({
         type: "tool.completed",
         eventId: asEventId("evt-seq-2"),
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
         turnId: asTurnId("turn-1"),
@@ -1486,7 +1482,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       fanout.codex.emit({
         type: "turn.completed",
         eventId: asEventId("evt-seq-3"),
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
         turnId: asTurnId("turn-1"),
@@ -1506,7 +1502,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
     Effect.gen(function* () {
       const provider = yield* ProviderService;
       const session = yield* provider.startSession(asThreadId("thread-1"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
@@ -1532,7 +1528,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         {
           type: "tool.completed",
           eventId: asEventId("evt-ordered-1"),
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           createdAt: "2026-01-01T00:00:00.000Z",
           threadId: session.threadId,
           turnId: asTurnId("turn-1"),
@@ -1543,7 +1539,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         {
           type: "message.delta",
           eventId: asEventId("evt-ordered-2"),
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           createdAt: "2026-01-01T00:00:00.000Z",
           threadId: session.threadId,
           turnId: asTurnId("turn-1"),
@@ -1552,7 +1548,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         {
           type: "turn.completed",
           eventId: asEventId("evt-ordered-3"),
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           createdAt: "2026-01-01T00:00:00.000Z",
           threadId: session.threadId,
           turnId: asTurnId("turn-1"),
@@ -1579,7 +1575,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       const provider = yield* ProviderService;
 
       const session = yield* provider.startSession(asThreadId("thread-metrics"), {
-        provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+        provider: "claudeAgent" as ProviderDriverKind,
         providerInstanceId: claudeAgentInstanceId,
         threadId: asThreadId("thread-metrics"),
         cwd: "/tmp/project",
@@ -1609,7 +1605,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
 
       assert.equal(
         hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           operation: "interrupt",
           outcome: "success",
         }),
@@ -1617,7 +1613,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       );
       assert.equal(
         hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           operation: "approval-response",
           outcome: "success",
         }),
@@ -1625,7 +1621,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       );
       assert.equal(
         hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           operation: "user-input-response",
           outcome: "success",
         }),
@@ -1633,7 +1629,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       );
       assert.equal(
         hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           operation: "rollback",
           outcome: "success",
         }),
@@ -1641,7 +1637,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       );
       assert.equal(
         hasMetricSnapshot(snapshots, "t3_provider_sessions_total", {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           operation: "stop",
           outcome: "success",
         }),
@@ -1657,7 +1653,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         const provider = yield* ProviderService;
 
         const session = yield* provider.startSession(asThreadId("thread-send-metrics"), {
-          provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+          provider: "claudeAgent" as ProviderDriverKind,
           providerInstanceId: claudeAgentInstanceId,
           threadId: asThreadId("thread-send-metrics"),
           cwd: "/tmp/project-send-metrics",
@@ -1674,7 +1670,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
 
         assert.equal(
           hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
-            provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+            provider: "claudeAgent" as ProviderDriverKind,
             operation: "send",
             outcome: "success",
           }),
@@ -1682,7 +1678,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         );
         assert.equal(
           hasMetricSnapshot(snapshots, "t3_provider_turn_duration", {
-            provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+            provider: "claudeAgent" as ProviderDriverKind,
             operation: "send",
           }),
           true,
@@ -1700,7 +1696,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
       validation.codex.startSession.mockClear();
       const failure = yield* Effect.flip(
         provider.startSession(asThreadId("thread-missing-instance-id"), {
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           threadId: asThreadId("thread-missing-instance-id"),
           runtimeMode: "full-access",
         }),
@@ -1720,7 +1716,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
       validation.claude.startSession.mockClear();
       const failure = yield* Effect.flip(
         provider.startSession(asThreadId("thread-instance-mismatch"), {
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           providerInstanceId: claudeAgentInstanceId,
           threadId: asThreadId("thread-instance-mismatch"),
           runtimeMode: "full-access",
@@ -1771,7 +1767,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
         Effect.sync(() => {
           const now = "2026-01-01T00:00:00.000Z";
           return {
-            provider: ProviderDriverKind.makeUnsafe("codex"),
+            provider: "codex" as ProviderDriverKind,
             status: "ready",
             threadId: input.threadId,
             runtimeMode: input.runtimeMode,
@@ -1783,7 +1779,7 @@ validation.layer("ProviderServiceLive validation", (it) => {
       );
 
       const session = yield* provider.startSession(asThreadId("thread-missing"), {
-        provider: ProviderDriverKind.makeUnsafe("codex"),
+        provider: "codex" as ProviderDriverKind,
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-missing"),
         cwd: "/tmp/project",

@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 import {
   Cache,
   Data,
@@ -1014,9 +1015,8 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       ).pipe(Effect.asVoid);
     };
 
-    const statusUpstreamRefreshCache = yield* Cache.makeWith({
-      capacity: STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY,
-      lookup: (cacheKey: StatusUpstreamRefreshCacheKey) =>
+    const statusUpstreamRefreshCache = yield* Cache.makeWith(
+      (cacheKey: StatusUpstreamRefreshCacheKey) =>
         Effect.gen(function* () {
           yield* fetchUpstreamRefForStatus(cacheKey.cwd, {
             upstreamRef: cacheKey.upstreamRef,
@@ -1025,10 +1025,13 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
           });
           return true as const;
         }),
-      // Keep successful refreshes warm; drop failures immediately so next request can retry.
-      timeToLive: (exit) =>
-        Exit.isSuccess(exit) ? STATUS_UPSTREAM_REFRESH_INTERVAL : Duration.zero,
-    });
+      {
+        capacity: STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY,
+        // Keep successful refreshes warm; drop failures immediately so next request can retry.
+        timeToLive: (exit: any) =>
+          Exit.isSuccess(exit) ? STATUS_UPSTREAM_REFRESH_INTERVAL : Duration.zero,
+      }
+    );
 
     const refreshStatusUpstreamIfStale = (cwd: string): Effect.Effect<void, GitCommandError> =>
       Effect.gen(function* () {

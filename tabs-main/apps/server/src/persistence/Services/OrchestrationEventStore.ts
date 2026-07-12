@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * OrchestrationEventStore - Event store interface for orchestration events.
  *
@@ -10,7 +11,7 @@
  * @module OrchestrationEventStore
  */
 import { OrchestrationEvent } from "@tabs/contracts";
-import { ServiceMap } from "effect";
+import {  } from "effect";
 import type { Effect, Stream } from "effect";
 
 import type { OrchestrationEventStoreError } from "../Errors.ts";
@@ -64,7 +65,7 @@ export interface OrchestrationEventStoreShape {
  * })
  * ```
  */
-export class OrchestrationEventStore extends ServiceMap.Service<
+export class OrchestrationEventStore extends Context.Service<
   OrchestrationEventStore,
   OrchestrationEventStoreShape
 >()("tabs/persistence/Services/OrchestrationEventStore") {}

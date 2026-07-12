@@ -8,7 +8,7 @@ export class GitCommandError extends Schema.TaggedErrorClass<GitCommandError>()(
   command: Schema.String,
   cwd: Schema.String,
   detail: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {
   override get message(): string {
     return `Git command failed in ${this.operation}: ${this.command} (${this.cwd}) - ${this.detail}`;
@@ -21,7 +21,7 @@ export class GitCommandError extends Schema.TaggedErrorClass<GitCommandError>()(
 export class GitHubCliError extends Schema.TaggedErrorClass<GitHubCliError>()("GitHubCliError", {
   operation: Schema.String,
   detail: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {
   override get message(): string {
     return `GitHub CLI failed in ${this.operation}: ${this.detail}`;
@@ -36,7 +36,7 @@ export class TextGenerationError extends Schema.TaggedErrorClass<TextGenerationE
   {
     operation: Schema.String,
     detail: Schema.String,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Unknown),
   },
 ) {
   override get message(): string {
@@ -50,7 +50,7 @@ export class TextGenerationError extends Schema.TaggedErrorClass<TextGenerationE
 export class GitManagerError extends Schema.TaggedErrorClass<GitManagerError>()("GitManagerError", {
   operation: Schema.String,
   detail: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {
   override get message(): string {
     return `Git manager failed in ${this.operation}: ${this.detail}`;
@@ -63,7 +63,7 @@ export class GitManagerError extends Schema.TaggedErrorClass<GitManagerError>()(
 export class GitLabCliError extends Schema.TaggedErrorClass<GitLabCliError>()("GitLabCliError", {
   operation: Schema.String,
   detail: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {
   override get message(): string {
     return `GitLab CLI failed in ${this.operation}: ${this.detail}`;
@@ -76,7 +76,7 @@ export class GitLabCliError extends Schema.TaggedErrorClass<GitLabCliError>()("G
 export class AzureDevOpsCliError extends Schema.TaggedErrorClass<AzureDevOpsCliError>()("AzureDevOpsCliError", {
   operation: Schema.String,
   detail: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {
   override get message(): string {
     return `Azure DevOps CLI failed in ${this.operation}: ${this.detail}`;

@@ -58,7 +58,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         },
         textGenerationModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
           options: [
             { id: "reasoningEffort", value: "high" },
@@ -95,8 +95,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       // Option selections are replaced wholesale (not deep-merged) under the
       // canonical array shape, so the prior reasoningEffort is dropped.
       assert.deepEqual(next.textGenerationModelSelection, {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
-        provider: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
         options: [{ id: "fastMode", value: false }],
       });
@@ -109,7 +108,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
           options: [{ id: "reasoningEffort", value: "high" }],
         },
@@ -117,14 +116,13 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       const next = yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+          instanceId: "claudeAgent" as ProviderInstanceId,
           model: "claude-sonnet-4-5",
         },
       });
 
       assert.deepEqual(next.textGenerationModelSelection, {
-        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
-        provider: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        instanceId: "claudeAgent" as ProviderInstanceId,
         model: "claude-sonnet-4-5",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
@@ -136,7 +134,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
           options: [{ id: "reasoningEffort", value: "high" }],
         },
@@ -144,14 +142,13 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       const next = yield* serverSettings.updateSettings({
         textGenerationModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5.4",
         },
       });
 
       assert.deepEqual(next.textGenerationModelSelection, {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
-        provider: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: "gpt-5.4",
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),

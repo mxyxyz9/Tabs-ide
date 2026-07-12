@@ -19,7 +19,7 @@ const GROK_OAUTH2_REFERRER_ENV = "GROK_OAUTH2_REFERRER";
 const T3_CODE_OAUTH_REFERRER = "t3code";
 const GROK_AUTH_METHOD_API_KEY = "xai.api_key";
 const GROK_AUTH_METHOD_CACHED_TOKEN = "cached_token";
-const GROK_DRIVER_KIND = ProviderDriverKind.makeUnsafe("grok");
+const GROK_DRIVER_KIND = "grok" as ProviderDriverKind;
 
 type GrokAcpRuntimeGrokSettings = Pick<GrokSettings, "binaryPath">;
 

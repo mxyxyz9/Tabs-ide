@@ -100,7 +100,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
 };
 
 const DEFAULT_TEST_MODEL_SELECTION = {
-  instanceId: ProviderInstanceId.makeUnsafe("opencode"),
+  instanceId: "opencode" as ProviderInstanceId,
   model: "openai/gpt-5",
 };
 

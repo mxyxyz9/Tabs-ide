@@ -128,6 +128,7 @@ function waitFor(predicate: () => boolean, timeoutMs = 800): Promise<void> {
 function openInput(overrides: Partial<TerminalOpenInput> = {}): TerminalOpenInput {
   return {
     threadId: "thread-1",
+    terminalId: DEFAULT_TERMINAL_ID,
     cwd: process.cwd(),
     cols: 100,
     rows: 24,
@@ -138,6 +139,7 @@ function openInput(overrides: Partial<TerminalOpenInput> = {}): TerminalOpenInpu
 function restartInput(overrides: Partial<TerminalRestartInput> = {}): TerminalRestartInput {
   return {
     threadId: "thread-1",
+    terminalId: DEFAULT_TERMINAL_ID,
     cwd: process.cwd(),
     cols: 100,
     rows: 24,
@@ -247,8 +249,8 @@ describe("TerminalManager", () => {
     expect(process).toBeDefined();
     if (!process) return;
 
-    await manager.write({ threadId: "thread-1", data: "ls\n" });
-    await manager.resize({ threadId: "thread-1", cols: 120, rows: 30 });
+    await manager.write({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID, data: "ls\n" });
+    await manager.resize({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID, cols: 120, rows: 30 });
 
     expect(process.writes).toEqual(["ls\n"]);
     expect(process.resizeCalls).toEqual([{ cols: 120, rows: 30 }]);
@@ -277,18 +279,12 @@ describe("TerminalManager", () => {
     expect(ptyProcess).toBeDefined();
     if (!ptyProcess) return;
 
-    await manager.open({
-      threadId: "thread-1",
-      cwd: globalThis.process.cwd(),
-    });
+    await manager.open({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID, cwd: globalThis.process.cwd() });
 
     expect(ptyProcess.resizeCalls).toEqual([]);
 
     ptyProcess.emitExit({ exitCode: 0, signal: 0 });
-    await manager.open({
-      threadId: "thread-1",
-      cwd: globalThis.process.cwd(),
-    });
+    await manager.open({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID, cwd: globalThis.process.cwd() });
 
     const resumedSpawn = ptyAdapter.spawnInputs[1];
     expect(resumedSpawn).toBeDefined();
@@ -301,10 +297,7 @@ describe("TerminalManager", () => {
 
   it("uses default dimensions when opening a new terminal without size hints", async () => {
     const { manager, ptyAdapter } = makeManager();
-    await manager.open({
-      threadId: "thread-1",
-      cwd: process.cwd(),
-    });
+    await manager.open({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID, cwd: process.cwd() });
 
     const spawned = ptyAdapter.spawnInputs[0];
     expect(spawned).toBeDefined();
@@ -349,7 +342,7 @@ describe("TerminalManager", () => {
 
     process.emitData("hello\n");
     await waitFor(() => fs.existsSync(historyLogPath(logsDir)));
-    await manager.clear({ threadId: "thread-1" });
+    await manager.clear({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID });
     await waitFor(() => fs.readFileSync(historyLogPath(logsDir), "utf8") === "");
 
     expect(events.some((event) => event.type === "cleared")).toBe(true);
@@ -416,7 +409,7 @@ describe("TerminalManager", () => {
 
     process.emitExit({ exitCode: 0, signal: 0 });
 
-    await expect(manager.write({ threadId: "thread-1", data: "\r" })).resolves.toBeUndefined();
+    await expect(manager.write({ threadId: "thread-1", terminalId: DEFAULT_TERMINAL_ID, data: "\r" })).resolves.toBeUndefined();
     expect(process.writes).toEqual([]);
 
     manager.dispose();

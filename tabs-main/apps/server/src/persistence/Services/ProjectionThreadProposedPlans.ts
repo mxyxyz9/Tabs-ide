@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 import {
   IsoDateTime,
   OrchestrationProposedPlanId,
@@ -5,7 +6,7 @@ import {
   TrimmedNonEmptyString,
   TurnId,
 } from "@tabs/contracts";
-import { Schema, ServiceMap } from "effect";
+import { Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -46,7 +47,7 @@ export interface ProjectionThreadProposedPlanRepositoryShape {
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 
-export class ProjectionThreadProposedPlanRepository extends ServiceMap.Service<
+export class ProjectionThreadProposedPlanRepository extends Context.Service<
   ProjectionThreadProposedPlanRepository,
   ProjectionThreadProposedPlanRepositoryShape
 >()(

@@ -113,9 +113,9 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
 
   it.live("boots two independent codex instances from a ProviderInstanceConfigMap", () =>
     Effect.gen(function* () {
-      const personalId = ProviderInstanceId.makeUnsafe("codex_personal");
-      const workId = ProviderInstanceId.makeUnsafe("codex_work");
-      const codexDriverKind = ProviderDriverKind.makeUnsafe("codex");
+      const personalId = "codex_personal" as ProviderInstanceId;
+      const workId = "codex_work" as ProviderInstanceId;
+      const codexDriverKind = "codex" as ProviderDriverKind;
 
       const configMap: ProviderInstanceConfigMap = {
         [personalId]: {
@@ -189,17 +189,17 @@ describe("ProviderInstanceRegistryLive — multi-instance codex slice", () => {
     "shadows instances whose driver is not registered in this build without failing boot",
     () =>
       Effect.gen(function* () {
-        const codexId = ProviderInstanceId.makeUnsafe("codex_main");
-        const ghostId = ProviderInstanceId.makeUnsafe("ghost_main");
+        const codexId = "codex_main" as ProviderInstanceId;
+        const ghostId = "ghost_main" as ProviderInstanceId;
 
         const configMap: ProviderInstanceConfigMap = {
           [codexId]: {
-            driver: ProviderDriverKind.makeUnsafe("codex"),
+            driver: "codex" as ProviderDriverKind,
             enabled: false,
             config: makeCodexConfig({}),
           },
           [ghostId]: {
-            driver: ProviderDriverKind.makeUnsafe("ghostDriver"),
+            driver: "ghostDriver" as ProviderDriverKind,
             displayName: "A fork-only driver we don't ship",
             enabled: false,
             config: { arbitrary: "payload", preserved: true },
@@ -250,17 +250,17 @@ describe("ProviderInstanceRegistryLive — all drivers slice", () => {
 
   it.live("boots one instance of every shipped driver from a single config map", () =>
     Effect.gen(function* () {
-      const codexId = ProviderInstanceId.makeUnsafe("codex_default");
-      const claudeId = ProviderInstanceId.makeUnsafe("claude_default");
-      const cursorId = ProviderInstanceId.makeUnsafe("cursor_default");
-      const grokId = ProviderInstanceId.makeUnsafe("grok_default");
-      const openCodeId = ProviderInstanceId.makeUnsafe("opencode_default");
+      const codexId = "codex_default" as ProviderInstanceId;
+      const claudeId = "claude_default" as ProviderInstanceId;
+      const cursorId = "cursor_default" as ProviderInstanceId;
+      const grokId = "grok_default" as ProviderInstanceId;
+      const openCodeId = "opencode_default" as ProviderInstanceId;
 
-      const codexDriverKind = ProviderDriverKind.makeUnsafe("codex");
-      const claudeDriverKind = ProviderDriverKind.makeUnsafe("claudeAgent");
-      const cursorDriverKind = ProviderDriverKind.makeUnsafe("cursor");
-      const grokDriverKind = ProviderDriverKind.makeUnsafe("grok");
-      const openCodeDriverKind = ProviderDriverKind.makeUnsafe("opencode");
+      const codexDriverKind = "codex" as ProviderDriverKind;
+      const claudeDriverKind = "claudeAgent" as ProviderDriverKind;
+      const cursorDriverKind = "cursor" as ProviderDriverKind;
+      const grokDriverKind = "grok" as ProviderDriverKind;
+      const openCodeDriverKind = "opencode" as ProviderDriverKind;
 
       const configMap: ProviderInstanceConfigMap = {
         [codexId]: {

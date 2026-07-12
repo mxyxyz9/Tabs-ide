@@ -9,6 +9,7 @@ import {
   WS_CHANNELS,
   WS_METHODS,
   type WsWelcomePayload,
+  type TerminalEvent,
 } from "@tabs/contracts";
 
 import { showContextMenuFallback } from "./contextMenuFallback";
@@ -157,12 +158,18 @@ export function createWsNativeApi(): NativeApi {
       close: (input) => transport.request(WS_METHODS.terminalClose, input),
       onEvent: (callback) =>
         transport.subscribe(WS_CHANNELS.terminalEvent, (message) => callback(message.data)),
+      attach: () => () => {},
+      onMetadata: () => () => {},
     },
     projects: {
       searchEntries: (input) => transport.request(WS_METHODS.projectsSearchEntries, input),
       readFile: (input) => transport.request(WS_METHODS.projectsReadFile, input),
       writeFile: (input) => transport.request(WS_METHODS.projectsWriteFile, input),
       filesystemBrowse: (input) => transport.request(WS_METHODS.filesystemBrowse, input),
+      listEntries: (input) => transport.request(WS_METHODS.projectsListEntries, input),
+    },
+    filesystem: {
+      browse: (input) => transport.request(WS_METHODS.filesystemBrowse, input),
     },
     repositories: {
       clone: async (input) => {
@@ -264,6 +271,11 @@ export function createWsNativeApi(): NativeApi {
       discoverSourceControl: () => transport.request(WS_METHODS.serverDiscoverSourceControl),
       cloneRepository: (input) => transport.request(WS_METHODS.serverCloneRepository, input),
       lookupRepository: (input) => transport.request(WS_METHODS.serverLookupRepository, input),
+      updateProvider: (input) => transport.request(WS_METHODS.serverUpdateProvider, input),
+      getTraceDiagnostics: () => transport.request(WS_METHODS.serverGetTraceDiagnostics),
+      getProcessDiagnostics: () => transport.request(WS_METHODS.serverGetProcessDiagnostics),
+      getProcessResourceHistory: (input) => transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
+      signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),
@@ -278,7 +290,38 @@ export function createWsNativeApi(): NativeApi {
         transport.subscribe(ORCHESTRATION_WS_CHANNELS.domainEvent, (message) =>
           callback(message.data),
         ),
+      getArchivedShellSnapshot: () =>
+        transport.request(ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot, {}),
+      subscribeShell: () => () => {},
+      subscribeThread: () => () => {},
     },
+    persistence: {
+      getClientSettings: async () => null,
+      setClientSettings: async () => {},
+    } as any,
+    assets: {
+      createUrl: async () => ({ url: "" }),
+    } as any,
+    sourceControl: {
+      lookupRepository: async () => { throw new Error("Unsupported in web"); },
+      cloneRepository: async () => { throw new Error("Unsupported in web"); },
+      publishRepository: async () => { throw new Error("Unsupported in web"); },
+    } as any,
+    vcs: {
+      listRefs: async () => ({ refs: [], activeRef: null }),
+      createWorktree: async () => ({ path: "", branch: "" }),
+      removeWorktree: async () => {},
+      createRef: async () => ({ ref: "" }),
+      switchRef: async () => ({ ref: "" }),
+      init: async () => {},
+      pull: async () => ({ success: true }),
+      refreshStatus: async () => ({ clean: true, changes: [] }),
+      onStatus: () => () => {},
+    } as any,
+    review: {
+      getDiffPreview: async () => { throw new Error("Unsupported in web"); },
+    } as any,
+    preview: {} as any,
   };
 
   instance = { api, transport };

@@ -39,7 +39,6 @@ export function makeAppModelSelection(
   const instanceId = ProviderInstanceId.makeUnsafe(provider);
   return {
     instanceId,
-    provider: instanceId,
     model,
     ...(options && options.length > 0 ? { options } : {}),
   };

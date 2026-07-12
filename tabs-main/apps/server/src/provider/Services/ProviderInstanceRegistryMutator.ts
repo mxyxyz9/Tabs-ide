@@ -29,7 +29,7 @@
  * @module provider/Services/ProviderInstanceRegistryMutator
  */
 import type { ProviderInstanceConfigMap } from "@tabs/contracts";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 export interface ProviderInstanceRegistryMutatorShape {
@@ -46,7 +46,7 @@ export interface ProviderInstanceRegistryMutatorShape {
   readonly reconcile: (configMap: ProviderInstanceConfigMap) => Effect.Effect<void>;
 }
 
-export class ProviderInstanceRegistryMutator extends ServiceMap.Service<
+export class ProviderInstanceRegistryMutator extends Context.Service<
   ProviderInstanceRegistryMutator,
   ProviderInstanceRegistryMutatorShape
->()("t3/provider/Services/ProviderInstanceRegistryMutator") {}
+>()("tabs/provider/Services/ProviderInstanceRegistryMutator") {}

@@ -13,9 +13,9 @@ import { Effect } from "effect";
 import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asProjectId = (value: string): ProjectId => ProjectId.makeUnsafe(value);
-const asMessageId = (value: string): MessageId => MessageId.makeUnsafe(value);
+const asEventId = (value: string): EventId => value as EventId;
+const asProjectId = (value: string): ProjectId => value as ProjectId;
+const asMessageId = (value: string): MessageId => value as MessageId;
 
 describe("decider project scripts", () => {
   it("emits empty scripts on project.create", async () => {
@@ -26,7 +26,7 @@ describe("decider project scripts", () => {
       decideOrchestrationCommand({
         command: {
           type: "project.create",
-          commandId: CommandId.makeUnsafe("cmd-project-create-scripts"),
+          commandId: "cmd-project-create-scripts" as CommandId,
           projectId: asProjectId("project-scripts"),
           title: "Scripts",
           workspaceRoot: "/tmp/scripts",
@@ -52,9 +52,9 @@ describe("decider project scripts", () => {
         aggregateId: asProjectId("project-scripts"),
         type: "project.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-project-create-scripts"),
+        commandId: "cmd-project-create-scripts" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-project-create-scripts"),
+        correlationId: "cmd-project-create-scripts" as CommandId,
         metadata: {},
         payload: {
           projectId: asProjectId("project-scripts"),
@@ -82,7 +82,7 @@ describe("decider project scripts", () => {
       decideOrchestrationCommand({
         command: {
           type: "project.meta.update",
-          commandId: CommandId.makeUnsafe("cmd-project-update-scripts"),
+          commandId: "cmd-project-update-scripts" as CommandId,
           projectId: asProjectId("project-scripts"),
           scripts: Array.from(scripts),
         },
@@ -106,9 +106,9 @@ describe("decider project scripts", () => {
         aggregateId: asProjectId("project-1"),
         type: "project.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-project-create"),
+        commandId: "cmd-project-create" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-project-create"),
+        correlationId: "cmd-project-create" as CommandId,
         metadata: {},
         payload: {
           projectId: asProjectId("project-1"),
@@ -126,19 +126,19 @@ describe("decider project scripts", () => {
         sequence: 2,
         eventId: asEventId("evt-thread-create"),
         aggregateKind: "thread",
-        aggregateId: ThreadId.makeUnsafe("thread-1"),
+        aggregateId: "thread-1" as ThreadId,
         type: "thread.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-thread-create"),
+        commandId: "cmd-thread-create" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-thread-create"),
+        correlationId: "cmd-thread-create" as CommandId,
         metadata: {},
         payload: {
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
           projectId: asProjectId("project-1"),
           title: "Thread",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -155,8 +155,8 @@ describe("decider project scripts", () => {
       decideOrchestrationCommand({
         command: {
           type: "thread.turn.start",
-          commandId: CommandId.makeUnsafe("cmd-turn-start"),
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          commandId: "cmd-turn-start" as CommandId,
+          threadId: "thread-1" as ThreadId,
           message: {
             messageId: asMessageId("message-user-1"),
             role: "user",
@@ -164,7 +164,7 @@ describe("decider project scripts", () => {
             attachments: [],
           },
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5.3-codex",
             options: [
               { id: "reasoningEffort", value: "high" },
@@ -190,7 +190,7 @@ describe("decider project scripts", () => {
       return;
     }
     expect(turnStartEvent.payload).toMatchObject({
-      threadId: ThreadId.makeUnsafe("thread-1"),
+      threadId: "thread-1" as ThreadId,
       messageId: asMessageId("message-user-1"),
       modelSelection: {
         instanceId: "codex",
@@ -215,9 +215,9 @@ describe("decider project scripts", () => {
         aggregateId: asProjectId("project-1"),
         type: "project.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-project-create"),
+        commandId: "cmd-project-create" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-project-create"),
+        correlationId: "cmd-project-create" as CommandId,
         metadata: {},
         payload: {
           projectId: asProjectId("project-1"),
@@ -235,19 +235,19 @@ describe("decider project scripts", () => {
         sequence: 2,
         eventId: asEventId("evt-thread-create"),
         aggregateKind: "thread",
-        aggregateId: ThreadId.makeUnsafe("thread-1"),
+        aggregateId: "thread-1" as ThreadId,
         type: "thread.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-thread-create"),
+        commandId: "cmd-thread-create" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-thread-create"),
+        correlationId: "cmd-thread-create" as CommandId,
         metadata: {},
         payload: {
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
           projectId: asProjectId("project-1"),
           title: "Thread",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -264,8 +264,8 @@ describe("decider project scripts", () => {
       decideOrchestrationCommand({
         command: {
           type: "thread.runtime-mode.set",
-          commandId: CommandId.makeUnsafe("cmd-runtime-mode-set"),
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          commandId: "cmd-runtime-mode-set" as CommandId,
+          threadId: "thread-1" as ThreadId,
           runtimeMode: "approval-required",
           createdAt: now,
         },
@@ -280,7 +280,7 @@ describe("decider project scripts", () => {
     expect(singleResult).toMatchObject({
       type: "thread.runtime-mode-set",
       payload: {
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        threadId: "thread-1" as ThreadId,
         runtimeMode: "approval-required",
       },
     });
@@ -297,9 +297,9 @@ describe("decider project scripts", () => {
         aggregateId: asProjectId("project-1"),
         type: "project.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-project-create"),
+        commandId: "cmd-project-create" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-project-create"),
+        correlationId: "cmd-project-create" as CommandId,
         metadata: {},
         payload: {
           projectId: asProjectId("project-1"),
@@ -317,19 +317,19 @@ describe("decider project scripts", () => {
         sequence: 2,
         eventId: asEventId("evt-thread-create"),
         aggregateKind: "thread",
-        aggregateId: ThreadId.makeUnsafe("thread-1"),
+        aggregateId: "thread-1" as ThreadId,
         type: "thread.created",
         occurredAt: now,
-        commandId: CommandId.makeUnsafe("cmd-thread-create"),
+        commandId: "cmd-thread-create" as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe("cmd-thread-create"),
+        correlationId: "cmd-thread-create" as CommandId,
         metadata: {},
         payload: {
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
           projectId: asProjectId("project-1"),
           title: "Thread",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -346,8 +346,8 @@ describe("decider project scripts", () => {
       decideOrchestrationCommand({
         command: {
           type: "thread.interaction-mode.set",
-          commandId: CommandId.makeUnsafe("cmd-interaction-mode-set"),
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          commandId: "cmd-interaction-mode-set" as CommandId,
+          threadId: "thread-1" as ThreadId,
           interactionMode: "plan",
           createdAt: now,
         },
@@ -362,7 +362,7 @@ describe("decider project scripts", () => {
     expect(singleResult).toMatchObject({
       type: "thread.interaction-mode-set",
       payload: {
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        threadId: "thread-1" as ThreadId,
         interactionMode: "plan",
       },
     });

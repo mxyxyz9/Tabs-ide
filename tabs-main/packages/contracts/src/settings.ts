@@ -1,20 +1,17 @@
-import { Duration, Effect } from "effect";
+import * as Effect from "effect/Effect";
+import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { ProjectId, ThreadId, TrimmedNonEmptyString, TrimmedString } from "./baseSchemas";
-import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model";
-import { ModelSelection } from "./orchestration";
-import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance";
+import { TrimmedNonEmptyString, TrimmedString, ProjectId, ThreadId, NonNegativeInt, PositiveInt } from "./baseSchemas.ts";
+import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
+import { ModelSelection } from "./orchestration.ts";
+import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
 
 // ── Client Settings (local-only) ───────────────────────────────
 
 export const TimestampFormat = Schema.Literals(["locale", "12-hour", "24-hour"]);
 export type TimestampFormat = typeof TimestampFormat.Type;
 export const DEFAULT_TIMESTAMP_FORMAT: TimestampFormat = "locale";
-
-export const DesktopIconTheme = Schema.Literals(["dark", "light"]);
-export type DesktopIconTheme = typeof DesktopIconTheme.Type;
-export const DEFAULT_DESKTOP_ICON_THEME: DesktopIconTheme = "dark";
 
 export const SidebarProjectSortOrder = Schema.Literals(["updated_at", "created_at", "manual"]);
 export type SidebarProjectSortOrder = typeof SidebarProjectSortOrder.Type;
@@ -24,20 +21,86 @@ export const SidebarThreadSortOrder = Schema.Literals(["updated_at", "created_at
 export type SidebarThreadSortOrder = typeof SidebarThreadSortOrder.Type;
 export const DEFAULT_SIDEBAR_THREAD_SORT_ORDER: SidebarThreadSortOrder = "updated_at";
 
+export const SidebarProjectGroupingMode = Schema.Literals([
+  "repository",
+  "repository_path",
+  "separate",
+]);
+export type SidebarProjectGroupingMode = typeof SidebarProjectGroupingMode.Type;
+export const DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE: SidebarProjectGroupingMode = "repository";
+export const MIN_SIDEBAR_THREAD_PREVIEW_COUNT = 1;
+export const MAX_SIDEBAR_THREAD_PREVIEW_COUNT = 15;
+export const SidebarThreadPreviewCount = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_SIDEBAR_THREAD_PREVIEW_COUNT,
+    maximum: MAX_SIDEBAR_THREAD_PREVIEW_COUNT,
+  }),
+);
+export type SidebarThreadPreviewCount = typeof SidebarThreadPreviewCount.Type;
+export const DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT: SidebarThreadPreviewCount = 6;
+
+export const DesktopIconTheme = Schema.Literals(["dark", "light"]);
+export type DesktopIconTheme = typeof DesktopIconTheme.Type;
+export const DEFAULT_DESKTOP_ICON_THEME: DesktopIconTheme = "dark";
+
 export const ClientSettingsSchema = Schema.Struct({
-  confirmTabClose: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
-  confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
   desktopIconTheme: DesktopIconTheme.pipe(
-    Schema.withDecodingDefault(() => DEFAULT_DESKTOP_ICON_THEME),
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_DESKTOP_ICON_THEME)),
   ),
-  diffWordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  confirmThreadDelete: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  confirmTabClose: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  dismissedProviderUpdateNotificationKeys: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  diffWordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  // Model favorites. Historically keyed by provider kind, now
+  // widened to `ProviderInstanceId` so users can favorite a specific model
+  // on a custom provider instance (e.g. "Codex Personal · gpt-5") without
+  // the UI collapsing it into the same bucket as the default Codex. The
+  // widening is backward-compatible by construction: prior provider-kind
+  // strings satisfy the `ProviderInstanceId` slug schema, so previously
+  // persisted favorites decode unchanged and continue to point at the
+  // default instance for their kind (because `defaultInstanceIdForDriver(kind)`
+  // uses the same slug). The field name is kept as `provider` for storage
+  // stability; new call sites should treat the value as an instance id.
+  favorites: Schema.Array(
+    Schema.Struct({
+      provider: ProviderInstanceId,
+      model: TrimmedNonEmptyString,
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  providerModelPreferences: Schema.Record(
+    ProviderInstanceId,
+    Schema.Struct({
+      hiddenModels: Schema.Array(Schema.String).pipe(
+        Schema.withDecodingDefault(Effect.succeed([])),
+      ),
+      modelOrder: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+    }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  sidebarProjectGroupingMode: SidebarProjectGroupingMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_GROUPING_MODE)),
+  ),
+  sidebarProjectGroupingOverrides: Schema.Record(
+    TrimmedNonEmptyString,
+    SidebarProjectGroupingMode,
+  ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   sidebarProjectSortOrder: SidebarProjectSortOrder.pipe(
-    Schema.withDecodingDefault(() => DEFAULT_SIDEBAR_PROJECT_SORT_ORDER),
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_PROJECT_SORT_ORDER)),
   ),
   sidebarThreadSortOrder: SidebarThreadSortOrder.pipe(
-    Schema.withDecodingDefault(() => DEFAULT_SIDEBAR_THREAD_SORT_ORDER),
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_SORT_ORDER)),
   ),
-  timestampFormat: TimestampFormat.pipe(Schema.withDecodingDefault(() => DEFAULT_TIMESTAMP_FORMAT)),
+  sidebarThreadPreviewCount: SidebarThreadPreviewCount.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SIDEBAR_THREAD_PREVIEW_COUNT)),
+  ),
+  timestampFormat: TimestampFormat.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_TIMESTAMP_FORMAT)),
+  ),
+  wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 
@@ -57,7 +120,7 @@ const makeBinaryPathSetting = (fallback: string) =>
         encode: (value) => Effect.succeed(value),
       }),
     ),
-    Schema.withDecodingDefault(() => fallback),
+    Schema.withDecodingDefault(Effect.succeed(fallback)),
   );
 
 export type ProviderSettingsFormControl = "text" | "password" | "textarea" | "switch";
@@ -104,7 +167,7 @@ export function makeProviderSettingsSchema<const Fields extends Schema.Struct.Fi
 export const CodexSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(() => true),
+      Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     binaryPath: makeBinaryPathSetting("codex").pipe(
@@ -115,35 +178,43 @@ export const CodexSettings = makeProviderSettingsSchema(
       }),
     ),
     homePath: TrimmedString.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "CODEX_HOME path",
         description: "Custom Codex home and config directory.",
-        providerSettingsForm: { placeholder: "~/.codex", clearWhenEmpty: "omit" },
+        providerSettingsForm: {
+          placeholder: "~/.codex",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
     shadowHomePath: TrimmedString.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Shadow home path",
         description:
           "Account-specific Codex home. Keeps auth.json separate while sharing state from CODEX_HOME.",
-        providerSettingsForm: { placeholder: "~/.codex-tabs/personal", clearWhenEmpty: "omit" },
+        providerSettingsForm: {
+          placeholder: "~/.codex-t3/personal",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(() => []),
+      Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["binaryPath", "homePath", "shadowHomePath"] },
+  {
+    order: ["binaryPath", "homePath", "shadowHomePath"],
+  },
 );
 export type CodexSettings = typeof CodexSettings.Type;
 
 export const ClaudeSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(() => true),
+      Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     binaryPath: makeBinaryPathSetting("claude").pipe(
@@ -154,7 +225,7 @@ export const ClaudeSettings = makeProviderSettingsSchema(
       }),
     ),
     homePath: TrimmedString.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Claude HOME path",
         description:
@@ -163,26 +234,31 @@ export const ClaudeSettings = makeProviderSettingsSchema(
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(() => []),
+      Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     launchArgs: Schema.String.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Launch arguments",
         description: "Additional CLI arguments passed on session start.",
-        providerSettingsForm: { placeholder: "e.g. --chrome", clearWhenEmpty: "omit" },
+        providerSettingsForm: {
+          placeholder: "e.g. --chrome",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
   },
-  { order: ["binaryPath", "homePath", "launchArgs"] },
+  {
+    order: ["binaryPath", "homePath", "launchArgs"],
+  },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
 
 export const CursorSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(() => false),
+      Schema.withDecodingDefault(Effect.succeed(false)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     binaryPath: makeBinaryPathSetting("agent").pipe(
@@ -193,26 +269,31 @@ export const CursorSettings = makeProviderSettingsSchema(
       }),
     ),
     apiEndpoint: TrimmedString.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "API endpoint",
         description: "Override the Cursor API endpoint for this instance.",
-        providerSettingsForm: { placeholder: "https://...", clearWhenEmpty: "omit" },
+        providerSettingsForm: {
+          placeholder: "https://...",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(() => []),
+      Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["binaryPath", "apiEndpoint"] },
+  {
+    order: ["binaryPath", "apiEndpoint"],
+  },
 );
 export type CursorSettings = typeof CursorSettings.Type;
 
 export const GrokSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(() => true),
+      Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     binaryPath: makeBinaryPathSetting("grok").pipe(
@@ -223,37 +304,45 @@ export const GrokSettings = makeProviderSettingsSchema(
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(() => []),
+      Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["binaryPath"] },
+  {
+    order: ["binaryPath"],
+  },
 );
 export type GrokSettings = typeof GrokSettings.Type;
 
 export const OpenCodeSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(() => true),
+      Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
     binaryPath: makeBinaryPathSetting("opencode").pipe(
       Schema.annotateKey({
         title: "Binary path",
         description: "Path to the OpenCode binary.",
-        providerSettingsForm: { placeholder: "opencode", clearWhenEmpty: "omit" },
+        providerSettingsForm: {
+          placeholder: "opencode",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
     serverUrl: TrimmedString.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server URL",
-        description: "Leave blank to let Tabs spawn the server when needed.",
-        providerSettingsForm: { placeholder: "http://127.0.0.1:4096", clearWhenEmpty: "omit" },
+        description: "Leave blank to let T3 Code spawn the server when needed.",
+        providerSettingsForm: {
+          placeholder: "http://127.0.0.1:4096",
+          clearWhenEmpty: "omit",
+        },
       }),
     ),
     serverPassword: TrimmedString.pipe(
-      Schema.withDecodingDefault(() => ""),
+      Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server password",
         description: "Stored in plain text on disk.",
@@ -265,72 +354,107 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       }),
     ),
     customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(() => []),
+      Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["binaryPath", "serverUrl", "serverPassword"] },
+  {
+    order: ["binaryPath", "serverUrl", "serverPassword"],
+  },
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
 
 export const ObservabilitySettings = Schema.Struct({
-  otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
-  otlpMetricsUrl: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
+  otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  otlpMetricsUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
 });
 export type ObservabilitySettings = typeof ObservabilitySettings.Type;
 
 export const DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL = Duration.seconds(30);
 
 export const ServerSettings = Schema.Struct({
-  enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
-  alwaysCreateTasks: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
-  // Stored as plain milliseconds (not DurationFromMillis) so the decoded shape
-  // equals the encoded shape — the settings-patch flow re-decodes a merged,
-  // already-decoded `ServerSettings`, which a Duration transform would break.
-  automaticGitFetchInterval: Schema.Number.pipe(
-    Schema.withDecodingDefault(() => Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
+  enableAssistantStreaming: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  alwaysCreateTasks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  automaticGitFetchInterval: Schema.DurationFromMillis.pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed(Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
+    ),
   ),
   defaultThreadEnvMode: ThreadEnvMode.pipe(
-    Schema.withDecodingDefault(() => "local" as const satisfies ThreadEnvMode),
+    Schema.withDecodingDefault(Effect.succeed("local" as const satisfies ThreadEnvMode)),
   ),
+  newWorktreesStartFromOrigin: Schema.Boolean.pipe(
+    Schema.withDecodingDefault(Effect.succeed(false)),
+  ),
+  addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   textGenerationModelSelection: ModelSelection.pipe(
-    Schema.withDecodingDefault(() => ({
-      instanceId: ProviderInstanceId.makeUnsafe("codex"),
-      model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
-    })),
+    Schema.withDecodingDefault(
+      Effect.succeed({
+        instanceId: ProviderInstanceId.make("codex"),
+        model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
+      }),
+    ),
   ),
 
-  // Legacy single-instance-per-driver settings. Source of truth until
-  // `providerInstances` hydration fully replaces it (see providerInstance.ts).
+  // Legacy single-instance-per-driver settings. Continues to be the source
+  // of truth until `providerInstances` (below) lands per-driver migration
+  // shims and the server starts hydrating instances from it. Driver-specific
+  // schemas live here for the duration of the migration; once each driver
+  // owns its config in its own package, this struct shrinks to nothing and
+  // is removed entirely.
   providers: Schema.Struct({
-    codex: CodexSettings.pipe(Schema.withDecodingDefault(() => ({}))),
-    claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(() => ({}))),
-    cursor: CursorSettings.pipe(Schema.withDecodingDefault(() => ({}))),
-    grok: GrokSettings.pipe(Schema.withDecodingDefault(() => ({}))),
-    opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(() => ({}))),
-  }).pipe(Schema.withDecodingDefault(() => ({}))),
-  // New driver-agnostic instance map keyed by `ProviderInstanceId`; values are
-  // `ProviderInstanceConfig` envelopes whose driver-specific config is opaque
-  // (`Schema.Unknown`) so unknown-driver envelopes round-trip without loss.
+    codex: CodexSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
+  // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
+  // is `Schema.Unknown` at this layer so envelopes with unknown drivers
+  // (forks, downgrades, in-flight PR branches) round-trip without loss.
+  // See providerInstance.ts for the forward/backward compatibility invariant.
   providerInstances: Schema.Record(ProviderInstanceId, ProviderInstanceConfig).pipe(
-    Schema.withDecodingDefault(() => ({})),
+    Schema.withDecodingDefault(Effect.succeed({})),
   ),
-  observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(() => ({}))),
+  observability: ObservabilitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = Schema.decodeSync(ServerSettings)({});
 
+export const ServerSettingsOperation = Schema.Literals([
+  "normalize",
+  "check-exists",
+  "read-file",
+  "read-secret",
+  "remove-secret",
+  "remove-stale-secret",
+  "write-secret",
+  "write-file",
+  "prepare-directory",
+]);
+export type ServerSettingsOperation = typeof ServerSettingsOperation.Type;
+
 export class ServerSettingsError extends Schema.TaggedErrorClass<ServerSettingsError>()(
   "ServerSettingsError",
   {
     settingsPath: Schema.String,
-    detail: Schema.String,
-    cause: Schema.optional(Schema.Defect),
+    operation: ServerSettingsOperation,
+    providerInstanceId: Schema.optional(Schema.String),
+    environmentVariable: Schema.optional(Schema.String),
+    cause: Schema.Defect(),
   },
 ) {
   override get message(): string {
-    return `Server settings error at ${this.settingsPath}: ${this.detail}`;
+    const provider =
+      this.providerInstanceId === undefined ? "" : ` for provider ${this.providerInstanceId}`;
+    const variable =
+      this.environmentVariable === undefined
+        ? ""
+        : ` and environment variable ${this.environmentVariable}`;
+    return `Server settings ${this.operation} failed${provider}${variable} at ${this.settingsPath}.`;
   }
 }
 
@@ -388,10 +512,14 @@ const OpenCodeSettingsPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  // Server settings
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
   alwaysCreateTasks: Schema.optionalKey(Schema.Boolean),
-  automaticGitFetchInterval: Schema.optionalKey(Schema.Number),
+  enableProviderUpdateChecks: Schema.optionalKey(Schema.Boolean),
+  automaticGitFetchInterval: Schema.optionalKey(Schema.DurationFromMillis),
   defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
+  newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
+  addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   observability: Schema.optionalKey(
     Schema.Struct({
@@ -408,11 +536,54 @@ export const ServerSettingsPatch = Schema.Struct({
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
     }),
   ),
-  // Whole-map replacement for the instance config (partial entry patches are
-  // intentionally out of scope; the web UI sends a fully-formed map).
+  // Whole-map replacement for the new instance config. Patching individual
+  // entries is intentionally out of scope: the map is small, and partial
+  // patches risk leaving driver-specific config in a half-merged state.
+  // The web UI sends a fully-formed map every time it edits this field.
   providerInstances: Schema.optionalKey(Schema.Record(ProviderInstanceId, ProviderInstanceConfig)),
 });
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
+
+export const ClientSettingsPatch = Schema.Struct({
+  desktopIconTheme: Schema.optionalKey(DesktopIconTheme),
+  autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
+  confirmThreadArchive: Schema.optionalKey(Schema.Boolean),
+  confirmThreadDelete: Schema.optionalKey(Schema.Boolean),
+  confirmTabClose: Schema.optionalKey(Schema.Boolean),
+  diffIgnoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  diffWordWrap: Schema.optionalKey(Schema.Boolean),
+  favorites: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        provider: ProviderInstanceId,
+        model: TrimmedNonEmptyString,
+      }),
+    ),
+  ),
+  providerModelPreferences: Schema.optionalKey(
+    Schema.Record(
+      ProviderInstanceId,
+      Schema.Struct({
+        hiddenModels: Schema.Array(Schema.String).pipe(
+          Schema.withDecodingDefault(Effect.succeed([])),
+        ),
+        modelOrder: Schema.Array(Schema.String).pipe(
+          Schema.withDecodingDefault(Effect.succeed([])),
+        ),
+      }),
+    ),
+  ),
+  sidebarProjectGroupingMode: Schema.optionalKey(SidebarProjectGroupingMode),
+  sidebarProjectGroupingOverrides: Schema.optionalKey(
+    Schema.Record(TrimmedNonEmptyString, SidebarProjectGroupingMode),
+  ),
+  sidebarProjectSortOrder: Schema.optionalKey(SidebarProjectSortOrder),
+  sidebarThreadSortOrder: Schema.optionalKey(SidebarThreadSortOrder),
+  sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
+  timestampFormat: Schema.optionalKey(TimestampFormat),
+  wordWrap: Schema.optionalKey(Schema.Boolean),
+});
+export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;
 
 // ── Project Workspace Shell (client-persisted) ──────────────────────
 
@@ -466,15 +637,15 @@ export const ProjectToolDefinition = Schema.Struct({
   id: ProjectSettingId,
   kind: ProjectToolKind,
   label: TrimmedNonEmptyString,
-  visible: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
+  visible: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   customEmbedId: Schema.optionalKey(Schema.NullOr(ProjectSettingId)),
   serverProcessId: Schema.optionalKey(Schema.NullOr(ProjectSettingId)),
 });
 export type ProjectToolDefinition = typeof ProjectToolDefinition.Type;
 
 export const ProjectBrowserSettings = Schema.Struct({
-  defaultUrl: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
-  openExternalByDefault: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  defaultUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  openExternalByDefault: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ProjectBrowserSettings = typeof ProjectBrowserSettings.Type;
 
@@ -482,60 +653,61 @@ export const ProjectServerProcessDefinition = Schema.Struct({
   id: ProjectSettingId,
   label: TrimmedNonEmptyString,
   command: Schema.optionalKey(TrimmedString),
-  commands: Schema.Array(TrimmedString).pipe(Schema.withDecodingDefault(() => [])),
-  cwd: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
-  env: Schema.Record(Schema.String, Schema.String).pipe(Schema.withDecodingDefault(() => ({}))),
-  autoStart: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  commands: Schema.Array(TrimmedString).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  cwd: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  env: Schema.Record(Schema.String, Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  autoStart: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ProjectServerProcessDefinition = typeof ProjectServerProcessDefinition.Type;
 
 export const ProjectWorkspaceSettings = Schema.Struct({
   tools: Schema.Array(ProjectToolDefinition).pipe(
-    Schema.withDecodingDefault(() =>
-      DEFAULT_PROJECT_TOOL_ORDER.map((kind) => ({
-        id: kind,
-        kind,
-        label:
-          kind === "code"
-            ? "Code"
-            : kind === "agents"
-              ? "Agents"
-              : kind === "server"
-                ? "Server"
-                : kind === "git"
-                  ? "Git"
-                  : "Browser",
-        visible: true,
-      })),
+    Schema.withDecodingDefault(
+      Effect.succeed(
+        DEFAULT_PROJECT_TOOL_ORDER.map((kind) => ({
+          id: kind,
+          kind,
+          label:
+            kind === "code"
+              ? "Code"
+              : kind === "agents"
+                ? "Agents"
+                : kind === "server"
+                  ? "Server"
+                  : kind === "git"
+                    ? "Git"
+                    : "Browser",
+          visible: true,
+        })),
+      ),
     ),
   ),
-  browser: ProjectBrowserSettings.pipe(Schema.withDecodingDefault(() => ({}))),
+  browser: ProjectBrowserSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   serverProcesses: Schema.Array(ProjectServerProcessDefinition).pipe(
-    Schema.withDecodingDefault(() => []),
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
   customEmbeds: Schema.Array(ProjectCustomEmbedDefinition).pipe(
-    Schema.withDecodingDefault(() => []),
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
 });
 export type ProjectWorkspaceSettings = typeof ProjectWorkspaceSettings.Type;
 
 export const ProjectWorkspaceSessionState = Schema.Struct({
-  openProjectIds: Schema.Array(ProjectId).pipe(Schema.withDecodingDefault(() => [])),
-  activeProjectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(() => null)),
+  openProjectIds: Schema.Array(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  activeProjectId: Schema.NullOr(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   // Ordered list of pending (unassigned) tab IDs. Each is a stable random string,
   // never a ProjectId. A pending tab shows the Welcome/landing screen until the
   // user picks a folder or recent project to resolve it into a real project tab.
-  pendingTabIds: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(() => [])),
+  pendingTabIds: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   // Which slot is focused: either a real project ID or a pending tab ID. When
   // both activeProjectId and activePendingTabId are set, activePendingTabId wins
   // for determining what to render in the content area.
-  activePendingTabId: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefault(() => null)),
+  activePendingTabId: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   activeToolIdByProjectId: Schema.Record(ProjectId, ProjectSettingId).pipe(
-    Schema.withDecodingDefault(() => ({})),
+    Schema.withDecodingDefault(Effect.succeed({})),
   ),
   rememberedThreadIdByProjectId: Schema.Record(ProjectId, ThreadId).pipe(
-    Schema.withDecodingDefault(() => ({})),
+    Schema.withDecodingDefault(Effect.succeed({})),
   ),
 });
 export type ProjectWorkspaceSessionState = typeof ProjectWorkspaceSessionState.Type;
-

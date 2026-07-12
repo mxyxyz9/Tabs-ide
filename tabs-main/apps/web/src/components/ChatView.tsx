@@ -19,9 +19,12 @@ import {
   ProviderInteractionMode,
   RuntimeMode,
   DEFAULT_MODEL,
+  type ServerProviderModel,
+  type ProviderOptionSelection,
 } from "@tabs/contracts";
 import { applyClaudePromptEffortPrefix, normalizeModelSlug } from "@tabs/shared/model";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useAtomValue } from "@effect/atom-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -64,7 +67,12 @@ import {
   setPendingUserInputCustomAnswer,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
-import { useStore } from "../store";
+import {
+  markThreadVisitedInAtoms,
+  setThreadBranchInAtoms,
+  setThreadErrorInAtoms,
+  syncServerReadModelToAtoms,
+} from "../state/readModel";
 import {
   buildPlanImplementationThreadTitle,
   buildPlanImplementationPrompt,
@@ -125,10 +133,15 @@ import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
   type PersistedComposerImageAttachment,
-  useComposerDraftStore,
   useEffectiveComposerModelState,
-  useComposerThreadDraft,
 } from "../composerDraftStore";
+import {
+  composerDraftActions,
+  composerDraftsAtom,
+  useComposerDraft,
+  useDraftThread,
+} from "../state/composerDrafts";
+import { appAtomRegistry } from "../state/atomRegistry";
 import {
   appendTerminalContextsToPrompt,
   formatTerminalContextLabel,
@@ -139,7 +152,8 @@ import {
 } from "../lib/terminalContext";
 import { deriveLatestContextWindowSnapshot } from "../lib/contextWindow";
 import { shouldUseCompactComposerFooter } from "./composerFooterLayout";
-import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
+import { terminalActions, useThreadTerminalState } from "../state/terminal";
+import { projectsAtom, threadsAtom } from "../state/threads";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -156,9 +170,52 @@ import { ComposerPlanFollowUpBanner } from "./chat/ComposerPlanFollowUpBanner";
 import { TaskListPanel } from "./chat/TaskListPanel";
 import {
   getComposerProviderState,
-  renderProviderTraitsMenuContent,
-  renderProviderTraitsPicker,
 } from "./chat/composerProviderRegistry";
+import { TraitsMenuContent, TraitsPicker } from "./chat/TraitsPicker";
+
+function renderProviderTraitsMenuContent(input: {
+  provider: ProviderKind;
+  threadId: ThreadId;
+  model: ModelSlug;
+  models: ReadonlyArray<ServerProviderModel>;
+  modelOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
+  prompt: string;
+  onPromptChange: (prompt: string) => void;
+}): ReactNode {
+  return (
+    <TraitsMenuContent
+      provider={input.provider}
+      models={input.models}
+      threadId={input.threadId}
+      model={input.model}
+      modelOptions={input.modelOptions}
+      prompt={input.prompt}
+      onPromptChange={input.onPromptChange}
+    />
+  );
+}
+
+function renderProviderTraitsPicker(input: {
+  provider: ProviderKind;
+  threadId: ThreadId;
+  model: ModelSlug;
+  models: ReadonlyArray<ServerProviderModel>;
+  modelOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
+  prompt: string;
+  onPromptChange: (prompt: string) => void;
+}): ReactNode {
+  return (
+    <TraitsPicker
+      provider={input.provider}
+      models={input.models}
+      threadId={input.threadId}
+      model={input.model}
+      modelOptions={input.modelOptions}
+      prompt={input.prompt}
+      onPromptChange={input.onPromptChange}
+    />
+  );
+}
 import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import {
@@ -257,16 +314,14 @@ interface ChatViewProps {
 }
 
 export default function ChatView({ threadId, compact = false, onRequestThread }: ChatViewProps) {
-  const threads = useStore((store) => store.threads);
-  const projects = useStore((store) => store.projects);
-  const markThreadVisited = useStore((store) => store.markThreadVisited);
-  const syncServerReadModel = useStore((store) => store.syncServerReadModel);
-  const setStoreThreadError = useStore((store) => store.setError);
-  const setStoreThreadBranch = useStore((store) => store.setThreadBranch);
+  const threads = useAtomValue(threadsAtom);
+  const projects = useAtomValue(projectsAtom);
+  const markThreadVisited = markThreadVisitedInAtoms;
+  const syncServerReadModel = syncServerReadModelToAtoms;
+  const setStoreThreadError = setThreadErrorInAtoms;
+  const setStoreThreadBranch = setThreadBranchInAtoms;
   const settings = useSettings();
-  const setStickyComposerModelSelection = useComposerDraftStore(
-    (store) => store.setStickyModelSelection,
-  );
+  const setStickyComposerModelSelection = composerDraftActions.setStickyModelSelection;
   const timestampFormat = settings.timestampFormat;
   const navigate = useNavigate();
   // Route to a thread. In the full Agents tab this navigates the app to the
@@ -291,7 +346,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
   const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
-  const composerDraft = useComposerThreadDraft(threadId);
+  const composerDraft = useComposerDraft(threadId);
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
   const composerTerminalContexts = composerDraft.terminalContexts;
@@ -305,46 +360,28 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     [composerImages.length, composerTerminalContexts, prompt],
   );
   const nonPersistedComposerImageIds = composerDraft.nonPersistedImageIds;
-  const setComposerDraftPrompt = useComposerDraftStore((store) => store.setPrompt);
-  const setComposerDraftModelSelection = useComposerDraftStore((store) => store.setModelSelection);
-  const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
-  const setComposerDraftInteractionMode = useComposerDraftStore(
-    (store) => store.setInteractionMode,
-  );
-  const addComposerDraftImage = useComposerDraftStore((store) => store.addImage);
-  const addComposerDraftImages = useComposerDraftStore((store) => store.addImages);
-  const removeComposerDraftImage = useComposerDraftStore((store) => store.removeImage);
-  const insertComposerDraftTerminalContext = useComposerDraftStore(
-    (store) => store.insertTerminalContext,
-  );
-  const addComposerDraftTerminalContexts = useComposerDraftStore(
-    (store) => store.addTerminalContexts,
-  );
-  const removeComposerDraftTerminalContext = useComposerDraftStore(
-    (store) => store.removeTerminalContext,
-  );
-  const setComposerDraftTerminalContexts = useComposerDraftStore(
-    (store) => store.setTerminalContexts,
-  );
-  const clearComposerDraftPersistedAttachments = useComposerDraftStore(
-    (store) => store.clearPersistedAttachments,
-  );
-  const syncComposerDraftPersistedAttachments = useComposerDraftStore(
-    (store) => store.syncPersistedAttachments,
-  );
-  const clearComposerDraftContent = useComposerDraftStore((store) => store.clearComposerContent);
-  const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const getDraftThreadByProjectId = useComposerDraftStore(
-    (store) => store.getDraftThreadByProjectId,
-  );
-  const getDraftThread = useComposerDraftStore((store) => store.getDraftThread);
-  const setProjectDraftThreadId = useComposerDraftStore((store) => store.setProjectDraftThreadId);
-  const clearProjectDraftThreadId = useComposerDraftStore(
-    (store) => store.clearProjectDraftThreadId,
-  );
-  const draftThread = useComposerDraftStore(
-    (store) => store.draftThreadsByThreadId[threadId] ?? null,
-  );
+  const {
+    setPrompt: setComposerDraftPrompt,
+    setModelSelection: setComposerDraftModelSelection,
+    setRuntimeMode: setComposerDraftRuntimeMode,
+    setInteractionMode: setComposerDraftInteractionMode,
+    addImage: addComposerDraftImage,
+    addImages: addComposerDraftImages,
+    removeImage: removeComposerDraftImage,
+    insertTerminalContext: insertComposerDraftTerminalContext,
+    addTerminalContexts: addComposerDraftTerminalContexts,
+    removeTerminalContext: removeComposerDraftTerminalContext,
+    setTerminalContexts: setComposerDraftTerminalContexts,
+    clearPersistedAttachments: clearComposerDraftPersistedAttachments,
+    syncPersistedAttachments: syncComposerDraftPersistedAttachments,
+    clearComposerContent: clearComposerDraftContent,
+    setDraftThreadContext,
+    getDraftThreadByProjectId,
+    getDraftThread,
+    setProjectDraftThreadId,
+    clearProjectDraftThreadId,
+  } = composerDraftActions;
+  const draftThread = useDraftThread(threadId);
   const promptRef = useRef(prompt);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
@@ -427,15 +464,13 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     setMessagesScrollElement(element);
   }, []);
 
-  const terminalState = useTerminalStateStore((state) =>
-    selectThreadTerminalState(state.terminalStateByThreadId, threadId),
-  );
-  const storeSetTerminalOpen = useTerminalStateStore((s) => s.setTerminalOpen);
-  const storeSetTerminalHeight = useTerminalStateStore((s) => s.setTerminalHeight);
-  const storeSplitTerminal = useTerminalStateStore((s) => s.splitTerminal);
-  const storeNewTerminal = useTerminalStateStore((s) => s.newTerminal);
-  const storeSetActiveTerminal = useTerminalStateStore((s) => s.setActiveTerminal);
-  const storeCloseTerminal = useTerminalStateStore((s) => s.closeTerminal);
+  const terminalState = useThreadTerminalState(threadId)!;
+  const storeSetTerminalOpen = terminalActions.setOpen;
+  const storeSetTerminalHeight = terminalActions.setHeight;
+  const storeSplitTerminal = terminalActions.split;
+  const storeNewTerminal = terminalActions.new;
+  const storeSetActiveTerminal = terminalActions.setActive;
+  const storeCloseTerminal = terminalActions.close;
 
   const setPrompt = useCallback(
     (nextPrompt: string) => {
@@ -1101,7 +1136,9 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         path: entry.path,
         pathKind: entry.kind,
         label: basenameOfPath(entry.path),
-        description: entry.parentPath ?? "",
+        description: entry.path.includes("/")
+          ? entry.path.substring(0, entry.path.lastIndexOf("/"))
+          : "",
       }));
     }
 
@@ -1938,7 +1975,8 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         return;
       }
       const getPersistedAttachmentsForThread = () =>
-        useComposerDraftStore.getState().draftsByThreadId[threadId]?.persistedAttachments ?? [];
+        appAtomRegistry.get(composerDraftsAtom).draftsByThreadId[threadId]
+          ?.persistedAttachments ?? [];
       try {
         const currentPersistedAttachments = getPersistedAttachmentsForThread();
         const existingPersistedById = new Map(

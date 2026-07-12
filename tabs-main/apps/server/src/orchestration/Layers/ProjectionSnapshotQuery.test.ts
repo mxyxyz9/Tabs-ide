@@ -16,11 +16,11 @@ import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 
-const asProjectId = (value: string): ProjectId => ProjectId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
-const asMessageId = (value: string): MessageId => MessageId.makeUnsafe(value);
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.makeUnsafe(value);
+const asProjectId = (value: string): ProjectId => value as ProjectId;
+const asTurnId = (value: string): TurnId => value as TurnId;
+const asMessageId = (value: string): MessageId => value as MessageId;
+const asEventId = (value: string): EventId => value as EventId;
+const asCheckpointRef = (value: string): CheckpointRef => value as CheckpointRef;
 
 const projectionSnapshotLayer = it.layer(
   OrchestrationProjectionSnapshotQueryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
@@ -243,8 +243,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           title: "Project 1",
           workspaceRoot: "/tmp/project-1",
           defaultModelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
-            provider: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           scripts: [
@@ -263,12 +262,11 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
       ]);
       assert.deepEqual(snapshot.threads, [
         {
-          id: ThreadId.makeUnsafe("thread-1"),
+          id: "thread-1" as ThreadId,
           projectId: asProjectId("project-1"),
           title: "Thread 1",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
-            provider: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: "default",
@@ -283,7 +281,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             completedAt: "2026-02-24T00:00:08.000Z",
             assistantMessageId: asMessageId("message-1"),
             sourceProposedPlan: {
-              threadId: ThreadId.makeUnsafe("thread-1"),
+              threadId: "thread-1" as ThreadId,
               planId: "plan-1",
             },
           },
@@ -308,7 +306,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
               turnId: asTurnId("turn-1"),
               planMarkdown: "# Ship it",
               implementedAt: "2026-02-24T00:00:05.500Z",
-              implementationThreadId: ThreadId.makeUnsafe("thread-2"),
+              implementationThreadId: "thread-2" as ThreadId,
               createdAt: "2026-02-24T00:00:05.000Z",
               updatedAt: "2026-02-24T00:00:05.500Z",
             },
@@ -336,7 +334,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             },
           ],
           session: {
-            threadId: ThreadId.makeUnsafe("thread-1"),
+            threadId: "thread-1" as ThreadId,
             status: "running",
             providerName: "codex",
             runtimeMode: "approval-required",

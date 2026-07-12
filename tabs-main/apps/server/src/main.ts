@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * CliConfig - CLI/runtime bootstrap service definitions.
  *
@@ -6,7 +7,7 @@
  *
  * @module CliConfig
  */
-import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema, ServiceMap } from "effect";
+import { Config, Data, Effect, FileSystem, Layer, Option, Path, Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import { NetService } from "@tabs/shared/Net";
 import {
@@ -89,7 +90,7 @@ export interface CliConfigShape {
 /**
  * CliConfig - Service tag for startup CLI/runtime helpers.
  */
-export class CliConfig extends ServiceMap.Service<CliConfig, CliConfigShape>()(
+export class CliConfig extends Context.Service<CliConfig, CliConfigShape>()(
   "tabs/main/CliConfig",
 ) {
   static readonly layer = Layer.effect(
@@ -158,7 +159,7 @@ const ServerConfigLive = (input: CliInput) =>
     Effect.gen(function* () {
       const cliConfig = yield* CliConfig;
       const { findAvailablePort } = yield* NetService;
-      const env = yield* CliEnvConfig.asEffect().pipe(
+      const env = yield* CliEnvConfig.pipe(
         Effect.mapError(
           (cause) =>
             new StartupError({ message: "Failed to read environment configuration", cause }),

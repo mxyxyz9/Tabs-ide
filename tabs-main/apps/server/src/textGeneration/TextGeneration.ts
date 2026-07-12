@@ -1,4 +1,4 @@
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@tabs/contracts";
@@ -115,8 +115,8 @@ export interface TextGenerationShape {
 /**
  * TextGeneration - Service tag for commit and PR text generation.
  */
-export class TextGeneration extends ServiceMap.Service<TextGeneration, TextGenerationShape>()(
-  "t3/textGeneration/TextGeneration",
+export class TextGeneration extends Context.Service<TextGeneration, TextGenerationShape>()(
+  "tabs/textGeneration/TextGeneration",
 ) {}
 
 type TextGenerationOp =

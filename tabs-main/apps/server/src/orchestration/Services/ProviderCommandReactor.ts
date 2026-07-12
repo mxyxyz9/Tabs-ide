@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProviderCommandReactor - Provider command reaction service interface.
  *
@@ -6,7 +7,7 @@
  *
  * @module ProviderCommandReactor
  */
-import { ServiceMap } from "effect";
+import {  } from "effect";
 import type { Effect, Scope } from "effect";
 
 /**
@@ -34,7 +35,7 @@ export interface ProviderCommandReactorShape {
 /**
  * ProviderCommandReactor - Service tag for provider command reaction workers.
  */
-export class ProviderCommandReactor extends ServiceMap.Service<
+export class ProviderCommandReactor extends Context.Service<
   ProviderCommandReactor,
   ProviderCommandReactorShape
 >()("tabs/orchestration/Services/ProviderCommandReactor") {}

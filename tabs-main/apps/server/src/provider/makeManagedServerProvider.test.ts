@@ -26,7 +26,7 @@ interface TestSettings {
 }
 
 const maintenanceCapabilities = {
-  provider: ProviderDriverKind.makeUnsafe("codex"),
+  provider: "codex" as ProviderDriverKind,
   packageName: "@openai/codex",
   update: {
     command: "npm install -g @openai/codex@latest",
@@ -40,8 +40,8 @@ const maintenanceCapabilities = {
 } as const;
 
 const initialSnapshot: ServerProvider = {
-  instanceId: ProviderInstanceId.makeUnsafe("codex"),
-  driver: ProviderDriverKind.makeUnsafe("codex"),
+  instanceId: "codex" as ProviderInstanceId,
+  driver: "codex" as ProviderDriverKind,
   enabled: true,
   installed: true,
   version: null,
@@ -55,8 +55,8 @@ const initialSnapshot: ServerProvider = {
 };
 
 const refreshedSnapshot: ServerProvider = {
-  instanceId: ProviderInstanceId.makeUnsafe("codex"),
-  driver: ProviderDriverKind.makeUnsafe("codex"),
+  instanceId: "codex" as ProviderInstanceId,
+  driver: "codex" as ProviderDriverKind,
   enabled: true,
   installed: true,
   version: "1.0.0",

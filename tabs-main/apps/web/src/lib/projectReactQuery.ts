@@ -19,6 +19,8 @@ const EMPTY_SEARCH_ENTRIES_RESULT: ProjectSearchEntriesResult = {
 const EMPTY_READ_FILE_RESULT: ProjectReadFileResult = {
   relativePath: "",
   contents: "",
+  byteLength: 0,
+  truncated: false,
 };
 
 export function projectSearchEntriesQueryOptions(input: {

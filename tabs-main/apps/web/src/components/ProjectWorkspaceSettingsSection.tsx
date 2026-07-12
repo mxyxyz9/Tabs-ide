@@ -28,7 +28,8 @@ import {
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
-import { useStore } from "../store";
+import { projectsAtom } from "../state/threads";
+import { useAtomValue } from "@effect/atom-react";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -44,7 +45,11 @@ import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
 import { cn } from "../lib/utils";
-import { useProjectWorkspaceSettings, useWorkspaceShellStore } from "../workspaceShellStore";
+import {
+  useProjectWorkspaceSettings,
+  useWorkspaceActiveProjectId,
+  workspaceShellActions,
+} from "../state/workspaceShell";
 
 function createCustomEmbedId() {
   return `embed-${crypto.randomUUID()}`;
@@ -246,14 +251,14 @@ function isServerProcessDraftDirty(draft: ServerProcessDraft) {
 }
 
 export function ProjectWorkspaceSettingsSection() {
-  const activeProjectId = useWorkspaceShellStore((state) => state.session.activeProjectId);
-  const activeProject = useStore((state) =>
+  const activeProjectId = useWorkspaceActiveProjectId();
+  const activeProject = useAtomValue(projectsAtom, (state) =>
     activeProjectId
-      ? (state.projects.find((project) => project.id === activeProjectId) ?? null)
+      ? (state.find((project) => project.id === activeProjectId) ?? null)
       : null,
   );
   const projectSettings = useProjectWorkspaceSettings(activeProjectId);
-  const upsertProjectSettings = useWorkspaceShellStore((state) => state.upsertProjectSettings);
+  const upsertProjectSettings = workspaceShellActions.upsertProjectSettings;
   const [customEmbedDrafts, setCustomEmbedDrafts] = useState<CustomEmbedDraft[]>([]);
   const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>([]);
   const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});

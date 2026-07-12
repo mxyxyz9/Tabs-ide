@@ -6,8 +6,8 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asProjectId = (value: string): ProjectId => ProjectId.makeUnsafe(value);
+const asEventId = (value: string): EventId => value as EventId;
+const asProjectId = (value: string): ProjectId => value as ProjectId;
 
 async function readModelWithProject(input: {
   projectId: string;
@@ -23,9 +23,9 @@ async function readModelWithProject(input: {
       aggregateId: asProjectId(input.projectId),
       type: "project.created",
       occurredAt: now,
-      commandId: CommandId.makeUnsafe(`cmd-create-${input.projectId}`),
+      commandId: `cmd-create-${input.projectId}` as CommandId,
       causationEventId: null,
-      correlationId: CommandId.makeUnsafe(`cmd-create-${input.projectId}`),
+      correlationId: `cmd-create-${input.projectId}` as CommandId,
       metadata: {},
       payload: {
         projectId: asProjectId(input.projectId),
@@ -48,9 +48,9 @@ async function readModelWithProject(input: {
         aggregateId: asProjectId(input.projectId),
         type: "project.deleted",
         occurredAt: input.deletedAt,
-        commandId: CommandId.makeUnsafe(`cmd-delete-${input.projectId}`),
+        commandId: `cmd-delete-${input.projectId}` as CommandId,
         causationEventId: null,
-        correlationId: CommandId.makeUnsafe(`cmd-delete-${input.projectId}`),
+        correlationId: `cmd-delete-${input.projectId}` as CommandId,
         metadata: {},
         payload: {
           projectId: asProjectId(input.projectId),
@@ -75,7 +75,7 @@ describe("decider project identity", () => {
       decideOrchestrationCommand({
         command: {
           type: "project.create",
-          commandId: CommandId.makeUnsafe("cmd-create-dup"),
+          commandId: "cmd-create-dup" as CommandId,
           projectId: asProjectId("project-duplicate"),
           title: "Duplicate",
           workspaceRoot: "/tmp/dup",
@@ -101,7 +101,7 @@ describe("decider project identity", () => {
       decideOrchestrationCommand({
         command: {
           type: "project.create",
-          commandId: CommandId.makeUnsafe("cmd-create-dup"),
+          commandId: "cmd-create-dup" as CommandId,
           projectId: asProjectId("project-duplicate"),
           title: "Duplicate",
           workspaceRoot: "/tmp/dup",
@@ -125,7 +125,7 @@ describe("decider project identity", () => {
       decideOrchestrationCommand({
         command: {
           type: "project.create",
-          commandId: CommandId.makeUnsafe("cmd-create-other"),
+          commandId: "cmd-create-other" as CommandId,
           projectId: asProjectId("project-other"),
           title: "Other",
           workspaceRoot: "/tmp/other",
@@ -151,7 +151,7 @@ describe("decider project identity", () => {
       decideOrchestrationCommand({
         command: {
           type: "project.create",
-          commandId: CommandId.makeUnsafe("cmd-create-reuse"),
+          commandId: "cmd-create-reuse" as CommandId,
           projectId: asProjectId("project-reuse"),
           title: "Reuse",
           workspaceRoot: "/tmp/dup",

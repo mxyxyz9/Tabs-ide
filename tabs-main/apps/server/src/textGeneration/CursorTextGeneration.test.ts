@@ -112,7 +112,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
             stagedPatch:
               "diff --git a/apps/server/src/textGeneration/CursorTextGeneration.ts b/apps/server/src/textGeneration/CursorTextGeneration.ts",
             modelSelection: {
-              ...createModelSelection(ProviderInstanceId.makeUnsafe("cursor"), "gpt-5.4", [
+              ...createModelSelection("cursor" as ProviderInstanceId, "gpt-5.4", [
                 { id: "reasoning", value: "xhigh" },
                 { id: "fastMode", value: true },
                 { id: "contextWindow", value: "1m" },
@@ -200,7 +200,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
             stagedSummary: "M README.md",
             stagedPatch: "diff --git a/README.md b/README.md",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+              instanceId: "cursor" as ProviderInstanceId,
               model: "composer-2",
             },
           });
@@ -224,7 +224,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
             cwd: process.cwd(),
             message: "Fix the reconnect spinner after a resumed session.",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+              instanceId: "cursor" as ProviderInstanceId,
               model: "composer-2",
             },
           });
@@ -255,7 +255,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
             stagedPatch:
               "diff --git a/apps/server/src/textGeneration/CursorTextGeneration.ts b/apps/server/src/textGeneration/CursorTextGeneration.ts",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+              instanceId: "cursor" as ProviderInstanceId,
               model: "composer-2",
             },
           });

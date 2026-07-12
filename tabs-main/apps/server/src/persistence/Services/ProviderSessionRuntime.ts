@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProviderSessionRuntimeRepository - Repository interface for provider runtime sessions.
  *
@@ -12,7 +13,7 @@ import {
   RuntimeMode,
   ThreadId,
 } from "@tabs/contracts";
-import { Option, Schema, ServiceMap } from "effect";
+import { Option, Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProviderSessionRuntimeRepositoryError } from "../Errors.ts";
@@ -80,7 +81,7 @@ export interface ProviderSessionRuntimeRepositoryShape {
 /**
  * ProviderSessionRuntimeRepository - Service tag for provider runtime persistence.
  */
-export class ProviderSessionRuntimeRepository extends ServiceMap.Service<
+export class ProviderSessionRuntimeRepository extends Context.Service<
   ProviderSessionRuntimeRepository,
   ProviderSessionRuntimeRepositoryShape
 >()("tabs/persistence/Services/ProviderSessionRuntime/ProviderSessionRuntimeRepository") {}

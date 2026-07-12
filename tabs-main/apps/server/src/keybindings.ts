@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * Keybindings - Keybinding configuration service definitions.
  *
@@ -34,7 +35,6 @@ import {
   SchemaIssue,
   SchemaTransformation,
   Ref,
-  ServiceMap,
   Scope,
   Stream,
 } from "effect";
@@ -61,7 +61,7 @@ export class KeybindingsConfigError extends Schema.TaggedErrorClass<KeybindingsC
   {
     configPath: Schema.String,
     detail: Schema.String,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Unknown),
   },
 ) {
   override get message(): string {
@@ -273,7 +273,7 @@ export interface KeybindingsShape {
 /**
  * Keybindings - Service tag for keybinding configuration operations.
  */
-export class Keybindings extends ServiceMap.Service<Keybindings, KeybindingsShape>()(
+export class Keybindings extends Context.Service<Keybindings, KeybindingsShape>()(
   "tabs/keybindings",
 ) {}
 

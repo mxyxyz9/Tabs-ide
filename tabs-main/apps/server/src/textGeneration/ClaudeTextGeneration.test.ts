@@ -211,7 +211,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             stagedPatch: "diff --git a/README.md b/README.md",
             modelSelection: {
               ...createModelSelection(
-                ProviderInstanceId.makeUnsafe("claudeAgent"),
+                "claudeAgent" as ProviderInstanceId,
                 "claude-haiku-4-5",
                 [
                   { id: "thinking", value: false },
@@ -248,7 +248,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             diffPatch: "diff --git a/README.md b/README.md",
             modelSelection: {
               ...createModelSelection(
-                ProviderInstanceId.makeUnsafe("claudeAgent"),
+                "claudeAgent" as ProviderInstanceId,
                 "claude-opus-4-6",
                 [
                   { id: "effort", value: "max" },
@@ -280,7 +280,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             cwd: process.cwd(),
             message: "Please investigate reconnect failures after restarting the session.",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+              instanceId: "claudeAgent" as ProviderInstanceId,
               model: "claude-sonnet-4-6",
             },
           });
@@ -315,7 +315,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
               cwd: process.cwd(),
               message: "thread title",
               modelSelection: {
-                instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+                instanceId: "claudeAgent" as ProviderInstanceId,
                 model: "claude-sonnet-4-6",
               },
             });
@@ -341,7 +341,7 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             cwd: process.cwd(),
             message: "Name this thread.",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+              instanceId: "claudeAgent" as ProviderInstanceId,
               model: "claude-sonnet-4-6",
             },
           });

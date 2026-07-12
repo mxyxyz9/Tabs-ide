@@ -27,12 +27,12 @@ import {
 } from "./providerMaintenance";
 const isServerProviderUpdateError = Schema.is(ServerProviderUpdateError);
 
-const CODEX_DRIVER = ProviderDriverKind.makeUnsafe("codex");
-const CURSOR_DRIVER = ProviderDriverKind.makeUnsafe("cursor");
-const OPENCODE_DRIVER = ProviderDriverKind.makeUnsafe("opencode");
-const CODEX_INSTANCE_ID = ProviderInstanceId.makeUnsafe("codex");
-const CURSOR_INSTANCE_ID = ProviderInstanceId.makeUnsafe("cursor");
-const OPENCODE_INSTANCE_ID = ProviderInstanceId.makeUnsafe("opencode");
+const CODEX_DRIVER = "codex" as ProviderDriverKind;
+const CURSOR_DRIVER = "cursor" as ProviderDriverKind;
+const OPENCODE_DRIVER = "opencode" as ProviderDriverKind;
+const CODEX_INSTANCE_ID = "codex" as ProviderInstanceId;
+const CURSOR_INSTANCE_ID = "cursor" as ProviderInstanceId;
+const OPENCODE_INSTANCE_ID = "opencode" as ProviderInstanceId;
 const encoder = new TextEncoder();
 
 afterEach(() => {
@@ -111,6 +111,7 @@ function mockHandle(result: {
     exitCode: result.exitCode ?? Effect.succeed(ChildProcessSpawner.ExitCode(result.code ?? 0)),
     isRunning: Effect.succeed(false),
     kill: () => Effect.void,
+    unref: Effect.succeed(Effect.void),
     stdin: Sink.drain,
     stdout: Stream.make(encoder.encode(result.stdout ?? "")),
     stderr: Stream.make(encoder.encode(result.stderr ?? "")),
@@ -379,8 +380,8 @@ describe("providerMaintenanceRunner", () => {
   it.effect("updates a single provider instance without touching sibling instances", () => {
     const calls: Array<{ command: string; args: ReadonlyArray<string> }> = [];
     return Effect.gen(function* () {
-      const personalInstanceId = ProviderInstanceId.makeUnsafe("codex_personal");
-      const workInstanceId = ProviderInstanceId.makeUnsafe("codex_work");
+      const personalInstanceId = "codex_personal" as ProviderInstanceId;
+      const workInstanceId = "codex_work" as ProviderInstanceId;
       const refreshedInstanceIds: Array<ProviderInstanceId> = [];
       const { registry } = yield* makeRegistry([
         {

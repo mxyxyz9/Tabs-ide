@@ -982,8 +982,7 @@ describe("summarizeGitResult", () => {
         subject: "feat: add optimistic UI for git action button",
       },
       push: { status: "skipped_not_requested" },
-      pr: { status: "skipped_not_requested" },
-    });
+    } as any);
 
     assert.deepEqual(result, {
       title: "Committed 0123456",
@@ -1006,7 +1005,7 @@ describe("summarizeGitResult", () => {
         upstreamBranch: "origin/foo",
       },
       pr: { status: "skipped_not_requested" },
-    });
+    } as any);
 
     assert.deepEqual(result, {
       title: "Pushed abcdef0 to origin/foo",
@@ -1032,7 +1031,7 @@ describe("summarizeGitResult", () => {
         number: 42,
         title: "feat: ship github shortcuts and improve PR CTA in success toast",
       },
-    });
+    } as any);
 
     assert.deepEqual(result, {
       title: "Created PR #42",
@@ -1056,7 +1055,7 @@ describe("summarizeGitResult", () => {
         title:
           "feat: this title is intentionally extremely long so we can validate that toast descriptions are truncated with an ellipsis suffix",
       },
-    });
+    } as any);
 
     assert.deepEqual(result, {
       title: "Created PR #99",

@@ -78,7 +78,7 @@ import { resolveCursorAcpBaseModelId } from "./CursorProvider";
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("cursor");
+const PROVIDER = "cursor" as ProviderDriverKind;
 const CURSOR_RESUME_VERSION = 1 as const;
 const ACP_PLAN_MODE_ALIASES = ["plan", "architect"];
 const ACP_IMPLEMENT_MODE_ALIASES = ["code", "agent", "default", "chat", "implement"];
@@ -310,7 +310,7 @@ export function makeCursorAdapter(
   options?: CursorAdapterLiveOptions,
 ) {
   return Effect.gen(function* () {
-    const boundInstanceId = options?.instanceId ?? ProviderInstanceId.makeUnsafe("cursor");
+    const boundInstanceId = options?.instanceId ?? "cursor" as ProviderInstanceId;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -342,7 +342,7 @@ export function makeCursorAdapter(
           }),
       ),
     );
-    const nextEventId = Effect.map(randomUUIDv4, (id) => EventId.makeUnsafe(id));
+    const nextEventId = Effect.map(randomUUIDv4, (id) => id as EventId);
     const makeEventStamp = () => Effect.all({ eventId: nextEventId, createdAt: nowIso });
     const mapExtensionFailure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       effect.pipe(
@@ -555,8 +555,8 @@ export function makeCursorAdapter(
                     params,
                     "acp.cursor.extension",
                   );
-                  const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-                  const runtimeRequestId = RuntimeRequestId.makeUnsafe(requestId);
+                  const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+                  const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                   const answers = yield* Deferred.make<ProviderUserInputAnswers>();
                   pendingUserInputs.set(requestId, { answers });
                   yield* offerRuntimeEvent({
@@ -659,8 +659,8 @@ export function makeCursorAdapter(
                     }
                   }
                   const permissionRequest = parsePermissionRequest(params);
-                  const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-                  const runtimeRequestId = RuntimeRequestId.makeUnsafe(requestId);
+                  const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+                  const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                   const decision = yield* Deferred.make<ProviderApprovalDecision>();
                   pendingApprovals.set(requestId, {
                     decision,
@@ -881,7 +881,7 @@ export function makeCursorAdapter(
     const sendTurn: CursorAdapterShape["sendTurn"] = (input) =>
       Effect.gen(function* () {
         const ctx = yield* requireSession(input.threadId);
-        const turnId = TurnId.makeUnsafe(yield* randomUUIDv4);
+        const turnId = (yield* randomUUIDv4) as TurnId;
         const turnModelSelection =
           input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
         const model = turnModelSelection?.model ?? ctx.session.model;

@@ -1,8 +1,14 @@
+import * as Context from "effect/Context";
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
 
 import { Effect, FileSystem, Layer, Path } from "effect";
-import { GitActionProgressEvent, GitActionProgressPhase, ModelSelection } from "@tabs/contracts";
+import {
+  GitActionProgressEvent,
+  GitActionProgressPhase,
+  type GitStackedAction,
+  ModelSelection,
+} from "@tabs/contracts";
 import {
   resolveAutoFeatureBranchName,
   sanitizeBranchFragment,
@@ -63,6 +69,12 @@ interface BranchHeadContext {
   headRepositoryNameWithOwner: string | null;
   headRepositoryOwnerLogin: string | null;
   isCrossRepository: boolean;
+}
+
+function isCommitAction(
+  action: GitStackedAction,
+): action is "commit" | "commit_push" | "commit_push_pr" {
+  return action === "commit" || action === "commit_push" || action === "commit_push_pr";
 }
 
 function parseRepositoryNameFromPullRequestUrl(url: string): string | null {
@@ -362,7 +374,7 @@ export const makeGitManager = Effect.gen(function* () {
   const serverSettingsService = yield* ServerSettingsService;
 
   const createProgressEmitter = (
-    input: { cwd: string; action: "commit" | "commit_push" | "commit_push_pr" },
+    input: { cwd: string; action: GitStackedAction },
     options?: GitRunStackedActionOptions,
   ) => {
     const actionId = options?.actionId ?? randomUUID();
@@ -1148,24 +1160,43 @@ export const makeGitManager = Effect.gen(function* () {
   const runStackedAction: GitManagerShape["runStackedAction"] = Effect.fnUntraced(
     function* (input, options) {
       const progress = createProgressEmitter(input, options);
-      const phases: GitActionProgressPhase[] = [
-        ...(input.featureBranch ? (["branch"] as const) : []),
-        "commit",
-        ...(input.action !== "commit" ? (["push"] as const) : []),
-        ...(input.action === "commit_push_pr" ? (["pr"] as const) : []),
-      ];
       let currentPhase: GitActionProgressPhase | null = null;
 
       const runAction = Effect.gen(function* () {
+        const initialStatus = yield* gitCore.statusDetails(input.cwd);
+        const wantsCommit = isCommitAction(input.action);
+        const wantsPush =
+          input.action === "push" ||
+          input.action === "commit_push" ||
+          input.action === "commit_push_pr" ||
+          (input.action === "create_pr" &&
+            (!initialStatus.hasUpstream || initialStatus.aheadCount > 0));
+        const wantsPr = input.action === "create_pr" || input.action === "commit_push_pr";
+        const phases: GitActionProgressPhase[] = [
+          ...(input.featureBranch ? (["branch"] as const) : []),
+          ...(wantsCommit ? (["commit"] as const) : []),
+          ...(wantsPush ? (["push"] as const) : []),
+          ...(wantsPr ? (["pr"] as const) : []),
+        ];
+
         yield* progress.emit({
           kind: "action_started",
           phases,
         });
 
-        const wantsPush = input.action !== "commit";
-        const wantsPr = input.action === "commit_push_pr";
+        if (input.featureBranch && !wantsCommit) {
+          return yield* gitManagerError(
+            "runStackedAction",
+            "Feature-branch checkout is only supported for commit actions.",
+          );
+        }
+        if (input.action === "create_pr" && initialStatus.hasWorkingTreeChanges) {
+          return yield* gitManagerError(
+            "runStackedAction",
+            "Commit local changes before creating a PR.",
+          );
+        }
 
-        const initialStatus = yield* gitCore.statusDetails(input.cwd);
         if (!input.featureBranch && wantsPush && !initialStatus.branch) {
           return yield* gitManagerError("runStackedAction", "Cannot push from detached HEAD.");
         }
@@ -1211,17 +1242,19 @@ export const makeGitManager = Effect.gen(function* () {
         const currentBranch = branchStep.name ?? initialStatus.branch;
 
         currentPhase = "commit";
-        const commit = yield* runCommitStep(
-          modelSelection,
-          input.cwd,
-          input.action,
-          currentBranch,
-          commitMessageForStep,
-          preResolvedCommitSuggestion,
-          input.filePaths,
-          options?.progressReporter,
-          progress.actionId,
-        );
+        const commit = wantsCommit
+          ? yield* runCommitStep(
+              modelSelection,
+              input.cwd,
+              input.action,
+              currentBranch,
+              commitMessageForStep,
+              preResolvedCommitSuggestion,
+              input.filePaths,
+              options?.progressReporter,
+              progress.actionId,
+            )
+          : { status: "skipped_not_requested" as const };
 
         const push = wantsPush
           ? yield* progress
@@ -1257,12 +1290,41 @@ export const makeGitManager = Effect.gen(function* () {
               )
           : { status: "skipped_not_requested" as const };
 
+        let toastTitle = "Git action finished";
+        let toastDescription: string | undefined = undefined;
+        let cta: any = { kind: "none" };
+
+        if (pr.status === "created" || pr.status === "opened_existing") {
+          const prNumber = pr.number ? ` #${pr.number}` : "";
+          toastTitle = `${pr.status === "created" ? "Created PR" : "Opened PR"}${prNumber}`;
+          toastDescription = pr.title;
+          if (pr.url) {
+            cta = { kind: "open_pr", label: "Open PR", url: pr.url };
+          }
+        } else if (push.status === "pushed") {
+          const shortSha = commit.status === "created" ? commit.commitSha.substring(0, 7) : "";
+          const branch = push.upstreamBranch ?? push.branch;
+          const pushedCommitPart = shortSha ? ` ${shortSha}` : "";
+          const branchPart = branch ? ` to ${branch}` : "";
+          toastTitle = `Pushed${pushedCommitPart}${branchPart}`;
+          toastDescription = commit.status === "created" ? commit.subject : undefined;
+        } else if (commit.status === "created") {
+          const shortSha = commit.commitSha ? commit.commitSha.substring(0, 7) : "";
+          toastTitle = shortSha ? `Committed ${shortSha}` : "Committed changes";
+          toastDescription = commit.subject;
+        }
+
         const result = {
           action: input.action,
           branch: branchStep,
           commit,
           push,
           pr,
+          toast: {
+            title: toastTitle,
+            ...(toastDescription ? { description: toastDescription } : {}),
+            cta,
+          },
         };
         yield* progress.emit({
           kind: "action_finished",

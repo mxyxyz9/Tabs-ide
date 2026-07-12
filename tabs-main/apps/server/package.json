@@ -1,6 +1,6 @@
 {
   "name": "tabs",
-  "version": "1.2.51",
+  "version": "1.2.52",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,6 +16,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/index.ts",
+    "dev:bundle": "tsdown --watch",
     "build": "bun scripts/cli.ts build",
     "start": "node dist/index.mjs",
     "prepare": "effect-language-service patch || true",

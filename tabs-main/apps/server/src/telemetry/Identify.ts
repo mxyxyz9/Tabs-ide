@@ -15,7 +15,7 @@ const ClaudeJsonSchema = Schema.Struct({
 
 class IdentifyUserError extends Schema.TaggedErrorClass<IdentifyUserError>()("IdentifyUserError", {
   message: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {}
 
 const hash = (value: string) =>
@@ -61,7 +61,7 @@ const upsertAnonymousId = Effect.gen(function* () {
   const anonymousId = yield* fileSystem.readFileString(anonymousIdPath).pipe(
     Effect.catch(() =>
       Effect.gen(function* () {
-        const randomId = yield* Random.nextUUIDv4;
+        const randomId = Crypto.randomUUID();
         yield* fileSystem.writeFileString(anonymousIdPath, randomId);
         return randomId;
       }),

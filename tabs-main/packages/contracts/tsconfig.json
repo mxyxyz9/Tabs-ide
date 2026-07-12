@@ -4,7 +4,9 @@
     "plugins": [
       {
         "name": "@effect/language-service",
-        "namespaceImportPackages": ["@effect/platform-node"],
+        "namespaceImportPackages": [
+          "@effect/platform-node"
+        ],
         "diagnosticSeverity": {
           "importFromBarrel": "error",
           "anyUnknownInErrorContext": "warning",
@@ -12,7 +14,11 @@
           "deterministicKeys": "warning"
         }
       }
-    ]
+    ],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

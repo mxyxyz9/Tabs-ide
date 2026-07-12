@@ -4,9 +4,7 @@ import { CheckpointRef, ProjectId, type ThreadId } from "@tabs/contracts";
 export const CHECKPOINT_REFS_PREFIX = "refs/tabs/checkpoints";
 
 export function checkpointRefForThreadTurn(threadId: ThreadId, turnCount: number): CheckpointRef {
-  return CheckpointRef.makeUnsafe(
-    `${CHECKPOINT_REFS_PREFIX}/${Encoding.encodeBase64Url(threadId)}/turn/${turnCount}`,
-  );
+  return `${CHECKPOINT_REFS_PREFIX}/${Encoding.encodeBase64Url(threadId)}/turn/${turnCount}` as CheckpointRef;
 }
 
 export function resolveThreadWorkspaceCwd(input: {

@@ -1,4 +1,4 @@
-import { ServiceMap } from "effect";
+import * as Context from "effect/Context";
 import type { Effect } from "effect";
 import type { ProcessRunResult } from "../../processRunner";
 import type { AzureDevOpsCliError } from "../Errors.ts";
@@ -15,6 +15,6 @@ export interface AzureDevOpsCliShape {
   }) => Effect.Effect<string, AzureDevOpsCliError>;
 }
 
-export class AzureDevOpsCli extends ServiceMap.Service<AzureDevOpsCli, AzureDevOpsCliShape>()(
+export class AzureDevOpsCli extends Context.Service<AzureDevOpsCli, AzureDevOpsCliShape>()(
   "tabs/git/Services/AzureDevOpsCli",
 ) {}

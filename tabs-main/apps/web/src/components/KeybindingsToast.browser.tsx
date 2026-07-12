@@ -23,7 +23,8 @@ import { useComposerDraftStore } from "../composerDraftStore";
 import { makeAppModelSelection } from "../modelSelection";
 import { makeTestServerProvider } from "../test/serverProviderFixture";
 import { getRouter } from "../router";
-import { useStore } from "../store";
+import { appAtomRegistry } from "../state/atomRegistry";
+import { readModelStateAtom } from "../state/readModel";
 
 const THREAD_ID = "thread-kb-toast-test" as ThreadId;
 const PROJECT_ID = "project-1" as ProjectId;
@@ -41,7 +42,7 @@ let pushSequence = 1;
 
 const wsLink = ws.link(/ws(s)?:\/\/.*/);
 
-function createBaseServerConfig(): ServerConfig {
+function createBaseServerConfig(): any {
   return {
     cwd: "/repo/project",
     keybindingsConfigPath: "/repo/project/.tabs-keybindings.json",
@@ -305,7 +306,7 @@ describe("Keybindings update toast", () => {
       draftThreadsByThreadId: {},
       projectDraftThreadIdByProjectId: {},
     });
-    useStore.setState({
+    appAtomRegistry.set(readModelStateAtom, {
       projects: [],
       threads: [],
       threadsHydrated: false,

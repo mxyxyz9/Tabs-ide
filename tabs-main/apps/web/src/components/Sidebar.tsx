@@ -38,6 +38,7 @@ import {
 } from "@tabs/contracts";
 import { makeAppModelSelection } from "../modelSelection";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAtomValue } from "@effect/atom-react";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
   type SidebarProjectSortOrder,
@@ -58,15 +59,22 @@ import {
 // space on the left.
 const isWindowsDesktop =
   isElectron && typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform);
-import { useStore } from "../store";
+import {
+  markThreadUnreadInAtoms,
+  readModelStateAtom,
+  reorderProjectsInAtoms,
+  toggleProjectInAtoms,
+} from "../state/readModel";
+import { useKeybindings } from "../state/settings";
 import { shortcutLabelForCommand } from "../keybindings";
 import { derivePendingApprovals, derivePendingUserInputs } from "../session-logic";
 import { gitRemoveWorktreeMutationOptions, gitStatusQueryOptions } from "../lib/gitReactQuery";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
-import { useComposerDraftStore } from "../composerDraftStore";
+import { composerDraftActions } from "../state/composerDrafts";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
+import { selectThreadTerminalState } from "../state/terminalTransitions";
+import { terminalStateAtom, terminalActions } from "../state/terminal";
 import { toastManager } from "./ui/toast";
 import {
   getArm64IntelBuildWarningDescription,
@@ -99,7 +107,7 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from "./ui/sidebar";
-import { useThreadSelectionStore } from "../threadSelectionStore";
+import { threadSelectionActions, useThreadSelection } from "../state/threadSelection";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
 import {
@@ -370,23 +378,20 @@ function SortableProjectItem({
 }
 
 export default function Sidebar() {
-  const projects = useStore((store) => store.projects);
-  const threads = useStore((store) => store.threads);
-  const markThreadUnread = useStore((store) => store.markThreadUnread);
-  const toggleProject = useStore((store) => store.toggleProject);
-  const reorderProjects = useStore((store) => store.reorderProjects);
-  const clearComposerDraftForThread = useComposerDraftStore((store) => store.clearDraftThread);
-  const getDraftThreadByProjectId = useComposerDraftStore(
-    (store) => store.getDraftThreadByProjectId,
+  const projects = useAtomValue(readModelStateAtom, (state) => state.projects);
+  const threads = useAtomValue(readModelStateAtom, (state) => state.threads);
+  const markThreadUnread = markThreadUnreadInAtoms;
+  const toggleProject = toggleProjectInAtoms;
+  const reorderProjects = reorderProjectsInAtoms;
+  const clearComposerDraftForThread = composerDraftActions.clearDraftThread;
+  const getDraftThreadByProjectId = composerDraftActions.getDraftThreadByProjectId;
+  const terminalStateByThreadId = useAtomValue(
+    terminalStateAtom,
+    (state) => state.terminalStateByThreadId,
   );
-  const terminalStateByThreadId = useTerminalStateStore((state) => state.terminalStateByThreadId);
-  const clearTerminalState = useTerminalStateStore((state) => state.clearTerminalState);
-  const clearProjectDraftThreadId = useComposerDraftStore(
-    (store) => store.clearProjectDraftThreadId,
-  );
-  const clearProjectDraftThreadById = useComposerDraftStore(
-    (store) => store.clearProjectDraftThreadById,
-  );
+  const clearTerminalState = terminalActions.clear;
+  const clearProjectDraftThreadId = composerDraftActions.clearProjectDraftThreadId;
+  const clearProjectDraftThreadById = composerDraftActions.clearProjectDraftThreadById;
   const navigate = useNavigate();
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
   const appSettings = useSettings();
@@ -396,10 +401,7 @@ export default function Sidebar() {
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
-  const { data: keybindings = EMPTY_KEYBINDINGS } = useQuery({
-    ...serverConfigQueryOptions(),
-    select: (config) => config.keybindings,
-  });
+  const keybindings = useKeybindings() ?? EMPTY_KEYBINDINGS;
   const queryClient = useQueryClient();
   const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const [addingProject, setAddingProject] = useState(false);
@@ -418,12 +420,12 @@ export default function Sidebar() {
   const dragInProgressRef = useRef(false);
   const suppressProjectClickAfterDragRef = useRef(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
-  const selectedThreadIds = useThreadSelectionStore((s) => s.selectedThreadIds);
-  const toggleThreadSelection = useThreadSelectionStore((s) => s.toggleThread);
-  const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
-  const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
-  const removeFromSelection = useThreadSelectionStore((s) => s.removeFromSelection);
-  const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
+  const { selectedThreadIds } = useThreadSelection();
+  const toggleThreadSelection = threadSelectionActions.toggle;
+  const rangeSelectTo = threadSelectionActions.rangeSelectTo;
+  const clearSelection = threadSelectionActions.clear;
+  const removeFromSelection = threadSelectionActions.remove;
+  const setSelectionAnchor = threadSelectionActions.setAnchor;
   const isLinuxDesktop = isElectron && isLinuxPlatform(navigator.platform);
   const shouldBrowseForProjectImmediately = isElectron && !isLinuxDesktop;
   const shouldShowProjectPathEntry = addingProject && !shouldBrowseForProjectImmediately;

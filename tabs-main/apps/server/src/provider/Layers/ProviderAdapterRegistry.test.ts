@@ -22,10 +22,10 @@ import type { TextGenerationShape } from "../../textGeneration/TextGeneration";
 import { ProviderAdapterRegistryLive } from "./ProviderAdapterRegistry";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
-const CODEX_DRIVER = ProviderDriverKind.makeUnsafe("codex");
-const CLAUDE_AGENT_DRIVER = ProviderDriverKind.makeUnsafe("claudeAgent");
-const OPENCODE_DRIVER = ProviderDriverKind.makeUnsafe("opencode");
-const CURSOR_DRIVER = ProviderDriverKind.makeUnsafe("cursor");
+const CODEX_DRIVER = "codex" as ProviderDriverKind;
+const CLAUDE_AGENT_DRIVER = "claudeAgent" as ProviderDriverKind;
+const OPENCODE_DRIVER = "opencode" as ProviderDriverKind;
+const CURSOR_DRIVER = "cursor" as ProviderDriverKind;
 
 const fakeCodexAdapter: CodexAdapterShape = {
   provider: CODEX_DRIVER,
@@ -104,7 +104,7 @@ const makeFakeInstance = (
   driverKindString: "codex" | "claudeAgent" | "cursor" | "opencode",
   adapter: ProviderInstance["adapter"],
 ): ProviderInstance => {
-  const driverKind = ProviderDriverKind.makeUnsafe(driverKindString);
+  const driverKind = driverKindString as ProviderDriverKind;
   return {
     instanceId: defaultInstanceIdForDriver(driverKind),
     driverKind,

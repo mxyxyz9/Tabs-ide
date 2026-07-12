@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as Option from "effect/Option";
 import { Badge } from "~/components/ui/badge";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
@@ -125,14 +126,25 @@ export function SourceControlSettingsPanel({
     );
   }
 
-  const vcs = data?.vcs ?? [];
-  const providers = data?.providers ?? [];
+  const vcs = (data?.versionControlSystems ?? []).map((item) => ({
+    system: item.kind === "jj" ? "jujutsu" : item.kind,
+    available: item.status === "available",
+    version: Option.getOrNull(item.version),
+  }));
+  const providers = (data?.sourceControlProviders ?? []).map((item) => ({
+    provider: item.kind,
+    cliAvailable: item.status === "available",
+    authenticated: item.auth.status === "authenticated",
+    authenticatedAs: Option.getOrNull(item.auth.account),
+    version: Option.getOrNull(item.version),
+    installInstructions: item.installHint,
+  }));
 
   return (
     <div className="space-y-6">
       <SettingsSection title="Version Control" headerAction={scanButton}>
         {vcs.map((item) => {
-          const Icon = VCS_ICONS[item.system];
+          const Icon = VCS_ICONS[item.system as keyof typeof VCS_ICONS];
           const dotClassName = itemStatusDot(item);
           const hasDetails = item.system === "jujutsu";
           const isExpanded = item.system === "jujutsu" && isJjExpanded;
@@ -232,7 +244,9 @@ export function SourceControlSettingsPanel({
 
       <SettingsSection title="Source Control Providers">
         {providers.map((item) => {
-          const Icon = SOURCE_CONTROL_PROVIDER_ICONS[item.provider];
+          const Icon = item.provider in SOURCE_CONTROL_PROVIDER_ICONS
+            ? SOURCE_CONTROL_PROVIDER_ICONS[item.provider as keyof typeof SOURCE_CONTROL_PROVIDER_ICONS]
+            : null;
           const dotClassName = itemStatusDot(item);
 
           return (

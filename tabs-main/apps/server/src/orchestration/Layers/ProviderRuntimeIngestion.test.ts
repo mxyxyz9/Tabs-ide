@@ -47,12 +47,12 @@ function makeTestServerSettingsLayer(overrides: Partial<ServerSettings> = {}) {
   return ServerSettingsService.layerTest(overrides);
 }
 
-const asProjectId = (value: string): ProjectId => ProjectId.makeUnsafe(value);
-const asItemId = (value: string): ProviderItemId => ProviderItemId.makeUnsafe(value);
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asMessageId = (value: string): MessageId => MessageId.makeUnsafe(value);
-const asThreadId = (value: string): ThreadId => ThreadId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
+const asProjectId = (value: string): ProjectId => value as ProjectId;
+const asItemId = (value: string): ProviderItemId => value as ProviderItemId;
+const asEventId = (value: string): EventId => value as EventId;
+const asMessageId = (value: string): MessageId => value as MessageId;
+const asThreadId = (value: string): ThreadId => value as ThreadId;
+const asTurnId = (value: string): TurnId => value as TurnId;
 
 type LegacyProviderRuntimeEvent = {
   readonly type: string;
@@ -192,12 +192,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-provider-project-create"),
+        commandId: "cmd-provider-project-create" as CommandId,
         projectId: asProjectId("project-1"),
         title: "Provider Project",
         workspaceRoot,
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -206,12 +206,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-create"),
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        commandId: "cmd-thread-create" as CommandId,
+        threadId: "thread-1" as ThreadId,
         projectId: asProjectId("project-1"),
         title: "Thread",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -224,10 +224,10 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-seed"),
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        commandId: "cmd-session-seed" as CommandId,
+        threadId: "thread-1" as ThreadId,
         session: {
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
           status: "ready",
           providerName: "codex",
           runtimeMode: "approval-required",
@@ -239,10 +239,10 @@ describe("ProviderRuntimeIngestion", () => {
       }),
     );
     provider.setSession({
-      provider: ProviderDriverKind.makeUnsafe("codex"),
+      provider: "codex" as ProviderDriverKind,
       status: "ready",
       runtimeMode: "approval-required",
-      threadId: ThreadId.makeUnsafe("thread-1"),
+      threadId: "thread-1" as ThreadId,
       createdAt,
       updatedAt: createdAt,
     });
@@ -423,7 +423,7 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
     const midThread = midReadModel.threads.find(
-      (entry) => entry.id === ThreadId.makeUnsafe("thread-1"),
+      (entry) => entry.id === "thread-1" as ThreadId,
     );
     expect(midThread?.session?.status).toBe("running");
     expect(midThread?.session?.activeTurnId).toBe("turn-midturn-lifecycle");
@@ -451,10 +451,10 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-seed-claude-placeholder"),
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        commandId: "cmd-session-seed-claude-placeholder" as CommandId,
+        threadId: "thread-1" as ThreadId,
         session: {
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
           status: "ready",
           providerName: "claudeAgent",
           runtimeMode: "approval-required",
@@ -530,7 +530,7 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
     const midThread = midReadModel.threads.find(
-      (entry) => entry.id === ThreadId.makeUnsafe("thread-1"),
+      (entry) => entry.id === "thread-1" as ThreadId,
     );
     expect(midThread?.session?.status).toBe("running");
     expect(midThread?.session?.activeTurnId).toBe("turn-primary");
@@ -584,7 +584,7 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
     const midThread = midReadModel.threads.find(
-      (entry) => entry.id === ThreadId.makeUnsafe("thread-1"),
+      (entry) => entry.id === "thread-1" as ThreadId,
     );
     expect(midThread?.session?.status).toBe("running");
     expect(midThread?.session?.activeTurnId).toBe("turn-guarded-main");
@@ -735,12 +735,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-create-plan-source"),
+        commandId: "cmd-thread-create-plan-source" as CommandId,
         threadId: sourceThreadId,
         projectId: asProjectId("project-1"),
         title: "Plan Source",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: "plan",
@@ -753,7 +753,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-set-plan-source"),
+        commandId: "cmd-session-set-plan-source" as CommandId,
         threadId: sourceThreadId,
         session: {
           threadId: sourceThreadId,
@@ -770,12 +770,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-create-plan-target"),
+        commandId: "cmd-thread-create-plan-target" as CommandId,
         threadId: targetThreadId,
         projectId: asProjectId("project-1"),
         title: "Plan Target",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -788,7 +788,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-set-plan-target"),
+        commandId: "cmd-session-set-plan-target" as CommandId,
         threadId: targetThreadId,
         session: {
           threadId: targetThreadId,
@@ -803,7 +803,7 @@ describe("ProviderRuntimeIngestion", () => {
       }),
     );
     harness.setProviderSession({
-      provider: ProviderDriverKind.makeUnsafe("codex"),
+      provider: "codex" as ProviderDriverKind,
       status: "ready",
       runtimeMode: "approval-required",
       threadId: targetThreadId,
@@ -847,7 +847,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.makeUnsafe("cmd-turn-start-plan-target"),
+        commandId: "cmd-turn-start-plan-target" as CommandId,
         threadId: targetThreadId,
         message: {
           messageId: asMessageId("msg-plan-target"),
@@ -922,12 +922,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-create-plan-source-guarded"),
+        commandId: "cmd-thread-create-plan-source-guarded" as CommandId,
         threadId: sourceThreadId,
         projectId: asProjectId("project-1"),
         title: "Plan Source",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: "plan",
@@ -940,7 +940,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-set-plan-source-guarded"),
+        commandId: "cmd-session-set-plan-source-guarded" as CommandId,
         threadId: sourceThreadId,
         session: {
           threadId: sourceThreadId,
@@ -955,7 +955,7 @@ describe("ProviderRuntimeIngestion", () => {
       }),
     );
     harness.setProviderSession({
-      provider: ProviderDriverKind.makeUnsafe("codex"),
+      provider: "codex" as ProviderDriverKind,
       status: "running",
       runtimeMode: "approval-required",
       threadId: targetThreadId,
@@ -1016,7 +1016,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.makeUnsafe("cmd-turn-start-plan-target-guarded"),
+        commandId: "cmd-turn-start-plan-target-guarded" as CommandId,
         threadId: targetThreadId,
         message: {
           messageId: asMessageId("msg-plan-target-guarded"),
@@ -1075,12 +1075,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-create-plan-source-unrelated"),
+        commandId: "cmd-thread-create-plan-source-unrelated" as CommandId,
         threadId: sourceThreadId,
         projectId: asProjectId("project-1"),
         title: "Plan Source",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: "plan",
@@ -1093,7 +1093,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-set-plan-source-unrelated"),
+        commandId: "cmd-session-set-plan-source-unrelated" as CommandId,
         threadId: sourceThreadId,
         session: {
           threadId: sourceThreadId,
@@ -1110,12 +1110,12 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-create-plan-target-unrelated"),
+        commandId: "cmd-thread-create-plan-target-unrelated" as CommandId,
         threadId: targetThreadId,
         projectId: asProjectId("project-1"),
         title: "Plan Target",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -1128,7 +1128,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.session.set",
-        commandId: CommandId.makeUnsafe("cmd-session-set-plan-target-unrelated"),
+        commandId: "cmd-session-set-plan-target-unrelated" as CommandId,
         threadId: targetThreadId,
         session: {
           threadId: targetThreadId,
@@ -1178,7 +1178,7 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.makeUnsafe("cmd-turn-start-plan-target-unrelated"),
+        commandId: "cmd-turn-start-plan-target-unrelated" as CommandId,
         threadId: targetThreadId,
         message: {
           messageId: asMessageId("msg-plan-target-unrelated"),
@@ -1197,7 +1197,7 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.setProviderSession({
-      provider: ProviderDriverKind.makeUnsafe("codex"),
+      provider: "codex" as ProviderDriverKind,
       status: "running",
       runtimeMode: "approval-required",
       threadId: targetThreadId,
@@ -1330,7 +1330,7 @@ describe("ProviderRuntimeIngestion", () => {
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
     const midThread = midReadModel.threads.find(
-      (entry) => entry.id === ThreadId.makeUnsafe("thread-1"),
+      (entry) => entry.id === "thread-1" as ThreadId,
     );
     expect(
       midThread?.messages.some(
@@ -1372,8 +1372,8 @@ describe("ProviderRuntimeIngestion", () => {
     await Effect.runPromise(
       harness.engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.makeUnsafe("cmd-turn-start-streaming-mode"),
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        commandId: "cmd-turn-start-streaming-mode" as CommandId,
+        threadId: "thread-1" as ThreadId,
         message: {
           messageId: asMessageId("message-streaming-mode"),
           role: "user",
@@ -1614,7 +1614,7 @@ describe("ProviderRuntimeIngestion", () => {
       provider: "codex",
       createdAt: now,
       threadId: asThreadId("thread-1"),
-      requestId: ApprovalRequestId.makeUnsafe("req-open"),
+      requestId: "req-open" as ApprovalRequestId,
       payload: {
         requestType: "command_execution_approval",
         detail: "pwd",
@@ -1627,7 +1627,7 @@ describe("ProviderRuntimeIngestion", () => {
       provider: "codex",
       createdAt: now,
       threadId: asThreadId("thread-1"),
-      requestId: ApprovalRequestId.makeUnsafe("req-open"),
+      requestId: "req-open" as ApprovalRequestId,
       payload: {
         requestType: "command_execution_approval",
         decision: "accept",
@@ -1646,7 +1646,7 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === ThreadId.makeUnsafe("thread-1"));
+    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
     expect(thread).toBeDefined();
 
     const requested = thread?.activities.find(
@@ -2458,7 +2458,7 @@ describe("ProviderRuntimeIngestion", () => {
       createdAt: now,
       threadId: asThreadId("thread-1"),
       turnId: asTurnId("turn-user-input"),
-      requestId: ApprovalRequestId.makeUnsafe("req-user-input-1"),
+      requestId: "req-user-input-1" as ApprovalRequestId,
       payload: {
         questions: [
           {
@@ -2483,7 +2483,7 @@ describe("ProviderRuntimeIngestion", () => {
       createdAt: new Date().toISOString(),
       threadId: asThreadId("thread-1"),
       turnId: asTurnId("turn-user-input"),
-      requestId: ApprovalRequestId.makeUnsafe("req-user-input-1"),
+      requestId: "req-user-input-1" as ApprovalRequestId,
       payload: {
         answers: {
           sandbox_mode: "workspace-write",

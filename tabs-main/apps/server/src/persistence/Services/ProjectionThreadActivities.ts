@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionThreadActivityRepository - Projection repository interface for thread activity.
  *
@@ -14,7 +15,7 @@ import {
   ThreadId,
   TurnId,
 } from "@tabs/contracts";
-import { Schema, ServiceMap } from "effect";
+import { Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -77,7 +78,7 @@ export interface ProjectionThreadActivityRepositoryShape {
 /**
  * ProjectionThreadActivityRepository - Service tag for thread activity persistence.
  */
-export class ProjectionThreadActivityRepository extends ServiceMap.Service<
+export class ProjectionThreadActivityRepository extends Context.Service<
   ProjectionThreadActivityRepository,
   ProjectionThreadActivityRepositoryShape
 >()("tabs/persistence/Services/ProjectionThreadActivities/ProjectionThreadActivityRepository") {}

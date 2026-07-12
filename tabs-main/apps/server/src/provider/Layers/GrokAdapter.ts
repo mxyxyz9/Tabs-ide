@@ -68,7 +68,7 @@ import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogg
 
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("grok");
+const PROVIDER = "grok" as ProviderDriverKind;
 const GROK_RESUME_VERSION = 1 as const;
 
 function encodeJsonStringForDiagnostics(input: unknown): string | undefined {
@@ -167,7 +167,7 @@ function selectAutoApprovedPermissionOption(
 
 export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapterLiveOptions) {
   return Effect.gen(function* () {
-    const boundInstanceId = options?.instanceId ?? ProviderInstanceId.makeUnsafe("grok");
+    const boundInstanceId = options?.instanceId ?? "grok" as ProviderInstanceId;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -197,7 +197,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           }),
       ),
     );
-    const nextEventId = Effect.map(randomUUIDv4, (id) => EventId.makeUnsafe(id));
+    const nextEventId = Effect.map(randomUUIDv4, (id) => id as EventId);
     const makeEventStamp = () => Effect.all({ eventId: nextEventId, createdAt: nowIso });
     const mapAcpCallbackFailure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
       effect.pipe(
@@ -397,8 +397,8 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                   mapAcpCallbackFailure(
                     Effect.gen(function* () {
                       yield* logNative(input.threadId, method, params);
-                      const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-                      const runtimeRequestId = RuntimeRequestId.makeUnsafe(requestId);
+                      const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+                      const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                       const resolution = yield* Deferred.make<PendingUserInputResolution>();
                       pendingUserInputs.set(requestId, { resolution });
                       yield* offerRuntimeEvent({
@@ -459,8 +459,8 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
                     }
                   }
                   const permissionRequest = parsePermissionRequest(params);
-                  const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-                  const runtimeRequestId = RuntimeRequestId.makeUnsafe(requestId);
+                  const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+                  const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                   const decision = yield* Deferred.make<ProviderApprovalDecision>();
                   pendingApprovals.set(requestId, { decision });
                   yield* offerRuntimeEvent(
@@ -663,7 +663,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
           input.threadId,
           Effect.gen(function* () {
             const ctx = yield* requireSession(input.threadId);
-            const turnId = TurnId.makeUnsafe(yield* randomUUIDv4);
+            const turnId = (yield* randomUUIDv4) as TurnId;
             const turnModelSelection =
               input.modelSelection?.instanceId === boundInstanceId
                 ? input.modelSelection

@@ -4,6 +4,7 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@tabs/contracts";
 import { useQuery } from "@tanstack/react-query";
+import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
@@ -35,8 +36,9 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { useSourceControlDiscovery } from "~/lib/sourceControlReactQuery";
 import { readNativeApi } from "../nativeApi";
-import { useStore } from "../store";
-import { useTerminalStateStore } from "../terminalStateStore";
+import { readModelStateAtom } from "../state/readModel";
+import { useKeybindings } from "../state/settings";
+import { useThreadTerminalState } from "../state/terminal";
 import { newCommandId, newProjectId } from "../lib/utils";
 import { makeAppModelSelection } from "../modelSelection";
 import { resolveShortcutCommand } from "../keybindings";
@@ -79,17 +81,12 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   }, []);
   const clearOpenIntent = useCallback(() => setOpenIntent(null), []);
 
-  const { data: serverConfig } = useQuery(serverConfigQueryOptions());
-  const keybindings = serverConfig?.keybindings ?? [];
+  const keybindings = useKeybindings();
 
   // Track active terminal state from store if route has threadId
   const params = useParams({ strict: false });
   const activeThreadId = (params as any).threadId ?? null;
-  const terminalOpen = useTerminalStateStore((state) => {
-    if (!activeThreadId) return false;
-    const threadState = state.terminalStateByThreadId[activeThreadId];
-    return threadState ? threadState.terminalOpen : false;
-  });
+  const terminalOpen = useThreadTerminalState(activeThreadId)?.terminalOpen ?? false;
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -160,8 +157,8 @@ function OpenCommandPaletteDialog(props: {
   const [query, setQuery] = useState("");
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
 
-  const projects = useStore((state) => state.projects);
-  const threads = useStore((state) => state.threads);
+  const projects = useAtomValue(readModelStateAtom, (state) => state.projects);
+  const threads = useAtomValue(readModelStateAtom, (state) => state.threads);
 
   const { handleNewThread } = useHandleNewThread();
 
@@ -180,10 +177,10 @@ function OpenCommandPaletteDialog(props: {
 
   const getProviderBadge = useCallback((providerKind: string) => {
     if (!sourceControlDiscovery) return null;
-    const provider = sourceControlDiscovery.providers.find((p) => p.provider === providerKind);
+    const provider = sourceControlDiscovery.sourceControlProviders.find((p) => p.kind === providerKind);
     if (!provider) return null;
-    if (provider.cliAvailable && provider.authenticated) return null;
-    if (providerKind === "bitbucket" && provider.authenticated) return null;
+    if (provider.status === "available" && provider.auth.status === "authenticated") return null;
+    if (providerKind === "bitbucket" && provider.auth.status === "authenticated") return null;
 
     return (
       <Badge variant="warning" className="ml-2 py-0 h-4 text-[10px]">
@@ -199,13 +196,9 @@ function OpenCommandPaletteDialog(props: {
 
   const params = useParams({ strict: false });
   const currentThreadId = (params as any).threadId ?? null;
-  const currentThread = useStore((state) =>
-    state.threads.find((t) => t.id === currentThreadId)
-  );
+  const currentThread = threads.find((thread) => thread.id === currentThreadId);
   const currentProjectId = currentThread?.projectId ?? null;
-  const currentProjectCwd = useStore((state) =>
-    state.projects.find((p) => p.id === currentProjectId)?.cwd ?? null
-  );
+  const currentProjectCwd = projects.find((project) => project.id === currentProjectId)?.cwd ?? null;
 
   // Checks if the search query is a local path query
   const isFilesystemBrowseQuery = (val: string): boolean => {
@@ -479,19 +472,9 @@ function OpenCommandPaletteDialog(props: {
     destinationPath: string,
     remoteUrl?: string
   ) => {
-    toastManager.add({
-      type: "info",
-      title: "[DIAG] triggerClone Invoked",
-      description: `args: provider=${provider}, repository=${repository}, destinationPath=${destinationPath}, remoteUrl=${remoteUrl}`,
-    });
-    console.log("[DIAG] triggerClone invoked:", { provider, repository, destinationPath, remoteUrl });
     const api = readNativeApi();
     if (!api) {
-      toastManager.add({
-        type: "error",
-        title: "[DIAG] triggerClone Failed",
-        description: "api (readNativeApi) not found",
-      });
+      setLookupError("Connection to the server is not available.");
       return;
     }
     setIsRemoteProjectCloning(true);
@@ -503,36 +486,17 @@ function OpenCommandPaletteDialog(props: {
         remoteUrl: remoteUrl || (provider === "git-url" ? repository : undefined),
         destinationPath,
       };
-      toastManager.add({
-        type: "info",
-        title: "[DIAG] Calling cloneRepository",
-        description: `input: ${JSON.stringify(input)}`,
-      });
-      console.log("[DIAG] Calling api.server.cloneRepository input:", input);
       const result = await api.server.cloneRepository(input);
-      toastManager.add({
-        type: "success",
-        title: "[DIAG] Received clone result",
-        description: `result: ${JSON.stringify(result)}`,
-      });
-      console.log("[DIAG] Received clone result:", result);
-      setIsRemoteProjectCloning(false);
       if (result && result.cwd) {
         setOpen(false);
         setAddProjectCloneFlow(null);
         await addProjectFromPath(result.cwd);
       }
-    } catch (err: any) {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Clone failed. Please try again.";
+      setLookupError(message);
+    } finally {
       setIsRemoteProjectCloning(false);
-      const errMsg = err?.message || String(err);
-      const errStack = err?.stack || "";
-      toastManager.add({
-        type: "error",
-        title: "[DIAG] cloneRepository Failed",
-        description: `${errMsg}\n${errStack}`,
-      });
-      console.error("[DIAG] api.server.cloneRepository error:", err);
-      setLookupError(errMsg || "Clone failed. Please try again.");
     }
   }, [addProjectFromPath]);
 

@@ -45,7 +45,7 @@ function makeSnapshot(input: {
         projectId: input.projectId,
         title: "Thread",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -53,7 +53,7 @@ function makeSnapshot(input: {
         branch: null,
         worktreePath: input.worktreePath,
         latestTurn: {
-          turnId: TurnId.makeUnsafe("turn-1"),
+          turnId: "turn-1" as TurnId,
           state: "completed",
           requestedAt: "2026-01-01T00:00:00.000Z",
           startedAt: "2026-01-01T00:00:00.000Z",
@@ -69,7 +69,7 @@ function makeSnapshot(input: {
         proposedPlans: [],
         checkpoints: [
           {
-            turnId: TurnId.makeUnsafe("turn-1"),
+            turnId: "turn-1" as TurnId,
             checkpointTurnCount: input.checkpointTurnCount,
             checkpointRef: input.checkpointRef,
             status: "ready",
@@ -86,8 +86,8 @@ function makeSnapshot(input: {
 
 describe("CheckpointDiffQueryLive", () => {
   it("computes diffs using canonical turn-0 checkpoint refs", async () => {
-    const projectId = ProjectId.makeUnsafe("project-1");
-    const threadId = ThreadId.makeUnsafe("thread-1");
+    const projectId = "project-1" as ProjectId;
+    const threadId = "thread-1" as ThreadId;
     const toCheckpointRef = checkpointRefForThreadTurn(threadId, 1);
     const hasCheckpointRefCalls: Array<CheckpointRef> = [];
     const diffCheckpointsCalls: Array<{
@@ -160,7 +160,7 @@ describe("CheckpointDiffQueryLive", () => {
   });
 
   it("fails when the thread is missing from the snapshot", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-missing");
+    const threadId = "thread-missing" as ThreadId;
 
     const checkpointStore: CheckpointStoreShape = {
       isGitRepository: () => Effect.succeed(true),

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -31,8 +31,8 @@ import { makeCursorAdapter } from "./CursorAdapter";
 const decodeCursorSettings = Schema.decodeSync(CursorSettings);
 
 // Test-local service tag so the rest of the file can keep using `yield* CursorAdapter`.
-class CursorAdapter extends ServiceMap.Service<CursorAdapter, CursorAdapterShape>()(
-  "t3/provider/Layers/CursorAdapter.test/CursorAdapter",
+class CursorAdapter extends Context.Service<CursorAdapter, CursorAdapterShape>()(
+  "tabs/provider/Layers/CursorAdapter.test/CursorAdapter",
 ) {}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -154,7 +154,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const settings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-mock-thread");
+      const threadId = "cursor-mock-thread" as ThreadId;
 
       const wrapperPath = yield* Effect.promise(() => makeMockAgentWrapper());
       yield* settings.updateSettings({ providers: { cursor: { binaryPath: wrapperPath } } });
@@ -166,10 +166,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       const session = yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       assert.equal(session.provider, "cursor");
@@ -236,7 +236,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const settings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-stop-session-close");
+      const threadId = "cursor-stop-session-close" as ThreadId;
       const tempDir = yield* Effect.promise(() =>
         mkdtemp(path.join(os.tmpdir(), "cursor-adapter-exit-log-")),
       );
@@ -251,10 +251,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       yield* adapter.stopSession(threadId);
@@ -270,7 +270,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       Effect.gen(function* () {
         const adapter = yield* CursorAdapter;
         const settings = yield* ServerSettingsService;
-        const threadId = ThreadId.makeUnsafe("cursor-concurrent-start-session");
+        const threadId = "cursor-concurrent-start-session" as ThreadId;
         const tempDir = yield* Effect.promise(() =>
           mkdtemp(path.join(os.tmpdir(), "cursor-adapter-concurrent-exit-log-")),
         );
@@ -290,21 +290,21 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
           [
             adapter.startSession({
               threadId,
-              provider: ProviderDriverKind.makeUnsafe("cursor"),
+              provider: "cursor" as ProviderDriverKind,
               cwd: process.cwd(),
               runtimeMode: "full-access",
               modelSelection: {
-                instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+                instanceId: "cursor" as ProviderInstanceId,
                 model: "default",
               },
             }),
             adapter.startSession({
               threadId,
-              provider: ProviderDriverKind.makeUnsafe("cursor"),
+              provider: "cursor" as ProviderDriverKind,
               cwd: process.cwd(),
               runtimeMode: "full-access",
               modelSelection: {
-                instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+                instanceId: "cursor" as ProviderInstanceId,
                 model: "default",
               },
             }),
@@ -327,8 +327,8 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       const adapter = yield* CursorAdapter;
       const result = yield* adapter
         .startSession({
-          threadId: ThreadId.makeUnsafe("bad-provider"),
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          threadId: "bad-provider" as ThreadId,
+          provider: "codex" as ProviderDriverKind,
           cwd: process.cwd(),
           runtimeMode: "full-access",
         })
@@ -342,7 +342,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-plan-mode-probe");
+      const threadId = "cursor-plan-mode-probe" as ThreadId;
       const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "cursor-acp-")));
       const requestLogPath = path.join(tempDir, "requests.ndjson");
       const argvLogPath = path.join(tempDir, "argv.txt");
@@ -354,11 +354,11 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+          instanceId: "cursor" as ProviderInstanceId,
           model: "composer-2",
         },
       });
@@ -401,7 +401,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       Effect.gen(function* () {
         const adapter = yield* CursorAdapter;
         const serverSettings = yield* ServerSettingsService;
-        const threadId = ThreadId.makeUnsafe("cursor-initial-config-probe");
+        const threadId = "cursor-initial-config-probe" as ThreadId;
         const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "cursor-acp-")));
         const requestLogPath = path.join(tempDir, "requests.ndjson");
         const argvLogPath = path.join(tempDir, "argv.txt");
@@ -414,7 +414,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         });
 
         const modelSelection = createModelSelection(
-          ProviderInstanceId.makeUnsafe("cursor"),
+          "cursor" as ProviderInstanceId,
           "gpt-5.4",
           [
             { id: "reasoning", value: "xhigh" },
@@ -425,7 +425,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
         yield* adapter.startSession({
           threadId,
-          provider: ProviderDriverKind.makeUnsafe("cursor"),
+          provider: "cursor" as ProviderDriverKind,
           cwd: process.cwd(),
           runtimeMode: "full-access",
           modelSelection,
@@ -478,7 +478,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
         const adapter = yield* CursorAdapter;
         const serverSettings = yield* ServerSettingsService;
-        const threadId = ThreadId.makeUnsafe("cursor-tool-call-probe");
+        const threadId = "cursor-tool-call-probe" as ThreadId;
         const runtimeEvents: Array<ProviderRuntimeEvent> = [];
         const settledEventTypes = new Set<string>();
         const settledEventsReady = yield* Deferred.make<void>();
@@ -499,7 +499,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
             if (event.type === "request.opened" && event.requestId) {
               yield* adapter.respondToRequest(
                 threadId,
-                ApprovalRequestId.makeUnsafe(String(event.requestId)),
+                String(event.requestId) as ApprovalRequestId,
                 "accept",
               );
             }
@@ -519,11 +519,11 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         const program = Effect.gen(function* () {
           yield* adapter.startSession({
             threadId,
-            provider: ProviderDriverKind.makeUnsafe("cursor"),
+            provider: "cursor" as ProviderDriverKind,
             cwd: process.cwd(),
             runtimeMode: "approval-required",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+              instanceId: "cursor" as ProviderInstanceId,
               model: "default",
             },
           });
@@ -648,7 +648,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       Effect.gen(function* () {
         const adapter = yield* CursorAdapter;
         const serverSettings = yield* ServerSettingsService;
-        const threadId = ThreadId.makeUnsafe("cursor-full-access-auto-approve");
+        const threadId = "cursor-full-access-auto-approve" as ThreadId;
         const runtimeEvents: Array<ProviderRuntimeEvent> = [];
         const settledEventTypes = new Set<string>();
         const settledEventsReady = yield* Deferred.make<void>();
@@ -684,10 +684,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
         yield* adapter.startSession({
           threadId,
-          provider: ProviderDriverKind.makeUnsafe("cursor"),
+          provider: "cursor" as ProviderDriverKind,
           cwd: process.cwd(),
           runtimeMode: "full-access",
-          modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+          modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
         });
 
         const turn = yield* adapter.sendTurn({
@@ -741,7 +741,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-assistant-tool-segmentation");
+      const threadId = "cursor-assistant-tool-segmentation" as ThreadId;
       const runtimeEvents: Array<ProviderRuntimeEvent> = [];
       const settledEventTypes = new Set<string>();
       const settledEventsReady = yield* Deferred.make<void>();
@@ -783,10 +783,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       const turn = yield* adapter.sendTurn({
@@ -869,7 +869,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-cancel-probe");
+      const threadId = "cursor-cancel-probe" as ThreadId;
       const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "cursor-acp-")));
       const requestLogPath = path.join(tempDir, "requests.ndjson");
       const argvLogPath = path.join(tempDir, "argv.txt");
@@ -905,10 +905,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "approval-required",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       const sendTurnFiber = yield* adapter
@@ -958,7 +958,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-stop-pending-approval");
+      const threadId = "cursor-stop-pending-approval" as ThreadId;
       const approvalRequested = yield* Deferred.make<void>();
 
       const wrapperPath = yield* Effect.promise(() =>
@@ -975,10 +975,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "approval-required",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       const sendTurnFiber = yield* adapter
@@ -1001,7 +1001,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-stop-pending-user-input");
+      const threadId = "cursor-stop-pending-user-input" as ThreadId;
       const userInputRequested = yield* Deferred.make<void>();
 
       const wrapperPath = yield* Effect.promise(() =>
@@ -1018,10 +1018,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       const sendTurnFiber = yield* adapter
@@ -1044,7 +1044,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-interrupt-pending-user-input");
+      const threadId = "cursor-interrupt-pending-user-input" as ThreadId;
       const userInputRequested = yield* Deferred.make<void>();
 
       const wrapperPath = yield* Effect.promise(() =>
@@ -1061,10 +1061,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       const sendTurnFiber = yield* adapter
@@ -1088,7 +1088,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const settings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-runtime-event-broadcast");
+      const threadId = "cursor-runtime-event-broadcast" as ThreadId;
 
       const wrapperPath = yield* Effect.promise(() => makeMockAgentWrapper());
       yield* settings.updateSettings({ providers: { cursor: { binaryPath: wrapperPath } } });
@@ -1104,10 +1104,10 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("cursor"), model: "default" },
+        modelSelection: { instanceId: "cursor" as ProviderInstanceId, model: "default" },
       });
 
       const firstEvents = Array.from(yield* Fiber.join(firstConsumer));
@@ -1130,7 +1130,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-model-switch");
+      const threadId = "cursor-model-switch" as ThreadId;
       const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "cursor-acp-")));
       const requestLogPath = path.join(tempDir, "requests.ndjson");
       const argvLogPath = path.join(tempDir, "argv.txt");
@@ -1142,11 +1142,11 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+          instanceId: "cursor" as ProviderInstanceId,
           model: "composer-2",
         },
       });
@@ -1162,7 +1162,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         input: "second turn after switching model",
         attachments: [],
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("cursor"),
+          "cursor" as ProviderInstanceId,
           "composer-2",
           [{ id: "fastMode", value: true }],
         ),
@@ -1198,7 +1198,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
     Effect.gen(function* () {
       const adapter = yield* CursorAdapter;
       const serverSettings = yield* ServerSettingsService;
-      const threadId = ThreadId.makeUnsafe("cursor-fast-mode-reset");
+      const threadId = "cursor-fast-mode-reset" as ThreadId;
       const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "cursor-acp-")));
       const requestLogPath = path.join(tempDir, "requests.ndjson");
       const argvLogPath = path.join(tempDir, "argv.txt");
@@ -1210,11 +1210,11 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("cursor"),
+          instanceId: "cursor" as ProviderInstanceId,
           model: "composer-2",
         },
       });
@@ -1224,7 +1224,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         input: "first turn with fast mode",
         attachments: [],
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("cursor"),
+          "cursor" as ProviderInstanceId,
           "composer-2",
           [{ id: "fastMode", value: true }],
         ),
@@ -1235,7 +1235,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         input: "second turn without fast mode",
         attachments: [],
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("cursor"),
+          "cursor" as ProviderInstanceId,
           "composer-2",
           [{ id: "fastMode", value: false }],
         ),
@@ -1259,7 +1259,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
   it.effect(
     "applies fast mode on the first turn when modelSelection uses a non-default instance id",
     () => {
-      const customInstanceId = ProviderInstanceId.makeUnsafe("cursor_secondary");
+      const customInstanceId = "cursor_secondary" as ProviderInstanceId;
       // Custom-instance cases can't share the suite-level `CursorAdapter`
       // layer because that one binds `instanceId: "cursor"`. We build a
       // fresh layer graph — including a fresh `ServerSettingsService` — so
@@ -1289,7 +1289,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       return Effect.gen(function* () {
         const adapter = yield* CursorAdapter;
         const serverSettings = yield* ServerSettingsService;
-        const threadId = ThreadId.makeUnsafe("cursor-fast-mode-custom-instance");
+        const threadId = "cursor-fast-mode-custom-instance" as ThreadId;
         const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "cursor-acp-")));
         const requestLogPath = path.join(tempDir, "requests.ndjson");
         const argvLogPath = path.join(tempDir, "argv.txt");
@@ -1303,7 +1303,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
 
         yield* adapter.startSession({
           threadId,
-          provider: ProviderDriverKind.makeUnsafe("cursor"),
+          provider: "cursor" as ProviderDriverKind,
           cwd: process.cwd(),
           runtimeMode: "full-access",
           modelSelection: {
@@ -1317,7 +1317,7 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
           input: "first turn with fast mode",
           attachments: [],
           modelSelection: {
-            ...createModelSelection(ProviderInstanceId.makeUnsafe("cursor"), "composer-2", [
+            ...createModelSelection("cursor" as ProviderInstanceId, "composer-2", [
               { id: "fastMode", value: true },
             ]),
             instanceId: customInstanceId,

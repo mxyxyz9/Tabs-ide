@@ -4,8 +4,10 @@ import { useCallback } from "react";
 
 import { newCommandId } from "../lib/utils";
 import { readNativeApi } from "../nativeApi";
-import { useComposerDraftStore } from "../composerDraftStore";
-import { useStore } from "../store";
+import { composerDraftActions, useDraftThread } from "../state/composerDrafts";
+import { setThreadBranchInAtoms } from "../state/readModel";
+import { projectsAtom, threadsAtom } from "../state/threads";
+import { useAtomValue } from "@effect/atom-react";
 import {
   EnvMode,
   resolveDraftEnvModeAfterBranchChange,
@@ -34,11 +36,11 @@ export default function BranchToolbar({
   onCheckoutPullRequestRequest,
   onComposerFocusRequest,
 }: BranchToolbarProps) {
-  const threads = useStore((store) => store.threads);
-  const projects = useStore((store) => store.projects);
-  const setThreadBranchAction = useStore((store) => store.setThreadBranch);
-  const draftThread = useComposerDraftStore((store) => store.getDraftThread(threadId));
-  const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
+  const threads = useAtomValue(threadsAtom);
+  const projects = useAtomValue(projectsAtom);
+  const setThreadBranchAction = setThreadBranchInAtoms;
+  const draftThread = useDraftThread(threadId);
+  const setDraftThreadContext = composerDraftActions.setDraftThreadContext;
 
   const serverThread = threads.find((thread) => thread.id === threadId);
   const activeProjectId = serverThread?.projectId ?? draftThread?.projectId ?? null;

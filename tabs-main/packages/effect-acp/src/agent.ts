@@ -1,4 +1,4 @@
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -207,7 +207,7 @@ export interface AcpAgentShape {
   ) => Effect.Effect<void>;
 }
 
-export class AcpAgent extends ServiceMap.Service<AcpAgent, AcpAgentShape>()(
+export class AcpAgent extends Context.Service<AcpAgent, AcpAgentShape>()(
   "effect-acp/agent/AcpAgent",
 ) {}
 
@@ -367,7 +367,8 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
     generateRequestId: () => nextRpcRequestId++ as never,
   }).pipe(Effect.provideService(RpcClient.Protocol, transport.clientProtocol));
 
-  return AcpAgent.of({
+  return {
+
     raw: {
       notifications: transport.incoming,
       request: transport.request,
@@ -506,7 +507,8 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
         );
         return Effect.void;
       }),
-  });
+  
+};
 });
 
 export const layer = (stdio: Stdio.Stdio, options: AcpAgentOptions = {}): Layer.Layer<AcpAgent> =>

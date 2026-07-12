@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionTurnRepository - Projection repository interface for unified turn state.
  *
@@ -17,7 +18,7 @@ import {
   ThreadId,
   TurnId,
 } from "@tabs/contracts";
-import { Option, Schema, ServiceMap } from "effect";
+import { Option, Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -162,7 +163,7 @@ export interface ProjectionTurnRepositoryShape {
   ) => Effect.Effect<void, ProjectionRepositoryError>;
 }
 
-export class ProjectionTurnRepository extends ServiceMap.Service<
+export class ProjectionTurnRepository extends Context.Service<
   ProjectionTurnRepository,
   ProjectionTurnRepositoryShape
 >()("tabs/persistence/Services/ProjectionTurns/ProjectionTurnRepository") {}

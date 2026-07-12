@@ -1,4 +1,5 @@
 import type { FileDiffMetadata, Hunk } from "@pierre/diffs";
+import { useAtomValue } from "@effect/atom-react";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   MessageId,
@@ -64,10 +65,9 @@ import {
   useState,
 } from "react";
 
-import { useStore } from "../store";
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { useComposerDraftStore } from "../composerDraftStore";
+import { composerDraftActions } from "../state/composerDrafts";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { isElectron } from "../env";
@@ -160,7 +160,6 @@ import {
   EMPTY_PROJECT_CODE_TOOL_STATE,
   EMPTY_PROJECT_GIT_TOOL_STATE,
   resolveProjectTools,
-  useProjectWorkspaceSettings,
   useWorkspaceShellStore,
 } from "../workspaceShellStore";
 import {
@@ -171,7 +170,18 @@ import {
   type Thread,
 } from "../types";
 import { type ProjectBrowserToolState } from "../workspaceShellStore";
-import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
+import {
+  workspaceShellActions,
+  workspaceShellAtom,
+  useProjectWorkspaceSettings,
+  useWorkspaceShellState,
+} from "../state/workspaceShell";
+import { selectThreadTerminalState } from "../state/terminalTransitions";
+import {
+  getThreadTerminalState,
+  terminalActions,
+  useThreadTerminalState,
+} from "../state/terminal";
 import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
@@ -184,6 +194,8 @@ import { CodeActivityRail } from "./code/CodeActivityRail";
 import { CodeHeaderBar } from "./code/CodeHeaderBar";
 import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
 import { resolveShortcutCommand } from "../keybindings";
+import { useKeybindings } from "../state/settings";
+import { projectsAtom, threadsAtom, threadsHydratedAtom } from "../state/threads";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 
@@ -1097,8 +1109,9 @@ function FallbackCodeTool(props: { project: Project }) {
   const api = readNativeApi();
   const { resolvedTheme } = useTheme();
   const [query, setQuery] = useState("");
-  const setCodeFocusedPath = useWorkspaceShellStore((state) => state.setCodeFocusedPath);
-  const codeState = useWorkspaceShellStore(
+  const setCodeFocusedPath = workspaceShellActions.setCodeFocusedPath;
+  const codeState = useAtomValue(
+    workspaceShellAtom,
     (state) => state.codeStateByProjectId[props.project.id] ?? EMPTY_PROJECT_CODE_TOOL_STATE,
   );
   const trimmedQuery = query.trim();
@@ -1427,7 +1440,8 @@ function DesktopCodeTool(props: { project: Project }) {
   );
   const [hostReady, setHostReady] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
-  const codeState = useWorkspaceShellStore(
+  const codeState = useAtomValue(
+    workspaceShellAtom,
     (state) => state.codeStateByProjectId[props.project.id] ?? EMPTY_PROJECT_CODE_TOOL_STATE,
   );
   // Native-chrome state pushed from the embedded workbench through the desktop
@@ -1449,8 +1463,8 @@ function DesktopCodeTool(props: { project: Project }) {
   // whole app (the full Agents tab is route-driven; this isn't).
   const sideChatOpen = codeState.sideChatOpen;
   const sideChatThreadIdOverride = codeState.sideChatThreadId;
-  const setSideChatOpenStore = useWorkspaceShellStore((state) => state.setSideChatOpen);
-  const setSideChatThreadStore = useWorkspaceShellStore((state) => state.setSideChatThread);
+  const setSideChatOpenStore = workspaceShellActions.setSideChatOpen;
+  const setSideChatThreadStore = workspaceShellActions.setSideChatThread;
   const setSideChatOpen = useCallback(
     (open: boolean) => setSideChatOpenStore(projectId, open),
     [projectId, setSideChatOpenStore],
@@ -1466,14 +1480,15 @@ function DesktopCodeTool(props: { project: Project }) {
   const sideChatWidthRef = useRef(sideChatWidth);
   sideChatWidthRef.current = sideChatWidth;
   const [isResizingSideChat, setIsResizingSideChat] = useState(false);
-  const rememberedThreadId = useWorkspaceShellStore(
+  const rememberedThreadId = useAtomValue(
+    workspaceShellAtom,
     (state) => state.session.rememberedThreadIdByProjectId[projectId] ?? null,
   );
   // Select the stable threads array, then derive the sorted project list in a
   // memo. Deriving INSIDE the selector would return a new array on every
   // getSnapshot, which makes useSyncExternalStore re-render infinitely
   // ("Maximum update depth exceeded").
-  const allThreads = useStore((state) => state.threads);
+  const allThreads = useAtomValue(threadsAtom);
   const projectThreads = useMemo(
     () => sortProjectThreads(allThreads.filter((thread) => thread.projectId === projectId)),
     [allThreads, projectId],
@@ -1496,7 +1511,7 @@ function DesktopCodeTool(props: { project: Project }) {
     if (!sideChatOpen) return;
     if (sideChatThreadId) return; // already has a thread
 
-    const { getDraftThreadByProjectId, setProjectDraftThreadId } = useComposerDraftStore.getState();
+    const { getDraftThreadByProjectId, setProjectDraftThreadId } = composerDraftActions;
 
     // Get existing draft thread for this project, or create one
     const existingDraft = getDraftThreadByProjectId(projectId);
@@ -1541,7 +1556,7 @@ function DesktopCodeTool(props: { project: Project }) {
     window.addEventListener("pointerup", onUp);
   }, []);
   const onNewSideChatThread = useCallback(() => {
-    const { setProjectDraftThreadId } = useComposerDraftStore.getState();
+    const { setProjectDraftThreadId } = composerDraftActions;
     const nextThreadId = newThreadId();
     setProjectDraftThreadId(projectId, nextThreadId, {
       createdAt: new Date().toISOString(),
@@ -2069,15 +2084,16 @@ function GitTool(props: {
     proposal: null,
     error: null,
   });
-  const gitToolState = useWorkspaceShellStore(
+  const gitToolState = useAtomValue(
+    workspaceShellAtom,
     (state) => state.gitStateByProjectId[project.id] ?? EMPTY_PROJECT_GIT_TOOL_STATE,
   );
   const selectedPath = gitToolState.selectedPath;
   const selectedCommit = gitToolState.selectedCommit;
-  const setSelectedPath = useWorkspaceShellStore((state) => state.setGitSelectedPath);
-  const setSelectedCommit = useWorkspaceShellStore((state) => state.setGitSelectedCommit);
-  const activeAgentsThread = useStore((state) =>
-    activeThreadId ? (state.threads.find((thread) => thread.id === activeThreadId) ?? null) : null,
+  const setSelectedPath = workspaceShellActions.setGitSelectedPath;
+  const setSelectedCommit = workspaceShellActions.setGitSelectedCommit;
+  const activeAgentsThread = useAtomValue(threadsAtom, (state) =>
+    activeThreadId ? (state.find((thread) => thread.id === activeThreadId) ?? null) : null,
   );
 
   const allBranches = useMemo(
@@ -5540,7 +5556,7 @@ function DesktopBrowserTool(props: {
 }) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
-  const browserState = useWorkspaceShellStore((state) => {
+  const browserState = useAtomValue(workspaceShellAtom, (state) => {
     const existing = state.browserStateByProjectId[props.project.id];
     if (existing) {
       return existing;
@@ -5553,8 +5569,8 @@ function DesktopBrowserTool(props: {
       landscape: false,
     } as const;
   });
-  const setBrowserCurrentUrl = useWorkspaceShellStore((state) => state.setBrowserCurrentUrl);
-  const setBrowserViewport = useWorkspaceShellStore((state) => state.setBrowserViewport);
+  const setBrowserCurrentUrl = workspaceShellActions.setBrowserCurrentUrl;
+  const setBrowserViewport = workspaceShellActions.setBrowserViewport;
   const [draftUrl, setDraftUrl] = useState(browserState.currentUrl);
   const [hostState, setHostState] = useState<DesktopBrowserHostState>(
     DEFAULT_DESKTOP_BROWSER_HOST_STATE,
@@ -5997,7 +6013,7 @@ function EmbeddedBrowserTool(props: {
   projectSettings: ProjectWorkspaceSettings;
 }) {
   const api = readNativeApi();
-  const browserState = useWorkspaceShellStore((state) => {
+  const browserState = useAtomValue(workspaceShellAtom, (state) => {
     const existing = state.browserStateByProjectId[props.project.id];
     if (existing) {
       return existing;
@@ -6010,8 +6026,8 @@ function EmbeddedBrowserTool(props: {
       landscape: false,
     } as const;
   });
-  const setBrowserCurrentUrl = useWorkspaceShellStore((state) => state.setBrowserCurrentUrl);
-  const setBrowserViewport = useWorkspaceShellStore((state) => state.setBrowserViewport);
+  const setBrowserCurrentUrl = workspaceShellActions.setBrowserCurrentUrl;
+  const setBrowserViewport = workspaceShellActions.setBrowserViewport;
   const [draftUrl, setDraftUrl] = useState(browserState.currentUrl);
   const [embedBlocked, setEmbedBlocked] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -6190,7 +6206,7 @@ function DesktopCustomEmbedTool(props: {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
   const projectSettings = useProjectWorkspaceSettings(props.project.id);
-  const browserState = useWorkspaceShellStore((state) => {
+  const browserState = useAtomValue(workspaceShellAtom, (state) => {
     const existing = state.browserStateByProjectId[props.project.id];
     if (existing) {
       return existing;
@@ -6203,7 +6219,7 @@ function DesktopCustomEmbedTool(props: {
       landscape: false,
     } as const;
   });
-  const setBrowserViewport = useWorkspaceShellStore((state) => state.setBrowserViewport);
+  const setBrowserViewport = workspaceShellActions.setBrowserViewport;
   const [hostState, setHostState] = useState<DesktopBrowserHostState>(
     DEFAULT_DESKTOP_BROWSER_HOST_STATE,
   );
@@ -6215,8 +6231,8 @@ function DesktopCustomEmbedTool(props: {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
   const sessionKey = `${props.project.id}:${props.sessionId}`;
-  const storedUrl = useWorkspaceShellStore((state) => state.browserUrlBySessionKey[sessionKey]);
-  const setBrowserSessionUrl = useWorkspaceShellStore((state) => state.setBrowserSessionUrl);
+  const storedUrl = useAtomValue(workspaceShellAtom, (state) => state.browserUrlBySessionKey[sessionKey]);
+  const setBrowserSessionUrl = workspaceShellActions.setBrowserSessionUrl;
   // A custom tab reopens at the URL the user last navigated to (persisted),
   // falling back to its configured URL; editing the configured URL takes over.
   const configuredUrl = normalizeBrowserUrl(props.url);
@@ -7763,21 +7779,23 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
-  const projects = useStore((state) => state.projects);
-  const threads = useStore((state) => state.threads);
+  const projects = useAtomValue(projectsAtom);
+  const threads = useAtomValue(threadsAtom);
   const { handleNewThread } = useHandleNewThread();
-  const workspaceState = useWorkspaceShellStore((state) => state);
-  const syncProjects = useWorkspaceShellStore((state) => state.syncProjects);
-  const openProject = useWorkspaceShellStore((state) => state.openProject);
-  const closeProject = useWorkspaceShellStore((state) => state.closeProject);
-  const setActiveProject = useWorkspaceShellStore((state) => state.setActiveProject);
-  const setActiveTool = useWorkspaceShellStore((state) => state.setActiveTool);
-  const setCodeFocusedPath = useWorkspaceShellStore((state) => state.setCodeFocusedPath);
-  const rememberThread = useWorkspaceShellStore((state) => state.rememberThread);
-  const upsertProjectSettings = useWorkspaceShellStore((state) => state.upsertProjectSettings);
-  const openPendingTab = useWorkspaceShellStore((state) => state.openPendingTab);
-  const resolvePendingTab = useWorkspaceShellStore((state) => state.resolvePendingTab);
-  const closePendingTab = useWorkspaceShellStore((state) => state.closePendingTab);
+  const workspaceState = useWorkspaceShellState();
+  const {
+    syncProjects,
+    openProject,
+    closeProject,
+    setActiveProject,
+    setActiveTool,
+    setCodeFocusedPath,
+    rememberThread,
+    upsertProjectSettings,
+    openPendingTab,
+    resolvePendingTab,
+    closePendingTab,
+  } = workspaceShellActions;
   const activePendingTabId = workspaceState.session.activePendingTabId ?? null;
   const pendingTabIds = workspaceState.session.pendingTabIds ?? [];
   const isActivePendingTab = Boolean(activePendingTabId);
@@ -7797,7 +7815,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [closeProject, settings.confirmTabClose],
   );
-  const threadsHydrated = useStore((state) => state.threadsHydrated);
+  const threadsHydrated = useAtomValue(threadsHydratedAtom);
   const embeddedMode = useMemo(() => resolveEmbeddedWorkspaceMode(), []);
   const embeddedProjectCreateRequestedRef = useRef<string | null>(null);
 
@@ -8075,14 +8093,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     ],
   );
 
-  const { data: serverConfig } = useQuery(serverConfigQueryOptions());
-  const keybindings = serverConfig?.keybindings ?? [];
+  const keybindings = useKeybindings();
 
-  const terminalOpen = useTerminalStateStore((state) => {
-    if (!routeThreadId) return false;
-    const threadState = state.terminalStateByThreadId[routeThreadId];
-    return threadState ? threadState.terminalOpen : false;
-  });
+  const routeTerminalState = useThreadTerminalState(routeThreadId ?? null);
+  const terminalOpen = routeTerminalState?.terminalOpen ?? false;
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -8486,16 +8500,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const gitActionThreadId = rememberedThread?.id ?? routeThreadId ?? null;
   const gitTerminalThreadId = activeProject ? ThreadId.makeUnsafe(`git:${activeProject.id}`) : null;
   const serverThreadId = activeProject ? ThreadId.makeUnsafe(`server:${activeProject.id}`) : null;
-  const gitTerminalState = useTerminalStateStore((state) =>
-    gitTerminalThreadId
-      ? selectThreadTerminalState(state.terminalStateByThreadId, gitTerminalThreadId)
-      : null,
-  );
-  const serverTerminalState = useTerminalStateStore((state) =>
-    serverThreadId
-      ? selectThreadTerminalState(state.terminalStateByThreadId, serverThreadId)
-      : null,
-  );
+  const gitTerminalState = useThreadTerminalState(gitTerminalThreadId);
+  const serverTerminalState = useThreadTerminalState(serverThreadId);
   // Custom "terminal tab" embeds (gemini/codex/etc.) must run in their OWN
   // terminal thread — never the shared `server:<project>` thread — so their
   // terminals don't leak into the Server tab's terminal list. Only the active
@@ -8506,18 +8512,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     activeProject && activeCustomProcessId
       ? ThreadId.makeUnsafe(`server:${activeProject.id}:custom:${activeCustomProcessId}`)
       : null;
-  const customProcessTerminalState = useTerminalStateStore((state) =>
-    customProcessThreadId
-      ? selectThreadTerminalState(state.terminalStateByThreadId, customProcessThreadId)
-      : null,
-  );
-  const storeSetTerminalOpen = useTerminalStateStore((state) => state.setTerminalOpen);
-  const storeSetTerminalHeight = useTerminalStateStore((state) => state.setTerminalHeight);
-  const storeSplitTerminal = useTerminalStateStore((state) => state.splitTerminal);
-  const storeNewTerminal = useTerminalStateStore((state) => state.newTerminal);
-  const storeSetActiveTerminal = useTerminalStateStore((state) => state.setActiveTerminal);
-  const storeCloseTerminal = useTerminalStateStore((state) => state.closeTerminal);
-  const storeClearTerminalState = useTerminalStateStore((state) => state.clearTerminalState);
+  const customProcessTerminalState = useThreadTerminalState(customProcessThreadId);
+  const storeSetTerminalOpen = terminalActions.setOpen;
+  const storeSetTerminalHeight = terminalActions.setHeight;
+  const storeSplitTerminal = terminalActions.split;
+  const storeNewTerminal = terminalActions.new;
+  const storeSetActiveTerminal = terminalActions.setActive;
+  const storeCloseTerminal = terminalActions.close;
+  const storeClearTerminalState = terminalActions.clear;
   const [shellTerminalFocusRequestId, setShellTerminalFocusRequestId] = useState(0);
 
   const setGitTerminalOpen = useCallback(
@@ -8873,10 +8875,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         // snapshot) so running several presets in quick succession each see the
         // terminals the previous run just created — otherwise the placeholder
         // eviction and dedupe work off stale data.
-        terminalState: selectThreadTerminalState(
-          useTerminalStateStore.getState().terminalStateByThreadId,
-          serverThreadId,
-        ),
+        terminalState: getThreadTerminalState(serverThreadId),
         process,
         reveal: true,
       });
@@ -8895,10 +8894,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     async (process: ProjectWorkspaceSettings["serverProcesses"][number], threadId: ThreadId) => {
       await openProcessTerminal({
         threadId,
-        terminalState: selectThreadTerminalState(
-          useTerminalStateStore.getState().terminalStateByThreadId,
-          threadId,
-        ),
+        terminalState: getThreadTerminalState(threadId),
         process,
         reveal: true,
       });
@@ -8909,10 +8905,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     async (terminalId: string, threadId: ThreadId) => {
       await closeThreadTerminal({
         threadId,
-        terminalState: selectThreadTerminalState(
-          useTerminalStateStore.getState().terminalStateByThreadId,
-          threadId,
-        ),
+        terminalState: getThreadTerminalState(threadId),
         terminalId,
         clearIfFinal: false,
       });

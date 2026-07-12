@@ -1,8 +1,8 @@
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString } from "./baseSchemas";
-import { ProviderDriverKind } from "./providerInstance";
+import { TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { ProviderDriverKind } from "./providerInstance.ts";
 
 export const ProviderOptionDescriptorType = Schema.Literals(["select", "boolean"]);
 export type ProviderOptionDescriptorType = typeof ProviderOptionDescriptorType.Type;
@@ -122,11 +122,6 @@ function canonicalSelectionsToLegacyObject(
   return out;
 }
 
-// ModelCapabilities carries BOTH the new generic `optionDescriptors` and the
-// legacy typed fields the web UI still renders from (effort dropdowns,
-// fast-mode/thinking toggles). The server populates the legacy fields by
-// deriving them from `optionDescriptors` (see `createModelCapabilities` in
-// @tabs/shared/model), so producers only build descriptors.
 export const ModelCapabilities = Schema.Struct({
   reasoningEffortLevels: Schema.Array(
     Schema.Struct({
@@ -134,19 +129,21 @@ export const ModelCapabilities = Schema.Struct({
       label: TrimmedNonEmptyString,
       isDefault: Schema.optional(Schema.Boolean),
     }),
+  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  supportsFastMode: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  supportsThinkingToggle: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  promptInjectedEffortLevels: Schema.Array(TrimmedNonEmptyString).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
   ),
-  supportsFastMode: Schema.Boolean,
-  supportsThinkingToggle: Schema.Boolean,
-  promptInjectedEffortLevels: Schema.Array(TrimmedNonEmptyString),
   optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
 });
 export type ModelCapabilities = typeof ModelCapabilities.Type;
 
-const CODEX_DRIVER_KIND = ProviderDriverKind.makeUnsafe("codex");
-const CLAUDE_DRIVER_KIND = ProviderDriverKind.makeUnsafe("claudeAgent");
-const CURSOR_DRIVER_KIND = ProviderDriverKind.makeUnsafe("cursor");
-const GROK_DRIVER_KIND = ProviderDriverKind.makeUnsafe("grok");
-const OPENCODE_DRIVER_KIND = ProviderDriverKind.makeUnsafe("opencode");
+const CODEX_DRIVER_KIND = ProviderDriverKind.make("codex");
+const CLAUDE_DRIVER_KIND = ProviderDriverKind.make("claudeAgent");
+const CURSOR_DRIVER_KIND = ProviderDriverKind.make("cursor");
+const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
+const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 
 export const DEFAULT_MODEL = "gpt-5.4";
 export const DEFAULT_GIT_TEXT_GENERATION_MODEL = "gpt-5.4-mini";
@@ -225,13 +222,6 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [OPENCODE_DRIVER_KIND]: "OpenCode",
 };
 
-// ── Compatibility shim (transitional) ─────────────────────────────────
-// Tabs' pre-migration model layer used typed per-provider option structs
-// instead of t3code's generic ProviderOptionDescriptor/Selection model.
-// These are retained so existing consumers (settings patches, web pickers)
-// keep compiling during the provider migration; remove once the UI fully
-// adopts `ProviderOptionSelections`.
-
 export const CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"] as const;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_OPTIONS)[number];
 export const CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultrathink"] as const;
@@ -256,12 +246,5 @@ export const ProviderModelOptions = Schema.Struct({
   claudeAgent: Schema.optional(ClaudeModelOptions),
 });
 export type ProviderModelOptions = typeof ProviderModelOptions.Type;
-
-export const EffortOption = Schema.Struct({
-  value: TrimmedNonEmptyString,
-  label: TrimmedNonEmptyString,
-  isDefault: Schema.optional(Schema.Boolean),
-});
-export type EffortOption = typeof EffortOption.Type;
 
 export type ModelSlug = string & {};

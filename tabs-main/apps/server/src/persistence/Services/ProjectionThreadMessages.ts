@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionThreadMessageRepository - Projection repository interface for messages.
  *
@@ -14,7 +15,7 @@ import {
   TurnId,
   IsoDateTime,
 } from "@tabs/contracts";
-import { Schema, ServiceMap } from "effect";
+import { Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -75,7 +76,7 @@ export interface ProjectionThreadMessageRepositoryShape {
 /**
  * ProjectionThreadMessageRepository - Service tag for message projection persistence.
  */
-export class ProjectionThreadMessageRepository extends ServiceMap.Service<
+export class ProjectionThreadMessageRepository extends Context.Service<
   ProjectionThreadMessageRepository,
   ProjectionThreadMessageRepositoryShape
 >()("tabs/persistence/Services/ProjectionThreadMessages/ProjectionThreadMessageRepository") {}

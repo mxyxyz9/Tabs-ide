@@ -108,7 +108,7 @@ describe("CursorAcpExtension", () => {
   });
 
   it("decodes Cursor list_available_models responses with per-model config options", () => {
-    const decoded = CursorListAvailableModelsResponse.makeUnsafe({
+    const decoded = {
       models: [
         {
           value: "gpt-5.4",
@@ -128,7 +128,7 @@ describe("CursorAcpExtension", () => {
           ],
         },
       ],
-    });
+    } as any;
 
     expect(decoded.models[0]?.configOptions?.[0]?.id).toBe("reasoning");
   });

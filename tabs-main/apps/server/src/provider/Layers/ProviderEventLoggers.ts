@@ -27,7 +27,7 @@
  *
  * @module provider/Layers/ProviderEventLoggers
  */
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -47,10 +47,10 @@ export interface ProviderEventLoggersShape {
  * (`ProviderEventLoggersLive`); consumers (drivers, `ProviderService`) read
  * one tag and pluck the field they need.
  */
-export class ProviderEventLoggers extends ServiceMap.Service<
+export class ProviderEventLoggers extends Context.Service<
   ProviderEventLoggers,
   ProviderEventLoggersShape
->()("t3/provider/Layers/ProviderEventLoggers") {}
+>()("tabs/provider/Layers/ProviderEventLoggers") {}
 
 /**
  * Constant value used by tests / boot layers that want to opt out of native

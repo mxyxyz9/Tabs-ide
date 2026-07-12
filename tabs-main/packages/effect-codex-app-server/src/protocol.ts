@@ -364,7 +364,7 @@ export const makeCodexAppServerPatchedProtocol = Effect.fn("makeCodexAppServerPa
       Effect.forkScoped,
     );
 
-    yield* Stream.fromQueue(outgoing).pipe(Stream.run(options.stdio.stdout), Effect.forkScoped);
+    yield* Stream.run(Stream.fromQueue(outgoing), options.stdio.stdout()).pipe(Effect.forkScoped);
 
     const request = (method: string, payload?: unknown) =>
       Effect.gen(function* () {

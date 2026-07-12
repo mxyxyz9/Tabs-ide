@@ -221,7 +221,7 @@ describe("openCodexThread", () => {
     const opened = await Effect.runPromise(
       openCodexThread({
         client,
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        threadId: "thread-1" as ThreadId,
         runtimeMode: "full-access",
         cwd: "/tmp/project",
         requestedModel: "gpt-5.3-codex",
@@ -261,7 +261,7 @@ describe("openCodexThread", () => {
       Effect.runPromise(
         openCodexThread({
           client,
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
           runtimeMode: "full-access",
           cwd: "/tmp/project",
           requestedModel: "gpt-5.3-codex",

@@ -70,7 +70,7 @@ export interface KeybindingsSettingsProps {
   readonly onUpsert: (rule: KeybindingRule) => Promise<unknown> | unknown;
   readonly onRemove: (rule: KeybindingRule) => Promise<unknown> | unknown;
   readonly keybindingsConfigPath?: string | null | undefined;
-  readonly availableEditors?: ReadonlyArray<"cursor" | "vscode" | "zed" | "antigravity" | "file-manager"> | null | undefined;
+  readonly availableEditors?: ReadonlyArray<string> | null | undefined;
   readonly platform?: string;
 }
 
@@ -1120,7 +1120,7 @@ export function KeybindingsSettings({
     if (!keybindingsConfigPath) return;
     const api = ensureNativeApi();
     const editor = resolveAndPersistPreferredEditor(
-      (availableEditors ?? []) as ReadonlyArray<"cursor" | "vscode" | "zed" | "antigravity" | "file-manager">
+      (availableEditors ?? []) as ReadonlyArray<any>
     );
     if (!editor) {
       toastManager.add({

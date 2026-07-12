@@ -10,11 +10,9 @@
  * store.
  */
 import { useCallback, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ServerSettings,
   ServerSettingsPatch,
-  ServerConfig,
   ModelSelection,
   ThreadEnvMode,
 } from "@tabs/contracts";
@@ -31,13 +29,18 @@ import {
   TimestampFormat,
   UnifiedSettings,
 } from "@tabs/contracts/settings";
-import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
 import { ensureNativeApi } from "~/nativeApi";
-import { useLocalStorage } from "./useLocalStorage";
 import { makeAppModelSelection, normalizeCustomModelSlugs } from "~/modelSelection";
 import { Predicate, Schema, Struct } from "effect";
 import { DeepMutable } from "effect/Types";
 import { deepMerge } from "@tabs/shared/Struct";
+import {
+  patchServerSettings,
+  refreshServerConfig,
+  updateClientSettings,
+  useClientSettings,
+  useServerSettings,
+} from "../state/settings";
 
 const CLIENT_SETTINGS_STORAGE_KEY = "tabs:client-settings:v1";
 const OLD_SETTINGS_KEY = "tabs:app-settings:v1";
@@ -122,19 +125,15 @@ function splitPatch(patch: Partial<UnifiedSettings>): {
 export function useSettings<T extends UnifiedSettings = UnifiedSettings>(
   selector?: (s: UnifiedSettings) => T,
 ): T {
-  const { data: serverConfig } = useQuery(serverConfigQueryOptions());
-  const [clientSettings] = useLocalStorage(
-    CLIENT_SETTINGS_STORAGE_KEY,
-    DEFAULT_CLIENT_SETTINGS,
-    ClientSettingsSchema,
-  );
+  const serverSettings = useServerSettings();
+  const clientSettings = useClientSettings();
 
   const merged = useMemo<UnifiedSettings>(
     () => ({
-      ...(serverConfig?.settings ?? DEFAULT_SERVER_SETTINGS),
+      ...serverSettings,
       ...clientSettings,
     }),
-    [serverConfig?.settings, clientSettings],
+    [serverSettings, clientSettings],
   );
 
   return useMemo(() => (selector ? selector(merged) : (merged as T)), [merged, selector]);
@@ -147,35 +146,22 @@ export function useSettings<T extends UnifiedSettings = UnifiedSettings>(
  * persisted via RPC. Client keys go straight to localStorage.
  */
 export function useUpdateSettings() {
-  const queryClient = useQueryClient();
-  const [, setClientSettings] = useLocalStorage(
-    CLIENT_SETTINGS_STORAGE_KEY,
-    DEFAULT_CLIENT_SETTINGS,
-    ClientSettingsSchema,
-  );
-
   const updateSettings = useCallback(
     (patch: Partial<UnifiedSettings>) => {
       const { serverPatch, clientPatch } = splitPatch(patch);
 
       if (Object.keys(serverPatch).length > 0) {
-        // Optimistic update of the React Query cache
-        queryClient.setQueryData<ServerConfig>(serverQueryKeys.config(), (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            settings: mergeServerSettingsPatch(old.settings, serverPatch),
-          };
-        });
-        // Fire-and-forget RPC — push will reconcile on success
-        void ensureNativeApi().server.updateSettings(serverPatch);
+        patchServerSettings(serverPatch, (current) => mergeServerSettingsPatch(current, serverPatch));
+        void ensureNativeApi()
+          .server.updateSettings(serverPatch)
+          .then(() => refreshServerConfig());
       }
 
       if (Object.keys(clientPatch).length > 0) {
-        setClientSettings((prev) => ({ ...prev, ...clientPatch }));
+        updateClientSettings((current) => ({ ...current, ...clientPatch }));
       }
     },
-    [queryClient, setClientSettings],
+    [],
   );
 
   const resetSettings = useCallback(() => {
@@ -190,7 +176,7 @@ export function useUpdateSettings() {
 
 // ── One-time migration from localStorage ─────────────────────────────
 
-export function buildLegacyServerSettingsMigrationPatch(legacySettings: Record<string, unknown>) {
+export function buildLegacyServerSettingsMigrationPatch(legacySettings: Record<string, unknown>): ServerSettingsPatch {
   const patch: DeepMutable<ServerSettingsPatch> = {};
 
   if (Predicate.isBoolean(legacySettings.enableAssistantStreaming)) {

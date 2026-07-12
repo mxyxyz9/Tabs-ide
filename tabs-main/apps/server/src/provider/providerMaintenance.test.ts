@@ -43,7 +43,7 @@ const brewVsNpmHttpClient = () =>
     ),
   );
 
-const driver = (value: string) => ProviderDriverKind.makeUnsafe(value);
+const driver = (value: string) => value as ProviderDriverKind;
 const makeTempDir = (name: string) =>
   Effect.sync(() => path.join(os.tmpdir(), `${name}-${nodeRandomUUID()}`));
 const isNativeTestCommandPath =

@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * CheckpointDiffQuery - Query interface for computed checkpoint diffs.
  *
@@ -12,7 +13,6 @@ import type {
   OrchestrationGetTurnDiffInput,
   OrchestrationGetTurnDiffResult,
 } from "@tabs/contracts";
-import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
 import type { CheckpointServiceError } from "../Errors.ts";
@@ -43,7 +43,7 @@ export interface CheckpointDiffQueryShape {
 /**
  * CheckpointDiffQuery - Service tag for checkpoint diff queries.
  */
-export class CheckpointDiffQuery extends ServiceMap.Service<
+export class CheckpointDiffQuery extends Context.Service<
   CheckpointDiffQuery,
   CheckpointDiffQueryShape
 >()("tabs/checkpointing/Services/CheckpointDiffQuery") {}

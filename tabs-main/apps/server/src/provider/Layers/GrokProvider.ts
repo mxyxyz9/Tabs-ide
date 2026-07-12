@@ -37,7 +37,7 @@ const GROK_PRESENTATION = {
   showInteractionModeToggle: false,
   requiresNewThreadForModelChange: true,
 } as const;
-const PROVIDER = ProviderDriverKind.makeUnsafe("grok");
+const PROVIDER = "grok" as ProviderDriverKind;
 const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });

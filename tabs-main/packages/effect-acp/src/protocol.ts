@@ -112,11 +112,13 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
 
     const encoded = yield* Effect.try({
       try: () => parser.encode(message),
-      catch: (cause) =>
-        new AcpError.AcpProtocolParseError({
+      catch: (cause) => {
+        console.error("ENCODE FAILED CAUSE:", cause);
+        return new AcpError.AcpProtocolParseError({
           detail: "Failed to encode ACP message",
           cause,
-        }),
+        });
+      },
     });
 
     if (encoded) {
@@ -364,8 +366,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
     }
   };
 
-  yield* options.stdio.stdin.pipe(
-    Stream.runForEach((data) =>
+  yield* Stream.runForEach(options.stdio.stdin, (data) =>
       logProtocol({
         direction: "incoming",
         stage: "raw",
@@ -406,9 +407,7 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
             discard: true,
           }),
         ),
-      ),
-    ),
-    Effect.matchEffect({
+    )).pipe(Effect.matchEffect({
       onFailure: (error) => {
         const normalized: AcpError.AcpError = isAcpError(error)
           ? error
@@ -437,27 +436,23 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
   // peer process has exited (common during teardown). That race is benign — the
   // session is ending — so swallow it instead of surfacing an unhandled error
   // from this forked fiber.
-  yield* Stream.fromQueue(outgoing).pipe(
-    Stream.run(options.stdio.stdout),
-    Effect.ignore,
-    Effect.forkScoped,
-  );
+  yield* Stream.run(Stream.fromQueue(outgoing), options.stdio.stdout()).pipe(Effect.ignore, Effect.forkScoped);
 
   const clientProtocol = RpcClient.Protocol.of({
-    run: (f) =>
+    run: (_clientId, write) =>
       Stream.fromQueue(clientQueue).pipe(
-        Stream.runForEach((message) => f(message)),
+        Stream.runForEach((message) => write(message)),
         Effect.forever,
       ),
-    send: (request) => offerOutgoing(request).pipe(Effect.mapError(toRpcClientError)),
+    send: (_clientId, request) => offerOutgoing(request).pipe(Effect.mapError(toRpcClientError)),
     supportsAck: true,
     supportsTransferables: false,
   });
 
   const serverProtocol = RpcServer.Protocol.of({
-    run: (f) =>
+    run: (write) =>
       Stream.fromQueue(serverQueue).pipe(
-        Stream.runForEach((message) => f(0, message)),
+        Stream.runForEach((message) => write(0, message)),
         Effect.forever,
       ),
     disconnects,

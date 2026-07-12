@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * AnalyticsService - Anonymous telemetry capture contract.
  *
@@ -6,7 +7,7 @@
  *
  * @module AnalyticsService
  */
-import { Effect, Layer, ServiceMap } from "effect";
+import { Effect, Layer } from "effect";
 
 export interface AnalyticsServiceShape {
   /**
@@ -23,7 +24,7 @@ export interface AnalyticsServiceShape {
   readonly flush: Effect.Effect<void, never>;
 }
 
-export class AnalyticsService extends ServiceMap.Service<AnalyticsService, AnalyticsServiceShape>()(
+export class AnalyticsService extends Context.Service<AnalyticsService, AnalyticsServiceShape>()(
   "tabs/telemetry/Services/AnalyticsService",
 ) {
   static readonly layerTest = Layer.succeed(AnalyticsService, {

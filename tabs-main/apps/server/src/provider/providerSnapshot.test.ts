@@ -27,7 +27,7 @@ describe("providerModelsFromSettings", () => {
   it("applies the provided capabilities to custom models", () => {
     const models = providerModelsFromSettings(
       [],
-      ProviderDriverKind.makeUnsafe("opencode"),
+      "opencode" as ProviderDriverKind,
       ["openai/gpt-5"],
       OPENCODE_CUSTOM_MODEL_CAPABILITIES,
     );

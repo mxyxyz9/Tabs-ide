@@ -31,7 +31,8 @@ import {
 } from "../lib/terminalContext";
 import { isMacPlatform } from "../lib/utils";
 import { getRouter } from "../router";
-import { useStore } from "../store";
+import { appAtomRegistry } from "../state/atomRegistry";
+import { readModelStateAtom, syncServerReadModelToAtoms } from "../state/readModel";
 import { DEFAULT_CLIENT_SETTINGS } from "@tabs/contracts/settings";
 
 const THREAD_ID = "thread-browser-test" as ThreadId;
@@ -81,7 +82,7 @@ function isoAt(offsetSeconds: number): string {
   return new Date(BASE_TIME_MS + offsetSeconds * 1_000).toISOString();
 }
 
-function createBaseServerConfig(): ServerConfig {
+function createBaseServerConfig(): any {
   return {
     cwd: "/repo/project",
     keybindingsConfigPath: "/repo/project/.tabs-keybindings.json",
@@ -864,7 +865,7 @@ describe("ChatView browser behavior (full app)", () => {
       stickyModelSelectionByProvider: {},
       stickyActiveProvider: null,
     });
-    useStore.setState({
+    appAtomRegistry.set(readModelStateAtom, {
       projects: [],
       threads: [],
       threadsHydrated: false,
@@ -970,7 +971,7 @@ describe("ChatView browser behavior (full app)", () => {
         updatedAt: isoAt(999),
       };
 
-      useStore.getState().syncServerReadModel(updatedSnapshot);
+      syncServerReadModelToAtoms(updatedSnapshot);
       await waitForLayout();
 
       expect(Math.abs(scrollContainer.scrollTop - scrollTopBeforeUpdate)).toBeLessThanOrEqual(4);
@@ -1480,8 +1481,7 @@ describe("ChatView browser behavior (full app)", () => {
       // thread has been promoted to a server thread (thread.create + turn.start
       // succeeded). The snapshot now includes the new thread, and the sync
       // should clear the draft without disrupting the route.
-      const { syncServerReadModel } = useStore.getState();
-      syncServerReadModel(addThreadToSnapshot(fixture.snapshot, newThreadId));
+      syncServerReadModelToAtoms(addThreadToSnapshot(fixture.snapshot, newThreadId));
 
       // Clear the draft now that the server thread exists (mirrors EventRouter behavior).
       useComposerDraftStore.getState().clearDraftThread(newThreadId);
@@ -1912,8 +1912,7 @@ describe("ChatView browser behavior (full app)", () => {
       );
       const promotedThreadId = promotedThreadPath.slice(1) as ThreadId;
 
-      const { syncServerReadModel } = useStore.getState();
-      syncServerReadModel(addThreadToSnapshot(fixture.snapshot, promotedThreadId));
+      syncServerReadModelToAtoms(addThreadToSnapshot(fixture.snapshot, promotedThreadId));
       useComposerDraftStore.getState().clearDraftThread(promotedThreadId);
 
       const freshThreadPath = await triggerChatNewShortcutUntilPath(

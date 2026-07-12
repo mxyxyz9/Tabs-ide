@@ -100,7 +100,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
             stagedSummary: "M apps/server/src/provider/Drivers/GrokDriver.ts",
             stagedPatch: "diff --git a/.../GrokDriver.ts b/.../GrokDriver.ts",
             modelSelection: createModelSelection(
-              ProviderInstanceId.makeUnsafe("grok"),
+              "grok" as ProviderInstanceId,
               "grok-mock-alt",
             ),
           });
@@ -140,7 +140,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
             cwd: process.cwd(),
             message: "the lint job is red",
             modelSelection: createModelSelection(
-              ProviderInstanceId.makeUnsafe("grok"),
+              "grok" as ProviderInstanceId,
               "grok-mock-alt",
             ),
           });
@@ -161,7 +161,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
               cwd: process.cwd(),
               message: "wire up grok",
               modelSelection: createModelSelection(
-                ProviderInstanceId.makeUnsafe("grok"),
+                "grok" as ProviderInstanceId,
                 "missing-grok-model",
               ),
             }),
@@ -184,7 +184,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
               cwd: process.cwd(),
               message: "anything",
               modelSelection: createModelSelection(
-                ProviderInstanceId.makeUnsafe("grok"),
+                "grok" as ProviderInstanceId,
                 "grok-build",
               ),
             }),
@@ -213,7 +213,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
             diffSummary: "M apps/server/src/provider/Drivers/GrokDriver.ts",
             diffPatch: "diff --git a/.../GrokDriver.ts b/.../GrokDriver.ts",
             modelSelection: createModelSelection(
-              ProviderInstanceId.makeUnsafe("grok"),
+              "grok" as ProviderInstanceId,
               "grok-build",
             ),
           });
@@ -236,7 +236,7 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
               cwd: process.cwd(),
               message: "anything",
               modelSelection: createModelSelection(
-                ProviderInstanceId.makeUnsafe("grok"),
+                "grok" as ProviderInstanceId,
                 "grok-build",
               ),
             }),

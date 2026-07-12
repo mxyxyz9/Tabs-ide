@@ -98,7 +98,7 @@ describe("WsTransport", () => {
         type: "push",
         sequence: 1,
         channel: WS_CHANNELS.serverConfigUpdated,
-        data: { issues: [] },
+        data: { issues: [], providers: [] },
       }),
     );
 
@@ -107,7 +107,7 @@ describe("WsTransport", () => {
       type: "push",
       sequence: 1,
       channel: WS_CHANNELS.serverConfigUpdated,
-      data: { issues: [] },
+      data: { issues: [], providers: [] },
     });
 
     transport.dispose();
@@ -160,7 +160,7 @@ describe("WsTransport", () => {
         type: "push",
         sequence: 3,
         channel: WS_CHANNELS.serverConfigUpdated,
-        data: { issues: [] },
+        data: { issues: [], providers: [] },
       }),
     );
 
@@ -169,7 +169,7 @@ describe("WsTransport", () => {
       type: "push",
       sequence: 3,
       channel: WS_CHANNELS.serverConfigUpdated,
-      data: { issues: [] },
+      data: { issues: [], providers: [] },
     });
     expect(warnSpy).toHaveBeenCalledTimes(2);
     expect(warnSpy).toHaveBeenNthCalledWith(

@@ -175,7 +175,7 @@ export function makeAcpToolCallEvent(input: {
     provider: input.provider,
     threadId: input.threadId,
     turnId: input.turnId,
-    itemId: RuntimeItemId.makeUnsafe(input.toolCall.toolCallId),
+    itemId: input.toolCall.toolCallId as RuntimeItemId,
     payload: {
       itemType: canonicalItemTypeFromAcpToolKind(input.toolCall.kind),
       ...(runtimeStatus ? { status: runtimeStatus } : {}),
@@ -205,7 +205,7 @@ export function makeAcpAssistantItemEvent(input: {
     provider: input.provider,
     threadId: input.threadId,
     turnId: input.turnId,
-    itemId: RuntimeItemId.makeUnsafe(input.itemId),
+    itemId: input.itemId as RuntimeItemId,
     payload: {
       itemType: "assistant_message",
       status: input.lifecycle === "item.completed" ? "completed" : "inProgress",
@@ -228,7 +228,7 @@ export function makeAcpContentDeltaEvent(input: {
     provider: input.provider,
     threadId: input.threadId,
     turnId: input.turnId,
-    ...(input.itemId ? { itemId: RuntimeItemId.makeUnsafe(input.itemId) } : {}),
+    ...(input.itemId ? { itemId: input.itemId as RuntimeItemId } : {}),
     payload: {
       streamKind: "assistant_text",
       delta: input.text,

@@ -43,7 +43,7 @@ import {
 } from "../CodexDeveloperInstructions";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("codex");
+const PROVIDER = "codex" as ProviderDriverKind;
 
 const ANSI_ESCAPE_CHAR = String.fromCharCode(27);
 const ANSI_ESCAPE_REGEX = new RegExp(`${ANSI_ESCAPE_CHAR}\\[[0-9;]*m`, "g");
@@ -520,18 +520,18 @@ function readRouteFields(notification: CodexServerNotification): {
     case "turn/started":
     case "turn/completed":
       return {
-        turnId: TurnId.makeUnsafe(notification.params.turn.id),
+        turnId: notification.params.turn.id as TurnId,
         itemId: undefined,
       };
     case "error":
       return {
-        turnId: TurnId.makeUnsafe(notification.params.turnId),
+        turnId: notification.params.turnId as TurnId,
         itemId: undefined,
       };
     case "turn/diff/updated":
     case "turn/plan/updated":
       return {
-        turnId: TurnId.makeUnsafe(notification.params.turnId),
+        turnId: notification.params.turnId as TurnId,
         itemId: undefined,
       };
     case "serverRequest/resolved":
@@ -542,8 +542,8 @@ function readRouteFields(notification: CodexServerNotification): {
     case "item/started":
     case "item/completed":
       return {
-        turnId: TurnId.makeUnsafe(notification.params.turnId),
-        itemId: ProviderItemId.makeUnsafe(notification.params.item.id),
+        turnId: notification.params.turnId as TurnId,
+        itemId: notification.params.item.id as ProviderItemId,
       };
     case "item/agentMessage/delta":
     case "item/plan/delta":
@@ -555,8 +555,8 @@ function readRouteFields(notification: CodexServerNotification): {
     case "item/reasoning/summaryPartAdded":
     case "item/reasoning/textDelta":
       return {
-        turnId: TurnId.makeUnsafe(notification.params.turnId),
-        itemId: ProviderItemId.makeUnsafe(notification.params.itemId),
+        turnId: notification.params.turnId as TurnId,
+        itemId: notification.params.itemId as ProviderItemId,
       };
     default:
       return {
@@ -677,7 +677,7 @@ function parseThreadSnapshot(
   return {
     threadId: response.thread.id,
     turns: response.thread.turns.map((turn) => ({
-      id: TurnId.makeUnsafe(turn.id),
+      id: turn.id as TurnId,
       items: turn.items,
     })),
   };
@@ -767,7 +767,7 @@ export const makeCodexSessionRuntime = (
       Effect.gen(function* () {
         const id = yield* randomUUIDv4;
         return yield* offerEvent({
-          id: EventId.makeUnsafe(id),
+          id: id as EventId,
           provider: PROVIDER,
           ...(options.providerInstanceId ? { providerInstanceId: options.providerInstanceId } : {}),
           createdAt: yield* nowIso,
@@ -889,7 +889,7 @@ export const makeCodexSessionRuntime = (
           }
           return updateSession(sessionRef, {
             status: "running",
-            activeTurnId: TurnId.makeUnsafe(payload.turn.id),
+            activeTurnId: payload.turn.id as TurnId,
           });
         }),
       ),
@@ -933,9 +933,9 @@ export const makeCodexSessionRuntime = (
 
     yield* client.handleServerRequest("item/commandExecution/requestApproval", (payload) =>
       Effect.gen(function* () {
-        const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-        const turnId = TurnId.makeUnsafe(payload.turnId);
-        const itemId = ProviderItemId.makeUnsafe(payload.itemId);
+        const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+        const turnId = payload.turnId as TurnId;
+        const itemId = payload.itemId as ProviderItemId;
         const decision = yield* Deferred.make<ProviderApprovalDecision>();
 
         yield* Ref.update(pendingApprovalsRef, (current) => {
@@ -989,9 +989,9 @@ export const makeCodexSessionRuntime = (
 
     yield* client.handleServerRequest("item/fileChange/requestApproval", (payload) =>
       Effect.gen(function* () {
-        const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-        const turnId = TurnId.makeUnsafe(payload.turnId);
-        const itemId = ProviderItemId.makeUnsafe(payload.itemId);
+        const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+        const turnId = payload.turnId as TurnId;
+        const itemId = payload.itemId as ProviderItemId;
         const decision = yield* Deferred.make<ProviderApprovalDecision>();
 
         yield* Ref.update(pendingApprovalsRef, (current) => {
@@ -1045,9 +1045,9 @@ export const makeCodexSessionRuntime = (
 
     yield* client.handleServerRequest("item/tool/requestUserInput", (payload) =>
       Effect.gen(function* () {
-        const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
-        const turnId = TurnId.makeUnsafe(payload.turnId);
-        const itemId = ProviderItemId.makeUnsafe(payload.itemId);
+        const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+        const turnId = payload.turnId as TurnId;
+        const itemId = payload.itemId as ProviderItemId;
         const answers = yield* Deferred.make<ProviderUserInputAnswers>();
 
         yield* Ref.update(pendingUserInputsRef, (current) => {
@@ -1264,7 +1264,7 @@ export const makeCodexSessionRuntime = (
               toProtocolParseError("Invalid turn/start response payload", error),
             ),
           );
-          const turnId = TurnId.makeUnsafe(response.turn.id);
+          const turnId = response.turn.id as TurnId;
           yield* updateSession(sessionRef, {
             status: "running",
             activeTurnId: turnId,

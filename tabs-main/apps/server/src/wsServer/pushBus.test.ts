@@ -53,6 +53,7 @@ describe("makeServerPushBus", () => {
 
         yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
           issues: [{ kind: "keybindings.malformed-config", message: "queued-before-connect" }],
+          providers: [],
         });
 
         const delivered = yield* pushBus.publishClient(
@@ -69,6 +70,7 @@ describe("makeServerPushBus", () => {
 
         yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
           issues: [],
+          providers: [],
         });
 
         yield* Effect.promise(() => client.waitForSentCount(2));

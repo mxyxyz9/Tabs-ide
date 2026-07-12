@@ -261,7 +261,7 @@ export const materializeCodexShadowHome = Effect.fn("materializeCodexShadowHome"
 
 export function codexContinuationIdentity(layout: CodexHomeLayout) {
   return {
-    driverKind: ProviderDriverKind.makeUnsafe("codex"),
+    driverKind: "codex" as ProviderDriverKind,
     continuationKey: layout.continuationKey,
   };
 }

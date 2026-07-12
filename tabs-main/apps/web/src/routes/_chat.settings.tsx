@@ -94,6 +94,7 @@ import { DEFAULT_DESKTOP_ICON_THEME, DEFAULT_UNIFIED_SETTINGS } from "@tabs/cont
 import { SourceControlSettingsPanel } from "../components/settings/SourceControlSettings";
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
+import { refreshServerConfig, useServerConfig } from "../state/settings";
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
@@ -516,7 +517,7 @@ function SettingsRouteView() {
       });
     },
   });
-  const serverConfigQuery = useQuery(serverConfigQueryOptions());
+  const serverConfig = useServerConfig();
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("general");
@@ -553,6 +554,7 @@ function SettingsRouteView() {
     api.server
       .refreshProviders()
       .then(() => {
+        void refreshServerConfig();
         void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
         void queryClient.invalidateQueries({ queryKey: ["source-control-discovery"] });
       })
@@ -681,10 +683,10 @@ function SettingsRouteView() {
   }, []);
 
   const codexHomePath = settings.providers.codex.homePath;
-  const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
-  const loginCwd = serverConfigQuery.data?.cwd ?? null;
-  const availableEditors = serverConfigQuery.data?.availableEditors;
-  const serverProviders = serverConfigQuery.data?.providers ?? EMPTY_SERVER_PROVIDERS;
+  const keybindingsConfigPath = serverConfig?.keybindingsConfigPath ?? null;
+  const loginCwd = serverConfig?.cwd ?? null;
+  const availableEditors = serverConfig?.availableEditors;
+  const serverProviders = serverConfig?.providers ?? EMPTY_SERVER_PROVIDERS;
 
   const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
   const textGenInstanceId = textGenerationModelSelection.instanceId;
@@ -740,12 +742,15 @@ function SettingsRouteView() {
     ...(areProviderSettingsDirty ? ["Providers"] : []),
   ];
 
-  const resolvedKeybindings = serverConfigQuery.data?.keybindings ?? EMPTY_KEYBINDINGS;
+  const resolvedKeybindings = serverConfig?.keybindings ?? EMPTY_KEYBINDINGS;
 
   const applyKeybindingMutation = useCallback(
     (run: Promise<unknown>) =>
       run
-        .then(() => queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() }))
+        .then(() => {
+          void refreshServerConfig();
+          return queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
+        })
         .catch((error: unknown) => {
           toastManager.add({
             type: "error",

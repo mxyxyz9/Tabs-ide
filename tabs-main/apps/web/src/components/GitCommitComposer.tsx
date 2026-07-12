@@ -93,7 +93,7 @@ function resolveProgressDescription(progress: ActiveGitActionProgress): string |
 }
 
 function GitComposerActionIcon(props: {
-  actionId: "commit" | "commit_push" | "commit_push_pr" | "open_pr";
+  actionId: GitStackedAction | "open_pr";
 }) {
   const className = "size-3.5";
   if (props.actionId === "commit") return <GitCommitIcon className={className} />;

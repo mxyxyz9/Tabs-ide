@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * OrchestrationProjectionPipeline - Event projection pipeline service interface.
  *
@@ -7,7 +8,7 @@
  * @module OrchestrationProjectionPipeline
  */
 import type { OrchestrationEvent } from "@tabs/contracts";
-import { ServiceMap } from "effect";
+import {  } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";
@@ -36,7 +37,7 @@ export interface OrchestrationProjectionPipelineShape {
 /**
  * OrchestrationProjectionPipeline - Service tag for orchestration projections.
  */
-export class OrchestrationProjectionPipeline extends ServiceMap.Service<
+export class OrchestrationProjectionPipeline extends Context.Service<
   OrchestrationProjectionPipeline,
   OrchestrationProjectionPipelineShape
 >()("tabs/orchestration/Services/ProjectionPipeline/OrchestrationProjectionPipeline") {}

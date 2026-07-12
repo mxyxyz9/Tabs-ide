@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * TerminalManager - Terminal session orchestration service interface.
  *
@@ -18,11 +19,11 @@ import {
   TerminalWriteInput,
 } from "@tabs/contracts";
 import { PtyProcess } from "./PTY";
-import { Effect, Schema, ServiceMap } from "effect";
+import { Effect, Schema } from "effect";
 
 export class TerminalError extends Schema.TaggedErrorClass<TerminalError>()("TerminalError", {
   message: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {}
 
 export interface TerminalSessionState {
@@ -120,6 +121,6 @@ export interface TerminalManagerShape {
 /**
  * TerminalManager - Service tag for terminal session orchestration.
  */
-export class TerminalManager extends ServiceMap.Service<TerminalManager, TerminalManagerShape>()(
+export class TerminalManager extends Context.Service<TerminalManager, TerminalManagerShape>()(
   "tabs/terminal/Services/Manager/TerminalManager",
 ) {}

@@ -15,15 +15,15 @@ function makeEvent(input: {
 }): OrchestrationEvent {
   return {
     sequence: input.sequence,
-    eventId: EventId.makeUnsafe(`event-${input.sequence}`),
+    eventId: `event-${input.sequence}` as EventId,
     type: input.type,
     aggregateKind: input.aggregateKind,
     aggregateId:
       input.aggregateKind === "project"
-        ? ProjectId.makeUnsafe(input.aggregateId)
-        : ThreadId.makeUnsafe(input.aggregateId),
+        ? input.aggregateId as ProjectId
+        : input.aggregateId as ThreadId,
     occurredAt: input.occurredAt,
-    commandId: input.commandId === null ? null : CommandId.makeUnsafe(input.commandId),
+    commandId: input.commandId === null ? null : input.commandId as CommandId,
     causationEventId: null,
     correlationId: null,
     metadata: {},

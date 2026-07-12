@@ -50,7 +50,7 @@ import {
 import { makeClaudeCapabilitiesCacheKey, makeClaudeContinuationGroupKey } from "./ClaudeHome";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
-const DRIVER_KIND = ProviderDriverKind.makeUnsafe("claudeAgent");
+const DRIVER_KIND = "claudeAgent" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 const CAPABILITIES_PROBE_TTL = Duration.minutes(5);
 

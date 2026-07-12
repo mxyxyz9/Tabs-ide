@@ -13,15 +13,13 @@ import {
 } from "@tabs/shared/model";
 import type { ReactNode } from "react";
 import { getProviderModelCapabilities } from "../../providerModels";
-import { TraitsMenuContent, TraitsPicker } from "./TraitsPicker";
 
 // Composer model state and trait controls are derived entirely from the
 // selected model's capabilities/option descriptors, so these work for any
 // provider/driver (codex, claude, cursor, grok, opencode, …) uniformly.
 // Options flow as the canonical `ProviderOptionSelection[]` wire form — no
-// per-provider typed-option shims. `TraitsPicker`/`TraitsMenuContent` render
-// nothing when a model exposes no trait controls, so trait-less providers
-// (grok, opencode) degrade cleanly.
+// per-provider typed-option shims.
+// Options are configured by each provider dynamically.
 
 export type ComposerProviderStateInput = {
   provider: ProviderKind;
@@ -68,46 +66,3 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   };
 }
 
-export function renderProviderTraitsMenuContent(input: {
-  provider: ProviderKind;
-  threadId: ThreadId;
-  model: ModelSlug;
-  models: ReadonlyArray<ServerProviderModel>;
-  modelOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
-  prompt: string;
-  onPromptChange: (prompt: string) => void;
-}): ReactNode {
-  return (
-    <TraitsMenuContent
-      provider={input.provider}
-      models={input.models}
-      threadId={input.threadId}
-      model={input.model}
-      modelOptions={input.modelOptions}
-      prompt={input.prompt}
-      onPromptChange={input.onPromptChange}
-    />
-  );
-}
-
-export function renderProviderTraitsPicker(input: {
-  provider: ProviderKind;
-  threadId: ThreadId;
-  model: ModelSlug;
-  models: ReadonlyArray<ServerProviderModel>;
-  modelOptions: ReadonlyArray<ProviderOptionSelection> | undefined;
-  prompt: string;
-  onPromptChange: (prompt: string) => void;
-}): ReactNode {
-  return (
-    <TraitsPicker
-      provider={input.provider}
-      models={input.models}
-      threadId={input.threadId}
-      model={input.model}
-      modelOptions={input.modelOptions}
-      prompt={input.prompt}
-      onPromptChange={input.onPromptChange}
-    />
-  );
-}

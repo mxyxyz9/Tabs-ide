@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * OrchestrationEngineService - Service interface for orchestration command handling.
  *
@@ -15,7 +16,7 @@ import type {
   OrchestrationEvent,
   OrchestrationReadModel,
 } from "@tabs/contracts";
-import { ServiceMap } from "effect";
+import {  } from "effect";
 import type { Effect, Stream } from "effect";
 
 import type { OrchestrationDispatchError } from "../Errors.ts";
@@ -74,7 +75,7 @@ export interface OrchestrationEngineShape {
  * })
  * ```
  */
-export class OrchestrationEngineService extends ServiceMap.Service<
+export class OrchestrationEngineService extends Context.Service<
   OrchestrationEngineService,
   OrchestrationEngineShape
 >()("tabs/orchestration/Services/OrchestrationEngine/OrchestrationEngineService") {}

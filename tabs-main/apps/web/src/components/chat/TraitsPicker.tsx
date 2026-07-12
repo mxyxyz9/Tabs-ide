@@ -32,7 +32,7 @@ import {
   MenuSeparator as MenuDivider,
   MenuTrigger,
 } from "../ui/menu";
-import { useComposerDraftStore } from "../../composerDraftStore";
+import { composerDraftActions } from "../../state/composerDrafts";
 import { getProviderModelCapabilities } from "../../providerModels";
 import { cn } from "~/lib/utils";
 
@@ -151,7 +151,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   onRequestClose,
   ...persistence
 }: TraitsMenuContentProps & TraitsPersistence) {
-  const setProviderModelOptions = useComposerDraftStore((store) => store.setProviderModelOptions);
+  const setProviderModelOptions = composerDraftActions.setProviderModelOptions;
   const updateModelOptions = useCallback(
     (nextOptions: ProviderOptions | undefined) => {
       if ("onModelOptionsChange" in persistence) {

@@ -69,7 +69,7 @@ const isCodexSessionRuntimeThreadIdMissingError = Schema.is(
 );
 const isCodexResumeCursorSchema = Schema.is(CodexResumeCursorSchema);
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("codex");
+const PROVIDER = "codex" as ProviderDriverKind;
 
 export interface CodexAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
@@ -405,11 +405,11 @@ function contentStreamKindFromMethod(
 }
 
 function asRuntimeItemId(itemId: ProviderEvent["itemId"] & string): RuntimeItemId {
-  return RuntimeItemId.makeUnsafe(itemId);
+  return itemId as unknown as RuntimeItemId;
 }
 
 function asRuntimeRequestId(requestId: string): RuntimeRequestId {
-  return RuntimeRequestId.makeUnsafe(requestId);
+  return requestId as RuntimeRequestId;
 }
 
 function eventRawSource(event: ProviderEvent): NonNullable<ProviderRuntimeEvent["raw"]>["source"] {
@@ -1350,7 +1350,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   codexConfig: CodexSettings,
   options?: CodexAdapterLiveOptions,
 ) {
-  const boundInstanceId = options?.instanceId ?? ProviderInstanceId.makeUnsafe("codex");
+  const boundInstanceId = options?.instanceId ?? "codex" as ProviderInstanceId;
   const fileSystem = yield* FileSystem.FileSystem;
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverConfig = yield* Effect.service(ServerConfig);

@@ -50,7 +50,7 @@ import {
 } from "../opencodeRuntime";
 import * as Option from "effect/Option";
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("opencode");
+const PROVIDER = "opencode" as ProviderDriverKind;
 
 interface OpenCodeTurnSnapshot {
   readonly id: TurnId;
@@ -319,11 +319,13 @@ export function appendOpenCodeAssistantTextDelta(
   };
 }
 
-const isoFromEpochMs = (value: number): string | undefined => {
-  // smol's `DateTime.make` returns `DateTime | undefined` (not an Option).
-  const dateTime = DateTime.make(value);
-  return dateTime === undefined ? undefined : DateTime.formatIso(dateTime);
-};
+const isoFromEpochMs = (value: number) =>
+  DateTime.make(value).pipe(
+    Option.match({
+      onNone: () => undefined,
+      onSome: DateTime.formatIso,
+    }),
+  );
 
 function messageRoleForPart(
   context: OpenCodeSessionContext,
@@ -426,7 +428,7 @@ export function makeOpenCodeAdapter(
   options?: OpenCodeAdapterLiveOptions,
 ) {
   return Effect.gen(function* () {
-    const boundInstanceId = options?.instanceId ?? ProviderInstanceId.makeUnsafe("opencode");
+    const boundInstanceId = options?.instanceId ?? "opencode" as ProviderInstanceId;
     const serverConfig = yield* ServerConfig;
     const openCodeRuntime = yield* OpenCodeRuntime;
     const nativeEventLogger =
@@ -455,7 +457,7 @@ export function makeOpenCodeAdapter(
     );
     const buildEventBase = (input: EventBaseInput) =>
       Effect.all({
-        eventId: randomUUIDv4.pipe(Effect.map(EventId.makeUnsafe)),
+        eventId: randomUUIDv4.pipe(Effect.map(EventId.make)),
         createdAt: input.createdAt === undefined ? nowIso : Effect.succeed(input.createdAt),
       }).pipe(
         Effect.map(({ eventId, createdAt }) => ({
@@ -464,8 +466,8 @@ export function makeOpenCodeAdapter(
           threadId: input.threadId,
           createdAt,
           ...(input.turnId ? { turnId: input.turnId } : {}),
-          ...(input.itemId ? { itemId: RuntimeItemId.makeUnsafe(input.itemId) } : {}),
-          ...(input.requestId ? { requestId: RuntimeRequestId.makeUnsafe(input.requestId) } : {}),
+          ...(input.itemId ? { itemId: input.itemId as RuntimeItemId } : {}),
+          ...(input.requestId ? { requestId: input.requestId as RuntimeRequestId } : {}),
           ...(input.raw !== undefined
             ? {
                 raw: {
@@ -1148,7 +1150,7 @@ export function makeOpenCodeAdapter(
 
     const sendTurn: OpenCodeAdapterShape["sendTurn"] = Effect.fn("sendTurn")(function* (input) {
       const context = ensureSessionContext(sessions, input.threadId);
-      const turnId = TurnId.makeUnsafe(`opencode-turn-${yield* randomUUIDv4}`);
+      const turnId = `opencode-turn-${yield* randomUUIDv4}` as TurnId;
       const modelSelection =
         input.modelSelection ??
         (context.session.model
@@ -1367,7 +1369,7 @@ export function makeOpenCodeAdapter(
         for (const entry of messages.data ?? []) {
           if (entry.info.role === "assistant") {
             turns.push({
-              id: TurnId.makeUnsafe(entry.info.id),
+              id: entry.info.id as TurnId,
               items: [entry.info, ...entry.parts],
             });
           }

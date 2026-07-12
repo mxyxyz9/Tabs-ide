@@ -207,6 +207,10 @@ This triggers the full **Release Desktop** workflow which builds all platforms, 
 └── logo/                       # Brand assets (SVG icons)
 ```
 
+One-off migration and compatibility-repair material is kept under
+`_maintenance/legacy-repair/` (ignored by Git) rather than in the repository
+root. It is not needed to run the product.
+
 ### Key Design Patterns
 
 - **Effect-TS** — The server uses Effect for services, layers, typed errors, and structured concurrency

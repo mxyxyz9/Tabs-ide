@@ -447,9 +447,11 @@ it.layer(TestLayer)("git integration", (it) => {
 
         yield* (yield* GitCore).checkoutBranch({ cwd: source, branch: featureBranch });
         const core = yield* GitCore;
+        const runtimeServices = yield* Effect.context();
+        const runPromise = Effect.runPromiseWith(runtimeServices);
         yield* Effect.promise(() =>
           vi.waitFor(async () => {
-            const details = await Effect.runPromise(core.statusDetails(source));
+            const details = await runPromise(core.statusDetails(source));
             expect(details.branch).toBe(featureBranch);
             expect(details.aheadCount).toBe(0);
             expect(details.behindCount).toBe(1);

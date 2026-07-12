@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * GitCore - Effect service contract for low-level Git operations.
  *
@@ -6,7 +7,6 @@
  *
  * @module GitCore
  */
-import { ServiceMap } from "effect";
 import type { Effect, Scope } from "effect";
 import type {
   GitApplyHunkInput,
@@ -434,6 +434,6 @@ export interface GitCoreShape {
 /**
  * GitCore - Service tag for low-level Git repository operations.
  */
-export class GitCore extends ServiceMap.Service<GitCore, GitCoreShape>()(
+export class GitCore extends Context.Service<GitCore, GitCoreShape>()(
   "tabs/git/Services/GitCore",
 ) {}

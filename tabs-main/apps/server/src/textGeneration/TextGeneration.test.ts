@@ -61,7 +61,7 @@ const makeStubRegistry = (
 describe("makeTextGenerationFromRegistry", () => {
   it.effect("delegates to the matching instance's textGeneration closure", () =>
     Effect.gen(function* () {
-      const personalId = ProviderInstanceId.makeUnsafe("codex_personal");
+      const personalId = "codex_personal" as ProviderInstanceId;
       const personalCalls: string[] = [];
       const personal = makeStubInstance(
         personalId,
@@ -73,7 +73,7 @@ describe("makeTextGenerationFromRegistry", () => {
         }),
       );
 
-      const workId = ProviderInstanceId.makeUnsafe("codex_work");
+      const workId = "codex_work" as ProviderInstanceId;
       const work = makeStubInstance(
         workId,
         makeStubTextGeneration({
@@ -87,7 +87,7 @@ describe("makeTextGenerationFromRegistry", () => {
         cwd: process.cwd(),
         message: "Refactor the routing layer",
         modelSelection: createModelSelection(
-          ProviderInstanceId.makeUnsafe("codex_personal"),
+          "codex_personal" as ProviderInstanceId,
           "gpt-5",
         ),
       });
@@ -106,7 +106,7 @@ describe("makeTextGenerationFromRegistry", () => {
           cwd: process.cwd(),
           message: "anything",
           modelSelection: createModelSelection(
-            ProviderInstanceId.makeUnsafe("missing_instance"),
+            "missing_instance" as ProviderInstanceId,
             "gpt-5",
           ),
         })

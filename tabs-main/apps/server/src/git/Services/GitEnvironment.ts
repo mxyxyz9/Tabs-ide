@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * GitEnvironment - Effect service contract for detecting the local Git / GitHub
  * CLI environment and managing GitHub CLI accounts.
@@ -7,7 +8,6 @@
  *
  * @module GitEnvironment
  */
-import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 import type {
   GitEnvironmentInput,
@@ -50,7 +50,7 @@ export interface GitEnvironmentShape {
 /**
  * GitEnvironment - Service tag for Git/GitHub environment detection.
  */
-export class GitEnvironment extends ServiceMap.Service<GitEnvironment, GitEnvironmentShape>()(
+export class GitEnvironment extends Context.Service<GitEnvironment, GitEnvironmentShape>()(
   "tabs/git/Services/GitEnvironment",
 ) {}
 

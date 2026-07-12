@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionCheckpointRepository - Projection repository interface for checkpoints.
  *
@@ -16,7 +17,7 @@ import {
   ThreadId,
   TurnId,
 } from "@tabs/contracts";
-import { Option, ServiceMap, Schema } from "effect";
+import { Option, Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -87,7 +88,7 @@ export interface ProjectionCheckpointRepositoryShape {
 /**
  * ProjectionCheckpointRepository - Service tag for checkpoint projection persistence.
  */
-export class ProjectionCheckpointRepository extends ServiceMap.Service<
+export class ProjectionCheckpointRepository extends Context.Service<
   ProjectionCheckpointRepository,
   ProjectionCheckpointRepositoryShape
 >()("tabs/persistence/Services/ProjectionCheckpoints/ProjectionCheckpointRepository") {}

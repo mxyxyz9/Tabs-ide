@@ -26,11 +26,11 @@ const readModel: OrchestrationReadModel = {
   updatedAt: now,
   projects: [
     {
-      id: ProjectId.makeUnsafe("project-a"),
+      id: "project-a" as ProjectId,
       title: "Project A",
       workspaceRoot: "/tmp/project-a",
       defaultModelSelection: {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: "gpt-5-codex",
       },
       scripts: [],
@@ -39,11 +39,11 @@ const readModel: OrchestrationReadModel = {
       deletedAt: null,
     },
     {
-      id: ProjectId.makeUnsafe("project-b"),
+      id: "project-b" as ProjectId,
       title: "Project B",
       workspaceRoot: "/tmp/project-b",
       defaultModelSelection: {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: "gpt-5-codex",
       },
       scripts: [],
@@ -54,11 +54,11 @@ const readModel: OrchestrationReadModel = {
   ],
   threads: [
     {
-      id: ThreadId.makeUnsafe("thread-1"),
-      projectId: ProjectId.makeUnsafe("project-a"),
+      id: "thread-1" as ThreadId,
+      projectId: "project-a" as ProjectId,
       title: "Thread A",
       modelSelection: {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: "gpt-5-codex",
       },
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -77,11 +77,11 @@ const readModel: OrchestrationReadModel = {
       archivedAt: null,
     },
     {
-      id: ThreadId.makeUnsafe("thread-2"),
-      projectId: ProjectId.makeUnsafe("project-b"),
+      id: "thread-2" as ThreadId,
+      projectId: "project-b" as ProjectId,
       title: "Thread B",
       modelSelection: {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: "gpt-5-codex",
       },
       interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -104,10 +104,10 @@ const readModel: OrchestrationReadModel = {
 
 const messageSendCommand: OrchestrationCommand = {
   type: "thread.turn.start",
-  commandId: CommandId.makeUnsafe("cmd-1"),
-  threadId: ThreadId.makeUnsafe("thread-1"),
+  commandId: "cmd-1" as CommandId,
+  threadId: "thread-1" as ThreadId,
   message: {
-    messageId: MessageId.makeUnsafe("msg-1"),
+    messageId: "msg-1" as MessageId,
     role: "user",
     text: "hello",
     attachments: [],
@@ -119,13 +119,13 @@ const messageSendCommand: OrchestrationCommand = {
 
 describe("commandInvariants", () => {
   it("finds threads by id and project", () => {
-    expect(findThreadById(readModel, ThreadId.makeUnsafe("thread-1"))?.projectId).toBe("project-a");
-    expect(findThreadById(readModel, ThreadId.makeUnsafe("missing"))).toBeUndefined();
+    expect(findThreadById(readModel, "thread-1" as ThreadId)?.projectId).toBe("project-a");
+    expect(findThreadById(readModel, "missing" as ThreadId)).toBeUndefined();
     expect(
-      listThreadsByProjectId(readModel, ProjectId.makeUnsafe("project-b")).map(
+      listThreadsByProjectId(readModel, "project-b" as ProjectId).map(
         (thread) => thread.id,
       ),
-    ).toEqual([ThreadId.makeUnsafe("thread-2")]);
+    ).toEqual(["thread-2" as ThreadId]);
   });
 
   it("requires existing thread", async () => {
@@ -133,17 +133,17 @@ describe("commandInvariants", () => {
       requireThread({
         readModel,
         command: messageSendCommand,
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        threadId: "thread-1" as ThreadId,
       }),
     );
-    expect(thread.id).toBe(ThreadId.makeUnsafe("thread-1"));
+    expect(thread.id).toBe("thread-1" as ThreadId);
 
     await expect(
       Effect.runPromise(
         requireThread({
           readModel,
           command: messageSendCommand,
-          threadId: ThreadId.makeUnsafe("missing"),
+          threadId: "missing" as ThreadId,
         }),
       ),
     ).rejects.toThrow("does not exist");
@@ -155,12 +155,12 @@ describe("commandInvariants", () => {
         readModel,
         command: {
           type: "thread.create",
-          commandId: CommandId.makeUnsafe("cmd-2"),
-          threadId: ThreadId.makeUnsafe("thread-3"),
-          projectId: ProjectId.makeUnsafe("project-a"),
+          commandId: "cmd-2" as CommandId,
+          threadId: "thread-3" as ThreadId,
+          projectId: "project-a" as ProjectId,
           title: "new",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -169,7 +169,7 @@ describe("commandInvariants", () => {
           worktreePath: null,
           createdAt: now,
         },
-        threadId: ThreadId.makeUnsafe("thread-3"),
+        threadId: "thread-3" as ThreadId,
       }),
     );
 
@@ -179,12 +179,12 @@ describe("commandInvariants", () => {
           readModel,
           command: {
             type: "thread.create",
-            commandId: CommandId.makeUnsafe("cmd-3"),
-            threadId: ThreadId.makeUnsafe("thread-1"),
-            projectId: ProjectId.makeUnsafe("project-a"),
+            commandId: "cmd-3" as CommandId,
+            threadId: "thread-1" as ThreadId,
+            projectId: "project-a" as ProjectId,
             title: "dup",
             modelSelection: {
-              instanceId: ProviderInstanceId.makeUnsafe("codex"),
+              instanceId: "codex" as ProviderInstanceId,
               model: "gpt-5-codex",
             },
             interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -193,7 +193,7 @@ describe("commandInvariants", () => {
             worktreePath: null,
             createdAt: now,
           },
-          threadId: ThreadId.makeUnsafe("thread-1"),
+          threadId: "thread-1" as ThreadId,
         }),
       ),
     ).rejects.toThrow("already exists");

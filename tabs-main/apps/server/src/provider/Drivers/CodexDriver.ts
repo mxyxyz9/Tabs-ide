@@ -53,7 +53,7 @@ import {
 } from "./CodexHomeLayout";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
-const DRIVER_KIND = ProviderDriverKind.makeUnsafe("codex");
+const DRIVER_KIND = "codex" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 const UPDATE = makePackageManagedProviderMaintenanceResolver({
   provider: DRIVER_KIND,

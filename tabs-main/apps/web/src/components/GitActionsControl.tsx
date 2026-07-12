@@ -50,6 +50,7 @@ import {
 import { randomUUID } from "~/lib/utils";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { readNativeApi } from "~/nativeApi";
+import { refreshVcs, useVcs } from "../state/vcs";
 
 interface GitActionsControlProps {
   gitCwd: string | null;
@@ -241,9 +242,7 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
     });
   }, [threadToastData]);
 
-  const { data: gitStatus = null, error: gitStatusError } = useQuery(gitStatusQueryOptions(gitCwd));
-
-  const { data: branchList = null } = useQuery(gitBranchesQueryOptions(gitCwd));
+  const { status: gitStatus, branches: branchList, error: gitStatusError } = useVcs(gitCwd);
   // Default to true while loading so we don't flash init controls.
   const isRepo = branchList?.isRepo ?? true;
   const hasOriginRemote = branchList?.hasOriginRemote ?? false;
@@ -254,7 +253,8 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
   useEffect(() => {
     if (!isGitStatusOutOfSync) return;
     void invalidateGitQueries(queryClient);
-  }, [isGitStatusOutOfSync, queryClient]);
+    void refreshVcs(gitCwd);
+  }, [gitCwd, isGitStatusOutOfSync, queryClient]);
 
   const gitStatusForActions = isGitStatusOutOfSync ? null : gitStatus;
 

@@ -1,6 +1,5 @@
-import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as Effect from "effect/Effect";
 
-export default Effect.gen(function* () {
-  yield* SqlClient.SqlClient;
-});
+// This migration intentionally became a no-op: the runtime-mode column was
+// introduced by migration 004, but the historical sequence must remain stable.
+export default Effect.void;

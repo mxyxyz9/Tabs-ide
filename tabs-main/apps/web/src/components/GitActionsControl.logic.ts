@@ -85,7 +85,7 @@ export function summarizeGitResult(result: GitRunStackedActionResult): {
   title: string;
   description?: string;
 } {
-  if (result.pr.status === "created" || result.pr.status === "opened_existing") {
+  if (result.pr?.status === "created" || result.pr?.status === "opened_existing") {
     const prNumber = result.pr.number ? ` #${result.pr.number}` : "";
     const title = `${result.pr.status === "created" ? "Created PR" : "Opened PR"}${prNumber}`;
     return withDescription(title, truncateText(result.pr.title));

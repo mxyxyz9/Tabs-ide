@@ -82,7 +82,7 @@ const makeTestAdapter = (binaryPath: string, options?: Parameters<typeof makeGro
 it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
   it.effect("starts a session and maps mock ACP prompt flow to runtime events", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.makeUnsafe("grok-mock-thread");
+      const threadId = "grok-mock-thread" as ThreadId;
       const wrapperPath = yield* Effect.promise(() => makeMockGrokWrapper());
       const adapter = yield* makeTestAdapter(wrapperPath);
 
@@ -102,11 +102,11 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
       const session = yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("grok"),
+        provider: "grok" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("grok"),
+          instanceId: "grok" as ProviderInstanceId,
           model: "grok-mock-alt",
         },
       });
@@ -150,7 +150,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
   it.effect("closes the ACP child process when a session stops", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.makeUnsafe("grok-stop-session-close");
+      const threadId = "grok-stop-session-close" as ThreadId;
       const tempDir = yield* Effect.promise(() =>
         mkdtemp(path.join(os.tmpdir(), "grok-adapter-exit-log-")),
       );
@@ -165,10 +165,10 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("grok"),
+        provider: "grok" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("grok"), model: "grok-build" },
+        modelSelection: { instanceId: "grok" as ProviderInstanceId, model: "grok-build" },
       });
 
       yield* adapter.stopSession(threadId);
@@ -182,16 +182,16 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
     Effect.gen(function* () {
       const wrapperPath = yield* Effect.promise(() => makeMockGrokWrapper());
       const adapter = yield* makeTestAdapter(wrapperPath);
-      const threadId = ThreadId.makeUnsafe("grok-provider-mismatch");
+      const threadId = "grok-provider-mismatch" as ThreadId;
 
       const error = yield* Effect.flip(
         adapter.startSession({
           threadId,
-          provider: ProviderDriverKind.makeUnsafe("cursor"),
+          provider: "cursor" as ProviderDriverKind,
           cwd: process.cwd(),
           runtimeMode: "full-access",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("grok"),
+            instanceId: "grok" as ProviderInstanceId,
             model: "grok-build",
           },
         }),
@@ -203,17 +203,17 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
   it.effect("rejects sendTurn with empty input and no attachments", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.makeUnsafe("grok-empty-turn");
+      const threadId = "grok-empty-turn" as ThreadId;
 
       const wrapperPath = yield* Effect.promise(() => makeMockGrokWrapper());
       const adapter = yield* makeTestAdapter(wrapperPath);
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("grok"),
+        provider: "grok" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
-        modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("grok"), model: "grok-build" },
+        modelSelection: { instanceId: "grok" as ProviderInstanceId, model: "grok-build" },
       });
 
       const error = yield* Effect.flip(
@@ -232,7 +232,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
   it.effect("responds to ACP approvals using provider-supplied option ids", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.makeUnsafe("grok-custom-approval-option-id");
+      const threadId = "grok-custom-approval-option-id" as ThreadId;
       const tempDir = yield* Effect.promise(() => mkdtemp(path.join(os.tmpdir(), "grok-acp-")));
       const requestLogPath = path.join(tempDir, "requests.ndjson");
       const wrapperPath = yield* Effect.promise(() =>
@@ -247,7 +247,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
         event.type === "request.opened"
           ? adapter.respondToRequest(
               threadId,
-              ApprovalRequestId.makeUnsafe(String(event.requestId)),
+              String(event.requestId) as ApprovalRequestId,
               "accept",
             )
           : Effect.void,
@@ -255,7 +255,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("grok"),
+        provider: "grok" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "approval-required",
       });
@@ -283,7 +283,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
   it.effect("handles xAI ask_user_question extension requests", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.makeUnsafe("grok-xai-ask-user-question");
+      const threadId = "grok-xai-ask-user-question" as ThreadId;
       const wrapperPath = yield* Effect.promise(() =>
         makeMockGrokWrapper({ T3_ACP_EMIT_XAI_ASK_USER_QUESTION: "1" }),
       );
@@ -308,7 +308,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("grok"),
+        provider: "grok" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
       });
@@ -325,7 +325,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
       yield* adapter.respondToUserInput(
         threadId,
-        ApprovalRequestId.makeUnsafe(String(requestedEvent.requestId)),
+        String(requestedEvent.requestId) as ApprovalRequestId,
         {
           "Which scope should Grok use?": "Workspace",
         },
@@ -344,7 +344,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
   it.effect("continues streaming events when native notification logging fails", () =>
     Effect.gen(function* () {
-      const threadId = ThreadId.makeUnsafe("grok-native-log-failure");
+      const threadId = "grok-native-log-failure" as ThreadId;
       const wrapperPath = yield* Effect.promise(() => makeMockGrokWrapper());
       const adapter = yield* makeTestAdapter(wrapperPath, {
         nativeEventLogger: {
@@ -369,7 +369,7 @@ it.layer(grokAdapterTestLayer)("GrokAdapterLive", (it) => {
 
       yield* adapter.startSession({
         threadId,
-        provider: ProviderDriverKind.makeUnsafe("grok"),
+        provider: "grok" as ProviderDriverKind,
         cwd: process.cwd(),
         runtimeMode: "full-access",
       });

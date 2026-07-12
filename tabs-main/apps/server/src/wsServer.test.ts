@@ -65,10 +65,10 @@ import { MigrationError } from "@effect/sql-sqlite-bun/SqliteMigrator";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
 
-const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
-const asProviderItemId = (value: string): ProviderItemId => ProviderItemId.makeUnsafe(value);
-const asThreadId = (value: string): ThreadId => ThreadId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
+const asEventId = (value: string): EventId => value as EventId;
+const asProviderItemId = (value: string): ProviderItemId => value as ProviderItemId;
+const asThreadId = (value: string): ThreadId => value as ThreadId;
+const asTurnId = (value: string): TurnId => value as TurnId;
 
 const defaultOpenService: OpenShape = {
   openBrowser: () => Effect.void,
@@ -77,8 +77,8 @@ const defaultOpenService: OpenShape = {
 
 const defaultProviderStatuses: ReadonlyArray<ServerProvider> = [
   {
-    instanceId: ProviderInstanceId.makeUnsafe("codex"),
-    driver: ProviderDriverKind.makeUnsafe("codex"),
+    instanceId: "codex" as ProviderInstanceId,
+    driver: "codex" as ProviderDriverKind,
     enabled: true,
     installed: true,
     version: "0.116.0",
@@ -129,6 +129,7 @@ class MockTerminalManager implements TerminalManagerShape {
       const now = new Date().toISOString();
       const terminalId = input.terminalId ?? DEFAULT_TERMINAL_ID;
       const snapshot: TerminalSessionSnapshot = {
+        worktreePath: null,
         threadId: input.threadId,
         terminalId,
         cwd: input.cwd,
@@ -146,7 +147,6 @@ class MockTerminalManager implements TerminalManagerShape {
           type: "started",
           threadId: input.threadId,
           terminalId,
-          createdAt: now,
           snapshot,
         });
       });
@@ -165,7 +165,6 @@ class MockTerminalManager implements TerminalManagerShape {
           type: "output",
           threadId: input.threadId,
           terminalId,
-          createdAt: new Date().toISOString(),
           data: input.data,
         });
       });
@@ -181,7 +180,6 @@ class MockTerminalManager implements TerminalManagerShape {
           type: "cleared",
           threadId: input.threadId,
           terminalId,
-          createdAt: new Date().toISOString(),
         });
       });
     });
@@ -191,6 +189,7 @@ class MockTerminalManager implements TerminalManagerShape {
       const now = new Date().toISOString();
       const terminalId = input.terminalId ?? DEFAULT_TERMINAL_ID;
       const snapshot: TerminalSessionSnapshot = {
+        worktreePath: null,
         threadId: input.threadId,
         terminalId,
         cwd: input.cwd,
@@ -208,7 +207,6 @@ class MockTerminalManager implements TerminalManagerShape {
           type: "restarted",
           threadId: input.threadId,
           terminalId,
-          createdAt: now,
           snapshot,
         });
       });
@@ -1302,7 +1300,7 @@ describe("WebSocket Server", () => {
     const providerService: ProviderServiceShape = {
       startSession: (threadId) =>
         Effect.succeed({
-          provider: ProviderDriverKind.makeUnsafe("codex"),
+          provider: "codex" as ProviderDriverKind,
           status: "ready",
           runtimeMode: "full-access",
           threadId,
@@ -1480,8 +1478,7 @@ describe("WebSocket Server", () => {
       type: "output",
       threadId: "thread-1",
       terminalId: DEFAULT_TERMINAL_ID,
-      createdAt: new Date().toISOString(),
-      data: "manual test output\n",
+          data: "manual test output\n",
     };
     terminalManager.emitEvent(manualEvent);
 

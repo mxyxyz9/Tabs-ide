@@ -19,9 +19,9 @@ import {
 } from "./providerStatusCache";
 
 const emptyCapabilities = createModelCapabilities({ optionDescriptors: [] });
-const CODEX_DRIVER = ProviderDriverKind.makeUnsafe("codex");
-const CLAUDE_AGENT_DRIVER = ProviderDriverKind.makeUnsafe("claudeAgent");
-const OPENCODE_DRIVER = ProviderDriverKind.makeUnsafe("opencode");
+const CODEX_DRIVER = "codex" as ProviderDriverKind;
+const CLAUDE_AGENT_DRIVER = "claudeAgent" as ProviderDriverKind;
+const OPENCODE_DRIVER = "opencode" as ProviderDriverKind;
 
 const makeProvider = (
   provider: ProviderDriverKind,
@@ -57,15 +57,15 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       });
       const codexPath = yield* resolveProviderStatusCachePath({
         cacheDir: tempDir,
-        instanceId: defaultInstanceIdForDriver(ProviderDriverKind.makeUnsafe("codex")),
+        instanceId: defaultInstanceIdForDriver("codex" as ProviderDriverKind),
       });
       const claudePath = yield* resolveProviderStatusCachePath({
         cacheDir: tempDir,
-        instanceId: defaultInstanceIdForDriver(ProviderDriverKind.makeUnsafe("claudeAgent")),
+        instanceId: defaultInstanceIdForDriver("claudeAgent" as ProviderDriverKind),
       });
       const openCodePath = yield* resolveProviderStatusCachePath({
         cacheDir: tempDir,
-        instanceId: defaultInstanceIdForDriver(ProviderDriverKind.makeUnsafe("opencode")),
+        instanceId: defaultInstanceIdForDriver("opencode" as ProviderDriverKind),
       });
 
       yield* writeProviderStatusCache({
@@ -183,7 +183,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       ],
     });
     const legacyCachedCodex = {
-      provider: ProviderDriverKind.makeUnsafe("codex"),
+      provider: "codex" as ProviderDriverKind,
       enabled: true,
       installed: true,
       version: "1.0.0",
@@ -202,7 +202,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       skills: [],
     } as unknown as ServerProvider;
     const mismatchedCachedCodex = makeProvider(CODEX_DRIVER, {
-      instanceId: ProviderInstanceId.makeUnsafe("codex_personal"),
+      instanceId: "codex_personal" as ProviderInstanceId,
     });
 
     assert.strictEqual(

@@ -12,7 +12,7 @@ import type {
   ServerProvider,
   ServerProviderUpdateState,
 } from "@tabs/contracts";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 import type { ProviderMaintenanceCapabilities } from "../providerMaintenance";
@@ -76,6 +76,6 @@ export interface ProviderRegistryShape {
   readonly streamChanges: Stream.Stream<ReadonlyArray<ServerProvider>>;
 }
 
-export class ProviderRegistry extends ServiceMap.Service<ProviderRegistry, ProviderRegistryShape>()(
-  "t3/provider/Services/ProviderRegistry",
+export class ProviderRegistry extends Context.Service<ProviderRegistry, ProviderRegistryShape>()(
+  "tabs/provider/Services/ProviderRegistry",
 ) {}

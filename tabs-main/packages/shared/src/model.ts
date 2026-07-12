@@ -10,7 +10,7 @@ import {
   type ProviderOptionSelection,
 } from "@tabs/contracts";
 
-const DEFAULT_PROVIDER_DRIVER_KIND = ProviderDriverKind.makeUnsafe("codex");
+const DEFAULT_PROVIDER_DRIVER_KIND = ("codex" as ProviderDriverKind);
 
 export interface SelectableModelOption {
   slug: string;
@@ -350,7 +350,7 @@ export function createModelSelection(
   const selections = options ? cloneSelections(options) : [];
   const base: ModelSelection = {
     instanceId,
-    provider: instanceId,
+    
     model,
   };
   return selections.length > 0 ? { ...base, options: selections } : base;
@@ -411,7 +411,7 @@ export function getDefaultModel(provider: string = "codex"): string {
 }
 
 export function hasEffortLevel(caps: ModelCapabilities, value: string): boolean {
-  if ((caps.reasoningEffortLevels ?? []).some((level) => level.value === value)) {
+  if (((caps as any).reasoningEffortLevels ?? []).some((level: any) => level.value === value)) {
     return true;
   }
   // Fall back to the generic descriptor model for providers that publish
@@ -420,7 +420,7 @@ export function hasEffortLevel(caps: ModelCapabilities, value: string): boolean 
 }
 
 export function getDefaultEffort(caps: ModelCapabilities): string | null {
-  const defaultLevel = (caps.reasoningEffortLevels ?? []).find((level) => level.isDefault);
+  const defaultLevel = ((caps as any).reasoningEffortLevels ?? []).find((level: any) => level.isDefault);
   if (defaultLevel) return defaultLevel.value;
   for (const descriptor of selectOptionDescriptors(caps)) {
     const fallback = descriptor.options.find((o) => o.isDefault);

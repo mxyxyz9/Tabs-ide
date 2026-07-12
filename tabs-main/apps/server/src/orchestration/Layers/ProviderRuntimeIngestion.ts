@@ -31,7 +31,7 @@ import { ServerSettingsService } from "../../serverSettings.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerCommandId = (event: ProviderRuntimeEvent, tag: string): CommandId =>
-  CommandId.makeUnsafe(`provider:${event.eventId}:${tag}:${crypto.randomUUID()}`);
+  `provider:${event.eventId}:${tag}:${crypto.randomUUID()}` as CommandId;
 
 const TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY = 10_000;
 const TURN_MESSAGE_IDS_BY_TURN_TTL = Duration.minutes(120);
@@ -58,11 +58,11 @@ type RuntimeIngestionInput =
     };
 
 function toTurnId(value: TurnId | string | undefined): TurnId | undefined {
-  return value === undefined ? undefined : TurnId.makeUnsafe(String(value));
+  return value === undefined ? undefined : String(value) as TurnId;
 }
 
 function toApprovalRequestId(value: string | undefined): ApprovalRequestId | undefined {
-  return value === undefined ? undefined : ApprovalRequestId.makeUnsafe(value);
+  return value === undefined ? undefined : value as ApprovalRequestId;
 }
 
 function sameId(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -215,7 +215,7 @@ function runtimeEventSequence(
 }
 
 function syntheticActivityId(event: ProviderRuntimeEvent, suffix: string): EventId {
-  return EventId.makeUnsafe(`${event.eventId}:${suffix}`);
+  return `${event.eventId}:${suffix}` as EventId;
 }
 
 function syntheticTaskActivitiesFromRuntimeEvent(input: {
@@ -1264,9 +1264,7 @@ const make = Effect.gen(function* () {
 
     yield* orchestrationEngine.dispatch({
       type: "thread.proposed-plan.upsert",
-      commandId: CommandId.makeUnsafe(
-        `provider:source-proposed-plan-implemented:${implementationThreadId}:${crypto.randomUUID()}`,
-      ),
+      commandId: `provider:source-proposed-plan-implemented:${implementationThreadId}:${crypto.randomUUID()}` as CommandId,
       threadId: sourceThread.id,
       proposedPlan: {
         ...sourcePlan,
@@ -1445,9 +1443,7 @@ const make = Effect.gen(function* () {
         event.type === "turn.proposed.delta" ? event.payload.delta : undefined;
 
       if (assistantDelta && assistantDelta.length > 0) {
-        const assistantMessageId = MessageId.makeUnsafe(
-          `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-        );
+        const assistantMessageId = `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId;
         const turnId = toTurnId(event.turnId);
         if (turnId) {
           yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
@@ -1491,9 +1487,7 @@ const make = Effect.gen(function* () {
       const assistantCompletion =
         event.type === "item.completed" && event.payload.itemType === "assistant_message"
           ? {
-              messageId: MessageId.makeUnsafe(
-                `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-              ),
+              messageId: `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId,
               fallbackText: event.payload.detail,
             }
           : undefined;
@@ -1628,9 +1622,7 @@ const make = Effect.gen(function* () {
           if (thread.checkpoints.some((c) => c.turnId === turnId)) {
             // Already tracked; no-op.
           } else {
-            const assistantMessageId = MessageId.makeUnsafe(
-              `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-            );
+            const assistantMessageId = `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId;
             const maxTurnCount = thread.checkpoints.reduce(
               (max, c) => Math.max(max, c.checkpointTurnCount),
               0,
@@ -1641,7 +1633,7 @@ const make = Effect.gen(function* () {
               threadId: thread.id,
               turnId,
               completedAt: now,
-              checkpointRef: CheckpointRef.makeUnsafe(`provider-diff:${event.eventId}`),
+              checkpointRef: `provider-diff:${event.eventId}` as CheckpointRef,
               status: "missing",
               files: [],
               assistantMessageId,

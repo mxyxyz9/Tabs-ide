@@ -33,7 +33,7 @@ import {
 } from "../providerMaintenance";
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
-const DRIVER_KIND = ProviderDriverKind.makeUnsafe("grok");
+const DRIVER_KIND = "grok" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 const UPDATE = makeStaticProviderMaintenanceResolver(
   makeManualOnlyProviderMaintenanceCapabilities({

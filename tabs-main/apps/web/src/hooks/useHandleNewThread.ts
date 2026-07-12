@@ -4,22 +4,21 @@ import { useCallback } from "react";
 import {
   type DraftThreadEnvMode,
   type DraftThreadState,
-  useComposerDraftStore,
 } from "../composerDraftStore";
+import { composerDraftActions, useDraftThread } from "../state/composerDrafts";
+import { projectsAtom, threadsAtom } from "../state/threads";
+import { useAtomValue } from "@effect/atom-react";
 import { newThreadId } from "../lib/utils";
-import { useStore } from "../store";
 
 export function useHandleNewThread() {
-  const projects = useStore((store) => store.projects);
-  const threads = useStore((store) => store.threads);
+  const projects = useAtomValue(projectsAtom);
+  const threads = useAtomValue(threadsAtom);
   const navigate = useNavigate();
   const routeThreadId = useParams({
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
-  const activeDraftThread = useComposerDraftStore((store) =>
-    routeThreadId ? (store.draftThreadsByThreadId[routeThreadId] ?? null) : null,
-  );
+  const activeDraftThread = useDraftThread(routeThreadId);
 
   const activeThread = routeThreadId
     ? threads.find((thread) => thread.id === routeThreadId)
@@ -46,7 +45,7 @@ export function useHandleNewThread() {
         applyStickyState,
         setDraftThreadContext,
         setProjectDraftThreadId,
-      } = useComposerDraftStore.getState();
+      } = composerDraftActions;
       const hasBranchOption = options?.branch !== undefined;
       const hasWorktreePathOption = options?.worktreePath !== undefined;
       const hasEnvModeOption = options?.envMode !== undefined;

@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * OrchestrationCommandReceiptRepository - Repository interface for command receipts.
  *
@@ -15,7 +16,7 @@ import {
   ProjectId,
   ThreadId,
 } from "@tabs/contracts";
-import { Option, Schema, ServiceMap } from "effect";
+import { Option, Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { OrchestrationCommandReceiptRepositoryError } from "../Errors.ts";
@@ -63,7 +64,7 @@ export interface OrchestrationCommandReceiptRepositoryShape {
 /**
  * OrchestrationCommandReceiptRepository - Service tag for command receipt persistence.
  */
-export class OrchestrationCommandReceiptRepository extends ServiceMap.Service<
+export class OrchestrationCommandReceiptRepository extends Context.Service<
   OrchestrationCommandReceiptRepository,
   OrchestrationCommandReceiptRepositoryShape
 >()(

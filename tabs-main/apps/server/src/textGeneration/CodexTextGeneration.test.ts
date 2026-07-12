@@ -17,7 +17,7 @@ import { makeCodexTextGeneration } from "./CodexTextGeneration";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DEFAULT_TEST_MODEL_SELECTION = createModelSelection(
-  ProviderInstanceId.makeUnsafe("codex"),
+  "codex" as ProviderInstanceId,
   "gpt-5.4-mini",
 );
 
@@ -228,7 +228,7 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
             stagedSummary: "M README.md",
             stagedPatch: "diff --git a/README.md b/README.md",
             modelSelection: createModelSelection(
-              ProviderInstanceId.makeUnsafe("codex"),
+              "codex" as ProviderInstanceId,
               "gpt-5.4",
               [
                 { id: "reasoningEffort", value: "xhigh" },

@@ -30,6 +30,9 @@ const MODE_ARGS = {
   ],
   "dev:server": ["run", "dev", "--filter=tabs"],
   "dev:web": ["run", "dev", "--filter=@tabs/web"],
+  // The desktop package watches its own authenticated backend bundle via
+  // `dev:backend-bundle`; do not run the standalone server here because it
+  // competes for state and is not the process Electron connects to.
   "dev:desktop": ["run", "dev", "--filter=@tabs/desktop", "--filter=@tabs/web", "--parallel"],
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
@@ -392,7 +395,7 @@ const resolveOptionalBooleanOverride = (
 
 export function runDevRunnerWithInput(input: DevRunnerCliInput) {
   return Effect.gen(function* () {
-    const { portOffset, devInstance } = yield* OffsetConfig.asEffect().pipe(
+    const { portOffset, devInstance } = yield* OffsetConfig.pipe(
       Effect.mapError(
         (cause) =>
           new DevRunnerError({

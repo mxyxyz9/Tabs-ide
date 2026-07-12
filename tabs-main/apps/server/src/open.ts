@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * Open - Browser/editor launch service interface.
  *
@@ -11,7 +12,7 @@ import { accessSync, constants, statSync } from "node:fs";
 import { extname, join } from "node:path";
 
 import { EDITORS, type EditorId } from "@tabs/contracts";
-import { ServiceMap, Schema, Effect, Layer } from "effect";
+import { Schema, Effect, Layer } from "effect";
 
 // ==============================
 // Definitions
@@ -19,7 +20,7 @@ import { ServiceMap, Schema, Effect, Layer } from "effect";
 
 export class OpenError extends Schema.TaggedErrorClass<OpenError>()("OpenError", {
   message: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Unknown),
 }) {}
 
 export interface OpenInEditorInput {
@@ -168,8 +169,16 @@ export function resolveAvailableEditors(
   const available: EditorId[] = [];
 
   for (const editor of EDITORS) {
-    const command = editor.command ?? fileManagerCommandForPlatform(platform);
-    if (isCommandAvailable(command, { platform, env })) {
+    if (editor.commands === null) {
+      const command = fileManagerCommandForPlatform(platform);
+      if (isCommandAvailable(command, { platform, env })) {
+        available.push(editor.id);
+      }
+      continue;
+    }
+
+    const command = editor.commands.find((cmd) => isCommandAvailable(cmd, { platform, env }));
+    if (command !== undefined) {
       available.push(editor.id);
     }
   }
@@ -197,7 +206,7 @@ export interface OpenShape {
 /**
  * Open - Service tag for browser/editor launch operations.
  */
-export class Open extends ServiceMap.Service<Open, OpenShape>()("tabs/open") {}
+export class Open extends Context.Service<Open, OpenShape>()("tabs/open") {}
 
 // ==============================
 // Implementations
@@ -212,10 +221,12 @@ export const resolveEditorLaunch = Effect.fnUntraced(function* (
     return yield* new OpenError({ message: `Unknown editor: ${input.editor}` });
   }
 
-  if (editorDef.command) {
+  if (editorDef.commands) {
+    const env = process.env;
+    const command = editorDef.commands.find((cmd) => isCommandAvailable(cmd, { platform, env })) ?? editorDef.commands[0];
     return shouldUseGotoFlag(editorDef.id, input.cwd)
-      ? { command: editorDef.command, args: ["--goto", input.cwd] }
-      : { command: editorDef.command, args: [input.cwd] };
+      ? { command, args: ["--goto", input.cwd] }
+      : { command, args: [input.cwd] };
   }
 
   if (editorDef.id !== "file-manager") {

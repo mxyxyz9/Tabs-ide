@@ -8,7 +8,7 @@ import {
   type ServerProviderUpdateState,
 } from "@tabs/contracts";
 import * as Cause from "effect/Cause";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -96,10 +96,10 @@ export interface ProviderMaintenanceRunnerShape {
   ) => Effect.Effect<ServerProviderUpdatedPayload, ServerProviderUpdateError>;
 }
 
-export class ProviderMaintenanceRunner extends ServiceMap.Service<
+export class ProviderMaintenanceRunner extends Context.Service<
   ProviderMaintenanceRunner,
   ProviderMaintenanceRunnerShape
->()("t3/provider/providerMaintenanceRunner") {}
+>()("tabs/provider/providerMaintenanceRunner") {}
 
 class ProviderMaintenanceCommandError extends Data.TaggedError("ProviderMaintenanceCommandError")<{
   readonly message: string;
@@ -249,7 +249,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const commandCoordinator = yield* makeProviderMaintenanceCommandCoordinator({
     makeAlreadyRunningError: () =>
       new ServerProviderUpdateError({
-        provider: ProviderDriverKind.makeUnsafe("unknown"),
+        provider: "unknown" as ProviderDriverKind,
         reason: "An update is already running for this provider.",
       }),
   });

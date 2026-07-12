@@ -28,7 +28,7 @@ import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory";
 import { makeProviderSessionReaperLive } from "./ProviderSessionReaper";
 
 const defaultModelSelection = {
-  instanceId: ProviderInstanceId.makeUnsafe("codex"),
+  instanceId: "codex" as ProviderInstanceId,
   model: "gpt-5-codex",
 } as const;
 
@@ -72,7 +72,7 @@ function makeReadModel(
   }>,
 ) {
   const now = "2026-01-01T00:00:00.000Z";
-  const projectId = ProjectId.makeUnsafe("project-provider-session-reaper");
+  const projectId = "project-provider-session-reaper" as ProjectId;
 
   return {
     snapshotSequence: 0,
@@ -160,7 +160,7 @@ describe("ProviderSessionReaper", () => {
       listSessions: () => Effect.succeed([]),
       getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
       getInstanceInfo: (instanceId) => {
-        const driverKind = ProviderDriverKind.makeUnsafe(String(instanceId));
+        const driverKind = String(instanceId) as ProviderDriverKind;
         return Effect.succeed({
           instanceId,
           driverKind,
@@ -204,7 +204,7 @@ describe("ProviderSessionReaper", () => {
   }
 
   it("reaps stale persisted sessions without active turns", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-reaper-stale");
+    const threadId = "thread-reaper-stale" as ThreadId;
     const now = "2026-01-01T00:00:00.000Z";
     const harness = await createHarness({
       readModel: makeReadModel([
@@ -251,8 +251,8 @@ describe("ProviderSessionReaper", () => {
   });
 
   it("skips stale sessions when the thread still has an active turn", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-reaper-active-turn");
-    const turnId = TurnId.makeUnsafe("turn-reaper-active");
+    const threadId = "thread-reaper-active-turn" as ThreadId;
+    const turnId = "turn-reaper-active" as TurnId;
     const now = "2026-01-01T00:00:00.000Z";
     const harness = await createHarness({
       readModel: makeReadModel([
@@ -299,7 +299,7 @@ describe("ProviderSessionReaper", () => {
   });
 
   it("does not reap sessions that are still within the inactivity threshold", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-reaper-fresh");
+    const threadId = "thread-reaper-fresh" as ThreadId;
     const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
     const harness = await createHarness({
       readModel: makeReadModel([
@@ -346,7 +346,7 @@ describe("ProviderSessionReaper", () => {
   });
 
   it("skips persisted sessions that are already marked stopped", async () => {
-    const threadId = ThreadId.makeUnsafe("thread-reaper-stopped");
+    const threadId = "thread-reaper-stopped" as ThreadId;
     const now = "2026-01-01T00:00:00.000Z";
     const harness = await createHarness({
       readModel: makeReadModel([
@@ -393,8 +393,8 @@ describe("ProviderSessionReaper", () => {
   });
 
   it("continues reaping other sessions when one stop attempt fails", async () => {
-    const failedThreadId = ThreadId.makeUnsafe("thread-reaper-stop-failure");
-    const reapedThreadId = ThreadId.makeUnsafe("thread-reaper-stop-success");
+    const failedThreadId = "thread-reaper-stop-failure" as ThreadId;
+    const reapedThreadId = "thread-reaper-stop-success" as ThreadId;
     const now = "2026-01-01T00:00:00.000Z";
     const harness = await createHarness({
       readModel: makeReadModel([
@@ -479,8 +479,8 @@ describe("ProviderSessionReaper", () => {
   });
 
   it("continues reaping other sessions when one stop attempt defects", async () => {
-    const defectThreadId = ThreadId.makeUnsafe("thread-reaper-stop-defect");
-    const reapedThreadId = ThreadId.makeUnsafe("thread-reaper-stop-after-defect");
+    const defectThreadId = "thread-reaper-stop-defect" as ThreadId;
+    const reapedThreadId = "thread-reaper-stop-after-defect" as ThreadId;
     const now = "2026-01-01T00:00:00.000Z";
     const harness = await createHarness({
       readModel: makeReadModel([

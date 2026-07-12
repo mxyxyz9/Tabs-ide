@@ -1,4 +1,4 @@
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
@@ -72,10 +72,7 @@ export interface CodexAppServerClientShape {
   ) => Effect.Effect<void>;
 }
 
-export class CodexAppServerClient extends ServiceMap.Service<
-  CodexAppServerClient,
-  CodexAppServerClientShape
->()("effect-codex-app-server/client/CodexAppServerClient") {}
+export class CodexAppServerClient extends Context.Service<CodexAppServerClient, CodexAppServerClientShape>()("effect-codex-app-server/client/CodexAppServerClient") {}
 
 type ServerRequestHandler = (
   payload: unknown,
@@ -218,7 +215,8 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
       Effect.flatMap((encoded) => transport.notify(method, encoded)),
     );
 
-  return CodexAppServerClient.of({
+  return {
+
     raw: {
       notifications: transport.incomingNotifications,
       requests: transport.incomingRequests,
@@ -247,7 +245,8 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
       Effect.sync(() => {
         unknownNotificationHandler = handler;
       }),
-  });
+  
+};
 });
 
 export const layerChildProcess = (

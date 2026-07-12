@@ -48,7 +48,7 @@ import {
 } from "../providerMaintenance";
 const decodeOpenCodeSettings = Schema.decodeSync(OpenCodeSettings);
 
-const DRIVER_KIND = ProviderDriverKind.makeUnsafe("opencode");
+const DRIVER_KIND = "opencode" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
 function isOpenCodeNativeCommandPath(commandPath: string): boolean {

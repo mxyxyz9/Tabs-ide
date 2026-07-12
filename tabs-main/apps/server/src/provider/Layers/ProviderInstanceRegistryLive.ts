@@ -40,7 +40,7 @@ import {
   type ProviderDriverKind,
   type ServerProvider,
 } from "@tabs/contracts";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Equal from "effect/Equal";
 import * as Exit from "effect/Exit";
@@ -220,7 +220,7 @@ const makeReconcile = <R>(input: {
       const previousUnavailable = yield* Ref.get(state.unavailable);
       const nextRaw = Object.entries(configMap);
       const nextKeys = new Set<ProviderInstanceId>(
-        nextRaw.map(([raw]) => ProviderInstanceId.makeUnsafe(raw)),
+        nextRaw.map(([raw]) => raw as ProviderInstanceId),
       );
 
       // 1. Close scopes for instances that disappeared or whose config
@@ -254,7 +254,7 @@ const makeReconcile = <R>(input: {
       const nextOrder: Array<ProviderInstanceId> = [];
 
       for (const [rawInstanceId, entry] of nextRaw) {
-        const instanceId = ProviderInstanceId.makeUnsafe(rawInstanceId);
+        const instanceId = rawInstanceId as ProviderInstanceId;
         nextOrder.push(instanceId);
 
         const existing = previousEntries.get(instanceId);
@@ -353,7 +353,7 @@ export const makeProviderInstanceRegistry = <R>(input: {
     // can be invoked later without re-providing driver dependencies.
     // The service tag's declared `reconcile: Effect<void>` hides R from
     // consumers — we materialize that here.
-    const driverContext = yield* Effect.services<R>();
+    const driverContext = yield* Effect.context<R>();
 
     const entries = yield* Ref.make<ReadonlyMap<ProviderInstanceId, LiveEntry>>(new Map());
     const unavailable = yield* Ref.make<ReadonlyMap<ProviderInstanceId, ServerProvider>>(new Map());
@@ -363,7 +363,7 @@ export const makeProviderInstanceRegistry = <R>(input: {
     const state: RegistryState = { entries, unavailable, changes };
     const reconcileWithR = makeReconcile({ state, driversById, parentScope });
     const reconcile: ProviderInstanceRegistryMutatorShape["reconcile"] = (configMap) =>
-      reconcileWithR(configMap).pipe(Effect.provideServices(driverContext));
+      reconcileWithR(configMap).pipe(Effect.provideContext(driverContext));
 
     // Hydrate the initial configMap synchronously so callers can read
     // `listInstances` immediately after this effect completes.
@@ -430,11 +430,11 @@ export const ProviderInstanceRegistryMutableLayer = <R>(input: {
   readonly drivers: ReadonlyArray<AnyProviderDriver<R>>;
   readonly configMap: ProviderInstanceConfigMap;
 }): Layer.Layer<ProviderInstanceRegistry | ProviderInstanceRegistryMutator, never, R> =>
-  Layer.effectServices(
+  Layer.effectContext(
     makeProviderInstanceRegistry(input).pipe(
       Effect.map(({ registry, mutator }) =>
-        ServiceMap.make(ProviderInstanceRegistry, registry).pipe(
-          ServiceMap.add(ProviderInstanceRegistryMutator, mutator),
+        Context.make(ProviderInstanceRegistry, registry).pipe(
+          Context.add(ProviderInstanceRegistryMutator, mutator),
         ),
       ),
     ),

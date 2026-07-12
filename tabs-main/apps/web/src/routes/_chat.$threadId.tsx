@@ -11,13 +11,15 @@ import {
   type DiffPanelMode,
 } from "../components/DiffPanelShell";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { composerDraftsAtom } from "../state/composerDrafts";
+import { threadsAtom, threadsHydratedAtom } from "../state/threads";
+import { useAtomValue } from "@effect/atom-react";
 import {
   type DiffRouteSearch,
   parseDiffRouteSearch,
   stripDiffSearchParams,
 } from "../diffRouteSearch";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { useStore } from "../store";
 import { Sheet, SheetPopup } from "../components/ui/sheet";
 import { Sidebar, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
@@ -161,15 +163,15 @@ const DiffPanelInlineSidebar = (props: {
 };
 
 function ChatThreadRouteView() {
-  const threadsHydrated = useStore((store) => store.threadsHydrated);
+  const threadsHydrated = useAtomValue(threadsHydratedAtom);
   const navigate = useNavigate();
   const threadId = Route.useParams({
     select: (params) => ThreadId.makeUnsafe(params.threadId),
   });
   const search = Route.useSearch();
-  const threadExists = useStore((store) => store.threads.some((thread) => thread.id === threadId));
-  const draftThreadExists = useComposerDraftStore((store) =>
-    Object.hasOwn(store.draftThreadsByThreadId, threadId),
+  const threadExists = useAtomValue(threadsAtom, (threads) => threads.some((thread) => thread.id === threadId));
+  const draftThreadExists = useAtomValue(composerDraftsAtom, (state) =>
+    Object.hasOwn(state.draftThreadsByThreadId, threadId),
   );
   const routeThreadExists = threadExists || draftThreadExists;
   const diffOpen = search.diff === "1";

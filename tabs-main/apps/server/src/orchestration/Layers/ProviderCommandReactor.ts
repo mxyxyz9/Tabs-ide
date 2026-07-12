@@ -5,8 +5,7 @@ import {
   type ModelSelection,
   type OrchestrationEvent,
   ProviderDriverKind,
-  ProviderKind,
-  type OrchestrationSession,
+    type OrchestrationSession,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
@@ -67,7 +66,7 @@ const turnStartKeyForEvent = (event: ProviderIntentEvent): string =>
   event.commandId !== null ? `command:${event.commandId}` : `event:${event.eventId}`;
 
 const serverCommandId = (tag: string): CommandId =>
-  CommandId.makeUnsafe(`server:${tag}:${crypto.randomUUID()}`);
+  `server:${tag}:${crypto.randomUUID()}` as CommandId;
 
 const HANDLED_TURN_START_KEY_MAX = 10_000;
 const HANDLED_TURN_START_KEY_TTL = Duration.minutes(30);
@@ -173,7 +172,7 @@ const make = Effect.gen(function* () {
       commandId: serverCommandId("provider-failure-activity"),
       threadId: input.threadId,
       activity: {
-        id: EventId.makeUnsafe(crypto.randomUUID()),
+        id: crypto.randomUUID() as EventId,
         tone: "error",
         kind: input.kind,
         summary: input.summary,
@@ -219,9 +218,7 @@ const make = Effect.gen(function* () {
     }
 
     const desiredRuntimeMode = thread.runtimeMode;
-    const currentProvider: ProviderKind | undefined = Schema.is(ProviderKind)(
-      thread.session?.providerName,
-    )
+    const currentProvider: ProviderDriverKind | undefined = (thread.session !== null && Schema.is(ProviderDriverKind)(thread.session.providerName))
       ? thread.session.providerName
       : undefined;
     const requestedModelSelection = options?.modelSelection;
@@ -234,7 +231,7 @@ const make = Effect.gen(function* () {
       requestedModelSelection.instanceId !== threadInstanceId
     ) {
       return yield* new ProviderAdapterRequestError({
-        provider: ProviderDriverKind.makeUnsafe(threadInstanceId),
+        provider: threadInstanceId as unknown as ProviderDriverKind,
         method: "thread.turn.start",
         detail: `Thread '${threadId}' is bound to provider instance '${threadInstanceId}' and cannot switch to '${requestedModelSelection.instanceId}'.`,
       });

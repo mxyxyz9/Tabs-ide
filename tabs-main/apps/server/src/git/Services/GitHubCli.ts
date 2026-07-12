@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * GitHubCli - Effect service contract for `gh` process interactions.
  *
@@ -5,7 +6,6 @@
  *
  * @module GitHubCli
  */
-import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
 import type { ProcessRunResult } from "../../processRunner";
@@ -105,6 +105,6 @@ export interface GitHubCliShape {
 /**
  * GitHubCli - Service tag for GitHub CLI process execution.
  */
-export class GitHubCli extends ServiceMap.Service<GitHubCli, GitHubCliShape>()(
+export class GitHubCli extends Context.Service<GitHubCli, GitHubCliShape>()(
   "tabs/git/Services/GitHubCli",
 ) {}

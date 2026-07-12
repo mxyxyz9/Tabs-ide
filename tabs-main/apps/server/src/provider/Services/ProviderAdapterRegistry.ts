@@ -20,7 +20,7 @@
  * @module ProviderAdapterRegistry
  */
 import type { ProviderDriverKind, ProviderInstanceId } from "@tabs/contracts";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as PubSub from "effect/PubSub";
 import type * as Scope from "effect/Scope";
@@ -94,7 +94,7 @@ export interface ProviderAdapterRegistryShape {
 /**
  * ProviderAdapterRegistry - Service tag for provider adapter lookup.
  */
-export class ProviderAdapterRegistry extends ServiceMap.Service<
+export class ProviderAdapterRegistry extends Context.Service<
   ProviderAdapterRegistry,
   ProviderAdapterRegistryShape
->()("t3/provider/Services/ProviderAdapterRegistry") {}
+>()("tabs/provider/Services/ProviderAdapterRegistry") {}

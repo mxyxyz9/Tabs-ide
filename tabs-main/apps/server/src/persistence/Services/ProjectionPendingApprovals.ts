@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionPendingApprovalRepository - Repository interface for pending approvals.
  *
@@ -14,7 +15,7 @@ import {
   ThreadId,
   TurnId,
 } from "@tabs/contracts";
-import { Option, Schema, ServiceMap } from "effect";
+import { Option, Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -85,7 +86,7 @@ export interface ProjectionPendingApprovalRepositoryShape {
 /**
  * ProjectionPendingApprovalRepository - Service tag for pending approval persistence.
  */
-export class ProjectionPendingApprovalRepository extends ServiceMap.Service<
+export class ProjectionPendingApprovalRepository extends Context.Service<
   ProjectionPendingApprovalRepository,
   ProjectionPendingApprovalRepositoryShape
 >()("tabs/persistence/Services/ProjectionPendingApprovals/ProjectionPendingApprovalRepository") {}

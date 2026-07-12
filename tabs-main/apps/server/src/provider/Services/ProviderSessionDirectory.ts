@@ -6,7 +6,7 @@ import type {
   ThreadId,
 } from "@tabs/contracts";
 import * as Option from "effect/Option";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 
 import type { ProviderSessionDirectoryPersistenceError, ProviderValidationError } from "../Errors";
@@ -61,7 +61,7 @@ export interface ProviderSessionDirectoryShape {
   >;
 }
 
-export class ProviderSessionDirectory extends ServiceMap.Service<
+export class ProviderSessionDirectory extends Context.Service<
   ProviderSessionDirectory,
   ProviderSessionDirectoryShape
->()("t3/provider/Services/ProviderSessionDirectory") {}
+>()("tabs/provider/Services/ProviderSessionDirectory") {}

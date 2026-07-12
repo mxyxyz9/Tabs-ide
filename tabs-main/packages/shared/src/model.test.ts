@@ -72,7 +72,7 @@ const claudeCaps: ModelCapabilities = createModelCapabilities({
 
 describe("normalizeModelSlug", () => {
   it("maps known aliases to canonical slugs", () => {
-    const claude = ProviderDriverKind.makeUnsafe("claudeAgent");
+    const claude = ("claudeAgent" as ProviderDriverKind);
     expect(normalizeModelSlug("gpt-5-codex")).toBe("gpt-5.4");
     expect(normalizeModelSlug("5.3")).toBe("gpt-5.3-codex");
     expect(normalizeModelSlug("sonnet", claude)).toBe("claude-sonnet-5");
@@ -88,20 +88,20 @@ describe("normalizeModelSlug", () => {
 
 describe("resolveModelSlugForProvider", () => {
   it("returns defaults when the model is missing", () => {
-    expect(resolveModelSlugForProvider(ProviderDriverKind.makeUnsafe("codex"), undefined)).toBe(
+    expect(resolveModelSlugForProvider(("codex" as ProviderDriverKind), undefined)).toBe(
       DEFAULT_MODEL,
     );
-    expect(resolveModelSlugForProvider(ProviderDriverKind.makeUnsafe("ollama"), undefined)).toBe(
+    expect(resolveModelSlugForProvider(("ollama" as ProviderDriverKind), undefined)).toBe(
       DEFAULT_MODEL,
     );
-    expect(resolveModelSlugForProvider(ProviderDriverKind.makeUnsafe("grok"), undefined)).toBe(
+    expect(resolveModelSlugForProvider(("grok" as ProviderDriverKind), undefined)).toBe(
       "grok-build",
     );
   });
 
   it("preserves normalized unknown models", () => {
     expect(
-      resolveModelSlugForProvider(ProviderDriverKind.makeUnsafe("codex"), "custom/internal-model"),
+      resolveModelSlugForProvider(("codex" as ProviderDriverKind), "custom/internal-model"),
     ).toBe("custom/internal-model");
   });
 });
@@ -113,13 +113,13 @@ describe("resolveSelectableModel", () => {
       { slug: "claude-sonnet-5", name: "Claude Sonnet 5" },
     ];
     expect(
-      resolveSelectableModel(ProviderDriverKind.makeUnsafe("codex"), "gpt-5.3-codex", options),
+      resolveSelectableModel(("codex" as ProviderDriverKind), "gpt-5.3-codex", options),
     ).toBe("gpt-5.3-codex");
     expect(
-      resolveSelectableModel(ProviderDriverKind.makeUnsafe("codex"), "gpt-5.3 codex", options),
+      resolveSelectableModel(("codex" as ProviderDriverKind), "gpt-5.3 codex", options),
     ).toBe("gpt-5.3-codex");
     expect(
-      resolveSelectableModel(ProviderDriverKind.makeUnsafe("claudeAgent"), "sonnet", options),
+      resolveSelectableModel(("claudeAgent" as ProviderDriverKind), "sonnet", options),
     ).toBe("claude-sonnet-5");
   });
 });
@@ -199,13 +199,12 @@ describe("descriptor helpers", () => {
 
   it("stores option selection arrays in model selections", () => {
     expect(
-      createModelSelection(ProviderInstanceId.makeUnsafe("codex"), "gpt-5.4", [
+      createModelSelection(("codex" as ProviderInstanceId), "gpt-5.4", [
         { id: "reasoningEffort", value: "high" },
         { id: "fastMode", value: true },
       ]),
     ).toEqual({
       instanceId: "codex",
-      provider: "codex",
       model: "gpt-5.4",
       options: [
         { id: "reasoningEffort", value: "high" },
@@ -215,7 +214,7 @@ describe("descriptor helpers", () => {
   });
 
   it("reads typed option selection values", () => {
-    const selection = createModelSelection(ProviderInstanceId.makeUnsafe("codex"), "gpt-5.4", [
+    const selection = createModelSelection(("codex" as ProviderInstanceId), "gpt-5.4", [
       { id: "reasoningEffort", value: "high" },
       { id: "fastMode", value: true },
     ]);

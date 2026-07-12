@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ClaudeAdapterLive - Scoped live implementation for the Claude Agent provider adapter.
  *
@@ -88,7 +89,7 @@ import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogg
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
 
-const PROVIDER = ProviderDriverKind.makeUnsafe("claudeAgent");
+const PROVIDER = "claudeAgent" as ProviderDriverKind;
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
   RuntimeContentStreamKind,
@@ -320,7 +321,7 @@ function isInterruptedResult(result: SDKResultMessage): boolean {
 }
 
 function asRuntimeItemId(value: string): RuntimeItemId {
-  return RuntimeItemId.makeUnsafe(value);
+  return value as RuntimeItemId;
 }
 
 function maxClaudeContextWindowFromModelUsage(
@@ -399,7 +400,7 @@ function asCanonicalTurnId(value: TurnId): TurnId {
 }
 
 function asRuntimeRequestId(value: ApprovalRequestId): RuntimeRequestId {
-  return RuntimeRequestId.makeUnsafe(value);
+  return value as unknown as RuntimeRequestId;
 }
 
 function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undefined {
@@ -417,7 +418,7 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
   const threadIdCandidate = typeof cursor.threadId === "string" ? cursor.threadId : undefined;
   const threadId =
     threadIdCandidate && !isSyntheticClaudeThreadId(threadIdCandidate)
-      ? ThreadId.makeUnsafe(threadIdCandidate)
+      ? threadIdCandidate as ThreadId
       : undefined;
   const resumeCandidate =
     typeof cursor.resume === "string"
@@ -734,7 +735,7 @@ function nativeProviderRefs(
 ): NonNullable<ProviderRuntimeEvent["providerRefs"]> {
   if (options?.providerItemId) {
     return {
-      providerItemId: ProviderItemId.makeUnsafe(options.providerItemId),
+      providerItemId: options.providerItemId as ProviderItemId,
     };
   }
   return {};
@@ -1048,7 +1049,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   claudeSettings: ClaudeSettings,
   options?: ClaudeAdapterLiveOptions,
 ) {
-  const boundInstanceId = options?.instanceId ?? ProviderInstanceId.makeUnsafe("claudeAgent");
+  const boundInstanceId = options?.instanceId ?? "claudeAgent" as ProviderInstanceId;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig;
@@ -1089,7 +1090,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         }),
     ),
   );
-  const nextEventId = Effect.map(randomUUIDv4, (id) => EventId.makeUnsafe(id));
+  const nextEventId = Effect.map(randomUUIDv4, (id) => id as EventId);
   const makeEventStamp = () => Effect.all({ eventId: nextEventId, createdAt: nowIso });
 
   const offerRuntimeEvent = (event: ProviderRuntimeEvent): Effect.Effect<void> =>
@@ -1126,7 +1127,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
                 turnId: asCanonicalTurnId(context.turnState.turnId),
               }
             : {}),
-          ...(itemId ? { itemId: ProviderItemId.makeUnsafe(itemId) } : {}),
+          ...(itemId ? { itemId: itemId as ProviderItemId } : {}),
           payload: message,
         },
       },
@@ -2030,7 +2031,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     // Auto-start a synthetic turn for assistant messages that arrive without
     // an active turn (e.g., background agent/subagent responses between user prompts).
     if (!context.turnState) {
-      const turnId = TurnId.makeUnsafe(yield* randomUUIDv4);
+      const turnId = (yield* randomUUIDv4) as TurnId;
       const startedAt = yield* nowIso;
       context.turnState = {
         turnId,
@@ -2221,7 +2222,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ...base,
           type: "task.started",
           payload: {
-            taskId: RuntimeTaskId.makeUnsafe(message.task_id),
+            taskId: message.task_id as RuntimeTaskId,
             description: message.description,
             ...(message.task_type ? { taskType: message.task_type } : {}),
           },
@@ -2251,7 +2252,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ...base,
           type: "task.progress",
           payload: {
-            taskId: RuntimeTaskId.makeUnsafe(message.task_id),
+            taskId: message.task_id as RuntimeTaskId,
             description: message.description,
             ...(message.summary ? { summary: message.summary } : {}),
             ...(message.usage ? { usage: message.usage } : {}),
@@ -2283,7 +2284,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           ...base,
           type: "task.completed",
           payload: {
-            taskId: RuntimeTaskId.makeUnsafe(message.task_id),
+            taskId: message.task_id as RuntimeTaskId,
             status: message.status,
             ...(message.summary ? { summary: message.summary } : {}),
             ...(message.usage ? { usage: message.usage } : {}),
@@ -2651,7 +2652,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const newSessionId = existingResumeSessionId === undefined ? yield* randomUUIDv4 : undefined;
       const sessionId = existingResumeSessionId ?? newSessionId;
 
-      const runtimeContext = yield* Effect.services<never>();
+      const runtimeContext = yield* Effect.context<never>();
       const runFork = Effect.runForkWith(runtimeContext);
       const runPromise = Effect.runPromiseWith(runtimeContext);
 
@@ -2683,7 +2684,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           readonly toolUseID?: string;
         },
       ) {
-        const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
+        const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
 
         // Parse questions from the SDK's AskUserQuestion input.
         // `id` MUST equal the full question text — Claude SDK >= 2.1.121 looks
@@ -2853,7 +2854,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           } satisfies PermissionResult;
         }
 
-        const requestId = ApprovalRequestId.makeUnsafe(yield* randomUUIDv4);
+        const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
         const requestType = classifyRequestType(toolName);
         const detail = summarizeToolRequest(toolName, toolInput);
         const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
@@ -3221,7 +3222,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       });
     }
 
-    const turnId = TurnId.makeUnsafe(yield* randomUUIDv4);
+    const turnId = (yield* randomUUIDv4) as TurnId;
     const turnState: ClaudeTurnState = {
       turnId,
       startedAt: yield* nowIso,

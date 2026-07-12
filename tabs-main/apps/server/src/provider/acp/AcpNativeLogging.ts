@@ -45,15 +45,7 @@ export const makeAcpNativeLoggerFactory = Effect.fn("makeAcpNativeLoggerFactory"
           },
           input.threadId,
         );
-      }).pipe(
-        Effect.catch((cause) =>
-          Effect.logWarning("Failed to write native ACP event log.", {
-            cause,
-            provider: input.provider,
-            threadId: input.threadId,
-          }),
-        ),
-      );
+      });
 
     return {
       requestLogger: (event: AcpSessionRequestLogEvent) =>

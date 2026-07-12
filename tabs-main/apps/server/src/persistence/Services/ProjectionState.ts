@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProjectionStateRepository - Projection repository interface for projector cursors.
  *
@@ -7,7 +8,7 @@
  * @module ProjectionStateRepository
  */
 import { IsoDateTime, NonNegativeInt } from "@tabs/contracts";
-import { Option, Schema, ServiceMap } from "effect";
+import { Option, Schema } from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../Errors.ts";
@@ -58,7 +59,7 @@ export interface ProjectionStateRepositoryShape {
 /**
  * ProjectionStateRepository - Service tag for projection cursor persistence.
  */
-export class ProjectionStateRepository extends ServiceMap.Service<
+export class ProjectionStateRepository extends Context.Service<
   ProjectionStateRepository,
   ProjectionStateRepositoryShape
 >()("tabs/persistence/Services/ProjectionState/ProjectionStateRepository") {}

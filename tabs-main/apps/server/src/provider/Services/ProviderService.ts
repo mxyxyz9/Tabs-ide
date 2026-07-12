@@ -24,7 +24,7 @@ import type {
   ThreadId,
   ProviderTurnStartResult,
 } from "@tabs/contracts";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 
@@ -116,6 +116,6 @@ export interface ProviderServiceShape {
 /**
  * ProviderService - Service tag for provider orchestration.
  */
-export class ProviderService extends ServiceMap.Service<ProviderService, ProviderServiceShape>()(
-  "t3/provider/Services/ProviderService",
+export class ProviderService extends Context.Service<ProviderService, ProviderServiceShape>()(
+  "tabs/provider/Services/ProviderService",
 ) {}

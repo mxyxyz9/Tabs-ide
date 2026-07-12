@@ -16,10 +16,8 @@ import { AnchoredToastProvider, ToastProvider, toastManager } from "../component
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
-import { clearPromotedDraftThreads, useComposerDraftStore } from "../composerDraftStore";
-import { useStore } from "../store";
-import { useTerminalStateStore } from "../terminalStateStore";
-import { useWorkspaceShellStore } from "../workspaceShellStore";
+import { clearPromotedDraftThreads } from "../composerDraftStore";
+import { terminalActions } from "../state/terminal";
 import { terminalRunningSubprocessFromEvent } from "../terminalActivity";
 import { onServerConfigUpdated, onServerProvidersUpdated, onServerWelcome } from "../wsNativeApi";
 import { migrateLocalSettingsToServer } from "../hooks/useSettings";
@@ -28,6 +26,12 @@ import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
 import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 import { CommandPalette } from "../components/CommandPalette";
+import { setProjectExpandedInAtoms, syncServerReadModelToAtoms } from "../state/readModel";
+import { appAtomRegistry } from "../state/atomRegistry";
+import { readModelStateAtom } from "../state/readModel";
+import { composerDraftActions, composerDraftsAtom } from "../state/composerDrafts";
+import { workspaceShellAtom } from "../state/workspaceShell";
+import { applyServerConfigUpdate, refreshServerConfig } from "../state/settings";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -172,11 +176,8 @@ function draftHasVisibleContent(
 }
 
 function EventRouter() {
-  const syncServerReadModel = useStore((store) => store.syncServerReadModel);
-  const setProjectExpanded = useStore((store) => store.setProjectExpanded);
-  const removeOrphanedTerminalStates = useTerminalStateStore(
-    (store) => store.removeOrphanedTerminalStates,
-  );
+  const syncServerReadModel = syncServerReadModelToAtoms;
+  const setProjectExpanded = setProjectExpandedInAtoms;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -199,15 +200,17 @@ function EventRouter() {
       if (disposed) return;
       latestSequence = Math.max(latestSequence, snapshot.snapshotSequence);
       syncServerReadModel(snapshot);
+      syncServerReadModelToAtoms(snapshot);
       clearPromotedDraftThreads(new Set(snapshot.threads.map((t) => t.id)));
       const draftThreadIds = Object.keys(
-        useComposerDraftStore.getState().draftThreadsByThreadId,
+        appAtomRegistry.get(composerDraftsAtom).draftThreadsByThreadId,
       ) as ThreadId[];
       // Collect custom-process IDs per project from the workspace store so
       // their isolated terminal threads (server:<projectId>:custom:<processId>)
       // are also retained by the orphan cleanup.
-      const projectSettingsByProjectId =
-        useWorkspaceShellStore.getState().projectSettingsByProjectId;
+      const projectSettingsByProjectId = appAtomRegistry.get(
+        workspaceShellAtom,
+      ).projectSettingsByProjectId;
       const customProcessIdsByProjectId = new Map<ProjectId, string[]>();
       for (const project of snapshot.projects) {
         const settings = projectSettingsByProjectId[project.id];
@@ -227,7 +230,7 @@ function EventRouter() {
         projectIds: snapshot.projects.map((p) => p.id),
         customProcessIdsByProjectId,
       });
-      removeOrphanedTerminalStates(activeThreadIds);
+      terminalActions.removeOrphans(activeThreadIds);
       if (pending) {
         pending = false;
         await flushSnapshotSync();
@@ -283,14 +286,12 @@ function EventRouter() {
         return;
       }
       const label = event.type === "activity" ? event.label : undefined;
-      useTerminalStateStore
-        .getState()
-        .setTerminalActivity(
-          ThreadId.makeUnsafe(event.threadId),
-          event.terminalId,
-          hasRunningSubprocess,
-          label,
-        );
+      terminalActions.activity(
+        ThreadId.makeUnsafe(event.threadId),
+        event.terminalId,
+        hasRunningSubprocess,
+        label,
+      );
     });
     const unsubWelcome = onServerWelcome((payload) => {
       // Migrate old localStorage settings to server on first connect
@@ -305,14 +306,7 @@ function EventRouter() {
         try {
           const activeSessions = await api.terminal.list();
           const activeIds = new Set(activeSessions.map((s) => s.terminalId));
-          const state = useTerminalStateStore.getState();
-          const cleared = Object.fromEntries(
-            Object.entries(state.terminalStateByThreadId).map(([k, v]) => {
-              const nextRunning = v.runningTerminalIds.filter((id) => activeIds.has(id));
-              return [k, { ...v, runningTerminalIds: nextRunning }];
-            }),
-          );
-          useTerminalStateStore.setState({ terminalStateByThreadId: cleared });
+          terminalActions.reconcileRunning(activeIds);
         } catch (e) {
           console.error("Failed to reconcile terminal states", e);
         }
@@ -323,8 +317,10 @@ function EventRouter() {
         setProjectExpanded(payload.bootstrapProjectId, true);
 
         const currentThreadId = threadIdFromPathname(pathnameRef.current);
-        const snapshotThreadIds = new Set(useStore.getState().threads.map((thread) => thread.id));
-        const composerDraftStore = useComposerDraftStore.getState();
+        const snapshotThreadIds = new Set(
+          appAtomRegistry.get(readModelStateAtom).threads.map((thread) => thread.id),
+        );
+        const composerDraftStore = appAtomRegistry.get(composerDraftsAtom);
         const activeDraftThread = currentThreadId
           ? composerDraftStore.draftThreadsByThreadId[currentThreadId]
           : null;
@@ -350,7 +346,7 @@ function EventRouter() {
         }
 
         if (shouldReplaceEmptyDraftSelection && currentThreadId) {
-          composerDraftStore.clearDraftThread(currentThreadId);
+          composerDraftActions.clearDraftThread(currentThreadId);
         }
         await navigate({
           to: "/$threadId",
@@ -365,6 +361,10 @@ function EventRouter() {
     // don't produce duplicate toasts.
     let subscribed = false;
     const unsubServerConfigUpdated = onServerConfigUpdated((payload) => {
+      if (payload.settings) {
+        applyServerConfigUpdate(payload);
+      }
+      void refreshServerConfig();
       // Invalidate the config query so active observers refetch fresh data.
       void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
 
@@ -412,6 +412,7 @@ function EventRouter() {
       });
     });
     const unsubProvidersUpdated = onServerProvidersUpdated(() => {
+      void refreshServerConfig();
       void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
     });
     subscribed = true;
@@ -428,7 +429,6 @@ function EventRouter() {
   }, [
     navigate,
     queryClient,
-    removeOrphanedTerminalStates,
     setProjectExpanded,
     syncServerReadModel,
   ]);

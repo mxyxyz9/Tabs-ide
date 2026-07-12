@@ -1,7 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
+    "composite": false,
+    "declaration": false,
     "types": ["node", "bun"],
     "lib": ["ES2023", "esnext.disposable"],
     "noEmit": true,

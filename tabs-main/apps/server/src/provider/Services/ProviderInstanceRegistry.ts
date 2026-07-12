@@ -18,7 +18,7 @@
  * @module provider/Services/ProviderInstanceRegistry
  */
 import type { ProviderInstanceId, ServerProvider } from "@tabs/contracts";
-import * as ServiceMap from "effect/ServiceMap";
+import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import type * as PubSub from "effect/PubSub";
 import type * as Scope from "effect/Scope";
@@ -81,7 +81,7 @@ export interface ProviderInstanceRegistryShape {
   readonly subscribeChanges: Effect.Effect<PubSub.Subscription<void>, never, Scope.Scope>;
 }
 
-export class ProviderInstanceRegistry extends ServiceMap.Service<
+export class ProviderInstanceRegistry extends Context.Service<
   ProviderInstanceRegistry,
   ProviderInstanceRegistryShape
->()("t3/provider/Services/ProviderInstanceRegistry") {}
+>()("tabs/provider/Services/ProviderInstanceRegistry") {}

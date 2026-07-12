@@ -1,11 +1,12 @@
-import { ServiceMap, Effect, Layer, Option } from "effect";
+import * as Context from "effect/Context";
+import { Effect, Layer, Option } from "effect";
 import type { SourceControlProviderAuth } from "@tabs/contracts";
 
 export interface BitbucketApiShape {
   readonly probeAuth: () => Effect.Effect<SourceControlProviderAuth, never>;
 }
 
-export class BitbucketApi extends ServiceMap.Service<BitbucketApi, BitbucketApiShape>()(
+export class BitbucketApi extends Context.Service<BitbucketApi, BitbucketApiShape>()(
   "tabs/sourceControl/BitbucketApi",
 ) {}
 

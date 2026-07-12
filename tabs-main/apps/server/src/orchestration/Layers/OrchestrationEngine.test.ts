@@ -30,10 +30,10 @@ import {
 import { ServerConfig } from "../../config.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 
-const asProjectId = (value: string): ProjectId => ProjectId.makeUnsafe(value);
-const asMessageId = (value: string): MessageId => MessageId.makeUnsafe(value);
-const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
-const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.makeUnsafe(value);
+const asProjectId = (value: string): ProjectId => value as ProjectId;
+const asMessageId = (value: string): MessageId => value as MessageId;
+const asTurnId = (value: string): TurnId => value as TurnId;
+const asCheckpointRef = (value: string): CheckpointRef => value as CheckpointRef;
 
 async function createOrchestrationSystem() {
   const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), {
@@ -69,12 +69,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-1-create"),
+        commandId: "cmd-project-1-create" as CommandId,
         projectId: asProjectId("project-1"),
         title: "Project 1",
         workspaceRoot: "/tmp/project-1",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -83,12 +83,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-1-create"),
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        commandId: "cmd-thread-1-create" as CommandId,
+        threadId: "thread-1" as ThreadId,
         projectId: asProjectId("project-1"),
         title: "Thread",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -101,8 +101,8 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.turn.start",
-        commandId: CommandId.makeUnsafe("cmd-turn-start-1"),
-        threadId: ThreadId.makeUnsafe("thread-1"),
+        commandId: "cmd-turn-start-1" as CommandId,
+        threadId: "thread-1" as ThreadId,
         message: {
           messageId: asMessageId("msg-1"),
           role: "user",
@@ -129,12 +129,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-replay-create"),
+        commandId: "cmd-project-replay-create" as CommandId,
         projectId: asProjectId("project-replay"),
         title: "Replay Project",
         workspaceRoot: "/tmp/project-replay",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -143,12 +143,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-replay-create"),
-        threadId: ThreadId.makeUnsafe("thread-replay"),
+        commandId: "cmd-thread-replay-create" as CommandId,
+        threadId: "thread-replay" as ThreadId,
         projectId: asProjectId("project-replay"),
         title: "replay",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -161,8 +161,8 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.delete",
-        commandId: CommandId.makeUnsafe("cmd-thread-replay-delete"),
-        threadId: ThreadId.makeUnsafe("thread-replay"),
+        commandId: "cmd-thread-replay-delete" as CommandId,
+        threadId: "thread-replay" as ThreadId,
       }),
     );
 
@@ -187,12 +187,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-stream-create"),
+        commandId: "cmd-project-stream-create" as CommandId,
         projectId: asProjectId("project-stream"),
         title: "Stream Project",
         workspaceRoot: "/tmp/project-stream",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -211,12 +211,12 @@ describe("OrchestrationEngine", () => {
         yield* Effect.sleep("10 millis");
         yield* engine.dispatch({
           type: "thread.create",
-          commandId: CommandId.makeUnsafe("cmd-stream-thread-create"),
-          threadId: ThreadId.makeUnsafe("thread-stream"),
+          commandId: "cmd-stream-thread-create" as CommandId,
+          threadId: "thread-stream" as ThreadId,
           projectId: asProjectId("project-stream"),
           title: "domain-stream",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -227,8 +227,8 @@ describe("OrchestrationEngine", () => {
         });
         yield* engine.dispatch({
           type: "thread.meta.update",
-          commandId: CommandId.makeUnsafe("cmd-stream-thread-update"),
-          threadId: ThreadId.makeUnsafe("thread-stream"),
+          commandId: "cmd-stream-thread-update" as CommandId,
+          threadId: "thread-stream" as ThreadId,
           title: "domain-stream-updated",
         });
         eventTypes.push((yield* Queue.take(eventQueue)).type);
@@ -248,12 +248,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-turn-diff-create"),
+        commandId: "cmd-project-turn-diff-create" as CommandId,
         projectId: asProjectId("project-turn-diff"),
         title: "Turn Diff Project",
         workspaceRoot: "/tmp/project-turn-diff",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -262,12 +262,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-turn-diff-create"),
-        threadId: ThreadId.makeUnsafe("thread-turn-diff"),
+        commandId: "cmd-thread-turn-diff-create" as CommandId,
+        threadId: "thread-turn-diff" as ThreadId,
         projectId: asProjectId("project-turn-diff"),
         title: "Turn diff thread",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -280,8 +280,8 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.turn.diff.complete",
-        commandId: CommandId.makeUnsafe("cmd-turn-diff-complete"),
-        threadId: ThreadId.makeUnsafe("thread-turn-diff"),
+        commandId: "cmd-turn-diff-complete" as CommandId,
+        threadId: "thread-turn-diff" as ThreadId,
         turnId: asTurnId("turn-1"),
         completedAt: createdAt,
         checkpointRef: asCheckpointRef("refs/tabs/checkpoints/thread-turn-diff/turn/1"),
@@ -320,7 +320,7 @@ describe("OrchestrationEngine", () => {
 
     const flakyStore: OrchestrationEventStoreShape = {
       append(event) {
-        if (shouldFailFirstAppend && event.commandId === CommandId.makeUnsafe("cmd-flaky-1")) {
+        if (shouldFailFirstAppend && event.commandId === "cmd-flaky-1" as CommandId) {
           shouldFailFirstAppend = false;
           return Effect.fail(
             new PersistenceSqlError({
@@ -365,12 +365,12 @@ describe("OrchestrationEngine", () => {
     await runtime.runPromise(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-flaky-create"),
+        commandId: "cmd-project-flaky-create" as CommandId,
         projectId: asProjectId("project-flaky"),
         title: "Flaky Project",
         workspaceRoot: "/tmp/project-flaky",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -381,12 +381,12 @@ describe("OrchestrationEngine", () => {
       runtime.runPromise(
         engine.dispatch({
           type: "thread.create",
-          commandId: CommandId.makeUnsafe("cmd-flaky-1"),
-          threadId: ThreadId.makeUnsafe("thread-flaky-fail"),
+          commandId: "cmd-flaky-1" as CommandId,
+          threadId: "thread-flaky-fail" as ThreadId,
           projectId: asProjectId("project-flaky"),
           title: "flaky-fail",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -401,12 +401,12 @@ describe("OrchestrationEngine", () => {
     const result = await runtime.runPromise(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-flaky-2"),
-        threadId: ThreadId.makeUnsafe("thread-flaky-ok"),
+        commandId: "cmd-flaky-2" as CommandId,
+        threadId: "thread-flaky-ok" as ThreadId,
         projectId: asProjectId("project-flaky"),
         title: "flaky-ok",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -429,7 +429,7 @@ describe("OrchestrationEngine", () => {
       projectEvent: (event) => {
         if (
           shouldFailRequestedProjection &&
-          event.commandId === CommandId.makeUnsafe("cmd-turn-start-atomic") &&
+          event.commandId === "cmd-turn-start-atomic" as CommandId &&
           event.type === "thread.turn-start-requested"
         ) {
           shouldFailRequestedProjection = false;
@@ -458,12 +458,12 @@ describe("OrchestrationEngine", () => {
     await runtime.runPromise(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-atomic-create"),
+        commandId: "cmd-project-atomic-create" as CommandId,
         projectId: asProjectId("project-atomic"),
         title: "Atomic Project",
         workspaceRoot: "/tmp/project-atomic",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -472,12 +472,12 @@ describe("OrchestrationEngine", () => {
     await runtime.runPromise(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-atomic-create"),
-        threadId: ThreadId.makeUnsafe("thread-atomic"),
+        commandId: "cmd-thread-atomic-create" as CommandId,
+        threadId: "thread-atomic" as ThreadId,
         projectId: asProjectId("project-atomic"),
         title: "atomic",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -490,8 +490,8 @@ describe("OrchestrationEngine", () => {
 
     const turnStartCommand = {
       type: "thread.turn.start" as const,
-      commandId: CommandId.makeUnsafe("cmd-turn-start-atomic"),
-      threadId: ThreadId.makeUnsafe("thread-atomic"),
+      commandId: "cmd-turn-start-atomic" as CommandId,
+      threadId: "thread-atomic" as ThreadId,
       message: {
         messageId: asMessageId("msg-atomic-1"),
         role: "user" as const,
@@ -571,7 +571,7 @@ describe("OrchestrationEngine", () => {
       projectEvent: (event) => {
         if (
           shouldFailProjection &&
-          event.commandId === CommandId.makeUnsafe("cmd-thread-meta-sync-fail")
+          event.commandId === "cmd-thread-meta-sync-fail" as CommandId
         ) {
           shouldFailProjection = false;
           return Effect.fail(
@@ -599,12 +599,12 @@ describe("OrchestrationEngine", () => {
     await runtime.runPromise(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-sync-create"),
+        commandId: "cmd-project-sync-create" as CommandId,
         projectId: asProjectId("project-sync"),
         title: "Sync Project",
         workspaceRoot: "/tmp/project-sync",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -613,12 +613,12 @@ describe("OrchestrationEngine", () => {
     await runtime.runPromise(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-sync-create"),
-        threadId: ThreadId.makeUnsafe("thread-sync"),
+        commandId: "cmd-thread-sync-create" as CommandId,
+        threadId: "thread-sync" as ThreadId,
         projectId: asProjectId("project-sync"),
         title: "sync-before",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -633,8 +633,8 @@ describe("OrchestrationEngine", () => {
       runtime.runPromise(
         engine.dispatch({
           type: "thread.meta.update",
-          commandId: CommandId.makeUnsafe("cmd-thread-meta-sync-fail"),
-          threadId: ThreadId.makeUnsafe("thread-sync"),
+          commandId: "cmd-thread-meta-sync-fail" as CommandId,
+          threadId: "thread-sync" as ThreadId,
           title: "sync-after-failed-projection",
         }),
       ),
@@ -658,8 +658,8 @@ describe("OrchestrationEngine", () => {
       system.run(
         engine.dispatch({
           type: "thread.turn.start",
-          commandId: CommandId.makeUnsafe("cmd-invariant-missing-thread"),
-          threadId: ThreadId.makeUnsafe("thread-missing"),
+          commandId: "cmd-invariant-missing-thread" as CommandId,
+          threadId: "thread-missing" as ThreadId,
           message: {
             messageId: asMessageId("msg-missing"),
             role: "user",
@@ -684,12 +684,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "project.create",
-        commandId: CommandId.makeUnsafe("cmd-project-duplicate-create"),
+        commandId: "cmd-project-duplicate-create" as CommandId,
         projectId: asProjectId("project-duplicate"),
         title: "Duplicate Project",
         workspaceRoot: "/tmp/project-duplicate",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         createdAt,
@@ -699,12 +699,12 @@ describe("OrchestrationEngine", () => {
     await system.run(
       engine.dispatch({
         type: "thread.create",
-        commandId: CommandId.makeUnsafe("cmd-thread-duplicate-1"),
-        threadId: ThreadId.makeUnsafe("thread-duplicate"),
+        commandId: "cmd-thread-duplicate-1" as CommandId,
+        threadId: "thread-duplicate" as ThreadId,
         projectId: asProjectId("project-duplicate"),
         title: "duplicate",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5-codex",
         },
         interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -719,12 +719,12 @@ describe("OrchestrationEngine", () => {
       system.run(
         engine.dispatch({
           type: "thread.create",
-          commandId: CommandId.makeUnsafe("cmd-thread-duplicate-2"),
-          threadId: ThreadId.makeUnsafe("thread-duplicate"),
+          commandId: "cmd-thread-duplicate-2" as CommandId,
+          threadId: "thread-duplicate" as ThreadId,
           projectId: asProjectId("project-duplicate"),
           title: "duplicate",
           modelSelection: {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
             model: "gpt-5-codex",
           },
           interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,

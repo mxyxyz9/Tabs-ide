@@ -24,11 +24,11 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       const sql = yield* SqlClient.SqlClient;
 
       yield* projects.upsert({
-        projectId: ProjectId.makeUnsafe("project-null-options"),
+        projectId: "project-null-options" as ProjectId,
         title: "Null options project",
         workspaceRoot: "/tmp/project-null-options",
         defaultModelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("codex"),
+          instanceId: "codex" as ProviderInstanceId,
           model: "gpt-5.4",
         },
         scripts: [],
@@ -58,11 +58,10 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       );
 
       const persisted = yield* projects.getById({
-        projectId: ProjectId.makeUnsafe("project-null-options"),
+        projectId: "project-null-options" as ProjectId,
       });
       assert.deepStrictEqual(Option.getOrNull(persisted)?.defaultModelSelection, {
-        instanceId: ProviderInstanceId.makeUnsafe("codex"),
-        provider: ProviderInstanceId.makeUnsafe("codex"),
+        instanceId: "codex" as ProviderInstanceId,
         model: "gpt-5.4",
       });
     }),
@@ -74,11 +73,11 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       const sql = yield* SqlClient.SqlClient;
 
       yield* threads.upsert({
-        threadId: ThreadId.makeUnsafe("thread-null-options"),
-        projectId: ProjectId.makeUnsafe("project-null-options"),
+        threadId: "thread-null-options" as ThreadId,
+        projectId: "project-null-options" as ProjectId,
         title: "Null options thread",
         modelSelection: {
-          instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
+          instanceId: "claudeAgent" as ProviderInstanceId,
           model: "claude-opus-4-6",
         },
         runtimeMode: "full-access",
@@ -113,11 +112,10 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       );
 
       const persisted = yield* threads.getById({
-        threadId: ThreadId.makeUnsafe("thread-null-options"),
+        threadId: "thread-null-options" as ThreadId,
       });
       assert.deepStrictEqual(Option.getOrNull(persisted)?.modelSelection, {
-        instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
-        provider: ProviderInstanceId.makeUnsafe("claudeAgent"),
+        instanceId: "claudeAgent" as ProviderInstanceId,
         model: "claude-opus-4-6",
       });
     }),

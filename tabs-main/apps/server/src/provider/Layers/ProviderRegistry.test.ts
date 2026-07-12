@@ -121,6 +121,7 @@ function mockHandle(result: { stdout: string; stderr: string; code: number }) {
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1),
     exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(result.code)),
+    unref: Effect.succeed(Effect.void),
     isRunning: Effect.succeed(false),
     kill: () => Effect.void,
     stdin: Sink.drain,
@@ -217,6 +218,7 @@ function hangingScopedSpawnerLayer(killCalls: Ref.Ref<number>) {
         const handle = ChildProcessSpawner.makeHandle({
           pid: ChildProcessSpawner.ProcessId(1),
           exitCode: Effect.never,
+          unref: Effect.succeed(Effect.void),
           isRunning: Effect.succeed(true),
           kill: () => Ref.update(killCalls, (current) => current + 1),
           stdin: Sink.drain,
@@ -473,8 +475,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
       it("treats equal provider snapshots as unchanged", () => {
         const providers = [
           {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
-            driver: ProviderDriverKind.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
+            driver: "codex" as ProviderDriverKind,
             status: "ready",
             enabled: true,
             installed: true,
@@ -486,8 +488,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             skills: [],
           },
           {
-            instanceId: ProviderInstanceId.makeUnsafe("claudeAgent"),
-            driver: ProviderDriverKind.makeUnsafe("claudeAgent"),
+            instanceId: "claudeAgent" as ProviderInstanceId,
+            driver: "claudeAgent" as ProviderDriverKind,
             status: "warning",
             enabled: true,
             installed: true,
@@ -505,8 +507,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
 
       it("preserves previously discovered provider models when a refresh returns none", () => {
         const previousProvider = {
-          instanceId: ProviderInstanceId.makeUnsafe("cursor"),
-          driver: ProviderDriverKind.makeUnsafe("cursor"),
+          instanceId: "cursor" as ProviderInstanceId,
+          driver: "cursor" as ProviderDriverKind,
           status: "ready",
           enabled: true,
           installed: true,
@@ -545,8 +547,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
 
       it("fills missing capabilities from the previous provider snapshot", () => {
         const previousProvider = {
-          instanceId: ProviderInstanceId.makeUnsafe("cursor"),
-          driver: ProviderDriverKind.makeUnsafe("cursor"),
+          instanceId: "cursor" as ProviderInstanceId,
+          driver: "cursor" as ProviderDriverKind,
           status: "ready",
           enabled: true,
           installed: true,
@@ -595,8 +597,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
       it("persists merged provider snapshots for the providers that were refreshed", () => {
         const previousProviders = [
           {
-            instanceId: ProviderInstanceId.makeUnsafe("cursor"),
-            driver: ProviderDriverKind.makeUnsafe("cursor"),
+            instanceId: "cursor" as ProviderInstanceId,
+            driver: "cursor" as ProviderDriverKind,
             status: "ready",
             enabled: true,
             installed: true,
@@ -623,8 +625,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             skills: [],
           },
           {
-            instanceId: ProviderInstanceId.makeUnsafe("codex"),
-            driver: ProviderDriverKind.makeUnsafe("codex"),
+            instanceId: "codex" as ProviderInstanceId,
+            driver: "codex" as ProviderDriverKind,
             status: "ready",
             enabled: true,
             installed: true,
@@ -645,7 +647,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
         const mergedProviders = mergeProviderSnapshots(previousProviders, [refreshedCursor]);
         const persistedProviders = selectProvidersByKind(
           mergedProviders,
-          new Set([ProviderDriverKind.makeUnsafe("cursor")]),
+          new Set(["cursor" as ProviderDriverKind]),
         );
 
         assert.deepStrictEqual(persistedProviders, [
@@ -658,8 +660,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
 
       it.effect("persists the merged snapshot when a live update has empty models", () =>
         Effect.gen(function* () {
-          const cursorDriver = ProviderDriverKind.makeUnsafe("cursor");
-          const cursorInstanceId = ProviderInstanceId.makeUnsafe("cursor");
+          const cursorDriver = "cursor" as ProviderDriverKind;
+          const cursorInstanceId = "cursor" as ProviderInstanceId;
           const initialProvider = {
             instanceId: cursorInstanceId,
             driver: cursorDriver,
@@ -771,8 +773,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
 
       it.effect("returns the cached provider list when a manual refresh fails", () =>
         Effect.gen(function* () {
-          const codexDriver = ProviderDriverKind.makeUnsafe("codex");
-          const codexInstanceId = ProviderInstanceId.makeUnsafe("codex");
+          const codexDriver = "codex" as ProviderDriverKind;
+          const codexInstanceId = "codex" as ProviderInstanceId;
           const cachedProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -845,10 +847,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
 
       it.effect("keeps consuming registry changes after one sync fails", () =>
         Effect.gen(function* () {
-          const codexDriver = ProviderDriverKind.makeUnsafe("codex");
-          const codexInstanceId = ProviderInstanceId.makeUnsafe("codex");
-          const claudeDriver = ProviderDriverKind.makeUnsafe("claudeAgent");
-          const claudeInstanceId = ProviderInstanceId.makeUnsafe("claudeAgent");
+          const codexDriver = "codex" as ProviderDriverKind;
+          const codexInstanceId = "codex" as ProviderInstanceId;
+          const claudeDriver = "claudeAgent" as ProviderDriverKind;
+          const claudeInstanceId = "claudeAgent" as ProviderInstanceId;
           const codexProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -1302,7 +1304,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
               const registry = yield* ProviderRegistry;
               const providers = yield* registry.getProviders;
               const cursorProvider = providers.find(
-                (provider) => provider.instanceId === ProviderInstanceId.makeUnsafe("cursor"),
+                (provider) => provider.instanceId === "cursor" as ProviderInstanceId,
               );
 
               assert.deepStrictEqual(providers.map((provider) => provider.instanceId).toSorted(), [

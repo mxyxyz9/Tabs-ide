@@ -95,7 +95,7 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
   closePendingTab: (pendingId: string) => void;
 }
 
-function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSettingsType {
+export function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSettingsType {
   return decodeProjectWorkspaceSettings({});
 }
 

@@ -1,3 +1,4 @@
+import * as Context from "effect/Context";
 /**
  * ProviderRuntimeIngestionService - Provider runtime ingestion service interface.
  *
@@ -6,7 +7,7 @@
  *
  * @module ProviderRuntimeIngestionService
  */
-import { ServiceMap } from "effect";
+import {  } from "effect";
 import type { Effect, Scope } from "effect";
 
 /**
@@ -34,7 +35,7 @@ export interface ProviderRuntimeIngestionShape {
 /**
  * ProviderRuntimeIngestionService - Service tag for runtime ingestion workers.
  */
-export class ProviderRuntimeIngestionService extends ServiceMap.Service<
+export class ProviderRuntimeIngestionService extends Context.Service<
   ProviderRuntimeIngestionService,
   ProviderRuntimeIngestionShape
 >()("tabs/orchestration/Services/ProviderRuntimeIngestion/ProviderRuntimeIngestionService") {}

@@ -13,7 +13,7 @@ import {
 describe("AcpCoreRuntimeEvents", () => {
   it("maps ACP permission requests to canonical runtime events", () => {
     const stamp = { eventId: "event-1" as never, createdAt: "2026-03-27T00:00:00.000Z" };
-    const turnId = TurnId.makeUnsafe("turn-1");
+    const turnId = "turn-1" as TurnId;
     const permissionRequest = {
       kind: "execute" as const,
       detail: "cat package.json",
@@ -30,10 +30,10 @@ describe("AcpCoreRuntimeEvents", () => {
     expect(
       makeAcpRequestOpenedEvent({
         stamp,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         threadId: "thread-1" as never,
         turnId,
-        requestId: RuntimeRequestId.makeUnsafe("request-1"),
+        requestId: "request-1" as RuntimeRequestId,
         permissionRequest,
         detail: "cat package.json",
         args: { command: ["cat", "package.json"] },
@@ -52,10 +52,10 @@ describe("AcpCoreRuntimeEvents", () => {
     expect(
       makeAcpRequestResolvedEvent({
         stamp,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         threadId: "thread-1" as never,
         turnId,
-        requestId: RuntimeRequestId.makeUnsafe("request-1"),
+        requestId: "request-1" as RuntimeRequestId,
         permissionRequest,
         decision: "accept",
       }),
@@ -70,12 +70,12 @@ describe("AcpCoreRuntimeEvents", () => {
 
   it("maps ACP core plan, tool-call, and content updates", () => {
     const stamp = { eventId: "event-1" as never, createdAt: "2026-03-27T00:00:00.000Z" };
-    const turnId = TurnId.makeUnsafe("turn-1");
+    const turnId = "turn-1" as TurnId;
 
     expect(
       makeAcpPlanUpdatedEvent({
         stamp,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         threadId: "thread-1" as never,
         turnId,
         payload: {
@@ -95,7 +95,7 @@ describe("AcpCoreRuntimeEvents", () => {
     expect(
       makeAcpToolCallEvent({
         stamp,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         threadId: "thread-1" as never,
         turnId,
         toolCall: {
@@ -119,7 +119,7 @@ describe("AcpCoreRuntimeEvents", () => {
     expect(
       makeAcpContentDeltaEvent({
         stamp,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         threadId: "thread-1" as never,
         turnId,
         itemId: "assistant:session-1:segment:0",
@@ -137,7 +137,7 @@ describe("AcpCoreRuntimeEvents", () => {
     expect(
       makeAcpAssistantItemEvent({
         stamp,
-        provider: ProviderDriverKind.makeUnsafe("cursor"),
+        provider: "cursor" as ProviderDriverKind,
         threadId: "thread-1" as never,
         turnId,
         itemId: "assistant:session-1:segment:0",

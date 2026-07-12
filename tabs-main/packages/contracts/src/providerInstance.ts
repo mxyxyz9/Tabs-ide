@@ -33,8 +33,10 @@
  *
  * @module providerInstance
  */
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { TrimmedNonEmptyString } from "./baseSchemas";
+import type * as Brand from "effect/Brand";
+import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 const PROVIDER_SLUG_MAX_CHARS = 64;
 /**
@@ -66,10 +68,13 @@ const slugSchema = TrimmedNonEmptyString.check(
  * That check belongs to the runtime registry, which downgrades unknown
  * drivers gracefully (see module docs).
  */
-export const ProviderDriverKind = slugSchema.pipe(Schema.brand("ProviderDriverKind"));
-export type ProviderDriverKind = typeof ProviderDriverKind.Type;
+const providerDriverKindSchema = slugSchema.pipe(Schema.brand("ProviderDriverKind"));
+export const ProviderDriverKind = Object.assign(providerDriverKindSchema, {
+  makeUnsafe: (value: string) => value as string & Brand.Brand<"ProviderDriverKind">,
+});
+export type ProviderDriverKind = typeof providerDriverKindSchema.Type;
 
-const isProviderDriverKindValue = Schema.is(ProviderDriverKind);
+const isProviderDriverKindValue = Schema.is(providerDriverKindSchema);
 export const isProviderDriverKind = (value: unknown): value is ProviderDriverKind =>
   isProviderDriverKindValue(value);
 
@@ -78,8 +83,11 @@ export const isProviderDriverKind = (value: unknown): value is ProviderDriverKin
  * instance. Same slug rules as `ProviderDriverKind`; branded separately so the
  * type system cannot confuse the two.
  */
-export const ProviderInstanceId = slugSchema.pipe(Schema.brand("ProviderInstanceId"));
-export type ProviderInstanceId = typeof ProviderInstanceId.Type;
+const providerInstanceIdSchema = slugSchema.pipe(Schema.brand("ProviderInstanceId"));
+export const ProviderInstanceId = Object.assign(providerInstanceIdSchema, {
+  makeUnsafe: (value: string) => value as string & Brand.Brand<"ProviderInstanceId">,
+});
+export type ProviderInstanceId = typeof providerInstanceIdSchema.Type;
 
 /**
  * Lightweight reference identifying which driver implements an instance.
@@ -102,8 +110,8 @@ export type ProviderInstanceEnvironmentVariableName =
 
 export const ProviderInstanceEnvironmentVariable = Schema.Struct({
   name: ProviderInstanceEnvironmentVariableName,
-  value: Schema.String.pipe(Schema.withDecodingDefault(() => "")),
-  sensitive: Schema.Boolean.pipe(Schema.withDecodingDefault(() => false)),
+  value: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  sensitive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   valueRedacted: Schema.optionalKey(Schema.Boolean),
 });
 export type ProviderInstanceEnvironmentVariable = typeof ProviderInstanceEnvironmentVariable.Type;
@@ -145,4 +153,4 @@ export type ProviderInstanceConfigMap = typeof ProviderInstanceConfigMap.Type;
  * migration without rewriting their stored selection payloads.
  */
 export const defaultInstanceIdForDriver = (driver: ProviderDriverKind): ProviderInstanceId =>
-  ProviderInstanceId.makeUnsafe(driver);
+  ProviderInstanceId.make(driver);

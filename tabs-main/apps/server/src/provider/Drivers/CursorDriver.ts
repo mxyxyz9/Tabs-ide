@@ -46,7 +46,7 @@ import {
 } from "../providerMaintenance";
 const decodeCursorSettings = Schema.decodeSync(CursorSettings);
 
-const DRIVER_KIND = ProviderDriverKind.makeUnsafe("cursor");
+const DRIVER_KIND = "cursor" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 const UPDATE = makeStaticProviderMaintenanceResolver(
   makeProviderMaintenanceCapabilities({

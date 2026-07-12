@@ -1,4 +1,4 @@
-import { ServiceMap } from "effect";
+import * as Context from "effect/Context";
 import type { Effect } from "effect";
 import type { ProcessRunResult } from "../../processRunner";
 import type { GitLabCliError } from "../Errors.ts";
@@ -15,6 +15,6 @@ export interface GitLabCliShape {
   }) => Effect.Effect<string, GitLabCliError>;
 }
 
-export class GitLabCli extends ServiceMap.Service<GitLabCli, GitLabCliShape>()(
+export class GitLabCli extends Context.Service<GitLabCli, GitLabCliShape>()(
   "tabs/git/Services/GitLabCli",
 ) {}

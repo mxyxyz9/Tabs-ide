@@ -221,7 +221,7 @@ const mergeOptions = <A>(a: Option.Option<A>, b: Option.Option<A>, defaultValue:
 const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (input: BuildCliInput) {
   const path = yield* Path.Path;
   const repoRoot = yield* RepoRoot;
-  const env = yield* BuildEnvConfig.asEffect();
+  const env = yield* BuildEnvConfig;
 
   const platform = mergeOptions(
     input.platform,

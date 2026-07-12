@@ -1,6 +1,6 @@
 {
   "name": "@tabs/contracts",
-  "version": "1.2.51",
+  "version": "1.2.52",
   "private": true,
   "files": [
     "dist"
@@ -36,6 +36,7 @@
     "@effect/vitest": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vite-plus": "catalog:"
   }
 }

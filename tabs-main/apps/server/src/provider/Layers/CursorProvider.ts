@@ -48,7 +48,7 @@ import { CursorListAvailableModelsResponse } from "../acp/CursorAcpExtension";
 const decodeCursorListAvailableModelsResponse = Schema.decodeUnknownEffect(
   CursorListAvailableModelsResponse,
 );
-const PROVIDER = ProviderDriverKind.makeUnsafe("cursor");
+const PROVIDER = "cursor" as ProviderDriverKind;
 const CURSOR_PRESENTATION = {
   displayName: "Cursor",
   badgeLabel: "Early Access",

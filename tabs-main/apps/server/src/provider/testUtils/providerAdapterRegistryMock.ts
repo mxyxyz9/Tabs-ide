@@ -42,7 +42,7 @@ export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapt
   const byInstanceId = new Map<ProviderInstanceId, ProviderAdapterShape<ProviderAdapterError>>();
   for (const [kind, adapter] of Object.entries(adapters)) {
     if (!adapter) continue;
-    const driverKind = ProviderDriverKind.makeUnsafe(kind);
+    const driverKind = kind as ProviderDriverKind;
     byInstanceId.set(defaultInstanceIdForDriver(driverKind), adapter);
   }
 
@@ -52,7 +52,7 @@ export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapt
       ? Effect.succeed(adapter)
       : Effect.fail(
           new ProviderUnsupportedError({
-            provider: ProviderDriverKind.makeUnsafe(instanceId),
+            provider: instanceId as unknown as ProviderDriverKind,
           }),
         );
   };
@@ -64,17 +64,17 @@ export const makeAdapterRegistryMock = (adapters: KindAdapterMap): ProviderAdapt
       if (!adapter) {
         return Effect.fail(
           new ProviderUnsupportedError({
-            provider: ProviderDriverKind.makeUnsafe(instanceId),
+            provider: instanceId as unknown as ProviderDriverKind,
           }),
         );
       }
       return Effect.succeed({
         instanceId,
-        driverKind: ProviderDriverKind.makeUnsafe(adapter.provider),
+        driverKind: adapter.provider as ProviderDriverKind,
         displayName: undefined,
         enabled: true,
         continuationIdentity: {
-          driverKind: ProviderDriverKind.makeUnsafe(adapter.provider),
+          driverKind: adapter.provider as ProviderDriverKind,
           continuationKey: `${adapter.provider}:instance:${instanceId}`,
         },
       });

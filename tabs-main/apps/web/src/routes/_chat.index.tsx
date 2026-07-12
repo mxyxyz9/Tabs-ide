@@ -2,13 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Button } from "../components/ui/button";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
-import { useStore } from "../store";
-import { useWorkspaceShellStore } from "../workspaceShellStore";
+import { projectsAtom, threadsAtom } from "../state/threads";
+import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
+import { useAtomValue } from "@effect/atom-react";
 
 function ChatIndexRouteView() {
-  const activeProjectId = useWorkspaceShellStore((state) => state.session.activeProjectId);
-  const projects = useStore((state) => state.projects);
-  const threads = useStore((state) => state.threads);
+  const activeProjectId = useWorkspaceActiveProjectId();
+  const projects = useAtomValue(projectsAtom);
+  const threads = useAtomValue(threadsAtom);
   const settings = useSettings();
   const { handleNewThread } = useHandleNewThread();
 
