@@ -166,7 +166,7 @@ function historyLogPath(logsDir: string, threadId = "thread-1"): string {
 function multiTerminalHistoryLogPath(
   logsDir: string,
   threadId = "thread-1",
-  terminalId = "default",
+  terminalId = DEFAULT_TERMINAL_ID,
 ): string {
   return path.join(logsDir, multiTerminalHistoryLogName(threadId, terminalId));
 }
@@ -222,7 +222,7 @@ describe("TerminalManager", () => {
     const third = await manager.open(openInput());
 
     expect(first.threadId).toBe("thread-1");
-    expect(first.terminalId).toBe("default");
+    expect(first.terminalId).toBe(DEFAULT_TERMINAL_ID);
     expect(second.threadId).toBe("thread-1");
     expect(third.threadId).toBe("thread-1");
     expect(ptyAdapter.spawnInputs).toHaveLength(1);
@@ -351,7 +351,7 @@ describe("TerminalManager", () => {
         (event) =>
           event.type === "cleared" &&
           event.threadId === "thread-1" &&
-          event.terminalId === "default",
+          event.terminalId === DEFAULT_TERMINAL_ID,
       ),
     ).toBe(true);
 
@@ -577,14 +577,14 @@ describe("TerminalManager", () => {
 
     defaultProcess.emitData("default\n");
     sidecarProcess.emitData("sidecar\n");
-    await waitFor(() => fs.existsSync(multiTerminalHistoryLogPath(logsDir, "thread-1", "default")));
+    await waitFor(() => fs.existsSync(multiTerminalHistoryLogPath(logsDir, "thread-1", DEFAULT_TERMINAL_ID)));
     await waitFor(() => fs.existsSync(multiTerminalHistoryLogPath(logsDir, "thread-1", "sidecar")));
 
     await manager.close({ threadId: "thread-1", deleteHistory: true });
 
     expect(defaultProcess.killed).toBe(true);
     expect(sidecarProcess.killed).toBe(true);
-    expect(fs.existsSync(multiTerminalHistoryLogPath(logsDir, "thread-1", "default"))).toBe(false);
+    expect(fs.existsSync(multiTerminalHistoryLogPath(logsDir, "thread-1", DEFAULT_TERMINAL_ID))).toBe(false);
     expect(fs.existsSync(multiTerminalHistoryLogPath(logsDir, "thread-1", "sidecar"))).toBe(false);
 
     manager.dispose();
@@ -629,7 +629,7 @@ describe("TerminalManager", () => {
 
     const sessions = (manager as unknown as { sessions: Map<string, unknown> }).sessions;
     const keys = [...sessions.keys()];
-    expect(keys).toEqual(["thread-2\u0000default"]);
+    expect(keys).toEqual([`thread-2\u0000${DEFAULT_TERMINAL_ID}`]);
 
     manager.dispose();
   });
