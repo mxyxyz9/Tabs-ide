@@ -14,7 +14,7 @@
     },
     "apps/desktop": {
       "name": "@tabs/desktop",
-      "version": "1.2.52",
+      "version": "1.2.54",
       "dependencies": {
         "effect": "catalog:",
         "electron": "40.6.0",
@@ -43,7 +43,7 @@
     },
     "apps/server": {
       "name": "tabs",
-      "version": "1.2.52",
+      "version": "1.2.54",
       "bin": {
         "tabs": "./dist/index.mjs",
       },
@@ -76,7 +76,7 @@
     },
     "apps/web": {
       "name": "@tabs/web",
-      "version": "1.2.52",
+      "version": "1.2.54",
       "dependencies": {
         "@base-ui/react": "^1.2.0",
         "@dnd-kit/core": "^6.3.1",
@@ -142,7 +142,7 @@
     },
     "packages/contracts": {
       "name": "@tabs/contracts",
-      "version": "1.2.52",
+      "version": "1.2.54",
       "dependencies": {
         "effect": "catalog:",
       },

@@ -75,7 +75,20 @@ export class ServerSettingsService extends Context.Service<
           getSettings: Ref.get(currentSettingsRef),
           updateSettings: (patch) =>
             Ref.get(currentSettingsRef).pipe(
-              Effect.map((currentSettings) => mergeServerSettingsPatch(currentSettings, patch)),
+              Effect.map((currentSettings) => Schema.encodeSync(ServerSettings)(currentSettings)),
+              Effect.map((currentRaw) => mergeServerSettingsPatch(currentRaw, patch)),
+              Effect.flatMap((merged) =>
+                Schema.decodeUnknownEffect(ServerSettings)(merged).pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new ServerSettingsError({
+                        settingsPath: "<memory>",
+                        detail: `failed to normalize server settings: ${SchemaIssue.makeFormatterDefault()(cause.issue)}`,
+                        cause,
+                      }),
+                  ),
+                ),
+              ),
               Effect.tap((nextSettings) => Ref.set(currentSettingsRef, nextSettings)),
             ),
           streamChanges: Stream.empty,
@@ -350,8 +363,9 @@ const makeServerSettings = Effect.gen(function* () {
       writeSemaphore.withPermits(1)(
         Effect.gen(function* () {
           const current = yield* getSettingsFromCache;
-          const next = yield* Schema.decodeUnknownEffect(Schema.toType(ServerSettings))(
-            mergeServerSettingsPatch(current, patch),
+          const currentRaw = Schema.encodeSync(ServerSettings)(current);
+          const next = yield* Schema.decodeUnknownEffect(ServerSettings)(
+            mergeServerSettingsPatch(currentRaw, patch),
           ).pipe(
             Effect.mapError(
               (cause) =>

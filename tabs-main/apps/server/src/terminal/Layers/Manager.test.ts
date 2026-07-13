@@ -567,7 +567,7 @@ describe("TerminalManager", () => {
 
   it("closes all terminals for a thread when close omits terminalId", async () => {
     const { manager, ptyAdapter, logsDir } = makeManager();
-    await manager.open(openInput({ terminalId: "default" }));
+    await manager.open(openInput({ terminalId: DEFAULT_TERMINAL_ID }));
     await manager.open(openInput({ terminalId: "sidecar" }));
     const defaultProcess = ptyAdapter.processes[0];
     const sidecarProcess = ptyAdapter.processes[1];

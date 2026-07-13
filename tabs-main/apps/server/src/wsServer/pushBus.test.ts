@@ -95,6 +95,7 @@ describe("makeServerPushBus", () => {
           channel: WS_CHANNELS.serverConfigUpdated,
           data: {
             issues: [],
+            providers: [],
           },
         });
       }),

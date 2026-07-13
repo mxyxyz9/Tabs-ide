@@ -101,7 +101,7 @@ const defaultProviderRegistryService: ProviderRegistryShape = {
   streamChanges: Stream.empty,
 };
 
-const defaultServerSettings = DEFAULT_SERVER_SETTINGS;
+const defaultServerSettings = JSON.parse(JSON.stringify(DEFAULT_SERVER_SETTINGS));
 
 class MockTerminalManager implements TerminalManagerShape {
   private readonly sessions = new Map<string, TerminalSessionSnapshot>();
@@ -780,7 +780,6 @@ describe("WebSocket Server", () => {
           title: "bootstrap-workspace",
           defaultModelSelection: {
             instanceId: "codex",
-            provider: "codex",
             model: "gpt-5-codex",
           },
         }),
@@ -794,7 +793,6 @@ describe("WebSocket Server", () => {
           title: "New thread",
           modelSelection: {
             instanceId: "codex",
-            provider: "codex",
             model: "gpt-5-codex",
           },
           branch: null,
@@ -1434,6 +1432,7 @@ describe("WebSocket Server", () => {
 
     const open = await sendRequest(ws, WS_METHODS.terminalOpen, {
       threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
       cwd,
       cols: 100,
       rows: 24,
@@ -1444,12 +1443,14 @@ describe("WebSocket Server", () => {
 
     const write = await sendRequest(ws, WS_METHODS.terminalWrite, {
       threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
       data: "echo hello\n",
     });
     expect(write.error).toBeUndefined();
 
     const resize = await sendRequest(ws, WS_METHODS.terminalResize, {
       threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
       cols: 120,
       rows: 30,
     });
@@ -1457,11 +1458,13 @@ describe("WebSocket Server", () => {
 
     const clear = await sendRequest(ws, WS_METHODS.terminalClear, {
       threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
     });
     expect(clear.error).toBeUndefined();
 
     const restart = await sendRequest(ws, WS_METHODS.terminalRestart, {
       threadId: "thread-1",
+      terminalId: DEFAULT_TERMINAL_ID,
       cwd,
       cols: 120,
       rows: 30,
