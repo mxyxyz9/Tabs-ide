@@ -75,10 +75,10 @@ export class ServerSettingsService extends Context.Service<
           getSettings: Ref.get(currentSettingsRef),
           updateSettings: (patch) =>
             Ref.get(currentSettingsRef).pipe(
-              Effect.map((currentSettings) => Schema.encodeSync(ServerSettings)(currentSettings)),
-              Effect.map((currentRaw) => mergeServerSettingsPatch(currentRaw, patch)),
-              Effect.flatMap((merged) =>
-                Schema.decodeUnknownEffect(ServerSettings)(merged).pipe(
+              Effect.map((currentSettings) => mergeServerSettingsPatch(currentSettings, patch)),
+              Effect.map((merged) => Schema.encodeSync(ServerSettings)(merged)),
+              Effect.flatMap((mergedRaw) =>
+                Schema.decodeUnknownEffect(ServerSettings)(mergedRaw).pipe(
                   Effect.mapError(
                     (cause) =>
                       new ServerSettingsError({
@@ -363,9 +363,10 @@ const makeServerSettings = Effect.gen(function* () {
       writeSemaphore.withPermits(1)(
         Effect.gen(function* () {
           const current = yield* getSettingsFromCache;
-          const currentRaw = Schema.encodeSync(ServerSettings)(current);
+          const merged = mergeServerSettingsPatch(current, patch);
+          const mergedRaw = Schema.encodeSync(ServerSettings)(merged);
           const next = yield* Schema.decodeUnknownEffect(ServerSettings)(
-            mergeServerSettingsPatch(currentRaw, patch),
+            mergedRaw,
           ).pipe(
             Effect.mapError(
               (cause) =>
