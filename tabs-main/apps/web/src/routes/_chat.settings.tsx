@@ -1366,6 +1366,64 @@ function SettingsRouteView() {
                       }
                     />
                     <SettingsRow
+                      title="Slider animations"
+                      description="Smoothly animate the model picker's reasoning-effort slider."
+                      resetAction={
+                        settings.sliderAnimationsEnabled !==
+                        DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
+                          <SettingResetButton
+                            label="slider animations"
+                            onClick={() =>
+                              updateSettings({
+                                sliderAnimationsEnabled:
+                                  DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.sliderAnimationsEnabled}
+                          onCheckedChange={(checked) =>
+                            updateSettings({
+                              sliderAnimationsEnabled: Boolean(checked),
+                            })
+                          }
+                          aria-label="Slider animations"
+                        />
+                      }
+                    />
+                    <SettingsRow
+                      title="Animated slider fill"
+                      description="Show a flowing color animation on the active model's reasoning-effort track."
+                      resetAction={
+                        settings.animatedTrackFillEnabled !==
+                        DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
+                          <SettingResetButton
+                            label="animated slider fill"
+                            onClick={() =>
+                              updateSettings({
+                                animatedTrackFillEnabled:
+                                  DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.animatedTrackFillEnabled}
+                          onCheckedChange={(checked) =>
+                            updateSettings({
+                              animatedTrackFillEnabled: Boolean(checked),
+                            })
+                          }
+                          aria-label="Animated slider fill"
+                        />
+                      }
+                    />
+                    <SettingsRow
                       title="Text generation model"
                       description="Configure the model used for text generation (commit messages, PR content etc.)"
                       resetAction={

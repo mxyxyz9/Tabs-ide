@@ -161,6 +161,7 @@ import { ChatHeader } from "./chat/ChatHeader";
 import { ContextWindowMeter } from "./chat/ContextWindowMeter";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { AVAILABLE_PROVIDER_OPTIONS, ProviderModelPicker } from "./chat/ProviderModelPicker";
+import { FusedModelPicker } from "./chat/FusedModelPicker";
 import { ComposerCommandItem, ComposerCommandMenu } from "./chat/ComposerCommandMenu";
 import { ComposerPendingApprovalActions } from "./chat/ComposerPendingApprovalActions";
 import { CompactComposerControlsMenu } from "./chat/CompactComposerControlsMenu";
@@ -3114,7 +3115,11 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   ]);
 
   const onProviderModelSelect = useCallback(
-    (provider: ProviderPickerKind, model: ModelSlug) => {
+    (
+      provider: ProviderPickerKind,
+      model: ModelSlug,
+      options?: ReadonlyArray<import("@tabs/contracts").ProviderOptionSelection>,
+    ) => {
       if (!activeThread) return;
       if (lockedProvider !== null && provider !== lockedProvider) {
         scheduleComposerFocus();
@@ -3130,7 +3135,9 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       const nextModelSelection: ModelSelection = makeAppModelSelection(
         resolvedProvider,
         resolvedModel,
+        options,
       );
+      fetch('http://localhost:9999', { method: 'POST', body: `[SLIDER-DEBUG-3] onProviderModelSelect provider=${provider} model=${model} hasOptions=${options !== undefined} options=${JSON.stringify(options)} selection=${JSON.stringify(nextModelSelection)} stack=${new Error().stack?.split('\n').slice(1,4).join(' <- ')}` }).catch(()=>{});
       setComposerDraftModelSelection(activeThread.id, nextModelSelection);
       setStickyComposerModelSelection(nextModelSelection);
       scheduleComposerFocus();
@@ -3160,6 +3167,16 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       scheduleComposerFocus();
     },
     [scheduleComposerFocus, setPrompt],
+  );
+  const onFusedModelOptionsChange = useCallback(
+    (nextOptions: ReadonlyArray<import("@tabs/contracts").ProviderOptionSelection> | undefined) => {
+      fetch('http://localhost:9999', { method: 'POST', body: `[SLIDER-DEBUG-3] onFusedModelOptionsChange options=${JSON.stringify(nextOptions)} threadId=${threadId} provider=${selectedProvider} model=${selectedModel} stack=${new Error().stack?.split('\n').slice(1,4).join(' <- ')}` }).catch(()=>{});
+      composerDraftActions.setProviderModelOptions(threadId, selectedProvider, nextOptions, {
+        persistSticky: true,
+        model: selectedModel,
+      });
+    },
+    [threadId, selectedProvider, selectedModel],
   );
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
@@ -3702,44 +3719,47 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                       : "gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible",
                   )}
                 >
-                  <ProviderModelPicker
-                    compact={isComposerFooterCompact}
-                    provider={selectedProvider}
-                    model={selectedModelForPickerWithCustomFallback}
-                    lockedProvider={lockedProvider}
-                    providers={providerStatuses}
-                    modelOptionsByProvider={modelOptionsByProvider}
-                    {...(composerProviderState.modelPickerIconClassName
-                      ? {
-                          activeProviderIconClassName:
-                            composerProviderState.modelPickerIconClassName,
-                        }
-                      : {})}
-                    onProviderModelChange={onProviderModelSelect}
-                  />
-
                   {isComposerFooterCompact ? (
-                    <CompactComposerControlsMenu
-                      activePlan={Boolean(activePlan || sidebarProposedPlan || planSidebarOpen)}
-                      interactionMode={interactionMode}
-                      planSidebarOpen={planSidebarOpen}
-                      runtimeMode={runtimeMode}
-                      traitsMenuContent={providerTraitsMenuContent}
-                      onToggleInteractionMode={toggleInteractionMode}
-                      onTogglePlanSidebar={togglePlanSidebar}
-                      onToggleRuntimeMode={toggleRuntimeMode}
-                    />
+                    <>
+                      <ProviderModelPicker
+                        compact={isComposerFooterCompact}
+                        provider={selectedProvider}
+                        model={selectedModelForPickerWithCustomFallback}
+                        lockedProvider={lockedProvider}
+                        providers={providerStatuses}
+                        modelOptionsByProvider={modelOptionsByProvider}
+                        {...(composerProviderState.modelPickerIconClassName
+                          ? {
+                              activeProviderIconClassName:
+                                composerProviderState.modelPickerIconClassName,
+                            }
+                          : {})}
+                        onProviderModelChange={onProviderModelSelect}
+                      />
+                      <CompactComposerControlsMenu
+                        activePlan={Boolean(activePlan || sidebarProposedPlan || planSidebarOpen)}
+                        interactionMode={interactionMode}
+                        planSidebarOpen={planSidebarOpen}
+                        runtimeMode={runtimeMode}
+                        traitsMenuContent={providerTraitsMenuContent}
+                        onToggleInteractionMode={toggleInteractionMode}
+                        onTogglePlanSidebar={togglePlanSidebar}
+                        onToggleRuntimeMode={toggleRuntimeMode}
+                      />
+                    </>
                   ) : (
                     <>
-                      {providerTraitsPicker ? (
-                        <>
-                          <Separator
-                            orientation="vertical"
-                            className="mx-0.5 hidden h-4 sm:block"
-                          />
-                          {providerTraitsPicker}
-                        </>
-                      ) : null}
+                      <FusedModelPicker
+                        provider={selectedProvider}
+                        model={selectedModelForPickerWithCustomFallback}
+                        lockedProvider={lockedProvider}
+                        providers={providerStatuses}
+                        prompt={prompt}
+                        onPromptChange={setPromptFromTraits}
+                        modelOptions={composerModelOptions?.[selectedProvider]}
+                        onProviderModelChange={onProviderModelSelect}
+                        onModelOptionsChange={onFusedModelOptionsChange}
+                      />
 
                       <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
 
@@ -4034,10 +4054,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden")}>
             <div
-              className={cn(
-                "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-                shouldCenterEmptyThreadComposer && "hidden",
-              )}
+              className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
             >
               <div
                 ref={setMessagesScrollContainerRef}
@@ -4081,6 +4098,20 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                 />
               </div>
 
+              {shouldCenterEmptyThreadComposer ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6 text-center">
+                  <h2 className="text-balance text-3xl font-semibold tracking-tight text-foreground/92 sm:text-4xl">
+                    {activeProject?.name
+                      ? `What should we build in ${activeProject.name}?`
+                      : "What should we build?"}
+                  </h2>
+                  <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground/65 sm:text-base">
+                    Start a new thread with a task, question, or plan. Tabs will keep the project
+                    context and workspace tools connected to this conversation.
+                  </p>
+                </div>
+              ) : null}
+
               {showScrollToBottom && (
                 <div className="pointer-events-none absolute bottom-1 left-1/2 z-30 flex -translate-x-1/2 justify-center py-1.5">
                   <button
@@ -4095,28 +4126,8 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
               )}
             </div>
 
-            <div
-              className={cn(
-                "relative w-full",
-                shouldCenterEmptyThreadComposer
-                  ? "flex flex-1 flex-col items-center justify-center"
-                  : "",
-              )}
-            >
-              {shouldCenterEmptyThreadComposer ? (
-                <div className="pointer-events-none mb-8 px-6 text-center">
-                  <h2 className="text-balance text-3xl font-semibold tracking-tight text-foreground/92 sm:text-4xl">
-                    {activeProject?.name
-                      ? `What should we build in ${activeProject.name}?`
-                      : "What should we build?"}
-                  </h2>
-                  <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground/65 sm:text-base">
-                    Start a new thread with a task, question, or plan. Tabs will keep the project
-                    context and workspace tools connected to this conversation.
-                  </p>
-                </div>
-              ) : null}
-              <div className={cn("w-full", shouldCenterEmptyThreadComposer && "max-w-3xl")}>
+            <div className="relative w-full">
+              <div className="w-full">
                 {composerSection}
               </div>
             </div>

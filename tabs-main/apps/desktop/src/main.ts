@@ -153,6 +153,7 @@ const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 const LOG_DIR = Path.join(STATE_DIR, "logs");
 const DEV_DESKTOP_LOG_PATH = Path.join(STATE_DIR, "desktop-dev.log");
+const SLIDER_DEBUG_LOG_PATH = Path.join(process.cwd(), "slider-debug.log");
 const DESKTOP_PREFERENCES_PATH = Path.join(STATE_DIR, "desktop-preferences.json");
 const LOG_FILE_MAX_BYTES = 10 * 1024 * 1024;
 const LOG_FILE_MAX_FILES = 10;
@@ -2379,6 +2380,16 @@ function createLegacyWindow(): BrowserWindow {
     window.setTitle(APP_DISPLAY_NAME);
     emitUpdateState();
   });
+  window.webContents.on("console-message", (_event, _level, message, line, sourceId) => {
+    if (message.includes("[SLIDER-DEBUG-3]")) {
+      console.log(`[RENDERER] [${sourceId}:${line}] ${message}`);
+      try {
+        const logLine = `[${new Date().toISOString()}] ${message}\n`;
+        FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
+      } catch { /* ignore */ }
+    }
+  });
+
   window.once("ready-to-show", () => {
     window.show();
   });
@@ -2487,6 +2498,12 @@ function createCodeOssWindow(
     writeDesktopLogHeader(
       `code-oss console level=${level} source=${sourceId}:${line} message=${sanitizeLogValue(message)}`,
     );
+    if (message.includes("[SLIDER-DEBUG-3]")) {
+      try {
+        const logLine = `[${new Date().toISOString()}] ${message}\n`;
+        FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
+      } catch { /* ignore */ }
+    }
   });
   window.webContents.on("did-finish-load", () => {
     writeDesktopLogHeader(`code-oss did-finish-load entry=${workbenchEntry}`);
@@ -2686,6 +2703,50 @@ async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap backend start requested");
   mainWindow = createWindow();
   writeDesktopLogHeader("bootstrap main window created");
+
+  // SLIDER-DEBUG: Inject a console.log wrapper into the renderer and poll for logs
+  if (isDevelopment && mainWindow) {
+    const win = mainWindow;
+    const injectScript = `
+      if (!window.__SLIDER_LOGS) {
+        window.__SLIDER_LOGS = [];
+        const origLog = console.log.bind(console);
+        console.log = function(...args) {
+          origLog(...args);
+          const msg = args.map(a => typeof a === 'string' ? a : JSON.stringify(a)).join(' ');
+          if (msg.includes('[SLIDER-DEBUG-3]')) {
+            window.__SLIDER_LOGS.push('[' + new Date().toISOString() + '] ' + msg);
+          }
+        };
+      }
+      'injected';
+    `;
+    // Inject after page loads, and re-inject on navigation
+    const inject = () => {
+      if (!win.isDestroyed()) {
+        win.webContents.executeJavaScript(injectScript).catch(() => {});
+      }
+    };
+    win.webContents.on("did-finish-load", inject);
+    win.webContents.on("dom-ready", inject);
+    // Poll every 2 seconds to read accumulated logs
+    const pollTimer = setInterval(() => {
+      if (win.isDestroyed()) { clearInterval(pollTimer); return; }
+      win.webContents.executeJavaScript(`
+        const logs = window.__SLIDER_LOGS || [];
+        window.__SLIDER_LOGS = [];
+        JSON.stringify(logs);
+      `).then((result: string) => {
+        const logs = JSON.parse(result) as string[];
+        if (logs.length > 0) {
+          const content = logs.join('\\n') + '\\n';
+          try { FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, content, "utf8"); } catch {}
+          console.log('[SLIDER-DEBUG-POLL] wrote ' + logs.length + ' log entries to ' + SLIDER_DEBUG_LOG_PATH);
+        }
+      }).catch(() => {});
+    }, 2000);
+    win.on("closed", () => clearInterval(pollTimer));
+  }
 }
 
 let isCleanupFinished = false;

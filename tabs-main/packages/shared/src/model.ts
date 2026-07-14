@@ -114,12 +114,7 @@ function resolveDescriptorChoiceValue(
   if (descriptor.options.length === 0) {
     return trimmed;
   }
-  if (
-    descriptor.promptInjectedValues?.includes(trimmed) &&
-    descriptor.options.some((option) => option.id === trimmed)
-  ) {
-    return descriptor.options.find((option) => option.isDefault)?.id;
-  }
+  // Allow prompt injected values to stick in the UI if they are valid options
   if (descriptor.options.some((option) => option.id === trimmed)) {
     return trimmed;
   }
@@ -383,17 +378,23 @@ export function applyClaudePromptEffortPrefix(
   text: string,
   effort: string | null | undefined,
 ): string {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return trimmed;
-  }
   if (effort !== "ultrathink") {
-    return trimmed;
+    // Strip the prefix if it exists when going back to a lower effort
+    const match = text.match(/^Ultrathink:\s*\n?/i);
+    if (match) {
+      return text.slice(match[0].length);
+    }
+    return text;
   }
-  if (trimmed.startsWith("Ultrathink:")) {
-    return trimmed;
+
+  const trimmed = text.trimStart();
+  if (!trimmed) {
+    return "Ultrathink:\n";
   }
-  return `Ultrathink:\n${trimmed}`;
+  if (trimmed.toLowerCase().startsWith("ultrathink:")) {
+    return text;
+  }
+  return `Ultrathink:\n${text}`;
 }
 
 // ── Compat shims: pre-migration ModelCapabilities (effort) + default model ──

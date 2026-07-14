@@ -193,11 +193,7 @@ export const TraitsMenuContent = memo(function TraitsMenuContentImpl({
   ) => {
     if (!value) return;
     if (descriptor.promptInjectedValues?.includes(value)) {
-      const nextPrompt =
-        prompt.trim().length === 0
-          ? ULTRATHINK_PROMPT_PREFIX
-          : applyClaudePromptEffortPrefix(prompt, "ultrathink");
-      onPromptChange(nextPrompt);
+      onPromptChange(applyClaudePromptEffortPrefix(prompt, "ultrathink"));
       onRequestClose?.();
       return;
     }
