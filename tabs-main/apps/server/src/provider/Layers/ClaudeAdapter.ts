@@ -265,6 +265,9 @@ function getEffectiveClaudeAgentEffort(
   effort: string | null | undefined,
   model: string | null | undefined,
 ): ClaudeSdkEffort | null {
+  if (effort === "ultrathink") {
+    return "high";
+  }
   const normalized = normalizeClaudeCliEffort(effort, model);
   return normalized ? (normalized as ClaudeSdkEffort) : null;
 }
