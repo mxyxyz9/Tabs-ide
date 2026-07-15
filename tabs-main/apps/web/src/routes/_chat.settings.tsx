@@ -99,6 +99,7 @@ import { ConnectionsSettings } from "../components/settings/ConnectionsSettings"
 import { Equal } from "effect";
 import { refreshServerConfig, useServerConfig } from "../state/settings";
 import { SplashScreen } from "../components/SplashScreen";
+import { CloseScreen } from "../components/CloseScreen";
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
@@ -535,6 +536,30 @@ function uninstallInstructions(os: DesktopOsKind): string[] {
   }
 }
 
+function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
+  const [phase, setPhase] = useState<any>("idle");
+
+  useEffect(() => {
+    // Hold idle for a short bit to show the "idle" text
+    const t = setTimeout(() => {
+      setPhase("closing");
+    }, 1000);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[99999]">
+      <CloseScreen
+        loader={loader}
+        palette={palette}
+        theme={theme}
+        phase={phase}
+        onIntroEnd={onClose}
+      />
+    </div>
+  );
+}
+
 function SettingsRouteView() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
@@ -582,11 +607,44 @@ function SettingsRouteView() {
   const [previewPalette, setPreviewPalette] = useState(settings.splashLoaderPalette);
   const [previewTheme, setPreviewTheme] = useState<"system" | "dark" | "light">(settings.splashLoaderTheme);
 
+  const [closePreviewStyle, setClosePreviewStyle] = useState(settings.closeLoaderStyle);
+  const [closePreviewPalette, setClosePreviewPalette] = useState(settings.closeLoaderPalette);
+  const [closePreviewTheme, setClosePreviewTheme] = useState<"system" | "dark" | "light">(settings.closeLoaderTheme);
+  const [closeReplayKey, setCloseReplayKey] = useState(0);
+
+  const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
+  const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
+
+  const effectivePreviewTheme = previewTheme === "system" ? theme : previewTheme;
+  const effectiveClosePreviewTheme = closePreviewTheme === "system" ? theme : closePreviewTheme;
+
+  const activeStyle = animationTab === "startup" ? previewStyle : closePreviewStyle;
+  const setActiveStyle = animationTab === "startup" ? setPreviewStyle : setClosePreviewStyle;
+
+  const activePalette = animationTab === "startup" ? previewPalette : closePreviewPalette;
+  const setActivePalette = animationTab === "startup" ? setPreviewPalette : setClosePreviewPalette;
+
+  const activeTheme = animationTab === "startup" ? previewTheme : closePreviewTheme;
+  const setActiveTheme = animationTab === "startup" ? setPreviewTheme : setClosePreviewTheme;
+
+  const activeEffectiveTheme = animationTab === "startup" ? effectivePreviewTheme : effectiveClosePreviewTheme;
+
   useEffect(() => {
     setPreviewStyle(settings.splashLoaderStyle);
     setPreviewPalette(settings.splashLoaderPalette);
     setPreviewTheme(settings.splashLoaderTheme);
-  }, [settings.splashLoaderStyle, settings.splashLoaderPalette, settings.splashLoaderTheme]);
+    
+    setClosePreviewStyle(settings.closeLoaderStyle);
+    setClosePreviewPalette(settings.closeLoaderPalette);
+    setClosePreviewTheme(settings.closeLoaderTheme);
+  }, [
+    settings.splashLoaderStyle,
+    settings.splashLoaderPalette,
+    settings.splashLoaderTheme,
+    settings.closeLoaderStyle,
+    settings.closeLoaderPalette,
+    settings.closeLoaderTheme
+  ]);
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string | null>>
   >({});
@@ -1012,6 +1070,15 @@ function SettingsRouteView() {
 
   return (
     <div className="isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden overscroll-y-none bg-background text-foreground">
+      {fullscreenClosePreview && (
+        <ClosePreviewOverlay
+          key={closeReplayKey}
+          loader={closePreviewStyle}
+          palette={closePreviewPalette}
+          theme={effectiveClosePreviewTheme}
+          onClose={() => setFullscreenClosePreview(false)}
+        />
+      )}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         {!isElectron && (
           <header className="border-b border-border px-3 py-2 sm:px-5">
@@ -1518,78 +1585,108 @@ function SettingsRouteView() {
                 {activeSettingsSection === "startup-animation" ? (
                   <SettingsSection title="Animations">
                     <div className="flex flex-col gap-10">
-                      {/* STARTUP GROUP */}
+                      {/* ANIMATION CONTROLS (Toggled) */}
                       <div className="flex flex-col gap-5">
-                        <h2 className="px-4 sm:px-5 pt-4 sm:pt-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Startup</h2>
+                        <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex items-center justify-between">
+                          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
+                          </h2>
+                          <div className="flex bg-muted p-1 rounded-lg gap-1">
+                            <button
+                              onClick={() => setAnimationTab("startup")}
+                              className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap", animationTab === "startup" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50")}
+                            >
+                              Startup
+                            </button>
+                            <button
+                              onClick={() => setAnimationTab("close")}
+                              className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap", animationTab === "close" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50")}
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Live Preview Container */}
                         <div className="px-4 sm:px-5">
                           <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
-                          <div className={cn("aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300", previewTheme === "dark" ? "bg-[#09090b]" : "bg-white")}>
-                            {/* Wrap in fixed 1280x720 scaled to 50% */}
-                            <div
-                              className="absolute"
-                              style={{
-                                width: "1280px",
-                                height: "720px",
-                                transform: "scale(0.5)",
-                              }}
-                            >
-                              <SplashScreen
-                                loader={previewStyle}
-                                palette={previewPalette}
-                                theme={previewTheme}
-                              />
-                            </div>
-                          </div>
-                          <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground mr-2">Preview Theme:</span>
-                              <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
-                                <button
-                                  onClick={() => setPreviewTheme("system")}
-                                  className={cn("px-3 py-1 text-xs font-medium rounded transition-colors", previewTheme === "system" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                                >
-                                  Auto
-                                </button>
-                                <button
-                                  onClick={() => setPreviewTheme("dark")}
-                                  className={cn("px-3 py-1 text-xs font-medium rounded transition-colors", previewTheme === "dark" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                                >
-                                  Dark
-                                </button>
-                                <button
-                                  onClick={() => setPreviewTheme("light")}
-                                  className={cn("px-3 py-1 text-xs font-medium rounded transition-colors", previewTheme === "light" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
-                                >
-                                  Light
-                                </button>
+                            <div className={cn("aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300", activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white")}>
+                              {/* Wrap in fixed 1280x720 scaled to 50% */}
+                              <div
+                                className="absolute"
+                                style={{
+                                  width: "1280px",
+                                  height: "720px",
+                                  transform: "scale(0.5)",
+                                }}
+                              >
+                                {animationTab === "startup" ? (
+                                  <SplashScreen
+                                    loader={activeStyle}
+                                    palette={activePalette}
+                                    theme={activeTheme}
+                                  />
+                                ) : (
+                                  <CloseScreen
+                                    key={closeReplayKey}
+                                    loader={activeStyle}
+                                    palette={activePalette}
+                                    theme={activeTheme}
+                                    phase="closing"
+                                    onIntroEnd={() => {}}
+                                  />
+                                )}
                               </div>
                             </div>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-7 text-xs"
-                              onClick={() => {
-                                updateSettings({ 
-                                  splashLoaderStyle: previewStyle,
-                                  splashLoaderPalette: previewPalette,
-                                  splashLoaderTheme: previewTheme
-                                });
-                                setTimeout(() => {
-                                  window.location.reload();
-                                }, 150);
-                              }}
-                            >
-                              <RefreshCwIcon className="mr-1.5 size-3" />
-                              Reload App
-                            </Button>
+                            <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-muted-foreground mr-2">Preview Theme:</span>
+                                <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
+                                  {["system", "dark", "light"].map((t) => (
+                                    <button
+                                      key={t}
+                                      onClick={() => setActiveTheme(t as any)}
+                                      className={cn("px-3 py-1 text-xs font-medium rounded transition-colors capitalize", activeTheme === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                                    >
+                                      {t === "system" ? "Auto" : t}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  updateSettings({ 
+                                    splashLoaderStyle: previewStyle,
+                                    splashLoaderPalette: previewPalette,
+                                    splashLoaderTheme: previewTheme,
+                                    closeLoaderStyle: closePreviewStyle,
+                                    closeLoaderPalette: closePreviewPalette,
+                                    closeLoaderTheme: closePreviewTheme
+                                  });
+                                  if (animationTab === "startup") {
+                                    setTimeout(() => window.location.reload(), 150);
+                                  } else {
+                                    setCloseReplayKey(k => k + 1);
+                                    setFullscreenClosePreview(true);
+                                  }
+                                }}
+                              >
+                                {animationTab === "startup" ? (
+                                  <><RefreshCwIcon className="mr-1.5 size-3" /> Reload App</>
+                                ) : (
+                                  <><MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen</>
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                        </div>
                         </div>
 
                         <SettingsRow
-                          title="Startup style"
-                          description="Choose the visual aesthetic for the startup loading screen."
+                          title="Style"
+                          description={`Choose the visual aesthetic for the ${animationTab} animation.`}
                           control={
                             <div className="flex bg-muted p-1 rounded-lg gap-1">
                               {[
@@ -1599,10 +1696,10 @@ function SettingsRouteView() {
                                 <button
                                   key={option.value}
                                   type="button"
-                                  onClick={() => setPreviewStyle(option.value as any)}
+                                  onClick={() => setActiveStyle(option.value as any)}
                                   className={cn(
                                     "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
-                                    previewStyle === option.value
+                                    activeStyle === option.value
                                       ? "bg-background text-foreground shadow-sm"
                                       : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                                   )}
@@ -1616,7 +1713,7 @@ function SettingsRouteView() {
 
                         <SettingsRow
                           title="Color palette"
-                          description="Choose the color palette for the startup loading screen."
+                          description={`Choose the color palette for the ${animationTab} animation.`}
                           control={
                             <div className="flex bg-muted p-1 rounded-lg gap-1">
                               {[
@@ -1626,10 +1723,10 @@ function SettingsRouteView() {
                                 <button
                                   key={option.value}
                                   type="button"
-                                  onClick={() => setPreviewPalette(option.value as any)}
+                                  onClick={() => setActivePalette(option.value as any)}
                                   className={cn(
                                     "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
-                                    previewPalette === option.value
+                                    activePalette === option.value
                                       ? "bg-background text-foreground shadow-sm"
                                       : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                                   )}
@@ -1642,8 +1739,32 @@ function SettingsRouteView() {
                         />
                       </div>
 
+                      {(previewStyle !== settings.splashLoaderStyle || 
+                        previewPalette !== settings.splashLoaderPalette || 
+                        previewTheme !== settings.splashLoaderTheme ||
+                        closePreviewStyle !== settings.closeLoaderStyle || 
+                        closePreviewPalette !== settings.closeLoaderPalette || 
+                        closePreviewTheme !== settings.closeLoaderTheme) && (
+                        <div className="flex justify-end p-4 sm:p-5 border-t border-border">
+                          <Button 
+                            onClick={() => updateSettings({ 
+                              splashLoaderStyle: previewStyle,
+                              splashLoaderPalette: previewPalette,
+                              splashLoaderTheme: previewTheme,
+                              closeLoaderStyle: closePreviewStyle,
+                              closeLoaderPalette: closePreviewPalette,
+                              closeLoaderTheme: closePreviewTheme
+                            })}
+                            className="gap-2"
+                          >
+                            <SaveIcon className="size-4" />
+                            Save Settings
+                          </Button>
+                        </div>
+                      )}
+
                       {/* INTERFACE GROUP */}
-                      <div className="flex flex-col gap-5">
+                      <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
                         <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Interface</h2>
                         <SettingsRow
                           title="Slider animations"
@@ -1704,21 +1825,7 @@ function SettingsRouteView() {
 
 
 
-                      {(previewStyle !== settings.splashLoaderStyle || previewPalette !== settings.splashLoaderPalette || previewTheme !== settings.splashLoaderTheme) && (
-                        <div className="flex justify-end p-4 sm:p-5 border-t border-border">
-                          <Button 
-                            onClick={() => updateSettings({ 
-                              splashLoaderStyle: previewStyle,
-                              splashLoaderPalette: previewPalette,
-                              splashLoaderTheme: previewTheme
-                            })}
-                            className="gap-2"
-                          >
-                            <SaveIcon className="size-4" />
-                            Save Settings
-                          </Button>
-                        </div>
-                      )}
+
                     </div>
                   </SettingsSection>
                 ) : null}

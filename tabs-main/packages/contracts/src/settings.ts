@@ -49,11 +49,16 @@ export const DEFAULT_SPLASH_LOADER_STYLE: SplashLoaderStyle = "glass";
 
 export const SplashLoaderPalette = Schema.Literals(["block", "mono"]);
 export type SplashLoaderPalette = typeof SplashLoaderPalette.Type;
-export const DEFAULT_SPLASH_LOADER_PALETTE: SplashLoaderPalette = "block";
+export const DEFAULT_SPLASH_LOADER_PALETTE: SplashLoaderPalette = "mono";
 
 export const SplashLoaderTheme = Schema.Literals(["system", "light", "dark"]);
 export type SplashLoaderTheme = typeof SplashLoaderTheme.Type;
 export const DEFAULT_SPLASH_LOADER_THEME: SplashLoaderTheme = "system";
+
+// Close animation — independent from startup, reuses same enum types
+export const DEFAULT_CLOSE_LOADER_STYLE: SplashLoaderStyle = "glass";
+export const DEFAULT_CLOSE_LOADER_PALETTE: SplashLoaderPalette = "mono";
+export const DEFAULT_CLOSE_LOADER_THEME: SplashLoaderTheme = "system";
 
 export const ClientSettingsSchema = Schema.Struct({
   desktopIconTheme: DesktopIconTheme.pipe(
@@ -124,6 +129,15 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   splashLoaderTheme: SplashLoaderTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_LOADER_THEME)),
+  ),
+  closeLoaderStyle: SplashLoaderStyle.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLOSE_LOADER_STYLE)),
+  ),
+  closeLoaderPalette: SplashLoaderPalette.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLOSE_LOADER_PALETTE)),
+  ),
+  closeLoaderTheme: SplashLoaderTheme.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLOSE_LOADER_THEME)),
   ),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
@@ -606,6 +620,9 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   wordWrap: Schema.optionalKey(Schema.Boolean),
+  closeLoaderStyle: Schema.optionalKey(SplashLoaderStyle),
+  closeLoaderPalette: Schema.optionalKey(SplashLoaderPalette),
+  closeLoaderTheme: Schema.optionalKey(SplashLoaderTheme),
 });
 export type ClientSettingsPatch = typeof ClientSettingsPatch.Type;
 

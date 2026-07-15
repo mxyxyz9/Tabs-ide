@@ -83,6 +83,7 @@ const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
+const APP_CLOSING_CHANNEL = "desktop:app-closing";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
@@ -2766,6 +2767,10 @@ app.on("before-quit", (event) => {
   isQuitting = true;
   writeDesktopLogHeader("before-quit received, performing async cleanup");
 
+  // Notify the renderer to show the close animation.
+  // The renderer goes into "idle" (waving) while we clean up.
+  mainWindow?.webContents.send(APP_CLOSING_CHANNEL);
+
   clearUpdatePollTimer();
   codeHostManager.dispose();
   browserHostManager.dispose();
@@ -2788,7 +2793,26 @@ app.on("before-quit", (event) => {
     } finally {
       isCleanupFinished = true;
       restoreStdIoCapture?.();
-      writeDesktopLogHeader("cleanup finished, exiting app");
+      writeDesktopLogHeader("cleanup finished, notifying renderer to finalize close animation");
+      
+      // Tell renderer that cleanup is done so it can trigger the squash/drain
+      mainWindow?.webContents.send("desktop:app-cleanup-done");
+      
+      // Wait for renderer to signal that animation is finished
+      try {
+        await Promise.race([
+          new Promise<void>((resolve) => {
+            ipcMain.once("desktop:app-ready-to-exit", () => resolve());
+          }),
+          new Promise<void>((_, reject) => 
+            setTimeout(() => reject(new Error("Renderer close animation timed out after 5 seconds")), 5000)
+          )
+        ]);
+        writeDesktopLogHeader("renderer animation done, exiting app");
+      } catch (err: any) {
+        writeDesktopLogHeader(err.message);
+      }
+      
       app.exit(0);
     }
   })();

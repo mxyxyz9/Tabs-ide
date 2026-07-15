@@ -1050,6 +1050,10 @@ export interface DesktopBridge {
    * Electron desktop build; web builds have `preview === undefined`.
    */
   preview?: DesktopPreviewBridge;
+  /** Fired by main when the app is about to quit. */
+  onAppClosing: (listener: () => void) => () => void;
+  onAppCleanupDone: (listener: () => void) => () => void;
+  notifyReadyToExit: () => Promise<void>;
 }
 
 export interface DesktopPreviewBridge {

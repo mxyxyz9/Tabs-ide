@@ -10,6 +10,9 @@ const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
+const APP_CLOSING_CHANNEL = "desktop:app-closing";
+const APP_CLEANUP_DONE_CHANNEL = "desktop:app-cleanup-done";
+const APP_READY_TO_EXIT_CHANNEL = "desktop:app-ready-to-exit";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
@@ -145,5 +148,23 @@ contextBridge.exposeInMainWorld("desktopBridge", {
 
   getTailscaleStatus: () => {
     return ipcRenderer.invoke("get-tailscale-status");
+  },
+  onAppClosing: (listener) => {
+    const wrapped = () => listener();
+    ipcRenderer.on(APP_CLOSING_CHANNEL, wrapped);
+    return () => {
+      ipcRenderer.removeListener(APP_CLOSING_CHANNEL, wrapped);
+    };
+  },
+  onAppCleanupDone: (listener) => {
+    const wrapped = () => listener();
+    ipcRenderer.on(APP_CLEANUP_DONE_CHANNEL, wrapped);
+    return () => {
+      ipcRenderer.removeListener(APP_CLEANUP_DONE_CHANNEL, wrapped);
+    };
+  },
+  notifyReadyToExit: () => {
+    ipcRenderer.send(APP_READY_TO_EXIT_CHANNEL);
+    return Promise.resolve();
   },
 } satisfies DesktopBridge);
