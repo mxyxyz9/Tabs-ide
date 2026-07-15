@@ -22,7 +22,7 @@ import {
   type ServerProviderModel,
   type ProviderOptionSelection,
 } from "@tabs/contracts";
-import { applyClaudePromptEffortPrefix, normalizeModelSlug } from "@tabs/shared/model";
+import { applyClaudePromptEffortPrefix, isClaudeUltrathinkPrompt, normalizeModelSlug } from "@tabs/shared/model";
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -104,6 +104,7 @@ import {
   ListTodoIcon,
   LockIcon,
   LockOpenIcon,
+  PenIcon,
   XIcon,
 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -708,6 +709,32 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     [selectedModel, selectedModelOptionsForDispatch, selectedProvider],
   );
   const selectedModelForPicker = selectedModel;
+
+  // If the user manually removes the Ultrathink prefix from the prompt, revert the model selection
+  // to avoid being stuck in an effort mode that doesn't match the prompt content.
+  useEffect(() => {
+    if (
+      selectedPromptEffort === "ultrathink" &&
+      !isClaudeUltrathinkPrompt(prompt)
+    ) {
+      const nextOptions = (composerModelOptions?.[selectedProvider] ?? []).filter(
+        (o) => o.value !== "ultrathink",
+      );
+      setComposerDraftModelSelection(
+        threadId,
+        makeAppModelSelection(selectedProvider, selectedModel, nextOptions),
+      );
+    }
+  }, [
+    prompt,
+    selectedPromptEffort,
+    composerModelOptions,
+    selectedProvider,
+    selectedModel,
+    threadId,
+    setComposerDraftModelSelection,
+  ]);
+
   const phase = derivePhase(activeThread?.session ?? null);
   const isSendBusy = sendPhase !== "idle";
   const isPreparingWorktree = sendPhase === "preparing-worktree";
@@ -1531,6 +1558,18 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       if (isLocalDraftThread) {
         setDraftThreadContext(threadId, { interactionMode: mode });
       }
+
+      const currentOptions = composerModelOptions?.[selectedProvider] ?? [];
+      if (currentOptions.some((o) => o.id === "mode")) {
+        const nextOptions = currentOptions.map((o) =>
+          o.id === "mode" ? { ...o, currentValue: mode } : o,
+        );
+        composerDraftActions.setProviderModelOptions(threadId, selectedProvider, nextOptions, {
+          persistSticky: true,
+          model: selectedModel,
+        });
+      }
+
       scheduleComposerFocus();
     },
     [
@@ -1540,6 +1579,10 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       setComposerDraftInteractionMode,
       setDraftThreadContext,
       threadId,
+      composerModelOptions,
+      selectedProvider,
+      selectedModel,
+      composerDraftActions,
     ],
   );
   const toggleInteractionMode = useCallback(() => {
@@ -3171,12 +3214,18 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const onFusedModelOptionsChange = useCallback(
     (nextOptions: ReadonlyArray<import("@tabs/contracts").ProviderOptionSelection> | undefined) => {
       fetch('http://localhost:9999', { method: 'POST', body: `[SLIDER-DEBUG-3] onFusedModelOptionsChange options=${JSON.stringify(nextOptions)} threadId=${threadId} provider=${selectedProvider} model=${selectedModel} stack=${new Error().stack?.split('\n').slice(1,4).join(' <- ')}` }).catch(()=>{});
+      
+      const newMode = nextOptions?.find((o) => o.id === "mode")?.currentValue;
+      if (typeof newMode === "string" && (newMode === "plan" || newMode === "default") && newMode !== interactionMode) {
+        handleInteractionModeChange(newMode);
+      }
+
       composerDraftActions.setProviderModelOptions(threadId, selectedProvider, nextOptions, {
         persistSticky: true,
         model: selectedModel,
       });
     },
-    [threadId, selectedProvider, selectedModel],
+    [threadId, selectedProvider, selectedModel, interactionMode, handleInteractionModeChange, composerDraftActions],
   );
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
@@ -3522,7 +3571,6 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const shouldCenterEmptyThreadComposer = shouldUseCenteredEmptyComposer({
     isLocalDraftThread,
     hasTimelineEntries,
-    hasPendingComposerContent: composerSendState.hasSendableContent,
     isWorking,
   });
   const composerSection = (
@@ -3765,7 +3813,12 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
 
                       <Button
                         variant="ghost"
-                        className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                        className={cn(
+                          "shrink-0 whitespace-nowrap px-2 sm:px-3",
+                          interactionMode === "plan"
+                            ? "text-blue-400 hover:text-blue-300"
+                            : "text-muted-foreground/70 hover:text-foreground/80"
+                        )}
                         size="sm"
                         type="button"
                         onClick={toggleInteractionMode}
@@ -3775,9 +3828,9 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                             : "Default mode — click to enter plan mode"
                         }
                       >
-                        <BotIcon />
+                        {interactionMode === "plan" ? <ListTodoIcon /> : <BotIcon />}
                         <span className="sr-only sm:not-sr-only">
-                          {interactionMode === "plan" ? "Plan" : "Chat"}
+                          {interactionMode === "plan" ? "Plan" : "Build"}
                         </span>
                       </Button>
 
@@ -3785,23 +3838,44 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
 
                       <Button
                         variant="ghost"
-                        className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+                        className={cn(
+                          "shrink-0 whitespace-nowrap px-2 sm:px-3",
+                          settings.colorizePermissions
+                            ? runtimeMode === "full-access"
+                              ? "text-[#c27070]/80 hover:text-[#c27070]"
+                              : runtimeMode === "auto-accept-edits"
+                                ? "text-[#a683c2]/80 hover:text-[#a683c2]"
+                                : "text-muted-foreground/70 hover:text-foreground/80"
+                            : "text-muted-foreground/70 hover:text-foreground/80"
+                        )}
                         size="sm"
                         type="button"
-                        onClick={() =>
-                          void handleRuntimeModeChange(
-                            runtimeMode === "full-access" ? "approval-required" : "full-access",
-                          )
-                        }
+                        onClick={() => {
+                          const modes = ["approval-required", "auto-accept-edits", "full-access"] as const;
+                          const nextIndex = (modes.indexOf(runtimeMode) + 1) % modes.length;
+                          void handleRuntimeModeChange(modes[nextIndex]);
+                        }}
                         title={
                           runtimeMode === "full-access"
                             ? "Full access — click to require approvals"
-                            : "Approval required — click for full access"
+                            : runtimeMode === "auto-accept-edits"
+                              ? "Auto-accept edits — click for full access"
+                              : "Supervised — click for auto-accept edits"
                         }
                       >
-                        {runtimeMode === "full-access" ? <LockOpenIcon /> : <LockIcon />}
+                        {runtimeMode === "full-access" ? (
+                          <LockOpenIcon />
+                        ) : runtimeMode === "auto-accept-edits" ? (
+                          <PenIcon />
+                        ) : (
+                          <LockIcon />
+                        )}
                         <span className="sr-only sm:not-sr-only">
-                          {runtimeMode === "full-access" ? "Full access" : "Supervised"}
+                          {runtimeMode === "full-access"
+                            ? "Full access"
+                            : runtimeMode === "auto-accept-edits"
+                              ? "Auto-accept edits"
+                              : "Supervised"}
                         </span>
                       </Button>
 

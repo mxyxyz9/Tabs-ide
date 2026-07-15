@@ -1125,6 +1125,32 @@ function SettingsRouteView() {
                       }
                     />
 
+                    <SettingsRow
+                      title="Colorize permissions"
+                      description="Apply distinct semantic colors to the different permission levels in the composer."
+                      resetAction={
+                        !settings.colorizePermissions ? (
+                          <SettingResetButton
+                            label="colorize permissions"
+                            onClick={() =>
+                              updateSettings({
+                                colorizePermissions: true,
+                              })
+                            }
+                          />
+                        ) : null
+                      }
+                      control={
+                        <Switch
+                          checked={settings.colorizePermissions}
+                          onCheckedChange={(checked) => {
+                            updateSettings({ colorizePermissions: checked });
+                          }}
+                          aria-label="Colorize permissions"
+                        />
+                      }
+                    />
+
                     {isElectron ? (
                       <SettingsRow
                         title="Desktop icon"

@@ -176,13 +176,11 @@ export function shouldPauseAutoScrollOnUserScrollIntent(options: {
 export function shouldUseCenteredEmptyComposer(options: {
   isLocalDraftThread: boolean;
   hasTimelineEntries: boolean;
-  hasPendingComposerContent: boolean;
   isWorking: boolean;
 }): boolean {
   return (
     options.isLocalDraftThread &&
     !options.hasTimelineEntries &&
-    !options.hasPendingComposerContent &&
     !options.isWorking
   );
 }

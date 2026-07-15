@@ -658,7 +658,7 @@ const ModelRow = memo(function ModelRow(props: {
           className="flex-1 relative h-full flex items-center px-5 cursor-grab active:cursor-grabbing"
         >
           {props.isActive && (
-            <div className="absolute inset-y-2 left-2.5 right-2.5 bg-white/5 rounded-full overflow-hidden pointer-events-none">
+            <div className="absolute top-1/2 -translate-y-1/2 h-5 left-2.5 right-2.5 bg-white/5 rounded-full overflow-hidden pointer-events-none">
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full overflow-hidden",
@@ -684,7 +684,7 @@ const ModelRow = memo(function ModelRow(props: {
           )}
 
           {/* Aligned stops: solid dots if supported, empty circles if not */}
-          <div className="absolute left-5 right-5 flex justify-between pointer-events-none z-10">
+          <div className="absolute top-1/2 -translate-y-1/2 left-5 right-5 flex justify-between pointer-events-none z-10">
             {props.globalStops.map((stop, oIdx) => {
               const isSupported = allowedOptionIds.includes(stop.id);
               const isDotActive = props.isActive && oIdx <= resolvedIndex;
@@ -705,7 +705,7 @@ const ModelRow = memo(function ModelRow(props: {
           {props.isActive && (
             <div
               className={cn(
-                "absolute size-7 bg-white rounded-full shadow-lg z-20 pointer-events-none",
+                "absolute top-1/2 -translate-y-1/2 size-7 bg-white rounded-full shadow-lg z-20 pointer-events-none",
                 sliderAnimationsEnabled && localStopIndex === null && "transition-[left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
               )}
               style={{

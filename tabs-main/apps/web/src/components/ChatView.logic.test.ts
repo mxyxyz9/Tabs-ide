@@ -124,7 +124,6 @@ describe("shouldUseCenteredEmptyComposer", () => {
       shouldUseCenteredEmptyComposer({
         isLocalDraftThread: true,
         hasTimelineEntries: false,
-        hasPendingComposerContent: false,
         isWorking: false,
       }),
     ).toBe(true);
@@ -135,21 +134,19 @@ describe("shouldUseCenteredEmptyComposer", () => {
       shouldUseCenteredEmptyComposer({
         isLocalDraftThread: false,
         hasTimelineEntries: false,
-        hasPendingComposerContent: false,
         isWorking: false,
       }),
     ).toBe(false);
   });
 
-  it("keeps the composer docked when a draft already has content", () => {
+  it("keeps the welcome text visible even when a draft already has content", () => {
     expect(
       shouldUseCenteredEmptyComposer({
         isLocalDraftThread: true,
         hasTimelineEntries: false,
-        hasPendingComposerContent: true,
         isWorking: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });
 
