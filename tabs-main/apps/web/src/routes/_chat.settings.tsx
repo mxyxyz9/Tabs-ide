@@ -15,10 +15,13 @@ import {
   RefreshCwIcon,
   RotateCcwIcon,
   SlidersHorizontalIcon,
+  SparklesIcon,
   Undo2Icon,
   XIcon,
   GitBranchIcon,
   Link2Icon,
+  MonitorPlayIcon,
+  SaveIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -95,6 +98,7 @@ import { SourceControlSettingsPanel } from "../components/settings/SourceControl
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
 import { refreshServerConfig, useServerConfig } from "../state/settings";
+import { SplashScreen } from "../components/SplashScreen";
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
@@ -113,6 +117,32 @@ const THEME_OPTIONS = [
     value: "dark",
     label: "Dark",
     description: "Always use the dark theme.",
+  },
+] as const;
+
+const SPLASH_LOADER_STYLE_OPTIONS = [
+  {
+    value: "glass",
+    label: "Molten Glass",
+    description: "Fluid, distorted text effect with rotating status.",
+  },
+  {
+    value: "solari",
+    label: "Solari Grid",
+    description: "Mechanical split-flap display effect.",
+  },
+] as const;
+
+const SPLASH_LOADER_PALETTE_OPTIONS = [
+  {
+    value: "block",
+    label: "Solid Block",
+    description: "Vibrant indigo background.",
+  },
+  {
+    value: "mono",
+    label: "Mono Quiet",
+    description: "Minimalist, theme-matching background.",
   },
 ] as const;
 
@@ -214,6 +244,7 @@ type SettingsSectionId =
   | "providers"
   | "source-control"
   | "connections"
+  | "startup-animation"
   | "keybindings"
   | "about";
 
@@ -223,6 +254,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   icon: typeof SlidersHorizontalIcon;
 }> = [
   { id: "general", label: "General", icon: SlidersHorizontalIcon },
+  { id: "startup-animation", label: "Animations", icon: MonitorPlayIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
   { id: "source-control", label: "Source Control", icon: GitBranchIcon },
   { id: "connections", label: "Connections", icon: Link2Icon },
@@ -520,7 +552,14 @@ function SettingsRouteView() {
   const serverConfig = useServerConfig();
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("general");
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>(() => {
+    const saved = sessionStorage.getItem("tabs_active_settings_tab");
+    return (saved as SettingsSectionId) || "general";
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem("tabs_active_settings_tab", activeSettingsSection);
+  }, [activeSettingsSection]);
   const [openProviderDetails, setOpenProviderDetails] = useState<
     Partial<Record<ProviderSettingsKey, boolean>>
   >({
@@ -538,6 +577,16 @@ function SettingsRouteView() {
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string>>
   >({});
+  
+  const [previewStyle, setPreviewStyle] = useState(settings.splashLoaderStyle);
+  const [previewPalette, setPreviewPalette] = useState(settings.splashLoaderPalette);
+  const [previewTheme, setPreviewTheme] = useState<"system" | "dark" | "light">(settings.splashLoaderTheme);
+
+  useEffect(() => {
+    setPreviewStyle(settings.splashLoaderStyle);
+    setPreviewPalette(settings.splashLoaderPalette);
+    setPreviewTheme(settings.splashLoaderTheme);
+  }, [settings.splashLoaderStyle, settings.splashLoaderPalette, settings.splashLoaderTheme]);
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string | null>>
   >({});
@@ -1078,6 +1127,7 @@ function SettingsRouteView() {
                       }
                     />
 
+
                     <SettingsRow
                       title="Time format"
                       description="System default follows your browser or OS clock preference."
@@ -1392,64 +1442,6 @@ function SettingsRouteView() {
                       }
                     />
                     <SettingsRow
-                      title="Slider animations"
-                      description="Smoothly animate the model picker's reasoning-effort slider."
-                      resetAction={
-                        settings.sliderAnimationsEnabled !==
-                        DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
-                          <SettingResetButton
-                            label="slider animations"
-                            onClick={() =>
-                              updateSettings({
-                                sliderAnimationsEnabled:
-                                  DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.sliderAnimationsEnabled}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              sliderAnimationsEnabled: Boolean(checked),
-                            })
-                          }
-                          aria-label="Slider animations"
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      title="Animated slider fill"
-                      description="Show a flowing color animation on the active model's reasoning-effort track."
-                      resetAction={
-                        settings.animatedTrackFillEnabled !==
-                        DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
-                          <SettingResetButton
-                            label="animated slider fill"
-                            onClick={() =>
-                              updateSettings({
-                                animatedTrackFillEnabled:
-                                  DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.animatedTrackFillEnabled}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              animatedTrackFillEnabled: Boolean(checked),
-                            })
-                          }
-                          aria-label="Animated slider fill"
-                        />
-                      }
-                    />
-                    <SettingsRow
                       title="Text generation model"
                       description="Configure the model used for text generation (commit messages, PR content etc.)"
                       resetAction={
@@ -1521,6 +1513,213 @@ function SettingsRouteView() {
                         </div>
                       }
                     />
+                  </SettingsSection>
+                ) : null}
+                {activeSettingsSection === "startup-animation" ? (
+                  <SettingsSection title="Animations">
+                    <div className="flex flex-col gap-10">
+                      {/* STARTUP GROUP */}
+                      <div className="flex flex-col gap-5">
+                        <h2 className="px-4 sm:px-5 pt-4 sm:pt-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Startup</h2>
+                        {/* Live Preview Container */}
+                        <div className="px-4 sm:px-5">
+                          <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
+                          <div className={cn("aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300", previewTheme === "dark" ? "bg-[#09090b]" : "bg-white")}>
+                            {/* Wrap in fixed 1280x720 scaled to 50% */}
+                            <div
+                              className="absolute"
+                              style={{
+                                width: "1280px",
+                                height: "720px",
+                                transform: "scale(0.5)",
+                              }}
+                            >
+                              <SplashScreen
+                                loader={previewStyle}
+                                palette={previewPalette}
+                                theme={previewTheme}
+                              />
+                            </div>
+                          </div>
+                          <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground mr-2">Preview Theme:</span>
+                              <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
+                                <button
+                                  onClick={() => setPreviewTheme("system")}
+                                  className={cn("px-3 py-1 text-xs font-medium rounded transition-colors", previewTheme === "system" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                                >
+                                  Auto
+                                </button>
+                                <button
+                                  onClick={() => setPreviewTheme("dark")}
+                                  className={cn("px-3 py-1 text-xs font-medium rounded transition-colors", previewTheme === "dark" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                                >
+                                  Dark
+                                </button>
+                                <button
+                                  onClick={() => setPreviewTheme("light")}
+                                  className={cn("px-3 py-1 text-xs font-medium rounded transition-colors", previewTheme === "light" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                                >
+                                  Light
+                                </button>
+                              </div>
+                            </div>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                updateSettings({ 
+                                  splashLoaderStyle: previewStyle,
+                                  splashLoaderPalette: previewPalette,
+                                  splashLoaderTheme: previewTheme
+                                });
+                                setTimeout(() => {
+                                  window.location.reload();
+                                }, 150);
+                              }}
+                            >
+                              <RefreshCwIcon className="mr-1.5 size-3" />
+                              Reload App
+                            </Button>
+                          </div>
+                        </div>
+                        </div>
+
+                        <SettingsRow
+                          title="Startup style"
+                          description="Choose the visual aesthetic for the startup loading screen."
+                          control={
+                            <div className="flex bg-muted p-1 rounded-lg gap-1">
+                              {[
+                                { value: "glass", label: "Molten Glass" },
+                                { value: "solari", label: "Solari Grid" }
+                              ].map((option) => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => setPreviewStyle(option.value as any)}
+                                  className={cn(
+                                    "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
+                                    previewStyle === option.value
+                                      ? "bg-background text-foreground shadow-sm"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          }
+                        />
+
+                        <SettingsRow
+                          title="Color palette"
+                          description="Choose the color palette for the startup loading screen."
+                          control={
+                            <div className="flex bg-muted p-1 rounded-lg gap-1">
+                              {[
+                                { value: "block", label: "Solid Block" },
+                                { value: "mono", label: "Monochrome" }
+                              ].map((option) => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => setPreviewPalette(option.value as any)}
+                                  className={cn(
+                                    "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
+                                    previewPalette === option.value
+                                      ? "bg-background text-foreground shadow-sm"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          }
+                        />
+                      </div>
+
+                      {/* INTERFACE GROUP */}
+                      <div className="flex flex-col gap-5">
+                        <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Interface</h2>
+                        <SettingsRow
+                          title="Slider animations"
+                          description="Smoothly animate the model picker's reasoning-effort slider."
+                          resetAction={
+                            settings.sliderAnimationsEnabled !==
+                            DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
+                              <SettingResetButton
+                                label="slider animations"
+                                onClick={() =>
+                                  updateSettings({
+                                    sliderAnimationsEnabled:
+                                      DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <Switch
+                              checked={settings.sliderAnimationsEnabled}
+                              onCheckedChange={(checked) =>
+                                updateSettings({
+                                  sliderAnimationsEnabled: Boolean(checked),
+                                })
+                              }
+                              aria-label="Slider animations"
+                            />
+                          }
+                        />
+
+                        <SettingsRow
+                          title="Animated slider fill"
+                          description="Smoothly animate the fill color of sliders when value changes."
+                          resetAction={
+                            settings.animatedTrackFillEnabled !== DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
+                              <SettingResetButton
+                                label="animated slider fill"
+                                onClick={() =>
+                                  updateSettings({
+                                    animatedTrackFillEnabled: DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <Switch
+                              checked={settings.animatedTrackFillEnabled}
+                              onCheckedChange={(checked) =>
+                                updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
+                              }
+                              aria-label="Animated slider fill"
+                            />
+                          }
+                        />
+                      </div>
+
+
+
+                      {(previewStyle !== settings.splashLoaderStyle || previewPalette !== settings.splashLoaderPalette || previewTheme !== settings.splashLoaderTheme) && (
+                        <div className="flex justify-end p-4 sm:p-5 border-t border-border">
+                          <Button 
+                            onClick={() => updateSettings({ 
+                              splashLoaderStyle: previewStyle,
+                              splashLoaderPalette: previewPalette,
+                              splashLoaderTheme: previewTheme
+                            })}
+                            className="gap-2"
+                          >
+                            <SaveIcon className="size-4" />
+                            Save Settings
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </SettingsSection>
                 ) : null}
                 {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}

@@ -1,0 +1,250 @@
+import React, { useState, useEffect, useRef, useId } from "react";
+import { useTheme } from "../hooks/useTheme";
+import { cn } from "~/lib/utils";
+import "./loaders.css";
+
+const GLASS_MESSAGES = [
+  "COMPILING VIBES",
+  "MELTING NODE_MODULES",
+  "NEGOTIATING WITH THE LINTER",
+  "BRIBING THE GARBAGE COLLECTOR",
+  "RETICULATING SPLINES",
+  "ALMOST READY (PROBABLY)",
+];
+
+const SOLARI_MESSAGES = [
+  "BOARDING NODE_MODULES",
+  "HERDING SEMICOLONS",
+  "RESOLVING MERGE CONFLICTS",
+  "DOWNLOADING MORE RAM",
+  "BLAMING THE CACHE",
+  "ALMOST READY (PROBABLY)",
+];
+
+const SOLARI_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ".split("");
+
+
+
+function RotatingLabel({
+  messages,
+  intervalMs = 2200,
+  className,
+}: {
+  messages: string[];
+  intervalMs?: number;
+  className?: string;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [outgoing, setOutgoing] = useState<string | null>(null);
+  const idxRef = useRef(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const leaving = messages[idxRef.current];
+      if (leaving === undefined) return;
+      const next = (idxRef.current + 1) % messages.length;
+      idxRef.current = next;
+      setOutgoing(leaving);
+      setIdx(next);
+      const clearId = setTimeout(() => setOutgoing(null), 520);
+      return () => clearTimeout(clearId);
+    }, intervalMs);
+    return () => clearInterval(id);
+  }, [messages, intervalMs]);
+
+  return (
+    <div className={cn("relative z-10 h-[14px] w-full text-center loader-respect-motion", className)}>
+      {outgoing && (
+        <span
+          key={`out-${outgoing}`}
+          className="rl-out absolute inset-x-0 whitespace-nowrap text-[11px] font-semibold tracking-[0.22em] uppercase"
+        >
+          {outgoing}
+        </span>
+      )}
+      <span
+        key={`in-${messages[idx]}`}
+        className="rl-in absolute inset-x-0 whitespace-nowrap text-[11px] font-semibold tracking-[0.22em] uppercase"
+      >
+        {messages[idx]}
+      </span>
+    </div>
+  );
+}
+
+function MoltenGlass({ palette, isDark }: { palette: "block" | "mono", isDark: boolean }) {
+  const filterId = useId().replace(/:/g, "");
+  const isBlock = palette === "block";
+  const animateRef = useRef<SVGAnimationElement>(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (animateRef.current) {
+        try {
+          (animateRef.current as any).beginElement();
+        } catch (e) {}
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return (
+    <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
+      <div className="relative flex w-full flex-col items-center justify-center gap-[22px]">
+        <svg width="1" height="1" style={{ position: "absolute", opacity: 0.001, pointerEvents: "none" }} aria-hidden="true">
+          <defs>
+            <filter id={filterId} x="-30%" y="-30%" width="160%" height="160%">
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.02 0.09"
+                numOctaves="2"
+                seed="3"
+                result="noise"
+              >
+                <animate
+                  ref={animateRef}
+                  attributeName="baseFrequency"
+                  dur="6.75s"
+                  begin="indefinite"
+                  values="0.02 0.09;0.035 0.14;0.02 0.09"
+                  repeatCount="indefinite"
+                />
+              </feTurbulence>
+              <feDisplacementMap
+                in="SourceGraphic"
+                in2="noise"
+                scale="12"
+                xChannelSelector="R"
+                yChannelSelector="G"
+              />
+            </filter>
+          </defs>
+        </svg>
+
+        {/* 
+          #1c0f0e: A deliberate, warm near-black tone used to provide high legibility 
+          and depth against the vibrant indigo block background in dark mode. 
+        */}
+        <div
+          className={cn(
+            "relative z-10 text-[80px] font-[800] tracking-[-0.02em]",
+            isBlock ? (isDark ? "text-[#1c0f0e]" : "text-white") : (isDark ? "text-white" : "text-black")
+          )}
+          style={{ filter: `url(#${filterId})` }}
+        >
+          TABS
+        </div>
+
+        <RotatingLabel
+          messages={GLASS_MESSAGES}
+          className={
+            isBlock
+              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
+              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function SolariTile({ target, index, isBlock, isDark }: { target: string; index: number; isBlock: boolean; isDark: boolean }) {
+  const [ch, setCh] = useState(target);
+  const [justSettled, setJustSettled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 280ms stagger per tile → T at ~400ms, E at ~2.3s: clear one-by-one lock-in
+    const settleAt = 400 + index * 280;
+    const iv = setInterval(() => {
+      if (!cancelled) setCh(SOLARI_CHARS[Math.floor(Math.random() * SOLARI_CHARS.length)]!);
+    }, 70);
+    const to = setTimeout(() => {
+      clearInterval(iv);
+      if (cancelled) return;
+      setCh(target);
+      setJustSettled(true);
+      setTimeout(() => !cancelled && setJustSettled(false), 420);
+    }, settleAt);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      clearTimeout(to);
+    };
+  }, [target, index]);
+
+  return (
+    <div
+      className={cn(
+        "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-bold transition-all duration-300",
+        isBlock
+          ? justSettled
+            ? "border-white/90 bg-white/22 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
+            : "border-white/24 bg-white/12 shadow-none"
+          : justSettled
+            ? cn("border-primary shadow-[0_0_0_1px_var(--primary)]", isDark ? "bg-white/4" : "bg-black/3")
+            : cn("border-border shadow-none", isDark ? "bg-white/4" : "bg-black/3")
+      )}
+    >
+      <div className="absolute inset-x-0 top-1/2 h-px bg-black/35" />
+      {ch === " " ? "\u00A0" : ch}
+    </div>
+  );
+}
+
+function SolariGrid({ palette, isDark }: { palette: "block" | "mono", isDark: boolean }) {
+  const word = "TABS IDE".padEnd(8, " ").split("");
+  const isBlock = palette === "block";
+
+  return (
+    <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
+      <div className="relative flex w-full flex-col items-center justify-center gap-[20px]">
+        <div 
+          className={cn(
+            "relative z-10 grid grid-cols-4 gap-[6px]",
+            isBlock ? (isDark ? "text-[#1c0f0e]" : "text-white") : (isDark ? "text-white" : "text-black")
+          )}
+        >
+          {word.map((ch, i) => (
+            <SolariTile key={i} target={ch!} index={i} isBlock={isBlock} isDark={isDark} />
+          ))}
+        </div>
+        <RotatingLabel
+          messages={SOLARI_MESSAGES}
+          className={
+            isBlock
+              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
+              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+export interface SplashScreenProps {
+  loader: "glass" | "solari" | string;
+  palette: "block" | "mono" | string;
+  theme?: "light" | "dark" | "system";
+}
+
+export function SplashScreen({ loader, palette, theme: overrideTheme }: SplashScreenProps) {
+  const { resolvedTheme } = useTheme();
+  const theme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
+  const isDark = theme === "dark";
+  const isBlock = palette === "block";
+  return (
+    <div
+      className={cn(
+        "flex h-full w-full flex-col items-center justify-center",
+        isBlock ? "bg-primary" : (isDark ? "bg-[#09090b]" : "bg-white")
+      )}
+    >
+      {loader === "solari" ? (
+        <SolariGrid palette={palette as any} isDark={isDark} />
+      ) : (
+        <MoltenGlass palette={palette as any} isDark={isDark} />
+      )}
+    </div>
+  );
+}

@@ -5,6 +5,7 @@ import type { GitEnvironmentResult } from "@tabs/contracts";
 import { isWindowsPlatform } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
+import { MercuryChromeLoader } from "../MercuryChromeLoader";
 
 const GIT_DOWNLOAD_URL = "https://git-scm.com/downloads";
 
@@ -101,7 +102,7 @@ export function GitEnvironmentGate(props: {
   if (isRepo === undefined && isLoading) {
     return (
       <GateShell
-        icon={<Spinner className="size-6" />}
+        icon={<MercuryChromeLoader size={48} className="text-primary" />}
         title="Checking your setup…"
         description="Loading your repository."
       />

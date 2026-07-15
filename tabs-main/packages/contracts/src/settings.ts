@@ -43,6 +43,18 @@ export const DesktopIconTheme = Schema.Literals(["dark", "light"]);
 export type DesktopIconTheme = typeof DesktopIconTheme.Type;
 export const DEFAULT_DESKTOP_ICON_THEME: DesktopIconTheme = "dark";
 
+export const SplashLoaderStyle = Schema.Literals(["glass", "solari"]);
+export type SplashLoaderStyle = typeof SplashLoaderStyle.Type;
+export const DEFAULT_SPLASH_LOADER_STYLE: SplashLoaderStyle = "glass";
+
+export const SplashLoaderPalette = Schema.Literals(["block", "mono"]);
+export type SplashLoaderPalette = typeof SplashLoaderPalette.Type;
+export const DEFAULT_SPLASH_LOADER_PALETTE: SplashLoaderPalette = "block";
+
+export const SplashLoaderTheme = Schema.Literals(["system", "light", "dark"]);
+export type SplashLoaderTheme = typeof SplashLoaderTheme.Type;
+export const DEFAULT_SPLASH_LOADER_THEME: SplashLoaderTheme = "system";
+
 export const ClientSettingsSchema = Schema.Struct({
   desktopIconTheme: DesktopIconTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DESKTOP_ICON_THEME)),
@@ -104,6 +116,15 @@ export const ClientSettingsSchema = Schema.Struct({
   sliderAnimationsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   animatedTrackFillEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   colorizePermissions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  splashLoaderStyle: SplashLoaderStyle.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_LOADER_STYLE)),
+  ),
+  splashLoaderPalette: SplashLoaderPalette.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_LOADER_PALETTE)),
+  ),
+  splashLoaderTheme: SplashLoaderTheme.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_LOADER_THEME)),
+  ),
 });
 export type ClientSettings = typeof ClientSettingsSchema.Type;
 

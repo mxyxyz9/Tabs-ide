@@ -184,6 +184,7 @@ import {
 } from "../state/terminal";
 import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
+import { MercuryChromeLoader } from "./MercuryChromeLoader";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -1943,8 +1944,8 @@ function DesktopCodeTool(props: { project: Project }) {
               ) : sideChatThreadId ? (
                 <Suspense
                   fallback={
-                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                      Loading chat…
+                    <div className="flex h-full items-center justify-center text-muted-foreground">
+                      <MercuryChromeLoader size={80} />
                     </div>
                   }
                 >
@@ -9160,13 +9161,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     (!activeProject || activeProject.cwd !== embeddedMode.workspaceRoot || !activeProjectSettings);
 
   let content: ReactNode;
-  if (!threadsHydrated) {
-    content = (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Loading workspace…
-      </div>
-    );
-  } else if (isEmbeddedWorkspacePending) {
+  if (isEmbeddedWorkspacePending) {
     content = (
       <div className="flex h-full items-center justify-center bg-background px-6 text-center">
         <div className="max-w-md space-y-3">

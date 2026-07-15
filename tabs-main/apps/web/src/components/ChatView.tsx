@@ -3215,7 +3215,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     (nextOptions: ReadonlyArray<import("@tabs/contracts").ProviderOptionSelection> | undefined) => {
       fetch('http://localhost:9999', { method: 'POST', body: `[SLIDER-DEBUG-3] onFusedModelOptionsChange options=${JSON.stringify(nextOptions)} threadId=${threadId} provider=${selectedProvider} model=${selectedModel} stack=${new Error().stack?.split('\n').slice(1,4).join(' <- ')}` }).catch(()=>{});
       
-      const newMode = nextOptions?.find((o) => o.id === "mode")?.currentValue;
+      const newMode = nextOptions?.find((o) => o.id === "mode")?.value;
       if (typeof newMode === "string" && (newMode === "plan" || newMode === "default") && newMode !== interactionMode) {
         handleInteractionModeChange(newMode);
       }
@@ -3852,8 +3852,12 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                         type="button"
                         onClick={() => {
                           const modes = ["approval-required", "auto-accept-edits", "full-access"] as const;
-                          const nextIndex = (modes.indexOf(runtimeMode) + 1) % modes.length;
-                          void handleRuntimeModeChange(modes[nextIndex]);
+                          const currentMode = runtimeMode || "approval-required";
+                          const nextIndex = (modes.indexOf(currentMode) + 1) % modes.length;
+                          const nextMode = modes[nextIndex];
+                          if (nextMode) {
+                            void handleRuntimeModeChange(nextMode);
+                          }
                         }}
                         title={
                           runtimeMode === "full-access"

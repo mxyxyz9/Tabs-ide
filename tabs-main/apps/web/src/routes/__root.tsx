@@ -6,7 +6,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 
@@ -20,7 +20,12 @@ import { clearPromotedDraftThreads } from "../composerDraftStore";
 import { terminalActions } from "../state/terminal";
 import { terminalRunningSubprocessFromEvent } from "../terminalActivity";
 import { onServerConfigUpdated, onServerProvidersUpdated, onServerWelcome } from "../wsNativeApi";
-import { migrateLocalSettingsToServer } from "../hooks/useSettings";
+import { migrateLocalSettingsToServer, useSettings } from "../hooks/useSettings";
+import { useMinimumDuration } from "../hooks/useMinimumDuration";
+import { SplashScreen } from "../components/SplashScreen";
+import { cn } from "../lib/utils";
+import { useAtomValue } from "@effect/atom-react";
+import { threadsHydratedAtom } from "../state/threads";
 import { providerQueryKeys } from "../lib/providerReactQuery";
 import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
@@ -44,20 +49,34 @@ export const Route = createRootRouteWithContext<{
 });
 
 function RootRouteView() {
-  if (!readNativeApi()) {
-    return (
-      <div className="flex h-screen flex-col bg-background text-foreground">
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground">
-            Connecting to {APP_DISPLAY_NAME} server...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const isNativeApiReady = !!readNativeApi();
+  const threadsHydrated = useAtomValue(threadsHydratedAtom);
+  const ready = useMinimumDuration(isNativeApiReady && threadsHydrated, 3500);
+  const [mounted, setMounted] = useState(true);
+  const settings = useSettings();
+
+  useEffect(() => {
+    if (ready) {
+      const timer = setTimeout(() => setMounted(false), 1200);
+      return () => clearTimeout(timer);
+    } else {
+      setMounted(true);
+    }
+  }, [ready]);
 
   return (
-    <ToastProvider>
+    <>
+      {mounted && (
+        <div
+          className={cn(
+            "pointer-events-auto fixed inset-0 z-[9999] bg-background transition-transform duration-1000 ease-in-out",
+            ready ? "-translate-y-full" : "translate-y-0"
+          )}
+        >
+          <SplashScreen loader={settings.splashLoaderStyle} palette={settings.splashLoaderPalette} theme={settings.splashLoaderTheme} />
+        </div>
+      )}
+      <ToastProvider>
       <AnchoredToastProvider>
         <EventRouter />
         <DesktopProjectBootstrap />
@@ -67,6 +86,7 @@ function RootRouteView() {
         <GlobalConfirmDialog />
       </AnchoredToastProvider>
     </ToastProvider>
+    </>
   );
 }
 
