@@ -379,31 +379,8 @@ export function ProjectWorkspaceSettingsSection() {
     [serverProcessDrafts],
   );
   const toolbarPreviewTools = useMemo(() => {
-    let nextTools = projectSettings?.tools ?? [];
-    if (customEmbedsDirty) {
-      nextTools = mergeToolGroup(
-        nextTools,
-        buildCustomEmbedToolsFromDrafts(customEmbedDrafts),
-        "custom_embed",
-        "browser",
-      );
-    }
-    if (serverProcessesDirty) {
-      nextTools = mergeToolGroup(
-        nextTools,
-        buildCustomProcessToolsFromDrafts(serverProcessDrafts),
-        "custom_process",
-        "server",
-      );
-    }
-    return nextTools;
-  }, [
-    customEmbedDrafts,
-    customEmbedsDirty,
-    projectSettings?.tools,
-    serverProcessDrafts,
-    serverProcessesDirty,
-  ]);
+    return projectSettings?.tools ?? [];
+  }, [projectSettings?.tools]);
 
   const dndSensors = useSensors(
     // Require a small drag distance so taps/clicks on the row still work.
@@ -921,10 +898,6 @@ export function ProjectWorkspaceSettingsSection() {
                                 isActive={activeCustomEmbedId === draft.id}
                                 isUnsaved={isCustomEmbedDraftDirty(draft)}
                                 onSelect={() => setActiveCustomEmbedId(draft.id)}
-                                onMoveUp={() => setCustomEmbedDrafts((current) => reorderItems(current, index, -1))}
-                                onMoveDown={() => setCustomEmbedDrafts((current) => reorderItems(current, index, 1))}
-                                canMoveUp={index > 0}
-                                canMoveDown={index < customEmbedDrafts.length - 1}
                               />
                             ))
                           )}
@@ -1082,10 +1055,6 @@ export function ProjectWorkspaceSettingsSection() {
                                 isActive={activeServerProcessId === draft.id}
                                 isUnsaved={isServerProcessDraftDirty(draft)}
                                 onSelect={() => setActiveServerProcessId(draft.id)}
-                                onMoveUp={() => setServerProcessDrafts((current) => reorderItems(current, index, -1))}
-                                onMoveDown={() => setServerProcessDrafts((current) => reorderItems(current, index, 1))}
-                                canMoveUp={index > 0}
-                                canMoveDown={index < serverProcessDrafts.length - 1}
                               />
                             ))
                           )}
@@ -1327,10 +1296,6 @@ export function ProjectWorkspaceSettingsSection() {
                                 isActive={activeServerPresetId === draft.id}
                                 isUnsaved={isServerProcessDraftDirty(draft)}
                                 onSelect={() => setActiveServerPresetId(draft.id)}
-                                onMoveUp={() => setServerPresetDrafts((current) => reorderItems(current, index, -1))}
-                                onMoveDown={() => setServerPresetDrafts((current) => reorderItems(current, index, 1))}
-                                canMoveUp={index > 0}
-                                canMoveDown={index < serverPresetDrafts.length - 1}
                               />
                             ))
                           )}

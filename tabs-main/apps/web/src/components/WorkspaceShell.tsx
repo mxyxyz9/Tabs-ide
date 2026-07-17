@@ -120,6 +120,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import {
   Dialog,
+  DialogClose,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -7024,9 +7025,6 @@ function ServerTool(props: {
     (commands: ReadonlyArray<string>) => commands.some((command) => command.trim().length > 0),
     [],
   );
-  const togglePresetsExpanded = useCallback(() => {
-    setPresetsExpanded((current) => !current);
-  }, []);
   const normalizePresetDraft = useCallback(
     (preset: {
       id: string;
@@ -7039,20 +7037,47 @@ function ServerTool(props: {
       previewOpenTarget?: "in-app" | "external";
       previewFocus?: boolean;
       dependsOn?: readonly string[];
-    }) => ({
-      id: preset.id,
-      label: preset.label.trim(),
-      commands: preset.commands
-        .map((command) => command.trim())
-        .filter((command) => command.length > 0),
-      cwd: preset.cwd.trim(),
-      autoStart: preset.autoStart,
-      previewUrl: preset.previewUrl?.trim(),
-      autoOpenPreview: preset.autoOpenPreview,
-      previewOpenTarget: preset.previewOpenTarget,
-      previewFocus: preset.previewFocus,
-      dependsOn: preset.dependsOn,
-    }),
+    }) => {
+      const res: {
+        id: string;
+        label: string;
+        commands: string[];
+        cwd: string;
+        autoStart: boolean;
+        previewUrl?: string;
+        autoOpenPreview?: boolean;
+        previewOpenTarget?: "in-app" | "external";
+        previewFocus?: boolean;
+        dependsOn?: readonly string[];
+      } = {
+        id: preset.id,
+        label: preset.label.trim(),
+        commands: preset.commands
+          .map((command) => command.trim())
+          .filter((command) => command.length > 0),
+        cwd: preset.cwd.trim(),
+        autoStart: preset.autoStart,
+      };
+      
+      const trimmedUrl = preset.previewUrl?.trim();
+      if (trimmedUrl) {
+        res.previewUrl = trimmedUrl;
+      }
+      if (preset.autoOpenPreview !== undefined) {
+        res.autoOpenPreview = preset.autoOpenPreview;
+      }
+      if (preset.previewOpenTarget !== undefined) {
+        res.previewOpenTarget = preset.previewOpenTarget;
+      }
+      if (preset.previewFocus !== undefined) {
+        res.previewFocus = preset.previewFocus;
+      }
+      if (preset.dependsOn !== undefined) {
+        res.dependsOn = preset.dependsOn;
+      }
+      
+      return res;
+    },
     [],
   );
   const [isPresetDialogOpen, setIsPresetDialogOpen] = useState(false);
@@ -7073,6 +7098,7 @@ function ServerTool(props: {
     }),
     [props.project.cwd],
   );
+  
   const [presetDrafts, setPresetDrafts] = useState<
     Array<{
       id: string;
@@ -7087,177 +7113,256 @@ function ServerTool(props: {
       dependsOn?: readonly string[];
     }>
   >([]);
-  const presetRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const resetPresetDrafts = useCallback(() => {
-    setPresetDrafts(
-      presetDialogMode === "add"
-        ? [createBlankPreset()]
-        : processes.length > 0
-          ? processes.map((process: any) => ({
-              id: process.id,
-              label: process.label,
-              commands: process.commands.length > 0 ? [...process.commands] : [""],
-              cwd: process.cwd,
-              autoStart: process.autoStart,
-              previewUrl: process.previewUrl,
-              autoOpenPreview: process.autoOpenPreview,
-              previewOpenTarget: process.previewOpenTarget,
-              previewFocus: process.previewFocus,
-              dependsOn: process.dependsOn,
-            }))
-          : [createBlankPreset()],
-    );
-  }, [createBlankPreset, presetDialogMode, processes]);
+
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [isEditingRightPane, setIsEditingRightPane] = useState(false);
+  const [editingPresetDraft, setEditingPresetDraft] = useState<any>(null);
+  const [presetToDeleteId, setPresetToDeleteId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (!isPresetDialogOpen) return;
-    resetPresetDrafts();
-  }, [isPresetDialogOpen, resetPresetDrafts]);
-  useEffect(() => {
-    if (!isPresetDialogOpen || !editingPresetId) return;
-    const row = presetRowRefs.current[editingPresetId];
-    if (!row) return;
-    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    const timer = window.setTimeout(() => {
-      const input = row.querySelector("input");
-      if (input instanceof HTMLInputElement) {
-        input.focus();
-        input.select();
+    if (!isPresetDialogOpen) {
+      setEditingPresetDraft(null);
+      return;
+    }
+
+    const drafts = processes.map((process: any) => ({
+      id: process.id,
+      label: process.label,
+      commands: process.commands.length > 0 ? [...process.commands] : [""],
+      cwd: process.cwd,
+      autoStart: process.autoStart,
+      previewUrl: process.previewUrl,
+      autoOpenPreview: process.autoOpenPreview,
+      previewOpenTarget: process.previewOpenTarget,
+      previewFocus: process.previewFocus,
+      dependsOn: process.dependsOn,
+    }));
+    setPresetDrafts(drafts);
+
+    if (presetDialogMode === "add") {
+      const blank = createBlankPreset();
+      setEditingPresetDraft(blank);
+      setSelectedPresetId(blank.id);
+      setIsEditingRightPane(true);
+    } else {
+      if (editingPresetId) {
+        const match = drafts.find((p) => p.id === editingPresetId);
+        if (match) {
+          setSelectedPresetId(editingPresetId);
+          setEditingPresetDraft({ ...match });
+          setIsEditingRightPane(true);
+        } else {
+          setSelectedPresetId(drafts[0]?.id ?? null);
+          setIsEditingRightPane(false);
+        }
+      } else {
+        setSelectedPresetId(drafts[0]?.id ?? null);
+        setIsEditingRightPane(false);
       }
-    }, 60);
-    return () => window.clearTimeout(timer);
-  }, [editingPresetId, isPresetDialogOpen, presetDrafts]);
-  const addPresetRow = useCallback(() => {
-    setPresetDrafts((current) => [...current, createBlankPreset()]);
-  }, [createBlankPreset]);
-  const movePresetRow = useCallback((presetId: string, direction: -1 | 1) => {
-    setPresetDrafts((current) => {
-      const presetIndex = current.findIndex((preset) => preset.id === presetId);
-      if (presetIndex < 0) return current;
-      const nextIndex = presetIndex + direction;
-      if (nextIndex < 0 || nextIndex >= current.length) return current;
-      return moveListItem(current, presetIndex, nextIndex);
-    });
-  }, []);
-  const updatePresetRow = useCallback(
-    (
-      presetId: string,
-      updater: (preset: {
-        id: string;
-        label: string;
-        commands: string[];
-        cwd: string;
-        autoStart: boolean;
-      }) => {
-        id: string;
-        label: string;
-        commands: string[];
-        cwd: string;
-        autoStart: boolean;
-      },
-    ) => {
-      setPresetDrafts((current) =>
-        current.map((preset) => (preset.id === presetId ? updater(preset) : preset)),
-      );
+    }
+  }, [isPresetDialogOpen, presetDialogMode, editingPresetId, processes, createBlankPreset]);
+
+  const updatePresetDraft = useCallback(
+    (id: string, updater: (current: any) => any) => {
+      setEditingPresetDraft((cur: any) => (cur ? updater(cur) : null));
     },
     [],
   );
-  const addCommandStep = useCallback((presetId: string) => {
-    setPresetDrafts((current) =>
-      current.map((preset) =>
-        preset.id === presetId ? { ...preset, commands: [...preset.commands, ""] } : preset,
-      ),
-    );
-  }, []);
-  const moveCommandStep = useCallback(
-    (presetId: string, commandIndex: number, direction: -1 | 1) => {
-      setPresetDrafts((current) =>
-        current.map((preset) => {
-          if (preset.id !== presetId) return preset;
-          const nextIndex = commandIndex + direction;
-          if (nextIndex < 0 || nextIndex >= preset.commands.length) return preset;
-          return { ...preset, commands: moveListItem(preset.commands, commandIndex, nextIndex) };
-        }),
-      );
-    },
-    [],
-  );
-  const updateCommandStep = useCallback((presetId: string, commandIndex: number, value: string) => {
-    setPresetDrafts((current) =>
-      current.map((preset) =>
-        preset.id === presetId
-          ? {
-              ...preset,
-              commands: preset.commands.map((command, index) =>
-                index === commandIndex ? value : command,
-              ),
-            }
-          : preset,
-      ),
-    );
-  }, []);
-  const removeCommandStep = useCallback((presetId: string, commandIndex: number) => {
-    setPresetDrafts((current) =>
-      current.map((preset) => {
-        if (preset.id !== presetId) return preset;
-        const nextCommands = preset.commands.filter((_, index) => index !== commandIndex);
-        return { ...preset, commands: nextCommands.length > 0 ? nextCommands : [""] };
-      }),
-    );
-  }, []);
-  const removePresetRow = useCallback(
-    (presetId: string) => {
-      setPresetDrafts((current) => {
-        const next = current.filter((preset) => preset.id !== presetId);
-        return next.length > 0 ? next : [createBlankPreset()];
+  
+  const addCommandStepDraft = useCallback(
+    (id: string) => {
+      setEditingPresetDraft((cur: any) => {
+        if (!cur) return null;
+        return { ...cur, commands: [...cur.commands, ""] };
       });
     },
-    [createBlankPreset],
+    [],
   );
-  const hasIncompletePreset = presetDrafts.some((preset) => {
-    const normalizedPreset = normalizePresetDraft(preset);
-    // The auto-filled cwd does NOT count toward "this preset has been started."
-    const hasAnyValue =
-      preset.label.trim().length > 0 ||
-      preset.commands.some((command) => command.trim().length > 0);
-    return (
-      hasAnyValue && (normalizedPreset.label.length === 0 || normalizedPreset.commands.length === 0)
-    );
-  });
-  const hasAtLeastOnePreset = presetDrafts.some((preset) => {
-    const normalizedPreset = normalizePresetDraft(preset);
-    return normalizedPreset.label.length > 0 && normalizedPreset.commands.length > 0;
-  });
-  const savePresets = useCallback(() => {
-    if (hasIncompletePreset) return;
-    const nextPresets = presetDrafts
-      .map(normalizePresetDraft)
-      .filter((preset) => preset.label.length > 0 && preset.commands.length > 0);
-    props.onSavePresets(
-      presetDialogMode === "add"
-        ? [
-            ...processes.map((process: any) => ({
-              id: process.id,
-              label: process.label,
-              commands: [...process.commands],
-              cwd: process.cwd,
-              autoStart: process.autoStart,
-              previewUrl: process.previewUrl,
-              autoOpenPreview: process.autoOpenPreview,
-              previewOpenTarget: process.previewOpenTarget,
-              previewFocus: process.previewFocus,
-              dependsOn: process.dependsOn,
-            })),
-            ...nextPresets,
-          ]
-        : nextPresets,
-    );
-    setPresetDialogMode("manage");
-    setEditingPresetId(null);
-    setIsPresetDialogOpen(false);
-  }, [hasIncompletePreset, normalizePresetDraft, presetDialogMode, presetDrafts, processes, props]);
+
+  const updateCommandStepDraft = useCallback(
+    (id: string, stepIdx: number, val: string) => {
+      setEditingPresetDraft((cur: any) => {
+        if (!cur) return null;
+        const nextCmds = [...cur.commands];
+        nextCmds[stepIdx] = val;
+        return { ...cur, commands: nextCmds };
+      });
+    },
+    [],
+  );
+
+  const moveCommandStepDraft = useCallback(
+    (id: string, stepIdx: number, direction: -1 | 1) => {
+      setEditingPresetDraft((cur: any) => {
+        if (!cur) return null;
+        const nextCmds = [...cur.commands];
+        const targetIdx = stepIdx + direction;
+        if (targetIdx < 0 || targetIdx >= nextCmds.length) return cur;
+        const temp = nextCmds[stepIdx]!;
+        nextCmds[stepIdx] = nextCmds[targetIdx]!;
+        nextCmds[targetIdx] = temp;
+        return { ...cur, commands: nextCmds };
+      });
+    },
+    [],
+  );
+
+  const removeCommandStepDraft = useCallback(
+    (id: string, stepIdx: number) => {
+      setEditingPresetDraft((cur: any) => {
+        if (!cur) return null;
+        const nextCmds = cur.commands.filter((_: any, idx: number) => idx !== stepIdx);
+        return { ...cur, commands: nextCmds.length > 0 ? nextCmds : [""] };
+      });
+    },
+    [],
+  );
+
+  const selectPreset = useCallback((id: string) => {
+    setSelectedPresetId(id);
+    setIsEditingRightPane(false);
+    setEditingPresetDraft(null);
+  }, []);
+
+  const handleAddPresetClick = useCallback(() => {
+    const blank = createBlankPreset();
+    setSelectedPresetId(blank.id);
+    setEditingPresetDraft(blank);
+    setIsEditingRightPane(true);
+  }, [createBlankPreset]);
+
+  const handleEditClick = useCallback((preset: any) => {
+    setEditingPresetDraft({ ...preset });
+    setIsEditingRightPane(true);
+  }, []);
+
+  const handleCancelClick = useCallback(() => {
+    setIsEditingRightPane(false);
+    setEditingPresetDraft(null);
+    const exists = presetDrafts.some((p) => p.id === selectedPresetId);
+    if (!exists) {
+      setSelectedPresetId(presetDrafts[0]?.id ?? null);
+    }
+  }, [presetDrafts, selectedPresetId]);
+
+  const handleSaveClick = useCallback(() => {
+    if (!editingPresetDraft) return;
+    if (
+      editingPresetDraft.label.trim().length === 0 ||
+      editingPresetDraft.commands.filter((c: string) => c.trim().length > 0).length === 0
+    ) {
+      return;
+    }
+
+    const nextDrafts = [...presetDrafts];
+    const idx = nextDrafts.findIndex((p) => p.id === editingPresetDraft.id);
+    const normalized = normalizePresetDraft(editingPresetDraft);
+    if (idx >= 0) {
+      nextDrafts[idx] = normalized;
+    } else {
+      nextDrafts.push(normalized);
+    }
+
+    setPresetDrafts(nextDrafts);
+    props.onSavePresets(nextDrafts);
+    
+    setSelectedPresetId(editingPresetDraft.id);
+    setIsEditingRightPane(false);
+    setEditingPresetDraft(null);
+
+    if (presetDialogMode === "add") {
+      setIsPresetDialogOpen(false);
+    }
+  }, [editingPresetDraft, presetDrafts, normalizePresetDraft, props, presetDialogMode]);
+
+  const [draggedPresetId, setDraggedPresetId] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedPresetId(id);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedPresetId || draggedPresetId === targetId) {
+      setDraggedPresetId(null);
+      return;
+    }
+    const sourceIndex = presetDrafts.findIndex(p => p.id === draggedPresetId);
+    const targetIndex = presetDrafts.findIndex(p => p.id === targetId);
+    if (sourceIndex >= 0 && targetIndex >= 0) {
+      const nextDrafts = [...presetDrafts];
+      const [movedItem] = nextDrafts.splice(sourceIndex, 1);
+      nextDrafts.splice(targetIndex, 0, movedItem);
+      setPresetDrafts(nextDrafts);
+      props.onSavePresets(nextDrafts);
+    }
+    setDraggedPresetId(null);
+  };
+
+  const handleDeleteClick = useCallback((id: string) => {
+    setPresetToDeleteId(id);
+  }, []);
+
+  const confirmDeletePreset = useCallback(() => {
+    if (!presetToDeleteId) return;
+    const nextDrafts = presetDrafts.filter((p) => p.id !== presetToDeleteId);
+    setPresetDrafts(nextDrafts);
+    props.onSavePresets(nextDrafts);
+    
+    const nextSelected = nextDrafts[0]?.id ?? null;
+    setSelectedPresetId(nextSelected);
+    setIsEditingRightPane(false);
+    setEditingPresetDraft(null);
+    setPresetToDeleteId(null);
+  }, [presetToDeleteId, presetDrafts, props]);
+
   const editingPreset = editingPresetId
     ? (processes.find((process: any) => process.id === editingPresetId) ?? null)
     : null;
+
+  const handleRunProcessWithDependencies = useCallback((processId: string) => {
+    const process = processes.find((p: any) => p.id === processId) || presetDrafts.find((p) => p.id === processId);
+    if (process?.dependsOn && process.dependsOn.length > 0) {
+      let delayRun = false;
+      process.dependsOn.forEach((depId: string) => {
+        const depStatus = resolveServerPresetRuntimeStatus({
+          processId: depId,
+          runningProcessIds: runningProcessIdSet,
+          terminalIds: terminalIdSet,
+        });
+        if (depStatus !== "running") {
+          props.onRunProcess(depId);
+          delayRun = true;
+        }
+      });
+      if (delayRun) {
+        setTimeout(() => {
+          props.onRunProcess(processId);
+        }, 3500);
+      } else {
+        props.onRunProcess(processId);
+      }
+    } else {
+      props.onRunProcess(processId);
+    }
+  }, [processes, presetDrafts, runningProcessIdSet, terminalIdSet, props]);
+
+  const selectedPreset = selectedPresetId
+    ? presetDrafts.find((p) => p.id === selectedPresetId) ?? null
+    : null;
+  const selectedPresetStatus = selectedPreset
+    ? resolveServerPresetRuntimeStatus({
+        processId: selectedPreset.id,
+        runningProcessIds: runningProcessIdSet,
+        terminalIds: terminalIdSet,
+      })
+    : "idle";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -7297,18 +7402,19 @@ function ServerTool(props: {
             <PlusIcon className="size-3.5" />
             Add Preset
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={props.onOpenSettings}>
-            <SettingsIcon className="size-3.5" />
-            Settings
-          </Button>
           {processes.length > 0 ? (
-            <Button type="button" size="sm" variant="outline" onClick={togglePresetsExpanded}>
-              {presetsExpanded ? (
-                <PanelTopCloseIcon className="size-3.5" />
-              ) : (
-                <PanelTopOpenIcon className="size-3.5" />
-              )}
-              {presetsExpanded ? "Collapse Presets" : "Expand Presets"}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setPresetDialogMode("manage");
+                setEditingPresetId(null);
+                setIsPresetDialogOpen(true);
+              }}
+            >
+              <PanelTopOpenIcon className="size-3.5" />
+              View all presets
             </Button>
           ) : null}
           {props.hasTerminalWorkspace ? (
@@ -7337,170 +7443,40 @@ function ServerTool(props: {
                   runningProcessIds: runningProcessIdSet,
                   terminalIds: terminalIdSet,
                 });
-                const hasTerminal = terminalIdSet.has(process.id);
                 const isActive = props.activeTerminalId === process.id;
-                const isExpanded = presetsExpanded;
-                const primaryLabel =
-                  status === "running" ? "Open" : status === "stopped" ? "Run Again" : "Run";
-                const badgeVariant =
-                  status === "running" ? "success" : status === "stopped" ? "warning" : "outline";
-                const badgeLabel =
-                  status === "running" ? "Running" : status === "stopped" ? "Stopped" : "Idle";
-                const visibleCommands = process.commands.filter(
-                  (command: string) => command.trim().length > 0,
-                );
-                const visibleCommandRows: Array<{ key: string; command: string; stepNumber: number }> = [];
-                for (const command of visibleCommands) {
-                  const duplicateCount = visibleCommandRows.filter((row) => row.command === command).length;
-                  visibleCommandRows.push({
-                    key: `${process.id}-${command || "blank"}-${duplicateCount}`,
-                    command,
-                    stepNumber: visibleCommandRows.length + 1,
-                  });
-                }
-
-                if (!isExpanded) {
-                  return (
-                    <div
-                      key={process.id}
-                      className={cn(
-                        "flex shrink-0 items-center overflow-hidden rounded-full border border-input bg-popover shadow-xs/5",
-                        isActive && "border-primary/35 bg-accent/60",
-                      )}
-                    >
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        disabled={!hasRunnableCommands(process.commands)}
-                        onClick={() =>
-                          status === "running"
-                            ? props.onOpenProcessTerminal(process.id)
-                            : props.onRunProcess(process.id)
-                        }
-                        className={cn(
-                          "max-w-[14rem] rounded-none border-0 bg-transparent px-3 shadow-none hover:bg-transparent",
-                          isActive && "text-foreground",
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "inline-block size-2 rounded-full",
-                            status === "running" ? "bg-success" : "bg-muted-foreground/30",
-                          )}
-                        />
-                        <span className="truncate">{process.label}</span>
-                      </Button>
-                    </div>
-                  );
-                }
 
                 return (
-                  <Card
+                  <div
                     key={process.id}
                     className={cn(
-                      "w-[24rem] shrink-0 border-border/70 bg-card/70 shadow-xs",
-                      isActive && "border-primary/35 bg-card shadow-primary/8 shadow-lg",
+                      "flex shrink-0 items-center overflow-hidden rounded-full border border-input bg-popover shadow-xs/5",
+                      isActive && "border-primary/35 bg-accent/60",
                     )}
                   >
-                    <CardHeader className="space-y-3 pb-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 space-y-1">
-                          <CardTitle className="truncate text-[1.3rem] leading-none">
-                            {process.label}
-                          </CardTitle>
-                          <CardDescription className="truncate text-sm">
-                            {process.cwd.trim().length > 0 ? process.cwd : props.project.cwd}
-                          </CardDescription>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                          <Badge variant={badgeVariant} size="sm" className="rounded-full px-2.5">
-                            <span
-                              className={cn(
-                                "inline-block size-1.5 rounded-full",
-                                status === "running" ? "bg-success" : "bg-muted-foreground/30",
-                              )}
-                            />
-                            {badgeLabel}
-                          </Badge>
-                          {process.autoStart ? (
-                            <Badge variant="secondary" size="sm" className="rounded-full px-2.5">
-                              Auto-start
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4 pt-0">
-                      <div className="space-y-2">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          Command Steps
-                        </div>
-                        <div className="rounded-2xl border border-border/60 bg-background/60 px-3 py-3 font-mono text-xs leading-6 text-muted-foreground">
-                          {visibleCommandRows.length > 0 ? (
-                            visibleCommandRows.map((row) => (
-                              <div key={row.key} className="truncate">
-                                <span className="mr-2 text-[10px] font-medium text-muted-foreground/70">
-                                  {row.stepNumber}.
-                                </span>
-                                {row.command}
-                              </div>
-                            ))
-                          ) : (
-                            <span>No command steps configured</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          disabled={!hasRunnableCommands(process.commands)}
-                          onClick={() =>
-                            status === "running"
-                              ? props.onOpenProcessTerminal(process.id)
-                              : props.onRunProcess(process.id)
-                          }
-                        >
-                          <PlayIcon className="size-3.5" />
-                          {primaryLabel}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setPresetDialogMode("manage");
-                            setEditingPresetId(process.id);
-                            setIsPresetDialogOpen(true);
-                          }}
-                        >
-                          <PencilIcon className="size-3.5" />
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={!hasRunnableCommands(process.commands)}
-                          onClick={() => props.onRestartProcess(process.id)}
-                        >
-                          <RefreshCwIcon className="size-3.5" />
-                          Restart
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={!hasTerminal}
-                          onClick={() => props.onStopProcess(process.id)}
-                        >
-                          <XIcon className="size-3.5" />
-                          Stop
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={!hasRunnableCommands(process.commands)}
+                      onClick={() =>
+                        status === "running"
+                          ? props.onOpenProcessTerminal(process.id)
+                          : handleRunProcessWithDependencies(process.id)
+                      }
+                      className={cn(
+                        "max-w-[14rem] rounded-none border-0 bg-transparent px-3 shadow-none hover:bg-transparent",
+                        isActive && "text-foreground",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block size-2 rounded-full mr-2",
+                          status === "running" ? "bg-success" : "bg-muted-foreground/30",
+                        )}
+                      />
+                      <span className="truncate">{process.label}</span>
+                    </Button>
+                  </div>
                 );
               })}
             </div>
@@ -7537,10 +7513,6 @@ function ServerTool(props: {
                   <PlusIcon className="size-3.5" />
                   Add Preset
                 </Button>
-                <Button type="button" variant="ghost" onClick={props.onOpenSettings}>
-                  <SettingsIcon className="size-3.5" />
-                  Settings
-                </Button>
                 {props.hasTerminalWorkspace ? (
                   <Button
                     type="button"
@@ -7566,88 +7538,305 @@ function ServerTool(props: {
           setIsPresetDialogOpen(open);
         }}
       >
-        <DialogPopup className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {presetDialogMode === "add"
-                ? "Add Preset"
-                : editingPreset
-                  ? `Edit ${editingPreset.label}`
-                  : "Server Presets"}
-            </DialogTitle>
-            <DialogDescription>
-              {presetDialogMode === "add"
-                ? "Create a new one-click preset with ordered command steps."
-                : editingPreset
-                  ? "Update this preset's label, command steps, working directory, and auto-start behavior."
-                  : "Create and manage one-click presets like `Frontend` or `Backend`, each with ordered command steps."}
-            </DialogDescription>
+        <DialogPopup className="max-w-4xl p-0 overflow-hidden flex flex-col h-[40rem] bg-zinc-900 border border-zinc-800">
+          {/* Global Header */}
+          <DialogHeader className="p-5 border-b border-zinc-800/40 shrink-0 relative flex flex-row items-start justify-between bg-zinc-950/20">
+            <div className="text-left">
+              <DialogTitle className="text-lg font-bold text-foreground">
+                Server Presets
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                Create and manage one-click presets like 'Frontend' or 'Backend', each with ordered command steps.
+              </DialogDescription>
+            </div>
           </DialogHeader>
-          <DialogPanel className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">
-                  {presetDialogMode === "add"
-                    ? "New Preset"
-                    : editingPreset
-                      ? "Editing Preset"
-                      : "Presets"}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {presetDialogMode === "add"
-                    ? "Start with a blank preset. You can add more blank presets here if needed."
-                    : editingPreset
-                      ? "You can still add or reorder other presets here, but the highlighted row is the one you opened from the Server card."
-                      : "Add and arrange server presets in the order you want to see them."}
-                </div>
-              </div>
-              <Button type="button" size="sm" variant="outline" onClick={addPresetRow}>
+
+          <div className="flex flex-1 min-h-0">
+            {/* Left Sidebar */}
+            <div className="w-60 bg-zinc-950/40 border-r border-zinc-800/60 p-4 flex flex-col gap-4 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddPresetClick}
+                className="w-full flex items-center justify-center gap-1.5 shrink-0"
+              >
                 <PlusIcon className="size-3.5" />
-                {presetDialogMode === "add" || editingPreset ? "Add Another Preset" : "Add Preset"}
+                Add Preset
               </Button>
+              
+              <ScrollArea className="flex-1 -mx-2 px-2">
+                <div className="space-y-1">
+                  {presetDrafts.map((preset) => {
+                    const isSelected = selectedPresetId === preset.id;
+                    const status = resolveServerPresetRuntimeStatus({
+                      processId: preset.id,
+                      runningProcessIds: runningProcessIdSet,
+                      terminalIds: terminalIdSet,
+                    });
+                    return (
+                      <button
+                        key={preset.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, preset.id)}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, preset.id)}
+                        onDragEnd={() => setDraggedPresetId(null)}
+                        type="button"
+                        onClick={() => selectPreset(preset.id)}
+                        className={cn(
+                          "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-sm transition-all border border-transparent cursor-pointer",
+                          isSelected
+                            ? "bg-zinc-800/80 text-foreground font-medium shadow-xs border-zinc-700/50"
+                            : "text-muted-foreground hover:bg-zinc-800/30 hover:text-foreground",
+                          draggedPresetId === preset.id && "opacity-40 border-dashed border-zinc-500"
+                        )}
+                      >
+                        <span className="truncate mr-2">{preset.label || "Untitled Preset"}</span>
+                        {status === "running" && (
+                          <span className="size-1.5 bg-success rounded-full shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                  {presetDrafts.length === 0 && (
+                    <div className="text-xs text-muted-foreground text-center py-8">
+                      No presets configured
+                    </div>
+                  )}
+                </div>
+              </ScrollArea>
+
+              {selectedPreset && !isEditingRightPane && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full flex items-center justify-start gap-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0"
+                  onClick={() => handleDeleteClick(selectedPreset.id)}
+                >
+                  <Trash2Icon className="size-3.5" />
+                  Delete Preset
+                </Button>
+              )}
             </div>
 
-            <div className="space-y-3">
-              {presetDrafts.map((preset, index) => (
-                <ServerPresetFormFields
-                  key={preset.id}
-                  preset={preset as any}
-                  presetDrafts={presetDrafts as any}
-                  projectCwd={props.project.cwd}
-                  isEditing={editingPresetId === preset.id}
-                  presetRowRef={(node) => { presetRowRefs.current[preset.id] = node; }}
-                  updatePresetRow={updatePresetRow as any}
-                  addCommandStep={addCommandStep}
-                  updateCommandStep={updateCommandStep}
-                  moveCommandStep={moveCommandStep}
-                  removeCommandStep={removeCommandStep}
-                  movePresetRow={movePresetRow}
-                  removePresetRow={removePresetRow}
-                  index={index}
-                />
-              ))}
-            </div>
+            {/* Right details / Edit pane */}
+            <div className="flex-1 flex flex-col min-w-0 bg-zinc-900/60">
+              <DialogPanel className="flex-1 overflow-y-auto p-6 min-h-0">
+                {isEditingRightPane && editingPresetDraft ? (
+                  <div className="space-y-4">
+                    <ServerPresetFormFields
+                      variant="plain"
+                      preset={editingPresetDraft}
+                      presetDrafts={presetDrafts as any}
+                      projectCwd={props.project.cwd}
+                      isEditing={true}
+                      updatePresetRow={updatePresetDraft}
+                      addCommandStep={addCommandStepDraft}
+                      updateCommandStep={updateCommandStepDraft}
+                      moveCommandStep={moveCommandStepDraft}
+                      removeCommandStep={removeCommandStepDraft}
+                    />
+                    {/* Validation notice */}
+                    {(!editingPresetDraft.label?.trim() || !editingPresetDraft.commands?.some((c: string) => c.trim().length > 0)) && (
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-200/90 leading-normal">
+                        Each preset needs a label and at least one command step before saving.
+                      </div>
+                    )}
+                  </div>
+                ) : selectedPreset ? (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-bold text-foreground">
+                          {selectedPreset.label || "Untitled Preset"}
+                        </h2>
+                        {selectedPresetStatus === "running" ? (
+                          <Badge variant="success" className="text-[10px] uppercase tracking-wider font-semibold">Running</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-semibold">Idle</Badge>
+                        )}
+                        {selectedPreset.autoOpenPreview && (
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 border-blue-500/30">Auto-opens</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs font-mono text-muted-foreground mt-2 truncate">
+                        {selectedPreset.cwd || props.project.cwd}
+                      </div>
+                    </div>
 
-            {hasIncompletePreset ? (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                Each preset needs a label and at least one command step before saving.
-              </div>
-            ) : null}
-          </DialogPanel>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsPresetDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={savePresets}
-              disabled={hasIncompletePreset || !hasAtLeastOnePreset}
-            >
-              Save Presets
-            </Button>
-          </DialogFooter>
+                    <div className="space-y-3 mt-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Command Steps
+                      </div>
+                      <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 font-mono text-xs leading-relaxed text-zinc-300 space-y-1 max-h-48 overflow-y-auto">
+                        {selectedPreset.commands.map((cmd, idx) => (
+                          <div key={idx} className="truncate flex items-start gap-2">
+                            <span className="text-muted-foreground/60 w-4 text-right shrink-0">{idx + 1}.</span>
+                            <span className="break-all whitespace-pre-wrap">{cmd}</span>
+                          </div>
+                        ))}
+                        {selectedPreset.commands.length === 0 && (
+                          <div className="text-muted-foreground/60 py-2">No commands configured</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      {(selectedPreset.autoOpenPreview || !!selectedPreset.previewUrl || selectedPreset.previewOpenTarget === "external") && (
+                        <div className="space-y-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            Browser Tool Integration
+                          </div>
+                          <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-300 space-y-3">
+                            <div className="flex justify-between border-b border-zinc-800/30 pb-3">
+                              <span className="text-muted-foreground">URL Target</span>
+                              {selectedPreset.previewUrl ? (
+                                <span className="font-mono">{selectedPreset.previewUrl}</span>
+                              ) : (
+                                <span className="italic text-muted-foreground/50">Not configured</span>
+                              )}
+                            </div>
+                            <div className="flex justify-between border-b border-zinc-800/30 pb-3">
+                              <span className="text-muted-foreground">Target Browser</span>
+                              <span>{selectedPreset.previewOpenTarget === "external" ? "External Browser" : "Internal Browser"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Auto switch to browser tab</span>
+                              <span>{selectedPreset.autoOpenPreview ? "Enabled" : "Disabled"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Configuration
+                        </div>
+                        <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-300 space-y-3">
+                          <div className={cn("flex justify-between", selectedPreset.dependsOn && selectedPreset.dependsOn.length > 0 && "border-b border-zinc-800/30 pb-3")}>
+                            <span className="text-muted-foreground">Auto-start on launch</span>
+                            <span>{selectedPreset.autoStart ? "Enabled" : "Disabled"}</span>
+                          </div>
+                          {selectedPreset.dependsOn && selectedPreset.dependsOn.length > 0 && (
+                            <div className="flex justify-between items-start">
+                              <span className="text-muted-foreground">Dependencies</span>
+                              <div className="flex flex-col items-end gap-1">
+                                {selectedPreset.dependsOn.map(depId => (
+                                  <span key={depId}>{presetDrafts.find(p => p.id === depId)?.label || "Unknown Preset"}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-2 py-16">
+                    <TerminalSquareIcon className="size-8 stroke-1 text-muted-foreground/60" />
+                    <span className="text-sm">Select or create a server preset to get started</span>
+                  </div>
+                )}
+              </DialogPanel>
+
+              <DialogFooter className="p-4 border-t border-zinc-800/40 shrink-0 bg-zinc-950/15 flex items-center justify-between gap-3">
+                {isEditingRightPane && editingPresetDraft ? (
+                  <>
+                    <div className="flex gap-2 w-full justify-end">
+                      <Button type="button" variant="outline" size="sm" onClick={handleCancelClick}>
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleSaveClick}
+                        disabled={
+                          !editingPresetDraft?.label?.trim() ||
+                          !editingPresetDraft?.commands?.some((c: string) => c.trim().length > 0)
+                        }
+                      >
+                        Save Changes
+                      </Button>
+                    </div>
+                  </>
+                ) : selectedPreset ? (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!hasRunnableCommands(selectedPreset.commands)}
+                      onClick={() => {
+                        if (selectedPresetStatus === "running") {
+                          props.onOpenProcessTerminal(selectedPreset.id);
+                        } else {
+                          handleRunProcessWithDependencies(selectedPreset.id);
+                        }
+                        setIsPresetDialogOpen(false);
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white border-transparent"
+                    >
+                      <PlayIcon className="size-3.5 mr-1.5" />
+                      {selectedPresetStatus === "running" ? "Open" : "Run"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEditClick(selectedPreset)}
+                    >
+                      <PencilIcon className="size-3.5 mr-1.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!hasRunnableCommands(selectedPreset.commands)}
+                      onClick={() => {
+                        props.onRestartProcess(selectedPreset.id);
+                        setIsPresetDialogOpen(false);
+                      }}
+                    >
+                      <RefreshCwIcon className="size-3.5 mr-1.5" />
+                      Restart
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!terminalIdSet.has(selectedPreset.id)}
+                      onClick={() => props.onStopProcess(selectedPreset.id)}
+                    >
+                      <XIcon className="size-3.5 mr-1.5" />
+                      Stop
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex justify-end w-full">
+                  </div>
+                )}
+              </DialogFooter>
+            </div>
+          </div>
         </DialogPopup>
       </Dialog>
+      
+      <AlertDialog open={!!presetToDeleteId} onOpenChange={(open) => !open && setPresetToDeleteId(null)}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Preset?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this server preset? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button variant="destructive" onClick={confirmDeletePreset}>
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 }

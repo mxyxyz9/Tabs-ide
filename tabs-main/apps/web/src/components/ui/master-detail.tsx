@@ -6,7 +6,7 @@ import { cn } from "../../lib/utils";
 
 export function MasterDetail({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex flex-1 min-h-0 gap-6 h-[26rem]", className)}>
+    <div className={cn("flex flex-1 min-h-0 gap-6", className)}>
       {children}
     </div>
   );
@@ -22,21 +22,21 @@ export function MasterDetailSidebar({ children, className }: { children: ReactNo
 
 export function MasterDetailList({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <ScrollArea className={cn("flex-1 -mx-2 px-2", className)}>
+    <div className={cn("flex-1 -mx-2 px-2", className)}>
       <div className="space-y-1 pb-4">
         {children}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
 export function MasterDetailContent({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <ScrollArea className={cn("flex-1 -my-2 py-2 pr-4", className)}>
+    <div className={cn("flex-1 -my-2 py-2 pr-4", className)}>
       <div className="pb-4">
         {children}
       </div>
-    </ScrollArea>
+    </div>
   );
 }
 
