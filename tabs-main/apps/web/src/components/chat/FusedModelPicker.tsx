@@ -137,7 +137,6 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const handleSelectChange = useCallback(
     (descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>, optionId: string) => {
-
       if (descriptor.id === "effort" || descriptor.id === "reasoningEffort") {
         props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, optionId));
       }
@@ -216,7 +215,11 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   }, [activeModel, leverDescriptor, activePrimarySelect]);
 
   const activeColorIndex = useMemo(
-    () => Math.max(0, models.findIndex((m) => m.slug === activeModel?.slug)),
+    () =>
+      Math.max(
+        0,
+        models.findIndex((m) => m.slug === activeModel?.slug),
+      ),
     [models, activeModel],
   );
   const activeColor = THEME_COLORS[activeColorIndex % THEME_COLORS.length] ?? THEME_COLORS[0]!;
@@ -329,14 +332,17 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                       isActive={model.slug === activeModel?.slug}
                       ultra={model.slug === activeModel?.slug && isUltra}
                       themeColor={
-                        THEME_COLORS[models.findIndex((m) => m.slug === model.slug) % THEME_COLORS.length] ??
-                        THEME_COLORS[0]!
+                        THEME_COLORS[
+                          models.findIndex((m) => m.slug === model.slug) % THEME_COLORS.length
+                        ] ?? THEME_COLORS[0]!
                       }
                       selections={model.slug === activeModel?.slug ? props.modelOptions : undefined}
                       globalStops={globalStops}
                       prompt={props.prompt}
                       onPromptChange={props.onPromptChange}
-                      onSelect={(nextOptions) => setModelAndOptions(activeProvider, model.slug, nextOptions)}
+                      onSelect={(nextOptions) =>
+                        setModelAndOptions(activeProvider, model.slug, nextOptions)
+                      }
                       onSelectChange={handleSelectChange}
                       onBooleanChange={handleBooleanChange}
                     />
@@ -391,14 +397,22 @@ const ModelRow = memo(function ModelRow(props: {
     (d): d is Extract<ProviderOptionDescriptor, { type: "select" }> => d.type === "select",
   );
   const booleans = descriptors
-    .filter((d): d is Extract<ProviderOptionDescriptor, { type: "boolean" }> => d.type === "boolean")
+    .filter(
+      (d): d is Extract<ProviderOptionDescriptor, { type: "boolean" }> => d.type === "boolean",
+    )
     .filter((d) => d.id !== "fastMode");
 
-  const primarySelect = selects.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? selects[0];
-  const secondarySelects = primarySelect ? selects.filter((d) => d.id !== primarySelect.id) : selects;
+  const primarySelect =
+    selects.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? selects[0];
+  const secondarySelects = primarySelect
+    ? selects.filter((d) => d.id !== primarySelect.id)
+    : selects;
 
   const allowedOptionIds = useMemo(
-    () => (primarySelect && primarySelect.type === "select" ? primarySelect.options.map((o) => o.id) : []),
+    () =>
+      primarySelect && primarySelect.type === "select"
+        ? primarySelect.options.map((o) => o.id)
+        : [],
     [primarySelect],
   );
 
@@ -490,7 +504,6 @@ const ModelRow = memo(function ModelRow(props: {
       dragIndexRef.current = null;
       setLocalStopIndex(null);
 
-
       if (!curPrimary || curPrimary.type !== "select") {
         curSelect(undefined);
         return;
@@ -499,7 +512,6 @@ const ModelRow = memo(function ModelRow(props: {
       // Read final stop computed during the mouseup step
       const finalIndex = finalStopIdx !== null ? finalStopIdx : currentStopIndex;
       const resolvedOptionId = props.globalStops[finalIndex]?.id;
-
 
       if (resolvedOptionId) {
         if (curPrimary.id === "effort" || curPrimary.id === "reasoningEffort") {
@@ -538,7 +550,8 @@ const ModelRow = memo(function ModelRow(props: {
   const fillStyle: React.CSSProperties = props.ultra
     ? {
         width: `calc(20px + (100% - 40px) * ${percentage / 100})`,
-        backgroundImage: "linear-gradient(90deg, var(--dynamic-ultra-hex)55, var(--dynamic-ultra-hex), #fff)",
+        backgroundImage:
+          "linear-gradient(90deg, var(--dynamic-ultra-hex)55, var(--dynamic-ultra-hex), #fff)",
         backgroundSize: "200% 100%",
         animation: "fmp-cosmic-gradient 3s linear infinite",
       }
@@ -662,7 +675,10 @@ const ModelRow = memo(function ModelRow(props: {
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full overflow-hidden",
-                  !props.ultra && sliderAnimationsEnabled && localStopIndex === null && "transition-all duration-200"
+                  !props.ultra &&
+                    sliderAnimationsEnabled &&
+                    localStopIndex === null &&
+                    "transition-all duration-200",
                 )}
                 style={fillStyle}
               >
@@ -706,7 +722,9 @@ const ModelRow = memo(function ModelRow(props: {
             <div
               className={cn(
                 "absolute top-1/2 -translate-y-1/2 size-7 bg-white rounded-full shadow-lg z-20 pointer-events-none",
-                sliderAnimationsEnabled && localStopIndex === null && "transition-[left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+                sliderAnimationsEnabled &&
+                  localStopIndex === null &&
+                  "transition-[left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
               )}
               style={{
                 left: `calc(20px + (100% - 40px) * ${percentage / 100} - 14px)`,
@@ -738,27 +756,24 @@ const Lever = memo(function Lever(props: {
   // Local engaged state to prevent drag lag
   const [localEngaged, setLocalEngaged] = useState<boolean | null>(null);
 
-  const updateLever = useCallback(
-    (clientY: number) => {
-      const el = trackRef.current;
-      if (el == null) return;
-      const rect = el.getBoundingClientRect();
-      const padding = 4;
-      const range = rect.height - 32 - padding * 2;
-      const y = Math.max(0, Math.min(clientY - rect.top - 16, range));
-      const pct = range > 0 ? y / range : 0;
-      setDragProgress(pct);
+  const updateLever = useCallback((clientY: number) => {
+    const el = trackRef.current;
+    if (el == null) return;
+    const rect = el.getBoundingClientRect();
+    const padding = 4;
+    const range = rect.height - 32 - padding * 2;
+    const y = Math.max(0, Math.min(clientY - rect.top - 16, range));
+    const pct = range > 0 ? y / range : 0;
+    setDragProgress(pct);
 
-      if (pct > 0.65) {
-        setLocalEngaged(true);
-        lastEngaged.current = true;
-      } else if (pct < 0.35) {
-        setLocalEngaged(false);
-        lastEngaged.current = false;
-      }
-    },
-    [],
-  );
+    if (pct > 0.65) {
+      setLocalEngaged(true);
+      lastEngaged.current = true;
+    } else if (pct < 0.35) {
+      setLocalEngaged(false);
+      lastEngaged.current = false;
+    }
+  }, []);
 
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -814,7 +829,8 @@ const Lever = memo(function Lever(props: {
             style={{
               backgroundColor: props.themeColor.hex,
               maskImage: "repeating-linear-gradient(180deg, transparent 0 6px, #000 6px 12px)",
-              WebkitMaskImage: "repeating-linear-gradient(180deg, transparent 0 6px, #000 6px 12px)",
+              WebkitMaskImage:
+                "repeating-linear-gradient(180deg, transparent 0 6px, #000 6px 12px)",
               animation: "fmp-cosmic-flow 3s linear infinite",
             }}
           />

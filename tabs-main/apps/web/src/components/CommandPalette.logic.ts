@@ -1,4 +1,8 @@
-import { type KeybindingCommand, type FilesystemBrowseEntry, type SidebarThreadSortOrder } from "@tabs/contracts";
+import {
+  type KeybindingCommand,
+  type FilesystemBrowseEntry,
+  type SidebarThreadSortOrder,
+} from "@tabs/contracts";
 import { type ReactNode } from "react";
 import { type Project, type Thread } from "../types";
 
@@ -151,10 +155,7 @@ function getLatestUserMessageTimestamp(thread: Thread): number {
   return getFirstSortableTimestamp(thread.updatedAt, thread.createdAt) ?? Number.NEGATIVE_INFINITY;
 }
 
-export function getThreadSortTimestamp(
-  thread: Thread,
-  sortOrder: SidebarThreadSortOrder,
-): number {
+export function getThreadSortTimestamp(thread: Thread, sortOrder: SidebarThreadSortOrder): number {
   if (sortOrder === "created_at") {
     return (
       getFirstSortableTimestamp(thread.createdAt, thread.updatedAt) ?? Number.NEGATIVE_INFINITY
@@ -338,11 +339,13 @@ export function filterCommandPaletteGroups(input: {
           return [];
         }
 
-        return [{
-          item,
-          index,
-          rank: rankCommandPaletteItemMatch(item, normalizedQuery),
-        }];
+        return [
+          {
+            item,
+            index,
+            rank: rankCommandPaletteItemMatch(item, normalizedQuery),
+          },
+        ];
       })
       .toSorted((left, right) => right.rank - left.rank || left.index - right.index)
       .map((entry) => entry.item);

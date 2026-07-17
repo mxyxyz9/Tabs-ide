@@ -83,7 +83,7 @@ function extractActivityRequestId(payload: unknown): ApprovalRequestId | null {
     return null;
   }
   const requestId = (payload as Record<string, unknown>).requestId;
-  return typeof requestId === "string" ? requestId as ApprovalRequestId : null;
+  return typeof requestId === "string" ? (requestId as ApprovalRequestId) : null;
 }
 
 function retainProjectionMessagesAfterRevert(

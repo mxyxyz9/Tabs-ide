@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ThreadId } from "@tabs/contracts";
 
 import { appAtomRegistry } from "./atomRegistry";
-import {
-  threadSelectionActions,
-  threadSelectionAtom,
-} from "./threadSelection";
+import { threadSelectionActions, threadSelectionAtom } from "./threadSelection";
 
 const A = ThreadId.makeUnsafe("thread-a");
 const B = ThreadId.makeUnsafe("thread-b");

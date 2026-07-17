@@ -90,9 +90,7 @@ export interface CliConfigShape {
 /**
  * CliConfig - Service tag for startup CLI/runtime helpers.
  */
-export class CliConfig extends Context.Service<CliConfig, CliConfigShape>()(
-  "tabs/main/CliConfig",
-) {
+export class CliConfig extends Context.Service<CliConfig, CliConfigShape>()("tabs/main/CliConfig") {
   static readonly layer = Layer.effect(
     CliConfig,
     Effect.gen(function* () {

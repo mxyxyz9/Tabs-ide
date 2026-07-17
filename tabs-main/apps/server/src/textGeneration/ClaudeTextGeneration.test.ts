@@ -210,14 +210,10 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             stagedSummary: "M README.md",
             stagedPatch: "diff --git a/README.md b/README.md",
             modelSelection: {
-              ...createModelSelection(
-                "claudeAgent" as ProviderInstanceId,
-                "claude-haiku-4-5",
-                [
-                  { id: "thinking", value: false },
-                  { id: "effort", value: "high" },
-                ],
-              ),
+              ...createModelSelection("claudeAgent" as ProviderInstanceId, "claude-haiku-4-5", [
+                { id: "thinking", value: false },
+                { id: "effort", value: "high" },
+              ]),
             },
           });
 
@@ -247,14 +243,10 @@ it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
             diffSummary: "1 file changed",
             diffPatch: "diff --git a/README.md b/README.md",
             modelSelection: {
-              ...createModelSelection(
-                "claudeAgent" as ProviderInstanceId,
-                "claude-opus-4-6",
-                [
-                  { id: "effort", value: "max" },
-                  { id: "fastMode", value: true },
-                ],
-              ),
+              ...createModelSelection("claudeAgent" as ProviderInstanceId, "claude-opus-4-6", [
+                { id: "effort", value: "max" },
+                { id: "fastMode", value: true },
+              ]),
             },
           });
 

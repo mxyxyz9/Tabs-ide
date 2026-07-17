@@ -227,14 +227,10 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
             branch: "feature/codex-effect",
             stagedSummary: "M README.md",
             stagedPatch: "diff --git a/README.md b/README.md",
-            modelSelection: createModelSelection(
-              "codex" as ProviderInstanceId,
-              "gpt-5.4",
-              [
-                { id: "reasoningEffort", value: "xhigh" },
-                { id: "fastMode", value: true },
-              ],
-            ),
+            modelSelection: createModelSelection("codex" as ProviderInstanceId, "gpt-5.4", [
+              { id: "reasoningEffort", value: "xhigh" },
+              { id: "fastMode", value: true },
+            ]),
           }),
       ),
   );

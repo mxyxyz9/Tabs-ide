@@ -46,7 +46,9 @@ export function useRememberedThreadId(projectId: ProjectId): ThreadId | null {
   );
 }
 
-export function useProjectWorkspaceSettings(projectId: ProjectId | null): ProjectWorkspaceSettingsType | null {
+export function useProjectWorkspaceSettings(
+  projectId: ProjectId | null,
+): ProjectWorkspaceSettingsType | null {
   return useAtomValue(workspaceShellAtom, (state) =>
     projectId
       ? (state.projectSettingsByProjectId[projectId] ?? createDefaultProjectWorkspaceSettings())
@@ -65,40 +67,58 @@ export function useResolvedProjectTools(projectId: ProjectId | null) {
 }
 
 export const workspaceShellActions = {
-  syncProjects: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["syncProjects"]>) =>
-    useWorkspaceShellStore.getState().syncProjects(...args),
-  openProject: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["openProject"]>) =>
-    useWorkspaceShellStore.getState().openProject(...args),
-  closeProject: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["closeProject"]>) =>
-    useWorkspaceShellStore.getState().closeProject(...args),
-  setActiveProject: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setActiveProject"]>) =>
-    useWorkspaceShellStore.getState().setActiveProject(...args),
-  setActiveTool: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setActiveTool"]>) =>
-    useWorkspaceShellStore.getState().setActiveTool(...args),
-  setCodeFocusedPath: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setCodeFocusedPath"]>) =>
-    useWorkspaceShellStore.getState().setCodeFocusedPath(...args),
-  rememberThread: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["rememberThread"]>) =>
-    useWorkspaceShellStore.getState().rememberThread(...args),
-  upsertProjectSettings: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["upsertProjectSettings"]>) =>
-    useWorkspaceShellStore.getState().upsertProjectSettings(...args),
-  openPendingTab: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["openPendingTab"]>) =>
-    useWorkspaceShellStore.getState().openPendingTab(...args),
-  resolvePendingTab: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["resolvePendingTab"]>) =>
-    useWorkspaceShellStore.getState().resolvePendingTab(...args),
-  closePendingTab: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["closePendingTab"]>) =>
-    useWorkspaceShellStore.getState().closePendingTab(...args),
-  setSideChatOpen: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setSideChatOpen"]>) =>
-    useWorkspaceShellStore.getState().setSideChatOpen(...args),
-  setSideChatThread: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setSideChatThread"]>) =>
-    useWorkspaceShellStore.getState().setSideChatThread(...args),
-  setGitSelectedPath: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setGitSelectedPath"]>) =>
-    useWorkspaceShellStore.getState().setGitSelectedPath(...args),
-  setGitSelectedCommit: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setGitSelectedCommit"]>) =>
-    useWorkspaceShellStore.getState().setGitSelectedCommit(...args),
-  setBrowserCurrentUrl: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserCurrentUrl"]>) =>
-    useWorkspaceShellStore.getState().setBrowserCurrentUrl(...args),
-  setBrowserSessionUrl: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserSessionUrl"]>) =>
-    useWorkspaceShellStore.getState().setBrowserSessionUrl(...args),
-  setBrowserViewport: (...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserViewport"]>) =>
-    useWorkspaceShellStore.getState().setBrowserViewport(...args),
+  syncProjects: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["syncProjects"]>
+  ) => useWorkspaceShellStore.getState().syncProjects(...args),
+  openProject: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["openProject"]>
+  ) => useWorkspaceShellStore.getState().openProject(...args),
+  closeProject: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["closeProject"]>
+  ) => useWorkspaceShellStore.getState().closeProject(...args),
+  setActiveProject: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setActiveProject"]>
+  ) => useWorkspaceShellStore.getState().setActiveProject(...args),
+  setActiveTool: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setActiveTool"]>
+  ) => useWorkspaceShellStore.getState().setActiveTool(...args),
+  setCodeFocusedPath: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setCodeFocusedPath"]>
+  ) => useWorkspaceShellStore.getState().setCodeFocusedPath(...args),
+  rememberThread: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["rememberThread"]>
+  ) => useWorkspaceShellStore.getState().rememberThread(...args),
+  upsertProjectSettings: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["upsertProjectSettings"]>
+  ) => useWorkspaceShellStore.getState().upsertProjectSettings(...args),
+  openPendingTab: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["openPendingTab"]>
+  ) => useWorkspaceShellStore.getState().openPendingTab(...args),
+  resolvePendingTab: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["resolvePendingTab"]>
+  ) => useWorkspaceShellStore.getState().resolvePendingTab(...args),
+  closePendingTab: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["closePendingTab"]>
+  ) => useWorkspaceShellStore.getState().closePendingTab(...args),
+  setSideChatOpen: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setSideChatOpen"]>
+  ) => useWorkspaceShellStore.getState().setSideChatOpen(...args),
+  setSideChatThread: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setSideChatThread"]>
+  ) => useWorkspaceShellStore.getState().setSideChatThread(...args),
+  setGitSelectedPath: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setGitSelectedPath"]>
+  ) => useWorkspaceShellStore.getState().setGitSelectedPath(...args),
+  setGitSelectedCommit: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setGitSelectedCommit"]>
+  ) => useWorkspaceShellStore.getState().setGitSelectedCommit(...args),
+  setBrowserCurrentUrl: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserCurrentUrl"]>
+  ) => useWorkspaceShellStore.getState().setBrowserCurrentUrl(...args),
+  setBrowserSessionUrl: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserSessionUrl"]>
+  ) => useWorkspaceShellStore.getState().setBrowserSessionUrl(...args),
+  setBrowserViewport: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserViewport"]>
+  ) => useWorkspaceShellStore.getState().setBrowserViewport(...args),
 };

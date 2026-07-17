@@ -421,7 +421,7 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
   const threadIdCandidate = typeof cursor.threadId === "string" ? cursor.threadId : undefined;
   const threadId =
     threadIdCandidate && !isSyntheticClaudeThreadId(threadIdCandidate)
-      ? threadIdCandidate as ThreadId
+      ? (threadIdCandidate as ThreadId)
       : undefined;
   const resumeCandidate =
     typeof cursor.resume === "string"
@@ -1052,7 +1052,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   claudeSettings: ClaudeSettings,
   options?: ClaudeAdapterLiveOptions,
 ) {
-  const boundInstanceId = options?.instanceId ?? "claudeAgent" as ProviderInstanceId;
+  const boundInstanceId = options?.instanceId ?? ("claudeAgent" as ProviderInstanceId);
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig;

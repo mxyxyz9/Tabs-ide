@@ -413,15 +413,11 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
           providers: { cursor: { binaryPath: wrapperPath } },
         });
 
-        const modelSelection = createModelSelection(
-          "cursor" as ProviderInstanceId,
-          "gpt-5.4",
-          [
-            { id: "reasoning", value: "xhigh" },
-            { id: "contextWindow", value: "1m" },
-            { id: "fastMode", value: true },
-          ],
-        );
+        const modelSelection = createModelSelection("cursor" as ProviderInstanceId, "gpt-5.4", [
+          { id: "reasoning", value: "xhigh" },
+          { id: "contextWindow", value: "1m" },
+          { id: "fastMode", value: true },
+        ]);
 
         yield* adapter.startSession({
           threadId,
@@ -1161,11 +1157,9 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         threadId,
         input: "second turn after switching model",
         attachments: [],
-        modelSelection: createModelSelection(
-          "cursor" as ProviderInstanceId,
-          "composer-2",
-          [{ id: "fastMode", value: true }],
-        ),
+        modelSelection: createModelSelection("cursor" as ProviderInstanceId, "composer-2", [
+          { id: "fastMode", value: true },
+        ]),
       });
 
       const argvRuns = yield* Effect.promise(() => readArgvLog(argvLogPath));
@@ -1223,22 +1217,18 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
         threadId,
         input: "first turn with fast mode",
         attachments: [],
-        modelSelection: createModelSelection(
-          "cursor" as ProviderInstanceId,
-          "composer-2",
-          [{ id: "fastMode", value: true }],
-        ),
+        modelSelection: createModelSelection("cursor" as ProviderInstanceId, "composer-2", [
+          { id: "fastMode", value: true },
+        ]),
       });
 
       yield* adapter.sendTurn({
         threadId,
         input: "second turn without fast mode",
         attachments: [],
-        modelSelection: createModelSelection(
-          "cursor" as ProviderInstanceId,
-          "composer-2",
-          [{ id: "fastMode", value: false }],
-        ),
+        modelSelection: createModelSelection("cursor" as ProviderInstanceId, "composer-2", [
+          { id: "fastMode", value: false },
+        ]),
       });
 
       const requests = yield* Effect.promise(() => readJsonLines(requestLogPath));

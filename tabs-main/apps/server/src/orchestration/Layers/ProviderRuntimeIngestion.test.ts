@@ -422,9 +422,7 @@ describe("ProviderRuntimeIngestion", () => {
 
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
-    const midThread = midReadModel.threads.find(
-      (entry) => entry.id === "thread-1" as ThreadId,
-    );
+    const midThread = midReadModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(midThread?.session?.status).toBe("running");
     expect(midThread?.session?.activeTurnId).toBe("turn-midturn-lifecycle");
 
@@ -529,9 +527,7 @@ describe("ProviderRuntimeIngestion", () => {
 
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
-    const midThread = midReadModel.threads.find(
-      (entry) => entry.id === "thread-1" as ThreadId,
-    );
+    const midThread = midReadModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(midThread?.session?.status).toBe("running");
     expect(midThread?.session?.activeTurnId).toBe("turn-primary");
 
@@ -583,9 +579,7 @@ describe("ProviderRuntimeIngestion", () => {
 
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
-    const midThread = midReadModel.threads.find(
-      (entry) => entry.id === "thread-1" as ThreadId,
-    );
+    const midThread = midReadModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(midThread?.session?.status).toBe("running");
     expect(midThread?.session?.activeTurnId).toBe("turn-guarded-main");
 
@@ -1329,9 +1323,7 @@ describe("ProviderRuntimeIngestion", () => {
 
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
-    const midThread = midReadModel.threads.find(
-      (entry) => entry.id === "thread-1" as ThreadId,
-    );
+    const midThread = midReadModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(
       midThread?.messages.some(
         (message: ProviderRuntimeTestMessage) => message.id === "assistant:item-buffered",
@@ -1646,7 +1638,7 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread).toBeDefined();
 
     const requested = thread?.activities.find(

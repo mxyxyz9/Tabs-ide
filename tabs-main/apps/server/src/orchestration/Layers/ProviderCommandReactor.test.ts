@@ -39,8 +39,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ServerSettingsService } from "../../serverSettings.ts";
 
 const asProjectId = (value: string): ProjectId => value as ProjectId;
-const asApprovalRequestId = (value: string): ApprovalRequestId =>
-  value as ApprovalRequestId;
+const asApprovalRequestId = (value: string): ApprovalRequestId => value as ApprovalRequestId;
 const asMessageId = (value: string): MessageId => value as MessageId;
 const asTurnId = (value: string): TurnId => value as TurnId;
 
@@ -122,8 +121,8 @@ describe("ProviderCommandReactor", () => {
         input !== null &&
         "threadId" in input &&
         typeof input.threadId === "string"
-          ? input.threadId as ThreadId
-          : `thread-${sessionIndex}` as ThreadId;
+          ? (input.threadId as ThreadId)
+          : (`thread-${sessionIndex}` as ThreadId);
       const session: ProviderSession = {
         provider: modelSelection.instanceId as unknown as ProviderDriverKind,
         status: "ready" as const,
@@ -306,7 +305,7 @@ describe("ProviderCommandReactor", () => {
     });
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
@@ -535,9 +534,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(async () => {
       const readModel = await Effect.runPromise(harness.engine.getReadModel());
-      const thread = readModel.threads.find(
-        (entry) => entry.id === "thread-1" as ThreadId,
-      );
+      const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
       return (
         thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
         false
@@ -548,7 +545,7 @@ describe("ProviderCommandReactor", () => {
     expect(harness.sendTurn).not.toHaveBeenCalled();
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.session).toBeNull();
     expect(
       thread?.activities.find((activity) => activity.kind === "provider.turn.start.failed"),
@@ -771,9 +768,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(async () => {
       const readModel = await Effect.runPromise(harness.engine.getReadModel());
-      const thread = readModel.threads.find(
-        (entry) => entry.id === "thread-1" as ThreadId,
-      );
+      const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
       return thread?.runtimeMode === "approval-required";
     });
     await waitFor(() => harness.startSession.mock.calls.length === 2);
@@ -807,7 +802,7 @@ describe("ProviderCommandReactor", () => {
     });
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
@@ -907,9 +902,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(async () => {
       const readModel = await Effect.runPromise(harness.engine.getReadModel());
-      const thread = readModel.threads.find(
-        (entry) => entry.id === "thread-1" as ThreadId,
-      );
+      const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
       return (
         thread?.activities.some((activity) => activity.kind === "provider.turn.start.failed") ??
         false
@@ -921,7 +914,7 @@ describe("ProviderCommandReactor", () => {
     expect(harness.stopSession.mock.calls.length).toBe(0);
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.providerName).toBe("codex");
     expect(thread?.session?.runtimeMode).toBe("approval-required");
@@ -984,9 +977,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(async () => {
       const readModel = await Effect.runPromise(harness.engine.getReadModel());
-      const thread = readModel.threads.find(
-        (entry) => entry.id === "thread-1" as ThreadId,
-      );
+      const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
       return thread?.runtimeMode === "approval-required";
     });
     await waitFor(() => harness.startSession.mock.calls.length === 2);
@@ -996,7 +987,7 @@ describe("ProviderCommandReactor", () => {
     expect(harness.sendTurn.mock.calls.length).toBe(1);
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.session?.threadId).toBe("thread-1");
     expect(thread?.session?.runtimeMode).toBe("full-access");
   });
@@ -1190,9 +1181,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(async () => {
       const readModel = await Effect.runPromise(harness.engine.getReadModel());
-      const thread = readModel.threads.find(
-        (entry) => entry.id === "thread-1" as ThreadId,
-      );
+      const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
       if (!thread) return false;
       return thread.activities.some(
         (activity) => activity.kind === "provider.approval.respond.failed",
@@ -1200,7 +1189,7 @@ describe("ProviderCommandReactor", () => {
     });
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread).toBeDefined();
 
     const failureActivity = thread?.activities.find(
@@ -1301,9 +1290,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(async () => {
       const readModel = await Effect.runPromise(harness.engine.getReadModel());
-      const thread = readModel.threads.find(
-        (entry) => entry.id === "thread-1" as ThreadId,
-      );
+      const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
       if (!thread) return false;
       return thread.activities.some(
         (activity) => activity.kind === "provider.user-input.respond.failed",
@@ -1311,7 +1298,7 @@ describe("ProviderCommandReactor", () => {
     });
 
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread).toBeDefined();
 
     const failureActivity = thread?.activities.find(
@@ -1366,7 +1353,7 @@ describe("ProviderCommandReactor", () => {
 
     await waitFor(() => harness.stopSession.mock.calls.length === 1);
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.session).not.toBeNull();
     expect(thread?.session?.status).toBe("stopped");
     expect(thread?.session?.threadId).toBe("thread-1");

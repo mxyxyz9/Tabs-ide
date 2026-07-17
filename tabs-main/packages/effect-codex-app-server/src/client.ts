@@ -72,7 +72,10 @@ export interface CodexAppServerClientShape {
   ) => Effect.Effect<void>;
 }
 
-export class CodexAppServerClient extends Context.Service<CodexAppServerClient, CodexAppServerClientShape>()("effect-codex-app-server/client/CodexAppServerClient") {}
+export class CodexAppServerClient extends Context.Service<
+  CodexAppServerClient,
+  CodexAppServerClientShape
+>()("effect-codex-app-server/client/CodexAppServerClient") {}
 
 type ServerRequestHandler = (
   payload: unknown,
@@ -216,7 +219,6 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
     );
 
   return {
-
     raw: {
       notifications: transport.incomingNotifications,
       requests: transport.incomingRequests,
@@ -245,8 +247,7 @@ export const make = Effect.fn("effect-codex-app-server/CodexAppServerClient.make
       Effect.sync(() => {
         unknownNotificationHandler = handler;
       }),
-  
-};
+  };
 });
 
 export const layerChildProcess = (

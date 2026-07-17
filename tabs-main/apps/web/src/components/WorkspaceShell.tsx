@@ -7014,13 +7014,13 @@ function ServerTool(props: {
   // processes that back standalone terminal tabs (e.g. gemini/claude).
   const processes = useMemo(() => {
     const customProcessIds = new Set(
-      props.projectSettings.tools.flatMap((tool) =>
+      (props.projectSettings.tools ?? []).flatMap((tool) =>
         tool.kind === "custom_process" && tool.serverProcessId != null
           ? [tool.serverProcessId]
           : [],
       ),
     );
-    return props.projectSettings.serverProcesses.filter(
+    return (props.projectSettings.serverProcesses ?? []).filter(
       (process) => !customProcessIds.has(process.id),
     );
   }, [props.projectSettings.serverProcesses, props.projectSettings.tools]);
@@ -8867,7 +8867,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const runServerProcess = useCallback(
     async (processId: string) => {
       if (!activeProjectSettings || !serverThreadId) return;
-      const process = activeProjectSettings.serverProcesses.find((entry) => entry.id === processId);
+      const process = (activeProjectSettings.serverProcesses ?? []).find((entry) => entry.id === processId);
       if (!process) return;
       revealServerTerminal();
       await openProcessTerminal({
@@ -8955,13 +8955,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     // Processes backing custom terminal tabs auto-start in their own tab — the
     // Server tab must not also launch them in the shared server thread.
     const customProcessIds = new Set(
-      activeProjectSettings.tools.flatMap((tool) =>
+      (activeProjectSettings.tools ?? []).flatMap((tool) =>
         tool.kind === "custom_process" && tool.serverProcessId != null
           ? [tool.serverProcessId]
           : [],
       ),
     );
-    for (const process of activeProjectSettings.serverProcesses) {
+    for (const process of (activeProjectSettings.serverProcesses ?? [])) {
       if (customProcessIds.has(process.id)) continue;
       if (!process.autoStart || process.commands.every((command) => command.trim().length === 0)) {
         continue;
@@ -9013,7 +9013,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
             // Preserve the processes that back custom terminal tabs — the Server
             // preset editor only manages presets created in the Server tab.
             const customProcessIds = new Set(
-              current.tools.flatMap((tool) =>
+              (current.tools ?? []).flatMap((tool) =>
                 tool.kind === "custom_process" && tool.serverProcessId != null
                   ? [tool.serverProcessId]
                   : [],
@@ -9022,7 +9022,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
             return {
               ...current,
               serverProcesses: [
-                ...current.serverProcesses.filter((process) => customProcessIds.has(process.id)),
+                ...(current.serverProcesses ?? []).filter((process) => customProcessIds.has(process.id)),
                 ...presets.map((preset) => ({
                   id: preset.id,
                   label: preset.label,
@@ -9066,7 +9066,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               focusRequestId={shellTerminalFocusRequestId}
               terminalLabels={{
                 ...Object.fromEntries(
-                  activeProjectSettings.serverProcesses.map((p) => [p.id, p.label]),
+                  (activeProjectSettings.serverProcesses ?? []).map((p) => [p.id, p.label]),
                 ),
                 ...serverTerminalState.terminalLabels,
               }}
@@ -9086,7 +9086,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     activeProject && activeProjectSettings && activeTool?.kind === "custom_embed"
       ? (() => {
           const embed = activeTool.customEmbedId
-            ? (activeProjectSettings.customEmbeds.find(
+            ? ((activeProjectSettings.customEmbeds ?? []).find(
                 (entry) => entry.id === activeTool.customEmbedId,
               ) ?? null)
             : null;
@@ -9115,7 +9115,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     customProcessThreadId
       ? (() => {
           const process = activeTool.serverProcessId
-            ? (activeProjectSettings.serverProcesses.find(
+            ? ((activeProjectSettings.serverProcesses ?? []).find(
                 (entry) => entry.id === activeTool.serverProcessId,
               ) ?? null)
             : null;

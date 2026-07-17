@@ -310,7 +310,7 @@ export function makeCursorAdapter(
   options?: CursorAdapterLiveOptions,
 ) {
   return Effect.gen(function* () {
-    const boundInstanceId = options?.instanceId ?? "cursor" as ProviderInstanceId;
+    const boundInstanceId = options?.instanceId ?? ("cursor" as ProviderInstanceId);
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;

@@ -25,6 +25,8 @@ describe("terminal atoms", () => {
   it("removes orphaned terminal state", () => {
     terminalActions.setOpen(THREAD_ID, true);
     terminalActions.removeOrphans(new Set());
-    expect(appAtomRegistry.get(terminalStateAtom).terminalStateByThreadId[THREAD_ID]).toBeUndefined();
+    expect(
+      appAtomRegistry.get(terminalStateAtom).terminalStateByThreadId[THREAD_ID],
+    ).toBeUndefined();
   });
 });

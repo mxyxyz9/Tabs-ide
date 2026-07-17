@@ -1304,7 +1304,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
               const registry = yield* ProviderRegistry;
               const providers = yield* registry.getProviders;
               const cursorProvider = providers.find(
-                (provider) => provider.instanceId === "cursor" as ProviderInstanceId,
+                (provider) => provider.instanceId === ("cursor" as ProviderInstanceId),
               );
 
               assert.deepStrictEqual(providers.map((provider) => provider.instanceId).toSorted(), [

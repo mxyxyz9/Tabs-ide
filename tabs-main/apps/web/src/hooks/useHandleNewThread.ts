@@ -1,10 +1,7 @@
 import { DEFAULT_RUNTIME_MODE, type ProjectId, ThreadId } from "@tabs/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback } from "react";
-import {
-  type DraftThreadEnvMode,
-  type DraftThreadState,
-} from "../composerDraftStore";
+import { type DraftThreadEnvMode, type DraftThreadState } from "../composerDraftStore";
 import { composerDraftActions, useDraftThread } from "../state/composerDrafts";
 import { projectsAtom, threadsAtom } from "../state/threads";
 import { useAtomValue } from "@effect/atom-react";

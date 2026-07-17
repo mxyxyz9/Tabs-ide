@@ -7,7 +7,7 @@ import * as Context from "effect/Context";
  *
  * @module ProviderCommandReactor
  */
-import {  } from "effect";
+import {} from "effect";
 import type { Effect, Scope } from "effect";
 
 /**

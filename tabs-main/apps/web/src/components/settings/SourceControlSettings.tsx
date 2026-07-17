@@ -16,34 +16,32 @@ import {
 import { cn } from "~/lib/utils";
 import { SettingsSection } from "~/routes/_chat.settings";
 
-const SOURCE_CONTROL_COMMANDS: Record<
-  string,
-  { name: string; install?: string; login?: string }
-> = {
-  github: {
-    name: "GitHub CLI",
-    install: "brew install gh",
-    login: "gh auth login",
-  },
-  gitlab: {
-    name: "GitLab CLI",
-    install: "brew install glab",
-    login: "glab auth login",
-  },
-  "azure-devops": {
-    name: "Azure CLI",
-    install: "brew install azure-cli && az extension add --name azure-devops",
-    login: "az login",
-  },
-  git: {
-    name: "Git",
-    install: "brew install git",
-  },
-  jujutsu: {
-    name: "Jujutsu",
-    install: "brew install jujutsu",
-  },
-};
+const SOURCE_CONTROL_COMMANDS: Record<string, { name: string; install?: string; login?: string }> =
+  {
+    github: {
+      name: "GitHub CLI",
+      install: "brew install gh",
+      login: "gh auth login",
+    },
+    gitlab: {
+      name: "GitLab CLI",
+      install: "brew install glab",
+      login: "glab auth login",
+    },
+    "azure-devops": {
+      name: "Azure CLI",
+      install: "brew install azure-cli && az extension add --name azure-devops",
+      login: "az login",
+    },
+    git: {
+      name: "Git",
+      install: "brew install git",
+    },
+    jujutsu: {
+      name: "Jujutsu",
+      install: "brew install jujutsu",
+    },
+  };
 
 const SOURCE_CONTROL_PROVIDER_ICONS = {
   github: GitHubIcon,
@@ -244,9 +242,12 @@ export function SourceControlSettingsPanel({
 
       <SettingsSection title="Source Control Providers">
         {providers.map((item) => {
-          const Icon = item.provider in SOURCE_CONTROL_PROVIDER_ICONS
-            ? SOURCE_CONTROL_PROVIDER_ICONS[item.provider as keyof typeof SOURCE_CONTROL_PROVIDER_ICONS]
-            : null;
+          const Icon =
+            item.provider in SOURCE_CONTROL_PROVIDER_ICONS
+              ? SOURCE_CONTROL_PROVIDER_ICONS[
+                  item.provider as keyof typeof SOURCE_CONTROL_PROVIDER_ICONS
+                ]
+              : null;
           const dotClassName = itemStatusDot(item);
 
           return (
@@ -325,25 +326,27 @@ export function SourceControlSettingsPanel({
                         Install
                       </Button>
                     )}
-                    {item.cliAvailable && !item.authenticated && SOURCE_CONTROL_COMMANDS[item.provider]?.login && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 gap-1.5 px-2.5 text-xs"
-                        disabled={providerActionBusy}
-                        onClick={() =>
-                          startProviderAction({
-                            provider: item.provider,
-                            providerName: SOURCE_CONTROL_COMMANDS[item.provider]!.name,
-                            command: SOURCE_CONTROL_COMMANDS[item.provider]!.login!,
-                            kind: "login",
-                          })
-                        }
-                      >
-                        <LogInIcon className="size-3.5" />
-                        Sign in
-                      </Button>
-                    )}
+                    {item.cliAvailable &&
+                      !item.authenticated &&
+                      SOURCE_CONTROL_COMMANDS[item.provider]?.login && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1.5 px-2.5 text-xs"
+                          disabled={providerActionBusy}
+                          onClick={() =>
+                            startProviderAction({
+                              provider: item.provider,
+                              providerName: SOURCE_CONTROL_COMMANDS[item.provider]!.name,
+                              command: SOURCE_CONTROL_COMMANDS[item.provider]!.login!,
+                              kind: "login",
+                            })
+                          }
+                        >
+                          <LogInIcon className="size-3.5" />
+                          Sign in
+                        </Button>
+                      )}
                     <Switch checked={item.cliAvailable && item.authenticated} disabled />
                   </div>
                 </div>

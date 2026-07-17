@@ -17,6 +17,26 @@ import { ProjectId, ThreadId } from "@tabs/contracts";
 
 const WORKSPACE_SHELL_STORAGE_KEY = "tabs:workspace-shell:v1";
 
+// One-time cleanup: nuke any previously-corrupted localStorage data written
+// by the Python-script refactor. The persist middleware now uses version 2
+// and will migrate any old data, but as an extra safety net we explicitly
+// remove the old key here so there's no chance of reading stale state.
+if (typeof localStorage !== "undefined") {
+  try {
+    const raw = localStorage.getItem(WORKSPACE_SHELL_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { version?: number };
+      // If the stored version is less than 2, wipe it so we start fresh.
+      if (typeof parsed?.version !== "number" || parsed.version < 2) {
+        localStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
+      }
+    }
+  } catch {
+    // If parsing fails, the data is corrupt — remove it.
+    localStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
+  }
+}
+
 const decodeProjectWorkspaceSettingsSchema = Schema.decodeUnknownSync(ProjectWorkspaceSettings);
 const decodeProjectWorkspaceSessionState = Schema.decodeSync(ProjectWorkspaceSessionState);
 
@@ -103,7 +123,7 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
   const decoded = decodeProjectWorkspaceSettingsSchema(input);
   return {
     ...decoded,
-    serverProcesses: decoded.serverProcesses.map((process) => {
+    serverProcesses: (decoded.serverProcesses || []).map((process) => {
       const normalizedCommands =
         process.commands.length > 0
           ? process.commands
@@ -188,9 +208,9 @@ function defaultServerToolState(): ProjectServerToolState {
 }
 
 function resolveVisibleTools(settings: ProjectWorkspaceSettingsType): ProjectToolDefinition[] {
-  const customEmbedIds = new Set(settings.customEmbeds.map((embed) => embed.id));
-  const serverProcessIds = new Set(settings.serverProcesses.map((process) => process.id));
-  const visible = settings.tools.filter((tool) => {
+  const customEmbedIds = new Set((settings.customEmbeds || []).map((embed) => embed.id));
+  const serverProcessIds = new Set((settings.serverProcesses || []).map((process) => process.id));
+  const visible = (settings.tools || []).filter((tool) => {
     if (!tool.visible) return false;
     if (tool.kind === "custom_embed") {
       return tool.customEmbedId ? customEmbedIds.has(tool.customEmbedId) : false;
@@ -705,7 +725,13 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
     {
       name: WORKSPACE_SHELL_STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      // Bump version whenever persisted shape changes to force a clean reset.
+      // Version 2: Clear corrupted data written by partial Python-script refactor.
+      version: 2,
+      migrate: (_persistedState: unknown, _version: number) => {
+        // Any state from version < 2 is potentially corrupted — start fresh.
+        return createDefaultWorkspaceShellPersistedState();
+      },
       partialize: (state) => ({
         session: state.session,
         projectSettingsByProjectId: state.projectSettingsByProjectId,
@@ -716,12 +742,32 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
         serverStateByProjectId: state.serverStateByProjectId,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state && state.session) {
+        if (!state) return;
+        // Sanitize session
+        if (state.session) {
           state.session = {
             ...state.session,
+            openProjectIds: state.session.openProjectIds ?? [],
             pendingTabIds: state.session.pendingTabIds ?? [],
             activePendingTabId: state.session.activePendingTabId ?? null,
+            activeProjectId: state.session.activeProjectId ?? null,
+            activeToolIdByProjectId: state.session.activeToolIdByProjectId ?? {},
+            rememberedThreadIdByProjectId: state.session.rememberedThreadIdByProjectId ?? {},
           };
+        }
+        // Sanitize each project's settings so arrays are never undefined
+        if (state.projectSettingsByProjectId) {
+          const sanitized: typeof state.projectSettingsByProjectId = {};
+          for (const [id, settings] of Object.entries(state.projectSettingsByProjectId)) {
+            sanitized[id as keyof typeof sanitized] = {
+              ...settings,
+              tools: settings.tools ?? [],
+              serverProcesses: settings.serverProcesses ?? [],
+              customEmbeds: settings.customEmbeds ?? [],
+              browser: settings.browser ?? { defaultUrl: "", openExternalByDefault: false },
+            };
+          }
+          state.projectSettingsByProjectId = sanitized;
         }
       },
     },

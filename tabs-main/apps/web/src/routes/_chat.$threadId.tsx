@@ -169,7 +169,9 @@ function ChatThreadRouteView() {
     select: (params) => ThreadId.makeUnsafe(params.threadId),
   });
   const search = Route.useSearch();
-  const threadExists = useAtomValue(threadsAtom, (threads) => threads.some((thread) => thread.id === threadId));
+  const threadExists = useAtomValue(threadsAtom, (threads) =>
+    threads.some((thread) => thread.id === threadId),
+  );
   const draftThreadExists = useAtomValue(composerDraftsAtom, (state) =>
     Object.hasOwn(state.draftThreadsByThreadId, threadId),
   );

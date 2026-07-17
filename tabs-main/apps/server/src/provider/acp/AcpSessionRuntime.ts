@@ -138,10 +138,9 @@ interface EnsureActiveAssistantSegmentResult {
   readonly startedEvent?: Extract<AcpParsedSessionEvent, { readonly _tag: "AssistantItemStarted" }>;
 }
 
-export class AcpSessionRuntime extends Context.Service<
-  AcpSessionRuntime,
-  AcpSessionRuntimeShape
->()("tabs/provider/acp/AcpSessionRuntime") {
+export class AcpSessionRuntime extends Context.Service<AcpSessionRuntime, AcpSessionRuntimeShape>()(
+  "tabs/provider/acp/AcpSessionRuntime",
+) {
   static layer(
     options: AcpSessionRuntimeOptions,
   ): Layer.Layer<

@@ -43,7 +43,9 @@ export function markThreadUnreadInAtoms(threadId: ThreadId) {
 }
 
 export function markThreadVisitedInAtoms(threadId: ThreadId, visitedAt?: string) {
-  appAtomRegistry.update(readModelStateAtom, (state) => markThreadVisited(state, threadId, visitedAt));
+  appAtomRegistry.update(readModelStateAtom, (state) =>
+    markThreadVisited(state, threadId, visitedAt),
+  );
 }
 
 export function setThreadErrorInAtoms(threadId: ThreadId, error: string | null) {
@@ -61,14 +63,19 @@ export function setThreadBranchInAtoms(
 }
 
 export function setProjectExpandedInAtoms(projectId: Project["id"], expanded: boolean) {
-  appAtomRegistry.update(readModelStateAtom, (state) => setProjectExpanded(state, projectId, expanded));
+  appAtomRegistry.update(readModelStateAtom, (state) =>
+    setProjectExpanded(state, projectId, expanded),
+  );
 }
 
 export function toggleProjectInAtoms(projectId: Project["id"]) {
   appAtomRegistry.update(readModelStateAtom, (state) => toggleProject(state, projectId));
 }
 
-export function reorderProjectsInAtoms(draggedProjectId: Project["id"], targetProjectId: Project["id"]) {
+export function reorderProjectsInAtoms(
+  draggedProjectId: Project["id"],
+  targetProjectId: Project["id"],
+) {
   appAtomRegistry.update(readModelStateAtom, (state) =>
     reorderProjects(state, draggedProjectId, targetProjectId),
   );

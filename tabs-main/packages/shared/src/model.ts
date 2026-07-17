@@ -10,7 +10,7 @@ import {
   type ProviderOptionSelection,
 } from "@tabs/contracts";
 
-const DEFAULT_PROVIDER_DRIVER_KIND = ("codex" as ProviderDriverKind);
+const DEFAULT_PROVIDER_DRIVER_KIND = "codex" as ProviderDriverKind;
 
 export interface SelectableModelOption {
   slug: string;
@@ -345,7 +345,7 @@ export function createModelSelection(
   const selections = options ? cloneSelections(options) : [];
   const base: ModelSelection = {
     instanceId,
-    
+
     model,
   };
   return selections.length > 0 ? { ...base, options: selections } : base;
@@ -421,7 +421,9 @@ export function hasEffortLevel(caps: ModelCapabilities, value: string): boolean 
 }
 
 export function getDefaultEffort(caps: ModelCapabilities): string | null {
-  const defaultLevel = ((caps as any).reasoningEffortLevels ?? []).find((level: any) => level.isDefault);
+  const defaultLevel = ((caps as any).reasoningEffortLevels ?? []).find(
+    (level: any) => level.isDefault,
+  );
   if (defaultLevel) return defaultLevel.value;
   for (const descriptor of selectOptionDescriptors(caps)) {
     const fallback = descriptor.options.find((o) => o.isDefault);

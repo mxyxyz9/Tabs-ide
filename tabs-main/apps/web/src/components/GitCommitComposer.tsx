@@ -92,9 +92,7 @@ function resolveProgressDescription(progress: ActiveGitActionProgress): string |
   return formatElapsedDescription(progress.hookStartedAtMs ?? progress.phaseStartedAtMs);
 }
 
-function GitComposerActionIcon(props: {
-  actionId: GitStackedAction | "open_pr";
-}) {
+function GitComposerActionIcon(props: { actionId: GitStackedAction | "open_pr" }) {
   const className = "size-3.5";
   if (props.actionId === "commit") return <GitCommitIcon className={className} />;
   if (props.actionId === "open_pr" || props.actionId === "commit_push_pr") {

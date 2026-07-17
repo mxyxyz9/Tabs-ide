@@ -41,10 +41,7 @@ describe("EventNdjsonLogger", () => {
           return;
         }
 
-        yield* logger.write(
-          { threadId: "provider-thread-1", id: "evt-1" },
-          "thread-1" as ThreadId,
-        );
+        yield* logger.write({ threadId: "provider-thread-1", id: "evt-1" }, "thread-1" as ThreadId);
         yield* logger.write(
           { type: "turn.completed", threadId: "provider-thread-2", id: "evt-2" },
           "thread-2" as ThreadId,

@@ -24,7 +24,9 @@ function parseGitHubStatus(stdout: string): { authenticated: boolean; username: 
     const data = JSON.parse(stdout) as GitHubAuthJson;
     if (data && data.hosts) {
       for (const [_, accounts] of Object.entries(data.hosts)) {
-        const active = accounts.find((a) => a.active && a.state === "success") || accounts.find((a) => a.state === "success");
+        const active =
+          accounts.find((a) => a.active && a.state === "success") ||
+          accounts.find((a) => a.state === "success");
         if (active) {
           return { authenticated: true, username: active.login };
         }
@@ -40,9 +42,7 @@ const probeVersion = (cmd: string) =>
   Effect.tryPromise({
     try: () => runProcess(cmd, ["--version"], { timeoutMs: 5000 }),
     catch: () => null,
-  }).pipe(
-    Effect.catch(() => Effect.succeed(null))
-  );
+  }).pipe(Effect.catch(() => Effect.succeed(null)));
 
 function firstLine(value: string): string | null {
   const line = value.split(/\r?\n/)[0]?.trim();
@@ -62,17 +62,17 @@ const discoveryEffect = Effect.gen(function* () {
 
   let ghAuth = { authenticated: false, username: null as string | null };
   if (ghVersion) {
-    const statusText = yield* github.getAuthStatus({ cwd: process.cwd() }).pipe(
-      Effect.catch(() => Effect.succeed(""))
-    );
+    const statusText = yield* github
+      .getAuthStatus({ cwd: process.cwd() })
+      .pipe(Effect.catch(() => Effect.succeed("")));
     ghAuth = parseGitHubStatus(statusText);
   }
 
   let glabAuth = { authenticated: false, username: null as string | null };
   if (glabVersion) {
-    const statusText = yield* gitlab.getAuthStatus({ cwd: process.cwd() }).pipe(
-      Effect.catch(() => Effect.succeed(""))
-    );
+    const statusText = yield* gitlab
+      .getAuthStatus({ cwd: process.cwd() })
+      .pipe(Effect.catch(() => Effect.succeed("")));
     const match = statusText.match(/Logged in to \S+ as ([^\s]+)/i);
     if (match && match[1]) {
       glabAuth = { authenticated: true, username: match[1] };
@@ -81,11 +81,15 @@ const discoveryEffect = Effect.gen(function* () {
 
   let azAuth = { authenticated: false, username: null as string | null };
   if (azVersion) {
-    const statusText = yield* azure.getAuthStatus({ cwd: process.cwd() }).pipe(
-      Effect.catch(() => Effect.succeed(""))
-    );
+    const statusText = yield* azure
+      .getAuthStatus({ cwd: process.cwd() })
+      .pipe(Effect.catch(() => Effect.succeed("")));
     const trimmed = statusText.trim();
-    if (trimmed && !trimmed.toLowerCase().includes("error") && !trimmed.toLowerCase().includes("no active")) {
+    if (
+      trimmed &&
+      !trimmed.toLowerCase().includes("error") &&
+      !trimmed.toLowerCase().includes("no active")
+    ) {
       azAuth = { authenticated: true, username: trimmed };
     }
   }
@@ -101,7 +105,7 @@ const discoveryEffect = Effect.gen(function* () {
         implemented: true,
         label: "Git",
         executable: "git",
-        status: (gitVersion !== null && gitVersion.code === 0) ? "available" : "missing",
+        status: gitVersion !== null && gitVersion.code === 0 ? "available" : "missing",
         version: gitVersion ? Option.fromNullishOr(firstLine(gitVersion.stdout)) : Option.none(),
         installHint: "Install Git from https://git-scm.com/downloads or with your package manager.",
         detail: Option.none(),
@@ -122,61 +126,70 @@ const discoveryEffect = Effect.gen(function* () {
         kind: "github",
         label: "GitHub",
         executable: "gh",
-        status: (ghVersion !== null && ghVersion.code === 0) ? "available" : "missing",
+        status: ghVersion !== null && ghVersion.code === 0 ? "available" : "missing",
         version: ghVersion ? Option.fromNullishOr(firstLine(ghVersion.stdout)) : Option.none(),
-        installHint: "Install the GitHub CLI (`gh`) from https://cli.github.com or your package manager.",
+        installHint:
+          "Install the GitHub CLI (`gh`) from https://cli.github.com or your package manager.",
         detail: Option.none(),
-        auth: ghAuth.authenticated ? {
-          status: "authenticated" as const,
-          account: Option.fromNullishOr(ghAuth.username),
-          host: Option.some("github.com"),
-          detail: Option.none(),
-        } : {
-          status: "unauthenticated" as const,
-          account: Option.none(),
-          host: Option.none(),
-          detail: Option.none(),
-        },
+        auth: ghAuth.authenticated
+          ? {
+              status: "authenticated" as const,
+              account: Option.fromNullishOr(ghAuth.username),
+              host: Option.some("github.com"),
+              detail: Option.none(),
+            }
+          : {
+              status: "unauthenticated" as const,
+              account: Option.none(),
+              host: Option.none(),
+              detail: Option.none(),
+            },
       },
       {
         kind: "gitlab",
         label: "GitLab",
         executable: "glab",
-        status: (glabVersion !== null && glabVersion.code === 0) ? "available" : "missing",
+        status: glabVersion !== null && glabVersion.code === 0 ? "available" : "missing",
         version: glabVersion ? Option.fromNullishOr(firstLine(glabVersion.stdout)) : Option.none(),
-        installHint: "Install the GitLab CLI (`glab`) from https://gitlab.com/gitlab-org/cli or your package manager (e.g. `brew install glab`).",
+        installHint:
+          "Install the GitLab CLI (`glab`) from https://gitlab.com/gitlab-org/cli or your package manager (e.g. `brew install glab`).",
         detail: Option.none(),
-        auth: glabAuth.authenticated ? {
-          status: "authenticated" as const,
-          account: Option.fromNullishOr(glabAuth.username),
-          host: Option.some("gitlab.com"),
-          detail: Option.none(),
-        } : {
-          status: "unauthenticated" as const,
-          account: Option.none(),
-          host: Option.none(),
-          detail: Option.none(),
-        },
+        auth: glabAuth.authenticated
+          ? {
+              status: "authenticated" as const,
+              account: Option.fromNullishOr(glabAuth.username),
+              host: Option.some("gitlab.com"),
+              detail: Option.none(),
+            }
+          : {
+              status: "unauthenticated" as const,
+              account: Option.none(),
+              host: Option.none(),
+              detail: Option.none(),
+            },
       },
       {
         kind: "azure-devops",
         label: "Azure DevOps",
         executable: "az",
-        status: (azVersion !== null && azVersion.code === 0) ? "available" : "missing",
+        status: azVersion !== null && azVersion.code === 0 ? "available" : "missing",
         version: azVersion ? Option.fromNullishOr(firstLine(azVersion.stdout)) : Option.none(),
-        installHint: "Install the Azure command-line tools (`az`), then enable Azure DevOps support with `az extension add --name azure-devops`.",
+        installHint:
+          "Install the Azure command-line tools (`az`), then enable Azure DevOps support with `az extension add --name azure-devops`.",
         detail: Option.none(),
-        auth: azAuth.authenticated ? {
-          status: "authenticated" as const,
-          account: Option.fromNullishOr(azAuth.username),
-          host: Option.some("dev.azure.com"),
-          detail: Option.none(),
-        } : {
-          status: "unauthenticated" as const,
-          account: Option.none(),
-          host: Option.none(),
-          detail: Option.none(),
-        },
+        auth: azAuth.authenticated
+          ? {
+              status: "authenticated" as const,
+              account: Option.fromNullishOr(azAuth.username),
+              host: Option.some("dev.azure.com"),
+              detail: Option.none(),
+            }
+          : {
+              status: "unauthenticated" as const,
+              account: Option.none(),
+              host: Option.none(),
+              detail: Option.none(),
+            },
       },
       {
         kind: "bitbucket",
@@ -184,7 +197,8 @@ const discoveryEffect = Effect.gen(function* () {
         executable: undefined,
         status: bbAuthenticated ? "available" : "missing",
         version: Option.none(),
-        installHint: "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN on the server (use a Bitbucket API token with pull request and repository scopes).",
+        installHint:
+          "Set T3CODE_BITBUCKET_EMAIL and T3CODE_BITBUCKET_API_TOKEN on the server (use a Bitbucket API token with pull request and repository scopes).",
         detail: Option.none(),
         auth: bbAuth,
       },
@@ -194,15 +208,8 @@ const discoveryEffect = Effect.gen(function* () {
   return result;
 });
 
-const appLayer = Layer.mergeAll(
-  GitHubCliLive,
-  GitLabCliLive,
-  AzureDevOpsCliLive,
-  BitbucketApiLive
-);
+const appLayer = Layer.mergeAll(GitHubCliLive, GitLabCliLive, AzureDevOpsCliLive, BitbucketApiLive);
 
 export async function discoverSourceControl(): Promise<SourceControlDiscoveryResult> {
-  return Effect.runPromise(
-    discoveryEffect.pipe(Effect.provide(appLayer))
-  );
+  return Effect.runPromise(discoveryEffect.pipe(Effect.provide(appLayer)));
 }

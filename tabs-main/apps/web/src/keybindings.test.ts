@@ -273,14 +273,22 @@ describe("chat/editor shortcuts", () => {
 
   it("matches editor.openFavorite shortcut", () => {
     assert.isTrue(
-      isOpenFavoriteEditorShortcut(event({ key: "f", metaKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
-        platform: "MacIntel",
-      }),
+      isOpenFavoriteEditorShortcut(
+        event({ key: "f", metaKey: true, shiftKey: true }),
+        DEFAULT_BINDINGS,
+        {
+          platform: "MacIntel",
+        },
+      ),
     );
     assert.isTrue(
-      isOpenFavoriteEditorShortcut(event({ key: "f", ctrlKey: true, shiftKey: true }), DEFAULT_BINDINGS, {
-        platform: "Linux",
-      }),
+      isOpenFavoriteEditorShortcut(
+        event({ key: "f", ctrlKey: true, shiftKey: true }),
+        DEFAULT_BINDINGS,
+        {
+          platform: "Linux",
+        },
+      ),
     );
   });
 
@@ -376,9 +384,21 @@ describe("resolveShortcutCommand", () => {
 
   it("resolves chat.new and chat.newLocal commands when !terminalFocus", () => {
     const keybindings = compile([
-      { shortcut: modShortcut("n"), command: "chat.new", whenAst: whenNot(whenIdentifier("terminalFocus")) },
-      { shortcut: modShortcut("o", { shiftKey: true }), command: "chat.new", whenAst: whenNot(whenIdentifier("terminalFocus")) },
-      { shortcut: modShortcut("l", { shiftKey: true }), command: "chat.newLocal", whenAst: whenNot(whenIdentifier("terminalFocus")) },
+      {
+        shortcut: modShortcut("n"),
+        command: "chat.new",
+        whenAst: whenNot(whenIdentifier("terminalFocus")),
+      },
+      {
+        shortcut: modShortcut("o", { shiftKey: true }),
+        command: "chat.new",
+        whenAst: whenNot(whenIdentifier("terminalFocus")),
+      },
+      {
+        shortcut: modShortcut("l", { shiftKey: true }),
+        command: "chat.newLocal",
+        whenAst: whenNot(whenIdentifier("terminalFocus")),
+      },
     ]);
 
     // Matches chat.new with mod+n when terminalFocus is false

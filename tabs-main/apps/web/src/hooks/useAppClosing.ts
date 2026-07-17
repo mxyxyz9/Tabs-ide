@@ -13,8 +13,10 @@ export function useAppClosing(): { isClosing: boolean; cleanupDone: boolean } {
     const bridge = window.desktopBridge;
     if (!bridge?.onAppClosing) return;
     const unsubClosing = bridge.onAppClosing(() => setIsClosing(true));
-    const unsubCleanup = bridge.onAppCleanupDone ? bridge.onAppCleanupDone(() => setCleanupDone(true)) : () => {};
-    
+    const unsubCleanup = bridge.onAppCleanupDone
+      ? bridge.onAppCleanupDone(() => setCleanupDone(true))
+      : () => {};
+
     return () => {
       unsubClosing();
       unsubCleanup();

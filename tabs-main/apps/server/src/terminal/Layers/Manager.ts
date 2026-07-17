@@ -196,7 +196,7 @@ function normalizeChildCommandName(raw: string, platform: NodeJS.Platform): stri
 }
 
 async function checkWindowsSubprocessActivity(
-  terminalPid: number
+  terminalPid: number,
 ): Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }> {
   const command =
     'Get-CimInstance Win32_Process -ErrorAction Stop | ForEach-Object { Write-Output "$($_.ProcessId)|$($_.ParentProcessId)|$($_.Name)" }';
@@ -209,7 +209,7 @@ async function checkWindowsSubprocessActivity(
         allowNonZeroExit: true,
         maxBufferBytes: 32_768,
         outputMode: "truncate",
-      }
+      },
     );
     if (result.code !== 0) {
       return { hasRunningSubprocess: false, childCommand: null };
@@ -242,7 +242,7 @@ async function checkWindowsSubprocessActivity(
 }
 
 async function checkPosixSubprocessActivity(
-  terminalPid: number
+  terminalPid: number,
 ): Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }> {
   let childPid: number | null = null;
   try {
@@ -330,7 +330,7 @@ async function checkPosixSubprocessActivity(
 }
 
 async function defaultSubprocessChecker(
-  terminalPid: number
+  terminalPid: number,
 ): Promise<{ hasRunningSubprocess: boolean; childCommand: string | null }> {
   if (!Number.isInteger(terminalPid) || terminalPid <= 0) {
     return { hasRunningSubprocess: false, childCommand: null };
@@ -900,7 +900,7 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
         settled = true;
         resolve();
       };
-      
+
       setTimeout(() => {
         if (typeof pid === "number" && pid > 0 && !isWin) {
           try {

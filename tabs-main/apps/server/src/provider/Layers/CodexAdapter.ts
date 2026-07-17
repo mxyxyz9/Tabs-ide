@@ -1350,7 +1350,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
   codexConfig: CodexSettings,
   options?: CodexAdapterLiveOptions,
 ) {
-  const boundInstanceId = options?.instanceId ?? "codex" as ProviderInstanceId;
+  const boundInstanceId = options?.instanceId ?? ("codex" as ProviderInstanceId);
   const fileSystem = yield* FileSystem.FileSystem;
   const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverConfig = yield* Effect.service(ServerConfig);

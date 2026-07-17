@@ -945,4 +945,3 @@ label:has(> select#reasoning-effort) select {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
 }
-

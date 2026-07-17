@@ -205,7 +205,7 @@ const PlanSidebar = memo(function PlanSidebar({
                     className={cn(
                       "text-[13px] leading-snug",
                       step.status === "completed"
-                        ? "text-muted-foreground/50 line-through decoration-muted-foreground/20"
+                        ? "text-muted-foreground/50"
                         : step.status === "inProgress"
                           ? "text-foreground/90"
                           : "text-muted-foreground/70",

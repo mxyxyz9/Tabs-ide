@@ -1445,7 +1445,10 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
         await Effect.runPromise(resolvedShutdown.awaitComplete);
       })(),
       new Promise<void>((_, reject) =>
-        setTimeout(() => reject(new Error("Update install shutdown timed out after 10 seconds")), 10000)
+        setTimeout(
+          () => reject(new Error("Update install shutdown timed out after 10 seconds")),
+          10000,
+        ),
       ),
     ]);
     autoUpdater.quitAndInstall();
@@ -1678,7 +1681,10 @@ function stopBackend(): void {
   }
 }
 
-async function stopBackendProcessAndWait(child: ChildProcess.ChildProcess, timeoutMs = 5_000): Promise<void> {
+async function stopBackendProcessAndWait(
+  child: ChildProcess.ChildProcess,
+  timeoutMs = 5_000,
+): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return;
 
   await new Promise<void>((resolve) => {
@@ -1733,7 +1739,7 @@ async function stopBackendAndWaitForExit(timeoutMs = 5_000): Promise<void> {
 }
 
 const resolvedShutdown = Effect.runSync(
-  Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer))
+  Effect.service(DesktopShutdown).pipe(Effect.provide(shutdownLayer)),
 );
 
 const performShutdownEffect = Effect.gen(function* () {
@@ -1750,21 +1756,18 @@ const performShutdownEffect = Effect.gen(function* () {
             try: () => stopBackendProcessAndWait(child, 5000),
             catch: (error) => error,
           }).pipe(Effect.catch(() => Effect.void)),
-        { concurrency: "unbounded" }
+        { concurrency: "unbounded" },
       );
       backendProcess = null;
       writeDesktopLogHeader("shutdown finalizer finished: backends stopped");
-    }).pipe(Effect.ensuring(shutdown.markComplete))
+    }).pipe(Effect.ensuring(shutdown.markComplete)),
   );
 
   yield* shutdown.awaitRequest;
-}).pipe(
-  Effect.provideService(DesktopShutdown, resolvedShutdown),
-  Effect.scoped
-);
+}).pipe(Effect.provideService(DesktopShutdown, resolvedShutdown), Effect.scoped);
 
 const shutdownPromise = Effect.runPromise(
-  performShutdownEffect.pipe(Effect.catch(() => Effect.void))
+  performShutdownEffect.pipe(Effect.catch(() => Effect.void)),
 );
 
 function registerIpcHandlers(): void {
@@ -2387,7 +2390,9 @@ function createLegacyWindow(): BrowserWindow {
       try {
         const logLine = `[${new Date().toISOString()}] ${message}\n`;
         FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   });
 
@@ -2503,7 +2508,9 @@ function createCodeOssWindow(
       try {
         const logLine = `[${new Date().toISOString()}] ${message}\n`;
         FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
   });
   window.webContents.on("did-finish-load", () => {
@@ -2732,19 +2739,32 @@ async function bootstrap(): Promise<void> {
     win.webContents.on("dom-ready", inject);
     // Poll every 2 seconds to read accumulated logs
     const pollTimer = setInterval(() => {
-      if (win.isDestroyed()) { clearInterval(pollTimer); return; }
-      win.webContents.executeJavaScript(`
+      if (win.isDestroyed()) {
+        clearInterval(pollTimer);
+        return;
+      }
+      win.webContents
+        .executeJavaScript(`
         const logs = window.__SLIDER_LOGS || [];
         window.__SLIDER_LOGS = [];
         JSON.stringify(logs);
-      `).then((result: string) => {
-        const logs = JSON.parse(result) as string[];
-        if (logs.length > 0) {
-          const content = logs.join('\\n') + '\\n';
-          try { FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, content, "utf8"); } catch {}
-          console.log('[SLIDER-DEBUG-POLL] wrote ' + logs.length + ' log entries to ' + SLIDER_DEBUG_LOG_PATH);
-        }
-      }).catch(() => {});
+      `)
+        .then((result: string) => {
+          const logs = JSON.parse(result) as string[];
+          if (logs.length > 0) {
+            const content = logs.join("\\n") + "\\n";
+            try {
+              FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, content, "utf8");
+            } catch {}
+            console.log(
+              "[SLIDER-DEBUG-POLL] wrote " +
+                logs.length +
+                " log entries to " +
+                SLIDER_DEBUG_LOG_PATH,
+            );
+          }
+        })
+        .catch(() => {});
     }, 2000);
     win.on("closed", () => clearInterval(pollTimer));
   }
@@ -2785,7 +2805,7 @@ app.on("before-quit", (event) => {
           await Effect.runPromise(resolvedShutdown.awaitComplete);
         })(),
         new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error("App shutdown timed out after 10 seconds")), 10000)
+          setTimeout(() => reject(new Error("App shutdown timed out after 10 seconds")), 10000),
         ),
       ]);
     } catch (error) {
@@ -2794,25 +2814,28 @@ app.on("before-quit", (event) => {
       isCleanupFinished = true;
       restoreStdIoCapture?.();
       writeDesktopLogHeader("cleanup finished, notifying renderer to finalize close animation");
-      
+
       // Tell renderer that cleanup is done so it can trigger the squash/drain
       mainWindow?.webContents.send("desktop:app-cleanup-done");
-      
+
       // Wait for renderer to signal that animation is finished
       try {
         await Promise.race([
           new Promise<void>((resolve) => {
             ipcMain.once("desktop:app-ready-to-exit", () => resolve());
           }),
-          new Promise<void>((_, reject) => 
-            setTimeout(() => reject(new Error("Renderer close animation timed out after 5 seconds")), 5000)
-          )
+          new Promise<void>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Renderer close animation timed out after 5 seconds")),
+              5000,
+            ),
+          ),
         ]);
         writeDesktopLogHeader("renderer animation done, exiting app");
       } catch (err: any) {
         writeDesktopLogHeader(err.message);
       }
-      
+
       app.exit(0);
     }
   })();

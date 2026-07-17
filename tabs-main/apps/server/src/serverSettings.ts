@@ -19,7 +19,22 @@ import {
   ServerSettings,
   type ServerSettingsPatch,
 } from "@tabs/contracts";
-import { Cache, Deferred, Duration, Effect, Exit, FileSystem, Layer, Path, PubSub, Ref, Schema, SchemaIssue, Scope, Stream,  } from "effect";
+import {
+  Cache,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Path,
+  PubSub,
+  Ref,
+  Schema,
+  SchemaIssue,
+  Scope,
+  Stream,
+} from "effect";
 import * as Semaphore from "effect/Semaphore";
 import { ServerConfig } from "./config";
 import { type DeepPartial, deepMerge } from "@tabs/shared/Struct";
@@ -172,7 +187,7 @@ function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings
     ...settings,
     textGenerationModelSelection: {
       instanceId: fallback as ProviderInstanceId,
-      
+
       model:
         (DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER as Record<string, string>)[fallback] ?? "",
     } as ModelSelection,
@@ -365,9 +380,7 @@ const makeServerSettings = Effect.gen(function* () {
           const current = yield* getSettingsFromCache;
           const merged = mergeServerSettingsPatch(current, patch);
           const mergedRaw = Schema.encodeSync(ServerSettings)(merged);
-          const next = yield* Schema.decodeUnknownEffect(ServerSettings)(
-            mergedRaw,
-          ).pipe(
+          const next = yield* Schema.decodeUnknownEffect(ServerSettings)(mergedRaw).pipe(
             Effect.mapError(
               (cause) =>
                 new ServerSettingsError({

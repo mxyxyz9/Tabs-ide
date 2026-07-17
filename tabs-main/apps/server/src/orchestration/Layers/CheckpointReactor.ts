@@ -37,7 +37,7 @@ type ReactorInput =
     };
 
 function toTurnId(value: string | undefined): TurnId | null {
-  return value === undefined ? null : String(value) as TurnId;
+  return value === undefined ? null : (String(value) as TurnId);
 }
 
 function sameId(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -267,7 +267,7 @@ const make = Effect.gen(function* () {
       input.thread.messages
         .toReversed()
         .find((entry) => entry.role === "assistant" && entry.turnId === input.turnId)?.id ??
-      `assistant:${input.turnId}` as MessageId;
+      (`assistant:${input.turnId}` as MessageId);
 
     yield* orchestrationEngine.dispatch({
       type: "thread.turn.diff.complete",

@@ -73,11 +73,14 @@ export class GitLabCliError extends Schema.TaggedErrorClass<GitLabCliError>()("G
 /**
  * AzureDevOpsCliError - Azure DevOps CLI execution or authentication failed.
  */
-export class AzureDevOpsCliError extends Schema.TaggedErrorClass<AzureDevOpsCliError>()("AzureDevOpsCliError", {
-  operation: Schema.String,
-  detail: Schema.String,
-  cause: Schema.optional(Schema.Unknown),
-}) {
+export class AzureDevOpsCliError extends Schema.TaggedErrorClass<AzureDevOpsCliError>()(
+  "AzureDevOpsCliError",
+  {
+    operation: Schema.String,
+    detail: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {
   override get message(): string {
     return `Azure DevOps CLI failed in ${this.operation}: ${this.detail}`;
   }

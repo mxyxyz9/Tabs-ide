@@ -146,23 +146,20 @@ export function useSettings<T extends UnifiedSettings = UnifiedSettings>(
  * persisted via RPC. Client keys go straight to localStorage.
  */
 export function useUpdateSettings() {
-  const updateSettings = useCallback(
-    (patch: Partial<UnifiedSettings>) => {
-      const { serverPatch, clientPatch } = splitPatch(patch);
+  const updateSettings = useCallback((patch: Partial<UnifiedSettings>) => {
+    const { serverPatch, clientPatch } = splitPatch(patch);
 
-      if (Object.keys(serverPatch).length > 0) {
-        patchServerSettings(serverPatch, (current) => mergeServerSettingsPatch(current, serverPatch));
-        void ensureNativeApi()
-          .server.updateSettings(serverPatch)
-          .then(() => refreshServerConfig());
-      }
+    if (Object.keys(serverPatch).length > 0) {
+      patchServerSettings(serverPatch, (current) => mergeServerSettingsPatch(current, serverPatch));
+      void ensureNativeApi()
+        .server.updateSettings(serverPatch)
+        .then(() => refreshServerConfig());
+    }
 
-      if (Object.keys(clientPatch).length > 0) {
-        updateClientSettings((current) => ({ ...current, ...clientPatch }));
-      }
-    },
-    [],
-  );
+    if (Object.keys(clientPatch).length > 0) {
+      updateClientSettings((current) => ({ ...current, ...clientPatch }));
+    }
+  }, []);
 
   const resetSettings = useCallback(() => {
     updateSettings(DEFAULT_UNIFIED_SETTINGS);
@@ -176,7 +173,9 @@ export function useUpdateSettings() {
 
 // ── One-time migration from localStorage ─────────────────────────────
 
-export function buildLegacyServerSettingsMigrationPatch(legacySettings: Record<string, unknown>): ServerSettingsPatch {
+export function buildLegacyServerSettingsMigrationPatch(
+  legacySettings: Record<string, unknown>,
+): ServerSettingsPatch {
   const patch: DeepMutable<ServerSettingsPatch> = {};
 
   if (Predicate.isBoolean(legacySettings.enableAssistantStreaming)) {

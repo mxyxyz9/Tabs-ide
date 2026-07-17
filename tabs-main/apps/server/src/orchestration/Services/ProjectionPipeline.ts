@@ -8,7 +8,7 @@ import * as Context from "effect/Context";
  * @module OrchestrationProjectionPipeline
  */
 import type { OrchestrationEvent } from "@tabs/contracts";
-import {  } from "effect";
+import {} from "effect";
 import type { Effect } from "effect";
 
 import type { ProjectionRepositoryError } from "../../persistence/Errors.ts";

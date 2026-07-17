@@ -51,15 +51,17 @@ const makeGitLabCli = Effect.sync(() => {
           if (err && typeof err === "object" && "cause" in err) {
             const cause = err.cause;
             if (cause && typeof cause === "object") {
-              const stdout = "stdout" in cause && typeof cause.stdout === "string" ? cause.stdout : "";
-              const stderr = "stderr" in cause && typeof cause.stderr === "string" ? cause.stderr : "";
+              const stdout =
+                "stdout" in cause && typeof cause.stdout === "string" ? cause.stdout : "";
+              const stderr =
+                "stderr" in cause && typeof cause.stderr === "string" ? cause.stderr : "";
               if (stdout || stderr) {
                 return Effect.succeed(`${stdout}\n${stderr}`);
               }
             }
           }
           return Effect.fail(err);
-        })
+        }),
       ),
   } satisfies GitLabCliShape;
 });

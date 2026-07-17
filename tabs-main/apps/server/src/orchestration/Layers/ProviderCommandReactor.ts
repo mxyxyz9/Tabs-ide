@@ -5,7 +5,7 @@ import {
   type ModelSelection,
   type OrchestrationEvent,
   ProviderDriverKind,
-    type OrchestrationSession,
+  type OrchestrationSession,
   ThreadId,
   type ProviderSession,
   type RuntimeMode,
@@ -218,9 +218,10 @@ const make = Effect.gen(function* () {
     }
 
     const desiredRuntimeMode = thread.runtimeMode;
-    const currentProvider: ProviderDriverKind | undefined = (thread.session !== null && Schema.is(ProviderDriverKind)(thread.session.providerName))
-      ? thread.session.providerName
-      : undefined;
+    const currentProvider: ProviderDriverKind | undefined =
+      thread.session !== null && Schema.is(ProviderDriverKind)(thread.session.providerName)
+        ? thread.session.providerName
+        : undefined;
     const requestedModelSelection = options?.modelSelection;
     // Routing is keyed on the configured provider INSTANCE id (the model
     // selection's `instanceId`). For the built-in single-instance drivers the

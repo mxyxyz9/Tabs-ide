@@ -167,7 +167,7 @@ function selectAutoApprovedPermissionOption(
 
 export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapterLiveOptions) {
   return Effect.gen(function* () {
-    const boundInstanceId = options?.instanceId ?? "grok" as ProviderInstanceId;
+    const boundInstanceId = options?.instanceId ?? ("grok" as ProviderInstanceId);
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const childProcessSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;

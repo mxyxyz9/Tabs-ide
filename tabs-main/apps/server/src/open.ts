@@ -223,7 +223,9 @@ export const resolveEditorLaunch = Effect.fnUntraced(function* (
 
   if (editorDef.commands) {
     const env = process.env;
-    const command = editorDef.commands.find((cmd) => isCommandAvailable(cmd, { platform, env })) ?? editorDef.commands[0];
+    const command =
+      editorDef.commands.find((cmd) => isCommandAvailable(cmd, { platform, env })) ??
+      editorDef.commands[0];
     return shouldUseGotoFlag(editorDef.id, input.cwd)
       ? { command, args: ["--goto", input.cwd] }
       : { command, args: [input.cwd] };

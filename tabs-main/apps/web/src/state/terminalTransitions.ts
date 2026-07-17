@@ -328,13 +328,19 @@ function upsertTerminalIntoGroups(
   });
 }
 
-export function setThreadTerminalOpen(state: ThreadTerminalState, open: boolean): ThreadTerminalState {
+export function setThreadTerminalOpen(
+  state: ThreadTerminalState,
+  open: boolean,
+): ThreadTerminalState {
   const normalized = normalizeThreadTerminalState(state);
   if (normalized.terminalOpen === open) return normalized;
   return { ...normalized, terminalOpen: open };
 }
 
-export function setThreadTerminalHeight(state: ThreadTerminalState, height: number): ThreadTerminalState {
+export function setThreadTerminalHeight(
+  state: ThreadTerminalState,
+  height: number,
+): ThreadTerminalState {
   const normalized = normalizeThreadTerminalState(state);
   if (!Number.isFinite(height) || height <= 0 || normalized.terminalHeight === height) {
     return normalized;
@@ -342,11 +348,17 @@ export function setThreadTerminalHeight(state: ThreadTerminalState, height: numb
   return { ...normalized, terminalHeight: height };
 }
 
-export function splitThreadTerminal(state: ThreadTerminalState, terminalId: string): ThreadTerminalState {
+export function splitThreadTerminal(
+  state: ThreadTerminalState,
+  terminalId: string,
+): ThreadTerminalState {
   return upsertTerminalIntoGroups(state, terminalId, "split");
 }
 
-export function newThreadTerminal(state: ThreadTerminalState, terminalId: string): ThreadTerminalState {
+export function newThreadTerminal(
+  state: ThreadTerminalState,
+  terminalId: string,
+): ThreadTerminalState {
   return upsertTerminalIntoGroups(state, terminalId, "new");
 }
 
@@ -374,7 +386,10 @@ export function setThreadActiveTerminal(
   };
 }
 
-export function closeThreadTerminal(state: ThreadTerminalState, terminalId: string): ThreadTerminalState {
+export function closeThreadTerminal(
+  state: ThreadTerminalState,
+  terminalId: string,
+): ThreadTerminalState {
   const normalized = normalizeThreadTerminalState(state);
   if (!normalized.terminalIds.includes(terminalId)) {
     return normalized;
@@ -428,8 +443,9 @@ export function setThreadTerminalActivity(
     return normalized;
   }
   const alreadyRunning = normalized.runningTerminalIds.includes(terminalId);
+  const effectiveLabel = (label && label !== terminalId) ? label : undefined;
   const currentLabel = normalized.terminalLabels?.[terminalId];
-  if (hasRunningSubprocess === alreadyRunning && (!label || label === currentLabel)) {
+  if (hasRunningSubprocess === alreadyRunning && effectiveLabel === currentLabel) {
     return normalized;
   }
   const runningTerminalIds = new Set(normalized.runningTerminalIds);
@@ -439,8 +455,10 @@ export function setThreadTerminalActivity(
     runningTerminalIds.delete(terminalId);
   }
   const terminalLabels = { ...normalized.terminalLabels };
-  if (label) {
-    terminalLabels[terminalId] = label;
+  if (effectiveLabel) {
+    terminalLabels[terminalId] = effectiveLabel;
+  } else {
+    delete terminalLabels[terminalId];
   }
   return {
     ...normalized,

@@ -190,8 +190,8 @@ interface ServerProcessDraft {
 }
 
 function createCustomEmbedDrafts(settings: ProjectWorkspaceSettings): CustomEmbedDraft[] {
-  return settings.customEmbeds.map((embed) => {
-    const tool = settings.tools.find(
+  return (settings.customEmbeds ?? []).map((embed) => {
+    const tool = (settings.tools ?? []).find(
       (entry) => entry.kind === "custom_embed" && entry.customEmbedId === embed.id,
     );
     return {
@@ -208,8 +208,8 @@ function createCustomEmbedDrafts(settings: ProjectWorkspaceSettings): CustomEmbe
 }
 
 function createServerProcessDrafts(settings: ProjectWorkspaceSettings): ServerProcessDraft[] {
-  return settings.serverProcesses.map((process) => {
-    const tool = settings.tools.find(
+  return (settings.serverProcesses ?? []).map((process) => {
+    const tool = (settings.tools ?? []).find(
       (entry) => entry.kind === "custom_process" && entry.serverProcessId === process.id,
     );
     return {
@@ -291,7 +291,7 @@ export function ProjectWorkspaceSettingsSection() {
     }
     upsertProjectSettings(activeProjectId, (current) => ({
       ...current,
-      tools: current.tools.map((entry) =>
+      tools: (current.tools ?? []).map((entry) =>
         entry.id === toolId ? { ...entry, visible: nextVisible } : entry,
       ),
     }));

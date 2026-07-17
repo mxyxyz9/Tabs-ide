@@ -1030,7 +1030,7 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         // Keep successful refreshes warm; drop failures immediately so next request can retry.
         timeToLive: (exit: any) =>
           Exit.isSuccess(exit) ? STATUS_UPSTREAM_REFRESH_INTERVAL : Duration.zero,
-      }
+      },
     );
 
     const refreshStatusUpstreamIfStale = (cwd: string): Effect.Effect<void, GitCommandError> =>

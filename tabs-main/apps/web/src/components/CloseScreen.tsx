@@ -55,12 +55,14 @@ function RotatingLabel({
         return next;
       });
     }, intervalMs);
-    
+
     return () => clearInterval(id);
   }, [messages, intervalMs, phase]);
 
   return (
-    <div className={cn("relative z-10 h-[14px] w-full text-center loader-respect-motion", className)}>
+    <div
+      className={cn("relative z-10 h-[14px] w-full text-center loader-respect-motion", className)}
+    >
       <span
         key={phase === "holding" ? "goodbye" : messages[idx]}
         className="absolute inset-x-0 whitespace-nowrap text-[11px] font-semibold tracking-[0.22em] uppercase transition-opacity duration-300"
@@ -191,7 +193,7 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd }: CloseAnimation
         <div
           className={cn(
             "relative w-full flex flex-col items-center justify-center gap-[22px] transform-origin-center",
-            animating && "cq-card-fade"
+            animating && "cq-card-fade",
           )}
         >
           {/* Word with drain animation */}
@@ -200,8 +202,12 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd }: CloseAnimation
               "text-[72px] font-[800] tracking-[-0.02em] transform-origin-[center_bottom]",
               animating && "cq-word-drain",
               isBlock
-                ? (isDark ? "text-[#1c0f0e]" : "text-white")
-                : (isDark ? "text-[#f5f5f5]" : "text-[#18181b]")
+                ? isDark
+                  ? "text-[#1c0f0e]"
+                  : "text-white"
+                : isDark
+                  ? "text-[#f5f5f5]"
+                  : "text-[#18181b]",
             )}
             style={{ filter: `url(#${filterId})` }}
           >
@@ -214,8 +220,12 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd }: CloseAnimation
               "text-[11px] font-semibold tracking-[0.25em] uppercase transition-opacity duration-300",
               animating && "cq-caption-hide",
               isBlock
-                ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-                : (isDark ? "text-[#8f8f95]" : "text-[#71717a]")
+                ? isDark
+                  ? "text-[#1c0f0e]/85"
+                  : "text-white/75"
+                : isDark
+                  ? "text-[#8f8f95]"
+                  : "text-[#71717a]",
             )}
           >
             READY
@@ -228,8 +238,12 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd }: CloseAnimation
           phase={phase}
           className={
             isBlock
-              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
+              ? isDark
+                ? "text-[#1c0f0e]/85"
+                : "text-white/75"
+              : isDark
+                ? "text-[#a1a1aa]"
+                : "text-[#71717a]"
           }
         />
       </div>
@@ -277,9 +291,13 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd }: CloseAnimationP
             "relative w-full flex flex-col items-center justify-center gap-[22px] transform-origin-center",
             "rounded-[16px] border py-[32px] px-[24px]",
             isBlock
-              ? (isDark ? "border-[#1c0f0e]/10 bg-black/10" : "border-white/20 bg-white/10")
-              : (isDark ? "border-white/10 bg-[#131316] shadow-2xl shadow-black/50" : "border-black/5 bg-white shadow-xl shadow-black/5"),
-            animating && "cq-card-collapse"
+              ? isDark
+                ? "border-[#1c0f0e]/10 bg-black/10"
+                : "border-white/20 bg-white/10"
+              : isDark
+                ? "border-white/10 bg-[#131316] shadow-2xl shadow-black/50"
+                : "border-black/5 bg-white shadow-xl shadow-black/5",
+            animating && "cq-card-collapse",
           )}
         >
           {/* Tile grid */}
@@ -287,8 +305,12 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd }: CloseAnimationP
             className={cn(
               "relative z-10 grid grid-cols-4 gap-[6px]",
               isBlock
-                ? (isDark ? "text-[#1c0f0e]" : "text-white")
-                : (isDark ? "text-[#f5f5f5]" : "text-[#18181b]")
+                ? isDark
+                  ? "text-[#1c0f0e]"
+                  : "text-white"
+                : isDark
+                  ? "text-[#f5f5f5]"
+                  : "text-[#18181b]",
             )}
           >
             {tiles.map((ch, i) => (
@@ -301,7 +323,7 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd }: CloseAnimationP
                     ? "border-white/24 bg-white/12"
                     : isDark
                       ? "border-white/6 bg-white/4"
-                      : "border-black/8 bg-black/3"
+                      : "border-black/8 bg-black/3",
                 )}
                 style={animating ? { transitionDelay: `${i * 70}ms` } : undefined}
               >
@@ -316,8 +338,12 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd }: CloseAnimationP
             className={cn(
               "text-[11px] font-semibold tracking-[0.25em] uppercase",
               isBlock
-                ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-                : (isDark ? "text-[#8f8f95]" : "text-[#71717a]")
+                ? isDark
+                  ? "text-[#1c0f0e]/85"
+                  : "text-white/75"
+                : isDark
+                  ? "text-[#8f8f95]"
+                  : "text-[#71717a]",
             )}
           >
             READY
@@ -330,8 +356,12 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd }: CloseAnimationP
           phase={phase}
           className={
             isBlock
-              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
+              ? isDark
+                ? "text-[#1c0f0e]/85"
+                : "text-white/75"
+              : isDark
+                ? "text-[#a1a1aa]"
+                : "text-[#71717a]"
           }
         />
       </div>
@@ -367,7 +397,7 @@ export function CloseScreen({
     <div
       className={cn(
         "flex h-full w-full flex-col items-center justify-center",
-        isBlock ? "bg-primary" : (isDark ? "bg-[#09090b]" : "bg-white")
+        isBlock ? "bg-primary" : isDark ? "bg-[#09090b]" : "bg-white",
       )}
     >
       {loader === "solari" ? (

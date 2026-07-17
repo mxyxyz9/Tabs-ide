@@ -274,7 +274,8 @@ export function createWsNativeApi(): NativeApi {
       updateProvider: (input) => transport.request(WS_METHODS.serverUpdateProvider, input),
       getTraceDiagnostics: () => transport.request(WS_METHODS.serverGetTraceDiagnostics),
       getProcessDiagnostics: () => transport.request(WS_METHODS.serverGetProcessDiagnostics),
-      getProcessResourceHistory: (input) => transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
+      getProcessResourceHistory: (input) =>
+        transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
       signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
     },
     orchestration: {
@@ -303,9 +304,15 @@ export function createWsNativeApi(): NativeApi {
       createUrl: async () => ({ url: "" }),
     } as any,
     sourceControl: {
-      lookupRepository: async () => { throw new Error("Unsupported in web"); },
-      cloneRepository: async () => { throw new Error("Unsupported in web"); },
-      publishRepository: async () => { throw new Error("Unsupported in web"); },
+      lookupRepository: async () => {
+        throw new Error("Unsupported in web");
+      },
+      cloneRepository: async () => {
+        throw new Error("Unsupported in web");
+      },
+      publishRepository: async () => {
+        throw new Error("Unsupported in web");
+      },
     } as any,
     vcs: {
       listRefs: async () => ({ refs: [], activeRef: null }),
@@ -319,7 +326,9 @@ export function createWsNativeApi(): NativeApi {
       onStatus: () => () => {},
     } as any,
     review: {
-      getDiffPreview: async () => { throw new Error("Unsupported in web"); },
+      getDiffPreview: async () => {
+        throw new Error("Unsupported in web");
+      },
     } as any,
     preview: {} as any,
   };

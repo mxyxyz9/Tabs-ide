@@ -1483,7 +1483,7 @@ describe("WebSocket Server", () => {
       type: "output",
       threadId: "thread-1",
       terminalId: DEFAULT_TERMINAL_ID,
-          data: "manual test output\n",
+      data: "manual test output\n",
     };
     terminalManager.emitEvent(manualEvent);
 

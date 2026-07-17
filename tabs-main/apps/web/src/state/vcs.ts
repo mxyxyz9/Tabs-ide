@@ -25,7 +25,10 @@ export function refreshVcs(cwd: string | null): Promise<void> {
   if (!cwd) return Promise.resolve();
   const active = refreshes.get(cwd);
   if (active) return active;
-  const refresh = Promise.all([ensureNativeApi().git.status({ cwd }), ensureNativeApi().git.listBranches({ cwd })])
+  const refresh = Promise.all([
+    ensureNativeApi().git.status({ cwd }),
+    ensureNativeApi().git.listBranches({ cwd }),
+  ])
     .then(([status, branches]) => {
       appAtomRegistry.update(vcsSnapshotAtom, (snapshot) => ({
         statusByCwd: { ...snapshot.statusByCwd, [cwd]: status },

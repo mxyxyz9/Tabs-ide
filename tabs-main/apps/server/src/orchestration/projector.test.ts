@@ -20,10 +20,10 @@ function makeEvent(input: {
     aggregateKind: input.aggregateKind,
     aggregateId:
       input.aggregateKind === "project"
-        ? input.aggregateId as ProjectId
-        : input.aggregateId as ThreadId,
+        ? (input.aggregateId as ProjectId)
+        : (input.aggregateId as ThreadId),
     occurredAt: input.occurredAt,
-    commandId: input.commandId === null ? null : input.commandId as CommandId,
+    commandId: input.commandId === null ? null : (input.commandId as CommandId),
     causationEventId: null,
     correlationId: null,
     metadata: {},

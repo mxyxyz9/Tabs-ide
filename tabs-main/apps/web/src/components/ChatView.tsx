@@ -22,9 +22,21 @@ import {
   type ServerProviderModel,
   type ProviderOptionSelection,
 } from "@tabs/contracts";
-import { applyClaudePromptEffortPrefix, isClaudeUltrathinkPrompt, normalizeModelSlug } from "@tabs/shared/model";
+import {
+  applyClaudePromptEffortPrefix,
+  isClaudeUltrathinkPrompt,
+  normalizeModelSlug,
+} from "@tabs/shared/model";
 import { useAtomValue } from "@effect/atom-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -170,9 +182,7 @@ import { ComposerPendingApprovalPanel } from "./chat/ComposerPendingApprovalPane
 import { ComposerPendingUserInputPanel } from "./chat/ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./chat/ComposerPlanFollowUpBanner";
 import { TaskListPanel } from "./chat/TaskListPanel";
-import {
-  getComposerProviderState,
-} from "./chat/composerProviderRegistry";
+import { getComposerProviderState } from "./chat/composerProviderRegistry";
 import { TraitsMenuContent, TraitsPicker } from "./chat/TraitsPicker";
 
 function renderProviderTraitsMenuContent(input: {
@@ -713,10 +723,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   // If the user manually removes the Ultrathink prefix from the prompt, revert the model selection
   // to avoid being stuck in an effort mode that doesn't match the prompt content.
   useEffect(() => {
-    if (
-      selectedPromptEffort === "ultrathink" &&
-      !isClaudeUltrathinkPrompt(prompt)
-    ) {
+    if (selectedPromptEffort === "ultrathink" && !isClaudeUltrathinkPrompt(prompt)) {
       const nextOptions = (composerModelOptions?.[selectedProvider] ?? []).filter(
         (o) => o.value !== "ultrathink",
       );
@@ -2019,8 +2026,8 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         return;
       }
       const getPersistedAttachmentsForThread = () =>
-        appAtomRegistry.get(composerDraftsAtom).draftsByThreadId[threadId]
-          ?.persistedAttachments ?? [];
+        appAtomRegistry.get(composerDraftsAtom).draftsByThreadId[threadId]?.persistedAttachments ??
+        [];
       try {
         const currentPersistedAttachments = getPersistedAttachmentsForThread();
         const existingPersistedById = new Map(
@@ -3180,7 +3187,10 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         resolvedModel,
         options,
       );
-      fetch('http://localhost:9999', { method: 'POST', body: `[SLIDER-DEBUG-3] onProviderModelSelect provider=${provider} model=${model} hasOptions=${options !== undefined} options=${JSON.stringify(options)} selection=${JSON.stringify(nextModelSelection)} stack=${new Error().stack?.split('\n').slice(1,4).join(' <- ')}` }).catch(()=>{});
+      fetch("http://localhost:9999", {
+        method: "POST",
+        body: `[SLIDER-DEBUG-3] onProviderModelSelect provider=${provider} model=${model} hasOptions=${options !== undefined} options=${JSON.stringify(options)} selection=${JSON.stringify(nextModelSelection)} stack=${new Error().stack?.split("\n").slice(1, 4).join(" <- ")}`,
+      }).catch(() => {});
       setComposerDraftModelSelection(activeThread.id, nextModelSelection);
       setStickyComposerModelSelection(nextModelSelection);
       scheduleComposerFocus();
@@ -3213,10 +3223,17 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   );
   const onFusedModelOptionsChange = useCallback(
     (nextOptions: ReadonlyArray<import("@tabs/contracts").ProviderOptionSelection> | undefined) => {
-      fetch('http://localhost:9999', { method: 'POST', body: `[SLIDER-DEBUG-3] onFusedModelOptionsChange options=${JSON.stringify(nextOptions)} threadId=${threadId} provider=${selectedProvider} model=${selectedModel} stack=${new Error().stack?.split('\n').slice(1,4).join(' <- ')}` }).catch(()=>{});
-      
+      fetch("http://localhost:9999", {
+        method: "POST",
+        body: `[SLIDER-DEBUG-3] onFusedModelOptionsChange options=${JSON.stringify(nextOptions)} threadId=${threadId} provider=${selectedProvider} model=${selectedModel} stack=${new Error().stack?.split("\n").slice(1, 4).join(" <- ")}`,
+      }).catch(() => {});
+
       const newMode = nextOptions?.find((o) => o.id === "mode")?.value;
-      if (typeof newMode === "string" && (newMode === "plan" || newMode === "default") && newMode !== interactionMode) {
+      if (
+        typeof newMode === "string" &&
+        (newMode === "plan" || newMode === "default") &&
+        newMode !== interactionMode
+      ) {
         handleInteractionModeChange(newMode);
       }
 
@@ -3225,7 +3242,14 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         model: selectedModel,
       });
     },
-    [threadId, selectedProvider, selectedModel, interactionMode, handleInteractionModeChange, composerDraftActions],
+    [
+      threadId,
+      selectedProvider,
+      selectedModel,
+      interactionMode,
+      handleInteractionModeChange,
+      composerDraftActions,
+    ],
   );
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({
     provider: selectedProvider,
@@ -3817,7 +3841,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                           "shrink-0 whitespace-nowrap px-2 sm:px-3",
                           interactionMode === "plan"
                             ? "text-blue-400 hover:text-blue-300"
-                            : "text-muted-foreground/70 hover:text-foreground/80"
+                            : "text-muted-foreground/70 hover:text-foreground/80",
                         )}
                         size="sm"
                         type="button"
@@ -3846,12 +3870,16 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                               : runtimeMode === "auto-accept-edits"
                                 ? "text-[#a683c2]/80 hover:text-[#a683c2]"
                                 : "text-muted-foreground/70 hover:text-foreground/80"
-                            : "text-muted-foreground/70 hover:text-foreground/80"
+                            : "text-muted-foreground/70 hover:text-foreground/80",
                         )}
                         size="sm"
                         type="button"
                         onClick={() => {
-                          const modes = ["approval-required", "auto-accept-edits", "full-access"] as const;
+                          const modes = [
+                            "approval-required",
+                            "auto-accept-edits",
+                            "full-access",
+                          ] as const;
                           const currentMode = runtimeMode || "approval-required";
                           const nextIndex = (modes.indexOf(currentMode) + 1) % modes.length;
                           const nextMode = modes[nextIndex];
@@ -4131,9 +4159,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         {/* Chat column */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden")}>
-            <div
-              className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-            >
+            <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <div
                 ref={setMessagesScrollContainerRef}
                 className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3 sm:px-5 sm:py-4"
@@ -4205,9 +4231,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
             </div>
 
             <div className="relative w-full">
-              <div className="w-full">
-                {composerSection}
-              </div>
+              <div className="w-full">{composerSection}</div>
             </div>
 
             {branchToolbar}

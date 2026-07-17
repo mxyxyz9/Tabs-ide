@@ -333,8 +333,8 @@ function writeKeybindingsJsonFile(pathname: string, rules: Array<Record<string, 
       current = [];
     }
   }
-  const targetKeys = new Set(rules.map(r => r.key));
-  const filtered = current.filter(item => !targetKeys.has(item.key));
+  const targetKeys = new Set(rules.map((r) => r.key));
+  const filtered = current.filter((item) => !targetKeys.has(item.key));
   FS.writeFileSync(pathname, `${JSON.stringify([...filtered, ...rules], null, 2)}\n`, "utf8");
 }
 
@@ -2204,7 +2204,9 @@ export class CodeHostManager {
           command: "-workbench.action.newWindow",
         },
       ]);
-      console.log(`[code-oss] embed keybindings written (desktop-renderer) → ${desktopKeybindingsPath}`);
+      console.log(
+        `[code-oss] embed keybindings written (desktop-renderer) → ${desktopKeybindingsPath}`,
+      );
     } catch {
       // Non-fatal.
     }

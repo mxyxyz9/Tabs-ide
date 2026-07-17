@@ -320,7 +320,7 @@ describe("OrchestrationEngine", () => {
 
     const flakyStore: OrchestrationEventStoreShape = {
       append(event) {
-        if (shouldFailFirstAppend && event.commandId === "cmd-flaky-1" as CommandId) {
+        if (shouldFailFirstAppend && event.commandId === ("cmd-flaky-1" as CommandId)) {
           shouldFailFirstAppend = false;
           return Effect.fail(
             new PersistenceSqlError({
@@ -429,7 +429,7 @@ describe("OrchestrationEngine", () => {
       projectEvent: (event) => {
         if (
           shouldFailRequestedProjection &&
-          event.commandId === "cmd-turn-start-atomic" as CommandId &&
+          event.commandId === ("cmd-turn-start-atomic" as CommandId) &&
           event.type === "thread.turn-start-requested"
         ) {
           shouldFailRequestedProjection = false;
@@ -571,7 +571,7 @@ describe("OrchestrationEngine", () => {
       projectEvent: (event) => {
         if (
           shouldFailProjection &&
-          event.commandId === "cmd-thread-meta-sync-fail" as CommandId
+          event.commandId === ("cmd-thread-meta-sync-fail" as CommandId)
         ) {
           shouldFailProjection = false;
           return Effect.fail(

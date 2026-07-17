@@ -1,6 +1,6 @@
 {
   "name": "@tabs/web",
-  "version": "1.2.59",
+  "version": "1.2.60",
   "private": true,
   "type": "module",
   "scripts": {
@@ -23,8 +23,8 @@
     "@formkit/auto-animate": "^0.9.0",
     "@lexical/react": "^0.41.0",
     "@pierre/diffs": "^1.2.7",
-    "@tabs/contracts": "workspace:*",
     "@tabs/client-runtime": "workspace:*",
+    "@tabs/contracts": "workspace:*",
     "@tabs/shared": "workspace:*",
     "@tanstack/react-pacer": "^0.19.4",
     "@tanstack/react-query": "^5.90.0",
@@ -57,6 +57,7 @@
     "babel-plugin-react-compiler": "^19.0.0-beta-e552027-20250112",
     "msw": "^2.14.6",
     "playwright": "^1.60.0",
+    "puppeteer": "^25.3.0",
     "tailwindcss": "^4.3.0",
     "typescript": "catalog:",
     "vite": "^8.0.16",

@@ -1,4 +1,5 @@
 import { memo, useState } from "react";
+import { CheckIcon, LoaderIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { TaskNode } from "../../session-logic";
 
@@ -105,14 +106,18 @@ export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPane
                     className={cn(
                       "mt-[1px] shrink-0 font-mono text-[11px] tabular-nums",
                       isDone
-                        ? "text-muted-foreground/35"
+                        ? "text-muted-foreground/50"
                         : isRunning
                           ? "text-blue-400/70"
-                          : "text-muted-foreground/50",
+                          : "text-muted-foreground/40",
                     )}
                   >
                     {isDone ? (
-                      // Circle outline for completed
+                      <CheckIcon className="mt-0.5 size-3.5" />
+                    ) : isRunning ? (
+                      <LoaderIcon className="mt-0.5 size-3.5 animate-spin" />
+                    ) : (
+                      // Circle outline for pending
                       <svg viewBox="0 0 14 14" fill="none" className="mt-0.5 size-3.5">
                         <circle
                           cx="7"
@@ -123,11 +128,6 @@ export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPane
                           strokeDasharray="2 2"
                         />
                       </svg>
-                    ) : (
-                      // Solid circle for in-progress / pending
-                      <svg viewBox="0 0 14 14" fill="none" className="mt-0.5 size-3.5">
-                        <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" />
-                      </svg>
                     )}
                   </span>
 
@@ -136,7 +136,7 @@ export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPane
                     className={cn(
                       "text-[12px] leading-[1.5]",
                       isDone
-                        ? "text-muted-foreground/40 line-through decoration-muted-foreground/25"
+                        ? "text-muted-foreground/50"
                         : "text-foreground/80",
                     )}
                   >

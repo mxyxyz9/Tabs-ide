@@ -3,6 +3,7 @@ import type { ThreadId } from "@tabs/contracts";
 import { Atom } from "@tabs/client-runtime/state";
 
 import { appAtomRegistry } from "./atomRegistry";
+import { DEFAULT_THREAD_TERMINAL_ID } from "../types";
 import {
   closeThreadTerminal,
   createDefaultThreadTerminalState,
@@ -25,9 +26,9 @@ export interface TerminalState {
 function load(): TerminalState {
   if (typeof localStorage === "undefined") return { terminalStateByThreadId: {} };
   try {
-    const persisted = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as
-      | { terminalStateByThreadId?: Record<ThreadId, ThreadTerminalState> }
-      | null;
+    const persisted = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null") as {
+      terminalStateByThreadId?: Record<ThreadId, ThreadTerminalState>;
+    } | null;
     return {
       terminalStateByThreadId: Object.fromEntries(
         Object.entries(persisted?.terminalStateByThreadId ?? {}).map(([id, state]) => [
@@ -61,7 +62,10 @@ function persist(state: TerminalState) {
   );
 }
 
-function updateThread(threadId: ThreadId, updater: (state: ThreadTerminalState) => ThreadTerminalState) {
+function updateThread(
+  threadId: ThreadId,
+  updater: (state: ThreadTerminalState) => ThreadTerminalState,
+) {
   appAtomRegistry.update(terminalStateAtom, (state) => {
     const terminalStateByThreadId = updateTerminalStateByThreadId(
       state.terminalStateByThreadId,
@@ -107,9 +111,15 @@ export const terminalActions = {
   removeOrphans(activeThreadIds: Set<ThreadId>) {
     appAtomRegistry.update(terminalStateAtom, (state) => {
       const terminalStateByThreadId = Object.fromEntries(
-        Object.entries(state.terminalStateByThreadId).filter(([id]) => activeThreadIds.has(id as ThreadId)),
+        Object.entries(state.terminalStateByThreadId).filter(([id]) =>
+          activeThreadIds.has(id as ThreadId),
+        ),
       ) as Record<ThreadId, ThreadTerminalState>;
-      if (Object.keys(terminalStateByThreadId).length === Object.keys(state.terminalStateByThreadId).length) return state;
+      if (
+        Object.keys(terminalStateByThreadId).length ===
+        Object.keys(state.terminalStateByThreadId).length
+      )
+        return state;
       const next = { terminalStateByThreadId };
       persist(next);
       return next;
@@ -118,10 +128,23 @@ export const terminalActions = {
   reconcileRunning(activeTerminalIds: Set<string>) {
     appAtomRegistry.update(terminalStateAtom, (state) => ({
       terminalStateByThreadId: Object.fromEntries(
-        Object.entries(state.terminalStateByThreadId).map(([id, terminalState]) => [
-          id,
-          { ...terminalState, runningTerminalIds: terminalState.runningTerminalIds.filter((key) => activeTerminalIds.has(key)) },
-        ]),
+        Object.entries(state.terminalStateByThreadId).map(([id, terminalState]) => {
+          let nextState = terminalState;
+          for (const terminalId of terminalState.terminalIds) {
+            if (!activeTerminalIds.has(terminalId) && terminalId !== DEFAULT_THREAD_TERMINAL_ID) {
+              nextState = closeThreadTerminal(nextState, terminalId);
+            }
+          }
+          return [
+            id,
+            {
+              ...nextState,
+              runningTerminalIds: nextState.runningTerminalIds.filter((key) =>
+                activeTerminalIds.has(key),
+              ),
+            },
+          ];
+        }),
       ) as Record<ThreadId, ThreadTerminalState>,
     }));
   },

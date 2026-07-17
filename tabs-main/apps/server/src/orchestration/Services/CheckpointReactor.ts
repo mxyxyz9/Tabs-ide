@@ -7,7 +7,7 @@ import * as Context from "effect/Context";
  *
  * @module CheckpointReactor
  */
-import {  } from "effect";
+import {} from "effect";
 import type { Effect, Scope } from "effect";
 
 /**
@@ -35,7 +35,6 @@ export interface CheckpointReactorShape {
 /**
  * CheckpointReactor - Service tag for checkpoint reactor workers.
  */
-export class CheckpointReactor extends Context.Service<
-  CheckpointReactor,
-  CheckpointReactorShape
->()("tabs/orchestration/Services/CheckpointReactor") {}
+export class CheckpointReactor extends Context.Service<CheckpointReactor, CheckpointReactorShape>()(
+  "tabs/orchestration/Services/CheckpointReactor",
+) {}

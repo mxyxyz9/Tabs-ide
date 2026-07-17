@@ -58,7 +58,10 @@ export function applyServerConfigUpdate(payload: ServerConfigUpdatedPayload) {
   );
 }
 
-export function patchServerSettings(patch: ServerSettingsPatch, merge: (current: ServerSettings) => ServerSettings) {
+export function patchServerSettings(
+  patch: ServerSettingsPatch,
+  merge: (current: ServerSettings) => ServerSettings,
+) {
   appAtomRegistry.update(serverConfigAtom, (config) =>
     config === null ? config : { ...config, settings: merge(config.settings) },
   );

@@ -428,7 +428,7 @@ export function makeOpenCodeAdapter(
   options?: OpenCodeAdapterLiveOptions,
 ) {
   return Effect.gen(function* () {
-    const boundInstanceId = options?.instanceId ?? "opencode" as ProviderInstanceId;
+    const boundInstanceId = options?.instanceId ?? ("opencode" as ProviderInstanceId);
     const serverConfig = yield* ServerConfig;
     const openCodeRuntime = yield* OpenCodeRuntime;
     const nativeEventLogger =

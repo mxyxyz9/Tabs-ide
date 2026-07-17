@@ -255,7 +255,8 @@ function UnknownWhenVariableWarning({
         }
       />
       <TooltipPopup side="top" className="max-w-72 whitespace-normal leading-relaxed">
-        This condition is not explicitly recognized. It can still be saved, but it may not match unless the runtime provides it.
+        This condition is not explicitly recognized. It can still be saved, but it may not match
+        unless the runtime provides it.
       </TooltipPopup>
     </Tooltip>
   );
@@ -314,10 +315,7 @@ function WhenVariableSelect({
           <UnknownWhenVariableWarning identifiers={unknownIdentifiers} focusable={false} />
         ) : null}
       </SelectTrigger>
-      <SelectContent
-        alignItemWithTrigger={false}
-        className="max-h-72 w-fit min-w-44"
-      >
+      <SelectContent alignItemWithTrigger={false} className="max-h-72 w-fit min-w-44">
         {options.map((option) => (
           <SelectItem
             key={option}
@@ -506,10 +504,7 @@ function WhenExpressionNodeEditor({
           <SelectTrigger size="xs" className="h-7 min-h-7 w-24 rounded-md text-xs sm:h-7">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent
-            alignItemWithTrigger={false}
-            className="w-fit min-w-24"
-          >
+          <SelectContent alignItemWithTrigger={false} className="w-fit min-w-24">
             <SelectItem value="and" className="min-h-7 py-1 font-mono text-[12px]">
               and
             </SelectItem>
@@ -992,10 +987,7 @@ function NewKeybindingTableRow({
           >
             <SelectValue placeholder="Command" />
           </SelectTrigger>
-          <SelectContent
-            alignItemWithTrigger={false}
-            className="max-h-72 w-fit min-w-56"
-          >
+          <SelectContent alignItemWithTrigger={false} className="max-h-72 w-fit min-w-56">
             {commandOptions.map((command) => (
               <SelectItem key={command} value={command} className="min-h-7 w-full py-1 text-[12px]">
                 <span className="truncate">{commandLabel(command)}</span>
@@ -1119,9 +1111,7 @@ export function KeybindingsSettings({
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
     const api = ensureNativeApi();
-    const editor = resolveAndPersistPreferredEditor(
-      (availableEditors ?? []) as ReadonlyArray<any>
-    );
+    const editor = resolveAndPersistPreferredEditor((availableEditors ?? []) as ReadonlyArray<any>);
     if (!editor) {
       toastManager.add({
         title: "Unable to open keybindings file",
@@ -1256,16 +1246,13 @@ export function KeybindingsSettings({
         <div className="flex items-start gap-2 border-b border-warning/20 bg-warning/5 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground sm:px-4">
           <InfoIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
           <p>
-            Some shortcuts may be claimed by the browser before the app sees them. Use the desktop version for better support.
+            Some shortcuts may be claimed by the browser before the app sees them. Use the desktop
+            version for better support.
           </p>
         </div>
       ) : null}
 
-      <ScrollArea
-        scrollFade
-        hideScrollbars
-        className="w-full max-w-full rounded-none"
-      >
+      <ScrollArea scrollFade hideScrollbars className="w-full max-w-full rounded-none">
         <div className="grid min-w-[680px] grid-cols-[minmax(190px,1.1fr)_minmax(220px,0.85fr)_minmax(210px,1fr)_60px] border-b border-border/70 bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
           <div>Command</div>
           <div>Keybinding</div>

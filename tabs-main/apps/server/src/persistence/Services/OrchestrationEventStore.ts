@@ -11,7 +11,7 @@ import * as Context from "effect/Context";
  * @module OrchestrationEventStore
  */
 import { OrchestrationEvent } from "@tabs/contracts";
-import {  } from "effect";
+import {} from "effect";
 import type { Effect, Stream } from "effect";
 
 import type { OrchestrationEventStoreError } from "../Errors.ts";

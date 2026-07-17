@@ -122,9 +122,7 @@ describe("commandInvariants", () => {
     expect(findThreadById(readModel, "thread-1" as ThreadId)?.projectId).toBe("project-a");
     expect(findThreadById(readModel, "missing" as ThreadId)).toBeUndefined();
     expect(
-      listThreadsByProjectId(readModel, "project-b" as ProjectId).map(
-        (thread) => thread.id,
-      ),
+      listThreadsByProjectId(readModel, "project-b" as ProjectId).map((thread) => thread.id),
     ).toEqual(["thread-2" as ThreadId]);
   });
 

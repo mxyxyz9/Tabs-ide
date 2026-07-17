@@ -602,14 +602,18 @@ function SettingsRouteView() {
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string>>
   >({});
-  
+
   const [previewStyle, setPreviewStyle] = useState(settings.splashLoaderStyle);
   const [previewPalette, setPreviewPalette] = useState(settings.splashLoaderPalette);
-  const [previewTheme, setPreviewTheme] = useState<"system" | "dark" | "light">(settings.splashLoaderTheme);
+  const [previewTheme, setPreviewTheme] = useState<"system" | "dark" | "light">(
+    settings.splashLoaderTheme,
+  );
 
   const [closePreviewStyle, setClosePreviewStyle] = useState(settings.closeLoaderStyle);
   const [closePreviewPalette, setClosePreviewPalette] = useState(settings.closeLoaderPalette);
-  const [closePreviewTheme, setClosePreviewTheme] = useState<"system" | "dark" | "light">(settings.closeLoaderTheme);
+  const [closePreviewTheme, setClosePreviewTheme] = useState<"system" | "dark" | "light">(
+    settings.closeLoaderTheme,
+  );
   const [closeReplayKey, setCloseReplayKey] = useState(0);
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
@@ -627,13 +631,14 @@ function SettingsRouteView() {
   const activeTheme = animationTab === "startup" ? previewTheme : closePreviewTheme;
   const setActiveTheme = animationTab === "startup" ? setPreviewTheme : setClosePreviewTheme;
 
-  const activeEffectiveTheme = animationTab === "startup" ? effectivePreviewTheme : effectiveClosePreviewTheme;
+  const activeEffectiveTheme =
+    animationTab === "startup" ? effectivePreviewTheme : effectiveClosePreviewTheme;
 
   useEffect(() => {
     setPreviewStyle(settings.splashLoaderStyle);
     setPreviewPalette(settings.splashLoaderPalette);
     setPreviewTheme(settings.splashLoaderTheme);
-    
+
     setClosePreviewStyle(settings.closeLoaderStyle);
     setClosePreviewPalette(settings.closeLoaderPalette);
     setClosePreviewTheme(settings.closeLoaderTheme);
@@ -643,7 +648,7 @@ function SettingsRouteView() {
     settings.splashLoaderTheme,
     settings.closeLoaderStyle,
     settings.closeLoaderPalette,
-    settings.closeLoaderTheme
+    settings.closeLoaderTheme,
   ]);
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string | null>>
@@ -737,9 +742,13 @@ function SettingsRouteView() {
     const sendOnce = () => {
       if (providerActionCommandSentRef.current === threadId) return;
       providerActionCommandSentRef.current = threadId;
-      void api.terminal
-        .write({ threadId, terminalId: DEFAULT_THREAD_TERMINAL_ID, data: `${command}\r` })
-        .catch(() => undefined);
+      setTimeout(() => {
+        const api = readNativeApi();
+        if (!api) return;
+        void api.terminal
+          .write({ threadId, terminalId: DEFAULT_THREAD_TERMINAL_ID, data: `${command}\r` })
+          .catch(() => undefined);
+      }, 750);
     };
     const unsubscribe = api.terminal.onEvent((event) => {
       if (event.threadId !== threadId || event.terminalId !== DEFAULT_THREAD_TERMINAL_ID) return;
@@ -1194,7 +1203,6 @@ function SettingsRouteView() {
                       }
                     />
 
-
                     <SettingsRow
                       title="Time format"
                       description="System default follows your browser or OS clock preference."
@@ -1594,13 +1602,23 @@ function SettingsRouteView() {
                           <div className="flex bg-muted p-1 rounded-lg gap-1">
                             <button
                               onClick={() => setAnimationTab("startup")}
-                              className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap", animationTab === "startup" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50")}
+                              className={cn(
+                                "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                animationTab === "startup"
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                              )}
                             >
                               Startup
                             </button>
                             <button
                               onClick={() => setAnimationTab("close")}
-                              className={cn("px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap", animationTab === "close" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-background/50")}
+                              className={cn(
+                                "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                animationTab === "close"
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                              )}
                             >
                               Close
                             </button>
@@ -1610,7 +1628,12 @@ function SettingsRouteView() {
                         {/* Live Preview Container */}
                         <div className="px-4 sm:px-5">
                           <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
-                            <div className={cn("aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300", activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white")}>
+                            <div
+                              className={cn(
+                                "aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300",
+                                activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white",
+                              )}
+                            >
                               {/* Wrap in fixed 1280x720 scaled to 50% */}
                               <div
                                 className="absolute"
@@ -1640,44 +1663,55 @@ function SettingsRouteView() {
                             </div>
                             <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
                               <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground mr-2">Preview Theme:</span>
+                                <span className="text-xs text-muted-foreground mr-2">
+                                  Preview Theme:
+                                </span>
                                 <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
                                   {["system", "dark", "light"].map((t) => (
                                     <button
                                       key={t}
                                       onClick={() => setActiveTheme(t as any)}
-                                      className={cn("px-3 py-1 text-xs font-medium rounded transition-colors capitalize", activeTheme === t ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                                      className={cn(
+                                        "px-3 py-1 text-xs font-medium rounded transition-colors capitalize",
+                                        activeTheme === t
+                                          ? "bg-background text-foreground shadow-sm"
+                                          : "text-muted-foreground hover:text-foreground",
+                                      )}
                                     >
                                       {t === "system" ? "Auto" : t}
                                     </button>
                                   ))}
                                 </div>
                               </div>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 className="h-7 text-xs"
                                 onClick={() => {
-                                  updateSettings({ 
+                                  updateSettings({
                                     splashLoaderStyle: previewStyle,
                                     splashLoaderPalette: previewPalette,
                                     splashLoaderTheme: previewTheme,
                                     closeLoaderStyle: closePreviewStyle,
                                     closeLoaderPalette: closePreviewPalette,
-                                    closeLoaderTheme: closePreviewTheme
+                                    closeLoaderTheme: closePreviewTheme,
                                   });
                                   if (animationTab === "startup") {
                                     setTimeout(() => window.location.reload(), 150);
                                   } else {
-                                    setCloseReplayKey(k => k + 1);
+                                    setCloseReplayKey((k) => k + 1);
                                     setFullscreenClosePreview(true);
                                   }
                                 }}
                               >
                                 {animationTab === "startup" ? (
-                                  <><RefreshCwIcon className="mr-1.5 size-3" /> Reload App</>
+                                  <>
+                                    <RefreshCwIcon className="mr-1.5 size-3" /> Reload App
+                                  </>
                                 ) : (
-                                  <><MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen</>
+                                  <>
+                                    <MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen
+                                  </>
                                 )}
                               </Button>
                             </div>
@@ -1691,7 +1725,7 @@ function SettingsRouteView() {
                             <div className="flex bg-muted p-1 rounded-lg gap-1">
                               {[
                                 { value: "glass", label: "Molten Glass" },
-                                { value: "solari", label: "Solari Grid" }
+                                { value: "solari", label: "Solari Grid" },
                               ].map((option) => (
                                 <button
                                   key={option.value}
@@ -1701,7 +1735,7 @@ function SettingsRouteView() {
                                     "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
                                     activeStyle === option.value
                                       ? "bg-background text-foreground shadow-sm"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50",
                                   )}
                                 >
                                   {option.label}
@@ -1718,7 +1752,7 @@ function SettingsRouteView() {
                             <div className="flex bg-muted p-1 rounded-lg gap-1">
                               {[
                                 { value: "block", label: "Solid Block" },
-                                { value: "mono", label: "Monochrome" }
+                                { value: "mono", label: "Monochrome" },
                               ].map((option) => (
                                 <button
                                   key={option.value}
@@ -1728,7 +1762,7 @@ function SettingsRouteView() {
                                     "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
                                     activePalette === option.value
                                       ? "bg-background text-foreground shadow-sm"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50",
                                   )}
                                 >
                                   {option.label}
@@ -1739,22 +1773,24 @@ function SettingsRouteView() {
                         />
                       </div>
 
-                      {(previewStyle !== settings.splashLoaderStyle || 
-                        previewPalette !== settings.splashLoaderPalette || 
+                      {(previewStyle !== settings.splashLoaderStyle ||
+                        previewPalette !== settings.splashLoaderPalette ||
                         previewTheme !== settings.splashLoaderTheme ||
-                        closePreviewStyle !== settings.closeLoaderStyle || 
-                        closePreviewPalette !== settings.closeLoaderPalette || 
+                        closePreviewStyle !== settings.closeLoaderStyle ||
+                        closePreviewPalette !== settings.closeLoaderPalette ||
                         closePreviewTheme !== settings.closeLoaderTheme) && (
                         <div className="flex justify-end p-4 sm:p-5 border-t border-border">
-                          <Button 
-                            onClick={() => updateSettings({ 
-                              splashLoaderStyle: previewStyle,
-                              splashLoaderPalette: previewPalette,
-                              splashLoaderTheme: previewTheme,
-                              closeLoaderStyle: closePreviewStyle,
-                              closeLoaderPalette: closePreviewPalette,
-                              closeLoaderTheme: closePreviewTheme
-                            })}
+                          <Button
+                            onClick={() =>
+                              updateSettings({
+                                splashLoaderStyle: previewStyle,
+                                splashLoaderPalette: previewPalette,
+                                splashLoaderTheme: previewTheme,
+                                closeLoaderStyle: closePreviewStyle,
+                                closeLoaderPalette: closePreviewPalette,
+                                closeLoaderTheme: closePreviewTheme,
+                              })
+                            }
                             className="gap-2"
                           >
                             <SaveIcon className="size-4" />
@@ -1765,7 +1801,9 @@ function SettingsRouteView() {
 
                       {/* INTERFACE GROUP */}
                       <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
-                        <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Interface</h2>
+                        <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                          Interface
+                        </h2>
                         <SettingsRow
                           title="Slider animations"
                           description="Smoothly animate the model picker's reasoning-effort slider."
@@ -1800,12 +1838,14 @@ function SettingsRouteView() {
                           title="Animated slider fill"
                           description="Smoothly animate the fill color of sliders when value changes."
                           resetAction={
-                            settings.animatedTrackFillEnabled !== DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
+                            settings.animatedTrackFillEnabled !==
+                            DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
                               <SettingResetButton
                                 label="animated slider fill"
                                 onClick={() =>
                                   updateSettings({
-                                    animatedTrackFillEnabled: DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                    animatedTrackFillEnabled:
+                                      DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
                                   })
                                 }
                               />
@@ -1822,10 +1862,6 @@ function SettingsRouteView() {
                           }
                         />
                       </div>
-
-
-
-
                     </div>
                   </SettingsSection>
                 ) : null}

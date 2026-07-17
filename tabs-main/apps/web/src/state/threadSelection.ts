@@ -49,7 +49,11 @@ export const threadSelectionActions = {
         selectedThreadIds.add(threadId);
         return { selectedThreadIds, anchorThreadId: threadId };
       }
-      for (let index = Math.min(anchorIndex, targetIndex); index <= Math.max(anchorIndex, targetIndex); index += 1) {
+      for (
+        let index = Math.min(anchorIndex, targetIndex);
+        index <= Math.max(anchorIndex, targetIndex);
+        index += 1
+      ) {
         const id = orderedThreadIds[index];
         if (id !== undefined) selectedThreadIds.add(id);
       }
@@ -65,16 +69,27 @@ export const threadSelectionActions = {
   remove(threadIds: readonly ThreadId[]) {
     const removals = new Set(threadIds);
     update((state) => {
-      const selectedThreadIds = new Set([...state.selectedThreadIds].filter((id) => !removals.has(id)));
-      if (selectedThreadIds.size === state.selectedThreadIds.size && !removals.has(state.anchorThreadId as ThreadId)) return state;
+      const selectedThreadIds = new Set(
+        [...state.selectedThreadIds].filter((id) => !removals.has(id)),
+      );
+      if (
+        selectedThreadIds.size === state.selectedThreadIds.size &&
+        !removals.has(state.anchorThreadId as ThreadId)
+      )
+        return state;
       return {
         selectedThreadIds,
-        anchorThreadId: state.anchorThreadId !== null && removals.has(state.anchorThreadId) ? null : state.anchorThreadId,
+        anchorThreadId:
+          state.anchorThreadId !== null && removals.has(state.anchorThreadId)
+            ? null
+            : state.anchorThreadId,
       };
     });
   },
   setAnchor(threadId: ThreadId) {
-    update((state) => (state.anchorThreadId === threadId ? state : { ...state, anchorThreadId: threadId }));
+    update((state) =>
+      state.anchorThreadId === threadId ? state : { ...state, anchorThreadId: threadId },
+    );
   },
 };
 

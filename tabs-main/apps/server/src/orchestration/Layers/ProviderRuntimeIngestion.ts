@@ -58,11 +58,11 @@ type RuntimeIngestionInput =
     };
 
 function toTurnId(value: TurnId | string | undefined): TurnId | undefined {
-  return value === undefined ? undefined : String(value) as TurnId;
+  return value === undefined ? undefined : (String(value) as TurnId);
 }
 
 function toApprovalRequestId(value: string | undefined): ApprovalRequestId | undefined {
-  return value === undefined ? undefined : value as ApprovalRequestId;
+  return value === undefined ? undefined : (value as ApprovalRequestId);
 }
 
 function sameId(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -1264,7 +1264,8 @@ const make = Effect.gen(function* () {
 
     yield* orchestrationEngine.dispatch({
       type: "thread.proposed-plan.upsert",
-      commandId: `provider:source-proposed-plan-implemented:${implementationThreadId}:${crypto.randomUUID()}` as CommandId,
+      commandId:
+        `provider:source-proposed-plan-implemented:${implementationThreadId}:${crypto.randomUUID()}` as CommandId,
       threadId: sourceThread.id,
       proposedPlan: {
         ...sourcePlan,
@@ -1443,7 +1444,8 @@ const make = Effect.gen(function* () {
         event.type === "turn.proposed.delta" ? event.payload.delta : undefined;
 
       if (assistantDelta && assistantDelta.length > 0) {
-        const assistantMessageId = `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId;
+        const assistantMessageId =
+          `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId;
         const turnId = toTurnId(event.turnId);
         if (turnId) {
           yield* rememberAssistantMessageId(thread.id, turnId, assistantMessageId);
@@ -1622,7 +1624,8 @@ const make = Effect.gen(function* () {
           if (thread.checkpoints.some((c) => c.turnId === turnId)) {
             // Already tracked; no-op.
           } else {
-            const assistantMessageId = `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId;
+            const assistantMessageId =
+              `assistant:${event.itemId ?? event.turnId ?? event.eventId}` as MessageId;
             const maxTurnCount = thread.checkpoints.reduce(
               (max, c) => Math.max(max, c.checkpointTurnCount),
               0,

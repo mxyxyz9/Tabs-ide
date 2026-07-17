@@ -32,7 +32,22 @@ import {
   type WsPushEnvelopeBase,
 } from "@tabs/contracts";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import { Cause, Deferred, Effect, Exit, FileSystem, Layer, Option, Path, Ref, Result, Schema, Scope, Stream, Struct,  } from "effect";
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Exit,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Ref,
+  Result,
+  Schema,
+  Scope,
+  Stream,
+  Struct,
+} from "effect";
 import { WebSocketServer, type WebSocket } from "ws";
 
 import { createLogger } from "./logger";
@@ -814,7 +829,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             };
 
             let resolvedInputPath = "";
-            const isAbsolute = path.isAbsolute(body.partialPath) || body.partialPath.startsWith("~/") || body.partialPath === "~";
+            const isAbsolute =
+              path.isAbsolute(body.partialPath) ||
+              body.partialPath.startsWith("~/") ||
+              body.partialPath === "~";
             if (isAbsolute) {
               resolvedInputPath = path.resolve(expandHomePath(body.partialPath));
             } else {
@@ -825,7 +843,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             }
 
             const endsWithSeparator = /[\\/]$/.test(body.partialPath) || body.partialPath === "~";
-            const parentPath = endsWithSeparator ? resolvedInputPath : path.dirname(resolvedInputPath);
+            const parentPath = endsWithSeparator
+              ? resolvedInputPath
+              : path.dirname(resolvedInputPath);
 
             const dirents = await fs.promises.readdir(parentPath, { withFileTypes: true });
             const entries = dirents
@@ -1240,7 +1260,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                   runProcess("gh", ["repo", "view", repo, "--json", "url,sshUrl"], {
                     timeoutMs: 15000,
                     allowNonZeroExit: true,
-                  })
+                  }),
                 );
                 if (result.code === 0) {
                   const parsed = tryParseJson(result.stdout);
@@ -1255,11 +1275,14 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                   runProcess("glab", ["api", `projects/${encodeURIComponent(repo)}`], {
                     timeoutMs: 15000,
                     allowNonZeroExit: true,
-                  })
+                  }),
                 );
                 if (result.code === 0) {
                   const parsed = tryParseJson(result.stdout);
-                  remoteUrl = parsed?.ssh_url_to_repo || parsed?.http_url_to_repo || `https://gitlab.com/${repo}.git`;
+                  remoteUrl =
+                    parsed?.ssh_url_to_repo ||
+                    parsed?.http_url_to_repo ||
+                    `https://gitlab.com/${repo}.git`;
                 } else {
                   remoteUrl = `https://gitlab.com/${repo}.git`;
                 }
@@ -1270,11 +1293,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                   runProcess("az", ["repos", "show", "--detect", "true", "--repository", repo], {
                     timeoutMs: 15000,
                     allowNonZeroExit: true,
-                  })
+                  }),
                 );
                 if (result.code === 0) {
                   const parsed = tryParseJson(result.stdout);
-                  remoteUrl = parsed?.sshUrl || parsed?.remoteUrl || `https://dev.azure.com/${repo}`;
+                  remoteUrl =
+                    parsed?.sshUrl || parsed?.remoteUrl || `https://dev.azure.com/${repo}`;
                 } else {
                   remoteUrl = repo.startsWith("http") ? repo : `https://dev.azure.com/${repo}`;
                 }
@@ -1320,7 +1344,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           cwd: process.cwd(),
           args: ["clone", remoteUrl, dest],
         });
-        console.log("[DIAG-SERVER] serverCloneRepository clone succeeded, cloneResult:", cloneResult);
+        console.log(
+          "[DIAG-SERVER] serverCloneRepository clone succeeded, cloneResult:",
+          cloneResult,
+        );
         return {
           cwd: dest,
           remoteUrl,
@@ -1344,7 +1371,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               runProcess("gh", ["repo", "view", repository, "--json", "nameWithOwner,url,sshUrl"], {
                 timeoutMs: 15000,
                 allowNonZeroExit: true,
-              })
+              }),
             );
             if (result.code === 0) {
               const parsed = tryParseJson(result.stdout);
@@ -1366,7 +1393,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               runProcess("glab", ["api", `projects/${encodeURIComponent(repository)}`], {
                 timeoutMs: 15000,
                 allowNonZeroExit: true,
-              })
+              }),
             );
             if (result.code === 0) {
               const parsed = tryParseJson(result.stdout);
@@ -1388,7 +1415,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               runProcess("az", ["repos", "show", "--detect", "true", "--repository", repository], {
                 timeoutMs: 15000,
                 allowNonZeroExit: true,
-              })
+              }),
             );
             if (result.code === 0) {
               const parsed = tryParseJson(result.stdout);

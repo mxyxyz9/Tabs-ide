@@ -258,7 +258,10 @@ export function ProjectFavicon({ cwd, className }: { cwd: string; className?: st
     <img
       src={src}
       alt=""
-      className={className ?? `size-3.5 shrink-0 rounded-sm object-contain ${status === "loading" ? "hidden" : ""}`}
+      className={
+        className ??
+        `size-3.5 shrink-0 rounded-sm object-contain ${status === "loading" ? "hidden" : ""}`
+      }
       onLoad={() => {
         loadedProjectFaviconSrcs.add(src);
         setStatus("loaded");

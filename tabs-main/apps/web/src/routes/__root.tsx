@@ -70,22 +70,26 @@ function RootRouteView() {
         <div
           className={cn(
             "pointer-events-auto fixed inset-0 z-[9999] bg-background transition-transform duration-1000 ease-in-out",
-            ready ? "-translate-y-full" : "translate-y-0"
+            ready ? "-translate-y-full" : "translate-y-0",
           )}
         >
-          <SplashScreen loader={settings.splashLoaderStyle} palette={settings.splashLoaderPalette} theme={settings.splashLoaderTheme} />
+          <SplashScreen
+            loader={settings.splashLoaderStyle}
+            palette={settings.splashLoaderPalette}
+            theme={settings.splashLoaderTheme}
+          />
         </div>
       )}
       <ToastProvider>
-      <AnchoredToastProvider>
-        <EventRouter />
-        <DesktopProjectBootstrap />
-        <CommandPalette>
-          <Outlet />
-        </CommandPalette>
-        <GlobalConfirmDialog />
-      </AnchoredToastProvider>
-    </ToastProvider>
+        <AnchoredToastProvider>
+          <EventRouter />
+          <DesktopProjectBootstrap />
+          <CommandPalette>
+            <Outlet />
+          </CommandPalette>
+          <GlobalConfirmDialog />
+        </AnchoredToastProvider>
+      </ToastProvider>
     </>
   );
 }
@@ -228,9 +232,8 @@ function EventRouter() {
       // Collect custom-process IDs per project from the workspace store so
       // their isolated terminal threads (server:<projectId>:custom:<processId>)
       // are also retained by the orphan cleanup.
-      const projectSettingsByProjectId = appAtomRegistry.get(
-        workspaceShellAtom,
-      ).projectSettingsByProjectId;
+      const projectSettingsByProjectId =
+        appAtomRegistry.get(workspaceShellAtom).projectSettingsByProjectId;
       const customProcessIdsByProjectId = new Map<ProjectId, string[]>();
       for (const project of snapshot.projects) {
         const settings = projectSettingsByProjectId[project.id];
@@ -446,12 +449,7 @@ function EventRouter() {
       unsubServerConfigUpdated();
       unsubProvidersUpdated();
     };
-  }, [
-    navigate,
-    queryClient,
-    setProjectExpanded,
-    syncServerReadModel,
-  ]);
+  }, [navigate, queryClient, setProjectExpanded, syncServerReadModel]);
 
   return null;
 }

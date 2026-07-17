@@ -283,12 +283,17 @@ const makeGitHubCli = Effect.sync(() => {
           // check if we can still extract stdout.
           if (err && typeof err === "object" && "cause" in err) {
             const cause = err.cause;
-            if (cause && typeof cause === "object" && "stdout" in cause && typeof cause.stdout === "string") {
+            if (
+              cause &&
+              typeof cause === "object" &&
+              "stdout" in cause &&
+              typeof cause.stdout === "string"
+            ) {
               return Effect.succeed(cause.stdout);
             }
           }
           return Effect.fail(err);
-        })
+        }),
       ),
   } satisfies GitHubCliShape;
 

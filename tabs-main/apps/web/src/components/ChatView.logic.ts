@@ -178,11 +178,7 @@ export function shouldUseCenteredEmptyComposer(options: {
   hasTimelineEntries: boolean;
   isWorking: boolean;
 }): boolean {
-  return (
-    options.isLocalDraftThread &&
-    !options.hasTimelineEntries &&
-    !options.isWorking
-  );
+  return options.isLocalDraftThread && !options.hasTimelineEntries && !options.isWorking;
 }
 
 export function resolveBaseComposerPlaceholder(options: {

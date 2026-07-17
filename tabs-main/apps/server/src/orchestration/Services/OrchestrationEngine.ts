@@ -16,7 +16,7 @@ import type {
   OrchestrationEvent,
   OrchestrationReadModel,
 } from "@tabs/contracts";
-import {  } from "effect";
+import {} from "effect";
 import type { Effect, Stream } from "effect";
 
 import type { OrchestrationDispatchError } from "../Errors.ts";

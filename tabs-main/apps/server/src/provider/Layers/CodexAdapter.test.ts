@@ -270,11 +270,9 @@ validationLayer("CodexAdapterLive validation", (it) => {
       yield* adapter.startSession({
         provider: "codex" as ProviderDriverKind,
         threadId: asThreadId("thread-1"),
-        modelSelection: createModelSelection(
-          "codex" as ProviderInstanceId,
-          "gpt-5.3-codex",
-          [{ id: "fastMode", value: true }],
-        ),
+        modelSelection: createModelSelection("codex" as ProviderInstanceId, "gpt-5.3-codex", [
+          { id: "fastMode", value: true },
+        ]),
         runtimeMode: "full-access",
       });
 
@@ -344,14 +342,10 @@ sessionErrorLayer("CodexAdapterLive session errors", (it) => {
         adapter.sendTurn({
           threadId: asThreadId("sess-missing"),
           input: "hello",
-          modelSelection: createModelSelection(
-            "codex" as ProviderInstanceId,
-            "gpt-5.3-codex",
-            [
-              { id: "reasoningEffort", value: "high" },
-              { id: "fastMode", value: true },
-            ],
-          ),
+          modelSelection: createModelSelection("codex" as ProviderInstanceId, "gpt-5.3-codex", [
+            { id: "reasoningEffort", value: "high" },
+            { id: "fastMode", value: true },
+          ]),
           attachments: [],
         }),
       );

@@ -126,7 +126,7 @@ async function waitForThread(
     activities: ReadonlyArray<{ kind: string }>;
   }> => {
     const readModel = await Effect.runPromise(engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     if (thread && predicate(thread)) {
       return thread;
     }
@@ -247,7 +247,7 @@ describe("CheckpointReactor", () => {
       cwd,
       options?.hasSession ?? true,
       options?.providerSessionCwd ?? cwd,
-      options?.providerName ?? "codex" as ProviderDriverKind,
+      options?.providerName ?? ("codex" as ProviderDriverKind),
     );
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionPipelineLive),
@@ -373,10 +373,7 @@ describe("CheckpointReactor", () => {
       threadId: "thread-1" as ThreadId,
       turnId: asTurnId("turn-1"),
     });
-    await waitForGitRefExists(
-      harness.cwd,
-      checkpointRefForThreadTurn("thread-1" as ThreadId, 0),
-    );
+    await waitForGitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0));
 
     fs.writeFileSync(path.join(harness.cwd, "README.md"), "v2\n", "utf8");
     harness.provider.emit({
@@ -396,12 +393,12 @@ describe("CheckpointReactor", () => {
       (entry) => entry.latestTurn?.turnId === "turn-1" && entry.checkpoints.length === 1,
     );
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0)),
-    ).toBe(true);
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 1)),
-    ).toBe(true);
+    expect(gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0))).toBe(
+      true,
+    );
+    expect(gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 1))).toBe(
+      true,
+    );
     expect(
       gitShowFileAtRef(
         harness.cwd,
@@ -449,10 +446,7 @@ describe("CheckpointReactor", () => {
       threadId: "thread-1" as ThreadId,
       turnId: asTurnId("turn-main"),
     });
-    await waitForGitRefExists(
-      harness.cwd,
-      checkpointRefForThreadTurn("thread-1" as ThreadId, 0),
-    );
+    await waitForGitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0));
 
     fs.writeFileSync(path.join(harness.cwd, "README.md"), "v2\n", "utf8");
 
@@ -469,9 +463,7 @@ describe("CheckpointReactor", () => {
 
     await harness.drain();
     const midReadModel = await Effect.runPromise(harness.engine.getReadModel());
-    const midThread = midReadModel.threads.find(
-      (entry) => entry.id === "thread-1" as ThreadId,
-    );
+    const midThread = midReadModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(midThread?.checkpoints).toHaveLength(0);
 
     harness.provider.emit({
@@ -525,10 +517,7 @@ describe("CheckpointReactor", () => {
       threadId: "thread-1" as ThreadId,
       turnId: asTurnId("turn-claude-1"),
     });
-    await waitForGitRefExists(
-      harness.cwd,
-      checkpointRefForThreadTurn("thread-1" as ThreadId, 0),
-    );
+    await waitForGitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0));
 
     fs.writeFileSync(path.join(harness.cwd, "README.md"), "v2\n", "utf8");
     harness.provider.emit({
@@ -548,9 +537,9 @@ describe("CheckpointReactor", () => {
     );
 
     expect(thread.checkpoints[0]?.checkpointTurnCount).toBe(1);
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 1)),
-    ).toBe(true);
+    expect(gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 1))).toBe(
+      true,
+    );
   });
 
   it("appends capture failure activity when turn diff summary cannot be derived", async () => {
@@ -624,10 +613,7 @@ describe("CheckpointReactor", () => {
       }),
     );
 
-    await waitForGitRefExists(
-      harness.cwd,
-      checkpointRefForThreadTurn("thread-1" as ThreadId, 0),
-    );
+    await waitForGitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0));
     expect(
       gitShowFileAtRef(
         harness.cwd,
@@ -676,9 +662,9 @@ describe("CheckpointReactor", () => {
     });
 
     await waitForEvent(harness.engine, (event) => event.type === "thread.turn-diff-completed");
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 1)),
-    ).toBe(true);
+    expect(gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 1))).toBe(
+      true,
+    );
     expect(
       gitShowFileAtRef(
         harness.cwd,
@@ -724,7 +710,7 @@ describe("CheckpointReactor", () => {
 
     await harness.drain();
     const readModel = await Effect.runPromise(harness.engine.getReadModel());
-    const thread = readModel.threads.find((entry) => entry.id === "thread-1" as ThreadId);
+    const thread = readModel.threads.find((entry) => entry.id === ("thread-1" as ThreadId));
     expect(thread?.checkpoints.some((checkpoint) => checkpoint.checkpointTurnCount === 3)).toBe(
       false,
     );
@@ -781,13 +767,10 @@ describe("CheckpointReactor", () => {
       turnId: asTurnId("turn-after-runtime-failure"),
     });
 
-    await waitForGitRefExists(
-      harness.cwd,
-      checkpointRefForThreadTurn("thread-1" as ThreadId, 0),
+    await waitForGitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0));
+    expect(gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0))).toBe(
+      true,
     );
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 0)),
-    ).toBe(true);
   });
 
   it("executes provider revert and emits thread.reverted for checkpoint revert requests", async () => {
@@ -863,9 +846,9 @@ describe("CheckpointReactor", () => {
       numTurns: 1,
     });
     expect(fs.readFileSync(path.join(harness.cwd, "README.md"), "utf8")).toBe("v2\n");
-    expect(
-      gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 2)),
-    ).toBe(false);
+    expect(gitRefExists(harness.cwd, checkpointRefForThreadTurn("thread-1" as ThreadId, 2))).toBe(
+      false,
+    );
   });
 
   it("executes provider revert and emits thread.reverted for claude sessions", async () => {

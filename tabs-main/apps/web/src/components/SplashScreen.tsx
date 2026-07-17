@@ -23,8 +23,6 @@ const SOLARI_MESSAGES = [
 
 const SOLARI_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ".split("");
 
-
-
 function RotatingLabel({
   messages,
   intervalMs = 2200,
@@ -53,7 +51,9 @@ function RotatingLabel({
   }, [messages, intervalMs]);
 
   return (
-    <div className={cn("relative z-10 h-[14px] w-full text-center loader-respect-motion", className)}>
+    <div
+      className={cn("relative z-10 h-[14px] w-full text-center loader-respect-motion", className)}
+    >
       {outgoing && (
         <span
           key={`out-${outgoing}`}
@@ -72,7 +72,7 @@ function RotatingLabel({
   );
 }
 
-function MoltenGlass({ palette, isDark }: { palette: "block" | "mono", isDark: boolean }) {
+function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: boolean }) {
   const filterId = useId().replace(/:/g, "");
   const isBlock = palette === "block";
   const animateRef = useRef<SVGAnimationElement>(null);
@@ -91,7 +91,12 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono", isDark: b
   return (
     <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
       <div className="relative flex w-full flex-col items-center justify-center gap-[22px]">
-        <svg width="1" height="1" style={{ position: "absolute", opacity: 0.001, pointerEvents: "none" }} aria-hidden="true">
+        <svg
+          width="1"
+          height="1"
+          style={{ position: "absolute", opacity: 0.001, pointerEvents: "none" }}
+          aria-hidden="true"
+        >
           <defs>
             <filter id={filterId} x="-30%" y="-30%" width="160%" height="160%">
               <feTurbulence
@@ -121,14 +126,20 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono", isDark: b
           </defs>
         </svg>
 
-        {/* 
+        {/*
           #1c0f0e: A deliberate, warm near-black tone used to provide high legibility 
           and depth against the vibrant indigo block background in dark mode. 
         */}
         <div
           className={cn(
             "relative z-10 text-[80px] font-[800] tracking-[-0.02em]",
-            isBlock ? (isDark ? "text-[#1c0f0e]" : "text-white") : (isDark ? "text-white" : "text-black")
+            isBlock
+              ? isDark
+                ? "text-[#1c0f0e]"
+                : "text-white"
+              : isDark
+                ? "text-white"
+                : "text-black",
           )}
           style={{ filter: `url(#${filterId})` }}
         >
@@ -139,8 +150,12 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono", isDark: b
           messages={GLASS_MESSAGES}
           className={
             isBlock
-              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
+              ? isDark
+                ? "text-[#1c0f0e]/85"
+                : "text-white/75"
+              : isDark
+                ? "text-[#a1a1aa]"
+                : "text-[#71717a]"
           }
         />
       </div>
@@ -148,7 +163,17 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono", isDark: b
   );
 }
 
-function SolariTile({ target, index, isBlock, isDark }: { target: string; index: number; isBlock: boolean; isDark: boolean }) {
+function SolariTile({
+  target,
+  index,
+  isBlock,
+  isDark,
+}: {
+  target: string;
+  index: number;
+  isBlock: boolean;
+  isDark: boolean;
+}) {
   const [ch, setCh] = useState(target);
   const [justSettled, setJustSettled] = useState(false);
 
@@ -182,8 +207,11 @@ function SolariTile({ target, index, isBlock, isDark }: { target: string; index:
             ? "border-white/90 bg-white/22 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
             : "border-white/24 bg-white/12 shadow-none"
           : justSettled
-            ? cn("border-primary shadow-[0_0_0_1px_var(--primary)]", isDark ? "bg-white/4" : "bg-black/3")
-            : cn("border-border shadow-none", isDark ? "bg-white/4" : "bg-black/3")
+            ? cn(
+                "border-primary shadow-[0_0_0_1px_var(--primary)]",
+                isDark ? "bg-white/4" : "bg-black/3",
+              )
+            : cn("border-border shadow-none", isDark ? "bg-white/4" : "bg-black/3"),
       )}
     >
       <div className="absolute inset-x-0 top-1/2 h-px bg-black/35" />
@@ -192,17 +220,23 @@ function SolariTile({ target, index, isBlock, isDark }: { target: string; index:
   );
 }
 
-function SolariGrid({ palette, isDark }: { palette: "block" | "mono", isDark: boolean }) {
+function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: boolean }) {
   const word = "TABS IDE".padEnd(8, " ").split("");
   const isBlock = palette === "block";
 
   return (
     <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
       <div className="relative flex w-full flex-col items-center justify-center gap-[20px]">
-        <div 
+        <div
           className={cn(
             "relative z-10 grid grid-cols-4 gap-[6px]",
-            isBlock ? (isDark ? "text-[#1c0f0e]" : "text-white") : (isDark ? "text-white" : "text-black")
+            isBlock
+              ? isDark
+                ? "text-[#1c0f0e]"
+                : "text-white"
+              : isDark
+                ? "text-white"
+                : "text-black",
           )}
         >
           {word.map((ch, i) => (
@@ -213,8 +247,12 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono", isDark: bo
           messages={SOLARI_MESSAGES}
           className={
             isBlock
-              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
-              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
+              ? isDark
+                ? "text-[#1c0f0e]/85"
+                : "text-white/75"
+              : isDark
+                ? "text-[#a1a1aa]"
+                : "text-[#71717a]"
           }
         />
       </div>
@@ -237,7 +275,7 @@ export function SplashScreen({ loader, palette, theme: overrideTheme }: SplashSc
     <div
       className={cn(
         "flex h-full w-full flex-col items-center justify-center",
-        isBlock ? "bg-primary" : (isDark ? "bg-[#09090b]" : "bg-white")
+        isBlock ? "bg-primary" : isDark ? "bg-[#09090b]" : "bg-white",
       )}
     >
       {loader === "solari" ? (
