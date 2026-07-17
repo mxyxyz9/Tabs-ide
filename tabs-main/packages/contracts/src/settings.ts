@@ -681,6 +681,7 @@ export const ProjectToolDefinition = Schema.Struct({
   visible: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   customEmbedId: Schema.optionalKey(Schema.NullOr(ProjectSettingId)),
   serverProcessId: Schema.optionalKey(Schema.NullOr(ProjectSettingId)),
+  terminalProcessId: Schema.optionalKey(Schema.NullOr(ProjectSettingId)),
 });
 export type ProjectToolDefinition = typeof ProjectToolDefinition.Type;
 
@@ -700,6 +701,22 @@ export const ProjectServerProcessDefinition = Schema.Struct({
   autoStart: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ProjectServerProcessDefinition = typeof ProjectServerProcessDefinition.Type;
+
+export const ProjectServerPresetDefinition = Schema.Struct({
+  id: ProjectSettingId,
+  label: TrimmedNonEmptyString,
+  command: Schema.optionalKey(TrimmedString),
+  commands: Schema.Array(TrimmedString).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  cwd: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  env: Schema.Record(Schema.String, Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  autoStart: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  previewUrl: Schema.optionalKey(TrimmedString),
+  autoOpenPreview: Schema.optionalKey(Schema.Boolean),
+  previewOpenTarget: Schema.optionalKey(Schema.Literals(["in-app", "external"])),
+  previewFocus: Schema.optionalKey(Schema.Boolean),
+  dependsOn: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+export type ProjectServerPresetDefinition = typeof ProjectServerPresetDefinition.Type;
 
 export const ProjectWorkspaceSettings = Schema.Struct({
   tools: Schema.Array(ProjectToolDefinition).pipe(
@@ -724,7 +741,10 @@ export const ProjectWorkspaceSettings = Schema.Struct({
     ),
   ),
   browser: ProjectBrowserSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
-  serverProcesses: Schema.Array(ProjectServerProcessDefinition).pipe(
+  terminalProcesses: Schema.Array(ProjectServerProcessDefinition).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  serverPresets: Schema.Array(ProjectServerPresetDefinition).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
   customEmbeds: Schema.Array(ProjectCustomEmbedDefinition).pipe(

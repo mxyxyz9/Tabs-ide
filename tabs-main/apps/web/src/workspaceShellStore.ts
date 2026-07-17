@@ -121,35 +121,38 @@ export function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSetting
 
 function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSettingsType {
   const decoded = decodeProjectWorkspaceSettingsSchema(input);
+  
+  const normalizeProcess = (process: any) => {
+    const normalizedCommands =
+      process.commands && process.commands.length > 0
+        ? process.commands
+        : process.command && process.command.trim().length > 0
+          ? [process.command.trim()]
+          : [];
+          
+    const result: any = {
+      id: process.id,
+      label: process.label,
+      commands: normalizedCommands,
+      cwd: process.cwd || "",
+      env: process.env || {},
+      autoStart: Boolean(process.autoStart),
+    };
+    
+    if (process.command) result.command = process.command;
+    if (process.previewUrl !== undefined) result.previewUrl = process.previewUrl;
+    if (process.autoOpenPreview !== undefined) result.autoOpenPreview = process.autoOpenPreview;
+    if (process.previewOpenTarget !== undefined) result.previewOpenTarget = process.previewOpenTarget;
+    if (process.previewFocus !== undefined) result.previewFocus = process.previewFocus;
+    if (process.dependsOn !== undefined) result.dependsOn = process.dependsOn;
+    
+    return result;
+  };
+
   return {
     ...decoded,
-    serverProcesses: (decoded.serverProcesses || []).map((process) => {
-      const normalizedCommands =
-        process.commands.length > 0
-          ? process.commands
-          : process.command && process.command.trim().length > 0
-            ? [process.command.trim()]
-            : [];
-      if (process.command) {
-        return {
-          id: process.id,
-          label: process.label,
-          command: process.command,
-          commands: normalizedCommands,
-          cwd: process.cwd,
-          env: process.env,
-          autoStart: process.autoStart,
-        };
-      }
-      return {
-        id: process.id,
-        label: process.label,
-        commands: normalizedCommands,
-        cwd: process.cwd,
-        env: process.env,
-        autoStart: process.autoStart,
-      };
-    }),
+    terminalProcesses: (decoded.terminalProcesses || []).map(normalizeProcess),
+    serverPresets: (decoded.serverPresets || []).map(normalizeProcess),
   };
 }
 
@@ -209,14 +212,14 @@ function defaultServerToolState(): ProjectServerToolState {
 
 function resolveVisibleTools(settings: ProjectWorkspaceSettingsType): ProjectToolDefinition[] {
   const customEmbedIds = new Set((settings.customEmbeds || []).map((embed) => embed.id));
-  const serverProcessIds = new Set((settings.serverProcesses || []).map((process) => process.id));
+  const terminalProcessIds = new Set((settings.terminalProcesses || []).map((process) => process.id));
   const visible = (settings.tools || []).filter((tool) => {
     if (!tool.visible) return false;
     if (tool.kind === "custom_embed") {
       return tool.customEmbedId ? customEmbedIds.has(tool.customEmbedId) : false;
     }
     if (tool.kind === "custom_process") {
-      return tool.serverProcessId ? serverProcessIds.has(tool.serverProcessId) : false;
+      return tool.terminalProcessId ? terminalProcessIds.has(tool.terminalProcessId) : false;
     }
     return true;
   });
@@ -762,7 +765,8 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             sanitized[id as keyof typeof sanitized] = {
               ...settings,
               tools: settings.tools ?? [],
-              serverProcesses: settings.serverProcesses ?? [],
+              terminalProcesses: settings.terminalProcesses ?? [],
+              serverPresets: settings.serverPresets ?? [],
               customEmbeds: settings.customEmbeds ?? [],
               browser: settings.browser ?? { defaultUrl: "", openExternalByDefault: false },
             };

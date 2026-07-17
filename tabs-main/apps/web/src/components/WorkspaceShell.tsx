@@ -111,6 +111,7 @@ const isWindowsDesktop =
   isElectron && typeof navigator !== "undefined" && isWindowsPlatform(navigator.platform);
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
+import { ServerPresetFormFields } from "./ServerPresetFormFields";
 import GitCommitComposer from "./GitCommitComposer";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -6848,7 +6849,7 @@ function CustomEmbedTool(props: {
 
 function CustomProcessTool(props: {
   project: Project;
-  process: ProjectWorkspaceSettings["serverProcesses"][number];
+  process: ProjectWorkspaceSettings["terminalProcesses"][number];
   threadId: ThreadId;
   terminalState: NonNullable<ReturnType<typeof selectThreadTerminalState>>;
   focusRequestId: number;
@@ -6999,6 +7000,11 @@ function ServerTool(props: {
       commands: string[];
       cwd: string;
       autoStart: boolean;
+      previewUrl?: string;
+      autoOpenPreview?: boolean;
+      previewOpenTarget?: "in-app" | "external";
+      previewFocus?: boolean;
+      dependsOn?: readonly string[];
     }>,
   ) => void;
   terminalVisible: boolean;
@@ -7008,22 +7014,9 @@ function ServerTool(props: {
   activeTerminalId: string | null;
   hasTerminalWorkspace: boolean;
 }) {
-  // Server presets and custom "terminal tab" embeds share one `serverProcesses`
-  // array (a custom_process tool references its process via `serverProcessId`).
-  // The Server tab must only surface presets the user added *here* — never the
-  // processes that back standalone terminal tabs (e.g. gemini/claude).
   const processes = useMemo(() => {
-    const customProcessIds = new Set(
-      (props.projectSettings.tools ?? []).flatMap((tool) =>
-        tool.kind === "custom_process" && tool.serverProcessId != null
-          ? [tool.serverProcessId]
-          : [],
-      ),
-    );
-    return (props.projectSettings.serverProcesses ?? []).filter(
-      (process) => !customProcessIds.has(process.id),
-    );
-  }, [props.projectSettings.serverProcesses, props.projectSettings.tools]);
+    return props.projectSettings.serverPresets ?? [];
+  }, [props.projectSettings.serverPresets]);
   const terminalIdSet = new Set(props.terminalIds);
   const runningProcessIdSet = new Set(props.runningProcessIds);
   const [presetsExpanded, setPresetsExpanded] = useState(false);
@@ -7041,6 +7034,11 @@ function ServerTool(props: {
       commands: string[];
       cwd: string;
       autoStart: boolean;
+      previewUrl?: string;
+      autoOpenPreview?: boolean;
+      previewOpenTarget?: "in-app" | "external";
+      previewFocus?: boolean;
+      dependsOn?: readonly string[];
     }) => ({
       id: preset.id,
       label: preset.label.trim(),
@@ -7049,6 +7047,11 @@ function ServerTool(props: {
         .filter((command) => command.length > 0),
       cwd: preset.cwd.trim(),
       autoStart: preset.autoStart,
+      previewUrl: preset.previewUrl?.trim(),
+      autoOpenPreview: preset.autoOpenPreview,
+      previewOpenTarget: preset.previewOpenTarget,
+      previewFocus: preset.previewFocus,
+      dependsOn: preset.dependsOn,
     }),
     [],
   );
@@ -7062,11 +7065,27 @@ function ServerTool(props: {
       commands: [""],
       cwd: props.project.cwd,
       autoStart: false,
+      previewUrl: "",
+      autoOpenPreview: false,
+      previewOpenTarget: "in-app" as const,
+      previewFocus: false,
+      dependsOn: [] as string[],
     }),
     [props.project.cwd],
   );
   const [presetDrafts, setPresetDrafts] = useState<
-    Array<{ id: string; label: string; commands: string[]; cwd: string; autoStart: boolean }>
+    Array<{
+      id: string;
+      label: string;
+      commands: string[];
+      cwd: string;
+      autoStart: boolean;
+      previewUrl?: string;
+      autoOpenPreview?: boolean;
+      previewOpenTarget?: "in-app" | "external";
+      previewFocus?: boolean;
+      dependsOn?: readonly string[];
+    }>
   >([]);
   const presetRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const resetPresetDrafts = useCallback(() => {
@@ -7074,12 +7093,17 @@ function ServerTool(props: {
       presetDialogMode === "add"
         ? [createBlankPreset()]
         : processes.length > 0
-          ? processes.map((process) => ({
+          ? processes.map((process: any) => ({
               id: process.id,
               label: process.label,
               commands: process.commands.length > 0 ? [...process.commands] : [""],
               cwd: process.cwd,
               autoStart: process.autoStart,
+              previewUrl: process.previewUrl,
+              autoOpenPreview: process.autoOpenPreview,
+              previewOpenTarget: process.previewOpenTarget,
+              previewFocus: process.previewFocus,
+              dependsOn: process.dependsOn,
             }))
           : [createBlankPreset()],
     );
@@ -7191,10 +7215,9 @@ function ServerTool(props: {
   );
   const hasIncompletePreset = presetDrafts.some((preset) => {
     const normalizedPreset = normalizePresetDraft(preset);
+    // The auto-filled cwd does NOT count toward "this preset has been started."
     const hasAnyValue =
       preset.label.trim().length > 0 ||
-      preset.cwd.trim().length > 0 ||
-      preset.autoStart ||
       preset.commands.some((command) => command.trim().length > 0);
     return (
       hasAnyValue && (normalizedPreset.label.length === 0 || normalizedPreset.commands.length === 0)
@@ -7212,12 +7235,17 @@ function ServerTool(props: {
     props.onSavePresets(
       presetDialogMode === "add"
         ? [
-            ...processes.map((process) => ({
+            ...processes.map((process: any) => ({
               id: process.id,
               label: process.label,
               commands: [...process.commands],
               cwd: process.cwd,
               autoStart: process.autoStart,
+              previewUrl: process.previewUrl,
+              autoOpenPreview: process.autoOpenPreview,
+              previewOpenTarget: process.previewOpenTarget,
+              previewFocus: process.previewFocus,
+              dependsOn: process.dependsOn,
             })),
             ...nextPresets,
           ]
@@ -7228,7 +7256,7 @@ function ServerTool(props: {
     setIsPresetDialogOpen(false);
   }, [hasIncompletePreset, normalizePresetDraft, presetDialogMode, presetDrafts, processes, props]);
   const editingPreset = editingPresetId
-    ? (processes.find((process) => process.id === editingPresetId) ?? null)
+    ? (processes.find((process: any) => process.id === editingPresetId) ?? null)
     : null;
 
   return (
@@ -7303,7 +7331,7 @@ function ServerTool(props: {
         {processes.length > 0 ? (
           <ScrollArea className="mt-4 w-full">
             <div className="flex items-start gap-3 pb-1">
-              {processes.map((process) => {
+              {processes.map((process: any) => {
                 const status = resolveServerPresetRuntimeStatus({
                   processId: process.id,
                   runningProcessIds: runningProcessIdSet,
@@ -7319,19 +7347,17 @@ function ServerTool(props: {
                 const badgeLabel =
                   status === "running" ? "Running" : status === "stopped" ? "Stopped" : "Idle";
                 const visibleCommands = process.commands.filter(
-                  (command) => command.trim().length > 0,
+                  (command: string) => command.trim().length > 0,
                 );
-                const visibleCommandRows = visibleCommands.reduce<
-                  Array<{ key: string; command: string; stepNumber: number }>
-                >((rows, command) => {
-                  const duplicateCount = rows.filter((row) => row.command === command).length;
-                  rows.push({
+                const visibleCommandRows: Array<{ key: string; command: string; stepNumber: number }> = [];
+                for (const command of visibleCommands) {
+                  const duplicateCount = visibleCommandRows.filter((row) => row.command === command).length;
+                  visibleCommandRows.push({
                     key: `${process.id}-${command || "blank"}-${duplicateCount}`,
                     command,
-                    stepNumber: rows.length + 1,
+                    stepNumber: visibleCommandRows.length + 1,
                   });
-                  return rows;
-                }, []);
+                }
 
                 if (!isExpanded) {
                   return (
@@ -7583,167 +7609,22 @@ function ServerTool(props: {
 
             <div className="space-y-3">
               {presetDrafts.map((preset, index) => (
-                <div
+                <ServerPresetFormFields
                   key={preset.id}
-                  ref={(node) => {
-                    presetRowRefs.current[preset.id] = node;
-                  }}
-                  className={cn(
-                    "space-y-3 rounded-2xl border border-border/70 p-4",
-                    editingPresetId === preset.id && "border-primary/50 ring-1 ring-primary/30",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium text-foreground">Preset {index + 1}</div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        size="icon-xs"
-                        variant="outline"
-                        disabled={index === 0}
-                        onClick={() => movePresetRow(preset.id, -1)}
-                        aria-label={`Move preset ${index + 1} up`}
-                      >
-                        <ChevronUpIcon className="size-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-xs"
-                        variant="outline"
-                        disabled={index === presetDrafts.length - 1}
-                        onClick={() => movePresetRow(preset.id, 1)}
-                        aria-label={`Move preset ${index + 1} down`}
-                      >
-                        <ChevronDownIcon className="size-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon-xs"
-                        variant="outline"
-                        onClick={() => removePresetRow(preset.id)}
-                        aria-label={`Delete preset ${index + 1}`}
-                      >
-                        <XIcon className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-foreground">Label</div>
-                    <Input
-                      value={preset.label}
-                      onChange={(event) =>
-                        updatePresetRow(preset.id, (current) => ({
-                          ...current,
-                          label: event.target.value,
-                        }))
-                      }
-                      placeholder="Frontend"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium text-foreground">Command Steps</div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => addCommandStep(preset.id)}
-                      >
-                        <PlusIcon className="size-3.5" />
-                        Add Step
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {preset.commands.map((command, commandIndex) => {
-                        const stepKey = `${preset.id}-step-${commandIndex}`;
-                        return (
-                          <div key={stepKey} className="flex gap-2">
-                            <div className="flex h-10 min-w-10 items-center justify-center rounded-xl border border-border/70 bg-muted/20 text-xs font-medium text-muted-foreground">
-                              {commandIndex + 1}
-                            </div>
-                            <Input
-                              value={command}
-                              onChange={(event) =>
-                                updateCommandStep(preset.id, commandIndex, event.target.value)
-                              }
-                              placeholder={
-                                commandIndex === 0
-                                  ? "npm install"
-                                  : commandIndex === 1
-                                    ? "npm run dev"
-                                    : "echo ready"
-                              }
-                            />
-                            <Button
-                              type="button"
-                              size="icon-xs"
-                              variant="outline"
-                              disabled={commandIndex === 0}
-                              onClick={() => moveCommandStep(preset.id, commandIndex, -1)}
-                              aria-label={`Move step ${commandIndex + 1} up`}
-                            >
-                              <ChevronUpIcon className="size-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="icon-xs"
-                              variant="outline"
-                              disabled={commandIndex === preset.commands.length - 1}
-                              onClick={() => moveCommandStep(preset.id, commandIndex, 1)}
-                              aria-label={`Move step ${commandIndex + 1} down`}
-                            >
-                              <ChevronDownIcon className="size-3.5" />
-                            </Button>
-                            <Button
-                              type="button"
-                              size="icon-xs"
-                              variant="outline"
-                              disabled={preset.commands.length === 1}
-                              onClick={() => removeCommandStep(preset.id, commandIndex)}
-                              aria-label={`Delete step ${commandIndex + 1}`}
-                            >
-                              <XIcon className="size-3.5" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-foreground">Working Directory</div>
-                    <Input
-                      value={preset.cwd}
-                      onChange={(event) =>
-                        updatePresetRow(preset.id, (current) => ({
-                          ...current,
-                          cwd: event.target.value,
-                        }))
-                      }
-                      placeholder={props.project.cwd}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-3">
-                    <div>
-                      <div className="text-sm font-medium text-foreground">Auto-start</div>
-                      <div className="text-xs text-muted-foreground">
-                        Launch this preset automatically when the Server tab opens.
-                      </div>
-                    </div>
-                    <Switch
-                      checked={preset.autoStart}
-                      onCheckedChange={(checked) =>
-                        updatePresetRow(preset.id, (current) => ({
-                          ...current,
-                          autoStart: Boolean(checked),
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
+                  preset={preset as any}
+                  presetDrafts={presetDrafts as any}
+                  projectCwd={props.project.cwd}
+                  isEditing={editingPresetId === preset.id}
+                  presetRowRef={(node) => { presetRowRefs.current[preset.id] = node; }}
+                  updatePresetRow={updatePresetRow as any}
+                  addCommandStep={addCommandStep}
+                  updateCommandStep={updateCommandStep}
+                  moveCommandStep={moveCommandStep}
+                  removeCommandStep={removeCommandStep}
+                  movePresetRow={movePresetRow}
+                  removePresetRow={removePresetRow}
+                  index={index}
+                />
               ))}
             </div>
 
@@ -8508,7 +8389,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   // terminals don't leak into the Server tab's terminal list. Only the active
   // custom_process tab needs a live thread at a time.
   const activeCustomProcessId =
-    activeTool?.kind === "custom_process" ? (activeTool.serverProcessId ?? null) : null;
+    activeTool?.kind === "custom_process" ? (activeTool.terminalProcessId ?? null) : null;
   const customProcessThreadId =
     activeProject && activeCustomProcessId
       ? ThreadId.makeUnsafe(`server:${activeProject.id}:custom:${activeCustomProcessId}`)
@@ -8714,7 +8595,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     async (input: {
       threadId: ThreadId;
       terminalState: ReturnType<typeof selectThreadTerminalState> | null;
-      process: ProjectWorkspaceSettings["serverProcesses"][number];
+      process: ProjectWorkspaceSettings["terminalProcesses"][number];
       reveal: boolean;
     }) => {
       const api = readNativeApi();
@@ -8867,7 +8748,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const runServerProcess = useCallback(
     async (processId: string) => {
       if (!activeProjectSettings || !serverThreadId) return;
-      const process = (activeProjectSettings.serverProcesses ?? []).find((entry) => entry.id === processId);
+      const process = (activeProjectSettings.serverPresets ?? []).find((entry: any) => entry.id === processId);
       if (!process) return;
       revealServerTerminal();
       await openProcessTerminal({
@@ -8892,7 +8773,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   );
   // ── Custom terminal-tab handlers (isolated per-process thread) ────────
   const runCustomProcess = useCallback(
-    async (process: ProjectWorkspaceSettings["serverProcesses"][number], threadId: ThreadId) => {
+    async (process: ProjectWorkspaceSettings["terminalProcesses"][number] | ProjectWorkspaceSettings["serverPresets"][number], threadId: ThreadId) => {
       await openProcessTerminal({
         threadId,
         terminalState: getThreadTerminalState(threadId),
@@ -8954,16 +8835,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     if (activeTool?.kind !== "server" || !activeProjectSettings) return;
     // Processes backing custom terminal tabs auto-start in their own tab — the
     // Server tab must not also launch them in the shared server thread.
-    const customProcessIds = new Set(
-      (activeProjectSettings.tools ?? []).flatMap((tool) =>
-        tool.kind === "custom_process" && tool.serverProcessId != null
-          ? [tool.serverProcessId]
-          : [],
-      ),
-    );
-    for (const process of (activeProjectSettings.serverProcesses ?? [])) {
-      if (customProcessIds.has(process.id)) continue;
-      if (!process.autoStart || process.commands.every((command) => command.trim().length === 0)) {
+    for (const process of (activeProjectSettings.serverPresets ?? [])) {
+      if (!process.autoStart || process.commands.every((command: string) => command.trim().length === 0)) {
         continue;
       }
       if (serverAutoStartedProcessIdsRef.current.has(process.id)) continue;
@@ -9010,28 +8883,24 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         onCloseAllTerminals={() => void closeAllServerTerminals()}
         onSavePresets={(presets) =>
           upsertProjectSettings(activeProject.id, (current) => {
-            // Preserve the processes that back custom terminal tabs — the Server
-            // preset editor only manages presets created in the Server tab.
-            const customProcessIds = new Set(
-              (current.tools ?? []).flatMap((tool) =>
-                tool.kind === "custom_process" && tool.serverProcessId != null
-                  ? [tool.serverProcessId]
-                  : [],
-              ),
-            );
             return {
               ...current,
-              serverProcesses: [
-                ...(current.serverProcesses ?? []).filter((process) => customProcessIds.has(process.id)),
-                ...presets.map((preset) => ({
+              serverPresets: presets.map((preset) => {
+                const res: any = {
                   id: preset.id,
                   label: preset.label,
                   commands: preset.commands,
                   cwd: preset.cwd,
                   env: {},
                   autoStart: preset.autoStart,
-                })),
-              ],
+                };
+                if (preset.previewUrl !== undefined) res.previewUrl = preset.previewUrl;
+                if (preset.autoOpenPreview !== undefined) res.autoOpenPreview = preset.autoOpenPreview;
+                if (preset.previewOpenTarget !== undefined) res.previewOpenTarget = preset.previewOpenTarget;
+                if (preset.previewFocus !== undefined) res.previewFocus = preset.previewFocus;
+                if (preset.dependsOn !== undefined) res.dependsOn = preset.dependsOn;
+                return res;
+              }),
             };
           })
         }
@@ -9066,7 +8935,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               focusRequestId={shellTerminalFocusRequestId}
               terminalLabels={{
                 ...Object.fromEntries(
-                  (activeProjectSettings.serverProcesses ?? []).map((p) => [p.id, p.label]),
+                  [
+                    ...(activeProjectSettings.terminalProcesses ?? []),
+                    ...(activeProjectSettings.serverPresets ?? []),
+                  ].map((p) => [p.id, p.label]),
                 ),
                 ...serverTerminalState.terminalLabels,
               }}
@@ -9114,9 +8986,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     activeTool?.kind === "custom_process" &&
     customProcessThreadId
       ? (() => {
-          const process = activeTool.serverProcessId
-            ? ((activeProjectSettings.serverProcesses ?? []).find(
-                (entry) => entry.id === activeTool.serverProcessId,
+          const process = activeTool.terminalProcessId
+            ? ((activeProjectSettings.terminalProcesses ?? []).find(
+                (entry) => entry.id === activeTool.terminalProcessId,
               ) ?? null)
             : null;
           const threadId = customProcessThreadId;

@@ -152,7 +152,8 @@ describe("workspaceShellStore", () => {
             defaultUrl: "http://localhost:3000",
             openExternalByDefault: false,
           },
-          serverProcesses: [],
+          terminalProcesses: [],
+          serverPresets: [],
           customEmbeds: [],
         },
       },
@@ -200,14 +201,15 @@ describe("workspaceShellStore", () => {
                 kind: "custom_process",
                 label: "Frontend",
                 visible: true,
-                serverProcessId: "frontend",
+                terminalProcessId: "frontend",
               },
             ],
             browser: {
               defaultUrl: "",
               openExternalByDefault: false,
             },
-            serverProcesses: [],
+            terminalProcesses: [],
+            serverPresets: [],
             customEmbeds: [],
           },
         },
@@ -271,7 +273,7 @@ describe("workspaceShellStore", () => {
               kind: "custom_process",
               label: "Frontend",
               visible: true,
-              serverProcessId: "frontend",
+              terminalProcessId: "frontend",
             },
             {
               id: "browser-figma",
@@ -282,7 +284,7 @@ describe("workspaceShellStore", () => {
             },
           ],
           browser: { defaultUrl: "", openExternalByDefault: false },
-          serverProcesses: [
+          terminalProcesses: [
             {
               id: "frontend",
               label: "Frontend",
@@ -292,6 +294,7 @@ describe("workspaceShellStore", () => {
               autoStart: false,
             },
           ],
+          serverPresets: [],
           customEmbeds: [{ id: "figma", label: "Figma", url: "https://figma.com" }],
         },
       },

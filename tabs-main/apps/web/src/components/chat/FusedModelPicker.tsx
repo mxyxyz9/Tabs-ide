@@ -1,5 +1,6 @@
 import {
   type ModelSlug,
+  type ProviderOptionChoice,
   type ProviderOptionDescriptor,
   type ProviderOptionSelection,
   type ServerProvider,
@@ -61,11 +62,45 @@ const THUMB_PX = 32; // size-8
 const PAD_PX = 4;
 const RANGE_PX = TRACK_PX - THUMB_PX - PAD_PX * 2;
 
-const getModelStopsCount = (model: ServerProviderModel) => {
-  const caps = model.capabilities ?? EMPTY_CAPABILITIES;
-  const desc = getProviderOptionDescriptors({ caps, selections: undefined });
-  const primary = desc.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? desc[0];
-  return primary && primary.type === "select" ? primary.options.length : 0;
+const getStandardOrderForProvider = (provider: string): string[] => {
+  if (provider === "claudeAgent") {
+    return ["low", "medium", "high", "xhigh", "max", "ultracode", "ultrathink"];
+  }
+  if (provider === "codex" || provider === "cursor") {
+    return ["low", "medium", "high", "xhigh", "max", "ultra"];
+  }
+  return ["none", "low", "medium", "high", "xhigh", "max"];
+};
+
+const FALLBACK_LABELS: Record<string, string> = {
+  none: "None",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra High",
+  max: "Max",
+  ultra: "Ultra",
+  ultracode: "Ultra Code",
+  ultrathink: "Ultra Think",
+};
+
+const getModelScore = (name: string): number => {
+  const lower = name.toLowerCase();
+  let familyScore = 0;
+  
+  if (lower.includes("fable")) familyScore = 10000;
+  else if (lower.includes("opus")) familyScore = 8000;
+  else if (lower.includes("sonnet")) familyScore = 6000;
+  else if (lower.includes("haiku")) familyScore = 4000;
+  else if (lower.includes("sol")) familyScore = 10000;
+  else if (lower.includes("terra")) familyScore = 8000;
+  else if (lower.includes("luna")) familyScore = 6000;
+  
+  const match = name.match(/\d+(\.\d+)?/);
+  const version = match ? parseFloat(match[0]) : 0;
+  const miniPenalty = lower.includes("mini") ? -100 : 0;
+  
+  return familyScore + version * 10 + miniPenalty;
 };
 
 interface FusedModelPickerProps {
@@ -112,7 +147,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         ? getProviderOptionDescriptors({
             caps: activeModel.capabilities ?? EMPTY_CAPABILITIES,
             selections: props.modelOptions,
-          })
+          }).filter((d) => d.id !== "agent")
         : [],
     [activeModel, props.modelOptions],
   );
@@ -171,24 +206,99 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   // Build union of reasoning stops across all models of the provider to form the global columns
   const globalStops = useMemo(() => {
-    let bestPrimary: Extract<ProviderOptionDescriptor, { type: "select" }> | null = null;
+    const standardOrder = getStandardOrderForProvider(activeProvider);
+    const allOptionsMap = new Map<string, ProviderOptionChoice>();
+    
     for (const m of models) {
       const caps = m.capabilities ?? EMPTY_CAPABILITIES;
-      const desc = getProviderOptionDescriptors({ caps, selections: undefined });
+      const desc = getProviderOptionDescriptors({ caps, selections: undefined }).filter(
+        (d) => d.id !== "agent",
+      );
       const primary = desc.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? desc[0];
       if (primary && primary.type === "select") {
-        if (!bestPrimary || primary.options.length > bestPrimary.options.length) {
-          bestPrimary = primary;
+        for (const opt of primary.options) {
+          if (!allOptionsMap.has(opt.id)) {
+            allOptionsMap.set(opt.id, opt);
+          }
         }
       }
     }
-    return bestPrimary ? bestPrimary.options : [];
-  }, [models]);
 
-  // Group models hierarchically by subProvider, sorting them in decreasing order of reasoning stops
+    let maxStandardIndex = -1;
+    for (const id of allOptionsMap.keys()) {
+      const idx = standardOrder.indexOf(id);
+      if (idx > maxStandardIndex) {
+        maxStandardIndex = idx;
+      }
+    }
+
+    const finalStops: ProviderOptionChoice[] = [];
+    if (maxStandardIndex >= 0) {
+      for (let i = 0; i <= maxStandardIndex; i++) {
+        const id = standardOrder[i]!;
+        const opt = allOptionsMap.get(id);
+        if (opt) {
+          finalStops.push(opt);
+        } else {
+          finalStops.push({ id, label: FALLBACK_LABELS[id] ?? id });
+        }
+      }
+    }
+    
+    for (const [id, opt] of allOptionsMap.entries()) {
+      if (!standardOrder.includes(id)) {
+        finalStops.push(opt);
+      }
+    }
+
+    return finalStops;
+  }, [models, activeProvider]);
+
+  // Group models hierarchically by subProvider, sorting them based on reasoning availability
   const groupedModels = useMemo(() => {
     const groups: Array<{ name: string | null; items: Array<ServerProviderModel> }> = [];
-    const sortedList = [...models].sort((a, b) => getModelStopsCount(b) - getModelStopsCount(a));
+    const standardOrder = getStandardOrderForProvider(activeProvider);
+    
+    const sortedList = [...models].sort((a, b) => {
+      const descA = getProviderOptionDescriptors({
+        caps: a.capabilities ?? EMPTY_CAPABILITIES,
+        selections: undefined,
+      }).filter((d) => d.id !== "agent");
+      const primaryA = descA.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descA[0];
+      const hasReasoningA = primaryA && primaryA.type === "select" && primaryA.options.length > 0;
+
+      const descB = getProviderOptionDescriptors({
+        caps: b.capabilities ?? EMPTY_CAPABILITIES,
+        selections: undefined,
+      }).filter((d) => d.id !== "agent");
+      const primaryB = descB.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descB[0];
+      const hasReasoningB = primaryB && primaryB.type === "select" && primaryB.options.length > 0;
+
+      if (hasReasoningA && !hasReasoningB) return -1;
+      if (!hasReasoningA && hasReasoningB) return 1;
+
+      if (hasReasoningA && hasReasoningB) {
+        let maxIdxA = -1;
+        for (const opt of (primaryA as Extract<ProviderOptionDescriptor, { type: "select" }>).options) {
+          const idx = standardOrder.indexOf(opt.id);
+          if (idx > maxIdxA) maxIdxA = idx;
+        }
+
+        let maxIdxB = -1;
+        for (const opt of (primaryB as Extract<ProviderOptionDescriptor, { type: "select" }>).options) {
+          const idx = standardOrder.indexOf(opt.id);
+          if (idx > maxIdxB) maxIdxB = idx;
+        }
+
+        if (maxIdxA !== maxIdxB) {
+          return maxIdxB - maxIdxA;
+        }
+      }
+
+      // Tie-break by hierarchy/version descending
+      return getModelScore(b.name) - getModelScore(a.name);
+    });
+
     for (const model of sortedList) {
       const groupName = model.subProvider ?? null;
       let group = groups.find((g) => g.name === groupName);
@@ -199,7 +309,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       group.items.push(model);
     }
     return groups;
-  }, [models]);
+  }, [models, activeProvider]);
 
   const triggerLabel = useMemo(() => {
     if (!activeModel) return "Select model";
@@ -391,7 +501,7 @@ const ModelRow = memo(function ModelRow(props: {
   const descriptors = getProviderOptionDescriptors({
     caps: props.model.capabilities ?? EMPTY_CAPABILITIES,
     selections: props.isActive ? props.selections : undefined,
-  });
+  }).filter((d) => d.id !== "agent");
 
   const selects = descriptors.filter(
     (d): d is Extract<ProviderOptionDescriptor, { type: "select" }> => d.type === "select",
