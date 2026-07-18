@@ -7298,9 +7298,11 @@ function ServerTool(props: {
     if (sourceIndex >= 0 && targetIndex >= 0) {
       const nextDrafts = [...presetDrafts];
       const [movedItem] = nextDrafts.splice(sourceIndex, 1);
-      nextDrafts.splice(targetIndex, 0, movedItem);
-      setPresetDrafts(nextDrafts);
-      props.onSavePresets(nextDrafts);
+      if (movedItem) {
+        nextDrafts.splice(targetIndex, 0, movedItem);
+        setPresetDrafts(nextDrafts);
+        props.onSavePresets(nextDrafts);
+      }
     }
     setDraggedPresetId(null);
   };
@@ -8939,6 +8941,23 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       if (!activeProjectSettings || !serverThreadId) return;
       const process = (activeProjectSettings.serverPresets ?? []).find((entry: any) => entry.id === processId);
       if (!process) return;
+
+      if (process.previewOpenTarget === "external" && process.previewUrl) {
+        const api = readNativeApi();
+        if (api?.shell?.openExternal) {
+          api.shell.openExternal(process.previewUrl).catch(console.error);
+        } else {
+          window.open(process.previewUrl, "_blank", "noopener,noreferrer");
+        }
+      } else {
+        if (process.previewUrl && activeProject?.id) {
+          workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
+        }
+        if (process.autoOpenPreview && activeProject?.id) {
+          workspaceShellActions.setActiveTool(activeProject.id, "browser");
+        }
+      }
+
       revealServerTerminal();
       await openProcessTerminal({
         threadId: serverThreadId,
@@ -8951,7 +8970,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         reveal: true,
       });
     },
-    [activeProjectSettings, openProcessTerminal, revealServerTerminal, serverThreadId],
+    [activeProjectSettings, openProcessTerminal, revealServerTerminal, serverThreadId, activeProject?.id],
   );
   const restartServerProcess = useCallback(
     async (processId: string) => {
