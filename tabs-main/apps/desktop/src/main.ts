@@ -2412,6 +2412,12 @@ function createLegacyWindow(): BrowserWindow {
     }
   });
 
+  window.webContents.on("did-fail-load", (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+    if (isMainFrame && !window.isVisible()) {
+      window.show();
+    }
+  });
+
   return window;
 }
 
@@ -2482,12 +2488,21 @@ function createCodeOssWindow(
     window.destroy();
   };
 
-  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-    writeDesktopLogHeader(
-      `code-oss did-fail-load code=${errorCode} url=${validatedURL} description=${sanitizeLogValue(errorDescription)}`,
-    );
-    fallbackToLegacyShell(`did-fail-load ${errorCode} ${errorDescription}`);
-  });
+  window.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame) {
+        writeDesktopLogHeader(
+          `code-oss did-fail-load (ignored iframe) code=${errorCode} url=${validatedURL}`,
+        );
+        return;
+      }
+      writeDesktopLogHeader(
+        `code-oss did-fail-load code=${errorCode} url=${validatedURL} description=${sanitizeLogValue(errorDescription)}`,
+      );
+      fallbackToLegacyShell(`did-fail-load ${errorCode} ${errorDescription}`);
+    },
+  );
   window.webContents.on("render-process-gone", (_event, details) => {
     writeDesktopLogHeader(
       `code-oss render-process-gone reason=${details.reason} exitCode=${details.exitCode}`,
