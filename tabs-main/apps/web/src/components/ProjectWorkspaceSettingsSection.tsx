@@ -45,6 +45,8 @@ import {
 } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
+import { useConfirm } from "~/hooks/useConfirm";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
@@ -55,6 +57,7 @@ import {
   useWorkspaceActiveProjectId,
   workspaceShellActions,
 } from "../state/workspaceShell";
+import { SettingsHeaderPortal } from "../routes/_chat.settings";
 
 function createCustomEmbedId() {
   return `embed-${crypto.randomUUID()}`;
@@ -301,6 +304,7 @@ function isServerProcessDraftDirty(draft: ServerProcessDraft) {
 }
 
 export function ProjectWorkspaceSettingsSection() {
+  const { confirm, confirmDialog } = useConfirm();
   const activeProjectId = useWorkspaceActiveProjectId();
   const activeProject = useAtomValue(projectsAtom, (state) =>
     activeProjectId
@@ -625,11 +629,32 @@ export function ProjectWorkspaceSettingsSection() {
 
   return (
     <>
+      {confirmDialog}
       <section className="space-y-6">
         <div className="mb-6 space-y-3">
-          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-            Project Workspace
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Project Workspace
+            </h2>
+            <SettingsHeaderPortal>
+              <Button
+                size="xs"
+                variant="outline"
+                className="no-drag"
+                onClick={async () => {
+                  const confirmed = await confirm("Restore default settings?\n\nThis will reset: Terminal shell and Editor preferences.");
+                  if (confirmed) {
+                    workspaceShellActions.upsertProjectSettings(activeProjectId, {
+                      // Terminal shell and editor preferences will be reset here if/when they are added to the schema.
+                    });
+                  }
+                }}
+              >
+                <RotateCcwIcon className="size-3.5 mr-1" />
+                Restore defaults
+              </Button>
+            </SettingsHeaderPortal>
+          </div>
           <div className="flex flex-col gap-2">
             <h3 className="text-2xl font-semibold text-foreground tracking-tight break-words">
               {activeProject.name}

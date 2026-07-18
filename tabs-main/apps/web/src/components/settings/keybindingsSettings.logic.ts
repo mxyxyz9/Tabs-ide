@@ -281,6 +281,12 @@ export function commandLabel(command: KeybindingCommand): string {
   if (raw.startsWith("script.") && raw.endsWith(".run")) {
     return `Run Script: ${titleCaseCommandSegment(raw.slice("script.".length, -".run".length))}`;
   }
+  if (raw.startsWith("tool.")) {
+    return `Toolbar Tools: ${raw.slice("tool.".length).split(".").map(titleCaseCommandSegment).join(": ")}`;
+  }
+  if (raw.startsWith("tab.")) {
+    return `Project: ${raw.slice("tab.".length).split(".").map(titleCaseCommandSegment).join(": ")}`;
+  }
   return raw.split(".").map(titleCaseCommandSegment).join(": ");
 }
 
@@ -341,9 +347,6 @@ export function keybindingFromKeyboardEvent(
   }
   if (event.altKey) parts.push("alt");
   if (event.shiftKey) parts.push("shift");
-  if (parts.length === 0) {
-    return null;
-  }
   parts.push(keyToken);
   return parts.join("+");
 }

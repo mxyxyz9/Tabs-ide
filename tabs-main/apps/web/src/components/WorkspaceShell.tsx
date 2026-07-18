@@ -2041,6 +2041,7 @@ function GitTool(props: {
     onDispatchRelease,
   } = props;
   const api = readNativeApi();
+  const keybindings = useKeybindings();
   const queryClient = useQueryClient();
   const gitStatusQuery = useQuery(gitStatusQueryOptions(project.cwd));
   const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(project.cwd));
@@ -3294,19 +3295,23 @@ function GitTool(props: {
         return;
       }
 
-      if (event.altKey && event.key === "1") {
+      const command = resolveShortcutCommand(event, keybindings, {
+        context: { terminalFocus: false },
+      });
+
+      if (command === "workspace.basicMode") {
         event.preventDefault();
         handleWorkspaceModeChange("basic");
         return;
       }
-      if (event.altKey && event.key === "2") {
+      if (command === "workspace.advancedMode") {
         event.preventDefault();
         handleWorkspaceModeChange("advanced");
         return;
       }
       if (!isBasicMode) return;
 
-      if (event.key === "]") {
+      if (command === "git.nextFile") {
         event.preventDefault();
         if (changedFiles.length === 0) return;
         const selectedIndex = changedFiles.findIndex((file) => file.path === selectedPath);
@@ -3317,7 +3322,7 @@ function GitTool(props: {
         }
         return;
       }
-      if (event.key === "[") {
+      if (command === "git.prevFile") {
         event.preventDefault();
         if (changedFiles.length === 0) return;
         const selectedIndex = changedFiles.findIndex((file) => file.path === selectedPath);
@@ -3331,12 +3336,12 @@ function GitTool(props: {
         }
         return;
       }
-      if (event.key.toLowerCase() === "s" && selectedWorkingTreeFile?.unstaged) {
+      if (command === "git.stageFile" && selectedWorkingTreeFile?.unstaged) {
         event.preventDefault();
         handleStageFile(selectedWorkingTreeFile);
         return;
       }
-      if (event.key.toLowerCase() === "u" && selectedWorkingTreeFile?.staged) {
+      if (command === "git.unstageFile" && selectedWorkingTreeFile?.staged) {
         event.preventDefault();
         handleUnstageFile(selectedWorkingTreeFile);
       }
@@ -3345,6 +3350,7 @@ function GitTool(props: {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    keybindings,
     changedFiles,
     handleStageFile,
     handleUnstageFile,

@@ -27,6 +27,8 @@ import type {
 } from "@tabs/contracts";
 import { DEFAULT_DESKTOP_ICON_THEME } from "@tabs/contracts/settings";
 import { autoUpdater } from "electron-updater";
+import { DEFAULT_KEYBINDINGS, parseKeybindingShortcut } from "@tabs/shared/keybindings";
+import type { KeybindingShortcut } from "@tabs/contracts";
 
 import type {
   ContextMenuItem,
@@ -744,6 +746,70 @@ async function checkForUpdatesFromMenu(): Promise<void> {
       buttons: ["OK"],
     });
   }
+}
+
+
+let keybindingsWatcher: FS.FSWatcher | null = null;
+
+function setupKeybindingsWatcher() {
+  if (keybindingsWatcher) return;
+  const keybindingsPath = Path.join(CODE_OSS_PRIMARY_STATE_DIR, "profile", "default", "keybindings.json");
+  const profileDir = Path.dirname(keybindingsPath);
+  try {
+    FS.mkdirSync(profileDir, { recursive: true });
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    keybindingsWatcher = FS.watch(profileDir, (eventType, filename) => {
+      if (filename === "keybindings.json") {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          configureApplicationMenu();
+      setupKeybindingsWatcher();
+        }, 500);
+      }
+    });
+  } catch (e) {
+    // ignore
+  }
+}
+
+function getActiveAccelerator(command: string): string | undefined {
+  const keybindingsPath = Path.join(CODE_OSS_PRIMARY_STATE_DIR, "profile", "default", "keybindings.json");
+  let userBindings: Array<{ key: string, command: string, when?: string }> = [];
+  try {
+    if (FS.existsSync(keybindingsPath)) {
+      userBindings = JSON.parse(FS.readFileSync(keybindingsPath, "utf-8"));
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const binding = userBindings.find((b: any) => b.command === command) || 
+                  DEFAULT_KEYBINDINGS.find((b: any) => b.command === command);
+
+  if (!binding) return undefined;
+
+  const shortcut = parseKeybindingShortcut(binding.key);
+  if (!shortcut) return undefined;
+
+  const parts: string[] = [];
+  if (shortcut.modKey) parts.push("CmdOrCtrl");
+  if (shortcut.metaKey) parts.push("Meta");
+  if (shortcut.ctrlKey) parts.push("Control");
+  if (shortcut.altKey) parts.push("Alt");
+  if (shortcut.shiftKey) parts.push("Shift");
+
+  if (!shortcut.key) return parts.join("+");
+
+  let key = shortcut.key.toUpperCase();
+  if (key === " ") key = "Space";
+  else if (key === "ESCAPE") key = "Esc";
+  else if (key === "ARROWUP") key = "Up";
+  else if (key === "ARROWDOWN") key = "Down";
+  else if (key === "ARROWLEFT") key = "Left";
+  else if (key === "ARROWRIGHT") key = "Right";
+  
+  parts.push(key);
+  return parts.join("+");
 }
 
 function configureApplicationMenu(): void {

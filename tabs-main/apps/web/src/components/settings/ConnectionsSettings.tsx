@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { SettingsSection } from "~/routes/_chat.settings";
+import { SettingsSection, SettingsHeaderPortal } from "~/routes/_chat.settings";
 import { toastManager } from "~/components/ui/toast";
+import { useConfirm } from "~/hooks/useConfirm";
 import {
   Link2Icon,
   MonitorIcon,
@@ -16,6 +17,7 @@ import {
   TerminalIcon,
   PlusIcon,
   TriangleAlertIcon,
+  RotateCcwIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,6 +40,7 @@ interface TailscaleStatus {
 
 export function ConnectionsSettings() {
   const isDesktop = typeof window !== "undefined" && !!window.desktopBridge;
+  const { confirm, confirmDialog } = useConfirm();
   const [networkAccess, setNetworkAccess] = useState(false);
   const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus>({
     available: false,
@@ -128,7 +131,29 @@ export function ConnectionsSettings() {
 
   return (
     <div className="space-y-6">
-      <SettingsSection title="This Environment">
+      {confirmDialog}
+      <SettingsSection 
+        title="This Environment"
+        headerAction={
+          <SettingsHeaderPortal>
+            <Button
+              size="xs"
+              variant="outline"
+              className="no-drag"
+              onClick={async () => {
+                const confirmed = await confirm("Restore default settings?\n\nThis will reset: Network Access.");
+                if (confirmed) {
+                  setNetworkAccess(false);
+                  localStorage.setItem("networkAccessEnabled", "false");
+                }
+              }}
+            >
+              <RotateCcwIcon className="size-3.5 mr-1" />
+              Restore defaults
+            </Button>
+          </SettingsHeaderPortal>
+        }
+      >
         {/* Network Access Row */}
         <div className="border-t border-border/60 px-4 py-4 first:border-t-0 sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
