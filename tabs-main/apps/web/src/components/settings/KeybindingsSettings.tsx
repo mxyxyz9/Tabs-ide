@@ -34,7 +34,7 @@ import { parseKeybindingShortcut } from "@tabs/shared/keybindings";
 
 import { isElectron } from "../../env";
 import { formatShortcutLabel } from "../../keybindings";
-import { cn } from "../../lib/utils";
+import { cn, isMacPlatform } from "../../lib/utils";
 import { ensureNativeApi } from "../../nativeApi";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
 import { Button } from "../ui/button";
@@ -42,8 +42,11 @@ import { Input } from "../ui/input";
 import { Kbd } from "../ui/kbd";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { ScrollArea } from "../ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { Toggle } from "../ui/toggle";
 import { toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -84,14 +87,14 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
+    <section className="flex flex-col space-y-3 h-full min-h-0">
+      <div className="flex items-center justify-between shrink-0">
         <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
           {title}
         </h2>
         {headerAction}
       </div>
-      <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
+      <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
         {children}
       </div>
     </section>
@@ -1243,54 +1246,143 @@ export function KeybindingsSettings({
       }
     >
       {!isElectron ? (
-        <div className="flex items-start gap-2 border-b border-warning/20 bg-warning/5 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground sm:px-4">
-          <InfoIcon className="mt-0.5 size-3.5 shrink-0 text-warning" />
-          <p>
-            Some shortcuts may be claimed by the browser before the app sees them. Use the desktop
-            version for better support.
-          </p>
+        <div className="flex items-center gap-2 bg-warning/10 px-4 py-2 text-[11px] text-warning-foreground border-b border-warning/20">
+          <InfoIcon className="size-3.5 shrink-0" />
+          <p>Some shortcuts may be claimed by the browser before the app sees them. Use the desktop version for better support.</p>
         </div>
-      ) : null}
+      ) : (
+        <div className="flex items-center gap-2 bg-muted/10 px-4 py-2 text-[11px] text-muted-foreground border-b border-border/40">
+          <InfoIcon className="size-3.5 shrink-0 opacity-70" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span>Tab switching (<Kbd className="h-4 px-1 text-[9px] bg-background">Ctrl</Kbd>+<Kbd className="h-4 px-1 text-[9px] bg-background">Tab</Kbd>) may be intercepted by terminal tools.</span>
+            <span className="opacity-60">|</span>
+            <span>Reliable alternative: <Kbd className="h-4 px-1 text-[9px] bg-background">{isMacPlatform(platform) ? "⌘" : "Ctrl"}</Kbd>+<Kbd className="h-4 px-1 text-[9px] bg-background">Shift</Kbd>+<Kbd className="h-4 px-1 text-[9px] bg-background">[</Kbd> or <Kbd className="h-4 px-1 text-[9px] bg-background">]</Kbd>.</span>
+          </div>
+        </div>
+      )}
 
-      <ScrollArea scrollFade hideScrollbars className="w-full max-w-full rounded-none">
-        <div className="grid min-w-[680px] grid-cols-[minmax(190px,1.1fr)_minmax(220px,0.85fr)_minmax(210px,1fr)_60px] border-b border-border/70 bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-          <div>Command</div>
-          <div>Keybinding</div>
-          <div>When</div>
-          <div>Status</div>
-        </div>
-        <div className="min-w-[680px] divide-y divide-border/60">
-          {isAddingBinding ? (
-            <NewKeybindingTableRow
-              commandOptions={commandOptions}
-              allRows={rows}
-              variables={whenVariables}
-              isSaving={savingCommand !== null}
-              onSave={saveKeybinding}
-              onCancel={() => setIsAddingBinding(false)}
-              platform={platform}
-            />
-          ) : null}
-          {rows.map((row) => (
-            <KeybindingTableRow
-              key={row.id}
-              row={row}
-              allRows={rows}
-              variables={whenVariables}
-              isSaving={savingCommand === row.command}
-              onSave={saveKeybinding}
-              onReset={resetKeybinding}
-              onRemove={removeKeybinding}
-              platform={platform}
-            />
-          ))}
-          {rows.length === 0 && !isAddingBinding ? (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              No keybindings match your search.
+      {(() => {
+        const groups: Record<string, KeybindingRow[]> = {};
+        for (const row of rows) {
+          const label = commandLabel(row.command);
+          const parts = label.split(":");
+          const category = parts.length > 1 ? (parts[0] || "General").trim() : "General";
+          if (!groups[category]) {
+            groups[category] = [];
+          }
+          groups[category]!.push(row);
+        }
+        const sortedGroups = Object.entries(groups).sort(([a], [b]) => {
+          if (a === "General") return -1;
+          if (b === "General") return 1;
+          return a.localeCompare(b);
+        });
+        const allCategories = ["All", ...sortedGroups.map(([c]) => c)];
+
+        const renderTable = (tableRows: readonly KeybindingRow[], groupedRows?: [string, KeybindingRow[]][]) => (
+          <ScrollArea scrollFade hideScrollbars className="w-full max-w-full rounded-none h-full min-h-0 flex-1">
+            <div className="flex flex-col min-w-[680px]">
+              <div className="grid grid-cols-[minmax(190px,1.1fr)_minmax(220px,0.85fr)_minmax(210px,1fr)_60px] border-b border-border/70 bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground sticky top-0 z-10 backdrop-blur-md">
+                <div>Command</div>
+                <div>Keybinding</div>
+                <div>When</div>
+                <div>Status</div>
+              </div>
+              <div className="pb-8">
+                {isAddingBinding ? (
+                  <div className="border-b border-border/60 bg-muted/5">
+                    <NewKeybindingTableRow
+                      commandOptions={commandOptions}
+                      allRows={rows}
+                      variables={whenVariables}
+                      isSaving={savingCommand !== null}
+                      onSave={saveKeybinding}
+                      onCancel={() => setIsAddingBinding(false)}
+                      platform={platform}
+                    />
+                  </div>
+                ) : null}
+                {groupedRows ? (
+                  <div className="flex flex-col">
+                    {groupedRows.map(([category, categoryRows]) => (
+                      <div key={category} className="flex flex-col">
+                        <div className="bg-muted/50 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-foreground border-y border-border/60 flex items-center shadow-xs/5">
+                          {category}
+                        </div>
+                        <div className="divide-y divide-border/40">
+                          {categoryRows.map((row) => (
+                            <KeybindingTableRow
+                              key={row.id}
+                              row={row}
+                              allRows={rows}
+                              variables={whenVariables}
+                              isSaving={savingCommand === row.command}
+                              onSave={saveKeybinding}
+                              onReset={resetKeybinding}
+                              onRemove={removeKeybinding}
+                              platform={platform}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {tableRows.map((row) => (
+                      <KeybindingTableRow
+                        key={row.id}
+                        row={row}
+                        allRows={rows}
+                        variables={whenVariables}
+                        isSaving={savingCommand === row.command}
+                        onSave={saveKeybinding}
+                        onReset={resetKeybinding}
+                        onRemove={removeKeybinding}
+                        platform={platform}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {tableRows.length === 0 && !isAddingBinding ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    No keybindings found in this category.
+                  </div>
+                ) : null}
+              </div>
             </div>
-          ) : null}
-        </div>
-      </ScrollArea>
+          </ScrollArea>
+        );
+
+        return (
+          <Tabs defaultValue="All" className="flex flex-col flex-1 min-h-0 w-full">
+            <div className="px-4 py-2 border-b border-border/40 shrink-0 overflow-x-auto hide-scrollbar">
+              <TabsList className="bg-transparent h-auto p-0 gap-1.5 flex w-max">
+                {allCategories.map(cat => (
+                  <TabsTrigger 
+                    key={cat} 
+                    value={cat}
+                    className="data-[state=active]:bg-muted data-[state=active]:text-foreground text-muted-foreground hover:bg-muted/50 rounded-full px-4 py-1.5 text-xs transition-colors"
+                  >
+                    {cat}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+            
+            <TabsContent value="All" className="mt-0 flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden">
+              {renderTable(rows, sortedGroups)}
+            </TabsContent>
+            
+            {sortedGroups.map(([category, categoryRows]) => (
+              <TabsContent key={category} value={category} className="mt-0 flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden">
+                {renderTable(categoryRows)}
+              </TabsContent>
+            ))}
+          </Tabs>
+        );
+      })()}
     </SettingsSection>
   );
 }

@@ -8208,50 +8208,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const routeTerminalState = useThreadTerminalState(routeThreadId ?? null);
   const terminalOpen = routeTerminalState?.terminalOpen ?? false;
 
-  useEffect(() => {
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented) return;
-      const command = resolveShortcutCommand(event, keybindings, {
-        context: {
-          terminalFocus: isTerminalFocused(),
-          terminalOpen,
-          shellChromeFocus: document.hasFocus(),
-        },
-      });
-      if (!command) return;
-
-      if (command === "tab.new") {
-        event.preventDefault();
-        event.stopPropagation();
-        const pendingId = randomUUID();
-        openPendingTab(pendingId);
-        void navigate({ to: "/" });
-        return;
-      }
-
-      if (command === "chat.new" || command === "chat.newLocal") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (workspaceState.session.activeProjectId) {
-          void handleNewThread(workspaceState.session.activeProjectId, {
-            envMode: command === "chat.newLocal" ? "local" : settings.defaultThreadEnvMode,
-          });
-        }
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    keybindings,
-    terminalOpen,
-    openPendingTab,
-    navigate,
-    handleNewThread,
-    workspaceState.session.activeProjectId,
-    settings.defaultThreadEnvMode,
-  ]);
 
   const handleCreateProject = useCallback(async () => {
     const api = readNativeApi();
@@ -8375,9 +8331,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           if (tabsList.length > 0) activate((base - 1 + tabsList.length) % tabsList.length);
           return;
         default: {
-          const goMatch = /^tab-go-([1-9])$/.exec(action);
-          if (goMatch && tabsList.length > 0) {
-            const requested = Number(goMatch[1]);
+          const tabGoMatch = /^tab-go-([1-9])$/.exec(action);
+          if (tabGoMatch && tabsList.length > 0) {
+            const requested = Number(tabGoMatch[1]);
             activate(requested === 9 ? tabsList.length - 1 : Math.min(requested - 1, tabsList.length - 1));
           }
         }
@@ -8580,6 +8536,65 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       workspaceState.session.rememberedThreadIdByProjectId,
     ],
   );
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const command = resolveShortcutCommand(event, keybindings, {
+        context: {
+          terminalFocus: isTerminalFocused(),
+          terminalOpen,
+          shellChromeFocus: document.hasFocus(),
+        },
+      });
+      if (!command) return;
+
+      if (command === "tab.new") {
+        event.preventDefault();
+        event.stopPropagation();
+        const pendingId = randomUUID();
+        openPendingTab(pendingId);
+        void navigate({ to: "/" });
+        return;
+      }
+
+      if (command === "chat.new" || command === "chat.newLocal") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (workspaceState.session.activeProjectId) {
+          void handleNewThread(workspaceState.session.activeProjectId, {
+            envMode: command === "chat.newLocal" ? "local" : settings.defaultThreadEnvMode,
+          });
+        }
+        return;
+      }
+      if (command.startsWith("tool.jumpTo")) {
+        const index = parseInt(command.slice(-1), 10) - 1;
+        if (workspaceState.session.activeProjectId && availableTools.length > 0) {
+          event.preventDefault();
+          event.stopPropagation();
+          const targetTool = availableTools[index === 8 ? availableTools.length - 1 : Math.min(index, availableTools.length - 1)];
+          if (targetTool) {
+            handleSelectTool(targetTool.id);
+          }
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    keybindings,
+    terminalOpen,
+    openPendingTab,
+    navigate,
+    handleNewThread,
+    workspaceState.session.activeProjectId,
+    settings.defaultThreadEnvMode,
+    availableTools,
+    handleSelectTool,
+  ]);
 
   // Tool-switching shortcuts (cmd/ctrl+alt+1..9 → the Nth visible tool of the
   // active project), via menu accelerators so they work everywhere — including

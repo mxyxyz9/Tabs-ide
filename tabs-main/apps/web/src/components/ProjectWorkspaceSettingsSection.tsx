@@ -25,6 +25,7 @@ import {
   RotateCcwIcon,
   SaveIcon,
   Trash2Icon,
+  InfoIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { MasterDetail, MasterDetailContent, MasterDetailItem, MasterDetailList, MasterDetailSidebar } from "./ui/master-detail";
@@ -44,6 +45,7 @@ import {
 } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
@@ -311,10 +313,21 @@ export function ProjectWorkspaceSettingsSection() {
   const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>([]);
   const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});
 
+  const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
+  const isBrowserDefaultUrlDirty = projectSettings ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl : false;
+
+  useEffect(() => {
+    setBrowserDefaultUrlDraft(projectSettings?.browser?.defaultUrl ?? "");
+  }, [projectSettings?.browser?.defaultUrl, activeProjectId]);
+
   const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
   const [activeCustomEmbedId, setActiveCustomEmbedId] = useState<string | null>(null);
   const [activeServerProcessId, setActiveServerProcessId] = useState<string | null>(null);
   const [activeServerPresetId, setActiveServerPresetId] = useState<string | null>(null);
+
+  const hasInternalBrowserOverride = serverPresetDrafts.some(
+    (preset) => preset.previewUrl && (!preset.previewOpenTarget || preset.previewOpenTarget === "in-app")
+  );
 
   const [pendingToggle, setPendingToggle] = useState<{
     toolId: string;
@@ -612,25 +625,30 @@ export function ProjectWorkspaceSettingsSection() {
 
   return (
     <>
-      <section className="space-y-3">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Project Workspace
-        </h2>
+      <section className="space-y-6">
+        <div className="mb-6 space-y-3">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Project Workspace
+          </h2>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-2xl font-semibold text-foreground tracking-tight break-words">
+              {activeProject.name}
+            </h3>
+            <div className="text-xs text-muted-foreground font-mono bg-muted/40 px-2 py-1.5 rounded-md w-fit break-all border border-border/50">
+              {activeProject.cwd}
+            </div>
+          </div>
+        </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>{activeProject.name}</CardTitle>
-            <CardDescription>{activeProject.cwd}</CardDescription>
+            <CardTitle>Toolbar Tools</CardTitle>
+            <CardDescription>
+              Toggle and reorder the tools shown in the project toolbar.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">Toolbar Tools</div>
-                <div className="text-xs text-muted-foreground">
-                  Toggle and reorder the tools shown in the project toolbar.
-                </div>
-              </div>
-              <div className="space-y-2">
+          <CardContent>
+            <div className="space-y-2">
                 <DndContext
                   sensors={dndSensors}
                   collisionDetection={closestCenter}
@@ -701,37 +719,62 @@ export function ProjectWorkspaceSettingsSection() {
                   </SortableContext>
                 </DndContext>
               </div>
-            </div>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">Browser Default URL</div>
-                <div className="text-xs text-muted-foreground">
-                  The Browser tool loads this URL by default for the active project.
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Browser Default URL</CardTitle>
+            <CardDescription>
+              The Browser tool loads this URL by default for the active project. Note: If you run a Server Preset that has a Preview URL configured, it will automatically override this default and navigate to the preset's preview.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={browserDefaultUrlDraft}
+                  onChange={(event) => setBrowserDefaultUrlDraft(event.target.value)}
+                  placeholder="http://localhost:3000"
+                />
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    if (activeProjectId) {
+                      upsertProjectSettings(activeProjectId, (current) => ({
+                        ...current,
+                        browser: {
+                          ...current.browser,
+                          defaultUrl: browserDefaultUrlDraft,
+                        },
+                      }));
+                    }
+                  }}
+                  disabled={!isBrowserDefaultUrlDirty}
+                >
+                  Save
+                </Button>
               </div>
-              <Input
-                value={projectSettings.browser.defaultUrl}
-                onChange={(event) =>
-                  upsertProjectSettings(activeProjectId, (current) => ({
-                    ...current,
-                    browser: {
-                      ...current.browser,
-                      defaultUrl: event.target.value,
-                    },
-                  }))
-                }
-                placeholder="http://localhost:3000"
-              />
+              {hasInternalBrowserOverride && (
+                <Alert variant="default" className="bg-muted/50 py-3">
+                  <InfoIcon className="size-4 mt-0" />
+                  <AlertDescription className="text-muted-foreground ml-2">
+                    A Server Preset is configured to open a preview in the Internal Browser. When you run that preset, its preview URL will override this default.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
+          </CardContent>
+        </Card>
 
-                        <div className="space-y-4 pt-4 border-t border-border/40">
-              <div>
-                <div className="text-sm font-medium text-foreground">Project Tools</div>
-                <div className="text-xs text-muted-foreground">
-                  Manage your project-specific browser tabs, background terminals, or server presets.
-                </div>
-              </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Project Tools</CardTitle>
+            <CardDescription>
+              Manage your project-specific browser tabs, background terminals, or server presets.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
               <Tabs defaultValue="browser">
                 <TabsList className="mb-4">
                   <TabsTrigger value="browser">Browser Tabs</TabsTrigger>
@@ -1243,8 +1286,6 @@ export function ProjectWorkspaceSettingsSection() {
                   </div>
                 </TabsContent>
               </Tabs>
-            </div>
-
           </CardContent>
         </Card>
       </section>

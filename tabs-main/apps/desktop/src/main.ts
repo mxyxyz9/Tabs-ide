@@ -833,7 +833,7 @@ function configureApplicationMenu(): void {
         { type: "separator" },
         ...Array.from({ length: 9 }, (_, index) => ({
           label: `Go to Tab ${index + 1}`,
-          accelerator: `CmdOrCtrl+${index + 1}`,
+          accelerator: `Alt+${index + 1}`,
           click: () => dispatchMenuAction(`tab-go-${index + 1}`),
         })),
         { type: "separator" },
@@ -841,7 +841,7 @@ function configureApplicationMenu(): void {
           label: "Switch Tool",
           submenu: Array.from({ length: 9 }, (_, index) => ({
             label: `Tool ${index + 1}`,
-            accelerator: `CmdOrCtrl+Alt+${index + 1}`,
+            accelerator: `CmdOrCtrl+${index + 1}`,
             click: () => dispatchMenuAction(`tool-go-${index + 1}`),
           })),
         },
