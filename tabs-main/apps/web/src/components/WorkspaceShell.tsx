@@ -8942,22 +8942,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       const process = (activeProjectSettings.serverPresets ?? []).find((entry: any) => entry.id === processId);
       if (!process) return;
 
-      if (process.previewOpenTarget === "external" && process.previewUrl) {
-        const api = readNativeApi();
-        if (api?.shell?.openExternal) {
-          api.shell.openExternal(process.previewUrl).catch(console.error);
-        } else {
-          window.open(process.previewUrl, "_blank", "noopener,noreferrer");
-        }
-      } else {
-        if (process.previewUrl && activeProject?.id) {
-          workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
-        }
-        if (process.autoOpenPreview && activeProject?.id) {
-          workspaceShellActions.setActiveTool(activeProject.id, "browser");
-        }
-      }
-
       revealServerTerminal();
       await openProcessTerminal({
         threadId: serverThreadId,
@@ -8969,6 +8953,26 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         process,
         reveal: true,
       });
+
+      // Delay opening the browser slightly to give the server (e.g. Vite) time to start up
+      // and bind to the port, preventing "Connection Refused" errors.
+      setTimeout(() => {
+        if (process.previewOpenTarget === "external" && process.previewUrl) {
+          const api = readNativeApi();
+          if (api?.shell?.openExternal) {
+            api.shell.openExternal(process.previewUrl).catch(console.error);
+          } else {
+            window.open(process.previewUrl, "_blank", "noopener,noreferrer");
+          }
+        } else {
+          if (process.previewUrl && activeProject?.id) {
+            workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
+          }
+          if (process.autoOpenPreview && activeProject?.id) {
+            workspaceShellActions.setActiveTool(activeProject.id, "browser");
+          }
+        }
+      }, 3000);
     },
     [activeProjectSettings, openProcessTerminal, revealServerTerminal, serverThreadId, activeProject?.id],
   );
