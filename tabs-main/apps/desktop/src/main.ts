@@ -167,7 +167,7 @@ const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const DESKTOP_UPDATE_CHANNEL = "latest";
 const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
-const CODE_OSS_READY_TIMEOUT_MS = 8_000;
+const CODE_OSS_READY_TIMEOUT_MS = 60_000;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 
@@ -2884,6 +2884,7 @@ if (hasSingleInstanceLock) {
 // This is intentional IDE behavior (exits the app when the main editor window is closed,
 // rather than leaving a headless backend process running).
 app.on("window-all-closed", () => {
+  writeDesktopLogHeader("window-all-closed emitted, calling app.quit()");
   app.quit();
 });
 

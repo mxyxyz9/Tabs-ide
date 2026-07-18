@@ -5177,21 +5177,25 @@ function GitTool(props: {
               />
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">
                 Release from branch
-                <select
+                <Select
                   value={releaseBranch}
-                  onChange={(event) => setReleaseBranch(event.target.value)}
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onValueChange={(value) => setReleaseBranch(value ?? "")}
                 >
-                  {localBranches.length === 0 ? (
-                    <option value={releaseBranch}>{releaseBranch || "main"}</option>
-                  ) : (
-                    localBranches.map((branch) => (
-                      <option key={branch.name} value={branch.name}>
-                        {branch.name}
-                      </option>
-                    ))
-                  )}
-                </select>
+                  <SelectTrigger className="h-8 w-full sm:text-sm">
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {localBranches.length === 0 ? (
+                      <SelectItem value={releaseBranch}>{releaseBranch || "main"}</SelectItem>
+                    ) : (
+                      localBranches.map((branch) => (
+                        <SelectItem key={branch.name} value={branch.name}>
+                          {branch.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectPopup>
+                </Select>
               </label>
               <div className="rounded-md bg-muted/40 px-2.5 py-1.5 font-mono text-xs text-muted-foreground">
                 {releaseVersion.trim().length > 0 && releaseBranch.trim().length > 0

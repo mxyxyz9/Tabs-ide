@@ -26,7 +26,7 @@ import {
   MAX_TERMINALS_PER_GROUP,
   type ThreadTerminalGroup,
 } from "../types";
-import { readNativeApi } from "~/nativeApi";
+import { readNativeApi, ensureNativeApi } from "~/nativeApi";
 
 const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
@@ -989,8 +989,11 @@ export default function ThreadTerminalDrawer({
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
               className="p-1 text-foreground/90 transition-colors hover:bg-accent"
-              onClick={() => {
-                if (window.confirm("Are you sure you want to close this terminal?")) {
+              onClick={async () => {
+                const confirmed = await (readNativeApi() ?? ensureNativeApi()).dialogs.confirm(
+                  "Are you sure you want to close this terminal?"
+                );
+                if (confirmed) {
                   onCloseTerminal(resolvedActiveTerminalId);
                 }
               }}
@@ -1086,8 +1089,11 @@ export default function ThreadTerminalDrawer({
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
-                    onClick={() => {
-                      if (window.confirm("Are you sure you want to close this terminal?")) {
+                    onClick={async () => {
+                      const confirmed = await (readNativeApi() ?? ensureNativeApi()).dialogs.confirm(
+                        "Are you sure you want to close this terminal?"
+                      );
+                      if (confirmed) {
                         onCloseTerminal(resolvedActiveTerminalId);
                       }
                     }}
