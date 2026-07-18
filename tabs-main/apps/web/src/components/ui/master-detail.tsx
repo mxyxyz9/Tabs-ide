@@ -6,7 +6,7 @@ import { cn } from "../../lib/utils";
 
 export function MasterDetail({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex flex-1 min-h-0 gap-6", className)}>
+    <div className={cn("flex flex-1 min-h-0 min-w-0 gap-6", className)}>
       {children}
     </div>
   );
@@ -32,7 +32,7 @@ export function MasterDetailList({ children, className }: { children: ReactNode;
 
 export function MasterDetailContent({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex-1 -my-2 py-2 pr-4", className)}>
+    <div className={cn("flex-1 min-w-0 -my-2 py-2 pr-4", className)}>
       <div className="pb-4">
         {children}
       </div>

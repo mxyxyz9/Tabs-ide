@@ -711,7 +711,7 @@ function SettingsRouteView() {
         providerName: input.providerName,
         command: input.command,
         kind: input.kind,
-        threadId: ThreadId.makeUnsafe(`settings-${input.kind}-${input.provider}`),
+        threadId: ThreadId.makeUnsafe(`settings-${input.kind}-${input.provider}-${Date.now()}`),
       });
     },
     [],
