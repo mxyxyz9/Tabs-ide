@@ -162,7 +162,7 @@ function buildCustomProcessToolsFromDrafts(drafts: readonly ServerProcessDraft[]
     kind: "custom_process" as const,
     label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal",
     visible: draft.visible,
-    serverProcessId: draft.id,
+    terminalProcessId: draft.id,
   }));
 }
 
@@ -486,12 +486,12 @@ export function ProjectWorkspaceSettingsSection() {
           nextServerProcesses[index]?.label ??
           (draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal"),
         visible: draft.visible,
-        serverProcessId: draft.id,
+        terminalProcessId: draft.id,
       }));
 
       return {
         ...current,
-        serverProcesses: nextServerProcesses,
+        terminalProcesses: nextServerProcesses,
         tools: mergeToolGroup(current.tools, nextProcessTools, "custom_process", "server"),
       };
     });
@@ -674,21 +674,6 @@ export function ProjectWorkspaceSettingsSection() {
                                     {describeToolKind(tool.kind)}
                                   </div>
                                 </div>
-                                {tool.kind === "custom_embed" || tool.kind === "custom_process" ? (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      setExpandedToolbarToolIds((current) => ({
-                                        ...current,
-                                        [tool.id]: !current[tool.id],
-                                      }))
-                                    }
-                                  >
-                                    {isExpanded ? "Collapse" : "Expand"}
-                                  </Button>
-                                ) : null}
                                 <Switch
                                   checked={tool.visible}
                                   onCheckedChange={(checked) => {
@@ -702,109 +687,8 @@ export function ProjectWorkspaceSettingsSection() {
                                   }}
                                   aria-label={`Toggle ${tool.label}`}
                                 />
-                                {tool.kind === "custom_embed" && embedDraft ? (
-                                  <Button
-                                    type="button"
-                                    size="icon-xs"
-                                    variant="outline"
-                                    onClick={() => removeCustomEmbedDraft(embedDraft.id)}
-                                  >
-                                    <Trash2Icon className="size-3.5" />
-                                  </Button>
-                                ) : null}
-                                {tool.kind === "custom_process" && processDraft ? (
-                                  <Button
-                                    type="button"
-                                    size="icon-xs"
-                                    variant="outline"
-                                    onClick={() => removeServerProcessDraft(processDraft.id)}
-                                  >
-                                    <Trash2Icon className="size-3.5" />
-                                  </Button>
-                                ) : null}
                               </div>
 
-                              {tool.kind === "custom_embed" && embedDraft && isExpanded ? (
-                                <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Custom URL
-                                    </div>
-                                    <Input
-                                      value={embedDraft.url}
-                                      onChange={(event) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === embedDraft.id
-                                              ? { ...entry, url: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="https://www.figma.com/file/..."
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Label
-                                    </div>
-                                    <Input
-                                      value={embedDraft.label}
-                                      onChange={(event) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === embedDraft.id
-                                              ? { ...entry, label: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="Figma"
-                                    />
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {tool.kind === "custom_process" && processDraft && isExpanded ? (
-                                <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Label
-                                    </div>
-                                    <Input
-                                      value={processDraft.label}
-                                      onChange={(event) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === processDraft.id
-                                              ? { ...entry, label: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="OpenCore"
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Working Directory
-                                    </div>
-                                    <Input
-                                      value={processDraft.cwd}
-                                      onChange={(event) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === processDraft.id
-                                              ? { ...entry, cwd: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder={activeProject.cwd}
-                                    />
-                                  </div>
-                                </div>
-                              ) : null}
                             </div>
                           )}
                         </SortableToolRow>
@@ -980,8 +864,10 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                    if (activeCustomEmbedId === activeDraft.id) setActiveCustomEmbedId(null);
+                                    if (window.confirm("Are you sure you want to delete this tab?")) {
+                                      setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
+                                      if (activeCustomEmbedId === activeDraft.id) setActiveCustomEmbedId(null);
+                                    }
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1222,8 +1108,10 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    setServerProcessDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                    if (activeServerProcessId === activeDraft.id) setActiveServerProcessId(null);
+                                    if (window.confirm("Are you sure you want to delete this terminal?")) {
+                                      setServerProcessDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
+                                      if (activeServerProcessId === activeDraft.id) setActiveServerProcessId(null);
+                                    }
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1334,8 +1222,10 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    setServerPresetDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                    if (activeServerPresetId === activeDraft.id) setActiveServerPresetId(null);
+                                    if (window.confirm("Are you sure you want to delete this preset?")) {
+                                      setServerPresetDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
+                                      if (activeServerPresetId === activeDraft.id) setActiveServerPresetId(null);
+                                    }
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />

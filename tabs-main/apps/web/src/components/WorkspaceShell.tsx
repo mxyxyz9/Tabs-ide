@@ -7271,7 +7271,7 @@ function ServerTool(props: {
     setEditingPresetDraft(null);
 
     if (presetDialogMode === "add") {
-      setIsPresetDialogOpen(false);
+      setPresetDialogMode("manage");
     }
   }, [editingPresetDraft, presetDrafts, normalizePresetDraft, props, presetDialogMode]);
 
@@ -8782,6 +8782,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   // ── Thread-parameterized terminal/process cores ──────────────────────
   // Shared by the Server tab (server thread) and each custom terminal tab
   // (its own isolated thread) so the two never cross-contaminate.
+  const executedCommandsRef = useRef<Set<string>>(new Set());
+
   const openProcessTerminal = useCallback(
     async (input: {
       threadId: ThreadId;
@@ -8826,8 +8828,15 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       setShellTerminalFocusRequestId((value) => value + 1);
       try {
         await api.terminal.open({ threadId: input.threadId, terminalId, cwd, env });
-        for (const command of commands) {
-          await api.terminal.write({ threadId: input.threadId, terminalId, data: `${command}\r` });
+        const runKey = `${input.threadId}:${terminalId}`;
+        const isAlreadyRunningLocally = executedCommandsRef.current.has(runKey);
+        const isAlreadyRunningRemotely = input.terminalState?.runningTerminalIds.includes(terminalId);
+
+        if (!isAlreadyRunningLocally && !isAlreadyRunningRemotely) {
+          executedCommandsRef.current.add(runKey);
+          for (const command of commands) {
+            await api.terminal.write({ threadId: input.threadId, terminalId, data: `${command}\r` });
+          }
         }
       } catch (error) {
         toastManager.add({
@@ -8852,6 +8861,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       terminalId: string;
       clearIfFinal: boolean;
     }) => {
+      executedCommandsRef.current.delete(`${input.threadId}:${input.terminalId}`);
       const api = readNativeApi();
       const isFinalTerminal = (input.terminalState?.terminalIds.length ?? 0) <= 1;
       const fallbackExitWrite = () =>
@@ -8885,6 +8895,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     (terminalId: string) => {
       const api = readNativeApi();
       if (!serverThreadId || !api || !serverTerminalState) return;
+      executedCommandsRef.current.delete(`${serverThreadId}:${terminalId}`);
       const isFinalTerminal = serverTerminalState.terminalIds.length <= 1;
       const fallbackExitWrite = () =>
         api.terminal

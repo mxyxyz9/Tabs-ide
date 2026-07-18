@@ -989,7 +989,11 @@ export default function ThreadTerminalDrawer({
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
               className="p-1 text-foreground/90 transition-colors hover:bg-accent"
-              onClick={() => onCloseTerminal(resolvedActiveTerminalId)}
+              onClick={() => {
+                if (window.confirm("Are you sure you want to close this terminal?")) {
+                  onCloseTerminal(resolvedActiveTerminalId);
+                }
+              }}
               label={closeTerminalActionLabel}
             >
               <Trash2 className="size-3.25" />
@@ -1082,7 +1086,11 @@ export default function ThreadTerminalDrawer({
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
-                    onClick={() => onCloseTerminal(resolvedActiveTerminalId)}
+                    onClick={() => {
+                      if (window.confirm("Are you sure you want to close this terminal?")) {
+                        onCloseTerminal(resolvedActiveTerminalId);
+                      }
+                    }}
                     label={closeTerminalActionLabel}
                   >
                     <Trash2 className="size-3.25" />
