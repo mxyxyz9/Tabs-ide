@@ -12,6 +12,16 @@ import {
   useState,
 } from "react";
 import { Popover, PopoverPopup, PopoverTrigger } from "~/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
+import { Button } from "~/components/ui/button";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
 import { openInPreferredEditor } from "../editorPreferences";
 import {
@@ -720,6 +730,7 @@ export default function ThreadTerminalDrawer({
   onHeightChange,
   onAddTerminalContext,
 }: ThreadTerminalDrawerProps) {
+  const [terminalToCloseId, setTerminalToCloseId] = useState<string | null>(null);
   const [drawerHeight, setDrawerHeight] = useState(() => clampDrawerHeight(height));
   const [resizeEpoch, setResizeEpoch] = useState(0);
   const drawerHeightRef = useRef(drawerHeight);
@@ -989,14 +1000,7 @@ export default function ThreadTerminalDrawer({
             <div className="h-4 w-px bg-border/80" />
             <TerminalActionButton
               className="p-1 text-foreground/90 transition-colors hover:bg-accent"
-              onClick={async () => {
-                const confirmed = await (readNativeApi() ?? ensureNativeApi()).dialogs.confirm(
-                  "Are you sure you want to close this terminal?"
-                );
-                if (confirmed) {
-                  onCloseTerminal(resolvedActiveTerminalId);
-                }
-              }}
+              onClick={() => setTerminalToCloseId(resolvedActiveTerminalId)}
               label={closeTerminalActionLabel}
             >
               <Trash2 className="size-3.25" />
@@ -1089,13 +1093,8 @@ export default function ThreadTerminalDrawer({
                   </TerminalActionButton>
                   <TerminalActionButton
                     className="inline-flex h-full items-center border-l border-border/70 px-1 text-foreground/90 transition-colors hover:bg-accent/70"
-                    onClick={async () => {
-                      const confirmed = await (readNativeApi() ?? ensureNativeApi()).dialogs.confirm(
-                        "Are you sure you want to close this terminal?"
-                      );
-                      if (confirmed) {
-                        onCloseTerminal(resolvedActiveTerminalId);
-                      }
+                    onClick={() => {
+                      setTerminalToCloseId(resolvedActiveTerminalId);
                     }}
                     label={closeTerminalActionLabel}
                   >
@@ -1169,7 +1168,7 @@ export default function ThreadTerminalDrawer({
                                       <button
                                         type="button"
                                         className="inline-flex size-3.5 items-center justify-center rounded text-xs font-medium leading-none text-muted-foreground opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"
-                                        onClick={() => onCloseTerminal(terminalId)}
+                                        onClick={() => setTerminalToCloseId(terminalId)}
                                         aria-label={closeTerminalLabel}
                                       />
                                     }
@@ -1199,6 +1198,36 @@ export default function ThreadTerminalDrawer({
           )}
         </div>
       </div>
+
+      <AlertDialog
+        open={!!terminalToCloseId}
+        onOpenChange={(open) => {
+          if (!open) setTerminalToCloseId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Terminal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close {terminalToCloseId ? (terminalLabelById.get(terminalToCloseId) ?? "this terminal") : "this terminal"}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (terminalToCloseId) {
+                  onCloseTerminal(terminalToCloseId);
+                  setTerminalToCloseId(null);
+                }
+              }}
+            >
+              Close Terminal
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

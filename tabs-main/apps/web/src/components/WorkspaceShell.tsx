@@ -158,6 +158,7 @@ import { toastManager } from "./ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { getGitWorkspaceLayoutSection } from "./GitToolLayout.logic";
 import type { GitWorkspaceMode, GitWorkspaceSwitchReason } from "./GitToolLayout.logic";
+import { useConfirm } from "~/hooks/useConfirm";
 import {
   EMPTY_PROJECT_CODE_TOOL_STATE,
   EMPTY_PROJECT_GIT_TOOL_STATE,
@@ -2026,6 +2027,7 @@ function GitTool(props: {
   onOpenFileInCode: (relativePath: string) => void;
   onDispatchRelease: (version: string, branch: string) => void;
 }) {
+  const { confirm, confirmDialog } = useConfirm();
   const {
     project,
     activeThreadId,
@@ -2747,7 +2749,7 @@ function GitTool(props: {
   const handleDiscardFile = useCallback(
     async (file: GitStatusFile) => {
       if (!api) return;
-      const confirmed = await api.dialogs.confirm(
+      const confirmed = await confirm(
         `Discard changes for ${file.path}? This cannot be undone.`,
       );
       if (!confirmed) return;
@@ -2920,7 +2922,7 @@ function GitTool(props: {
   const handleDropStash = useCallback(
     async (stashRef: string) => {
       if (!api) return;
-      const confirmed = await api.dialogs.confirm(`Drop ${stashRef}? This cannot be undone.`);
+      const confirmed = await confirm(`Drop ${stashRef}? This cannot be undone.`);
       if (!confirmed) return;
       void runGitTask({
         id: `stash:drop:${stashRef}`,
@@ -2935,7 +2937,7 @@ function GitTool(props: {
   const handleResolveConflictSide = useCallback(
     async (file: GitStatusFile, side: "ours" | "theirs") => {
       if (!api) return;
-      const confirmed = await api.dialogs.confirm(
+      const confirmed = await confirm(
         `Use ${side} for ${file.path}? This will replace the conflicted file contents and mark it resolved.`,
       );
       if (!confirmed) return;
@@ -3011,7 +3013,7 @@ function GitTool(props: {
     async (side: "ours" | "theirs") => {
       if (!api || conflictedFiles.length === 0) return;
       const sideLabel = side === "ours" ? "your current branch's" : "the incoming";
-      const confirmed = await api.dialogs.confirm(
+      const confirmed = await confirm(
         `Resolve all ${conflictedFiles.length} conflicted file${conflictedFiles.length === 1 ? "" : "s"} using ${sideLabel} version? Each file is replaced and marked resolved.`,
       );
       if (!confirmed) return;
@@ -3213,7 +3215,7 @@ function GitTool(props: {
 
   const handleAbortOperation = useCallback(async () => {
     if (!api || !currentOperation) return;
-    const confirmed = await api.dialogs.confirm(
+    const confirmed = await confirm(
       `Abort the current ${currentOperation.kind}? Any in-progress merge/rebase state will be discarded.`,
     );
     if (!confirmed) return;
@@ -5352,6 +5354,7 @@ function GitTool(props: {
           </DialogPanel>
         </DialogPopup>
       </Dialog>
+      {confirmDialog}
     </div>
   );
 }
@@ -7019,11 +7022,13 @@ function ServerTool(props: {
   activeTerminalId: string | null;
   hasTerminalWorkspace: boolean;
 }) {
+  const { confirm, confirmDialog } = useConfirm();
   const processes = useMemo(() => {
     return props.projectSettings.serverPresets ?? [];
   }, [props.projectSettings.serverPresets]);
   const terminalIdSet = new Set(props.terminalIds);
   const runningProcessIdSet = new Set(props.runningProcessIds);
+  const dependencyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [presetsExpanded, setPresetsExpanded] = useState(false);
   const hasRunnableCommands = useCallback(
     (commands: ReadonlyArray<string>) => commands.some((command) => command.trim().length > 0),
@@ -7123,11 +7128,16 @@ function ServerTool(props: {
   const [editingPresetDraft, setEditingPresetDraft] = useState<any>(null);
   const [presetToDeleteId, setPresetToDeleteId] = useState<string | null>(null);
 
+  const hasInitializedDraftsRef = useRef(false);
+
   useEffect(() => {
     if (!isPresetDialogOpen) {
       setEditingPresetDraft(null);
+      hasInitializedDraftsRef.current = false;
       return;
     }
+    if (hasInitializedDraftsRef.current) return;
+    hasInitializedDraftsRef.current = true;
 
     const drafts = processes.map((process: any) => ({
       id: process.id,
@@ -7333,6 +7343,10 @@ function ServerTool(props: {
     : null;
 
   const handleRunProcessWithDependencies = useCallback((processId: string) => {
+    if (dependencyTimeoutsRef.current.has(processId)) {
+      clearTimeout(dependencyTimeoutsRef.current.get(processId)!);
+      dependencyTimeoutsRef.current.delete(processId);
+    }
     const process = processes.find((p: any) => p.id === processId) || presetDrafts.find((p) => p.id === processId);
     if (process?.dependsOn && process.dependsOn.length > 0) {
       let delayRun = false;
@@ -7348,9 +7362,11 @@ function ServerTool(props: {
         }
       });
       if (delayRun) {
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
+          dependencyTimeoutsRef.current.delete(processId);
           props.onRunProcess(processId);
         }, 3500);
+        dependencyTimeoutsRef.current.set(processId, timeoutId);
       } else {
         props.onRunProcess(processId);
       }
@@ -7374,15 +7390,17 @@ function ServerTool(props: {
     <div className="flex h-full min-h-0 flex-col bg-background">
       <div className="border-b border-border/70 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={props.terminalVisible ? props.onHideTerminal : props.onRevealTerminal}
-          >
-            <TerminalSquareIcon className="size-3.5" />
-            {props.terminalVisible ? "Hide Terminal" : "Open Terminal"}
-          </Button>
+          {props.hasTerminalWorkspace ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={props.terminalVisible ? props.onHideTerminal : props.onRevealTerminal}
+            >
+              <TerminalSquareIcon className="size-3.5" />
+              {props.terminalVisible ? "Hide Terminal" : "Show Terminal"}
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"
@@ -7428,7 +7446,14 @@ function ServerTool(props: {
               type="button"
               size="sm"
               variant="destructive-outline"
-              onClick={props.onCloseAllTerminals}
+              onClick={async () => {
+                const confirmed = await confirm(
+                  "Are you sure you want to close all servers and terminals?",
+                );
+                if (confirmed) {
+                  props.onCloseAllTerminals();
+                }
+              }}
             >
               <XIcon className="size-3.5" />
               Close All
@@ -7523,7 +7548,14 @@ function ServerTool(props: {
                   <Button
                     type="button"
                     variant="destructive-outline"
-                    onClick={props.onCloseAllTerminals}
+                    onClick={async () => {
+                      const confirmed = await confirm(
+                        "Are you sure you want to close all servers and terminals?",
+                      );
+                      if (confirmed) {
+                        props.onCloseAllTerminals();
+                      }
+                    }}
                   >
                     <XIcon className="size-3.5" />
                     Close All
@@ -7843,6 +7875,7 @@ function ServerTool(props: {
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
+      {confirmDialog}
     </div>
   );
 }
@@ -8628,8 +8661,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const createNewGitTerminal = useCallback(() => {
     if (!gitTerminalThreadId) return;
     storeNewTerminal(gitTerminalThreadId, `terminal-${randomUUID()}`);
+    if (
+      gitTerminalState?.terminalIds.includes(DEFAULT_THREAD_TERMINAL_ID) &&
+      !gitTerminalState.runningTerminalIds.includes(DEFAULT_THREAD_TERMINAL_ID)
+    ) {
+      storeCloseTerminal(gitTerminalThreadId, DEFAULT_THREAD_TERMINAL_ID);
+    }
     setShellTerminalFocusRequestId((value) => value + 1);
-  }, [gitTerminalThreadId, storeNewTerminal]);
+  }, [gitTerminalThreadId, storeNewTerminal, gitTerminalState, storeCloseTerminal]);
   const activateGitTerminal = useCallback(
     (terminalId: string) => {
       if (!gitTerminalThreadId) return;
@@ -8760,8 +8799,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const createNewServerTerminal = useCallback(() => {
     if (!serverThreadId) return;
     storeNewTerminal(serverThreadId, `terminal-${randomUUID()}`);
+    if (
+      serverTerminalState?.terminalIds.includes(DEFAULT_THREAD_TERMINAL_ID) &&
+      !serverTerminalState.runningTerminalIds.includes(DEFAULT_THREAD_TERMINAL_ID)
+    ) {
+      storeCloseTerminal(serverThreadId, DEFAULT_THREAD_TERMINAL_ID);
+    }
     setShellTerminalFocusRequestId((value) => value + 1);
-  }, [serverThreadId, storeNewTerminal]);
+  }, [serverThreadId, storeNewTerminal, serverTerminalState, storeCloseTerminal]);
   const activateServerTerminal = useCallback(
     (terminalId: string) => {
       if (!serverThreadId) return;
@@ -8786,7 +8831,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   // ── Thread-parameterized terminal/process cores ──────────────────────
   // Shared by the Server tab (server thread) and each custom terminal tab
   // (its own isolated thread) so the two never cross-contaminate.
-  const executedCommandsRef = useRef<Set<string>>(new Set());
+  const executedCommandsRef = useRef<Map<string, number>>(new Map());
+  const previewTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const openProcessTerminal = useCallback(
     async (input: {
@@ -8833,11 +8879,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       try {
         await api.terminal.open({ threadId: input.threadId, terminalId, cwd, env });
         const runKey = `${input.threadId}:${terminalId}`;
-        const isAlreadyRunningLocally = executedCommandsRef.current.has(runKey);
+        const isAlreadyRunningLocally =
+          executedCommandsRef.current.has(runKey) &&
+          Date.now() - (executedCommandsRef.current.get(runKey) || 0) < 2000;
         const isAlreadyRunningRemotely = input.terminalState?.runningTerminalIds.includes(terminalId);
 
         if (!isAlreadyRunningLocally && !isAlreadyRunningRemotely) {
-          executedCommandsRef.current.add(runKey);
+          executedCommandsRef.current.set(runKey, Date.now());
           for (const command of commands) {
             await api.terminal.write({ threadId: input.threadId, terminalId, data: `${command}\r` });
           }
@@ -8945,6 +8993,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       } catch {
         await fallbackExitWrite().catch(() => undefined);
       } finally {
+        executedCommandsRef.current.delete(`${serverThreadId}:${processId}`);
+        if (previewTimeoutsRef.current.has(processId)) {
+          clearTimeout(previewTimeoutsRef.current.get(processId)!);
+          previewTimeoutsRef.current.delete(processId);
+        }
         storeCloseTerminal(serverThreadId, processId);
         setShellTerminalFocusRequestId((value) => value + 1);
       }
@@ -8971,7 +9024,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
 
       // Delay opening the browser slightly to give the server (e.g. Vite) time to start up
       // and bind to the port, preventing "Connection Refused" errors.
-      setTimeout(() => {
+      if (previewTimeoutsRef.current.has(processId)) {
+        clearTimeout(previewTimeoutsRef.current.get(processId)!);
+      }
+      const timeoutId = setTimeout(() => {
+        previewTimeoutsRef.current.delete(processId);
         if (process.previewOpenTarget === "external" && process.previewUrl) {
           const api = readNativeApi();
           if (api?.shell?.openExternal) {
@@ -8988,6 +9045,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           }
         }
       }, 3000);
+      previewTimeoutsRef.current.set(processId, timeoutId);
     },
     [activeProjectSettings, openProcessTerminal, revealServerTerminal, serverThreadId, activeProject?.id],
   );
@@ -9027,6 +9085,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       return;
     }
     const terminalIds = [...new Set(serverTerminalState.terminalIds)];
+    terminalIds.forEach((id) => {
+      executedCommandsRef.current.delete(`${serverThreadId}:${id}`);
+      if (previewTimeoutsRef.current.has(id)) {
+        clearTimeout(previewTimeoutsRef.current.get(id)!);
+        previewTimeoutsRef.current.delete(id);
+      }
+    });
     await Promise.all(
       terminalIds.map(async (terminalId) => {
         const fallbackExitWrite = () =>
@@ -9161,13 +9226,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               activeTerminalGroupId={serverTerminalState.activeTerminalGroupId}
               focusRequestId={shellTerminalFocusRequestId}
               terminalLabels={{
+                ...serverTerminalState.terminalLabels,
                 ...Object.fromEntries(
                   [
                     ...(activeProjectSettings.terminalProcesses ?? []),
                     ...(activeProjectSettings.serverPresets ?? []),
                   ].map((p) => [p.id, p.label]),
                 ),
-                ...serverTerminalState.terminalLabels,
               }}
               onSplitTerminal={splitServerTerminal}
               onNewTerminal={createNewServerTerminal}

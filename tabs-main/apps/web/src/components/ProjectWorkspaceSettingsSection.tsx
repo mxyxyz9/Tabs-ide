@@ -322,6 +322,10 @@ export function ProjectWorkspaceSettingsSection() {
     toolKind: string;
     nextVisible: boolean;
   } | null>(null);
+  
+  const [tabToDeleteId, setTabToDeleteId] = useState<string | null>(null);
+  const [terminalToDeleteId, setTerminalToDeleteId] = useState<string | null>(null);
+  const [presetToDeleteId, setPresetToDeleteId] = useState<string | null>(null);
 
   const confirmToggle = useCallback(() => {
     if (!pendingToggle || !activeProjectId) return;
@@ -864,10 +868,7 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    if (window.confirm("Are you sure you want to delete this tab?")) {
-                                      setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                      if (activeCustomEmbedId === activeDraft.id) setActiveCustomEmbedId(null);
-                                    }
+                                    setTabToDeleteId(activeDraft.id);
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1108,10 +1109,7 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    if (window.confirm("Are you sure you want to delete this terminal?")) {
-                                      setServerProcessDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                      if (activeServerProcessId === activeDraft.id) setActiveServerProcessId(null);
-                                    }
+                                    setTerminalToDeleteId(activeDraft.id);
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1222,10 +1220,7 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    if (window.confirm("Are you sure you want to delete this preset?")) {
-                                      setServerPresetDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                      if (activeServerPresetId === activeDraft.id) setActiveServerPresetId(null);
-                                    }
+                                    setPresetToDeleteId(activeDraft.id);
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1285,6 +1280,117 @@ export function ProjectWorkspaceSettingsSection() {
               }}
             >
               {pendingToggle?.nextVisible ? "Show" : "Hide"} {pendingToggle?.toolLabel ?? "tool"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog
+        open={tabToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setTabToDeleteId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this tab?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button variant="outline" onClick={() => setTabToDeleteId(null)}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (tabToDeleteId) {
+                  setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== tabToDeleteId));
+                  if (activeCustomEmbedId === tabToDeleteId) setActiveCustomEmbedId(null);
+                }
+                setTabToDeleteId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog
+        open={terminalToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setTerminalToDeleteId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this terminal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button variant="outline" onClick={() => setTerminalToDeleteId(null)}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (terminalToDeleteId) {
+                  setServerProcessDrafts((current) => current.filter((entry) => entry.id !== terminalToDeleteId));
+                  if (activeServerProcessId === terminalToDeleteId) setActiveServerProcessId(null);
+                }
+                setTerminalToDeleteId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog
+        open={presetToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPresetToDeleteId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this preset?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button variant="outline" onClick={() => setPresetToDeleteId(null)}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (presetToDeleteId) {
+                  setServerPresetDrafts((current) => current.filter((entry) => entry.id !== presetToDeleteId));
+                  if (activeServerPresetId === presetToDeleteId) setActiveServerPresetId(null);
+                }
+                setPresetToDeleteId(null);
+              }}
+            >
+              Delete
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

@@ -100,6 +100,7 @@ import { Equal } from "effect";
 import { refreshServerConfig, useServerConfig } from "../state/settings";
 import { SplashScreen } from "../components/SplashScreen";
 import { CloseScreen } from "../components/CloseScreen";
+import { useConfirm } from "~/hooks/useConfirm";
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
@@ -561,6 +562,7 @@ function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
 }
 
 function SettingsRouteView() {
+  const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const settings = useSettings();
@@ -1057,7 +1059,7 @@ function SettingsRouteView() {
     if (changedSettingLabels.length === 0) return;
 
     const api = readNativeApi();
-    const confirmed = await (api ?? ensureNativeApi()).dialogs.confirm(
+    const confirmed = await confirm(
       ["Restore default settings?", `This will reset: ${changedSettingLabels.join(", ")}.`].join(
         "\n",
       ),
@@ -2529,6 +2531,7 @@ function SettingsRouteView() {
           </div>
         ) : null}
       </div>
+      {confirmDialog}
     </div>
   );
 }

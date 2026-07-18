@@ -103,6 +103,7 @@ import {
 import { basenameOfPath } from "../vscode-icons";
 import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
+import { useConfirm } from "~/hooks/useConfirm";
 import BranchToolbar from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
@@ -326,6 +327,7 @@ interface ChatViewProps {
 }
 
 export default function ChatView({ threadId, compact = false, onRequestThread }: ChatViewProps) {
+  const { confirm, confirmDialog } = useConfirm();
   const threads = useAtomValue(threadsAtom);
   const projects = useAtomValue(projectsAtom);
   const markThreadVisited = markThreadVisitedInAtoms;
@@ -2403,7 +2405,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         setThreadError(activeThread.id, "Interrupt the current turn before reverting checkpoints.");
         return;
       }
-      const confirmed = await api.dialogs.confirm(
+      const confirmed = await confirm(
         [
           `Revert this thread to checkpoint ${turnCount}?`,
           "This will discard newer messages and turn diffs in this thread.",
@@ -4370,6 +4372,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
           )}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
