@@ -22,7 +22,7 @@ import { Button } from "../ui/button";
 import { BotIcon, ListTodoIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Textarea } from "../ui/textarea";
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 export interface ChatComposerProps {
   threadId: ThreadId;
   className?: string;
@@ -183,20 +183,24 @@ export function ChatComposer({
       {/* Footer Controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <select
+          <Select
             value={provider}
-            onChange={(e) =>
-              handleProviderSelect(e.target.value as ProviderKind, modelSelection?.model || "gpt-4")
+            onValueChange={(value) =>
+              handleProviderSelect(value as ProviderKind, modelSelection?.model || "gpt-4")
             }
             disabled={isDisabled}
-            className="rounded-md border border-input bg-background px-3 py-1 text-sm"
           >
-            {availableProviders.map((p) => (
-              <option key={p.instanceId} value={p.instanceId}>
-                {p.instanceId}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select provider" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableProviders.map((p) => (
+                <SelectItem key={p.instanceId} value={p.instanceId}>
+                  {p.instanceId}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center gap-2">

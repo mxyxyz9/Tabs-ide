@@ -123,7 +123,7 @@ import {
 } from "./Sidebar.logic";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
-
+import { useConfirm } from "~/hooks/useConfirm";
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -406,6 +406,7 @@ export default function Sidebar() {
   });
   const keybindings = useKeybindings() ?? EMPTY_KEYBINDINGS;
   const queryClient = useQueryClient();
+  const { confirm, confirmDialog } = useConfirm();
   const removeWorktreeMutation = useMutation(gitRemoveWorktreeMutationOptions({ queryClient }));
   const [addingProject, setAddingProject] = useState(false);
   const [newCwd, setNewCwd] = useState("");
@@ -699,7 +700,7 @@ export default function Sidebar() {
       const canDeleteWorktree = orphanedWorktreePath !== null && threadProject !== undefined;
       const shouldDeleteWorktree =
         canDeleteWorktree &&
-        (await api.dialogs.confirm(
+        (await confirm(
           [
             "This thread is the only one linked to this worktree:",
             displayWorktreePath ?? orphanedWorktreePath,
@@ -871,7 +872,7 @@ export default function Sidebar() {
       }
       if (clicked !== "delete") return;
       if (appSettings.confirmThreadDelete) {
-        const confirmed = await api.dialogs.confirm(
+        const confirmed = await confirm(
           [
             `Delete thread "${thread.title}"?`,
             "This permanently clears conversation history for this thread.",
@@ -921,7 +922,7 @@ export default function Sidebar() {
       if (clicked !== "delete") return;
 
       if (appSettings.confirmThreadDelete) {
-        const confirmed = await api.dialogs.confirm(
+        const confirmed = await confirm(
           [
             `Delete ${count} thread${count === 1 ? "" : "s"}?`,
             "This permanently clears conversation history for these threads.",
@@ -1007,7 +1008,7 @@ export default function Sidebar() {
         return;
       }
 
-      const confirmed = await api.dialogs.confirm(`Remove project "${project.name}"?`);
+      const confirmed = await confirm(`Remove project "${project.name}"?`);
       if (!confirmed) return;
 
       try {
@@ -1868,6 +1869,7 @@ export default function Sidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+      {confirmDialog}
     </>
   );
 }

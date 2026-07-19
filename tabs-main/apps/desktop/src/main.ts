@@ -27,6 +27,8 @@ import type {
 } from "@tabs/contracts";
 import { DEFAULT_DESKTOP_ICON_THEME } from "@tabs/contracts/settings";
 import { autoUpdater } from "electron-updater";
+import { DEFAULT_KEYBINDINGS, parseKeybindingShortcut } from "@tabs/shared/keybindings";
+import type { KeybindingShortcut } from "@tabs/contracts";
 
 import type {
   ContextMenuItem,
@@ -167,7 +169,7 @@ const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const DESKTOP_UPDATE_CHANNEL = "latest";
 const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
-const CODE_OSS_READY_TIMEOUT_MS = 8_000;
+const CODE_OSS_READY_TIMEOUT_MS = 60_000;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 
@@ -746,6 +748,70 @@ async function checkForUpdatesFromMenu(): Promise<void> {
   }
 }
 
+
+let keybindingsWatcher: FS.FSWatcher | null = null;
+
+function setupKeybindingsWatcher() {
+  if (keybindingsWatcher) return;
+  const keybindingsPath = Path.join(CODE_OSS_PRIMARY_STATE_DIR, "profile", "default", "keybindings.json");
+  const profileDir = Path.dirname(keybindingsPath);
+  try {
+    FS.mkdirSync(profileDir, { recursive: true });
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    keybindingsWatcher = FS.watch(profileDir, (eventType, filename) => {
+      if (filename === "keybindings.json") {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => {
+          configureApplicationMenu();
+      setupKeybindingsWatcher();
+        }, 500);
+      }
+    });
+  } catch (e) {
+    // ignore
+  }
+}
+
+function getActiveAccelerator(command: string): string | undefined {
+  const keybindingsPath = Path.join(CODE_OSS_PRIMARY_STATE_DIR, "profile", "default", "keybindings.json");
+  let userBindings: Array<{ key: string, command: string, when?: string }> = [];
+  try {
+    if (FS.existsSync(keybindingsPath)) {
+      userBindings = JSON.parse(FS.readFileSync(keybindingsPath, "utf-8"));
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const binding = userBindings.find((b: any) => b.command === command) || 
+                  DEFAULT_KEYBINDINGS.find((b: any) => b.command === command);
+
+  if (!binding) return undefined;
+
+  const shortcut = parseKeybindingShortcut(binding.key);
+  if (!shortcut) return undefined;
+
+  const parts: string[] = [];
+  if (shortcut.modKey) parts.push("CmdOrCtrl");
+  if (shortcut.metaKey) parts.push("Meta");
+  if (shortcut.ctrlKey) parts.push("Control");
+  if (shortcut.altKey) parts.push("Alt");
+  if (shortcut.shiftKey) parts.push("Shift");
+
+  if (!shortcut.key) return parts.join("+");
+
+  let key = shortcut.key.toUpperCase();
+  if (key === " ") key = "Space";
+  else if (key === "ESCAPE") key = "Esc";
+  else if (key === "ARROWUP") key = "Up";
+  else if (key === "ARROWDOWN") key = "Down";
+  else if (key === "ARROWLEFT") key = "Left";
+  else if (key === "ARROWRIGHT") key = "Right";
+  
+  parts.push(key);
+  return parts.join("+");
+}
+
 function configureApplicationMenu(): void {
   const template: MenuItemConstructorOptions[] = [];
 
@@ -833,7 +899,7 @@ function configureApplicationMenu(): void {
         { type: "separator" },
         ...Array.from({ length: 9 }, (_, index) => ({
           label: `Go to Tab ${index + 1}`,
-          accelerator: `CmdOrCtrl+${index + 1}`,
+          accelerator: `Alt+${index + 1}`,
           click: () => dispatchMenuAction(`tab-go-${index + 1}`),
         })),
         { type: "separator" },
@@ -841,7 +907,7 @@ function configureApplicationMenu(): void {
           label: "Switch Tool",
           submenu: Array.from({ length: 9 }, (_, index) => ({
             label: `Tool ${index + 1}`,
-            accelerator: `CmdOrCtrl+Alt+${index + 1}`,
+            accelerator: `CmdOrCtrl+${index + 1}`,
             click: () => dispatchMenuAction(`tool-go-${index + 1}`),
           })),
         },
@@ -2412,6 +2478,12 @@ function createLegacyWindow(): BrowserWindow {
     }
   });
 
+  window.webContents.on("did-fail-load", (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+    if (isMainFrame && !window.isVisible()) {
+      window.show();
+    }
+  });
+
   return window;
 }
 
@@ -2482,12 +2554,21 @@ function createCodeOssWindow(
     window.destroy();
   };
 
-  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
-    writeDesktopLogHeader(
-      `code-oss did-fail-load code=${errorCode} url=${validatedURL} description=${sanitizeLogValue(errorDescription)}`,
-    );
-    fallbackToLegacyShell(`did-fail-load ${errorCode} ${errorDescription}`);
-  });
+  window.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame) {
+        writeDesktopLogHeader(
+          `code-oss did-fail-load (ignored iframe) code=${errorCode} url=${validatedURL}`,
+        );
+        return;
+      }
+      writeDesktopLogHeader(
+        `code-oss did-fail-load code=${errorCode} url=${validatedURL} description=${sanitizeLogValue(errorDescription)}`,
+      );
+      fallbackToLegacyShell(`did-fail-load ${errorCode} ${errorDescription}`);
+    },
+  );
   window.webContents.on("render-process-gone", (_event, details) => {
     writeDesktopLogHeader(
       `code-oss render-process-gone reason=${details.reason} exitCode=${details.exitCode}`,
@@ -2608,6 +2689,8 @@ app.on("second-instance", () => {
   targetWindow.focus();
 });
 
+const getAppVersion = () => app.isPackaged ? app.getVersion() : process.env.npm_package_version || app.getVersion();
+
 function formatRuntimeDownloadStatus(progress: RuntimeInstallProgress): string {
   if (progress.phase === "downloading") {
     if (progress.totalBytes && progress.receivedBytes) {
@@ -2634,7 +2717,7 @@ function ensureDownloadedCodeOssRuntime(): void {
   if (codeOssRuntimeDownloadStarted || codeHostConfig.state.available) {
     return;
   }
-  const appVersion = app.getVersion();
+  const appVersion = getAppVersion();
   if (isRuntimeInstalled(appVersion)) {
     return; // already resolved synchronously at startup
   }
@@ -2884,6 +2967,7 @@ if (hasSingleInstanceLock) {
 // This is intentional IDE behavior (exits the app when the main editor window is closed,
 // rather than leaving a headless backend process running).
 app.on("window-all-closed", () => {
+  writeDesktopLogHeader("window-all-closed emitted, calling app.quit()");
   app.quit();
 });
 

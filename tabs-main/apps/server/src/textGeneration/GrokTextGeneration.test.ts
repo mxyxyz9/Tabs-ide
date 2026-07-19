@@ -42,7 +42,7 @@ function makeAcpGrokWrapper(dir: string, env: Record<string, string>): string {
       '  printf "%s\\n" "unexpected args: $*" >&2',
       "  exit 11",
       "fi",
-      `exec ${JSON.stringify(process.execPath)} ${JSON.stringify(mockAgentPath)}`,
+      `exec "bun" ${JSON.stringify(mockAgentPath)}`,
       "",
     ].join("\n"),
     "utf8",

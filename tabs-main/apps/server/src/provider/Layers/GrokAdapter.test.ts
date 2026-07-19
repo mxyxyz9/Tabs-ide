@@ -28,7 +28,7 @@ const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockAgentPath = path.join(__dirname, "../../../scripts/acp-mock-agent.ts");
-const mockAgentCommand = process.execPath;
+const mockAgentCommand = "bun";
 
 async function makeMockGrokWrapper(extraEnv?: Record<string, string>) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "grok-acp-mock-"));

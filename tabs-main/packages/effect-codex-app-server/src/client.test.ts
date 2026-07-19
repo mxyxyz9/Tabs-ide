@@ -29,7 +29,7 @@ describe.skipIf(!fixtureExists)("effect-codex-app-server client", () => {
         const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
         const path = yield* Path.Path;
         const peerCwd = path.join(import.meta.dirname, "..");
-        const command = ChildProcess.make(process.execPath, mockPeerArgs(yield* mockPeerPath), {
+        const command = ChildProcess.make("bun", mockPeerArgs(yield* mockPeerPath), {
           cwd: peerCwd,
         });
         return yield* spawner.spawn(command);

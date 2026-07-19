@@ -25,6 +25,7 @@ import {
   RotateCcwIcon,
   SaveIcon,
   Trash2Icon,
+  InfoIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { MasterDetail, MasterDetailContent, MasterDetailItem, MasterDetailList, MasterDetailSidebar } from "./ui/master-detail";
@@ -44,6 +45,9 @@ import {
 } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
+import { useConfirm } from "~/hooks/useConfirm";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
@@ -53,6 +57,7 @@ import {
   useWorkspaceActiveProjectId,
   workspaceShellActions,
 } from "../state/workspaceShell";
+import { SettingsHeaderPortal } from "../routes/_chat.settings";
 
 function createCustomEmbedId() {
   return `embed-${crypto.randomUUID()}`;
@@ -162,7 +167,7 @@ function buildCustomProcessToolsFromDrafts(drafts: readonly ServerProcessDraft[]
     kind: "custom_process" as const,
     label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal",
     visible: draft.visible,
-    serverProcessId: draft.id,
+    terminalProcessId: draft.id,
   }));
 }
 
@@ -299,6 +304,7 @@ function isServerProcessDraftDirty(draft: ServerProcessDraft) {
 }
 
 export function ProjectWorkspaceSettingsSection() {
+  const { confirm, confirmDialog } = useConfirm();
   const activeProjectId = useWorkspaceActiveProjectId();
   const activeProject = useAtomValue(projectsAtom, (state) =>
     activeProjectId
@@ -311,10 +317,21 @@ export function ProjectWorkspaceSettingsSection() {
   const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>([]);
   const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});
 
+  const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
+  const isBrowserDefaultUrlDirty = projectSettings ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl : false;
+
+  useEffect(() => {
+    setBrowserDefaultUrlDraft(projectSettings?.browser?.defaultUrl ?? "");
+  }, [projectSettings?.browser?.defaultUrl, activeProjectId]);
+
   const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
   const [activeCustomEmbedId, setActiveCustomEmbedId] = useState<string | null>(null);
   const [activeServerProcessId, setActiveServerProcessId] = useState<string | null>(null);
   const [activeServerPresetId, setActiveServerPresetId] = useState<string | null>(null);
+
+  const hasInternalBrowserOverride = serverPresetDrafts.some(
+    (preset) => preset.previewUrl && (!preset.previewOpenTarget || preset.previewOpenTarget === "in-app")
+  );
 
   const [pendingToggle, setPendingToggle] = useState<{
     toolId: string;
@@ -322,6 +339,10 @@ export function ProjectWorkspaceSettingsSection() {
     toolKind: string;
     nextVisible: boolean;
   } | null>(null);
+  
+  const [tabToDeleteId, setTabToDeleteId] = useState<string | null>(null);
+  const [terminalToDeleteId, setTerminalToDeleteId] = useState<string | null>(null);
+  const [presetToDeleteId, setPresetToDeleteId] = useState<string | null>(null);
 
   const confirmToggle = useCallback(() => {
     if (!pendingToggle || !activeProjectId) return;
@@ -379,31 +400,8 @@ export function ProjectWorkspaceSettingsSection() {
     [serverProcessDrafts],
   );
   const toolbarPreviewTools = useMemo(() => {
-    let nextTools = projectSettings?.tools ?? [];
-    if (customEmbedsDirty) {
-      nextTools = mergeToolGroup(
-        nextTools,
-        buildCustomEmbedToolsFromDrafts(customEmbedDrafts),
-        "custom_embed",
-        "browser",
-      );
-    }
-    if (serverProcessesDirty) {
-      nextTools = mergeToolGroup(
-        nextTools,
-        buildCustomProcessToolsFromDrafts(serverProcessDrafts),
-        "custom_process",
-        "server",
-      );
-    }
-    return nextTools;
-  }, [
-    customEmbedDrafts,
-    customEmbedsDirty,
-    projectSettings?.tools,
-    serverProcessDrafts,
-    serverProcessesDirty,
-  ]);
+    return projectSettings?.tools ?? [];
+  }, [projectSettings?.tools]);
 
   const dndSensors = useSensors(
     // Require a small drag distance so taps/clicks on the row still work.
@@ -509,12 +507,12 @@ export function ProjectWorkspaceSettingsSection() {
           nextServerProcesses[index]?.label ??
           (draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal"),
         visible: draft.visible,
-        serverProcessId: draft.id,
+        terminalProcessId: draft.id,
       }));
 
       return {
         ...current,
-        serverProcesses: nextServerProcesses,
+        terminalProcesses: nextServerProcesses,
         tools: mergeToolGroup(current.tools, nextProcessTools, "custom_process", "server"),
       };
     });
@@ -631,25 +629,51 @@ export function ProjectWorkspaceSettingsSection() {
 
   return (
     <>
-      <section className="space-y-3">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Project Workspace
-        </h2>
+      {confirmDialog}
+      <section className="space-y-6">
+        <div className="mb-6 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+              Project Workspace
+            </h2>
+            <SettingsHeaderPortal>
+              <Button
+                size="xs"
+                variant="outline"
+                className="no-drag"
+                onClick={async () => {
+                  const confirmed = await confirm("Restore default settings?\n\nThis will reset: Terminal shell and Editor preferences.");
+                  if (confirmed) {
+                    workspaceShellActions.upsertProjectSettings(activeProjectId, {
+                      // Terminal shell and editor preferences will be reset here if/when they are added to the schema.
+                    });
+                  }
+                }}
+              >
+                <RotateCcwIcon className="size-3.5 mr-1" />
+                Restore defaults
+              </Button>
+            </SettingsHeaderPortal>
+          </div>
+          <div className="flex flex-col gap-2">
+            <h3 className="text-2xl font-semibold text-foreground tracking-tight break-words">
+              {activeProject.name}
+            </h3>
+            <div className="text-xs text-muted-foreground font-mono bg-muted/40 px-2 py-1.5 rounded-md w-fit break-all border border-border/50">
+              {activeProject.cwd}
+            </div>
+          </div>
+        </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>{activeProject.name}</CardTitle>
-            <CardDescription>{activeProject.cwd}</CardDescription>
+            <CardTitle>Toolbar Tools</CardTitle>
+            <CardDescription>
+              Toggle and reorder the tools shown in the project toolbar.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">Toolbar Tools</div>
-                <div className="text-xs text-muted-foreground">
-                  Toggle and reorder the tools shown in the project toolbar.
-                </div>
-              </div>
-              <div className="space-y-2">
+          <CardContent>
+            <div className="space-y-2">
                 <DndContext
                   sensors={dndSensors}
                   collisionDetection={closestCenter}
@@ -697,21 +721,6 @@ export function ProjectWorkspaceSettingsSection() {
                                     {describeToolKind(tool.kind)}
                                   </div>
                                 </div>
-                                {tool.kind === "custom_embed" || tool.kind === "custom_process" ? (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                      setExpandedToolbarToolIds((current) => ({
-                                        ...current,
-                                        [tool.id]: !current[tool.id],
-                                      }))
-                                    }
-                                  >
-                                    {isExpanded ? "Collapse" : "Expand"}
-                                  </Button>
-                                ) : null}
                                 <Switch
                                   checked={tool.visible}
                                   onCheckedChange={(checked) => {
@@ -725,109 +734,8 @@ export function ProjectWorkspaceSettingsSection() {
                                   }}
                                   aria-label={`Toggle ${tool.label}`}
                                 />
-                                {tool.kind === "custom_embed" && embedDraft ? (
-                                  <Button
-                                    type="button"
-                                    size="icon-xs"
-                                    variant="outline"
-                                    onClick={() => removeCustomEmbedDraft(embedDraft.id)}
-                                  >
-                                    <Trash2Icon className="size-3.5" />
-                                  </Button>
-                                ) : null}
-                                {tool.kind === "custom_process" && processDraft ? (
-                                  <Button
-                                    type="button"
-                                    size="icon-xs"
-                                    variant="outline"
-                                    onClick={() => removeServerProcessDraft(processDraft.id)}
-                                  >
-                                    <Trash2Icon className="size-3.5" />
-                                  </Button>
-                                ) : null}
                               </div>
 
-                              {tool.kind === "custom_embed" && embedDraft && isExpanded ? (
-                                <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Custom URL
-                                    </div>
-                                    <Input
-                                      value={embedDraft.url}
-                                      onChange={(event) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === embedDraft.id
-                                              ? { ...entry, url: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="https://www.figma.com/file/..."
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Label
-                                    </div>
-                                    <Input
-                                      value={embedDraft.label}
-                                      onChange={(event) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === embedDraft.id
-                                              ? { ...entry, label: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="Figma"
-                                    />
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {tool.kind === "custom_process" && processDraft && isExpanded ? (
-                                <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Label
-                                    </div>
-                                    <Input
-                                      value={processDraft.label}
-                                      onChange={(event) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === processDraft.id
-                                              ? { ...entry, label: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="OpenCore"
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Working Directory
-                                    </div>
-                                    <Input
-                                      value={processDraft.cwd}
-                                      onChange={(event) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === processDraft.id
-                                              ? { ...entry, cwd: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder={activeProject.cwd}
-                                    />
-                                  </div>
-                                </div>
-                              ) : null}
                             </div>
                           )}
                         </SortableToolRow>
@@ -836,37 +744,62 @@ export function ProjectWorkspaceSettingsSection() {
                   </SortableContext>
                 </DndContext>
               </div>
-            </div>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-3">
-              <div>
-                <div className="text-sm font-medium text-foreground">Browser Default URL</div>
-                <div className="text-xs text-muted-foreground">
-                  The Browser tool loads this URL by default for the active project.
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Browser Default URL</CardTitle>
+            <CardDescription>
+              The Browser tool loads this URL by default for the active project. Note: If you run a Server Preset that has a Preview URL configured, it will automatically override this default and navigate to the preset's preview.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={browserDefaultUrlDraft}
+                  onChange={(event) => setBrowserDefaultUrlDraft(event.target.value)}
+                  placeholder="http://localhost:3000"
+                />
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    if (activeProjectId) {
+                      upsertProjectSettings(activeProjectId, (current) => ({
+                        ...current,
+                        browser: {
+                          ...current.browser,
+                          defaultUrl: browserDefaultUrlDraft,
+                        },
+                      }));
+                    }
+                  }}
+                  disabled={!isBrowserDefaultUrlDirty}
+                >
+                  Save
+                </Button>
               </div>
-              <Input
-                value={projectSettings.browser.defaultUrl}
-                onChange={(event) =>
-                  upsertProjectSettings(activeProjectId, (current) => ({
-                    ...current,
-                    browser: {
-                      ...current.browser,
-                      defaultUrl: event.target.value,
-                    },
-                  }))
-                }
-                placeholder="http://localhost:3000"
-              />
+              {hasInternalBrowserOverride && (
+                <Alert variant="default" className="bg-muted/50 py-3">
+                  <InfoIcon className="size-4 mt-0" />
+                  <AlertDescription className="text-muted-foreground ml-2">
+                    A Server Preset is configured to open a preview in the Internal Browser. When you run that preset, its preview URL will override this default.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
+          </CardContent>
+        </Card>
 
-                        <div className="space-y-4 pt-4 border-t border-border/40">
-              <div>
-                <div className="text-sm font-medium text-foreground">Project Tools</div>
-                <div className="text-xs text-muted-foreground">
-                  Manage your project-specific browser tabs, background terminals, or server presets.
-                </div>
-              </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Project Tools</CardTitle>
+            <CardDescription>
+              Manage your project-specific browser tabs, background terminals, or server presets.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
               <Tabs defaultValue="browser">
                 <TabsList className="mb-4">
                   <TabsTrigger value="browser">Browser Tabs</TabsTrigger>
@@ -921,10 +854,6 @@ export function ProjectWorkspaceSettingsSection() {
                                 isActive={activeCustomEmbedId === draft.id}
                                 isUnsaved={isCustomEmbedDraftDirty(draft)}
                                 onSelect={() => setActiveCustomEmbedId(draft.id)}
-                                onMoveUp={() => setCustomEmbedDrafts((current) => reorderItems(current, index, -1))}
-                                onMoveDown={() => setCustomEmbedDrafts((current) => reorderItems(current, index, 1))}
-                                canMoveUp={index > 0}
-                                canMoveDown={index < customEmbedDrafts.length - 1}
                               />
                             ))
                           )}
@@ -1007,8 +936,7 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                    if (activeCustomEmbedId === activeDraft.id) setActiveCustomEmbedId(null);
+                                    setTabToDeleteId(activeDraft.id);
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1082,10 +1010,6 @@ export function ProjectWorkspaceSettingsSection() {
                                 isActive={activeServerProcessId === draft.id}
                                 isUnsaved={isServerProcessDraftDirty(draft)}
                                 onSelect={() => setActiveServerProcessId(draft.id)}
-                                onMoveUp={() => setServerProcessDrafts((current) => reorderItems(current, index, -1))}
-                                onMoveDown={() => setServerProcessDrafts((current) => reorderItems(current, index, 1))}
-                                canMoveUp={index > 0}
-                                canMoveDown={index < serverProcessDrafts.length - 1}
                               />
                             ))
                           )}
@@ -1253,8 +1177,7 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    setServerProcessDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                    if (activeServerProcessId === activeDraft.id) setActiveServerProcessId(null);
+                                    setTerminalToDeleteId(activeDraft.id);
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1327,10 +1250,6 @@ export function ProjectWorkspaceSettingsSection() {
                                 isActive={activeServerPresetId === draft.id}
                                 isUnsaved={isServerProcessDraftDirty(draft)}
                                 onSelect={() => setActiveServerPresetId(draft.id)}
-                                onMoveUp={() => setServerPresetDrafts((current) => reorderItems(current, index, -1))}
-                                onMoveDown={() => setServerPresetDrafts((current) => reorderItems(current, index, 1))}
-                                canMoveUp={index > 0}
-                                canMoveDown={index < serverPresetDrafts.length - 1}
                               />
                             ))
                           )}
@@ -1369,8 +1288,7 @@ export function ProjectWorkspaceSettingsSection() {
                                   type="button"
                                   variant="destructive-outline"
                                   onClick={() => {
-                                    setServerPresetDrafts((current) => current.filter((entry) => entry.id !== activeDraft.id));
-                                    if (activeServerPresetId === activeDraft.id) setActiveServerPresetId(null);
+                                    setPresetToDeleteId(activeDraft.id);
                                   }}
                                 >
                                   <Trash2Icon className="mr-2 size-3.5" />
@@ -1393,8 +1311,6 @@ export function ProjectWorkspaceSettingsSection() {
                   </div>
                 </TabsContent>
               </Tabs>
-            </div>
-
           </CardContent>
         </Card>
       </section>
@@ -1430,6 +1346,117 @@ export function ProjectWorkspaceSettingsSection() {
               }}
             >
               {pendingToggle?.nextVisible ? "Show" : "Hide"} {pendingToggle?.toolLabel ?? "tool"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog
+        open={tabToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setTabToDeleteId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this tab?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button variant="outline" onClick={() => setTabToDeleteId(null)}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (tabToDeleteId) {
+                  setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== tabToDeleteId));
+                  if (activeCustomEmbedId === tabToDeleteId) setActiveCustomEmbedId(null);
+                }
+                setTabToDeleteId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog
+        open={terminalToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setTerminalToDeleteId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this terminal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button variant="outline" onClick={() => setTerminalToDeleteId(null)}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (terminalToDeleteId) {
+                  setServerProcessDrafts((current) => current.filter((entry) => entry.id !== terminalToDeleteId));
+                  if (activeServerProcessId === terminalToDeleteId) setActiveServerProcessId(null);
+                }
+                setTerminalToDeleteId(null);
+              }}
+            >
+              Delete
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog
+        open={presetToDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPresetToDeleteId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this preset?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button variant="outline" onClick={() => setPresetToDeleteId(null)}>
+                  Cancel
+                </Button>
+              }
+            />
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (presetToDeleteId) {
+                  setServerPresetDrafts((current) => current.filter((entry) => entry.id !== presetToDeleteId));
+                  if (activeServerPresetId === presetToDeleteId) setActiveServerPresetId(null);
+                }
+                setPresetToDeleteId(null);
+              }}
+            >
+              Delete
             </Button>
           </AlertDialogFooter>
         </AlertDialogPopup>

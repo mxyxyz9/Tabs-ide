@@ -13,13 +13,14 @@ export default defineConfig({
   // desktop app doesn't need to resolve `workspace:*` deps at runtime. This
   // covers the `@tabs/*` packages plus the (unscoped) `effect-acp` and
   // `effect-codex-app-server` workspace packages.
-  noExternal: (id) =>
-    id.startsWith("@tabs/") ||
-    id === "effect-acp" ||
-    id.startsWith("effect-acp/") ||
-    id === "effect-codex-app-server" ||
-    id.startsWith("effect-codex-app-server/"),
-  inlineOnly: false,
+  deps: {
+    alwaysBundle: (id) =>
+      id.startsWith("@tabs/") ||
+      id === "effect-acp" ||
+      id.startsWith("effect-acp/") ||
+      id === "effect-codex-app-server" ||
+      id.startsWith("effect-codex-app-server/"),
+  },
   banner: {
     js: "#!/usr/bin/env node\n",
   },

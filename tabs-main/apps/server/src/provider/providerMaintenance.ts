@@ -236,12 +236,9 @@ function isNpmGlobalCommandPath(commandPath: string): boolean {
 function isHomebrewCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
   return (
-    normalized.includes("/opt/homebrew/cellar/") ||
-    normalized.includes("/usr/local/cellar/") ||
-    normalized.includes("/homebrew/cellar/") ||
-    normalized.includes("/opt/homebrew/caskroom/") ||
-    normalized.includes("/usr/local/caskroom/") ||
-    normalized.includes("/homebrew/caskroom/")
+    normalized.includes("/opt/homebrew/") ||
+    normalized.includes("/usr/local/") ||
+    normalized.includes("/homebrew/")
   );
 }
 
