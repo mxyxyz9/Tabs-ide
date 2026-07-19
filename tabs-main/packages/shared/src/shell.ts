@@ -504,3 +504,62 @@ export function resolveWindowsEnvironment(
     ? { ...baselinePatch, ...profiledPatch }
     : baselinePatch;
 }
+
+const WINDOWS_SHELL_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
+
+function escapeWindowsShellArg(arg: string): string {
+  let escaped = arg.replace(/(\\*)"/g, '$1$1\\"');
+  escaped = escaped.replace(/(\\*)$/, "$1$1");
+  escaped = `"${escaped}"`;
+  return escaped.replace(WINDOWS_SHELL_META_CHARS, "^$1");
+}
+
+function sanitizeShellModeArgsForPlatform(
+  args: ReadonlyArray<string>,
+  platform: NodeJS.Platform,
+): Array<string> {
+  return platform === "win32" ? args.map(escapeWindowsShellArg) : [...args];
+}
+
+export interface ResolvedSpawnCommand {
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+  readonly shell: boolean;
+}
+
+import * as Effect from "effect/Effect";
+
+export interface SpawnCommandOptions {
+  readonly env?: NodeJS.ProcessEnv;
+  readonly extendEnv?: boolean;
+}
+
+export const resolveSpawnCommand = (
+  command: string,
+  args: ReadonlyArray<string>,
+  options: SpawnCommandOptions = {},
+) => Effect.sync((): ResolvedSpawnCommand => {
+  const platform = process.platform;
+  if (platform !== "win32") {
+    return { command, args: [...args], shell: false };
+  }
+
+  const env =
+    options.env === undefined
+      ? process.env
+      : options.extendEnv
+        ? { ...process.env, ...options.env }
+        : options.env;
+        
+  const resolvedCommand = resolveCommandPath(command, { platform, env }) ?? command;
+  const extension = (resolvedCommand.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+  if (extension !== ".cmd" && extension !== ".bat") {
+    return { command: resolvedCommand, args: [...args], shell: false };
+  }
+
+  return {
+    command: escapeWindowsShellArg(resolvedCommand),
+    args: sanitizeShellModeArgsForPlatform(args, platform),
+    shell: true,
+  };
+});

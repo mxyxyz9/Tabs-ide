@@ -27,6 +27,7 @@ import {
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
 } from "@tabs/shared/model";
+import { resolveSpawnCommand } from "@tabs/shared/shell";
 
 import {
   buildBooleanOptionDescriptor,
@@ -927,13 +928,18 @@ export function parseCursorAboutOutput(result: CommandResult): CursorAboutResult
 const runCursorCommand = (
   cursorSettings: CursorSettings,
   args: ReadonlyArray<string>,
-  environment: NodeJS.ProcessEnv = process.env,
+  environment?: NodeJS.ProcessEnv,
 ) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const command = ChildProcess.make(cursorSettings.binaryPath, [...args], {
-      env: environment,
-      shell: process.platform === "win32",
+    const spawnCommand = yield* resolveSpawnCommand(
+      cursorSettings.binaryPath,
+      args,
+      environment ? { env: environment } : {},
+    );
+    const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+      ...(environment ? { env: environment } : { extendEnv: true }),
+      shell: spawnCommand.shell,
     });
 
     const child = yield* spawner.spawn(command);
@@ -946,24 +952,13 @@ const runCursorCommand = (
       { concurrency: "unbounded" },
     );
 
-    // TEMP DEBUG (remove): why does `agent` work in a terminal but fail in-app?
-    yield* Effect.logWarning("CURSOR_DEBUG runCursorCommand", {
-      binaryPath: cursorSettings.binaryPath,
-      args: [...args],
-      code: exitCode,
-      stdoutHead: stdout.slice(0, 300),
-      stderrHead: stderr.slice(0, 300),
-      HOME: environment.HOME,
-      pathHasLocalBin: (environment.PATH ?? "").includes("/.local/bin"),
-      PATH: (environment.PATH ?? "").slice(0, 400),
-    });
 
     return { stdout, stderr, code: exitCode } satisfies CommandResult;
   }).pipe(Effect.scoped);
 
 const runCursorAboutCommand = (
   cursorSettings: CursorSettings,
-  environment: NodeJS.ProcessEnv = process.env,
+  environment?: NodeJS.ProcessEnv,
 ) =>
   Effect.gen(function* () {
     const jsonResult = yield* runCursorCommand(
@@ -979,7 +974,7 @@ const runCursorAboutCommand = (
 
 export const checkCursorProviderStatus = Effect.fn("checkCursorProviderStatus")(function* (
   cursorSettings: CursorSettings,
-  environment: NodeJS.ProcessEnv = process.env,
+  environment?: NodeJS.ProcessEnv,
 ): Effect.fn.Return<
   ServerProviderDraft,
   never,
