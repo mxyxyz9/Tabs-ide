@@ -1539,6 +1539,17 @@ function DesktopCodeTool(props: { project: Project }) {
 
   // Drag-to-resize the side chat from its left edge (BrowserView follows via the
   // bounds ResizeObserver). Persist the chosen width across sessions.
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (dragCleanupRef.current) {
+        dragCleanupRef.current();
+        dragCleanupRef.current = null;
+      }
+    };
+  }, []);
+
   const startSideChatResize = useCallback((event: React.PointerEvent) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -1546,16 +1557,31 @@ function DesktopCodeTool(props: { project: Project }) {
     // Mount the resize overlay → the BrowserView hides → pointer events flow to
     // the window even as the cursor crosses the editor area while widening.
     setIsResizingSideChat(true);
+
+    if (dragCleanupRef.current) {
+      dragCleanupRef.current();
+    }
+
     const onMove = (moveEvent: PointerEvent) => {
       const next = Math.min(760, Math.max(300, startWidth + (startX - moveEvent.clientX)));
       setSideChatWidth(next);
     };
-    const onUp = () => {
+
+    const cleanup = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      if (dragCleanupRef.current === cleanup) {
+        dragCleanupRef.current = null;
+      }
+    };
+
+    const onUp = () => {
+      cleanup();
       window.localStorage?.setItem("tabs.sideChatWidth", String(sideChatWidthRef.current));
       setIsResizingSideChat(false);
     };
+
+    dragCleanupRef.current = cleanup;
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   }, []);
