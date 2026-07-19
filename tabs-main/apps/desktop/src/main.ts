@@ -2689,6 +2689,8 @@ app.on("second-instance", () => {
   targetWindow.focus();
 });
 
+const getAppVersion = () => app.isPackaged ? app.getVersion() : process.env.npm_package_version || app.getVersion();
+
 function formatRuntimeDownloadStatus(progress: RuntimeInstallProgress): string {
   if (progress.phase === "downloading") {
     if (progress.totalBytes && progress.receivedBytes) {
@@ -2715,7 +2717,7 @@ function ensureDownloadedCodeOssRuntime(): void {
   if (codeOssRuntimeDownloadStarted || codeHostConfig.state.available) {
     return;
   }
-  const appVersion = app.getVersion();
+  const appVersion = getAppVersion();
   if (isRuntimeInstalled(appVersion)) {
     return; // already resolved synchronously at startup
   }
