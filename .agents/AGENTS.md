@@ -1,5 +1,8 @@
 # Agent Rules & Instructions
 
+**CRITICAL STARTING POINT**: For a complete overview of the application's architecture, package structure, and technologies, agents MUST read [ARCHITECTURE.md](file:///Users/rushil.dev/Desktop/Tabs-ide-cleanup-vscode-web-2026-04-28/.agents/ARCHITECTURE.md) first. Update it whenever significant architectural changes are made.
+
+
 - **MANDATORY ANTI-ROGUE PROTOCOL:** You MUST act as a strictly obedient pair programmer. Before executing ANY task, you must consult `instructions/anti-rogue.instructions.md`. Unprompted refactoring, UI rewrites, and guessing the user's intent are strictly forbidden.
 - **MANDATORY ARCHITECTURE PROTOCOL:** Before creating new files or adding features, you must consult `instructions/architecture.instructions.md` to understand where your code belongs within the `apps/` and `packages/` monorepo structure. Do not guess.
 - **MANDATORY UI/UX PROTOCOL:** Any task involving frontend development must comply with `instructions/ui-ux.instructions.md`. All UI must be production-ready and premium. Do not hallucinate layouts; use mockups and ask for clarification.
