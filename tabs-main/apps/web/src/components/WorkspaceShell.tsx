@@ -71,6 +71,8 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { composerDraftActions } from "../state/composerDrafts";
 import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
+import { useAppClosing } from "../hooks/useAppClosing";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { isElectron } from "../env";
 import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
 import { toGitUserFacingErrorMessage } from "../lib/gitErrorMessages";
@@ -6248,6 +6250,7 @@ function DesktopCustomEmbedTool(props: {
   title: string;
   url: string;
   resumeLastVisitedPage?: boolean | undefined;
+  lastVisitedUrl?: string | undefined;
   sessionId: string;
 }) {
   const api = readNativeApi();
@@ -6283,7 +6286,7 @@ function DesktopCustomEmbedTool(props: {
   // A custom tab optionally reopens at the URL the user last navigated to (persisted),
   // falling back to its configured URL; editing the configured URL takes over.
   const configuredUrl = normalizeBrowserUrl(props.url);
-  const normalizedUrl = normalizeBrowserUrl(props.resumeLastVisitedPage ? (storedUrl ?? props.url) : props.url);
+  const normalizedUrl = normalizeBrowserUrl(props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url);
   // Editable address bar for the custom embed. Navigating here writes the
   // per-session URL (NOT the shared per-project browser state — see the
   // navigate effect below), which recomputes `normalizedUrl` and drives the
@@ -6304,12 +6307,45 @@ function DesktopCustomEmbedTool(props: {
       setBrowserSessionUrl(props.project.id, props.sessionId, configuredUrl);
     }
   }, [configuredUrl, props.project.id, props.sessionId, setBrowserSessionUrl]);
+  const { isClosing } = useAppClosing();
+  const [debouncedCurrentUrl, currentUrlDebouncer] = useDebouncedValue(
+    sessionState.currentUrl,
+    { wait: 2000 },
+  );
+
   useEffect(() => {
-    const current = sessionState.currentUrl;
+    if (isClosing) {
+      currentUrlDebouncer.flush();
+    }
+  }, [isClosing, currentUrlDebouncer]);
+
+  useEffect(() => {
+    const current = debouncedCurrentUrl;
     if (current && current !== storedUrl) {
       setBrowserSessionUrl(props.project.id, props.sessionId, current);
+      if (props.resumeLastVisitedPage) {
+        workspaceShellActions.upsertProjectSettings(props.project.id, (settings) => {
+          const embedId = props.sessionId.replace(/^custom-/, "");
+          const customEmbeds = settings.customEmbeds ?? [];
+          const index = customEmbeds.findIndex((e) => e.id === embedId);
+          if (index === -1) return settings;
+          const embed = customEmbeds[index];
+          if (!embed || embed.lastVisitedUrl === current) return settings;
+          
+          const nextEmbeds = [...customEmbeds];
+          nextEmbeds[index] = { ...embed, lastVisitedUrl: current };
+          return { ...settings, customEmbeds: nextEmbeds };
+        });
+      }
     }
-  }, [sessionState.currentUrl, storedUrl, setBrowserSessionUrl, props.project.id, props.sessionId]);
+  }, [
+    debouncedCurrentUrl,
+    storedUrl,
+    setBrowserSessionUrl,
+    props.project.id,
+    props.sessionId,
+    props.resumeLastVisitedPage,
+  ]);
   // Keep the address bar reflecting where the embed actually is (e.g. after the
   // user clicks a link inside it or navigates), like a real browser URL bar.
   useEffect(() => {
@@ -6790,6 +6826,7 @@ function CustomEmbedTool(props: {
   title: string;
   url: string;
   resumeLastVisitedPage?: boolean | undefined;
+  lastVisitedUrl?: string | undefined;
   sessionId: string;
 }) {
   if (window.desktopBridge) {
@@ -6799,6 +6836,7 @@ function CustomEmbedTool(props: {
         title={props.title}
         url={props.url}
         resumeLastVisitedPage={props.resumeLastVisitedPage}
+        lastVisitedUrl={props.lastVisitedUrl}
         sessionId={props.sessionId}
       />
     );
@@ -6809,7 +6847,7 @@ function CustomEmbedTool(props: {
   const [embedBlocked, setEmbedBlocked] = useState(false);
   const sessionKey = `${props.project.id}:${props.sessionId}`;
   const storedUrl = useAtomValue(workspaceShellAtom, (state) => state.browserUrlBySessionKey[sessionKey]);
-  const normalizedUrl = normalizeBrowserUrl(props.resumeLastVisitedPage ? (storedUrl ?? props.url) : props.url);
+  const normalizedUrl = normalizeBrowserUrl(props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url);
 
   useEffect(() => {
     setLoading(true);

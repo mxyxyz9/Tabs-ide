@@ -51,6 +51,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
+import { Separator } from "./ui/separator";
 import { cn } from "../lib/utils";
 import {
   useProjectWorkspaceSettings,
@@ -417,6 +418,65 @@ export function ProjectWorkspaceSettingsSection() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const updatePresetRow = useCallback((id: string, updater: (current: ServerProcessDraft) => ServerProcessDraft) => {
+    setServerPresetDrafts((current) =>
+      current.map((entry) => (entry.id === id ? updater(entry) : entry)),
+    );
+  }, []);
+
+  const addCommandStep = useCallback((id: string) => {
+    setServerPresetDrafts((current) =>
+      current.map((entry) =>
+        entry.id === id
+          ? { ...entry, commands: [...entry.commands, ""] }
+          : entry,
+      ),
+    );
+  }, []);
+
+  const updateCommandStep = useCallback((id: string, commandIndex: number, command: string) => {
+    setServerPresetDrafts((current) =>
+      current.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              commands: entry.commands.map((step, stepIndex) =>
+                stepIndex === commandIndex ? command : step,
+              ),
+            }
+          : entry,
+      ),
+    );
+  }, []);
+
+  const moveCommandStep = useCallback((id: string, commandIndex: number, direction: -1 | 1) => {
+    setServerPresetDrafts((current) =>
+      current.map((entry) => {
+        if (entry.id !== id) return entry;
+        const targetIndex = commandIndex + direction;
+        if (targetIndex < 0 || targetIndex >= entry.commands.length) return entry;
+        const nextCommands = [...entry.commands];
+        const temp = nextCommands[commandIndex]!;
+        nextCommands[commandIndex] = nextCommands[targetIndex]!;
+        nextCommands[targetIndex] = temp;
+        return { ...entry, commands: nextCommands };
+      }),
+    );
+  }, []);
+
+  const removeCommandStep = useCallback((id: string, commandIndex: number) => {
+    setServerPresetDrafts((current) =>
+      current.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              commands: entry.commands.filter((_, stepIndex) => stepIndex !== commandIndex),
+            }
+          : entry,
+      ),
+    );
+  }, []);
+
   if (!activeProjectId || !activeProject || !projectSettings) {
     return (
       <section className="space-y-3">
@@ -475,12 +535,16 @@ export function ProjectWorkspaceSettingsSection() {
 
   const saveCustomEmbeds = () => {
     upsertProjectSettings(projectId, (current) => {
-      const nextCustomEmbeds = customEmbedDrafts.map((draft) => ({
-        id: draft.id,
-        label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab",
-        url: draft.url.trim(),
-        resumeLastVisitedPage: draft.resumeLastVisitedPage,
-      }));
+      const nextCustomEmbeds = customEmbedDrafts.map((draft) => {
+        const existingEmbed = current.customEmbeds?.find((e) => e.id === draft.id);
+        return {
+          id: draft.id,
+          label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab",
+          url: draft.url.trim(),
+          resumeLastVisitedPage: draft.resumeLastVisitedPage,
+          ...(existingEmbed?.lastVisitedUrl ? { lastVisitedUrl: existingEmbed.lastVisitedUrl } : {}),
+        };
+      });
       const nextCustomEmbedTools = customEmbedDrafts.map((draft, index) => ({
         id: createCustomEmbedToolId(draft.id),
         kind: "custom_embed" as const,
@@ -577,64 +641,7 @@ export function ProjectWorkspaceSettingsSection() {
     setServerProcessDrafts(createTerminalProcessDrafts(projectSettings));
   };
 
-  const updatePresetRow = useCallback((id: string, updater: (current: ServerProcessDraft) => ServerProcessDraft) => {
-    setServerPresetDrafts((current) =>
-      current.map((entry) => (entry.id === id ? updater(entry) : entry)),
-    );
-  }, []);
 
-  const addCommandStep = useCallback((id: string) => {
-    setServerPresetDrafts((current) =>
-      current.map((entry) =>
-        entry.id === id
-          ? { ...entry, commands: [...entry.commands, ""] }
-          : entry,
-      ),
-    );
-  }, []);
-
-  const updateCommandStep = useCallback((id: string, commandIndex: number, command: string) => {
-    setServerPresetDrafts((current) =>
-      current.map((entry) =>
-        entry.id === id
-          ? {
-              ...entry,
-              commands: entry.commands.map((step, stepIndex) =>
-                stepIndex === commandIndex ? command : step,
-              ),
-            }
-          : entry,
-      ),
-    );
-  }, []);
-
-  const moveCommandStep = useCallback((id: string, commandIndex: number, direction: -1 | 1) => {
-    setServerPresetDrafts((current) =>
-      current.map((entry) => {
-        if (entry.id !== id) return entry;
-        const targetIndex = commandIndex + direction;
-        if (targetIndex < 0 || targetIndex >= entry.commands.length) return entry;
-        const nextCommands = [...entry.commands];
-        const temp = nextCommands[commandIndex]!;
-        nextCommands[commandIndex] = nextCommands[targetIndex]!;
-        nextCommands[targetIndex] = temp;
-        return { ...entry, commands: nextCommands };
-      }),
-    );
-  }, []);
-
-  const removeCommandStep = useCallback((id: string, commandIndex: number) => {
-    setServerPresetDrafts((current) =>
-      current.map((entry) =>
-        entry.id === id
-          ? {
-              ...entry,
-              commands: entry.commands.filter((_, stepIndex) => stepIndex !== commandIndex),
-            }
-          : entry,
-      ),
-    );
-  }, []);
 
   return (
     <>
@@ -764,49 +771,57 @@ export function ProjectWorkspaceSettingsSection() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                <Input
-                  value={browserDefaultUrlDraft}
-                  onChange={(event) => setBrowserDefaultUrlDraft(event.target.value)}
-                  placeholder="http://localhost:3000"
-                />
-                <Button 
-                  type="button" 
-                  onClick={() => {
-                    if (activeProjectId) {
-                      upsertProjectSettings(activeProjectId, (current) => ({
-                        ...current,
-                        browser: {
-                          ...current.browser,
-                          defaultUrl: browserDefaultUrlDraft,
-                          resumeLastVisitedPage: resumeLastVisitedPageDraft,
-                        },
-                      }));
-                    }
-                  }}
-                  disabled={!isBrowserDefaultUrlDirty && !isResumeLastVisitedPageDirty}
-                >
-                  Save
-                </Button>
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={browserDefaultUrlDraft}
+                    onChange={(event) => setBrowserDefaultUrlDraft(event.target.value)}
+                    placeholder="http://localhost:3000"
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      if (activeProjectId) {
+                        upsertProjectSettings(activeProjectId, (current) => ({
+                          ...current,
+                          browser: {
+                            ...current.browser,
+                            defaultUrl: browserDefaultUrlDraft,
+                            resumeLastVisitedPage: resumeLastVisitedPageDraft,
+                          },
+                        }));
+                      }
+                    }}
+                    disabled={!isBrowserDefaultUrlDirty && !isResumeLastVisitedPageDirty}
+                  >
+                    Save
+                  </Button>
+                </div>
+                {hasInternalBrowserOverride && (
+                  <Alert variant="default" className="bg-muted/50 py-3">
+                    <InfoIcon className="size-4 mt-0" />
+                    <AlertDescription className="text-muted-foreground ml-2">
+                      A Server Preset is configured to open a preview in the Internal Browser. When you run that preset, its preview URL will override this default.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
-              <div className="flex items-center gap-3">
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                  <div className="text-sm font-medium">Resume last visited page on startup</div>
+                  <div className="text-xs text-muted-foreground">
+                    When the browser is reopened, load the page you were last on instead of the default URL above.
+                  </div>
+                </div>
                 <Switch
                   checked={resumeLastVisitedPageDraft}
                   onCheckedChange={(checked) => setResumeLastVisitedPageDraft(checked)}
                 />
-                <div className="text-sm">
-                  Resume last visited page on startup
-                </div>
               </div>
-              {hasInternalBrowserOverride && (
-                <Alert variant="default" className="bg-muted/50 py-3">
-                  <InfoIcon className="size-4 mt-0" />
-                  <AlertDescription className="text-muted-foreground ml-2">
-                    A Server Preset is configured to open a preview in the Internal Browser. When you run that preset, its preview URL will override this default.
-                  </AlertDescription>
-                </Alert>
-              )}
             </div>
           </CardContent>
         </Card>

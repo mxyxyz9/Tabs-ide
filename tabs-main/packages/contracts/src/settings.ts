@@ -678,6 +678,7 @@ export const ProjectCustomEmbedDefinition = Schema.Struct({
   label: TrimmedNonEmptyString,
   url: TrimmedString,
   resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  lastVisitedUrl: Schema.optionalKey(TrimmedString),
 });
 export type ProjectCustomEmbedDefinition = typeof ProjectCustomEmbedDefinition.Type;
 
