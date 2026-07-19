@@ -897,7 +897,7 @@ function ProjectToolBar(props: {
           type="button"
           variant="ghost"
           size="sm"
-          className="shrink-0 rounded-full"
+          className="shrink-0 rounded-full text-muted-foreground hover:text-foreground"
           onClick={props.onOpenSettings}
         >
           <SettingsIcon className="size-4" />
@@ -6695,30 +6695,30 @@ function DesktopCustomEmbedTool(props: {
       ) : (
         toolbarTarget
           ? createPortal(
-              <div className="inline-flex items-center overflow-hidden rounded-full border border-border/80 bg-background/85 shadow-sm backdrop-blur-sm">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  className="rounded-none px-3"
-                  onClick={() => setIsChromeExpanded(true)}
-                  aria-label="Show custom tab controls"
-                >
-                  <PanelTopOpenIcon className="size-3.5" />
-                  Controls
-                </Button>
-                <div className="h-4 w-px bg-border/80" />
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="ghost"
-                  className="rounded-none px-3"
-                  onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
-                  aria-label={`Open ${props.title} externally`}
-                >
-                  <ExternalLinkIcon className="size-3.5" />
-                  External
-                </Button>
+              <div className="flex items-center">
+                <div className="flex items-center gap-1 pr-2">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="rounded-md text-muted-foreground"
+                    onClick={() => setIsChromeExpanded(true)}
+                    aria-label="Show custom tab controls"
+                  >
+                    <PanelTopOpenIcon className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="rounded-md text-muted-foreground"
+                    onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
+                    aria-label={`Open ${props.title} externally`}
+                  >
+                    <ExternalLinkIcon className="size-4" />
+                  </Button>
+                </div>
+                <div className="h-4 w-px bg-border/60" />
               </div>,
               toolbarTarget
             )
