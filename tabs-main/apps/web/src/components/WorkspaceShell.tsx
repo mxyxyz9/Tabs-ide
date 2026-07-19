@@ -1,4 +1,5 @@
 import type { FileDiffMetadata, Hunk } from "@pierre/diffs";
+import { createPortal } from "react-dom";
 import { useAtomValue } from "@effect/atom-react";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
@@ -890,16 +891,19 @@ function ProjectToolBar(props: {
           );
         })}
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="shrink-0 rounded-full"
-        onClick={props.onOpenSettings}
-      >
-        <SettingsIcon className="size-4" />
-        Settings
-      </Button>
+      <div className="flex items-center gap-2">
+        <div id="project-toolbar-extra-controls" className="flex items-center empty:hidden" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 rounded-full"
+          onClick={props.onOpenSettings}
+        >
+          <SettingsIcon className="size-4" />
+          Settings
+        </Button>
+      </div>
     </div>
   );
 }
@@ -6537,6 +6541,12 @@ function DesktopCustomEmbedTool(props: {
     };
   }, [bridge, hostState.available, props.project.id]);
 
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setToolbarTarget(document.getElementById("project-toolbar-extra-controls"));
+  }, []);
+
   if (!bridge || !hostState.available) {
     return (
       <div className="flex h-full min-h-0 flex-col gap-4 p-4">
@@ -6560,7 +6570,7 @@ function DesktopCustomEmbedTool(props: {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col gap-2 p-2">
+    <div className={cn("relative flex h-full min-h-0 flex-col", isChromeExpanded ? "gap-2 p-2" : "")}>
       {isChromeExpanded ? (
         <Card className="relative z-20">
           <CardContent className="space-y-1.5 p-2">
@@ -6683,42 +6693,39 @@ function DesktopCustomEmbedTool(props: {
           </CardContent>
         </Card>
       ) : (
-        // Rendered IN FLOW (not as an absolute overlay): the native BrowserView
-        // always paints on top of the DOM, so an overlay here would be hidden
-        // behind the page and the user could never reach these controls — e.g.
-        // to bail out of a site that fails inside the embed (figma renders its
-        // own client-side-error page that Tabs can't detect). Keeping the row in
-        // flow positions the view below it, so Controls/External stay clickable.
-        <div className="flex items-center justify-end">
-          <div className="inline-flex items-center overflow-hidden rounded-full border border-border/80 bg-background/85 shadow-sm backdrop-blur-sm">
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              className="rounded-none px-3"
-              onClick={() => setIsChromeExpanded(true)}
-              aria-label="Show custom tab controls"
-            >
-              <PanelTopOpenIcon className="size-3.5" />
-              Controls
-            </Button>
-            <div className="h-4 w-px bg-border/80" />
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              className="rounded-none px-3"
-              onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
-              aria-label={`Open ${props.title} externally`}
-            >
-              <ExternalLinkIcon className="size-3.5" />
-              External
-            </Button>
-          </div>
-        </div>
+        toolbarTarget
+          ? createPortal(
+              <div className="inline-flex items-center overflow-hidden rounded-full border border-border/80 bg-background/85 shadow-sm backdrop-blur-sm">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="rounded-none px-3"
+                  onClick={() => setIsChromeExpanded(true)}
+                  aria-label="Show custom tab controls"
+                >
+                  <PanelTopOpenIcon className="size-3.5" />
+                  Controls
+                </Button>
+                <div className="h-4 w-px bg-border/80" />
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="rounded-none px-3"
+                  onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
+                  aria-label={`Open ${props.title} externally`}
+                >
+                  <ExternalLinkIcon className="size-3.5" />
+                  External
+                </Button>
+              </div>,
+              toolbarTarget
+            )
+          : null
       )}
 
-      <div className="relative z-0 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5">
+      <div className={cn("relative z-0 min-h-0 flex-1 overflow-hidden bg-card", isChromeExpanded ? "rounded-2xl border border-border/70 p-1.5" : "")}>
         {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
         <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
           <div
