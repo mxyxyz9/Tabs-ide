@@ -71,8 +71,13 @@ import {
   type RuntimeInstallProgress,
 } from "./codeOssRuntimeInstaller";
 import { CodeControlChannel } from "./codeControlChannel";
+import { checkDiskSpace } from "./disk";
 import { getTailscaleStatus } from "./tailscale";
 import type { CodeChromeState } from "@tabs/shared/codeChrome";
+
+// Prevent EPIPE crashes when pipes are closed unexpectedly (e.g. parent process killed)
+process.stdout.on("error", () => {});
+process.stderr.on("error", () => {});
 
 syncShellEnvironment();
 
@@ -1642,7 +1647,11 @@ function scheduleBackendRestart(reason: string): void {
 
   const delayMs = Math.min(500 * 2 ** restartAttempt, 10_000);
   restartAttempt += 1;
-  console.error(`[desktop] backend exited unexpectedly (${reason}); restarting in ${delayMs}ms`);
+  try {
+    console.error(`[desktop] backend exited unexpectedly (${reason}); restarting in ${delayMs}ms`);
+  } catch {
+    // Ignore EPIPE if pipes are closed during shutdown
+  }
 
   restartTimer = setTimeout(() => {
     restartTimer = null;
@@ -2919,7 +2928,20 @@ app.on("before-quit", (event) => {
         writeDesktopLogHeader(err.message);
       }
 
-      app.exit(0);
+      // Flush storage to ensure localStorage and IndexedDB writes from the renderer are saved to disk
+      try {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          writeDesktopLogHeader("flushing storage data to disk");
+          await mainWindow.webContents.session.flushStorageData();
+        } else {
+          writeDesktopLogHeader("flushing default session storage data to disk");
+          await session.defaultSession.flushStorageData();
+        }
+      } catch (err: any) {
+        writeDesktopLogHeader(`flush storage failed: ${err.message}`);
+      }
+
+      app.quit();
     }
   })();
 });

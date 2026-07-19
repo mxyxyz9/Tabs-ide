@@ -150,7 +150,7 @@ describe("workspaceShellStore", () => {
           ],
           browser: {
             defaultUrl: "http://localhost:3000",
-            openExternalByDefault: false,
+            openExternalByDefault: false, resumeLastVisitedPage: true,
           },
           terminalProcesses: [],
           serverPresets: [],
@@ -206,7 +206,7 @@ describe("workspaceShellStore", () => {
             ],
             browser: {
               defaultUrl: "",
-              openExternalByDefault: false,
+              openExternalByDefault: false, resumeLastVisitedPage: true,
             },
             terminalProcesses: [],
             serverPresets: [],
@@ -283,7 +283,7 @@ describe("workspaceShellStore", () => {
               customEmbedId: "figma",
             },
           ],
-          browser: { defaultUrl: "", openExternalByDefault: false },
+          browser: { defaultUrl: "", openExternalByDefault: false, resumeLastVisitedPage: true },
           terminalProcesses: [
             {
               id: "frontend",
@@ -295,7 +295,7 @@ describe("workspaceShellStore", () => {
             },
           ],
           serverPresets: [],
-          customEmbeds: [{ id: "figma", label: "Figma", url: "https://figma.com" }],
+          customEmbeds: [{ id: "figma", label: "Figma", url: "https://figma.com", resumeLastVisitedPage: false }],
         },
       },
     };

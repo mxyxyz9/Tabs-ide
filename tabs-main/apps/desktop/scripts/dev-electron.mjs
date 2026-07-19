@@ -47,17 +47,17 @@ function cleanupStaleDevApps() {
     return;
   }
 
-  const pgrepArgs = ["-f", "--", `--tabs-dev-root=${desktopDir}`];
+  const pgrepArgs = ["-f", "--", `[eE]lectron.*--tabs-dev-root=${desktopDir}`];
   if (spawnSync("pgrep", pgrepArgs, { stdio: "ignore" }).status !== 0) {
     return;
   }
 
-  spawnSync("pkill", ["-f", "--", `--tabs-dev-root=${desktopDir}`], { stdio: "ignore" });
+  spawnSync("pkill", ["-f", "--", `[eE]lectron.*--tabs-dev-root=${desktopDir}`], { stdio: "ignore" });
 
   const start = Date.now();
   while (spawnSync("pgrep", pgrepArgs, { stdio: "ignore" }).status === 0) {
     if (Date.now() - start > 5000) {
-      spawnSync("pkill", ["-9", "-f", "--", `--tabs-dev-root=${desktopDir}`], { stdio: "ignore" });
+      spawnSync("pkill", ["-9", "-f", "--", `[eE]lectron.*--tabs-dev-root=${desktopDir}`], { stdio: "ignore" });
       break;
     }
     spawnSync("sleep", ["0.1"]);
@@ -99,7 +99,8 @@ function startApp() {
       currentApp = null;
     }
 
-    const exitedAbnormally = signal !== null || code !== 0;
+    const exitedAbnormally = (code !== 0 && code !== null) || (signal !== null && signal !== "SIGTERM" && signal !== "SIGINT");
+    console.log(`[DEV-SCRIPT] App exited with code=${code} signal=${signal} abnormally=${exitedAbnormally}`);
     if (!shuttingDown && !expectedExits.has(app) && exitedAbnormally) {
       scheduleRestart();
     }

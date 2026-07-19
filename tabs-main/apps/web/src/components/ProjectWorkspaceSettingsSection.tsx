@@ -176,10 +176,12 @@ interface CustomEmbedDraft {
   label: string;
   url: string;
   visible: boolean;
+  resumeLastVisitedPage: boolean;
   isNew: boolean;
   originalLabel: string;
   originalUrl: string;
   originalVisible: boolean;
+  originalResumeLastVisitedPage: boolean;
 }
 
 export interface ServerProcessDraft {
@@ -216,10 +218,12 @@ function createCustomEmbedDrafts(settings: ProjectWorkspaceSettings): CustomEmbe
       id: embed.id,
       label: embed.label,
       url: embed.url,
+      resumeLastVisitedPage: embed.resumeLastVisitedPage ?? false,
       visible: tool?.visible ?? true,
       isNew: false,
       originalLabel: embed.label,
       originalUrl: embed.url,
+      originalResumeLastVisitedPage: embed.resumeLastVisitedPage ?? false,
       originalVisible: tool?.visible ?? true,
     };
   });
@@ -282,7 +286,8 @@ function isCustomEmbedDraftDirty(draft: CustomEmbedDraft) {
     draft.isNew ||
     draft.label !== draft.originalLabel ||
     draft.url !== draft.originalUrl ||
-    draft.visible !== draft.originalVisible
+    draft.visible !== draft.originalVisible ||
+    draft.resumeLastVisitedPage !== draft.originalResumeLastVisitedPage
   );
 }
 
@@ -318,11 +323,14 @@ export function ProjectWorkspaceSettingsSection() {
   const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});
 
   const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
+  const [resumeLastVisitedPageDraft, setResumeLastVisitedPageDraft] = useState<boolean>(true);
   const isBrowserDefaultUrlDirty = projectSettings ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl : false;
+  const isResumeLastVisitedPageDirty = projectSettings ? resumeLastVisitedPageDraft !== projectSettings.browser.resumeLastVisitedPage : false;
 
   useEffect(() => {
     setBrowserDefaultUrlDraft(projectSettings?.browser?.defaultUrl ?? "");
-  }, [projectSettings?.browser?.defaultUrl, activeProjectId]);
+    setResumeLastVisitedPageDraft(projectSettings?.browser?.resumeLastVisitedPage ?? true);
+  }, [projectSettings?.browser?.defaultUrl, projectSettings?.browser?.resumeLastVisitedPage, activeProjectId]);
 
   const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
   const [activeCustomEmbedId, setActiveCustomEmbedId] = useState<string | null>(null);
@@ -471,6 +479,7 @@ export function ProjectWorkspaceSettingsSection() {
         id: draft.id,
         label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab",
         url: draft.url.trim(),
+        resumeLastVisitedPage: draft.resumeLastVisitedPage,
       }));
       const nextCustomEmbedTools = customEmbedDrafts.map((draft, index) => ({
         id: createCustomEmbedToolId(draft.id),
@@ -771,14 +780,24 @@ export function ProjectWorkspaceSettingsSection() {
                         browser: {
                           ...current.browser,
                           defaultUrl: browserDefaultUrlDraft,
+                          resumeLastVisitedPage: resumeLastVisitedPageDraft,
                         },
                       }));
                     }
                   }}
-                  disabled={!isBrowserDefaultUrlDirty}
+                  disabled={!isBrowserDefaultUrlDirty && !isResumeLastVisitedPageDirty}
                 >
                   Save
                 </Button>
+              </div>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={resumeLastVisitedPageDraft}
+                  onCheckedChange={(checked) => setResumeLastVisitedPageDraft(checked)}
+                />
+                <div className="text-sm">
+                  Resume last visited page on startup
+                </div>
               </div>
               {hasInternalBrowserOverride && (
                 <Alert variant="default" className="bg-muted/50 py-3">
@@ -828,10 +847,12 @@ export function ProjectWorkspaceSettingsSection() {
                                 label: "",
                                 url: "",
                                 visible: true,
+                                resumeLastVisitedPage: false,
                                 isNew: true,
                                 originalLabel: "",
                                 originalUrl: "",
                                 originalVisible: true,
+                                originalResumeLastVisitedPage: false,
                               },
                               ...current,
                             ]);
@@ -923,6 +944,24 @@ export function ProjectWorkspaceSettingsSection() {
                                           current.map((entry) =>
                                             entry.id === activeDraft.id
                                               ? { ...entry, visible: Boolean(checked) }
+                                              : entry,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3 pt-4 border-t border-border/40">
+                                    <div className="text-xs text-muted-foreground">
+                                      <div className="mb-0.5 font-medium text-foreground">Resume last visited page</div>
+                                      When this tab is reopened, load the page you were last on instead of the custom URL above.
+                                    </div>
+                                    <Switch
+                                      checked={activeDraft.resumeLastVisitedPage}
+                                      onCheckedChange={(checked) =>
+                                        setCustomEmbedDrafts((current) =>
+                                          current.map((entry) =>
+                                            entry.id === activeDraft.id
+                                              ? { ...entry, resumeLastVisitedPage: Boolean(checked) }
                                               : entry,
                                           ),
                                         )

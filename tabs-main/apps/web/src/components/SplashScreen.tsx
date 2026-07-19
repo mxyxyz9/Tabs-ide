@@ -37,6 +37,7 @@ function RotatingLabel({
   const idxRef = useRef(0);
 
   useEffect(() => {
+    let clearId: ReturnType<typeof setTimeout> | undefined;
     const id = setInterval(() => {
       const leaving = messages[idxRef.current];
       if (leaving === undefined) return;
@@ -44,10 +45,12 @@ function RotatingLabel({
       idxRef.current = next;
       setOutgoing(leaving);
       setIdx(next);
-      const clearId = setTimeout(() => setOutgoing(null), 520);
-      return () => clearTimeout(clearId);
+      clearId = setTimeout(() => setOutgoing(null), 520);
     }, intervalMs);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (clearId) clearTimeout(clearId);
+    };
   }, [messages, intervalMs]);
 
   return (
@@ -78,14 +81,24 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
   const animateRef = useRef<SVGAnimationElement>(null);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    const triggerAnimation = () => {
       if (animateRef.current) {
         try {
           (animateRef.current as any).beginElement();
         } catch (e) {}
       }
-    });
-    return () => cancelAnimationFrame(frame);
+    };
+    
+    const frame = requestAnimationFrame(triggerAnimation);
+    
+    // Chromium sometimes drops SMIL feTurbulence animations after one cycle
+    // even with repeatCount="indefinite". Restart it explicitly right before it ends.
+    const intervalId = setInterval(triggerAnimation, 6700);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      clearInterval(intervalId);
+    };
   }, []);
 
   return (

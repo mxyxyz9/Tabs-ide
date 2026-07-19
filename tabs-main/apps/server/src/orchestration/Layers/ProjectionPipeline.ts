@@ -1216,20 +1216,25 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
     });
 
   const bootstrapProjector = (projector: ProjectorDefinition) =>
-    projectionStateRepository
-      .getByProjector({
-        projector: projector.name,
-      })
-      .pipe(
-        Effect.flatMap((stateRow) =>
-          Stream.runForEach(
-            eventStore.readFromSequence(
-              Option.isSome(stateRow) ? stateRow.value.lastAppliedSequence : 0,
-            ),
-            (event) => runProjectorForEvent(projector, event),
-          ),
-        ),
-      );
+    Effect.logInfo(`Bootstrapping projector ${projector.name}`).pipe(
+      Effect.flatMap(() => projectionStateRepository
+        .getByProjector({
+          projector: projector.name,
+        })
+        .pipe(
+          Effect.flatMap((stateRow) => {
+            const seq = Option.isSome(stateRow) ? stateRow.value.lastAppliedSequence : 0;
+            return Effect.logInfo(`Projector ${projector.name} last sequence: ${seq}`).pipe(
+              Effect.flatMap(() => Stream.runForEach(
+                eventStore.readFromSequence(seq),
+                (event) => runProjectorForEvent(projector, event),
+              ))
+            );
+          }),
+          Effect.tap(() => Effect.logInfo(`Finished bootstrapping projector ${projector.name}`))
+        )
+      )
+    );
 
   const projectEvent: OrchestrationProjectionPipelineShape["projectEvent"] = (event) =>
     Effect.forEach(projectors, (projector) => runProjectorForEvent(projector, event), {
