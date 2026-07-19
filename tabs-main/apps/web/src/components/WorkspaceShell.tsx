@@ -5598,6 +5598,170 @@ function GitConflictTextPane(props: {
   );
 }
 
+function DesktopBrowserChrome(props: {
+  projectId: ProjectId;
+  sessionId?: string;
+  title: string;
+  isChromeExpanded: boolean;
+  setIsChromeExpanded: (expanded: boolean) => void;
+  sessionState: DesktopBrowserSessionState;
+  browserState: ProjectBrowserToolState;
+  draftUrl: string;
+  setDraftUrl: (url: string) => void;
+  submitDraftUrl: () => void;
+  normalizedUrl: string;
+  setBrowserViewport: typeof workspaceShellActions.setBrowserViewport;
+  setViewportSelectorOpen: (open: boolean) => void;
+  toolbarTarget: HTMLElement | null;
+  children: ReactNode;
+}) {
+  const api = readNativeApi();
+  const bridge = window.desktopBridge;
+
+  const sessionArg = props.sessionId ? { projectId: props.projectId, sessionId: props.sessionId } : { projectId: props.projectId };
+
+  return (
+    <div className={cn("relative flex h-full min-h-0 flex-col", props.isChromeExpanded ? "gap-2 p-2" : "")}>
+      {props.isChromeExpanded ? (
+        <Card className="relative z-20">
+          <CardContent className="space-y-1.5 p-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                disabled={!props.sessionState.canGoBack}
+                onClick={() => void bridge?.goBackBrowserSession(sessionArg)}
+              >
+                <ArrowLeftIcon className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="outline"
+                disabled={!props.sessionState.canGoForward}
+                onClick={() => void bridge?.goForwardBrowserSession(sessionArg)}
+              >
+                <ArrowRightIcon className="size-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => void bridge?.reloadBrowserSession(sessionArg)}
+              >
+                <RefreshCwIcon className="size-3.5" />
+                Refresh
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant={props.sessionState.devToolsOpen ? "secondary" : "outline"}
+                onClick={() => void bridge?.toggleBrowserDevTools(sessionArg)}
+              >
+                <BugIcon className="size-3.5" />
+                Inspect
+              </Button>
+              <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
+                <Input
+                  className="h-8"
+                  value={props.draftUrl}
+                  onChange={(event) => props.setDraftUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    props.submitDraftUrl();
+                  }}
+                  placeholder="Enter a URL"
+                  aria-label={`${props.title} URL`}
+                />
+                <Button type="button" size="xs" onClick={props.submitDraftUrl}>
+                  Go
+                </Button>
+              </div>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() =>
+                  void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+                }
+              >
+                <ExternalLinkIcon className="size-3.5" />
+                External
+              </Button>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() =>
+                    props.setBrowserViewport(props.projectId, {
+                      devicePreset: props.browserState.devicePreset,
+                      landscape: !props.browserState.landscape,
+                    })
+                  }
+                >
+                  <RotateCwIcon className="size-3.5" />
+                  {props.browserState.landscape ? "Portrait" : "Landscape"}
+                </Button>
+                <BrowserViewportSelector
+                  browserState={props.browserState}
+                  projectId={props.projectId}
+                  setBrowserViewport={props.setBrowserViewport}
+                  onOpenChange={props.setViewportSelectorOpen}
+                />
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="outline"
+                  onClick={() => props.setIsChromeExpanded(false)}
+                  aria-label={`Collapse ${props.title} controls`}
+                >
+                  <PanelTopCloseIcon className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        props.toolbarTarget
+          ? createPortal(
+              <div className="flex items-center">
+                <div className="flex items-center gap-1 pr-2">
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="rounded-md text-muted-foreground"
+                    onClick={() => props.setIsChromeExpanded(true)}
+                    aria-label={`Show ${props.title} controls`}
+                  >
+                    <PanelTopOpenIcon className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="rounded-md text-muted-foreground"
+                    onClick={() => void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)}
+                    aria-label={`Open ${props.title} externally`}
+                  >
+                    <ExternalLinkIcon className="size-4" />
+                  </Button>
+                </div>
+                <div className="h-4 w-px bg-border/60" />
+              </div>,
+              props.toolbarTarget
+            )
+          : null
+      )}
+      <div className={cn("relative z-0 min-h-0 flex-1 overflow-hidden bg-card", props.isChromeExpanded ? "rounded-2xl border border-border/70 p-1.5" : "")}>
+        {props.children}
+      </div>
+    </div>
+  );
+}
+
 function DesktopBrowserTool(props: {
   project: Project;
   projectSettings: ProjectWorkspaceSettings;
@@ -5863,6 +6027,16 @@ function DesktopBrowserTool(props: {
     };
   }, [bridge, hostState.available, props.project.id]);
 
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setToolbarTarget(document.getElementById("project-toolbar-extra-controls"));
+  }, []);
+
+  const submitDraftUrl = useCallback(() => {
+    setBrowserCurrentUrl(props.project.id, normalizeBrowserUrl(draftUrl));
+  }, [draftUrl, props.project.id, setBrowserCurrentUrl]);
+
   if (!bridge || !hostState.available) {
     return (
       <div className="flex h-full min-h-0 flex-col gap-4 p-4">
@@ -5886,173 +6060,74 @@ function DesktopBrowserTool(props: {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-2">
-      <Card className="relative z-20">
-        <CardContent className="space-y-1.5 p-2">
-          <div className="flex flex-wrap items-center gap-1">
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              disabled={!sessionState.canGoBack}
-              onClick={() =>
-                void bridge.goBackBrowserSession({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <ArrowLeftIcon className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="icon-xs"
-              variant="outline"
-              disabled={!sessionState.canGoForward}
-              onClick={() =>
-                void bridge.goForwardBrowserSession({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <ArrowRightIcon className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={() =>
-                void bridge.reloadBrowserSession({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <RefreshCwIcon className="size-3.5" />
-              Refresh
-            </Button>
-            <Button
-              type="button"
-              size="xs"
-              variant={sessionState.devToolsOpen ? "secondary" : "outline"}
-              onClick={() =>
-                void bridge.toggleBrowserDevTools({
-                  projectId: props.project.id,
-                })
-              }
-            >
-              <BugIcon className="size-3.5" />
-              Inspect
-            </Button>
-            <div className="flex min-w-[12rem] flex-1 items-center gap-1.5">
-              <Input
-                className="h-8"
-                value={draftUrl}
-                onChange={(event) => setDraftUrl(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key !== "Enter") return;
-                  setBrowserCurrentUrl(props.project.id, normalizeBrowserUrl(draftUrl));
-                }}
-                placeholder="Enter a URL"
-              />
-              <Button
-                type="button"
-                size="xs"
-                onClick={() =>
-                  setBrowserCurrentUrl(props.project.id, normalizeBrowserUrl(draftUrl))
-                }
-              >
-                Go
-              </Button>
+    <DesktopBrowserChrome
+      projectId={props.project.id}
+      title="Browser"
+      isChromeExpanded={isChromeExpanded}
+      setIsChromeExpanded={setIsChromeExpanded}
+      sessionState={sessionState}
+      browserState={browserState}
+      draftUrl={draftUrl}
+      setDraftUrl={setDraftUrl}
+      submitDraftUrl={submitDraftUrl}
+      normalizedUrl={normalizedUrl}
+      setBrowserViewport={setBrowserViewport}
+      setViewportSelectorOpen={setViewportSelectorOpen}
+      toolbarTarget={toolbarTarget}
+    >
+      {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
+      <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
+        <div
+          className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
+          style={{
+            width: viewportWidth ? `min(${viewportWidth}px, 100%)` : "100%",
+            height: viewportHeight ? `min(${viewportHeight}px, 100%)` : "100%",
+            minHeight: viewportHeight ? undefined : "100%",
+          }}
+        >
+          <div ref={hostRef} className="absolute inset-0 bg-background" />
+          {sessionState.loading ? (
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
+              <LoaderIcon className="mr-2 size-4 animate-spin" />
+              Loading page...
             </div>
-            <Button
-              type="button"
-              size="xs"
-              variant="outline"
-              onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
-            >
-              <ExternalLinkIcon className="size-3.5" />
-              External
-            </Button>
-            <div className="flex items-center gap-1.5">
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() =>
-                  setBrowserViewport(props.project.id, {
-                    devicePreset: browserState.devicePreset,
-                    landscape: !browserState.landscape,
-                  })
-                }
-              >
-                <RotateCwIcon className="size-3.5" />
-                {browserState.landscape ? "Portrait" : "Landscape"}
-              </Button>
-              <BrowserViewportSelector
-                browserState={browserState}
-                projectId={props.project.id}
-                setBrowserViewport={setBrowserViewport}
-                onOpenChange={setViewportSelectorOpen}
-              />
+          ) : null}
+          {sessionState.lastError ? (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
+              <Card className="pointer-events-auto max-w-lg">
+                <CardHeader>
+                  <CardTitle>Page load failed</CardTitle>
+                  <CardDescription>{sessionState.lastError}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      void bridge.reloadBrowserSession({
+                        projectId: props.project.id,
+                      })
+                    }
+                  >
+                    <RefreshCwIcon className="size-3.5" />
+                    Retry
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
+                    }
+                  >
+                    <ExternalLinkIcon className="size-3.5" />
+                    Open In Browser
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="relative z-0 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5">
-        {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
-        <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
-          <div
-            className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
-            style={{
-              width: viewportWidth ? `min(${viewportWidth}px, 100%)` : "100%",
-              height: viewportHeight ? `min(${viewportHeight}px, 100%)` : "100%",
-              minHeight: viewportHeight ? undefined : "100%",
-            }}
-          >
-            <div ref={hostRef} className="absolute inset-0 bg-background" />
-            {sessionState.loading ? (
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
-                <LoaderIcon className="mr-2 size-4 animate-spin" />
-                Loading page...
-              </div>
-            ) : null}
-            {sessionState.lastError ? (
-              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
-                <Card className="pointer-events-auto max-w-lg">
-                  <CardHeader>
-                    <CardTitle>Page load failed</CardTitle>
-                    <CardDescription>{sessionState.lastError}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        void bridge.reloadBrowserSession({
-                          projectId: props.project.id,
-                        })
-                      }
-                    >
-                      <RefreshCwIcon className="size-3.5" />
-                      Retry
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
-                      }
-                    >
-                      <ExternalLinkIcon className="size-3.5" />
-                      Open In Browser
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
-    </div>
+    </DesktopBrowserChrome>
   );
 }
 
@@ -6607,217 +6682,76 @@ function DesktopCustomEmbedTool(props: {
   }
 
   return (
-    <div className={cn("relative flex h-full min-h-0 flex-col", isChromeExpanded ? "gap-2 p-2" : "")}>
-      {isChromeExpanded ? (
-        <Card className="relative z-20">
-          <CardContent className="space-y-1.5 p-2">
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="outline"
-                disabled={!sessionState.canGoBack}
-                onClick={() =>
-                  void bridge.goBackBrowserSession({
-                    projectId: props.project.id,
-                    sessionId: props.sessionId,
-                  })
-                }
-              >
-                <ArrowLeftIcon className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="icon-xs"
-                variant="outline"
-                disabled={!sessionState.canGoForward}
-                onClick={() =>
-                  void bridge.goForwardBrowserSession({
-                    projectId: props.project.id,
-                    sessionId: props.sessionId,
-                  })
-                }
-              >
-                <ArrowRightIcon className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() =>
-                  void bridge.reloadBrowserSession({
-                    projectId: props.project.id,
-                    sessionId: props.sessionId,
-                  })
-                }
-              >
-                <RefreshCwIcon className="size-3.5" />
-                Refresh
-              </Button>
-              <Button
-                type="button"
-                size="xs"
-                variant={sessionState.devToolsOpen ? "secondary" : "outline"}
-                onClick={() =>
-                  void bridge.toggleBrowserDevTools({
-                    projectId: props.project.id,
-                    sessionId: props.sessionId,
-                  })
-                }
-              >
-                <BugIcon className="size-3.5" />
-                Inspect
-              </Button>
-              <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
-                <Input
-                  className="h-8"
-                  value={draftUrl}
-                  onChange={(event) => setDraftUrl(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") return;
-                    submitDraftUrl();
-                  }}
-                  placeholder="Enter a URL"
-                  aria-label={`${props.title} URL`}
-                />
-                <Button type="button" size="xs" onClick={submitDraftUrl}>
-                  Go
-                </Button>
-              </div>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() =>
-                  void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
-                }
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                External
-              </Button>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  onClick={() =>
-                    setBrowserViewport(props.project.id, {
-                      devicePreset: browserState.devicePreset,
-                      landscape: !browserState.landscape,
-                    })
-                  }
-                >
-                  <RotateCwIcon className="size-3.5" />
-                  {browserState.landscape ? "Portrait" : "Landscape"}
-                </Button>
-                <BrowserViewportSelector
-                  browserState={browserState}
-                  projectId={props.project.id}
-                  setBrowserViewport={setBrowserViewport}
-                  onOpenChange={setViewportSelectorOpen}
-                />
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="outline"
-                  onClick={() => setIsChromeExpanded(false)}
-                  aria-label="Collapse custom tab controls"
-                >
-                  <PanelTopCloseIcon className="size-3.5" />
-                </Button>
-              </div>
+    <DesktopBrowserChrome
+      projectId={props.project.id}
+      sessionId={props.sessionId}
+      title={props.title}
+      isChromeExpanded={isChromeExpanded}
+      setIsChromeExpanded={setIsChromeExpanded}
+      sessionState={sessionState}
+      browserState={browserState}
+      draftUrl={draftUrl}
+      setDraftUrl={setDraftUrl}
+      submitDraftUrl={submitDraftUrl}
+      normalizedUrl={normalizedUrl}
+      setBrowserViewport={setBrowserViewport}
+      setViewportSelectorOpen={setViewportSelectorOpen}
+      toolbarTarget={toolbarTarget}
+    >
+      {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
+      <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
+        <div
+          className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
+          style={{
+            width: viewportWidth ? `min(${viewportWidth}px, 100%)` : "100%",
+            height: viewportHeight ? `min(${viewportHeight}px, 100%)` : "100%",
+            minHeight: viewportHeight ? undefined : "100%",
+          }}
+        >
+          <div ref={hostRef} className="absolute inset-0 bg-background" />
+          {sessionState.loading ? (
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
+              <LoaderIcon className="mr-2 size-4 animate-spin" />
+              Loading page...
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        toolbarTarget
-          ? createPortal(
-              <div className="flex items-center">
-                <div className="flex items-center gap-1 pr-2">
+          ) : null}
+          {sessionState.lastError ? (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
+              <Card className="pointer-events-auto max-w-lg">
+                <CardHeader>
+                  <CardTitle>Page load failed</CardTitle>
+                  <CardDescription>{sessionState.lastError}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="rounded-md text-muted-foreground"
-                    onClick={() => setIsChromeExpanded(true)}
-                    aria-label="Show custom tab controls"
+                    onClick={() =>
+                      void bridge.reloadBrowserSession({
+                        projectId: props.project.id,
+                        sessionId: props.sessionId,
+                      })
+                    }
                   >
-                    <PanelTopOpenIcon className="size-4" />
+                    <RefreshCwIcon className="size-3.5" />
+                    Retry
                   </Button>
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="rounded-md text-muted-foreground"
-                    onClick={() => void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)}
-                    aria-label={`Open ${props.title} externally`}
+                    variant="outline"
+                    onClick={() =>
+                      void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
+                    }
                   >
-                    <ExternalLinkIcon className="size-4" />
+                    <ExternalLinkIcon className="size-3.5" />
+                    Open In Browser
                   </Button>
-                </div>
-                <div className="h-4 w-px bg-border/60" />
-              </div>,
-              toolbarTarget
-            )
-          : null
-      )}
-
-      <div className={cn("relative z-0 min-h-0 flex-1 overflow-hidden bg-card", isChromeExpanded ? "rounded-2xl border border-border/70 p-1.5" : "")}>
-        {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
-        <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
-          <div
-            className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
-            style={{
-              width: viewportWidth ? `min(${viewportWidth}px, 100%)` : "100%",
-              height: viewportHeight ? `min(${viewportHeight}px, 100%)` : "100%",
-              minHeight: viewportHeight ? undefined : "100%",
-            }}
-          >
-            <div ref={hostRef} className="absolute inset-0 bg-background" />
-            {sessionState.loading ? (
-              <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
-                <LoaderIcon className="mr-2 size-4 animate-spin" />
-                Loading page...
-              </div>
-            ) : null}
-            {sessionState.lastError ? (
-              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-6">
-                <Card className="pointer-events-auto max-w-lg">
-                  <CardHeader>
-                    <CardTitle>Page load failed</CardTitle>
-                    <CardDescription>{sessionState.lastError}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      onClick={() =>
-                        void bridge.reloadBrowserSession({
-                          projectId: props.project.id,
-                          sessionId: props.sessionId,
-                        })
-                      }
-                    >
-                      <RefreshCwIcon className="size-3.5" />
-                      Retry
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() =>
-                        void api?.shell.openExternal(sessionState.currentUrl ?? normalizedUrl)
-                      }
-                    >
-                      <ExternalLinkIcon className="size-3.5" />
-                      Open In Browser
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : null}
-          </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
         </div>
       </div>
-    </div>
+    </DesktopBrowserChrome>
   );
 }
 
@@ -9136,6 +9070,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         } else {
           if (process.previewUrl && activeProject?.id) {
             workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
+            window.desktopBridge?.reloadBrowserSession({ projectId: activeProject.id });
           }
           if (process.autoOpenPreview && activeProject?.id) {
             workspaceShellActions.setActiveTool(activeProject.id, "browser");
