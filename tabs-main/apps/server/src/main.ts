@@ -300,15 +300,25 @@ const ServerConfigLive = (input: CliInput) =>
 // per-driver spawners — created inside the instance registry — can resolve it.
 const LayerLive = (input: CliInput) =>
   Layer.empty.pipe(
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => console.time("makeServerRuntimeServicesLayer")))),
     Layer.provideMerge(makeServerRuntimeServicesLayer()),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("makeServerRuntimeServicesLayer"); console.time("makeServerProviderLayer"); }))),
     Layer.provideMerge(makeServerProviderLayer()),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("makeServerProviderLayer"); console.time("makeProviderInstanceRegistryLayer"); }))),
     Layer.provideMerge(makeProviderInstanceRegistryLayer()),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("makeProviderInstanceRegistryLayer"); console.time("SqlitePersistence"); }))),
     Layer.provideMerge(SqlitePersistence.layerConfig),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("SqlitePersistence"); console.time("ServerLoggerLive"); }))),
     Layer.provideMerge(ServerLoggerLive),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("ServerLoggerLive"); console.time("AnalyticsServiceLayerLive"); }))),
     Layer.provideMerge(AnalyticsServiceLayerLive),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("AnalyticsServiceLayerLive"); console.time("ServerSettingsLive"); }))),
     Layer.provideMerge(ServerSettingsLive),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("ServerSettingsLive"); console.time("ServerConfigLive"); }))),
     Layer.provideMerge(ServerConfigLive(input)),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("ServerConfigLive"); console.time("NodeServices"); }))),
     Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(Layer.effectDiscard(Effect.sync(() => { console.timeEnd("NodeServices"); }))),
   );
 
 const isWildcardHost = (host: string | undefined): boolean =>

@@ -654,10 +654,12 @@ export const ProviderRegistryLive = Layer.effect(
     // was dropped, which made any settings change that replaced an
     // instance never propagate to the aggregator's `providersRef`.)
     const instanceChanges = yield* instanceRegistry.subscribeChanges;
-    // Initial sync: subscribe + kick off refreshes for every instance
-    // present at boot. Run synchronously so consumers pulling immediately
-    // after the layer build see the correct aggregator state.
-    yield* syncLiveSources;
+    // Initial sync: kick off refreshes for every instance present at boot.
+    // We run this asynchronously (forkScoped) so that the provider layer
+    // doesn't block the entire server boot on 30s+ CLI/network probes.
+    // The UI will initially render the cached/fallback snapshots we just
+    // seeded above, and will update dynamically as these probes resolve.
+    yield* syncLiveSourcesAndContinue.pipe(Effect.forkScoped);
     // React to registry mutations — instance added / removed / rebuilt.
     // `Stream.fromSubscription` builds a stream over the pre-acquired
     // subscription rather than subscribing on stream start, which is

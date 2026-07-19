@@ -677,6 +677,7 @@ export const ProjectCustomEmbedDefinition = Schema.Struct({
   id: ProjectSettingId,
   label: TrimmedNonEmptyString,
   url: TrimmedString,
+  resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ProjectCustomEmbedDefinition = typeof ProjectCustomEmbedDefinition.Type;
 
@@ -694,6 +695,7 @@ export type ProjectToolDefinition = typeof ProjectToolDefinition.Type;
 export const ProjectBrowserSettings = Schema.Struct({
   defaultUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   openExternalByDefault: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
 });
 export type ProjectBrowserSettings = typeof ProjectBrowserSettings.Type;
 

@@ -120,7 +120,24 @@ export function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSetting
 }
 
 function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSettingsType {
-  const decoded = decodeProjectWorkspaceSettingsSchema(input);
+  let toDecode = input;
+  
+  if (
+    input !== null &&
+    typeof input === "object" &&
+    "serverProcesses" in input &&
+    Array.isArray((input as any).serverProcesses)
+  ) {
+    const rawInput = input as any;
+    toDecode = { ...rawInput };
+    
+    if (!("terminalProcesses" in rawInput) && !("serverPresets" in rawInput)) {
+      (toDecode as any).terminalProcesses = rawInput.serverProcesses.filter((p: any) => p && !p.autoStart);
+      (toDecode as any).serverPresets = rawInput.serverProcesses.filter((p: any) => p && p.autoStart);
+    }
+  }
+
+  const decoded = decodeProjectWorkspaceSettingsSchema(toDecode);
   
   const normalizeProcess = (process: any) => {
     const normalizedCommands =
@@ -371,6 +388,16 @@ export function syncWorkspaceShellState(
     activeToolIdByProjectId,
     rememberedThreadIdByProjectId,
   };
+
+  // Reset browser URL to default if resumeLastVisitedPage is disabled
+  for (const project of projects) {
+    const settings = nextState.projectSettingsByProjectId[project.id];
+    const browserState = nextState.browserStateByProjectId[project.id];
+    if (settings && browserState && settings.browser.resumeLastVisitedPage === false) {
+      browserState.currentUrl = settings.browser.defaultUrl.trim();
+    }
+  }
+
   return nextState;
 }
 
