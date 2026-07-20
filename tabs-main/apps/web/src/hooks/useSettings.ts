@@ -130,8 +130,8 @@ export function useSettings<T extends UnifiedSettings = UnifiedSettings>(
 
   const merged = useMemo<UnifiedSettings>(
     () => ({
-      ...serverSettings,
       ...clientSettings,
+      ...serverSettings,
     }),
     [serverSettings, clientSettings],
   );
@@ -229,6 +229,10 @@ export function buildLegacyServerSettingsMigrationPatch(
       new Set<string>(),
       "claudeAgent",
     );
+  }
+
+  if (Array.isArray(legacySettings.favorites)) {
+    patch.favorites = legacySettings.favorites as NonNullable<(typeof patch)["favorites"]>;
   }
 
   return patch;
