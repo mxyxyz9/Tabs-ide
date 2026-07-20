@@ -205,6 +205,7 @@ export const ProviderRegistryLive = Layer.effect(
     // `providersRef` comes from the reactive `syncLiveSources` pass
     // below.
     const bootInstances = yield* instanceRegistry.listInstances;
+    const bootUnavailable = yield* instanceRegistry.listUnavailable;
     const bootSources = bootInstances.map(buildSnapshotSource);
     const fallbackProviders = yield* loadProviders(bootSources);
     const fallbackByInstance = new Map<ProviderInstanceId, ServerProvider>();
@@ -261,9 +262,10 @@ export const ProviderRegistryLive = Layer.effect(
       { concurrency: "unbounded" },
     ).pipe(
       Effect.map((providers) =>
-        orderProviderSnapshots(
-          providers.filter((provider): provider is ServerProvider => provider !== undefined),
-        ),
+        orderProviderSnapshots([
+          ...providers.filter((provider): provider is ServerProvider => provider !== undefined),
+          ...bootUnavailable,
+        ]),
       ),
     );
     const providersRef = yield* Ref.make<ReadonlyArray<ServerProvider>>(cachedProviders);
