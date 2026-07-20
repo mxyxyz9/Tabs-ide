@@ -13,10 +13,12 @@ const encoder = new TextEncoder();
 export const makeChildStdio = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   Stdio.make({
     stdin: handle.stdout,
-    stdout: () => Sink.mapInput(handle.stdin, (chunk: string | Uint8Array) =>
-      typeof chunk === "string" ? encoder.encode(chunk) : chunk,
-    ),
-    stderr: () => Sink.drain, args: Effect.succeed([]),
+    stdout: () =>
+      Sink.mapInput(handle.stdin, (chunk: string | Uint8Array) =>
+        typeof chunk === "string" ? encoder.encode(chunk) : chunk,
+      ),
+    stderr: () => Sink.drain,
+    args: Effect.succeed([]),
   });
 
 export const makeInMemoryStdio = Effect.fn("makeInMemoryStdio")(function* () {
@@ -27,13 +29,15 @@ export const makeInMemoryStdio = Effect.fn("makeInMemoryStdio")(function* () {
   return {
     stdio: Stdio.make({
       stdin: Stream.fromQueue(input),
-      stdout: () => Sink.forEach((chunk: string | Uint8Array) =>
-        Queue.offer(
-          output,
-          typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true }),
+      stdout: () =>
+        Sink.forEach((chunk: string | Uint8Array) =>
+          Queue.offer(
+            output,
+            typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true }),
+          ),
         ),
-      ),
-      stderr: () => Sink.drain, args: Effect.succeed([]),
+      stderr: () => Sink.drain,
+      args: Effect.succeed([]),
     }),
     input,
     output,

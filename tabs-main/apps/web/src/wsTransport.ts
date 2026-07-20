@@ -72,6 +72,7 @@ export class WsTransport {
   private readonly outboundQueue: string[] = [];
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectionTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
   private state: TransportState = "connecting";
   private url: string;
@@ -185,6 +186,10 @@ export class WsTransport {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    if (this.connectionTimeoutTimer !== null) {
+      clearTimeout(this.connectionTimeoutTimer);
+      this.connectionTimeoutTimer = null;
+    }
     for (const pending of this.pending.values()) {
       if (pending.timeout !== null) {
         clearTimeout(pending.timeout);
@@ -222,7 +227,17 @@ export class WsTransport {
       return;
     }
 
+    this.connectionTimeoutTimer = setTimeout(() => {
+      console.warn("WebSocket connection timed out; forcefully closing", { url: this.url });
+      this.connectionTimeoutTimer = null;
+      ws.close();
+    }, 5000);
+
     ws.addEventListener("open", () => {
+      if (this.connectionTimeoutTimer !== null) {
+        clearTimeout(this.connectionTimeoutTimer);
+        this.connectionTimeoutTimer = null;
+      }
       this.ws = ws;
       this.state = "open";
       this.reconnectAttempt = 0;
@@ -234,6 +249,10 @@ export class WsTransport {
     });
 
     ws.addEventListener("close", () => {
+      if (this.connectionTimeoutTimer !== null) {
+        clearTimeout(this.connectionTimeoutTimer);
+        this.connectionTimeoutTimer = null;
+      }
       if (this.ws === ws) {
         this.ws = null;
         this.outboundQueue.length = 0;

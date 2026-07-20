@@ -11,7 +11,7 @@ const current = {
   ],
   browser: { defaultUrl: "", openExternalByDefault: false },
   serverProcesses: [],
-  customEmbeds: []
+  customEmbeds: [],
 };
 
 const nextCustomEmbeds = [
@@ -19,7 +19,7 @@ const nextCustomEmbeds = [
     id: "embed-1234",
     label: "Figma",
     url: "https://figma.com",
-  }
+  },
 ];
 
 const nextCustomEmbedTools = [
@@ -29,13 +29,13 @@ const nextCustomEmbedTools = [
     label: "Figma",
     visible: true,
     customEmbedId: "embed-1234",
-  }
+  },
 ];
 
 const nextSettings = {
   ...current,
   customEmbeds: nextCustomEmbeds,
-  tools: [...current.tools, ...nextCustomEmbedTools]
+  tools: [...current.tools, ...nextCustomEmbedTools],
 };
 
 try {

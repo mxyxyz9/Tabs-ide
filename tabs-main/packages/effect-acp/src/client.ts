@@ -457,7 +457,6 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
   }).pipe(Effect.provideService(RpcClient.Protocol, transport.clientProtocol));
 
   return {
-
     raw: {
       notifications: transport.incoming,
       request: transport.request,
@@ -557,8 +556,7 @@ export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
         );
         return Effect.void;
       }),
-  
-};
+  };
 });
 
 export const layerChildProcess = (

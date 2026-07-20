@@ -132,7 +132,7 @@ export function ConnectionsSettings() {
   return (
     <div className="space-y-6">
       {confirmDialog}
-      <SettingsSection 
+      <SettingsSection
         title="This Environment"
         headerAction={
           <SettingsHeaderPortal>
@@ -141,7 +141,9 @@ export function ConnectionsSettings() {
               variant="outline"
               className="no-drag"
               onClick={async () => {
-                const confirmed = await confirm("Restore default settings?\n\nThis will reset: Network Access.");
+                const confirmed = await confirm(
+                  "Restore default settings?\n\nThis will reset: Network Access.",
+                );
                 if (confirmed) {
                   setNetworkAccess(false);
                   localStorage.setItem("networkAccessEnabled", "false");

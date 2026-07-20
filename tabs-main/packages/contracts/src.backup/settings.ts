@@ -368,7 +368,8 @@ export const ServerSettings = Schema.Struct({
   alwaysCreateTasks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   enableProviderUpdateChecks: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   automaticGitFetchInterval: Schema.DurationFromMillis.pipe(
-    Schema.withDecodingDefault(Effect.succeed(Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
+    Schema.withDecodingDefault(
+      Effect.succeed(Duration.toMillis(DEFAULT_AUTOMATIC_GIT_FETCH_INTERVAL)),
     ),
   ),
   defaultThreadEnvMode: ThreadEnvMode.pipe(
@@ -379,8 +380,9 @@ export const ServerSettings = Schema.Struct({
   ),
   addProjectBaseDirectory: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   textGenerationModelSelection: ModelSelection.pipe(
-    Schema.withDecodingDefault(Effect.succeed({
-        instanceId: ("codex" as ProviderInstanceId),
+    Schema.withDecodingDefault(
+      Effect.succeed({
+        instanceId: "codex" as ProviderInstanceId,
         model: DEFAULT_GIT_TEXT_GENERATION_MODEL,
       }),
     ),

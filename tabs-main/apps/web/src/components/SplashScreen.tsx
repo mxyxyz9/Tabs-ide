@@ -88,9 +88,9 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
         } catch (e) {}
       }
     };
-    
+
     const frame = requestAnimationFrame(triggerAnimation);
-    
+
     // Chromium sometimes drops SMIL feTurbulence animations after one cycle
     // even with repeatCount="indefinite". Restart it explicitly right before it ends.
     const intervalId = setInterval(triggerAnimation, 6700);

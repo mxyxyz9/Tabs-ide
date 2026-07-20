@@ -367,47 +367,49 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
   };
 
   yield* Stream.runForEach(options.stdio.stdin, (data) =>
-      logProtocol({
-        direction: "incoming",
-        stage: "raw",
-        payload: typeof data === "string" ? data : new TextDecoder().decode(data),
-      }).pipe(
-        Effect.flatMap(() =>
-          Effect.try({
-            try: () =>
-              parser.decode(data) as ReadonlyArray<
-                RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded
-              >,
-            catch: (cause) =>
-              new AcpError.AcpProtocolParseError({
-                detail: "Failed to decode ACP wire message",
-                cause,
-              }),
-          }),
-        ),
-        Effect.tap((messages) =>
-          logProtocol({
-            direction: "incoming",
-            stage: "decoded",
-            payload: messages,
-          }),
-        ),
-        Effect.tapErrorTag("AcpProtocolParseError", (error) =>
-          logProtocol({
-            direction: "incoming",
-            stage: "decode_failed",
-            payload: {
-              detail: error.detail,
-              cause: error.cause,
-            },
-          }),
-        ),
-        Effect.flatMap((messages) =>
-          Effect.forEach(messages, routeDecodedMessage, {
-            discard: true,
-          }),
-        ),
-    )).pipe(Effect.matchEffect({
+    logProtocol({
+      direction: "incoming",
+      stage: "raw",
+      payload: typeof data === "string" ? data : new TextDecoder().decode(data),
+    }).pipe(
+      Effect.flatMap(() =>
+        Effect.try({
+          try: () =>
+            parser.decode(data) as ReadonlyArray<
+              RpcMessage.FromClientEncoded | RpcMessage.FromServerEncoded
+            >,
+          catch: (cause) =>
+            new AcpError.AcpProtocolParseError({
+              detail: "Failed to decode ACP wire message",
+              cause,
+            }),
+        }),
+      ),
+      Effect.tap((messages) =>
+        logProtocol({
+          direction: "incoming",
+          stage: "decoded",
+          payload: messages,
+        }),
+      ),
+      Effect.tapErrorTag("AcpProtocolParseError", (error) =>
+        logProtocol({
+          direction: "incoming",
+          stage: "decode_failed",
+          payload: {
+            detail: error.detail,
+            cause: error.cause,
+          },
+        }),
+      ),
+      Effect.flatMap((messages) =>
+        Effect.forEach(messages, routeDecodedMessage, {
+          discard: true,
+        }),
+      ),
+    ),
+  ).pipe(
+    Effect.matchEffect({
       onFailure: (error) => {
         const normalized: AcpError.AcpError = isAcpError(error)
           ? error
@@ -436,7 +438,10 @@ export const makeAcpPatchedProtocol = Effect.fn("makeAcpPatchedProtocol")(functi
   // peer process has exited (common during teardown). That race is benign — the
   // session is ending — so swallow it instead of surfacing an unhandled error
   // from this forked fiber.
-  yield* Stream.run(Stream.fromQueue(outgoing), options.stdio.stdout()).pipe(Effect.ignore, Effect.forkScoped);
+  yield* Stream.run(Stream.fromQueue(outgoing), options.stdio.stdout()).pipe(
+    Effect.ignore,
+    Effect.forkScoped,
+  );
 
   const clientProtocol = RpcClient.Protocol.of({
     run: (_clientId, write) =>

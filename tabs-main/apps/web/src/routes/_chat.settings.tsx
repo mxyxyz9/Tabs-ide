@@ -1110,8 +1110,7 @@ function SettingsRouteView() {
                 Back
               </Button>
               <span className="text-sm font-medium text-foreground">Settings</span>
-              <div id="settings-header-actions" className="ms-auto flex items-center gap-2">
-              </div>
+              <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
             </div>
           </header>
         )}
@@ -1130,8 +1129,7 @@ function SettingsRouteView() {
             <span className="ml-2 text-xs font-medium tracking-wide text-muted-foreground/70">
               Settings
             </span>
-            <div id="settings-header-actions" className="ms-auto flex items-center gap-2">
-            </div>
+            <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
           </div>
         )}
 
@@ -1162,7 +1160,7 @@ function SettingsRouteView() {
             <div className="min-w-0 flex-1 overflow-y-auto overscroll-y-contain py-6">
               <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 {activeSettingsSection === "general" ? (
-                  <SettingsSection 
+                  <SettingsSection
                     title="General"
                     headerAction={
                       <SettingsHeaderPortal>
@@ -1171,13 +1169,16 @@ function SettingsRouteView() {
                           variant="outline"
                           className="no-drag"
                           onClick={async () => {
-                            const confirmed = await confirm("Restore default settings?\n\nThis will reset: Theme, Time format, Diff wrapping, Assistant output, New threads, and Confirmations.");
+                            const confirmed = await confirm(
+                              "Restore default settings?\n\nThis will reset: Theme, Time format, Diff wrapping, Assistant output, New threads, and Confirmations.",
+                            );
                             if (confirmed) {
                               setTheme("system");
                               updateSettings({
                                 timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
                                 diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
-                                enableAssistantStreaming: DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+                                enableAssistantStreaming:
+                                  DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
                                 defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
                                 confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
                                 confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
@@ -1612,7 +1613,7 @@ function SettingsRouteView() {
                   </SettingsSection>
                 ) : null}
                 {activeSettingsSection === "startup-animation" ? (
-                  <SettingsSection 
+                  <SettingsSection
                     title="Animations"
                     headerAction={
                       <SettingsHeaderPortal>
@@ -1621,11 +1622,15 @@ function SettingsRouteView() {
                           variant="outline"
                           className="no-drag"
                           onClick={async () => {
-                            const confirmed = await confirm("Restore default settings?\n\nThis will reset the animation toggles.");
+                            const confirmed = await confirm(
+                              "Restore default settings?\n\nThis will reset the animation toggles.",
+                            );
                             if (confirmed) {
                               updateSettings({
-                                sliderAnimationsEnabled: DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
-                                animatedTrackFillEnabled: DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                sliderAnimationsEnabled:
+                                  DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
+                                animatedTrackFillEnabled:
+                                  DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
                               });
                             }
                           }}

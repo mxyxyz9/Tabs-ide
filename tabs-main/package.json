@@ -54,6 +54,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "chrome-remote-interface": "^0.34.0",
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
     "playwright": "^1.61.1",

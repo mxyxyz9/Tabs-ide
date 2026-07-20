@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { homedir } from "node:os";
+import { execSync } from "node:child_process";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -393,6 +394,112 @@ const resolveOptionalBooleanOverride = (
   return envValue;
 };
 
+function terminateExistingDevInstances(): void {
+  try {
+    // 1. Get the current process ancestors to protect them from being terminated.
+    const ancestors = new Set<number>([process.pid]);
+    const ppidMap = new Map<number, number>();
+
+    // Get all processes with PID, PPID, and full command line
+    const psOutput = execSync("ps -ax -o pid,ppid,command").toString();
+    const lines = psOutput.split("\n");
+
+    const processesToInspect: Array<{ pid: number; command: string }> = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const rawLine = lines[i];
+      if (rawLine === undefined) {
+        continue;
+      }
+      const line = rawLine.trim();
+      if (!line) {
+        continue;
+      }
+      // Match pid, ppid, and the command string
+      const match = line.match(/^(\d+)\s+(\d+)\s+(.+)$/);
+      if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
+        const pid = parseInt(match[1], 10);
+        const ppid = parseInt(match[2], 10);
+        const command = match[3];
+        ppidMap.set(pid, ppid);
+        processesToInspect.push({ pid, command });
+      }
+    }
+
+    // Resolve full ancestor chain for the current process up to PID 1 or until a cycle/self-parent is detected
+    let currentPid = process.pid;
+    while (currentPid > 0) {
+      const parent = ppidMap.get(currentPid);
+      if (parent === undefined || parent === currentPid || ancestors.has(parent)) {
+        break;
+      }
+      ancestors.add(parent);
+      currentPid = parent;
+    }
+
+    // Resolve all descendants of the current process PID (not of its ancestors, to avoid protecting sibling shells in integrated terminals)
+    const descendants = new Set<number>([process.pid]);
+    let addedNewDescendant = true;
+    while (addedNewDescendant) {
+      addedNewDescendant = false;
+      for (const [pid, ppid] of ppidMap.entries()) {
+        if (descendants.has(ppid) && !descendants.has(pid)) {
+          descendants.add(pid);
+          addedNewDescendant = true;
+        }
+      }
+    }
+
+    // Combine ancestors and current process descendants into a single protected PIDs set
+    const protectedPids = new Set<number>([...ancestors, ...descendants]);
+
+    // Designate the process pattern matching targets
+    const TARGET_PATTERNS = [
+      "dev-electron.mjs",
+      "Tabs (Dev)",
+      "dist-electron/main.js",
+      "apps/server/dist/index.mjs",
+      "@tabs/desktop",
+      "node.*/apps/web/node_modules/.bin/vite",
+      "tsdown",
+      "dev:bundle dev:backend-bundle",
+    ];
+
+    // Identify processes to kill
+    const pidsToKill: number[] = [];
+    for (const { pid, command } of processesToInspect) {
+      // Never kill protected processes (ourselves, ancestors, or our own spawned descendants)
+      if (protectedPids.has(pid)) {
+        continue;
+      }
+
+      const matchesPattern = TARGET_PATTERNS.some((pattern) => {
+        if (pattern.includes(".*")) {
+          return new RegExp(pattern).test(command);
+        }
+        return command.includes(pattern);
+      });
+
+      if (matchesPattern) {
+        pidsToKill.push(pid);
+      }
+    }
+
+    // Kill the target processes
+    if (pidsToKill.length > 0) {
+      for (const pid of pidsToKill) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch {
+          // ignore if process already exited
+        }
+      }
+    }
+  } catch (e) {
+    // ignore errors to avoid breaking the startup flow if ps or execution fails
+  }
+}
+
 export function runDevRunnerWithInput(input: DevRunnerCliInput) {
   return Effect.gen(function* () {
     const { portOffset, devInstance } = yield* OffsetConfig.pipe(
@@ -461,6 +568,17 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       return;
     }
 
+    if (process.platform !== "win32") {
+      yield* Effect.logInfo(
+        "[dev-runner] Terminating any existing dev instances to prevent conflicts...",
+      );
+      terminateExistingDevInstances();
+
+      // Add a brief delay to allow the OS to fully reclaim memory from the killed processes.
+      // Without this, starting the massive turbo pipeline immediately can trigger the macOS OOM killer (SIGKILL).
+      yield* Effect.sleep("1500 millis");
+    }
+
     const child = yield* ChildProcess.make(
       "turbo",
       [...MODE_ARGS[input.mode], ...input.turboArgs],
@@ -473,16 +591,15 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
         // Windows needs shell mode to resolve .cmd shims (e.g. bun.cmd).
         shell: process.platform === "win32",
         // Keep turbo in the same process group so terminal signals (Ctrl+C)
-        // reach it directly. Effect defaults to detached: true on non-Windows,
-        // which would put turbo in a new group and require manual forwarding.
+        // reach it directly.
         detached: false,
         forceKillAfter: "1500 millis",
       },
     );
 
     const exitCode = yield* child.exitCode.pipe(
-      Effect.catch((cause) =>
-        Effect.fail(
+      Effect.mapError(
+        (cause) =>
           new DevRunnerError({
             message:
               cause instanceof Error
@@ -490,7 +607,6 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
                 : "turbo was interrupted before it could report an exit code",
             cause,
           }),
-        ),
       ),
     );
     if (exitCode !== 0) {

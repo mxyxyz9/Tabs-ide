@@ -71,7 +71,6 @@ import {
   type RuntimeInstallProgress,
 } from "./codeOssRuntimeInstaller";
 import { CodeControlChannel } from "./codeControlChannel";
-import { checkDiskSpace } from "./disk";
 import { getTailscaleStatus } from "./tailscale";
 import type { CodeChromeState } from "@tabs/shared/codeChrome";
 
@@ -753,12 +752,16 @@ async function checkForUpdatesFromMenu(): Promise<void> {
   }
 }
 
-
 let keybindingsWatcher: FS.FSWatcher | null = null;
 
 function setupKeybindingsWatcher() {
   if (keybindingsWatcher) return;
-  const keybindingsPath = Path.join(CODE_OSS_PRIMARY_STATE_DIR, "profile", "default", "keybindings.json");
+  const keybindingsPath = Path.join(
+    CODE_OSS_PRIMARY_STATE_DIR,
+    "profile",
+    "default",
+    "keybindings.json",
+  );
   const profileDir = Path.dirname(keybindingsPath);
   try {
     FS.mkdirSync(profileDir, { recursive: true });
@@ -768,7 +771,7 @@ function setupKeybindingsWatcher() {
         if (timeout) clearTimeout(timeout);
         timeout = setTimeout(() => {
           configureApplicationMenu();
-      setupKeybindingsWatcher();
+          setupKeybindingsWatcher();
         }, 500);
       }
     });
@@ -778,8 +781,13 @@ function setupKeybindingsWatcher() {
 }
 
 function getActiveAccelerator(command: string): string | undefined {
-  const keybindingsPath = Path.join(CODE_OSS_PRIMARY_STATE_DIR, "profile", "default", "keybindings.json");
-  let userBindings: Array<{ key: string, command: string, when?: string }> = [];
+  const keybindingsPath = Path.join(
+    CODE_OSS_PRIMARY_STATE_DIR,
+    "profile",
+    "default",
+    "keybindings.json",
+  );
+  let userBindings: Array<{ key: string; command: string; when?: string }> = [];
   try {
     if (FS.existsSync(keybindingsPath)) {
       userBindings = JSON.parse(FS.readFileSync(keybindingsPath, "utf-8"));
@@ -788,8 +796,9 @@ function getActiveAccelerator(command: string): string | undefined {
     // ignore
   }
 
-  const binding = userBindings.find((b: any) => b.command === command) || 
-                  DEFAULT_KEYBINDINGS.find((b: any) => b.command === command);
+  const binding =
+    userBindings.find((b: any) => b.command === command) ||
+    DEFAULT_KEYBINDINGS.find((b: any) => b.command === command);
 
   if (!binding) return undefined;
 
@@ -812,7 +821,7 @@ function getActiveAccelerator(command: string): string | undefined {
   else if (key === "ARROWDOWN") key = "Down";
   else if (key === "ARROWLEFT") key = "Left";
   else if (key === "ARROWRIGHT") key = "Right";
-  
+
   parts.push(key);
   return parts.join("+");
 }
@@ -2487,11 +2496,14 @@ function createLegacyWindow(): BrowserWindow {
     }
   });
 
-  window.webContents.on("did-fail-load", (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
-    if (isMainFrame && !window.isVisible()) {
-      window.show();
-    }
-  });
+  window.webContents.on(
+    "did-fail-load",
+    (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+      if (isMainFrame && !window.isVisible()) {
+        window.show();
+      }
+    },
+  );
 
   return window;
 }
@@ -2698,7 +2710,8 @@ app.on("second-instance", () => {
   targetWindow.focus();
 });
 
-const getAppVersion = () => app.isPackaged ? app.getVersion() : process.env.npm_package_version || app.getVersion();
+const getAppVersion = () =>
+  app.isPackaged ? app.getVersion() : process.env.npm_package_version || app.getVersion();
 
 function formatRuntimeDownloadStatus(progress: RuntimeInstallProgress): string {
   if (progress.phase === "downloading") {

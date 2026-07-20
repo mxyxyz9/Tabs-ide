@@ -368,7 +368,6 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
   }).pipe(Effect.provideService(RpcClient.Protocol, transport.clientProtocol));
 
   return {
-
     raw: {
       notifications: transport.incoming,
       request: transport.request,
@@ -507,8 +506,7 @@ export const make = Effect.fn("effect-acp/AcpAgent.make")(function* (
         );
         return Effect.void;
       }),
-  
-};
+  };
 });
 
 export const layer = (stdio: Stdio.Stdio, options: AcpAgentOptions = {}): Layer.Layer<AcpAgent> =>

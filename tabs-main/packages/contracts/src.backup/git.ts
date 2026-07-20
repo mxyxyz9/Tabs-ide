@@ -456,7 +456,6 @@ export type GitOperationKind = typeof GitOperationKind.Type;
 export const GitConflictResolutionSide = Schema.Literals(["ours", "theirs"]);
 export type GitConflictResolutionSide = typeof GitConflictResolutionSide.Type;
 
-
 export const GitApplyHunkInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   path: TrimmedNonEmptyStringSchema,

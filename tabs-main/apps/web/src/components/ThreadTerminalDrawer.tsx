@@ -1209,7 +1209,11 @@ export default function ThreadTerminalDrawer({
           <AlertDialogHeader>
             <AlertDialogTitle>Close Terminal?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to close {terminalToCloseId ? (terminalLabelById.get(terminalToCloseId) ?? "this terminal") : "this terminal"}?
+              Are you sure you want to close{" "}
+              {terminalToCloseId
+                ? (terminalLabelById.get(terminalToCloseId) ?? "this terminal")
+                : "this terminal"}
+              ?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

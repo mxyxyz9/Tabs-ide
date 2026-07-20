@@ -121,7 +121,7 @@ export function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSetting
 
 function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSettingsType {
   let toDecode = input;
-  
+
   if (
     input !== null &&
     typeof input === "object" &&
@@ -130,15 +130,19 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
   ) {
     const rawInput = input as any;
     toDecode = { ...rawInput };
-    
+
     if (!("terminalProcesses" in rawInput) && !("serverPresets" in rawInput)) {
-      (toDecode as any).terminalProcesses = rawInput.serverProcesses.filter((p: any) => p && !p.autoStart);
-      (toDecode as any).serverPresets = rawInput.serverProcesses.filter((p: any) => p && p.autoStart);
+      (toDecode as any).terminalProcesses = rawInput.serverProcesses.filter(
+        (p: any) => p && !p.autoStart,
+      );
+      (toDecode as any).serverPresets = rawInput.serverProcesses.filter(
+        (p: any) => p && p.autoStart,
+      );
     }
   }
 
   const decoded = decodeProjectWorkspaceSettingsSchema(toDecode);
-  
+
   const normalizeProcess = (process: any) => {
     const normalizedCommands =
       process.commands && process.commands.length > 0
@@ -146,7 +150,7 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
         : process.command && process.command.trim().length > 0
           ? [process.command.trim()]
           : [];
-          
+
     const result: any = {
       id: process.id,
       label: process.label,
@@ -155,14 +159,15 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
       env: process.env || {},
       autoStart: Boolean(process.autoStart),
     };
-    
+
     if (process.command) result.command = process.command;
     if (process.previewUrl !== undefined) result.previewUrl = process.previewUrl;
     if (process.autoOpenPreview !== undefined) result.autoOpenPreview = process.autoOpenPreview;
-    if (process.previewOpenTarget !== undefined) result.previewOpenTarget = process.previewOpenTarget;
+    if (process.previewOpenTarget !== undefined)
+      result.previewOpenTarget = process.previewOpenTarget;
     if (process.previewFocus !== undefined) result.previewFocus = process.previewFocus;
     if (process.dependsOn !== undefined) result.dependsOn = process.dependsOn;
-    
+
     return result;
   };
 
@@ -229,7 +234,9 @@ function defaultServerToolState(): ProjectServerToolState {
 
 function resolveVisibleTools(settings: ProjectWorkspaceSettingsType): ProjectToolDefinition[] {
   const customEmbedIds = new Set((settings.customEmbeds || []).map((embed) => embed.id));
-  const terminalProcessIds = new Set((settings.terminalProcesses || []).map((process) => process.id));
+  const terminalProcessIds = new Set(
+    (settings.terminalProcesses || []).map((process) => process.id),
+  );
   const visible = (settings.tools || []).filter((tool) => {
     if (!tool.visible) return false;
     if (tool.kind === "custom_embed") {
@@ -357,8 +364,7 @@ export function syncWorkspaceShellState(
       : (nextOpenProjectIds[0] ?? null);
   // Preserve activePendingTabId only if the pending tab still exists.
   const activePendingTabId =
-    input.session.activePendingTabId &&
-    pendingTabIds.includes(input.session.activePendingTabId)
+    input.session.activePendingTabId && pendingTabIds.includes(input.session.activePendingTabId)
       ? input.session.activePendingTabId
       : null;
   const rememberedThreadIdByProjectId: Record<ProjectId, ThreadId> = {};
@@ -453,7 +459,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
           const nextActivePendingTabId =
             wasActive && !nextActiveProjectId
               ? (state.session.pendingTabIds[state.session.pendingTabIds.length - 1] ??
-                 state.session.activePendingTabId)
+                state.session.activePendingTabId)
               : state.session.activePendingTabId;
           return {
             ...state,
@@ -737,9 +743,9 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             ? (pendingTabIds[pendingTabIds.length - 1] ?? null)
             : state.session.activePendingTabId;
           const nextActiveProjectId = wasActive
-            ? (nextActivePendingTabId
-                ? null
-                : (state.session.openProjectIds[state.session.openProjectIds.length - 1] ?? null))
+            ? nextActivePendingTabId
+              ? null
+              : (state.session.openProjectIds[state.session.openProjectIds.length - 1] ?? null)
             : state.session.activeProjectId;
           return {
             ...state,

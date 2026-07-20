@@ -7,12 +7,12 @@ const mockSettings = {
       kind: "browser",
       label: "Browser",
       visible: false,
-    }
+    },
   ],
   browser: {},
   terminalProcesses: [],
   serverPresets: [],
-  customEmbeds: []
+  customEmbeds: [],
 };
 
 try {

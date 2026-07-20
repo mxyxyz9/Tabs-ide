@@ -8,6 +8,88 @@
 - **MANDATORY UI/UX PROTOCOL:** Any task involving frontend development must comply with `instructions/ui-ux.instructions.md`. All UI must be production-ready and premium. Do not hallucinate layouts; use mockups and ask for clarification.
 - **MANDATORY PRODUCTION STANDARDS:** All code must be performant, tested, and CI-ready. Before completing any task, you must consult `instructions/production-standards.instructions.md`. You are forbidden from pushing untested code or code that fails local pre-flight checks (types, lint, tests).
 - **MANDATORY SAFETY NET:** To prevent workspace corruption, you must strictly follow `instructions/safety-net.instructions.md`. You are forbidden from running `npm`/`yarn`, auto-committing to Git without permission, or modifying files outside this workspace.
+## This is an Electron app — it must be launched as a desktop app, never as a plain web page in a browser
+
+1. The ONLY correct way to run and test this application is:
+     bun run dev:desktop
+   This launches the real Electron shell, which is required for the app to
+   function correctly (native IPC bridges, desktopBridge APIs, WebSocket
+   auth token exchange between the Electron main process and the backend,
+   window/menu management, etc. all depend on running inside Electron).
+
+2. NEVER run `bun run dev` (without `:desktop`) expecting it to represent
+   the real app. That command only starts the Vite web dev server and the
+   backend directly, which opens the frontend in a plain browser tab
+   (localhost) instead of inside Electron. This has already caused a
+   misdiagnosis once — testing in a browser tab produced different/
+   irrelevant behavior and timing than the real Electron app, because
+   critical pieces (the desktop bridge, native IPC, main-process-injected
+   WS URL/token) simply aren't present in a browser context.
+
+3. If a task, script, or automated test needs to launch this app for any
+   reason (reproduction, diagnostics, verification), it MUST use
+   `bun run dev:desktop` specifically — never `bun run dev`, never opening
+   http://localhost:<port> directly in a browser, and never assuming a
+   browser tab is an acceptable substitute for the real app "just to check
+   something quickly."
+
+4. If you are ever unsure whether the app is running as Electron vs. a
+   browser tab, check for an Electron process in `ps aux` (matching
+   `tabs-dev-root` or `dist-electron/main.js`) rather than assuming based
+   on what appeared on screen.
+
+## Process management — CRITICAL, non-negotiable
+
+1. HARD LIMIT: NEVER have more than ONE (1) instance of this app
+   (`bun run dev:desktop` / any Electron+backend launch of Tabs) running at
+   any time. Two instances is already the absolute maximum tolerable in an
+   emergency and should basically never happen — the target is always
+   exactly one. Each instance can consume 70GB+ of disk/memory, so even a
+   handful running simultaneously (this has happened before — 6 at once)
+   is enough to completely crash the machine and require a hard restart.
+
+   Before launching ANY new instance, always verify nothing is already
+   running:
+     ps aux | grep -iE "tabs-dev-root|dist-electron|apps/server/dist"
+   If ANYTHING shows up, kill it and confirm it's gone before launching
+   anything new. Do not launch "just one more" on top of an existing one
+   for any reason, including testing, comparison, or automation.
+
+2. NEVER run automated loops that launch this app multiple times in
+   sequence (e.g. "launch 20 times to catch a bug") UNLESS each iteration
+   is followed by a verified, confirmed full kill of that instance —
+   checked via the ps command above, not just a `sleep` delay or a bare
+   `pkill` — before the next iteration starts. If you cannot guarantee
+   with certainty that iteration N is fully dead before iteration N+1
+   launches, do not run the loop at all — do a small number of manual,
+   individually-verified launches instead.
+
+3. NEVER use broad process-kill patterns. Specifically NEVER run:
+     pkill -f "electron"
+     pkill -f "node"
+     pkill -f "bun"
+   on their own — these bare patterns match against the FULL command line
+   of every running process and will kill unrelated applications, including
+   the IDE/host application itself (this has already happened once and
+   caused Antigravity itself to quit repeatedly). ONLY use narrowly scoped
+   patterns specific to this app, such as:
+     pkill -9 -f "tabs-dev-root"
+     pkill -9 -f "dist-electron/main.js"
+     pkill -9 -f "apps/server/dist/index.mjs"
+
+4. Before ending any task/session that involved launching this app, always
+   run the ps check above AND `git status` to confirm zero orphaned
+   processes and zero uncommitted source changes are left behind. Report
+   both explicitly as part of finishing the task.
+
+5. Do not edit application source files (anything under apps/*/src) for
+   temporary debug logging without asking for explicit confirmation first,
+   describing the exact line(s) to be added. Revert any such temporary
+   changes before finishing the task.
+
+6. If disk space or memory ever looks abnormally high while working in this
+   repo, stop immediately and check for leftover Tabs instances (via the ps
+   command above) before doing anything else — do not assume it's unrelated.
 - **NO DESTRUCTIVE GIT COMMANDS:** NEVER run destructive Git commands under any circumstances unless explicitly, verbally commanded to do so by the user. This includes, but is not limited to: `git reset --hard`, `git clean -fd`, `git stash drop`, `git stash clear`, `git checkout -- .`. You are strictly forbidden from altering, dropping, or clearing the user's Git stash, or wiping out their uncommitted working directory history.
 - **NEVER Delete Code Without Permission:** Do not delete existing files, features, or large chunks of logic unless explicitly instructed by the user. If a change requires significant deletions or removals, you MUST ask for permission first. Avoid doing "whatever you want" and strictly adhere to the requested changes.
 - **Maintain Test Suite Correctness:** Whenever you implement a new feature, fix a bug, or modify any existing codebase, you MUST identify and run the relevant unit/integration tests to ensure no regressions are introduced. If existing tests are broken by your intentional changes, you MUST update the tests to reflect the new behavior. Always verify the full test suite passes using the workspace test commands (e.g. `bun run test` or package-specific test runner) before completing the task. Never leave failing or outdated tests.

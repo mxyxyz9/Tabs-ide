@@ -462,6 +462,8 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const pendingInteractionAnchorFrameRef = useRef<number | null>(null);
   const composerEditorRef = useRef<ComposerPromptEditorHandle>(null);
   const composerFormRef = useRef<HTMLFormElement>(null);
+  const composerCardRef = useRef<HTMLDivElement>(null);
+  const composerFooterRef = useRef<HTMLDivElement>(null);
   const composerFormHeightRef = useRef(0);
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
   const composerSelectLockRef = useRef(false);
@@ -3610,7 +3612,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       >
         <div
           className={cn(
-            "group rounded-[22px] p-px transition-colors duration-200",
+            "group rounded-[22px] bg-card p-0.5 transition-colors duration-200",
             composerProviderState.composerFrameClassName,
           )}
           onDragEnter={onComposerDragEnter}
@@ -3619,6 +3621,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
           onDrop={onComposerDrop}
         >
           <div
+            ref={composerCardRef}
             className={cn(
               "rounded-[20px] border bg-card transition-colors duration-200 has-focus-visible:border-ring/45",
               isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border",
@@ -3779,6 +3782,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
               </div>
             ) : (
               <div
+                ref={composerFooterRef}
                 data-chat-composer-footer="true"
                 className={cn(
                   "flex items-center justify-between px-2.5 pb-2.5 sm:px-3 sm:pb-3",
@@ -3833,6 +3837,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                         modelOptions={composerModelOptions?.[selectedProvider]}
                         onProviderModelChange={onProviderModelSelect}
                         onModelOptionsChange={onFusedModelOptionsChange}
+                        popupAnchorRef={composerFooterRef}
                       />
 
                       <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />

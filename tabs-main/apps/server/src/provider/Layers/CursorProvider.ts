@@ -952,14 +952,10 @@ const runCursorCommand = (
       { concurrency: "unbounded" },
     );
 
-
     return { stdout, stderr, code: exitCode } satisfies CommandResult;
   }).pipe(Effect.scoped);
 
-const runCursorAboutCommand = (
-  cursorSettings: CursorSettings,
-  environment?: NodeJS.ProcessEnv,
-) =>
+const runCursorAboutCommand = (cursorSettings: CursorSettings, environment?: NodeJS.ProcessEnv) =>
   Effect.gen(function* () {
     const jsonResult = yield* runCursorCommand(
       cursorSettings,

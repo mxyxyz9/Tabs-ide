@@ -2,7 +2,14 @@ import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString, TrimmedString, ProjectId, ThreadId, NonNegativeInt, PositiveInt } from "./baseSchemas.ts";
+import {
+  TrimmedNonEmptyString,
+  TrimmedString,
+  ProjectId,
+  ThreadId,
+  NonNegativeInt,
+  PositiveInt,
+} from "./baseSchemas.ts";
 import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { ModelSelection } from "./orchestration.ts";
 import { ProviderInstanceConfig, ProviderInstanceId } from "./providerInstance.ts";
@@ -706,7 +713,9 @@ export const ProjectServerProcessDefinition = Schema.Struct({
   command: Schema.optionalKey(TrimmedString),
   commands: Schema.Array(TrimmedString).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   cwd: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  env: Schema.Record(Schema.String, Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  env: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   autoStart: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
 });
 export type ProjectServerProcessDefinition = typeof ProjectServerProcessDefinition.Type;
@@ -717,7 +726,9 @@ export const ProjectServerPresetDefinition = Schema.Struct({
   command: Schema.optionalKey(TrimmedString),
   commands: Schema.Array(TrimmedString).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   cwd: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
-  env: Schema.Record(Schema.String, Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  env: Schema.Record(Schema.String, Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   autoStart: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   previewUrl: Schema.optionalKey(TrimmedString),
   autoOpenPreview: Schema.optionalKey(Schema.Boolean),
@@ -772,7 +783,9 @@ export const ProjectWorkspaceSessionState = Schema.Struct({
   // Which slot is focused: either a real project ID or a pending tab ID. When
   // both activeProjectId and activePendingTabId are set, activePendingTabId wins
   // for determining what to render in the content area.
-  activePendingTabId: Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
+  activePendingTabId: Schema.NullOr(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(null)),
+  ),
   activeToolIdByProjectId: Schema.Record(ProjectId, ProjectSettingId).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),

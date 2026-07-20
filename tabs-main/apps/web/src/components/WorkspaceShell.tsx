@@ -183,11 +183,7 @@ import {
   useWorkspaceShellState,
 } from "../state/workspaceShell";
 import { selectThreadTerminalState } from "../state/terminalTransitions";
-import {
-  getThreadTerminalState,
-  terminalActions,
-  useThreadTerminalState,
-} from "../state/terminal";
+import { getThreadTerminalState, terminalActions, useThreadTerminalState } from "../state/terminal";
 import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
 import { MercuryChromeLoader } from "./MercuryChromeLoader";
@@ -755,9 +751,7 @@ function ProjectTabs(props: {
 }) {
   // Merge real + pending tabs in a stable order: real projects first (as ordered
   // in openProjects), then pending slots appended at the end.
-  type TabEntry =
-    | { kind: "project"; project: Project }
-    | { kind: "pending"; pendingId: string };
+  type TabEntry = { kind: "project"; project: Project } | { kind: "pending"; pendingId: string };
 
   const tabs: TabEntry[] = [
     ...props.openProjects.map((project): TabEntry => ({ kind: "project", project })),
@@ -862,7 +856,6 @@ function ProjectTabs(props: {
     </div>
   );
 }
-
 
 function ProjectToolBar(props: {
   activeToolId: string;
@@ -2782,9 +2775,7 @@ function GitTool(props: {
   const handleDiscardFile = useCallback(
     async (file: GitStatusFile) => {
       if (!api) return;
-      const confirmed = await confirm(
-        `Discard changes for ${file.path}? This cannot be undone.`,
-      );
+      const confirmed = await confirm(`Discard changes for ${file.path}? This cannot be undone.`);
       if (!confirmed) return;
       void runGitTask({
         id: `discard:${file.path}`,
@@ -5618,10 +5609,17 @@ function DesktopBrowserChrome(props: {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
 
-  const sessionArg = props.sessionId ? { projectId: props.projectId, sessionId: props.sessionId } : { projectId: props.projectId };
+  const sessionArg = props.sessionId
+    ? { projectId: props.projectId, sessionId: props.sessionId }
+    : { projectId: props.projectId };
 
   return (
-    <div className={cn("relative flex h-full min-h-0 flex-col", props.isChromeExpanded ? "gap-2 p-2" : "")}>
+    <div
+      className={cn(
+        "relative flex h-full min-h-0 flex-col",
+        props.isChromeExpanded ? "gap-2 p-2" : "",
+      )}
+    >
       {props.isChromeExpanded ? (
         <Card className="relative z-20">
           <CardContent className="space-y-1.5 p-2">
@@ -5723,39 +5721,44 @@ function DesktopBrowserChrome(props: {
             </div>
           </CardContent>
         </Card>
-      ) : (
-        props.toolbarTarget
-          ? createPortal(
-              <div className="flex items-center">
-                <div className="flex items-center gap-1 pr-2">
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="rounded-md text-muted-foreground"
-                    onClick={() => props.setIsChromeExpanded(true)}
-                    aria-label={`Show ${props.title} controls`}
-                  >
-                    <PanelTopOpenIcon className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="rounded-md text-muted-foreground"
-                    onClick={() => void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)}
-                    aria-label={`Open ${props.title} externally`}
-                  >
-                    <ExternalLinkIcon className="size-4" />
-                  </Button>
-                </div>
-                <div className="h-4 w-px bg-border/60" />
-              </div>,
-              props.toolbarTarget
-            )
-          : null
-      )}
-      <div className={cn("relative z-0 min-h-0 flex-1 overflow-hidden bg-card", props.isChromeExpanded ? "rounded-2xl border border-border/70 p-1.5" : "")}>
+      ) : props.toolbarTarget ? (
+        createPortal(
+          <div className="flex items-center">
+            <div className="flex items-center gap-1 pr-2">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                className="rounded-md text-muted-foreground"
+                onClick={() => props.setIsChromeExpanded(true)}
+                aria-label={`Show ${props.title} controls`}
+              >
+                <PanelTopOpenIcon className="size-4" />
+              </Button>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                className="rounded-md text-muted-foreground"
+                onClick={() =>
+                  void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+                }
+                aria-label={`Open ${props.title} externally`}
+              >
+                <ExternalLinkIcon className="size-4" />
+              </Button>
+            </div>
+            <div className="h-4 w-px bg-border/60" />
+          </div>,
+          props.toolbarTarget,
+        )
+      ) : null}
+      <div
+        className={cn(
+          "relative z-0 min-h-0 flex-1 overflow-hidden bg-card",
+          props.isChromeExpanded ? "rounded-2xl border border-border/70 p-1.5" : "",
+        )}
+      >
         {props.children}
       </div>
     </div>
@@ -6356,12 +6359,17 @@ function DesktopCustomEmbedTool(props: {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
   const sessionKey = `${props.project.id}:${props.sessionId}`;
-  const storedUrl = useAtomValue(workspaceShellAtom, (state) => state.browserUrlBySessionKey[sessionKey]);
+  const storedUrl = useAtomValue(
+    workspaceShellAtom,
+    (state) => state.browserUrlBySessionKey[sessionKey],
+  );
   const setBrowserSessionUrl = workspaceShellActions.setBrowserSessionUrl;
   // A custom tab optionally reopens at the URL the user last navigated to (persisted),
   // falling back to its configured URL; editing the configured URL takes over.
   const configuredUrl = normalizeBrowserUrl(props.url);
-  const normalizedUrl = normalizeBrowserUrl(props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url);
+  const normalizedUrl = normalizeBrowserUrl(
+    props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url,
+  );
   // Editable address bar for the custom embed. Navigating here writes the
   // per-session URL (NOT the shared per-project browser state — see the
   // navigate effect below), which recomputes `normalizedUrl` and drives the
@@ -6383,10 +6391,9 @@ function DesktopCustomEmbedTool(props: {
     }
   }, [configuredUrl, props.project.id, props.sessionId, setBrowserSessionUrl]);
   const { isClosing } = useAppClosing();
-  const [debouncedCurrentUrl, currentUrlDebouncer] = useDebouncedValue(
-    sessionState.currentUrl,
-    { wait: 2000 },
-  );
+  const [debouncedCurrentUrl, currentUrlDebouncer] = useDebouncedValue(sessionState.currentUrl, {
+    wait: 2000,
+  });
 
   useEffect(() => {
     if (isClosing) {
@@ -6406,7 +6413,7 @@ function DesktopCustomEmbedTool(props: {
           if (index === -1) return settings;
           const embed = customEmbeds[index];
           if (!embed || embed.lastVisitedUrl === current) return settings;
-          
+
           const nextEmbeds = [...customEmbeds];
           nextEmbeds[index] = { ...embed, lastVisitedUrl: current };
           return { ...settings, customEmbeds: nextEmbeds };
@@ -6780,8 +6787,13 @@ function CustomEmbedTool(props: {
   const [loading, setLoading] = useState(true);
   const [embedBlocked, setEmbedBlocked] = useState(false);
   const sessionKey = `${props.project.id}:${props.sessionId}`;
-  const storedUrl = useAtomValue(workspaceShellAtom, (state) => state.browserUrlBySessionKey[sessionKey]);
-  const normalizedUrl = normalizeBrowserUrl(props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url);
+  const storedUrl = useAtomValue(
+    workspaceShellAtom,
+    (state) => state.browserUrlBySessionKey[sessionKey],
+  );
+  const normalizedUrl = normalizeBrowserUrl(
+    props.resumeLastVisitedPage ? (storedUrl ?? props.lastVisitedUrl ?? props.url) : props.url,
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -7083,7 +7095,7 @@ function ServerTool(props: {
         cwd: preset.cwd.trim(),
         autoStart: preset.autoStart,
       };
-      
+
       const trimmedUrl = preset.previewUrl?.trim();
       if (trimmedUrl) {
         res.previewUrl = trimmedUrl;
@@ -7100,7 +7112,7 @@ function ServerTool(props: {
       if (preset.dependsOn !== undefined) {
         res.dependsOn = preset.dependsOn;
       }
-      
+
       return res;
     },
     [],
@@ -7123,7 +7135,7 @@ function ServerTool(props: {
     }),
     [props.project.cwd],
   );
-  
+
   const [presetDrafts, setPresetDrafts] = useState<
     Array<{
       id: string;
@@ -7192,61 +7204,46 @@ function ServerTool(props: {
     }
   }, [isPresetDialogOpen, presetDialogMode, editingPresetId, processes, createBlankPreset]);
 
-  const updatePresetDraft = useCallback(
-    (id: string, updater: (current: any) => any) => {
-      setEditingPresetDraft((cur: any) => (cur ? updater(cur) : null));
-    },
-    [],
-  );
-  
-  const addCommandStepDraft = useCallback(
-    (id: string) => {
-      setEditingPresetDraft((cur: any) => {
-        if (!cur) return null;
-        return { ...cur, commands: [...cur.commands, ""] };
-      });
-    },
-    [],
-  );
+  const updatePresetDraft = useCallback((id: string, updater: (current: any) => any) => {
+    setEditingPresetDraft((cur: any) => (cur ? updater(cur) : null));
+  }, []);
 
-  const updateCommandStepDraft = useCallback(
-    (id: string, stepIdx: number, val: string) => {
-      setEditingPresetDraft((cur: any) => {
-        if (!cur) return null;
-        const nextCmds = [...cur.commands];
-        nextCmds[stepIdx] = val;
-        return { ...cur, commands: nextCmds };
-      });
-    },
-    [],
-  );
+  const addCommandStepDraft = useCallback((id: string) => {
+    setEditingPresetDraft((cur: any) => {
+      if (!cur) return null;
+      return { ...cur, commands: [...cur.commands, ""] };
+    });
+  }, []);
 
-  const moveCommandStepDraft = useCallback(
-    (id: string, stepIdx: number, direction: -1 | 1) => {
-      setEditingPresetDraft((cur: any) => {
-        if (!cur) return null;
-        const nextCmds = [...cur.commands];
-        const targetIdx = stepIdx + direction;
-        if (targetIdx < 0 || targetIdx >= nextCmds.length) return cur;
-        const temp = nextCmds[stepIdx]!;
-        nextCmds[stepIdx] = nextCmds[targetIdx]!;
-        nextCmds[targetIdx] = temp;
-        return { ...cur, commands: nextCmds };
-      });
-    },
-    [],
-  );
+  const updateCommandStepDraft = useCallback((id: string, stepIdx: number, val: string) => {
+    setEditingPresetDraft((cur: any) => {
+      if (!cur) return null;
+      const nextCmds = [...cur.commands];
+      nextCmds[stepIdx] = val;
+      return { ...cur, commands: nextCmds };
+    });
+  }, []);
 
-  const removeCommandStepDraft = useCallback(
-    (id: string, stepIdx: number) => {
-      setEditingPresetDraft((cur: any) => {
-        if (!cur) return null;
-        const nextCmds = cur.commands.filter((_: any, idx: number) => idx !== stepIdx);
-        return { ...cur, commands: nextCmds.length > 0 ? nextCmds : [""] };
-      });
-    },
-    [],
-  );
+  const moveCommandStepDraft = useCallback((id: string, stepIdx: number, direction: -1 | 1) => {
+    setEditingPresetDraft((cur: any) => {
+      if (!cur) return null;
+      const nextCmds = [...cur.commands];
+      const targetIdx = stepIdx + direction;
+      if (targetIdx < 0 || targetIdx >= nextCmds.length) return cur;
+      const temp = nextCmds[stepIdx]!;
+      nextCmds[stepIdx] = nextCmds[targetIdx]!;
+      nextCmds[targetIdx] = temp;
+      return { ...cur, commands: nextCmds };
+    });
+  }, []);
+
+  const removeCommandStepDraft = useCallback((id: string, stepIdx: number) => {
+    setEditingPresetDraft((cur: any) => {
+      if (!cur) return null;
+      const nextCmds = cur.commands.filter((_: any, idx: number) => idx !== stepIdx);
+      return { ...cur, commands: nextCmds.length > 0 ? nextCmds : [""] };
+    });
+  }, []);
 
   const selectPreset = useCallback((id: string) => {
     setSelectedPresetId(id);
@@ -7295,7 +7292,7 @@ function ServerTool(props: {
 
     setPresetDrafts(nextDrafts);
     props.onSavePresets(nextDrafts);
-    
+
     setSelectedPresetId(editingPresetDraft.id);
     setIsEditingRightPane(false);
     setEditingPresetDraft(null);
@@ -7323,8 +7320,8 @@ function ServerTool(props: {
       setDraggedPresetId(null);
       return;
     }
-    const sourceIndex = presetDrafts.findIndex(p => p.id === draggedPresetId);
-    const targetIndex = presetDrafts.findIndex(p => p.id === targetId);
+    const sourceIndex = presetDrafts.findIndex((p) => p.id === draggedPresetId);
+    const targetIndex = presetDrafts.findIndex((p) => p.id === targetId);
     if (sourceIndex >= 0 && targetIndex >= 0) {
       const nextDrafts = [...presetDrafts];
       const [movedItem] = nextDrafts.splice(sourceIndex, 1);
@@ -7346,7 +7343,7 @@ function ServerTool(props: {
     const nextDrafts = presetDrafts.filter((p) => p.id !== presetToDeleteId);
     setPresetDrafts(nextDrafts);
     props.onSavePresets(nextDrafts);
-    
+
     const nextSelected = nextDrafts[0]?.id ?? null;
     setSelectedPresetId(nextSelected);
     setIsEditingRightPane(false);
@@ -7358,41 +7355,46 @@ function ServerTool(props: {
     ? (processes.find((process: any) => process.id === editingPresetId) ?? null)
     : null;
 
-  const handleRunProcessWithDependencies = useCallback((processId: string) => {
-    if (dependencyTimeoutsRef.current.has(processId)) {
-      clearTimeout(dependencyTimeoutsRef.current.get(processId)!);
-      dependencyTimeoutsRef.current.delete(processId);
-    }
-    const process = processes.find((p: any) => p.id === processId) || presetDrafts.find((p) => p.id === processId);
-    if (process?.dependsOn && process.dependsOn.length > 0) {
-      let delayRun = false;
-      process.dependsOn.forEach((depId: string) => {
-        const depStatus = resolveServerPresetRuntimeStatus({
-          processId: depId,
-          runningProcessIds: runningProcessIdSet,
-          terminalIds: terminalIdSet,
+  const handleRunProcessWithDependencies = useCallback(
+    (processId: string) => {
+      if (dependencyTimeoutsRef.current.has(processId)) {
+        clearTimeout(dependencyTimeoutsRef.current.get(processId)!);
+        dependencyTimeoutsRef.current.delete(processId);
+      }
+      const process =
+        processes.find((p: any) => p.id === processId) ||
+        presetDrafts.find((p) => p.id === processId);
+      if (process?.dependsOn && process.dependsOn.length > 0) {
+        let delayRun = false;
+        process.dependsOn.forEach((depId: string) => {
+          const depStatus = resolveServerPresetRuntimeStatus({
+            processId: depId,
+            runningProcessIds: runningProcessIdSet,
+            terminalIds: terminalIdSet,
+          });
+          if (depStatus !== "running") {
+            props.onRunProcess(depId);
+            delayRun = true;
+          }
         });
-        if (depStatus !== "running") {
-          props.onRunProcess(depId);
-          delayRun = true;
-        }
-      });
-      if (delayRun) {
-        const timeoutId = setTimeout(() => {
-          dependencyTimeoutsRef.current.delete(processId);
+        if (delayRun) {
+          const timeoutId = setTimeout(() => {
+            dependencyTimeoutsRef.current.delete(processId);
+            props.onRunProcess(processId);
+          }, 3500);
+          dependencyTimeoutsRef.current.set(processId, timeoutId);
+        } else {
           props.onRunProcess(processId);
-        }, 3500);
-        dependencyTimeoutsRef.current.set(processId, timeoutId);
+        }
       } else {
         props.onRunProcess(processId);
       }
-    } else {
-      props.onRunProcess(processId);
-    }
-  }, [processes, presetDrafts, runningProcessIdSet, terminalIdSet, props]);
+    },
+    [processes, presetDrafts, runningProcessIdSet, terminalIdSet, props],
+  );
 
   const selectedPreset = selectedPresetId
-    ? presetDrafts.find((p) => p.id === selectedPresetId) ?? null
+    ? (presetDrafts.find((p) => p.id === selectedPresetId) ?? null)
     : null;
   const selectedPresetStatus = selectedPreset
     ? resolveServerPresetRuntimeStatus({
@@ -7600,7 +7602,8 @@ function ServerTool(props: {
                 Server Presets
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-1">
-                Create and manage one-click presets like 'Frontend' or 'Backend', each with ordered command steps.
+                Create and manage one-click presets like 'Frontend' or 'Backend', each with ordered
+                command steps.
               </DialogDescription>
             </div>
           </DialogHeader>
@@ -7617,7 +7620,7 @@ function ServerTool(props: {
                 <PlusIcon className="size-3.5" />
                 Add Preset
               </Button>
-              
+
               <ScrollArea className="flex-1 -mx-2 px-2">
                 <div className="space-y-1">
                   {presetDrafts.map((preset) => {
@@ -7642,7 +7645,8 @@ function ServerTool(props: {
                           isSelected
                             ? "bg-zinc-800/80 text-foreground font-medium shadow-xs border-zinc-700/50"
                             : "text-muted-foreground hover:bg-zinc-800/30 hover:text-foreground",
-                          draggedPresetId === preset.id && "opacity-40 border-dashed border-zinc-500"
+                          draggedPresetId === preset.id &&
+                            "opacity-40 border-dashed border-zinc-500",
                         )}
                       >
                         <span className="truncate mr-2">{preset.label || "Untitled Preset"}</span>
@@ -7691,7 +7695,8 @@ function ServerTool(props: {
                       removeCommandStep={removeCommandStepDraft}
                     />
                     {/* Validation notice */}
-                    {(!editingPresetDraft.label?.trim() || !editingPresetDraft.commands?.some((c: string) => c.trim().length > 0)) && (
+                    {(!editingPresetDraft.label?.trim() ||
+                      !editingPresetDraft.commands?.some((c: string) => c.trim().length > 0)) && (
                       <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-xs text-amber-200/90 leading-normal">
                         Each preset needs a label and at least one command step before saving.
                       </div>
@@ -7705,12 +7710,27 @@ function ServerTool(props: {
                           {selectedPreset.label || "Untitled Preset"}
                         </h2>
                         {selectedPresetStatus === "running" ? (
-                          <Badge variant="success" className="text-[10px] uppercase tracking-wider font-semibold">Running</Badge>
+                          <Badge
+                            variant="success"
+                            className="text-[10px] uppercase tracking-wider font-semibold"
+                          >
+                            Running
+                          </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-semibold">Idle</Badge>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] uppercase tracking-wider font-semibold"
+                          >
+                            Idle
+                          </Badge>
                         )}
                         {selectedPreset.autoOpenPreview && (
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 border-blue-500/30">Auto-opens</Badge>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] uppercase tracking-wider font-semibold text-blue-400 border-blue-500/30"
+                          >
+                            Auto-opens
+                          </Badge>
                         )}
                       </div>
                       <div className="text-xs font-mono text-muted-foreground mt-2 truncate">
@@ -7725,18 +7745,24 @@ function ServerTool(props: {
                       <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 font-mono text-xs leading-relaxed text-zinc-300 space-y-1 max-h-48 overflow-y-auto">
                         {selectedPreset.commands.map((cmd, idx) => (
                           <div key={idx} className="truncate flex items-start gap-2">
-                            <span className="text-muted-foreground/60 w-4 text-right shrink-0">{idx + 1}.</span>
+                            <span className="text-muted-foreground/60 w-4 text-right shrink-0">
+                              {idx + 1}.
+                            </span>
                             <span className="break-all whitespace-pre-wrap">{cmd}</span>
                           </div>
                         ))}
                         {selectedPreset.commands.length === 0 && (
-                          <div className="text-muted-foreground/60 py-2">No commands configured</div>
+                          <div className="text-muted-foreground/60 py-2">
+                            No commands configured
+                          </div>
                         )}
                       </div>
                     </div>
 
                     <div className="space-y-6">
-                      {(selectedPreset.autoOpenPreview || !!selectedPreset.previewUrl || selectedPreset.previewOpenTarget === "external") && (
+                      {(selectedPreset.autoOpenPreview ||
+                        !!selectedPreset.previewUrl ||
+                        selectedPreset.previewOpenTarget === "external") && (
                         <div className="space-y-3">
                           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Browser Tool Integration
@@ -7747,27 +7773,42 @@ function ServerTool(props: {
                               {selectedPreset.previewUrl ? (
                                 <span className="font-mono">{selectedPreset.previewUrl}</span>
                               ) : (
-                                <span className="italic text-muted-foreground/50">Not configured</span>
+                                <span className="italic text-muted-foreground/50">
+                                  Not configured
+                                </span>
                               )}
                             </div>
                             <div className="flex justify-between border-b border-zinc-800/30 pb-3">
                               <span className="text-muted-foreground">Target Browser</span>
-                              <span>{selectedPreset.previewOpenTarget === "external" ? "External Browser" : "Internal Browser"}</span>
+                              <span>
+                                {selectedPreset.previewOpenTarget === "external"
+                                  ? "External Browser"
+                                  : "Internal Browser"}
+                              </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Auto switch to browser tab</span>
+                              <span className="text-muted-foreground">
+                                Auto switch to browser tab
+                              </span>
                               <span>{selectedPreset.autoOpenPreview ? "Enabled" : "Disabled"}</span>
                             </div>
                           </div>
                         </div>
                       )}
-                      
+
                       <div className="space-y-3">
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Configuration
                         </div>
                         <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-300 space-y-3">
-                          <div className={cn("flex justify-between", selectedPreset.dependsOn && selectedPreset.dependsOn.length > 0 && "border-b border-zinc-800/30 pb-3")}>
+                          <div
+                            className={cn(
+                              "flex justify-between",
+                              selectedPreset.dependsOn &&
+                                selectedPreset.dependsOn.length > 0 &&
+                                "border-b border-zinc-800/30 pb-3",
+                            )}
+                          >
                             <span className="text-muted-foreground">Auto-start on launch</span>
                             <span>{selectedPreset.autoStart ? "Enabled" : "Disabled"}</span>
                           </div>
@@ -7775,8 +7816,11 @@ function ServerTool(props: {
                             <div className="flex justify-between items-start">
                               <span className="text-muted-foreground">Dependencies</span>
                               <div className="flex flex-col items-end gap-1">
-                                {selectedPreset.dependsOn.map(depId => (
-                                  <span key={depId}>{presetDrafts.find(p => p.id === depId)?.label || "Unknown Preset"}</span>
+                                {selectedPreset.dependsOn.map((depId) => (
+                                  <span key={depId}>
+                                    {presetDrafts.find((p) => p.id === depId)?.label ||
+                                      "Unknown Preset"}
+                                  </span>
                                 ))}
                               </div>
                             </div>
@@ -7866,16 +7910,18 @@ function ServerTool(props: {
                     </Button>
                   </div>
                 ) : (
-                  <div className="flex justify-end w-full">
-                  </div>
+                  <div className="flex justify-end w-full"></div>
                 )}
               </DialogFooter>
             </div>
           </div>
         </DialogPopup>
       </Dialog>
-      
-      <AlertDialog open={!!presetToDeleteId} onOpenChange={(open) => !open && setPresetToDeleteId(null)}>
+
+      <AlertDialog
+        open={!!presetToDeleteId}
+        onOpenChange={(open) => !open && setPresetToDeleteId(null)}
+      >
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Preset?</AlertDialogTitle>
@@ -7944,8 +7990,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const threadsHydrated = useAtomValue(threadsHydratedAtom);
   const embeddedMode = useMemo(() => resolveEmbeddedWorkspaceMode(), []);
   const embeddedProjectCreateRequestedRef = useRef<string | null>(null);
-
-
 
   useEffect(() => {
     // Wait for the server read model to actually arrive before syncing. Until
@@ -8078,8 +8122,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     label: tool.label,
   }));
 
-
-
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!bridge) return;
@@ -8116,9 +8158,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       if (!api) return true; // Offline or no API, assume true to avoid breaking state
       try {
         await api.projects.filesystemBrowse({
-          partialPath: project.cwd.endsWith("/") || project.cwd.endsWith("\\")
-            ? project.cwd
-            : project.cwd + "/",
+          partialPath:
+            project.cwd.endsWith("/") || project.cwd.endsWith("\\")
+              ? project.cwd
+              : project.cwd + "/",
         });
         return true;
       } catch (err) {
@@ -8127,11 +8170,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           title: "Project folder not found",
           description: `The folder at "${project.cwd}" does not exist. Removing it from recents.`,
         });
-        void api.orchestration.dispatchCommand({
-          type: "project.delete",
-          commandId: newCommandId(),
-          projectId,
-        }).catch(() => undefined);
+        void api.orchestration
+          .dispatchCommand({
+            type: "project.delete",
+            commandId: newCommandId(),
+            projectId,
+          })
+          .catch(() => undefined);
         closeProject(projectId);
         return false;
       }
@@ -8141,7 +8186,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
 
   // Periodically verify existence of recent projects every 30 seconds while welcome screen is open
   useEffect(() => {
-    const isShowingWelcome = isActivePendingTab || (!activeProject || !activeProjectSettings);
+    const isShowingWelcome = isActivePendingTab || !activeProject || !activeProjectSettings;
     if (!isShowingWelcome || !threadsHydrated) {
       return;
     }
@@ -8176,7 +8221,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     threadsHydrated,
     verifyProjectExists,
   ]);
-
 
   const focusProject = useCallback(
     async (projectId: ProjectId) => {
@@ -8224,7 +8268,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const routeTerminalState = useThreadTerminalState(routeThreadId ?? null);
   const terminalOpen = routeTerminalState?.terminalOpen ?? false;
 
-
   const handleCreateProject = useCallback(async () => {
     const api = readNativeApi();
     if (!api) return;
@@ -8265,8 +8308,16 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       setActiveTool(projectId, "code");
       await navigate({ to: "/" });
     }
-  }, [activePendingTabId, focusProject, navigate, openProject, projects, resolvePendingTab, setActiveProject, setActiveTool]);
-
+  }, [
+    activePendingTabId,
+    focusProject,
+    navigate,
+    openProject,
+    projects,
+    resolvePendingTab,
+    setActiveProject,
+    setActiveTool,
+  ]);
 
   // Browser-like tab keyboard shortcuts, driven by application-menu accelerators
   // (cmd/ctrl + T / W / 1..9 / shift+[ ] / ctrl+Tab). Using menu accelerators —
@@ -8288,16 +8339,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     const bridge = window.desktopBridge;
     if (!bridge) return;
     return bridge.onMenuAction((action) => {
-      const {
-        openProjectIds,
-        pendingTabIds,
-        activeProjectId,
-        activePendingTabId,
-      } = tabShortcutStateRef.current;
+      const { openProjectIds, pendingTabIds, activeProjectId, activePendingTabId } =
+        tabShortcutStateRef.current;
 
       const tabsList = [
-        ...openProjectIds.map(id => ({ kind: "project" as const, id })),
-        ...pendingTabIds.map(id => ({ kind: "pending" as const, id })),
+        ...openProjectIds.map((id) => ({ kind: "project" as const, id })),
+        ...pendingTabIds.map((id) => ({ kind: "pending" as const, id })),
       ];
 
       const activate = (index: number) => {
@@ -8314,10 +8361,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
 
       const getCurrentIndex = () => {
         if (activePendingTabId) {
-          return tabsList.findIndex(t => t.kind === "pending" && t.id === activePendingTabId);
+          return tabsList.findIndex((t) => t.kind === "pending" && t.id === activePendingTabId);
         }
         if (activeProjectId) {
-          return tabsList.findIndex(t => t.kind === "project" && t.id === activeProjectId);
+          return tabsList.findIndex((t) => t.kind === "project" && t.id === activeProjectId);
         }
         return -1;
       };
@@ -8350,7 +8397,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           const tabGoMatch = /^tab-go-([1-9])$/.exec(action);
           if (tabGoMatch && tabsList.length > 0) {
             const requested = Number(tabGoMatch[1]);
-            activate(requested === 9 ? tabsList.length - 1 : Math.min(requested - 1, tabsList.length - 1));
+            activate(
+              requested === 9 ? tabsList.length - 1 : Math.min(requested - 1, tabsList.length - 1),
+            );
           }
         }
       }
@@ -8392,7 +8441,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       setActiveTool(projectId, "code");
       await navigate({ to: "/" });
     },
-    [activePendingTabId, ensureProjectForWorkspaceRoot, navigate, resolvePendingTab, setActiveProject, setActiveTool],
+    [
+      activePendingTabId,
+      ensureProjectForWorkspaceRoot,
+      navigate,
+      resolvePendingTab,
+      setActiveProject,
+      setActiveTool,
+    ],
   );
 
   const handleOpenProjectFile = useCallback(async () => {
@@ -8589,7 +8645,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         if (workspaceState.session.activeProjectId && availableTools.length > 0) {
           event.preventDefault();
           event.stopPropagation();
-          const targetTool = availableTools[index === 8 ? availableTools.length - 1 : Math.min(index, availableTools.length - 1)];
+          const targetTool =
+            availableTools[
+              index === 8 ? availableTools.length - 1 : Math.min(index, availableTools.length - 1)
+            ];
           if (targetTool) {
             handleSelectTool(targetTool.id);
           }
@@ -8913,12 +8972,17 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         const isAlreadyRunningLocally =
           executedCommandsRef.current.has(runKey) &&
           Date.now() - (executedCommandsRef.current.get(runKey) || 0) < 2000;
-        const isAlreadyRunningRemotely = input.terminalState?.runningTerminalIds.includes(terminalId);
+        const isAlreadyRunningRemotely =
+          input.terminalState?.runningTerminalIds.includes(terminalId);
 
         if (!isAlreadyRunningLocally && !isAlreadyRunningRemotely) {
           executedCommandsRef.current.set(runKey, Date.now());
           for (const command of commands) {
-            await api.terminal.write({ threadId: input.threadId, terminalId, data: `${command}\r` });
+            await api.terminal.write({
+              threadId: input.threadId,
+              terminalId,
+              data: `${command}\r`,
+            });
           }
         }
       } catch (error) {
@@ -9038,7 +9102,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const runServerProcess = useCallback(
     async (processId: string) => {
       if (!activeProjectSettings || !serverThreadId) return;
-      const process = (activeProjectSettings.serverPresets ?? []).find((entry: any) => entry.id === processId);
+      const process = (activeProjectSettings.serverPresets ?? []).find(
+        (entry: any) => entry.id === processId,
+      );
       if (!process) return;
 
       revealServerTerminal();
@@ -9079,7 +9145,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       }, 3000);
       previewTimeoutsRef.current.set(processId, timeoutId);
     },
-    [activeProjectSettings, openProcessTerminal, revealServerTerminal, serverThreadId, activeProject?.id],
+    [
+      activeProjectSettings,
+      openProcessTerminal,
+      revealServerTerminal,
+      serverThreadId,
+      activeProject?.id,
+    ],
   );
   const restartServerProcess = useCallback(
     async (processId: string) => {
@@ -9090,7 +9162,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   );
   // ── Custom terminal-tab handlers (isolated per-process thread) ────────
   const runCustomProcess = useCallback(
-    async (process: ProjectWorkspaceSettings["terminalProcesses"][number] | ProjectWorkspaceSettings["serverPresets"][number], threadId: ThreadId) => {
+    async (
+      process:
+        | ProjectWorkspaceSettings["terminalProcesses"][number]
+        | ProjectWorkspaceSettings["serverPresets"][number],
+      threadId: ThreadId,
+    ) => {
       await openProcessTerminal({
         threadId,
         terminalState: getThreadTerminalState(threadId),
@@ -9159,8 +9236,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     if (activeTool?.kind !== "server" || !activeProjectSettings) return;
     // Processes backing custom terminal tabs auto-start in their own tab — the
     // Server tab must not also launch them in the shared server thread.
-    for (const process of (activeProjectSettings.serverPresets ?? [])) {
-      if (!process.autoStart || process.commands.every((command: string) => command.trim().length === 0)) {
+    for (const process of activeProjectSettings.serverPresets ?? []) {
+      if (
+        !process.autoStart ||
+        process.commands.every((command: string) => command.trim().length === 0)
+      ) {
         continue;
       }
       if (serverAutoStartedProcessIdsRef.current.has(process.id)) continue;
@@ -9219,8 +9299,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
                   autoStart: preset.autoStart,
                 };
                 if (preset.previewUrl !== undefined) res.previewUrl = preset.previewUrl;
-                if (preset.autoOpenPreview !== undefined) res.autoOpenPreview = preset.autoOpenPreview;
-                if (preset.previewOpenTarget !== undefined) res.previewOpenTarget = preset.previewOpenTarget;
+                if (preset.autoOpenPreview !== undefined)
+                  res.autoOpenPreview = preset.autoOpenPreview;
+                if (preset.previewOpenTarget !== undefined)
+                  res.previewOpenTarget = preset.previewOpenTarget;
                 if (preset.previewFocus !== undefined) res.previewFocus = preset.previewFocus;
                 if (preset.dependsOn !== undefined) res.dependsOn = preset.dependsOn;
                 return res;

@@ -574,10 +574,8 @@ export class ServerProviderUpdateError extends Schema.TaggedErrorClass<ServerPro
 export const ServerProviderMaintenanceAction = Schema.Literals(["install", "update"]);
 export type ServerProviderMaintenanceAction = typeof ServerProviderMaintenanceAction.Type;
 
-
 export const ServerRunProviderMaintenanceInput = Schema.Struct({
   instanceId: ProviderInstanceId,
   action: ServerProviderMaintenanceAction,
 });
 export type ServerRunProviderMaintenanceInput = typeof ServerRunProviderMaintenanceInput.Type;
-

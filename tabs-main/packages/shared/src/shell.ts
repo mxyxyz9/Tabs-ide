@@ -538,28 +538,29 @@ export const resolveSpawnCommand = (
   command: string,
   args: ReadonlyArray<string>,
   options: SpawnCommandOptions = {},
-) => Effect.sync((): ResolvedSpawnCommand => {
-  const platform = process.platform;
-  if (platform !== "win32") {
-    return { command, args: [...args], shell: false };
-  }
+) =>
+  Effect.sync((): ResolvedSpawnCommand => {
+    const platform = process.platform;
+    if (platform !== "win32") {
+      return { command, args: [...args], shell: false };
+    }
 
-  const env =
-    options.env === undefined
-      ? process.env
-      : options.extendEnv
-        ? { ...process.env, ...options.env }
-        : options.env;
-        
-  const resolvedCommand = resolveCommandPath(command, { platform, env }) ?? command;
-  const extension = (resolvedCommand.match(/\.[^.]+$/) || [""])[0].toLowerCase();
-  if (extension !== ".cmd" && extension !== ".bat") {
-    return { command: resolvedCommand, args: [...args], shell: false };
-  }
+    const env =
+      options.env === undefined
+        ? process.env
+        : options.extendEnv
+          ? { ...process.env, ...options.env }
+          : options.env;
 
-  return {
-    command: escapeWindowsShellArg(resolvedCommand),
-    args: sanitizeShellModeArgsForPlatform(args, platform),
-    shell: true,
-  };
-});
+    const resolvedCommand = resolveCommandPath(command, { platform, env }) ?? command;
+    const extension = (resolvedCommand.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+    if (extension !== ".cmd" && extension !== ".bat") {
+      return { command: resolvedCommand, args: [...args], shell: false };
+    }
+
+    return {
+      command: escapeWindowsShellArg(resolvedCommand),
+      args: sanitizeShellModeArgsForPlatform(args, platform),
+      shell: true,
+    };
+  });

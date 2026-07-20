@@ -28,7 +28,13 @@ import {
   InfoIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { MasterDetail, MasterDetailContent, MasterDetailItem, MasterDetailList, MasterDetailSidebar } from "./ui/master-detail";
+import {
+  MasterDetail,
+  MasterDetailContent,
+  MasterDetailItem,
+  MasterDetailList,
+  MasterDetailSidebar,
+} from "./ui/master-detail";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
 
@@ -252,7 +258,6 @@ function createTerminalProcessDrafts(settings: ProjectWorkspaceSettings): Server
   });
 }
 
-
 function createServerPresetDrafts(settings: ProjectWorkspaceSettings): ServerProcessDraft[] {
   return settings.serverPresets.map((process) => {
     return {
@@ -313,9 +318,7 @@ export function ProjectWorkspaceSettingsSection() {
   const { confirm, confirmDialog } = useConfirm();
   const activeProjectId = useWorkspaceActiveProjectId();
   const activeProject = useAtomValue(projectsAtom, (state) =>
-    activeProjectId
-      ? (state.find((project) => project.id === activeProjectId) ?? null)
-      : null,
+    activeProjectId ? (state.find((project) => project.id === activeProjectId) ?? null) : null,
   );
   const projectSettings = useProjectWorkspaceSettings(activeProjectId);
   const upsertProjectSettings = workspaceShellActions.upsertProjectSettings;
@@ -325,13 +328,21 @@ export function ProjectWorkspaceSettingsSection() {
 
   const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
   const [resumeLastVisitedPageDraft, setResumeLastVisitedPageDraft] = useState<boolean>(true);
-  const isBrowserDefaultUrlDirty = projectSettings ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl : false;
-  const isResumeLastVisitedPageDirty = projectSettings ? resumeLastVisitedPageDraft !== projectSettings.browser.resumeLastVisitedPage : false;
+  const isBrowserDefaultUrlDirty = projectSettings
+    ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl
+    : false;
+  const isResumeLastVisitedPageDirty = projectSettings
+    ? resumeLastVisitedPageDraft !== projectSettings.browser.resumeLastVisitedPage
+    : false;
 
   useEffect(() => {
     setBrowserDefaultUrlDraft(projectSettings?.browser?.defaultUrl ?? "");
     setResumeLastVisitedPageDraft(projectSettings?.browser?.resumeLastVisitedPage ?? true);
-  }, [projectSettings?.browser?.defaultUrl, projectSettings?.browser?.resumeLastVisitedPage, activeProjectId]);
+  }, [
+    projectSettings?.browser?.defaultUrl,
+    projectSettings?.browser?.resumeLastVisitedPage,
+    activeProjectId,
+  ]);
 
   const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
   const [activeCustomEmbedId, setActiveCustomEmbedId] = useState<string | null>(null);
@@ -339,7 +350,8 @@ export function ProjectWorkspaceSettingsSection() {
   const [activeServerPresetId, setActiveServerPresetId] = useState<string | null>(null);
 
   const hasInternalBrowserOverride = serverPresetDrafts.some(
-    (preset) => preset.previewUrl && (!preset.previewOpenTarget || preset.previewOpenTarget === "in-app")
+    (preset) =>
+      preset.previewUrl && (!preset.previewOpenTarget || preset.previewOpenTarget === "in-app"),
   );
 
   const [pendingToggle, setPendingToggle] = useState<{
@@ -348,7 +360,7 @@ export function ProjectWorkspaceSettingsSection() {
     toolKind: string;
     nextVisible: boolean;
   } | null>(null);
-  
+
   const [tabToDeleteId, setTabToDeleteId] = useState<string | null>(null);
   const [terminalToDeleteId, setTerminalToDeleteId] = useState<string | null>(null);
   const [presetToDeleteId, setPresetToDeleteId] = useState<string | null>(null);
@@ -398,7 +410,7 @@ export function ProjectWorkspaceSettingsSection() {
     () => customEmbedDrafts.some(isCustomEmbedDraftDirty),
     [customEmbedDrafts],
   );
-  
+
   const serverPresetsDirty = useMemo(
     () => serverPresetDrafts.some(isServerProcessDraftDirty),
     [serverPresetDrafts],
@@ -418,18 +430,19 @@ export function ProjectWorkspaceSettingsSection() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const updatePresetRow = useCallback((id: string, updater: (current: ServerProcessDraft) => ServerProcessDraft) => {
-    setServerPresetDrafts((current) =>
-      current.map((entry) => (entry.id === id ? updater(entry) : entry)),
-    );
-  }, []);
+  const updatePresetRow = useCallback(
+    (id: string, updater: (current: ServerProcessDraft) => ServerProcessDraft) => {
+      setServerPresetDrafts((current) =>
+        current.map((entry) => (entry.id === id ? updater(entry) : entry)),
+      );
+    },
+    [],
+  );
 
   const addCommandStep = useCallback((id: string) => {
     setServerPresetDrafts((current) =>
       current.map((entry) =>
-        entry.id === id
-          ? { ...entry, commands: [...entry.commands, ""] }
-          : entry,
+        entry.id === id ? { ...entry, commands: [...entry.commands, ""] } : entry,
       ),
     );
   }, []);
@@ -542,7 +555,9 @@ export function ProjectWorkspaceSettingsSection() {
           label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab",
           url: draft.url.trim(),
           resumeLastVisitedPage: draft.resumeLastVisitedPage,
-          ...(existingEmbed?.lastVisitedUrl ? { lastVisitedUrl: existingEmbed.lastVisitedUrl } : {}),
+          ...(existingEmbed?.lastVisitedUrl
+            ? { lastVisitedUrl: existingEmbed.lastVisitedUrl }
+            : {}),
         };
       });
       const nextCustomEmbedTools = customEmbedDrafts.map((draft, index) => ({
@@ -632,7 +647,6 @@ export function ProjectWorkspaceSettingsSection() {
     setCustomEmbedDrafts(createCustomEmbedDrafts(projectSettings));
   };
 
-  
   const resetServerPresets = () => {
     setServerPresetDrafts(createServerPresetDrafts(projectSettings));
   };
@@ -640,8 +654,6 @@ export function ProjectWorkspaceSettingsSection() {
   const resetServerProcesses = () => {
     setServerProcessDrafts(createTerminalProcessDrafts(projectSettings));
   };
-
-
 
   return (
     <>
@@ -658,7 +670,9 @@ export function ProjectWorkspaceSettingsSection() {
                 variant="outline"
                 className="no-drag"
                 onClick={async () => {
-                  const confirmed = await confirm("Restore default settings?\n\nThis will reset: Terminal shell and Editor preferences.");
+                  const confirmed = await confirm(
+                    "Restore default settings?\n\nThis will reset: Terminal shell and Editor preferences.",
+                  );
                   if (confirmed) {
                     workspaceShellActions.upsertProjectSettings(activeProjectId, {
                       // Terminal shell and editor preferences will be reset here if/when they are added to the schema.
@@ -690,76 +704,75 @@ export function ProjectWorkspaceSettingsSection() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-                <DndContext
-                  sensors={dndSensors}
-                  collisionDetection={closestCenter}
-                  modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                  onDragEnd={handleReorderTools}
+              <DndContext
+                sensors={dndSensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                onDragEnd={handleReorderTools}
+              >
+                <SortableContext
+                  items={toolbarPreviewTools.map((toolItem) => toolItem.id)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <SortableContext
-                    items={toolbarPreviewTools.map((toolItem) => toolItem.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {toolbarPreviewTools.map((tool) => {
-                      const isExpanded = expandedToolbarToolIds[tool.id] === true;
-                      const embedDraft =
-                        tool.kind === "custom_embed"
-                          ? (customEmbedDrafts.find(
-                              (entry) => createCustomEmbedToolId(entry.id) === tool.id,
-                            ) ?? null)
-                          : null;
-                      const processDraft =
-                        tool.kind === "custom_process"
-                          ? (serverProcessDrafts.find(
-                              (entry) => createServerProcessToolId(entry.id) === tool.id,
-                            ) ?? null)
-                          : null;
+                  {toolbarPreviewTools.map((tool) => {
+                    const isExpanded = expandedToolbarToolIds[tool.id] === true;
+                    const embedDraft =
+                      tool.kind === "custom_embed"
+                        ? (customEmbedDrafts.find(
+                            (entry) => createCustomEmbedToolId(entry.id) === tool.id,
+                          ) ?? null)
+                        : null;
+                    const processDraft =
+                      tool.kind === "custom_process"
+                        ? (serverProcessDrafts.find(
+                            (entry) => createServerProcessToolId(entry.id) === tool.id,
+                          ) ?? null)
+                        : null;
 
-                      return (
-                        <SortableToolRow key={tool.id} id={tool.id}>
-                          {({ attributes, listeners }) => (
-                            <div className="rounded-xl border border-border/70 px-3 py-2">
-                              <div className="flex items-center gap-3">
-                                <button
-                                  type="button"
-                                  aria-label={`Drag to reorder ${tool.label}`}
-                                  className="-ms-1 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground/50 hover:text-foreground active:cursor-grabbing"
-                                  {...attributes}
-                                  {...listeners}
-                                >
-                                  <GripVerticalIcon className="size-4" />
-                                </button>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-sm font-medium text-foreground">
-                                    {tool.label}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {describeToolKind(tool.kind)}
-                                  </div>
+                    return (
+                      <SortableToolRow key={tool.id} id={tool.id}>
+                        {({ attributes, listeners }) => (
+                          <div className="rounded-xl border border-border/70 px-3 py-2">
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                aria-label={`Drag to reorder ${tool.label}`}
+                                className="-ms-1 shrink-0 cursor-grab touch-none rounded-md p-1 text-muted-foreground/50 hover:text-foreground active:cursor-grabbing"
+                                {...attributes}
+                                {...listeners}
+                              >
+                                <GripVerticalIcon className="size-4" />
+                              </button>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-medium text-foreground">
+                                  {tool.label}
                                 </div>
-                                <Switch
-                                  checked={tool.visible}
-                                  onCheckedChange={(checked) => {
-                                    const nextVisible = Boolean(checked);
-                                    setPendingToggle({
-                                      toolId: tool.id,
-                                      toolLabel: tool.label,
-                                      toolKind: tool.kind,
-                                      nextVisible,
-                                    });
-                                  }}
-                                  aria-label={`Toggle ${tool.label}`}
-                                />
+                                <div className="text-xs text-muted-foreground">
+                                  {describeToolKind(tool.kind)}
+                                </div>
                               </div>
-
+                              <Switch
+                                checked={tool.visible}
+                                onCheckedChange={(checked) => {
+                                  const nextVisible = Boolean(checked);
+                                  setPendingToggle({
+                                    toolId: tool.id,
+                                    toolLabel: tool.label,
+                                    toolKind: tool.kind,
+                                    nextVisible,
+                                  });
+                                }}
+                                aria-label={`Toggle ${tool.label}`}
+                              />
                             </div>
-                          )}
-                        </SortableToolRow>
-                      );
-                    })}
-                  </SortableContext>
-                </DndContext>
-              </div>
+                          </div>
+                        )}
+                      </SortableToolRow>
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
+            </div>
           </CardContent>
         </Card>
 
@@ -767,7 +780,9 @@ export function ProjectWorkspaceSettingsSection() {
           <CardHeader>
             <CardTitle>Browser Default URL</CardTitle>
             <CardDescription>
-              The Browser tool loads this URL by default for the active project. Note: If you run a Server Preset that has a Preview URL configured, it will automatically override this default and navigate to the preset's preview.
+              The Browser tool loads this URL by default for the active project. Note: If you run a
+              Server Preset that has a Preview URL configured, it will automatically override this
+              default and navigate to the preset's preview.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -779,8 +794,8 @@ export function ProjectWorkspaceSettingsSection() {
                     onChange={(event) => setBrowserDefaultUrlDraft(event.target.value)}
                     placeholder="http://localhost:3000"
                   />
-                  <Button 
-                    type="button" 
+                  <Button
+                    type="button"
                     onClick={() => {
                       if (activeProjectId) {
                         upsertProjectSettings(activeProjectId, (current) => ({
@@ -802,7 +817,8 @@ export function ProjectWorkspaceSettingsSection() {
                   <Alert variant="default" className="bg-muted/50 py-3">
                     <InfoIcon className="size-4 mt-0" />
                     <AlertDescription className="text-muted-foreground ml-2">
-                      A Server Preset is configured to open a preview in the Internal Browser. When you run that preset, its preview URL will override this default.
+                      A Server Preset is configured to open a preview in the Internal Browser. When
+                      you run that preset, its preview URL will override this default.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -814,7 +830,8 @@ export function ProjectWorkspaceSettingsSection() {
                 <div className="flex flex-col gap-1">
                   <div className="text-sm font-medium">Resume last visited page on startup</div>
                   <div className="text-xs text-muted-foreground">
-                    When the browser is reopened, load the page you were last on instead of the default URL above.
+                    When the browser is reopened, load the page you were last on instead of the
+                    default URL above.
                   </div>
                 </div>
                 <Switch
@@ -834,537 +851,607 @@ export function ProjectWorkspaceSettingsSection() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-              <Tabs defaultValue="browser">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="browser">Browser Tabs</TabsTrigger>
-                  <TabsTrigger value="terminal">Terminal Tabs</TabsTrigger>
-                  <TabsTrigger value="preset">Server Presets</TabsTrigger>
-                </TabsList>
+            <Tabs defaultValue="browser">
+              <TabsList className="mb-4">
+                <TabsTrigger value="browser">Browser Tabs</TabsTrigger>
+                <TabsTrigger value="terminal">Terminal Tabs</TabsTrigger>
+                <TabsTrigger value="preset">Server Presets</TabsTrigger>
+              </TabsList>
 
-                <TabsContent value="browser" className="mt-0">
-                  <div className="space-y-3">
-                    <div className="text-xs text-muted-foreground">
-                      Add project-specific URLs like Figma, Linear, Notion, or internal tools. Save to
-                      add them into the toolbar, then fine-tune placement above in Toolbar Tools.
-                    </div>
-                    <MasterDetail>
-                      <MasterDetailSidebar>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="w-full justify-start"
-                          onClick={() => {
-                            const newId = createCustomEmbedId();
-                            setCustomEmbedDrafts((current) => [
-                              {
-                                id: newId,
-                                label: "",
-                                url: "",
-                                visible: true,
-                                resumeLastVisitedPage: false,
-                                isNew: true,
-                                originalLabel: "",
-                                originalUrl: "",
-                                originalVisible: true,
-                                originalResumeLastVisitedPage: false,
-                              },
-                              ...current,
-                            ]);
-                            setActiveCustomEmbedId(newId);
-                          }}
-                        >
-                          <PlusIcon className="mr-2 size-3.5" />
-                          Add Tab
-                        </Button>
-                        <MasterDetailList>
-                          {customEmbedDrafts.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-muted-foreground">
-                              No tabs
-                            </div>
-                          ) : (
-                            customEmbedDrafts.map((draft, index) => (
-                              <MasterDetailItem
-                                key={draft.id}
-                                label={draft.label.trim() || "Untitled"}
-                                isActive={activeCustomEmbedId === draft.id}
-                                isUnsaved={isCustomEmbedDraftDirty(draft)}
-                                onSelect={() => setActiveCustomEmbedId(draft.id)}
-                              />
-                            ))
-                          )}
-                        </MasterDetailList>
-                      </MasterDetailSidebar>
-                      <MasterDetailContent>
-                        {(() => {
-                          const activeDraft = customEmbedDrafts.find((d) => d.id === activeCustomEmbedId) || customEmbedDrafts[0];
-                          if (!activeDraft) return (
+              <TabsContent value="browser" className="mt-0">
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Add project-specific URLs like Figma, Linear, Notion, or internal tools. Save to
+                    add them into the toolbar, then fine-tune placement above in Toolbar Tools.
+                  </div>
+                  <MasterDetail>
+                    <MasterDetailSidebar>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const newId = createCustomEmbedId();
+                          setCustomEmbedDrafts((current) => [
+                            {
+                              id: newId,
+                              label: "",
+                              url: "",
+                              visible: true,
+                              resumeLastVisitedPage: false,
+                              isNew: true,
+                              originalLabel: "",
+                              originalUrl: "",
+                              originalVisible: true,
+                              originalResumeLastVisitedPage: false,
+                            },
+                            ...current,
+                          ]);
+                          setActiveCustomEmbedId(newId);
+                        }}
+                      >
+                        <PlusIcon className="mr-2 size-3.5" />
+                        Add Tab
+                      </Button>
+                      <MasterDetailList>
+                        {customEmbedDrafts.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-muted-foreground">
+                            No tabs
+                          </div>
+                        ) : (
+                          customEmbedDrafts.map((draft, index) => (
+                            <MasterDetailItem
+                              key={draft.id}
+                              label={draft.label.trim() || "Untitled"}
+                              isActive={activeCustomEmbedId === draft.id}
+                              isUnsaved={isCustomEmbedDraftDirty(draft)}
+                              onSelect={() => setActiveCustomEmbedId(draft.id)}
+                            />
+                          ))
+                        )}
+                      </MasterDetailList>
+                    </MasterDetailSidebar>
+                    <MasterDetailContent>
+                      {(() => {
+                        const activeDraft =
+                          customEmbedDrafts.find((d) => d.id === activeCustomEmbedId) ||
+                          customEmbedDrafts[0];
+                        if (!activeDraft)
+                          return (
                             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                               Select a tab or create a new one.
                             </div>
                           );
-                          const isDirty = isCustomEmbedDraftDirty(activeDraft);
-                          return (
-                            <div className="space-y-4 flex flex-col h-full min-h-0 justify-between">
+                        const isDirty = isCustomEmbedDraftDirty(activeDraft);
+                        return (
+                          <div className="space-y-4 flex flex-col h-full min-h-0 justify-between">
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-medium">
+                                  {activeDraft.label || "Untitled"}
+                                </h3>
+                                {isDirty && (
+                                  <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                                    Unsaved
+                                  </span>
+                                )}
+                              </div>
                               <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-lg font-medium">{activeDraft.label || "Untitled"}</h3>
-                                  {isDirty && <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Unsaved</span>}
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Label
+                                  </div>
+                                  <Input
+                                    value={activeDraft.label}
+                                    onChange={(event) =>
+                                      setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, label: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="Figma"
+                                  />
                                 </div>
-                                <div className="space-y-4">
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Label
-                                    </div>
-                                    <Input
-                                      value={activeDraft.label}
-                                      onChange={(event) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, label: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="Figma"
-                                    />
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Custom URL
                                   </div>
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Custom URL
-                                    </div>
-                                    <Input
-                                      value={activeDraft.url}
-                                      onChange={(event) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, url: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder="https://www.figma.com/file/..."
-                                    />
+                                  <Input
+                                    value={activeDraft.url}
+                                    onChange={(event) =>
+                                      setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, url: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="https://www.figma.com/file/..."
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-muted-foreground">
+                                    Show this browser tab in the toolbar once you save it.
                                   </div>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="text-xs text-muted-foreground">
-                                      Show this browser tab in the toolbar once you save it.
+                                  <Switch
+                                    checked={activeDraft.visible}
+                                    onCheckedChange={(checked) =>
+                                      setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, visible: Boolean(checked) }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 pt-4 border-t border-border/40">
+                                  <div className="text-xs text-muted-foreground">
+                                    <div className="mb-0.5 font-medium text-foreground">
+                                      Resume last visited page
                                     </div>
-                                    <Switch
-                                      checked={activeDraft.visible}
-                                      onCheckedChange={(checked) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, visible: Boolean(checked) }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
+                                    When this tab is reopened, load the page you were last on
+                                    instead of the custom URL above.
                                   </div>
-                                  <div className="flex items-center justify-between gap-3 pt-4 border-t border-border/40">
-                                    <div className="text-xs text-muted-foreground">
-                                      <div className="mb-0.5 font-medium text-foreground">Resume last visited page</div>
-                                      When this tab is reopened, load the page you were last on instead of the custom URL above.
-                                    </div>
-                                    <Switch
-                                      checked={activeDraft.resumeLastVisitedPage}
-                                      onCheckedChange={(checked) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, resumeLastVisitedPage: Boolean(checked) }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
-                                  </div>
+                                  <Switch
+                                    checked={activeDraft.resumeLastVisitedPage}
+                                    onCheckedChange={(checked) =>
+                                      setCustomEmbedDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, resumeLastVisitedPage: Boolean(checked) }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
                                 </div>
                               </div>
-                              <div className="pt-6 flex items-center justify-between border-t border-border/40 mt-6">
+                            </div>
+                            <div className="pt-6 flex items-center justify-between border-t border-border/40 mt-6">
+                              <Button
+                                type="button"
+                                variant="destructive-outline"
+                                onClick={() => {
+                                  setTabToDeleteId(activeDraft.id);
+                                }}
+                              >
+                                <Trash2Icon className="mr-2 size-3.5" />
+                                Delete Tab
+                              </Button>
+                              <div className="flex items-center gap-2">
                                 <Button
                                   type="button"
-                                  variant="destructive-outline"
-                                  onClick={() => {
-                                    setTabToDeleteId(activeDraft.id);
-                                  }}
+                                  variant="ghost"
+                                  onClick={resetCustomEmbeds}
+                                  disabled={!customEmbedsDirty}
                                 >
-                                  <Trash2Icon className="mr-2 size-3.5" />
-                                  Delete Tab
+                                  Cancel
                                 </Button>
-                                <div className="flex items-center gap-2">
-                                  <Button type="button" variant="ghost" onClick={resetCustomEmbeds} disabled={!customEmbedsDirty}>
-                                    Cancel
-                                  </Button>
-                                  <Button type="button" onClick={saveCustomEmbeds} disabled={!customEmbedsDirty}>
-                                    Save Changes
-                                  </Button>
-                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={saveCustomEmbeds}
+                                  disabled={!customEmbedsDirty}
+                                >
+                                  Save Changes
+                                </Button>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </MasterDetailContent>
-                    </MasterDetail>
-                  </div>
-                </TabsContent>
+                          </div>
+                        );
+                      })()}
+                    </MasterDetailContent>
+                  </MasterDetail>
+                </div>
+              </TabsContent>
 
-                <TabsContent value="terminal" className="mt-0">
-                  <div className="space-y-3">
-                    <div className="text-xs text-muted-foreground">
-                      Add project-specific terminal tools that auto-run predefined commands when the
-                      tab opens. Save to add them into the toolbar, then reorder them above if needed.
-                    </div>
-                    <MasterDetail>
-                      <MasterDetailSidebar>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="w-full justify-start"
-                          onClick={() => {
-                            const newId = createServerProcessId();
-                            setServerProcessDrafts((current) => [
-                              {
-                                id: newId,
-                                label: "",
-                                commands: [""],
-                                cwd: activeProject.cwd,
-                                autoStart: false,
-                                visible: true,
-                                isNew: true,
-                                originalLabel: "",
-                                originalCommands: [""],
-                                originalCwd: activeProject.cwd,
-                                originalAutoStart: false,
-                                originalVisible: true,
-                              },
-                              ...current,
-                            ]);
-                            setActiveServerProcessId(newId);
-                          }}
-                        >
-                          <PlusIcon className="mr-2 size-3.5" />
-                          Add Terminal
-                        </Button>
-                        <MasterDetailList>
-                          {serverProcessDrafts.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-muted-foreground">
-                              No terminals
-                            </div>
-                          ) : (
-                            serverProcessDrafts.map((draft, index) => (
-                              <MasterDetailItem
-                                key={draft.id}
-                                label={draft.label.trim() || "Untitled"}
-                                isActive={activeServerProcessId === draft.id}
-                                isUnsaved={isServerProcessDraftDirty(draft)}
-                                onSelect={() => setActiveServerProcessId(draft.id)}
-                              />
-                            ))
-                          )}
-                        </MasterDetailList>
-                      </MasterDetailSidebar>
-                      <MasterDetailContent>
-                        {(() => {
-                          const activeDraft = serverProcessDrafts.find((d) => d.id === activeServerProcessId) || serverProcessDrafts[0];
-                          if (!activeDraft) return (
+              <TabsContent value="terminal" className="mt-0">
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Add project-specific terminal tools that auto-run predefined commands when the
+                    tab opens. Save to add them into the toolbar, then reorder them above if needed.
+                  </div>
+                  <MasterDetail>
+                    <MasterDetailSidebar>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const newId = createServerProcessId();
+                          setServerProcessDrafts((current) => [
+                            {
+                              id: newId,
+                              label: "",
+                              commands: [""],
+                              cwd: activeProject.cwd,
+                              autoStart: false,
+                              visible: true,
+                              isNew: true,
+                              originalLabel: "",
+                              originalCommands: [""],
+                              originalCwd: activeProject.cwd,
+                              originalAutoStart: false,
+                              originalVisible: true,
+                            },
+                            ...current,
+                          ]);
+                          setActiveServerProcessId(newId);
+                        }}
+                      >
+                        <PlusIcon className="mr-2 size-3.5" />
+                        Add Terminal
+                      </Button>
+                      <MasterDetailList>
+                        {serverProcessDrafts.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-muted-foreground">
+                            No terminals
+                          </div>
+                        ) : (
+                          serverProcessDrafts.map((draft, index) => (
+                            <MasterDetailItem
+                              key={draft.id}
+                              label={draft.label.trim() || "Untitled"}
+                              isActive={activeServerProcessId === draft.id}
+                              isUnsaved={isServerProcessDraftDirty(draft)}
+                              onSelect={() => setActiveServerProcessId(draft.id)}
+                            />
+                          ))
+                        )}
+                      </MasterDetailList>
+                    </MasterDetailSidebar>
+                    <MasterDetailContent>
+                      {(() => {
+                        const activeDraft =
+                          serverProcessDrafts.find((d) => d.id === activeServerProcessId) ||
+                          serverProcessDrafts[0];
+                        if (!activeDraft)
+                          return (
                             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                               Select a terminal or create a new one.
                             </div>
                           );
-                          const isDirty = isServerProcessDraftDirty(activeDraft);
-                          return (
-                            <div className="space-y-4 flex flex-col h-full min-h-0 justify-between">
+                        const isDirty = isServerProcessDraftDirty(activeDraft);
+                        return (
+                          <div className="space-y-4 flex flex-col h-full min-h-0 justify-between">
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-medium">
+                                  {activeDraft.label || "Untitled"}
+                                </h3>
+                                {isDirty && (
+                                  <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                                    Unsaved
+                                  </span>
+                                )}
+                              </div>
                               <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-lg font-medium">{activeDraft.label || "Untitled"}</h3>
-                                  {isDirty && <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Unsaved</span>}
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Label
+                                  </div>
+                                  <Input
+                                    value={activeDraft.label}
+                                    onChange={(event) =>
+                                      setServerProcessDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, label: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="OpenCore"
+                                  />
                                 </div>
-                                <div className="space-y-4">
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Label
+                                <div>
+                                  <div className="flex items-center justify-between gap-3 mb-1">
+                                    <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                      Commands
                                     </div>
-                                    <Input
-                                      value={activeDraft.label}
-                                      onChange={(event) =>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
                                         setServerProcessDrafts((current) =>
                                           current.map((entry) =>
                                             entry.id === activeDraft.id
-                                              ? { ...entry, label: event.target.value }
+                                              ? { ...entry, commands: [...entry.commands, ""] }
                                               : entry,
                                           ),
                                         )
                                       }
-                                      placeholder="OpenCore"
-                                    />
+                                    >
+                                      <PlusIcon className="size-3.5 mr-2" />
+                                      Add Step
+                                    </Button>
                                   </div>
-                                  <div>
-                                    <div className="flex items-center justify-between gap-3 mb-1">
-                                      <div className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                        Commands
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() =>
-                                          setServerProcessDrafts((current) =>
-                                            current.map((entry) =>
-                                              entry.id === activeDraft.id
-                                                ? { ...entry, commands: [...entry.commands, ""] }
-                                                : entry,
-                                            ),
-                                          )
-                                        }
+                                  <div className="space-y-2">
+                                    {activeDraft.commands.map((command, commandIndex) => (
+                                      <div
+                                        key={`${activeDraft.id}-step-${commandIndex}`}
+                                        className="flex gap-2"
                                       >
-                                        <PlusIcon className="size-3.5 mr-2" />
-                                        Add Step
-                                      </Button>
-                                    </div>
-                                    <div className="space-y-2">
-                                      {activeDraft.commands.map((command, commandIndex) => (
-                                        <div key={`${activeDraft.id}-step-${commandIndex}`} className="flex gap-2">
-                                          <Input
-                                            value={command}
-                                            onChange={(event) =>
-                                              setServerProcessDrafts((current) =>
-                                                current.map((entry) =>
-                                                  entry.id === activeDraft.id
-                                                    ? {
-                                                        ...entry,
-                                                        commands: entry.commands.map((step, stepIndex) =>
-                                                          stepIndex === commandIndex ? event.target.value : step,
-                                                        ),
-                                                      }
-                                                    : entry,
-                                                ),
-                                              )
-                                            }
-                                            placeholder={commandIndex === 0 ? "npm install" : "npm run dev"}
-                                          />
-                                          <Button
-                                            type="button"
-                                            size="icon"
-                                            variant="outline"
-                                            disabled={activeDraft.commands.length === 1}
-                                            onClick={() =>
-                                              setServerProcessDrafts((current) =>
-                                                current.map((entry) =>
-                                                  entry.id === activeDraft.id
-                                                    ? {
-                                                        ...entry,
-                                                        commands: entry.commands.filter((_, stepIndex) => stepIndex !== commandIndex),
-                                                      }
-                                                    : entry,
-                                                ),
-                                              )
-                                            }
-                                          >
-                                            <Trash2Icon className="size-3.5" />
-                                          </Button>
-                                        </div>
-                                      ))}
-                                    </div>
+                                        <Input
+                                          value={command}
+                                          onChange={(event) =>
+                                            setServerProcessDrafts((current) =>
+                                              current.map((entry) =>
+                                                entry.id === activeDraft.id
+                                                  ? {
+                                                      ...entry,
+                                                      commands: entry.commands.map(
+                                                        (step, stepIndex) =>
+                                                          stepIndex === commandIndex
+                                                            ? event.target.value
+                                                            : step,
+                                                      ),
+                                                    }
+                                                  : entry,
+                                              ),
+                                            )
+                                          }
+                                          placeholder={
+                                            commandIndex === 0 ? "npm install" : "npm run dev"
+                                          }
+                                        />
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant="outline"
+                                          disabled={activeDraft.commands.length === 1}
+                                          onClick={() =>
+                                            setServerProcessDrafts((current) =>
+                                              current.map((entry) =>
+                                                entry.id === activeDraft.id
+                                                  ? {
+                                                      ...entry,
+                                                      commands: entry.commands.filter(
+                                                        (_, stepIndex) =>
+                                                          stepIndex !== commandIndex,
+                                                      ),
+                                                    }
+                                                  : entry,
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          <Trash2Icon className="size-3.5" />
+                                        </Button>
+                                      </div>
+                                    ))}
                                   </div>
-                                  <div>
-                                    <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                                      Working Directory
-                                    </div>
-                                    <Input
-                                      value={activeDraft.cwd}
-                                      onChange={(event) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, cwd: event.target.value }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                      placeholder={activeProject.cwd}
-                                    />
+                                </div>
+                                <div>
+                                  <div className="mb-1 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                                    Working Directory
                                   </div>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="text-xs text-muted-foreground">
-                                      Show this terminal in the toolbar once you save it.
-                                    </div>
-                                    <Switch
-                                      checked={activeDraft.visible}
-                                      onCheckedChange={(checked) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, visible: Boolean(checked) }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
+                                  <Input
+                                    value={activeDraft.cwd}
+                                    onChange={(event) =>
+                                      setServerProcessDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, cwd: event.target.value }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                    placeholder={activeProject.cwd}
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-muted-foreground">
+                                    Show this terminal in the toolbar once you save it.
                                   </div>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <div className="text-xs text-muted-foreground">
-                                      Auto-start this terminal when its tab or the Server tool is first opened.
-                                    </div>
-                                    <Switch
-                                      checked={activeDraft.autoStart}
-                                      onCheckedChange={(checked) =>
-                                        setServerProcessDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, autoStart: Boolean(checked) }
-                                              : entry,
-                                          ),
-                                        )
-                                      }
-                                    />
+                                  <Switch
+                                    checked={activeDraft.visible}
+                                    onCheckedChange={(checked) =>
+                                      setServerProcessDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, visible: Boolean(checked) }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-xs text-muted-foreground">
+                                    Auto-start this terminal when its tab or the Server tool is
+                                    first opened.
                                   </div>
+                                  <Switch
+                                    checked={activeDraft.autoStart}
+                                    onCheckedChange={(checked) =>
+                                      setServerProcessDrafts((current) =>
+                                        current.map((entry) =>
+                                          entry.id === activeDraft.id
+                                            ? { ...entry, autoStart: Boolean(checked) }
+                                            : entry,
+                                        ),
+                                      )
+                                    }
+                                  />
                                 </div>
                               </div>
-                              <div className="pt-6 flex items-center justify-between border-t border-border/40 mt-6">
+                            </div>
+                            <div className="pt-6 flex items-center justify-between border-t border-border/40 mt-6">
+                              <Button
+                                type="button"
+                                variant="destructive-outline"
+                                onClick={() => {
+                                  setTerminalToDeleteId(activeDraft.id);
+                                }}
+                              >
+                                <Trash2Icon className="mr-2 size-3.5" />
+                                Delete Terminal
+                              </Button>
+                              <div className="flex items-center gap-2">
                                 <Button
                                   type="button"
-                                  variant="destructive-outline"
-                                  onClick={() => {
-                                    setTerminalToDeleteId(activeDraft.id);
-                                  }}
+                                  variant="ghost"
+                                  onClick={resetServerProcesses}
+                                  disabled={!serverProcessesDirty}
                                 >
-                                  <Trash2Icon className="mr-2 size-3.5" />
-                                  Delete Terminal
+                                  Cancel
                                 </Button>
-                                <div className="flex items-center gap-2">
-                                  <Button type="button" variant="ghost" onClick={resetServerProcesses} disabled={!serverProcessesDirty}>
-                                    Cancel
-                                  </Button>
-                                  <Button type="button" onClick={saveServerProcesses} disabled={!serverProcessesDirty}>
-                                    Save Changes
-                                  </Button>
-                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={saveServerProcesses}
+                                  disabled={!serverProcessesDirty}
+                                >
+                                  Save Changes
+                                </Button>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </MasterDetailContent>
-                    </MasterDetail>
-                  </div>
-                </TabsContent>
+                          </div>
+                        );
+                      })()}
+                    </MasterDetailContent>
+                  </MasterDetail>
+                </div>
+              </TabsContent>
 
-                <TabsContent value="preset" className="mt-0">
-                  <div className="space-y-3">
-                    <div className="text-xs text-muted-foreground">
-                      Create and manage one-click presets like `Frontend` or `Backend`, each with ordered command steps.
-                    </div>
-                    <MasterDetail>
-                      <MasterDetailSidebar>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="w-full justify-start"
-                          onClick={() => {
-                            const newId = createServerProcessId();
-                            setServerPresetDrafts((current) => [
-                              {
-                                id: newId,
-                                label: "",
-                                commands: [""],
-                                cwd: activeProject.cwd,
-                                autoStart: false,
-                                visible: true,
-                                isNew: true,
-                                originalLabel: "",
-                                originalCommands: [""],
-                                originalCwd: activeProject.cwd,
-                                originalAutoStart: false,
-                                originalVisible: true,
-                              },
-                              ...current,
-                            ]);
-                            setActiveServerPresetId(newId);
-                          }}
-                        >
-                          <PlusIcon className="mr-2 size-3.5" />
-                          Add Preset
-                        </Button>
-                        <MasterDetailList>
-                          {serverPresetDrafts.length === 0 ? (
-                            <div className="p-4 text-center text-sm text-muted-foreground">
-                              No presets
-                            </div>
-                          ) : (
-                            serverPresetDrafts.map((draft, index) => (
-                              <MasterDetailItem
-                                key={draft.id}
-                                label={draft.label.trim() || "Untitled"}
-                                isActive={activeServerPresetId === draft.id}
-                                isUnsaved={isServerProcessDraftDirty(draft)}
-                                onSelect={() => setActiveServerPresetId(draft.id)}
-                              />
-                            ))
-                          )}
-                        </MasterDetailList>
-                      </MasterDetailSidebar>
-                      <MasterDetailContent>
-                        {(() => {
-                          const activeDraft = serverPresetDrafts.find((d) => d.id === activeServerPresetId) || serverPresetDrafts[0];
-                          if (!activeDraft) return (
+              <TabsContent value="preset" className="mt-0">
+                <div className="space-y-3">
+                  <div className="text-xs text-muted-foreground">
+                    Create and manage one-click presets like `Frontend` or `Backend`, each with
+                    ordered command steps.
+                  </div>
+                  <MasterDetail>
+                    <MasterDetailSidebar>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => {
+                          const newId = createServerProcessId();
+                          setServerPresetDrafts((current) => [
+                            {
+                              id: newId,
+                              label: "",
+                              commands: [""],
+                              cwd: activeProject.cwd,
+                              autoStart: false,
+                              visible: true,
+                              isNew: true,
+                              originalLabel: "",
+                              originalCommands: [""],
+                              originalCwd: activeProject.cwd,
+                              originalAutoStart: false,
+                              originalVisible: true,
+                            },
+                            ...current,
+                          ]);
+                          setActiveServerPresetId(newId);
+                        }}
+                      >
+                        <PlusIcon className="mr-2 size-3.5" />
+                        Add Preset
+                      </Button>
+                      <MasterDetailList>
+                        {serverPresetDrafts.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-muted-foreground">
+                            No presets
+                          </div>
+                        ) : (
+                          serverPresetDrafts.map((draft, index) => (
+                            <MasterDetailItem
+                              key={draft.id}
+                              label={draft.label.trim() || "Untitled"}
+                              isActive={activeServerPresetId === draft.id}
+                              isUnsaved={isServerProcessDraftDirty(draft)}
+                              onSelect={() => setActiveServerPresetId(draft.id)}
+                            />
+                          ))
+                        )}
+                      </MasterDetailList>
+                    </MasterDetailSidebar>
+                    <MasterDetailContent>
+                      {(() => {
+                        const activeDraft =
+                          serverPresetDrafts.find((d) => d.id === activeServerPresetId) ||
+                          serverPresetDrafts[0];
+                        if (!activeDraft)
+                          return (
                             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                               Select a preset or create a new one.
                             </div>
                           );
-                          const isDirty = isServerProcessDraftDirty(activeDraft);
-                          return (
-                            <div className="space-y-4 flex flex-col h-full min-h-0 justify-between">
-                              <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-lg font-medium">{activeDraft.label || "Untitled"}</h3>
-                                  {isDirty && <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">Unsaved</span>}
-                                </div>
-                                <ServerPresetFormFields
-                                  preset={activeDraft}
-                                  presetDrafts={serverPresetDrafts}
-                                  projectCwd={activeProject.cwd}
-                                  variant="plain"
-                                  updatePresetRow={updatePresetRow}
-                                  addCommandStep={addCommandStep}
-                                  updateCommandStep={updateCommandStep}
-                                  moveCommandStep={moveCommandStep}
-                                  removeCommandStep={removeCommandStep}
-                                />
+                        const isDirty = isServerProcessDraftDirty(activeDraft);
+                        return (
+                          <div className="space-y-4 flex flex-col h-full min-h-0 justify-between">
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-medium">
+                                  {activeDraft.label || "Untitled"}
+                                </h3>
+                                {isDirty && (
+                                  <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+                                    Unsaved
+                                  </span>
+                                )}
                               </div>
-                              <div className="pt-6 flex items-center justify-between border-t border-border/40 mt-6">
+                              <ServerPresetFormFields
+                                preset={activeDraft}
+                                presetDrafts={serverPresetDrafts}
+                                projectCwd={activeProject.cwd}
+                                variant="plain"
+                                updatePresetRow={updatePresetRow}
+                                addCommandStep={addCommandStep}
+                                updateCommandStep={updateCommandStep}
+                                moveCommandStep={moveCommandStep}
+                                removeCommandStep={removeCommandStep}
+                              />
+                            </div>
+                            <div className="pt-6 flex items-center justify-between border-t border-border/40 mt-6">
+                              <Button
+                                type="button"
+                                variant="destructive-outline"
+                                onClick={() => {
+                                  setPresetToDeleteId(activeDraft.id);
+                                }}
+                              >
+                                <Trash2Icon className="mr-2 size-3.5" />
+                                Delete Preset
+                              </Button>
+                              <div className="flex items-center gap-2">
                                 <Button
                                   type="button"
-                                  variant="destructive-outline"
-                                  onClick={() => {
-                                    setPresetToDeleteId(activeDraft.id);
-                                  }}
+                                  variant="ghost"
+                                  onClick={resetServerPresets}
+                                  disabled={!serverPresetsDirty}
                                 >
-                                  <Trash2Icon className="mr-2 size-3.5" />
-                                  Delete Preset
+                                  Cancel
                                 </Button>
-                                <div className="flex items-center gap-2">
-                                  <Button type="button" variant="ghost" onClick={resetServerPresets} disabled={!serverPresetsDirty}>
-                                    Cancel
-                                  </Button>
-                                  <Button type="button" onClick={saveServerPresets} disabled={!serverPresetsDirty}>
-                                    Save Changes
-                                  </Button>
-                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={saveServerPresets}
+                                  disabled={!serverPresetsDirty}
+                                >
+                                  Save Changes
+                                </Button>
                               </div>
                             </div>
-                          );
-                        })()}
-                      </MasterDetailContent>
-                    </MasterDetail>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                          </div>
+                        );
+                      })()}
+                    </MasterDetailContent>
+                  </MasterDetail>
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </section>
@@ -1414,9 +1501,7 @@ export function ProjectWorkspaceSettingsSection() {
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this tab?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose
@@ -1430,7 +1515,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (tabToDeleteId) {
-                  setCustomEmbedDrafts((current) => current.filter((entry) => entry.id !== tabToDeleteId));
+                  setCustomEmbedDrafts((current) =>
+                    current.filter((entry) => entry.id !== tabToDeleteId),
+                  );
                   if (activeCustomEmbedId === tabToDeleteId) setActiveCustomEmbedId(null);
                 }
                 setTabToDeleteId(null);
@@ -1451,9 +1538,7 @@ export function ProjectWorkspaceSettingsSection() {
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this terminal?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose
@@ -1467,7 +1552,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (terminalToDeleteId) {
-                  setServerProcessDrafts((current) => current.filter((entry) => entry.id !== terminalToDeleteId));
+                  setServerProcessDrafts((current) =>
+                    current.filter((entry) => entry.id !== terminalToDeleteId),
+                  );
                   if (activeServerProcessId === terminalToDeleteId) setActiveServerProcessId(null);
                 }
                 setTerminalToDeleteId(null);
@@ -1488,9 +1575,7 @@ export function ProjectWorkspaceSettingsSection() {
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to delete this preset?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose
@@ -1504,7 +1589,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (presetToDeleteId) {
-                  setServerPresetDrafts((current) => current.filter((entry) => entry.id !== presetToDeleteId));
+                  setServerPresetDrafts((current) =>
+                    current.filter((entry) => entry.id !== presetToDeleteId),
+                  );
                   if (activeServerPresetId === presetToDeleteId) setActiveServerPresetId(null);
                 }
                 setPresetToDeleteId(null);

@@ -443,7 +443,7 @@ export function setThreadTerminalActivity(
     return normalized;
   }
   const alreadyRunning = normalized.runningTerminalIds.includes(terminalId);
-  const effectiveLabel = (label && label !== terminalId) ? label : undefined;
+  const effectiveLabel = label && label !== terminalId ? label : undefined;
   const currentLabel = normalized.terminalLabels?.[terminalId];
   if (hasRunningSubprocess === alreadyRunning && effectiveLabel === currentLabel) {
     return normalized;

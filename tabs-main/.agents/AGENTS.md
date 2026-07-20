@@ -46,6 +46,7 @@ Use these as implementation references when designing protocol handling, UX flow
 ## Vendored Repositories
 
 This project vendors external repositories under `.repos/` as read-only reference material for coding agents.
+
 - Prefer examples and patterns from the vendored source code over generated guesses or web search results.
 - Do not edit files under `.repos/` unless explicitly asked.
 - Do not import from `.repos/`; application code must continue importing from normal package dependencies.

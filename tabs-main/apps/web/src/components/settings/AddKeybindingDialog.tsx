@@ -1,9 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -39,13 +34,13 @@ export function AddKeybindingDialog({
 
   const handleSave = () => {
     if (!command || !key) return;
-    
+
     onSave({
       command: command as KeybindingCommand,
       key,
       ...(whenNode ? { when: undefined } : {}),
     });
-    
+
     setCommand("");
     setKey("");
     setWhenNode(undefined);
@@ -58,11 +53,14 @@ export function AddKeybindingDialog({
         <DialogHeader>
           <DialogTitle>Add Keybinding</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium">Command</label>
-            <Select value={command} onValueChange={(value) => setCommand(value as KeybindingCommand)}>
+            <Select
+              value={command}
+              onValueChange={(value) => setCommand(value as KeybindingCommand)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a command" />
               </SelectTrigger>
@@ -85,11 +83,7 @@ export function AddKeybindingDialog({
             />
           </div>
 
-          <WhenExpressionBuilder
-            value={whenNode}
-            variables={variables}
-            onChange={setWhenNode}
-          />
+          <WhenExpressionBuilder value={whenNode} variables={variables} onChange={setWhenNode} />
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

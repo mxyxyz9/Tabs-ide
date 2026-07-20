@@ -12,15 +12,15 @@ import {
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
 } from "@tabs/shared/model";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
-import { ChevronDownIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDownIcon, StarIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
-import { useSettings } from "../../hooks/useSettings";
+import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 
 // ─────────────────────────────────────────────────────────────────────────
 // FusedModelPicker — AI Cockpit Matrix design (Aligned Columns & Compact Rows)
@@ -87,7 +87,7 @@ const FALLBACK_LABELS: Record<string, string> = {
 const getModelScore = (name: string): number => {
   const lower = name.toLowerCase();
   let familyScore = 0;
-  
+
   if (lower.includes("fable")) familyScore = 10000;
   else if (lower.includes("opus")) familyScore = 8000;
   else if (lower.includes("sonnet")) familyScore = 6000;
@@ -95,11 +95,11 @@ const getModelScore = (name: string): number => {
   else if (lower.includes("sol")) familyScore = 10000;
   else if (lower.includes("terra")) familyScore = 8000;
   else if (lower.includes("luna")) familyScore = 6000;
-  
+
   const match = name.match(/\d+(\.\d+)?/);
   const version = match ? parseFloat(match[0]) : 0;
   const miniPenalty = lower.includes("mini") ? -100 : 0;
-  
+
   return familyScore + version * 10 + miniPenalty;
 };
 
@@ -117,18 +117,132 @@ interface FusedModelPickerProps {
     options?: ReadonlyArray<ProviderOptionSelection>,
   ) => void;
   onModelOptionsChange: (options: ReadonlyArray<ProviderOptionSelection> | undefined) => void;
+  /** Optional ref to anchor the popup to a specific element (e.g. the composer card) instead of the trigger */
+  popupAnchorRef?: React.RefObject<HTMLElement | null>;
   triggerClassName?: string;
 }
 
 export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<ProviderPickerKind | "favorites" | null>(null);
+
+  const activeTab = selectedTab ?? (props.lockedProvider ?? props.provider);
   const activeProvider = props.lockedProvider ?? props.provider;
   const providerOptions = props.lockedProvider
     ? AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.lockedProvider)
     : AVAILABLE_PROVIDER_OPTIONS;
 
-  const models = getProviderModels(props.providers, activeProvider);
-  const activeModel = models.find((m) => m.slug === props.model) ?? models[0];
+  const settings = useSettings();
+  const { updateSettings } = useUpdateSettings();
+  const favorites = useMemo(() => settings.favorites ?? [], [settings.favorites]);
+
+  const [leftCollisionPadding, setLeftCollisionPadding] = useState(16);
+
+  useEffect(() => {
+    // When anchored to the composer card, we don't need aggressive left padding —
+    // the card is already positioned correctly relative to the sidebar.
+    if (props.popupAnchorRef) return;
+    if (!isOpen) return;
+
+    const measureLeftBoundary = () => {
+      const rail = document.querySelector<HTMLElement>(
+        '[data-slot="sidebar-wrapper"], [data-sidebar="sidebar"], aside, .sidebar-rail, .code-activity-rail',
+      );
+      if (rail) {
+        const rect = rail.getBoundingClientRect();
+        if (rect.right > 0 && rect.width > 0) {
+          setLeftCollisionPadding(Math.max(16, rect.right + 12));
+          return;
+        }
+      }
+      setLeftCollisionPadding(16);
+    };
+
+    measureLeftBoundary();
+    window.addEventListener("resize", measureLeftBoundary);
+    return () => window.removeEventListener("resize", measureLeftBoundary);
+  }, [isOpen, props.popupAnchorRef]);
+
+  const collisionPadding = useMemo(
+    () =>
+      props.popupAnchorRef
+        ? { top: 12, right: 12, bottom: 12, left: 12 }
+        : { top: 12, right: 12, bottom: 12, left: leftCollisionPadding },
+    [leftCollisionPadding, props.popupAnchorRef],
+  );
+
+  const isModelFavorite = useCallback(
+    (providerId: string, modelSlug: string) => {
+      return favorites.some(
+        (f) => (f.provider === providerId || f.provider === "") && f.model === modelSlug,
+      );
+    },
+    [favorites],
+  );
+
+  const handleToggleFavorite = useCallback(
+    (providerId: string, modelSlug: string) => {
+      const exists = favorites.some(
+        (f) => (f.provider === providerId || f.provider === "") && f.model === modelSlug,
+      );
+      const nextFavorites = exists
+        ? favorites.filter(
+            (f) => !((f.provider === providerId || f.provider === "") && f.model === modelSlug),
+          )
+        : [...favorites, { provider: providerId as any, model: modelSlug }];
+      updateSettings({ favorites: nextFavorites });
+    },
+    [favorites, updateSettings],
+  );
+
+  // Aggregated models with provider attribution across all providers
+  const allProviderModels = useMemo(() => {
+    const result: Array<ServerProviderModel & { providerId: string; providerName: string }> = [];
+    for (const providerOption of providerOptions) {
+      const providerSnapshot = getProviderSnapshot(props.providers, providerOption.value);
+      const providerModels = getProviderModels(props.providers, providerOption.value);
+      const name = providerSnapshot?.displayName ?? providerOption.label;
+      for (const m of providerModels) {
+        result.push({
+          ...m,
+          providerId: providerOption.value,
+          providerName: name,
+        });
+      }
+    }
+    return result;
+  }, [providerOptions, props.providers]);
+
+  const favoriteModels = useMemo(() => {
+    return allProviderModels.filter((m) =>
+      favorites.some(
+        (f) =>
+          (f.provider === m.providerId || f.provider === "") &&
+          f.model === m.slug,
+      ),
+    );
+  }, [allProviderModels, favorites]);
+
+  const models = useMemo(() => {
+    if (activeTab === "favorites") {
+      return favoriteModels;
+    }
+    return getProviderModels(props.providers, activeTab);
+  }, [activeTab, favoriteModels, props.providers]);
+
+  const activeModel = useMemo(() => {
+    if (activeTab === "favorites") {
+      return (
+        favoriteModels.find(
+          (m) => m.providerId === props.provider && m.slug === props.model,
+        ) ??
+        favoriteModels[0] ??
+        getProviderModels(props.providers, props.provider).find((m) => m.slug === props.model)
+      );
+    }
+    const provModels = getProviderModels(props.providers, activeTab);
+    return provModels.find((m) => m.slug === props.model) ?? provModels[0];
+  }, [activeTab, favoriteModels, props.providers, props.provider, props.model]);
 
   const setModelAndOptions = useCallback(
     (
@@ -206,9 +320,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   // Build union of reasoning stops across all models of the provider to form the global columns
   const globalStops = useMemo(() => {
-    const standardOrder = getStandardOrderForProvider(activeProvider);
+    const standardOrder = getStandardOrderForProvider(activeTab);
     const allOptionsMap = new Map<string, ProviderOptionChoice>();
-    
+
     for (const m of models) {
       const caps = m.capabilities ?? EMPTY_CAPABILITIES;
       const desc = getProviderOptionDescriptors({ caps, selections: undefined }).filter(
@@ -244,7 +358,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         }
       }
     }
-    
+
     for (const [id, opt] of allOptionsMap.entries()) {
       if (!standardOrder.includes(id)) {
         finalStops.push(opt);
@@ -252,26 +366,42 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     }
 
     return finalStops;
-  }, [models, activeProvider]);
+  }, [models, activeTab]);
 
-  // Group models hierarchically by subProvider, sorting them based on reasoning availability
+  // Group models hierarchically by subProvider or provider name
   const groupedModels = useMemo(() => {
-    const groups: Array<{ name: string | null; items: Array<ServerProviderModel> }> = [];
-    const standardOrder = getStandardOrderForProvider(activeProvider);
-    
+    const groups: Array<{ name: string | null; items: Array<ServerProviderModel & { providerId?: string }> }> = [];
+
+    if (activeTab === "favorites") {
+      for (const model of favoriteModels) {
+        const groupName = model.providerName ?? model.subProvider ?? "Favorites";
+        let group = groups.find((g) => g.name === groupName);
+        if (!group) {
+          group = { name: groupName, items: [] };
+          groups.push(group);
+        }
+        group.items.push(model);
+      }
+      return groups;
+    }
+
+    const standardOrder = getStandardOrderForProvider(activeTab);
+
     const sortedList = [...models].sort((a, b) => {
       const descA = getProviderOptionDescriptors({
         caps: a.capabilities ?? EMPTY_CAPABILITIES,
         selections: undefined,
       }).filter((d) => d.id !== "agent");
-      const primaryA = descA.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descA[0];
+      const primaryA =
+        descA.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descA[0];
       const hasReasoningA = primaryA && primaryA.type === "select" && primaryA.options.length > 0;
 
       const descB = getProviderOptionDescriptors({
         caps: b.capabilities ?? EMPTY_CAPABILITIES,
         selections: undefined,
       }).filter((d) => d.id !== "agent");
-      const primaryB = descB.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descB[0];
+      const primaryB =
+        descB.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descB[0];
       const hasReasoningB = primaryB && primaryB.type === "select" && primaryB.options.length > 0;
 
       if (hasReasoningA && !hasReasoningB) return -1;
@@ -279,13 +409,15 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
       if (hasReasoningA && hasReasoningB) {
         let maxIdxA = -1;
-        for (const opt of (primaryA as Extract<ProviderOptionDescriptor, { type: "select" }>).options) {
+        for (const opt of (primaryA as Extract<ProviderOptionDescriptor, { type: "select" }>)
+          .options) {
           const idx = standardOrder.indexOf(opt.id);
           if (idx > maxIdxA) maxIdxA = idx;
         }
 
         let maxIdxB = -1;
-        for (const opt of (primaryB as Extract<ProviderOptionDescriptor, { type: "select" }>).options) {
+        for (const opt of (primaryB as Extract<ProviderOptionDescriptor, { type: "select" }>)
+          .options) {
           const idx = standardOrder.indexOf(opt.id);
           if (idx > maxIdxB) maxIdxB = idx;
         }
@@ -309,7 +441,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       group.items.push(model);
     }
     return groups;
-  }, [models, activeProvider]);
+  }, [activeTab, favoriteModels, models]);
 
   const triggerLabel = useMemo(() => {
     if (!activeModel) return "Select model";
@@ -346,7 +478,15 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   const ActiveIcon = PROVIDER_ICON_BY_PROVIDER[activeProvider];
 
   return (
-    <Menu open={isOpen} onOpenChange={setIsOpen}>
+    <Menu
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
+          setSelectedTab(null);
+        }
+      }}
+    >
       <MenuTrigger
         render={
           <Button
@@ -363,20 +503,58 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         <span className="min-w-0 flex-1 truncate">{triggerLabel}</span>
         <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
       </MenuTrigger>
-      <MenuPopup align="start" className="w-auto p-0 border-0 bg-transparent shadow-none">
+      <MenuPopup
+        side="top"
+        sideOffset={8}
+        align={leverDescriptor ? "center" : "start"}
+        alignOffset={leverDescriptor ? 0 : 8}
+        anchor={props.popupAnchorRef}
+        collisionPadding={collisionPadding}
+        className="w-auto p-0 border-0 bg-transparent shadow-none before:hidden before:shadow-none dark:before:hidden [&>div]:p-0"
+      >
         <style>{COSMIC_KEYFRAMES}</style>
         <div
-          className="flex gap-6 rounded-[24px] border border-white/8 bg-[#18181b]/85 p-6 backdrop-blur-[24px] transition-all duration-300 select-none text-white animate-in fade-in zoom-in-95 duration-150"
+          className="relative flex gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-2xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150 dark:bg-[#18181b] dark:border-white/8 dark:text-white"
           style={panelStyle}
         >
           {/* Provider Sidebar navigation on Left */}
           {providerOptions.length > 1 && (
-            <div className="flex flex-col gap-3 border-r border-white/8 pr-6">
+            <div className="flex flex-col gap-2.5 border-r border-border pr-6 dark:border-white/8">
+              {/* ⭐ Favorites Tab */}
+              <button
+                key="favorites"
+                type="button"
+                title="Favorites"
+                onClick={() => setSelectedTab("favorites")}
+                className={cn(
+                  "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative dark:bg-white/3 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-white",
+                  activeTab === "favorites" &&
+                    "bg-accent border-border text-foreground shadow-xs dark:bg-white/10 dark:border-white/20 dark:text-white dark:shadow-md",
+                )}
+              >
+                <StarIcon
+                  aria-hidden="true"
+                  className={cn(
+                    "size-5 transition-colors",
+                    activeTab === "favorites"
+                      ? "text-foreground dark:text-white"
+                      : "text-muted-foreground dark:text-zinc-400",
+                  )}
+                />
+                {favoriteModels.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground dark:bg-white/10 dark:border-white/20 dark:text-zinc-300">
+                    {favoriteModels.length}
+                  </span>
+                )}
+              </button>
+
+              <div className="h-px w-full bg-border my-0.5 dark:bg-white/8" />
+
               {providerOptions.map((option) => {
                 const OptionIcon = PROVIDER_ICON_BY_PROVIDER[option.value];
                 const snapshot = getProviderSnapshot(props.providers, option.value);
                 const disabled = snapshot ? snapshot.status !== "ready" : false;
-                const isActive = option.value === activeProvider;
+                const isActive = option.value === activeTab;
                 return (
                   <button
                     key={option.value}
@@ -384,13 +562,15 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                     title={option.label}
                     disabled={disabled}
                     onClick={() => {
+                      setSelectedTab(option.value);
                       const nextModels = getProviderModels(props.providers, option.value);
                       const fallback = nextModels.find((m) => !m.isCustom) ?? nextModels[0];
                       if (fallback) setModelAndOptions(option.value, fallback.slug);
                     }}
                     className={cn(
-                      "flex size-11 items-center justify-center rounded-xl bg-white/3 border border-transparent text-zinc-400 hover:bg-white/8 hover:text-white transition-all",
-                      isActive && "bg-white/10 border-white/20 text-white shadow-md",
+                      "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all dark:bg-white/3 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-white",
+                      isActive &&
+                        "bg-accent border-border text-foreground shadow-xs dark:bg-white/10 dark:border-white/20 dark:text-white dark:shadow-md",
                       disabled && "cursor-not-allowed opacity-30",
                     )}
                   >
@@ -403,62 +583,82 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
           {/* Matrix Core containing model rows with horizontal aligned tracks */}
           <div className="flex min-w-[32rem] flex-col justify-center">
-            {/* Header labels aligned absolutely to the global columns */}
-            {globalStops.length > 0 && (
-              <div className="relative h-6 mb-1.5 select-none w-full">
-                {globalStops.map((stop, idx) => {
-                  const cleanedLabel = stop.label
-                    .replace(/([a-z])([A-Z])/g, "$1 $2")
-                    .replace(/([a-zA-Z])([0-9])/g, "$1 $2")
-                    .replace("Ultracode", "Ultra Code")
-                    .replace("Ultrathink", "Ultra Think");
-                  return (
-                    <div
-                      key={stop.id}
-                      className="absolute -translate-x-1/2 w-12 text-center text-[8px] font-bold uppercase tracking-wider text-zinc-400/80 transition-colors break-words leading-[1.15]"
-                      style={{
-                        left: `calc(128px + 20px + (100% - 128px - 40px) * ${idx / (globalStops.length - 1)})`,
-                      }}
-                    >
-                      {cleanedLabel}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <div className="flex flex-col max-h-[380px] overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 dark:[&::-webkit-scrollbar-thumb]:bg-white/10 dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full">
+              {/* Header labels aligned absolutely to the global columns */}
+              {globalStops.length > 0 && (
+                <div className="sticky top-0 z-30 h-6 mb-1.5 select-none w-full bg-popover/95 border-b border-border/60 pb-2 dark:bg-[#18181b]/95 dark:border-white/5">
+                  {globalStops.map((stop, idx) => {
+                    const cleanedLabel = stop.label
+                      .replace(/([a-z])([A-Z])/g, "$1 $2")
+                      .replace(/([a-zA-Z])([0-9])/g, "$1 $2")
+                      .replace("Ultracode", "Ultra Code")
+                      .replace("Ultrathink", "Ultra Think");
+                    return (
+                      <div
+                        key={stop.id}
+                        className="absolute -translate-x-1/2 w-12 text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors break-words leading-[1.15]"
+                        style={{
+                          left: `calc(128px + 20px + (100% - 128px - 40px) * ${idx / (globalStops.length - 1)})`,
+                        }}
+                      >
+                        {cleanedLabel}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-            <div className="flex flex-col gap-1.5">
-              {groupedModels.map((group) => (
-                <div key={group.name ?? "default"} className="flex flex-col gap-1.5">
-                  {group.name && (
-                    <div className="px-4 pt-2 pb-1 text-[9px] font-extrabold uppercase tracking-widest text-zinc-500 border-t border-white/5 mt-2 first:mt-0 first:border-t-0">
-                      {group.name}
+              {activeTab === "favorites" && favoriteModels.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none">
+                  <StarIcon className="size-8 text-muted-foreground/40 mb-2.5" />
+                  <div className="text-xs font-semibold text-foreground">No Favorites Yet</div>
+                  <div className="text-[11px] text-muted-foreground max-w-52 mt-1 leading-normal">
+                    Click the star icon next to any model to add it to your favorites list.
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  {groupedModels.map((group) => (
+                    <div key={group.name ?? "default"} className="flex flex-col gap-1.5">
+                      {group.name && (
+                        <div className="px-4 pt-2 pb-1 text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground/70 dark:text-zinc-500 border-t border-border/40 dark:border-white/5 mt-2 first:mt-0 first:border-t-0">
+                          {group.name}
+                        </div>
+                      )}
+                      {group.items.map((model) => {
+                        const modelProvider = (model as { providerId?: string }).providerId ?? activeProvider;
+                        const isFav = isModelFavorite(modelProvider, model.slug);
+                        const isCurrentActive =
+                          modelProvider === props.provider && model.slug === activeModel?.slug;
+                        return (
+                          <ModelRow
+                            key={`${modelProvider}-${model.slug}`}
+                            model={model}
+                            isActive={isCurrentActive}
+                            ultra={isCurrentActive && isUltra}
+                            isFavorite={isFav}
+                            onToggleFavorite={() => handleToggleFavorite(modelProvider, model.slug)}
+                            themeColor={
+                              THEME_COLORS[
+                                models.findIndex((m) => m.slug === model.slug) % THEME_COLORS.length
+                              ] ?? THEME_COLORS[0]!
+                            }
+                            selections={isCurrentActive ? props.modelOptions : undefined}
+                            globalStops={globalStops}
+                            prompt={props.prompt}
+                            onPromptChange={props.onPromptChange}
+                            onSelect={(nextOptions) =>
+                              setModelAndOptions(modelProvider as ProviderPickerKind, model.slug, nextOptions)
+                            }
+                            onSelectChange={handleSelectChange}
+                            onBooleanChange={handleBooleanChange}
+                          />
+                        );
+                      })}
                     </div>
-                  )}
-                  {group.items.map((model) => (
-                    <ModelRow
-                      key={model.slug}
-                      model={model}
-                      isActive={model.slug === activeModel?.slug}
-                      ultra={model.slug === activeModel?.slug && isUltra}
-                      themeColor={
-                        THEME_COLORS[
-                          models.findIndex((m) => m.slug === model.slug) % THEME_COLORS.length
-                        ] ?? THEME_COLORS[0]!
-                      }
-                      selections={model.slug === activeModel?.slug ? props.modelOptions : undefined}
-                      globalStops={globalStops}
-                      prompt={props.prompt}
-                      onPromptChange={props.onPromptChange}
-                      onSelect={(nextOptions) =>
-                        setModelAndOptions(activeProvider, model.slug, nextOptions)
-                      }
-                      onSelectChange={handleSelectChange}
-                      onBooleanChange={handleBooleanChange}
-                    />
                   ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -482,6 +682,8 @@ const ModelRow = memo(function ModelRow(props: {
   model: ServerProviderModel;
   isActive: boolean;
   ultra: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
   themeColor: (typeof THEME_COLORS)[number];
   selections: ReadonlyArray<ProviderOptionSelection> | null | undefined;
   globalStops: ReadonlyArray<{ id: string; label: string }>;
@@ -688,7 +890,9 @@ const ModelRow = memo(function ModelRow(props: {
       }}
       className={cn(
         "relative flex items-center rounded-full transition-all duration-200 select-none",
-        props.isActive ? "bg-white/5 h-13" : "hover:bg-white/[0.03] cursor-pointer h-9",
+        props.isActive
+          ? "bg-accent/80 border border-border/40 dark:bg-white/5 dark:border-transparent h-13"
+          : "hover:bg-accent/40 dark:hover:bg-white/[0.03] cursor-pointer h-9",
       )}
     >
       {props.ultra && (
@@ -706,16 +910,38 @@ const ModelRow = memo(function ModelRow(props: {
       )}
 
       {/* Model Name + inline Segmented Sub-controls */}
-      <div className="w-32 pl-4 flex flex-col justify-center leading-none">
-        <span
-          className="text-[13px] font-semibold transition-colors"
-          style={{
-            color: props.isActive ? props.themeColor.hex : "#a1a1aa",
-            textShadow: props.ultra ? `0 0 8px ${props.themeColor.hex}99` : undefined,
-          }}
-        >
-          {props.model.name}
-        </span>
+      <div className="w-32 pl-3 flex flex-col justify-center leading-none">
+        <div className="flex items-center gap-1 min-w-0">
+          {props.onToggleFavorite && (
+            <button
+              type="button"
+              title={props.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onToggleFavorite?.();
+              }}
+              className="shrink-0 p-0.5 rounded-full hover:bg-muted transition-colors focus:outline-none dark:hover:bg-white/10"
+            >
+              <StarIcon
+                className={cn(
+                  "size-3.5 transition-all",
+                  props.isFavorite
+                    ? "fill-current text-foreground dark:text-white opacity-100 scale-100"
+                    : "text-muted-foreground opacity-40 hover:opacity-100 hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 scale-90",
+                )}
+              />
+            </button>
+          )}
+          <span
+            className="text-[13px] font-semibold transition-colors truncate"
+            style={{
+              color: props.isActive ? props.themeColor.hex : undefined,
+              textShadow: props.ultra ? `0 0 8px ${props.themeColor.hex}99` : undefined,
+            }}
+          >
+            {props.model.name}
+          </span>
+        </div>
 
         {props.isActive && (secondarySelects.length > 0 || booleans.length > 0) && (
           <div className="flex gap-2 mt-1 select-none">
@@ -735,7 +961,7 @@ const ModelRow = memo(function ModelRow(props: {
                     e.stopPropagation();
                     if (nextOption) props.onSelectChange(descriptor, nextOption.id);
                   }}
-                  className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-black/45 border border-white/5 text-zinc-300 hover:text-white hover:bg-white/8 transition-all"
+                  className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-background/80 border border-border text-foreground hover:bg-accent transition-all dark:bg-black/45 dark:border-white/5 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-white/8"
                 >
                   {displayVal}
                 </button>
@@ -756,14 +982,14 @@ const ModelRow = memo(function ModelRow(props: {
                   className={cn(
                     "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[8px] font-semibold transition-all",
                     isTrue
-                      ? "bg-white/10 border-white/10 text-white"
-                      : "bg-black/40 border-white/5 text-zinc-400 hover:text-white",
+                      ? "bg-foreground/10 border-foreground/20 text-foreground dark:bg-white/10 dark:border-white/10 dark:text-white"
+                      : "bg-background/80 border-border text-muted-foreground hover:text-foreground dark:bg-black/40 dark:border-white/5 dark:text-zinc-400 dark:hover:text-white",
                   )}
                 >
                   <span
                     className={cn(
                       "size-1.5 rounded-full",
-                      isTrue ? "bg-emerald-400 shadow-[0_0_6px_#34d399]" : "bg-zinc-600",
+                      isTrue ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#34d399]" : "bg-muted-foreground/40 dark:bg-zinc-600",
                     )}
                   />
                   {descriptor.id === "thinking" ? "THINK" : descriptor.label.toUpperCase()}
@@ -781,7 +1007,7 @@ const ModelRow = memo(function ModelRow(props: {
           className="flex-1 relative h-full flex items-center px-5 cursor-grab active:cursor-grabbing"
         >
           {props.isActive && (
-            <div className="absolute top-1/2 -translate-y-1/2 h-5 left-2.5 right-2.5 bg-white/5 rounded-full overflow-hidden pointer-events-none">
+            <div className="absolute top-1/2 -translate-y-1/2 h-5 left-2.5 right-2.5 bg-foreground/5 dark:bg-white/5 rounded-full overflow-hidden pointer-events-none">
               <div
                 className={cn(
                   "absolute inset-y-0 left-0 rounded-full overflow-hidden",
@@ -819,8 +1045,10 @@ const ModelRow = memo(function ModelRow(props: {
                   key={stop.id}
                   className={cn(
                     "size-1.5 rounded-full transition-colors",
-                    isSupported ? "bg-zinc-600" : "border border-white/15 bg-transparent",
-                    isDotActive && isSupported && "bg-white/30",
+                    isSupported
+                      ? "bg-foreground/30 dark:bg-zinc-600"
+                      : "border border-border bg-transparent dark:border-white/15",
+                    isDotActive && isSupported && "bg-foreground/60 dark:bg-white/30",
                   )}
                 />
               );
@@ -831,7 +1059,7 @@ const ModelRow = memo(function ModelRow(props: {
           {props.isActive && (
             <div
               className={cn(
-                "absolute top-1/2 -translate-y-1/2 size-7 bg-white rounded-full shadow-lg z-20 pointer-events-none",
+                "absolute top-1/2 -translate-y-1/2 size-7 bg-popover text-popover-foreground border border-border/60 rounded-full shadow-md z-20 pointer-events-none dark:bg-white dark:border-0 dark:shadow-lg",
                 sliderAnimationsEnabled &&
                   localStopIndex === null &&
                   "transition-[left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
@@ -844,7 +1072,7 @@ const ModelRow = memo(function ModelRow(props: {
           )}
         </div>
       ) : (
-        <div className="flex-1 text-[11px] text-zinc-500/70 font-semibold pl-8 pointer-events-none select-none italic tracking-wider">
+        <div className="flex-1 text-[11px] text-muted-foreground/70 font-semibold pl-8 pointer-events-none select-none italic tracking-wider dark:text-zinc-500/70">
           Reasoning effort not supported by this model
         </div>
       )}
@@ -915,9 +1143,9 @@ const Lever = memo(function Lever(props: {
   const isEngaged = localEngaged !== null ? localEngaged : props.engaged;
 
   return (
-    <div className="flex w-20 flex-col items-center border-l border-white/8 pl-6">
+    <div className="flex w-20 flex-col items-center border-l border-border pl-6 dark:border-white/8">
       <div
-        className="mb-4 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-400 transition-colors leading-[1.2]"
+        className="mb-4 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors leading-[1.2] dark:text-zinc-400"
         style={{
           color: isEngaged ? props.themeColor.hex : undefined,
           textShadow: isEngaged ? `0 0 10px ${props.themeColor.hex}aa` : undefined,
@@ -928,7 +1156,7 @@ const Lever = memo(function Lever(props: {
         ref={trackRef}
         onMouseDown={onMouseDown}
         className={cn(
-          "relative h-32 w-9 cursor-pointer overflow-hidden rounded-full bg-black/40 shadow-inner border border-white/5 transition-all duration-300",
+          "relative h-32 w-9 cursor-pointer overflow-hidden rounded-full bg-muted/80 border border-border shadow-inner transition-all duration-300 dark:bg-black/40 dark:border-white/5",
           isEngaged && "shadow-[0_0_20px_-4px_var(--dynamic-ultra-hex)]",
         )}
       >
@@ -947,7 +1175,7 @@ const Lever = memo(function Lever(props: {
         )}
         {/* Chevron pulse indicators inside track */}
         <div
-          className="absolute inset-0 flex flex-col justify-around items-center pointer-events-none opacity-30"
+          className="absolute inset-0 flex flex-col justify-around items-center pointer-events-none opacity-40 dark:opacity-30"
           style={{
             animation: isEngaged ? "fmp-pulse-chevron 1.5s infinite" : undefined,
           }}
@@ -955,7 +1183,7 @@ const Lever = memo(function Lever(props: {
           {[0, 1, 2].map((i) => (
             <svg
               key={i}
-              className="size-3 text-white"
+              className="size-3 text-foreground dark:text-white"
               fill="none"
               stroke="currentColor"
               strokeWidth="3"

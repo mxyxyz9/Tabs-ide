@@ -19,26 +19,33 @@ import type {
   VcsStatusResult,
 } from "./git.ts";
 import type {
-  GitListBranchesInput, GitListBranchesResult,
-  GitCreateWorktreeInput, GitCreateWorktreeResult,
+  GitListBranchesInput,
+  GitListBranchesResult,
+  GitCreateWorktreeInput,
+  GitCreateWorktreeResult,
   GitRemoveWorktreeInput,
   GitCreateBranchInput,
   GitCheckoutInput,
-  GitRenameBranchInput, GitRenameBranchResult,
+  GitRenameBranchInput,
+  GitRenameBranchResult,
   GitDeleteBranchInput,
   GitSetBranchUpstreamInput,
   GitInitInput,
-  GitHistoryInput, GitHistoryResult,
-  GitDiffInput, GitDiffResult,
+  GitHistoryInput,
+  GitHistoryResult,
+  GitDiffInput,
+  GitDiffResult,
   GitStageFilesInput,
   GitUnstageFilesInput,
   GitDiscardChangesInput,
   GitStashSaveInput,
-  GitStashListInput, GitStashListResult,
+  GitStashListInput,
+  GitStashListResult,
   GitApplyStashInput,
   GitDropStashInput,
   GitResolveConflictInput,
-  GitConflictSnapshotInput, GitConflictSnapshotResult,
+  GitConflictSnapshotInput,
+  GitConflictSnapshotResult,
   GitApplyHunkInput,
   GitMergeInput,
   GitRebaseInput,
@@ -46,11 +53,16 @@ import type {
   GitAbortOperationInput,
   GitSkipRebaseInput,
   GitFetchInput,
-  GitPullInput, GitPullResult,
-  GitPushInput, GitPushResult,
-  GitStatusInput, GitStatusResult,
-  GitRunStackedActionInput, GitRunStackedActionResult,
-  GitEnvironmentInput, GitEnvironmentResult,
+  GitPullInput,
+  GitPullResult,
+  GitPushInput,
+  GitPushResult,
+  GitStatusInput,
+  GitStatusResult,
+  GitRunStackedActionInput,
+  GitRunStackedActionResult,
+  GitEnvironmentInput,
+  GitEnvironmentResult,
   GitHubSwitchAccountInput,
   GitHubLogoutInput,
   GitAmendCommitInput,
@@ -148,7 +160,12 @@ import { AuthAccessTokenResult, AuthSessionState, AuthWebSocketTicketResult } fr
 import { AdvertisedEndpoint } from "./remoteAccess.ts";
 import { EditorId } from "./editor.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
-import type { ClientSettings, ServerSettings, ServerSettingsPatch, DesktopIconTheme } from "./settings.ts";
+import type {
+  ClientSettings,
+  ServerSettings,
+  ServerSettingsPatch,
+  DesktopIconTheme,
+} from "./settings.ts";
 import type {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
@@ -1364,8 +1381,12 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     createTag: (input: GitCreateTagInput) => Promise<void>;
   };
   server: LocalApi["server"] & {
-    cloneRepository: (input: SourceControlCloneRepositoryInput) => Promise<SourceControlCloneRepositoryResult>;
-    lookupRepository: (input: SourceControlRepositoryLookupInput) => Promise<SourceControlRepositoryInfo>;
+    cloneRepository: (
+      input: SourceControlCloneRepositoryInput,
+    ) => Promise<SourceControlCloneRepositoryResult>;
+    lookupRepository: (
+      input: SourceControlRepositoryLookupInput,
+    ) => Promise<SourceControlRepositoryInfo>;
     runProviderMaintenance: (
       input: ServerRunProviderMaintenanceInput,
     ) => Promise<ServerProviderUpdatedPayload>;
@@ -1489,6 +1510,3 @@ export interface DesktopBrowserSessionState {
   devToolsOpen: boolean;
   lastError: string | null;
 }
-
-
-

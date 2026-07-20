@@ -936,7 +936,6 @@ function KeybindingTableRow({
   );
 }
 
-
 export function KeybindingsSettings({
   keybindings,
   onUpsert,
@@ -1059,11 +1058,11 @@ export function KeybindingsSettings({
         // Strip single and multiline comments (JSONC)
         const withoutComments = content.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
         const parsed = JSON.parse(withoutComments);
-        
+
         if (!Array.isArray(parsed)) throw new Error("Expected an array of keybindings.");
 
         let importedCount = 0;
-        
+
         // Basic mapping from common IDE commands to Tabs commands
         const commandMap: Record<string, KeybindingCommand> = {
           "workbench.action.quickOpen": "commandPalette.toggle",
@@ -1088,7 +1087,7 @@ export function KeybindingsSettings({
 
         for (const binding of parsed) {
           if (!binding.key || !binding.command) continue;
-          
+
           let cmd = binding.command;
           if (commandMap[cmd]) {
             cmd = commandMap[cmd];
@@ -1101,11 +1100,11 @@ export function KeybindingsSettings({
 
           // Normalize keys (e.g. "cmd+p" -> "meta+p")
           let key = binding.key.toLowerCase().replace(/cmd/g, "meta");
-          
-          await onUpsert({ 
-            command: cmd as KeybindingCommand, 
-            key, 
-            ...(binding.when ? { when: binding.when } : {}) 
+
+          await onUpsert({
+            command: cmd as KeybindingCommand,
+            key,
+            ...(binding.when ? { when: binding.when } : {}),
           });
           importedCount++;
         }
@@ -1115,7 +1114,6 @@ export function KeybindingsSettings({
           description: `Imported ${importedCount} keybindings.`,
           type: "success",
         });
-
       } catch (err) {
         toastManager.add({
           title: "Import Failed",
@@ -1123,7 +1121,7 @@ export function KeybindingsSettings({
           type: "error",
         });
       }
-      
+
       // Reset input so the same file can be selected again
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -1146,8 +1144,6 @@ export function KeybindingsSettings({
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
-
-
   return (
     <>
       {confirmDialog}
@@ -1166,9 +1162,7 @@ export function KeybindingsSettings({
           <div className="flex items-start justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                  Keybindings
-                </h2>
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">Keybindings</h2>
                 <span className="flex h-5 items-center justify-center rounded-full bg-primary/10 px-2 text-[11px] font-medium text-primary">
                   {rows.length} {rows.length === 1 ? "binding" : "bindings"}
                 </span>
@@ -1177,7 +1171,7 @@ export function KeybindingsSettings({
                 Manage your application keyboard shortcuts and custom bindings.
               </p>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <SettingsHeaderPortal>
                 <Button
@@ -1186,7 +1180,9 @@ export function KeybindingsSettings({
                   className="no-drag"
                   disabled={!rows.some((r) => r.source === "Custom")}
                   onClick={async () => {
-                    const confirmed = await confirm("Restore default keybindings?\n\nThis will remove all custom shortcuts.");
+                    const confirmed = await confirm(
+                      "Restore default keybindings?\n\nThis will remove all custom shortcuts.",
+                    );
                     if (confirmed) {
                       const customRows = rows.filter((r) => r.source === "Custom");
                       customRows.forEach((row) => {
@@ -1217,12 +1213,12 @@ export function KeybindingsSettings({
                 <PlusIcon className="size-4" />
                 Add keybinding
               </Button>
-              <input 
-                type="file" 
-                accept=".json" 
-                className="hidden" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFileChange}
               />
               <Button
                 type="button"
@@ -1250,148 +1246,202 @@ export function KeybindingsSettings({
             </div>
           </div>
         </div>
-        
+
         <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
-      {!isElectron ? (
-        <div className="flex items-center gap-3 bg-warning/5 px-5 py-3 text-sm text-warning-foreground border-b border-border/40 font-medium">
-          <InfoIcon className="size-4 shrink-0" />
-          <p>Some shortcuts may be claimed by the browser before the app sees them. Use the desktop version for full support.</p>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2 border-b border-border/40 bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:gap-4">
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-            <InfoIcon className="size-4" />
-          </div>
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3 text-[13px] text-muted-foreground">
-            <span>
-              <strong className="font-medium text-foreground">Project switching</strong> (<Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">Ctrl</Kbd> <span className="opacity-50">+</span> <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">Tab</Kbd>) may be intercepted by terminal tools.
-            </span>
-            <span className="hidden h-3.5 w-px bg-border/60 sm:inline-block"></span>
-            <span>
-              <strong className="font-medium text-foreground">Reliable alternative:</strong> <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">{isMacPlatform(platform) ? "⌘" : "Ctrl"}</Kbd> <span className="opacity-50">+</span> <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">Shift</Kbd> <span className="opacity-50">+</span> <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">[</Kbd> <span className="text-[11px] opacity-60">or</span> <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">]</Kbd>
-            </span>
-          </div>
-        </div>
-      )}
-
-      {(() => {
-        const groups: Record<string, KeybindingRow[]> = {};
-        for (const row of rows) {
-          const label = commandLabel(row.command);
-          const parts = label.split(":");
-          const category = parts.length > 1 ? (parts[0] || "General").trim() : "General";
-          if (!groups[category]) {
-            groups[category] = [];
-          }
-          groups[category]!.push(row);
-        }
-        const sortedGroups = Object.entries(groups).sort(([a], [b]) => {
-          if (a === "General") return -1;
-          if (b === "General") return 1;
-          return a.localeCompare(b);
-        });
-        const allCategories = ["All", ...sortedGroups.map(([c]) => c)];
-
-        const categoryIcons: Record<string, React.ReactNode> = {
-          "General": <KeyboardIcon className="size-5" />,
-          "Chat": <MessageSquareIcon className="size-5" />,
-          "Diff": <SplitIcon className="size-5" />,
-          "Editor": <CodeIcon className="size-5" />,
-          "Project": <TabletSmartphoneIcon className="size-5" />,
-          "Terminal": <SquareTerminalIcon className="size-5" />,
-          "Toolbar Tools": <WrenchIcon className="size-5" />,
-        };
-
-        const renderTable = (tableRows: readonly KeybindingRow[]) => (
-          <ScrollArea scrollFade hideScrollbars className="w-full max-w-full rounded-none h-full min-h-0 flex-1">
-            <div className="flex flex-col min-w-[680px]">
-              <div className="grid grid-cols-[minmax(190px,1.1fr)_minmax(220px,0.85fr)_minmax(210px,1fr)_60px] border-b border-border/70 bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground sticky top-0 z-10 backdrop-blur-md">
-                <div>Command</div>
-                <div>Keybinding</div>
-                <div>When</div>
-                <div>Status</div>
+          {!isElectron ? (
+            <div className="flex items-center gap-3 bg-warning/5 px-5 py-3 text-sm text-warning-foreground border-b border-border/40 font-medium">
+              <InfoIcon className="size-4 shrink-0" />
+              <p>
+                Some shortcuts may be claimed by the browser before the app sees them. Use the
+                desktop version for full support.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 border-b border-border/40 bg-muted/10 px-5 py-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <InfoIcon className="size-4" />
               </div>
-              <div className="divide-y divide-border/40 pb-8">
-
-                {tableRows.map((row) => (
-                  <KeybindingTableRow
-                    key={row.id}
-                    row={row}
-                    allRows={rows}
-                    variables={whenVariables}
-                    isSaving={savingCommand === row.command}
-                    onSave={saveKeybinding}
-                    onReset={resetKeybinding}
-                    onRemove={removeKeybinding}
-                    platform={platform}
-                  />
-                ))}
-
-                {tableRows.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-muted-foreground">
-                    No keybindings found in this category.
-                  </div>
-                ) : null}
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3 text-[13px] text-muted-foreground">
+                <span>
+                  <strong className="font-medium text-foreground">Project switching</strong> (
+                  <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">
+                    Ctrl
+                  </Kbd>{" "}
+                  <span className="opacity-50">+</span>{" "}
+                  <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">
+                    Tab
+                  </Kbd>
+                  ) may be intercepted by terminal tools.
+                </span>
+                <span className="hidden h-3.5 w-px bg-border/60 sm:inline-block"></span>
+                <span>
+                  <strong className="font-medium text-foreground">Reliable alternative:</strong>{" "}
+                  <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">
+                    {isMacPlatform(platform) ? "⌘" : "Ctrl"}
+                  </Kbd>{" "}
+                  <span className="opacity-50">+</span>{" "}
+                  <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">
+                    Shift
+                  </Kbd>{" "}
+                  <span className="opacity-50">+</span>{" "}
+                  <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">
+                    [
+                  </Kbd>{" "}
+                  <span className="text-[11px] opacity-60">or</span>{" "}
+                  <Kbd className="h-5 px-1.5 text-[10px] bg-muted/50 border border-border/40 shadow-none">
+                    ]
+                  </Kbd>
+                </span>
               </div>
             </div>
-          </ScrollArea>
-        );
+          )}
 
-        return (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0 w-full">
-            <TabsContent value="All" className="mt-0 flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden">
-              {query.trim().length > 0 ? (
-                renderTable(rows)
-              ) : (
-                <ScrollArea scrollFade hideScrollbars className="w-full max-w-full rounded-none h-full min-h-0 flex-1">
-                  <div className="p-5">
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {sortedGroups.map(([category, categoryRows]) => (
-                        <button
-                          key={category}
-                          type="button"
-                          onClick={() => setActiveTab(category)}
-                          className="group flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 text-left transition-all hover:border-border hover:bg-muted/30 hover:shadow-md active:scale-[0.98]"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex size-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
-                                {categoryIcons[category] ?? <KeyboardIcon className="size-5" />}
-                              </div>
-                              <span className="text-sm font-semibold text-foreground">{category}</span>
-                            </div>
-                            <ChevronRightIcon className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {categoryRows.length} {categoryRows.length === 1 ? "binding" : "bindings"}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+          {(() => {
+            const groups: Record<string, KeybindingRow[]> = {};
+            for (const row of rows) {
+              const label = commandLabel(row.command);
+              const parts = label.split(":");
+              const category = parts.length > 1 ? (parts[0] || "General").trim() : "General";
+              if (!groups[category]) {
+                groups[category] = [];
+              }
+              groups[category]!.push(row);
+            }
+            const sortedGroups = Object.entries(groups).sort(([a], [b]) => {
+              if (a === "General") return -1;
+              if (b === "General") return 1;
+              return a.localeCompare(b);
+            });
+            const allCategories = ["All", ...sortedGroups.map(([c]) => c)];
+
+            const categoryIcons: Record<string, React.ReactNode> = {
+              General: <KeyboardIcon className="size-5" />,
+              Chat: <MessageSquareIcon className="size-5" />,
+              Diff: <SplitIcon className="size-5" />,
+              Editor: <CodeIcon className="size-5" />,
+              Project: <TabletSmartphoneIcon className="size-5" />,
+              Terminal: <SquareTerminalIcon className="size-5" />,
+              "Toolbar Tools": <WrenchIcon className="size-5" />,
+            };
+
+            const renderTable = (tableRows: readonly KeybindingRow[]) => (
+              <ScrollArea
+                scrollFade
+                hideScrollbars
+                className="w-full max-w-full rounded-none h-full min-h-0 flex-1"
+              >
+                <div className="flex flex-col min-w-[680px]">
+                  <div className="grid grid-cols-[minmax(190px,1.1fr)_minmax(220px,0.85fr)_minmax(210px,1fr)_60px] border-b border-border/70 bg-muted/25 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground sticky top-0 z-10 backdrop-blur-md">
+                    <div>Command</div>
+                    <div>Keybinding</div>
+                    <div>When</div>
+                    <div>Status</div>
                   </div>
-                </ScrollArea>
-              )}
-            </TabsContent>
-            
-            {sortedGroups.map(([category, categoryRows]) => (
-              <TabsContent key={category} value={category} className="mt-0 flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden">
-                <div className="flex items-center gap-3 px-4 py-2 border-b border-border/60 bg-muted/10 shrink-0">
-                  <Button variant="ghost" size="icon" className="size-7 rounded-md hover:bg-background/80" onClick={() => setActiveTab("All")}>
-                    <ArrowLeftIcon className="size-4" />
-                  </Button>
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex size-6 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
-                      {categoryIcons[category] ?? <KeyboardIcon className="size-3.5" />}
-                    </div>
-                    <span className="text-xs font-bold uppercase tracking-[0.1em] text-foreground">{category}</span>
+                  <div className="divide-y divide-border/40 pb-8">
+                    {tableRows.map((row) => (
+                      <KeybindingTableRow
+                        key={row.id}
+                        row={row}
+                        allRows={rows}
+                        variables={whenVariables}
+                        isSaving={savingCommand === row.command}
+                        onSave={saveKeybinding}
+                        onReset={resetKeybinding}
+                        onRemove={removeKeybinding}
+                        platform={platform}
+                      />
+                    ))}
+
+                    {tableRows.length === 0 ? (
+                      <div className="py-12 text-center text-sm text-muted-foreground">
+                        No keybindings found in this category.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-                {renderTable(categoryRows)}
-              </TabsContent>
-            ))}
-          </Tabs>
-        );
-      })()}
+              </ScrollArea>
+            );
+
+            return (
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="flex flex-col flex-1 min-h-0 w-full"
+              >
+                <TabsContent
+                  value="All"
+                  className="mt-0 flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden"
+                >
+                  {query.trim().length > 0 ? (
+                    renderTable(rows)
+                  ) : (
+                    <ScrollArea
+                      scrollFade
+                      hideScrollbars
+                      className="w-full max-w-full rounded-none h-full min-h-0 flex-1"
+                    >
+                      <div className="p-5">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          {sortedGroups.map(([category, categoryRows]) => (
+                            <button
+                              key={category}
+                              type="button"
+                              onClick={() => setActiveTab(category)}
+                              className="group flex flex-col gap-3 rounded-xl border border-border/50 bg-card p-4 text-left transition-all hover:border-border hover:bg-muted/30 hover:shadow-md active:scale-[0.98]"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="flex size-8 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                                    {categoryIcons[category] ?? <KeyboardIcon className="size-5" />}
+                                  </div>
+                                  <span className="text-sm font-semibold text-foreground">
+                                    {category}
+                                  </span>
+                                </div>
+                                <ChevronRightIcon className="size-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {categoryRows.length}{" "}
+                                {categoryRows.length === 1 ? "binding" : "bindings"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </ScrollArea>
+                  )}
+                </TabsContent>
+
+                {sortedGroups.map(([category, categoryRows]) => (
+                  <TabsContent
+                    key={category}
+                    value={category}
+                    className="mt-0 flex-1 min-h-0 flex flex-col data-[state=inactive]:hidden"
+                  >
+                    <div className="flex items-center gap-3 px-4 py-2 border-b border-border/60 bg-muted/10 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 rounded-md hover:bg-background/80"
+                        onClick={() => setActiveTab("All")}
+                      >
+                        <ArrowLeftIcon className="size-4" />
+                      </Button>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex size-6 items-center justify-center rounded-md bg-muted/60 text-muted-foreground">
+                          {categoryIcons[category] ?? <KeyboardIcon className="size-3.5" />}
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-[0.1em] text-foreground">
+                          {category}
+                        </span>
+                      </div>
+                    </div>
+                    {renderTable(categoryRows)}
+                  </TabsContent>
+                ))}
+              </Tabs>
+            );
+          })()}
         </div>
       </section>
     </>

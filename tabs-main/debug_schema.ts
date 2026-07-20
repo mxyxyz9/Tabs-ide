@@ -1,5 +1,8 @@
-import { decodeProjectWorkspaceSettingsSchema, ProjectWorkspaceSettings } from './packages/contracts/src/settings.ts';
-import { Schema } from '@effect/schema';
+import {
+  decodeProjectWorkspaceSettingsSchema,
+  ProjectWorkspaceSettings,
+} from "./packages/contracts/src/settings.ts";
+import { Schema } from "@effect/schema";
 
 const sampleInput = {
   tools: [
@@ -16,7 +19,7 @@ const sampleInput = {
       label: "My Terminal",
       visible: true,
       terminalProcessId: "term-1", // previously serverProcessId
-    }
+    },
   ],
   terminalProcesses: [
     {
@@ -25,16 +28,16 @@ const sampleInput = {
       commands: ["echo hi"],
       cwd: ".",
       autoStart: false,
-    }
+    },
   ],
   customEmbeds: [
     {
       id: "embed-1",
       label: "My Browser",
-      url: "https://example.com"
-    }
+      url: "https://example.com",
+    },
   ],
-  serverPresets: []
+  serverPresets: [],
 };
 
 try {

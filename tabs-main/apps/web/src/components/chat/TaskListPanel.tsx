@@ -135,9 +135,7 @@ export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPane
                   <span
                     className={cn(
                       "text-[12px] leading-[1.5]",
-                      isDone
-                        ? "text-muted-foreground/50"
-                        : "text-foreground/80",
+                      isDone ? "text-muted-foreground/50" : "text-foreground/80",
                     )}
                   >
                     {`${index + 1}. `}

@@ -208,8 +208,8 @@ describe("WsTransport", () => {
   });
 
   it("does not create a timeout for requests with timeoutMs null", async () => {
-    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const transport = new WsTransport("ws://localhost:3020");
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
     const socket = getSocket();
     socket.open();
 

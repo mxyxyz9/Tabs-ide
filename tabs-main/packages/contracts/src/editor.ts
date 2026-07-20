@@ -133,4 +133,3 @@ export const OpenInEditorInput = Schema.Struct({
   editor: EditorId,
 });
 export type OpenInEditorInput = typeof OpenInEditorInput.Type;
-
