@@ -761,13 +761,13 @@ function ProjectTabs(props: {
   return (
     <div
       className={cn(
-        "drag-region flex items-end gap-3 overflow-x-auto border-b border-border/70 bg-linear-to-b from-background via-background to-card/85 px-3 pt-3",
+        "drag-region flex items-end gap-2 overflow-x-auto border-b border-border/60 bg-muted/40 px-3 pt-2.5 select-none dark:border-white/8 dark:bg-zinc-950/60 backdrop-blur-md",
         // Reserve space for the OS window controls: traffic lights (left) on
         // macOS/Linux, the overlaid caption buttons (right) on Windows.
         isElectron && (isWindowsDesktop ? "pr-[140px]" : "pl-[92px]"),
       )}
     >
-      <div className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((entry) => {
           if (entry.kind === "project") {
             const { project } = entry;
@@ -775,32 +775,33 @@ function ProjectTabs(props: {
             return (
               <div
                 key={project.id}
+                data-active={active ? "true" : undefined}
                 className={cn(
-                  "drag-region inline-flex min-w-[10rem] max-w-[15rem] items-center gap-3 rounded-t-[18px] border border-b-0 px-5 py-3 text-base transition-all",
+                  "drag-region group relative inline-flex min-w-[9rem] max-w-[14rem] items-center gap-2.5 rounded-t-xl border px-3.5 py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none",
                   active
-                    ? "relative -mb-px border-border/90 bg-card text-foreground shadow-[0_-1px_0_rgba(255,255,255,0.05)]"
-                    : "border-transparent bg-black/16 text-muted-foreground/90 hover:bg-black/24 hover:text-foreground dark:bg-white/[0.04] dark:hover:bg-white/[0.07]",
+                    ? "relative -mb-px border-border/80 border-b-transparent bg-background text-foreground shadow-xs dark:border-white/12 dark:border-b-transparent dark:bg-zinc-900 dark:text-zinc-100"
+                    : "border-transparent text-muted-foreground/75 hover:bg-background/50 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200",
                 )}
+                onClick={() => props.onActivateProject(project.id)}
               >
                 <button
                   type="button"
-                  onClick={() => props.onActivateProject(project.id)}
                   className={cn(
                     "min-w-0 flex-1 truncate text-left leading-none",
-                    active ? "font-semibold" : "font-medium",
+                    active ? "font-semibold text-foreground dark:text-zinc-100" : "font-medium",
                   )}
                 >
                   {project.name}
                 </button>
                 <button
                   type="button"
-                  className="no-drag rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-black/10 hover:text-foreground dark:hover:bg-white/8"
+                  className="no-drag shrink-0 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"
                   onClick={(event) => {
                     event.stopPropagation();
                     props.onCloseProject(project.id);
                   }}
                 >
-                  <XIcon className="size-3.5" />
+                  <XIcon className="size-3" />
                 </button>
               </div>
             );
@@ -812,41 +813,42 @@ function ProjectTabs(props: {
           return (
             <div
               key={pendingId}
+              data-active={active ? "true" : undefined}
               className={cn(
-                "drag-region inline-flex min-w-[10rem] max-w-[15rem] items-center gap-3 rounded-t-[18px] border border-b-0 px-5 py-3 text-base transition-all",
+                "drag-region group relative inline-flex min-w-[9rem] max-w-[14rem] items-center gap-2.5 rounded-t-xl border px-3.5 py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none",
                 active
-                  ? "relative -mb-px border-border/90 bg-card text-foreground shadow-[0_-1px_0_rgba(255,255,255,0.05)]"
-                  : "border-transparent bg-black/16 text-muted-foreground/90 hover:bg-black/24 hover:text-foreground dark:bg-white/[0.04] dark:hover:bg-white/[0.07]",
+                  ? "relative -mb-px border-border/80 border-b-transparent bg-background text-foreground shadow-xs dark:border-white/12 dark:border-b-transparent dark:bg-zinc-900 dark:text-zinc-100"
+                  : "border-transparent text-muted-foreground/75 hover:bg-background/50 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200",
               )}
+              onClick={() => props.onActivatePendingTab(pendingId)}
             >
               <button
                 type="button"
-                onClick={() => props.onActivatePendingTab(pendingId)}
                 className={cn(
                   "min-w-0 flex-1 truncate text-left leading-none",
-                  active ? "font-semibold" : "font-medium",
+                  active ? "font-semibold text-foreground dark:text-zinc-100" : "font-medium",
                 )}
               >
                 New Tab
               </button>
               <button
                 type="button"
-                className="no-drag rounded-md p-0.5 text-muted-foreground transition-colors hover:bg-black/10 hover:text-foreground dark:hover:bg-white/8"
+                className="no-drag shrink-0 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onClosePendingTab(pendingId);
                 }}
               >
-                <XIcon className="size-3.5" />
+                <XIcon className="size-3" />
               </button>
             </div>
           );
         })}
 
-        {/* Plain "+" button — no dropdown, creates a pending tab immediately */}
+        {/* Integrated "+" button */}
         <button
           type="button"
-          className="no-drag mb-2 shrink-0 rounded-full border border-border/60 bg-background/70 p-1 text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+          className="no-drag mb-1 shrink-0 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-background hover:text-foreground hover:shadow-xs dark:hover:bg-zinc-800/80 dark:hover:text-white"
           aria-label="New tab"
           onClick={props.onNewTab}
         >
@@ -8084,7 +8086,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const routeProjectId = activeThread?.projectId ?? null;
 
   useEffect(() => {
-    if (!routeThreadId || !routeProjectId) {
+    if (!routeThreadId || !routeProjectId || activePendingTabId) {
       return;
     }
     rememberThread(routeProjectId, routeThreadId);
@@ -8093,6 +8095,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     }
     setActiveTool(routeProjectId, "agents");
   }, [
+    activePendingTabId,
     rememberThread,
     routeProjectId,
     routeThreadId,
