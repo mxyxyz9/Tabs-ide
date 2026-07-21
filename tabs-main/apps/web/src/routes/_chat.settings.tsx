@@ -174,21 +174,26 @@ const SPLASH_LOADER_PALETTE_OPTIONS = [
 
 const DESKTOP_ICON_OPTIONS = [
   {
+    value: "system",
+    label: "System",
+    description: "Follows your OS appearance.",
+  },
+  {
     value: "dark",
-    label: "Dark icon",
+    label: "Dark",
     description: "Uses the dark background icon.",
   },
   {
     value: "light",
-    label: "Light icon",
+    label: "Light",
     description: "Uses the white icon variant.",
   },
 ] as const;
 
 const TIMESTAMP_FORMAT_LABELS = {
-  locale: "System default",
-  "12-hour": "12-hour",
-  "24-hour": "24-hour",
+  locale: "System",
+  "12-hour": "12h",
+  "24-hour": "24h",
 } as const;
 
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
@@ -411,11 +416,11 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="space-y-2.5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {title}
-        </h2>
+        </h3>
         {headerAction}
       </div>
       <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
@@ -1175,9 +1180,16 @@ function SettingsRouteView() {
             <div className="min-w-0 flex-1 overflow-y-auto overscroll-y-contain py-6">
               <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 {activeSettingsSection === "general" ? (
-                  <SettingsSection
-                    title="General"
-                    headerAction={
+                  <div className="space-y-6">
+                    <div className="mb-2 flex items-start justify-between">
+                      <div className="space-y-1.5">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          General
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Customize appearance, assistant behavior, display settings, and workspace preferences.
+                        </p>
+                      </div>
                       <SettingsHeaderPortal>
                         <Button
                           size="xs"
@@ -1205,214 +1217,414 @@ function SettingsRouteView() {
                           Restore defaults
                         </Button>
                       </SettingsHeaderPortal>
-                    }
-                  >
-                    <SettingsRow
-                      title="Theme"
-                      description="Choose how Tabs looks across the app."
-                      resetAction={
-                        theme !== "system" ? (
-                          <SettingResetButton label="theme" onClick={() => setTheme("system")} />
-                        ) : null
-                      }
-                      control={
-                        <Select
-                          value={theme}
-                          onValueChange={(value) => {
-                            if (value !== "system" && value !== "light" && value !== "dark") return;
-                            setTheme(value);
-                          }}
-                        >
-                          <SelectTrigger className="w-full sm:w-40" aria-label="Theme preference">
-                            <SelectValue>
-                              {THEME_OPTIONS.find((option) => option.value === theme)?.label ??
-                                "System"}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectPopup align="end" alignItemWithTrigger={false}>
+                    </div>
+
+                    {/* Group 1: Appearance & Interface */}
+                    <SettingsSection title="Appearance & Interface">
+                      <SettingsRow
+                        title="Theme"
+                        description="Choose how Tabs looks across the app."
+                        resetAction={
+                          theme !== "system" ? (
+                            <SettingResetButton label="theme" onClick={() => setTheme("system")} />
+                          ) : null
+                        }
+                        control={
+                          <div className="flex gap-0.5 rounded-lg bg-muted p-1">
                             {THEME_OPTIONS.map((option) => (
-                              <SelectItem hideIndicator key={option.value} value={option.value}>
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => setTheme(option.value)}
+                                aria-label={`Theme: ${option.label}`}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  theme === option.value
+                                    ? "bg-background text-foreground shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
                                 {option.label}
-                              </SelectItem>
+                              </button>
                             ))}
-                          </SelectPopup>
-                        </Select>
-                      }
-                    />
+                          </div>
+                        }
+                      />
 
-                    <SettingsRow
-                      title="Zoom & Scale"
-                      description="Adjust interface zoom level. Drag slider or use Cmd + / Cmd -."
-                      resetAction={
-                        zoomFactor !== 1.0 ? (
-                          <SettingResetButton label="zoom" onClick={() => updateZoom(1.0)} />
-                        ) : null
-                      }
-                      control={
-                        (() => {
-                          const currentIndex = Math.max(
-                            0,
-                            ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01)
-                          );
-                          return (
-                            <div className="flex flex-col gap-2 w-full sm:w-72">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground/70 font-medium">Scale Range</span>
-                                <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
-                                  {Math.round(zoomFactor * 100)}%
-                                </span>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-                                  onClick={() => updateZoom(ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)])}
-                                  title="Zoom Out (Cmd -)"
-                                  aria-label="Zoom Out"
-                                >
-                                  <MinusIcon className="h-3.5 w-3.5" />
-                                </Button>
-
-                                <div className="relative flex-1 flex items-center px-1">
-                                  <input
-                                    type="range"
-                                    min="0"
-                                    max={ZOOM_SNAP_POINTS.length - 1}
-                                    step="1"
-                                    value={currentIndex}
-                                    onChange={(e) =>
-                                      updateZoom(ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)])
-                                    }
-                                    aria-label="Zoom level slider"
-                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
-                                  />
+                      <SettingsRow
+                        title="Zoom & Scale"
+                        description="Adjust interface zoom level. Drag slider or use Cmd + / Cmd -."
+                        resetAction={
+                          zoomFactor !== 1.0 ? (
+                            <SettingResetButton label="zoom" onClick={() => updateZoom(1.0)} />
+                          ) : null
+                        }
+                        control={
+                          (() => {
+                            const currentIndex = Math.max(
+                              0,
+                              ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01)
+                            );
+                            return (
+                              <div className="flex flex-col gap-2 w-full sm:w-72">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground/70 font-medium">Scale Range</span>
+                                  <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
+                                    {Math.round(zoomFactor * 100)}%
+                                  </span>
                                 </div>
 
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-                                  onClick={() =>
-                                    updateZoom(
-                                      ZOOM_SNAP_POINTS[
-                                        Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
-                                      ]
-                                    )
-                                  }
-                                  title="Zoom In (Cmd +)"
-                                  aria-label="Zoom In"
-                                >
-                                  <PlusIcon className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-
-                              <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
-                                {ZOOM_SNAP_POINTS.map((pt) => (
-                                  <button
-                                    key={pt}
-                                    type="button"
-                                    onClick={() => updateZoom(pt)}
-                                    className={cn(
-                                      "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
-                                      Math.abs(zoomFactor - pt) < 0.01 ? "text-primary font-bold" : ""
-                                    )}
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                    onClick={() => updateZoom(ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)] ?? 1.0)}
+                                    title="Zoom Out (Cmd -)"
+                                    aria-label="Zoom Out"
                                   >
-                                    {Math.round(pt * 100)}%
-                                  </button>
-                                ))}
+                                    <MinusIcon className="h-3.5 w-3.5" />
+                                  </Button>
+
+                                  <div className="relative flex-1 flex items-center px-1">
+                                    <input
+                                      type="range"
+                                      min="0"
+                                      max={ZOOM_SNAP_POINTS.length - 1}
+                                      step="1"
+                                      value={currentIndex}
+                                      onChange={(e) =>
+                                        updateZoom(ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)] ?? 1.0)
+                                      }
+                                      aria-label="Zoom level slider"
+                                      className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
+                                    />
+                                  </div>
+
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                    onClick={() =>
+                                      updateZoom(
+                                        ZOOM_SNAP_POINTS[
+                                          Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
+                                        ] ?? 1.0
+                                      )
+                                    }
+                                    title="Zoom In (Cmd +)"
+                                    aria-label="Zoom In"
+                                  >
+                                    <PlusIcon className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+
+                                <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
+                                  {ZOOM_SNAP_POINTS.map((pt) => (
+                                    <button
+                                      key={pt}
+                                      type="button"
+                                      onClick={() => updateZoom(pt)}
+                                      className={cn(
+                                        "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
+                                        Math.abs(zoomFactor - pt) < 0.01 ? "text-primary font-bold" : ""
+                                      )}
+                                    >
+                                      {Math.round(pt * 100)}%
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
+                            );
+                          })()
+                        }
+                      />
+
+                      {isElectron ? (
+                        <SettingsRow
+                          title="Desktop icon"
+                          description="Choose which icon variant Tabs uses in the desktop shell and dock."
+                          resetAction={
+                            settings.desktopIconTheme !== DEFAULT_DESKTOP_ICON_THEME ? (
+                              <SettingResetButton
+                                label="desktop icon"
+                                onClick={() =>
+                                  updateSettings({
+                                    desktopIconTheme: DEFAULT_DESKTOP_ICON_THEME,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <div className="flex gap-0.5 rounded-lg bg-muted p-1">
+                              {DESKTOP_ICON_OPTIONS.map((option) => (
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => {
+                                    if (option.value !== "dark" && option.value !== "light" && option.value !== "system") return;
+                                    updateSettings({ desktopIconTheme: option.value as "dark" | "light" });
+                                  }}
+                                  aria-label={`Desktop icon: ${option.label}`}
+                                  className={cn(
+                                    "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                    settings.desktopIconTheme === option.value
+                                      ? "bg-background text-foreground shadow-xs"
+                                      : "text-muted-foreground hover:text-foreground",
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
                             </div>
-                          );
-                        })()
-                      }
-                    />
-
-                    <SettingsRow
-                      title="Time format"
-                      description="System default follows your browser or OS clock preference."
-                      resetAction={
-                        settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
-                          <SettingResetButton
-                            label="time format"
-                            onClick={() =>
-                              updateSettings({
-                                timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Select
-                          value={settings.timestampFormat}
-                          onValueChange={(value) => {
-                            if (value !== "locale" && value !== "12-hour" && value !== "24-hour") {
-                              return;
-                            }
-                            updateSettings({
-                              timestampFormat: value,
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-full sm:w-40" aria-label="Timestamp format">
-                            <SelectValue>
-                              {TIMESTAMP_FORMAT_LABELS[settings.timestampFormat]}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectPopup align="end" alignItemWithTrigger={false}>
-                            <SelectItem hideIndicator value="locale">
-                              {TIMESTAMP_FORMAT_LABELS.locale}
-                            </SelectItem>
-                            <SelectItem hideIndicator value="12-hour">
-                              {TIMESTAMP_FORMAT_LABELS["12-hour"]}
-                            </SelectItem>
-                            <SelectItem hideIndicator value="24-hour">
-                              {TIMESTAMP_FORMAT_LABELS["24-hour"]}
-                            </SelectItem>
-                          </SelectPopup>
-                        </Select>
-                      }
-                    />
-
-                    <SettingsRow
-                      title="Colorize permissions"
-                      description="Apply distinct semantic colors to the different permission levels in the composer."
-                      resetAction={
-                        !settings.colorizePermissions ? (
-                          <SettingResetButton
-                            label="colorize permissions"
-                            onClick={() =>
-                              updateSettings({
-                                colorizePermissions: true,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.colorizePermissions}
-                          onCheckedChange={(checked) => {
-                            updateSettings({ colorizePermissions: checked });
-                          }}
-                          aria-label="Colorize permissions"
+                          }
                         />
-                      }
-                    />
+                      ) : null}
 
-                    {isElectron ? (
                       <SettingsRow
-                        title="Desktop icon"
-                        description="Choose which icon variant Tabs uses in the desktop shell and dock."
+                        title="Time format"
+                        description="System default follows your browser or OS clock preference."
                         resetAction={
-                          settings.desktopIconTheme !== DEFAULT_DESKTOP_ICON_THEME ? (
+                          settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat ? (
                             <SettingResetButton
-                              label="desktop icon"
+                              label="time format"
                               onClick={() =>
                                 updateSettings({
-                                  desktopIconTheme: DEFAULT_DESKTOP_ICON_THEME,
+                                  timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <div className="flex gap-0.5 rounded-lg bg-muted p-1">
+                            {(["locale", "12-hour", "24-hour"] as const).map((fmt) => (
+                              <button
+                                key={fmt}
+                                type="button"
+                                onClick={() => updateSettings({ timestampFormat: fmt })}
+                                aria-label={`Time format: ${TIMESTAMP_FORMAT_LABELS[fmt]}`}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  settings.timestampFormat === fmt
+                                    ? "bg-background text-foreground shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                {TIMESTAMP_FORMAT_LABELS[fmt]}
+                              </button>
+                            ))}
+                          </div>
+                        }
+                      />
+                    </SettingsSection>
+
+                    {/* Group 2: Assistant & Code Generation */}
+                    <SettingsSection title="Assistant & Code Generation">
+                      <SettingsRow
+                        title="Assistant output"
+                        description="Show token-by-token output while a response is in progress."
+                        resetAction={
+                          settings.enableAssistantStreaming !==
+                          DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming ? (
+                            <SettingResetButton
+                              label="assistant output"
+                              onClick={() =>
+                                updateSettings({
+                                  enableAssistantStreaming:
+                                    DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Switch
+                            checked={settings.enableAssistantStreaming}
+                            onCheckedChange={(checked) =>
+                              updateSettings({
+                                enableAssistantStreaming: Boolean(checked),
+                              })
+                            }
+                            aria-label="Stream assistant messages"
+                          />
+                        }
+                      />
+
+                      <SettingsRow
+                        title="Always create tasks"
+                        description="Synthesize task progress for providers that do not emit native task events."
+                        resetAction={
+                          settings.alwaysCreateTasks !==
+                          DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks ? (
+                            <SettingResetButton
+                              label="always create tasks"
+                              onClick={() =>
+                                updateSettings({
+                                  alwaysCreateTasks: DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Switch
+                            checked={settings.alwaysCreateTasks}
+                            onCheckedChange={(checked) =>
+                              updateSettings({
+                                alwaysCreateTasks: Boolean(checked),
+                              })
+                            }
+                            aria-label="Always create tasks"
+                          />
+                        }
+                      />
+
+                      <SettingsRow
+                        title="Text generation model"
+                        description="Configure the model used for text generation (commit messages, PR content etc.)"
+                        resetAction={
+                          JSON.stringify(settings.textGenerationModelSelection ?? null) !==
+                          JSON.stringify(
+                            DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
+                          ) ? (
+                            <SettingResetButton
+                              label="text generation model"
+                              onClick={() => {
+                                updateSettings({
+                                  textGenerationModelSelection:
+                                    DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+                                });
+                              }}
+                            />
+                          ) : null
+                        }
+                        control={
+                          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+                            <SettingsProviderModelPicker
+                              activeInstanceId={textGenInstanceId}
+                              model={textGenModel}
+                              instanceEntries={gitModelInstanceEntries}
+                              modelOptionsByInstance={gitModelOptionsByInstance}
+                              triggerVariant="outline"
+                              triggerClassName="min-w-0 max-w-none shrink-0"
+                              onInstanceModelChange={(instanceId, model) => {
+                                updateSettings({
+                                  textGenerationModelSelection: resolveAppModelSelectionState(
+                                    {
+                                      ...settings,
+                                      textGenerationModelSelection: createModelSelection(
+                                        instanceId,
+                                        model,
+                                      ),
+                                    },
+                                    serverProviders,
+                                  ),
+                                });
+                              }}
+                            />
+                            <TraitsPicker
+                              provider={textGenProvider as any}
+                              models={textGenInstanceEntry?.models ?? []}
+                              model={textGenModel}
+                              prompt=""
+                              onPromptChange={() => {}}
+                              modelOptions={textGenModelOptions}
+                              allowPromptInjectedEffort={false}
+                              triggerVariant="outline"
+                              triggerClassName="min-w-0 max-w-none shrink-0"
+                              onModelOptionsChange={(nextOptions) => {
+                                updateSettings({
+                                  textGenerationModelSelection: resolveAppModelSelectionState(
+                                    {
+                                      ...settings,
+                                      textGenerationModelSelection: createModelSelection(
+                                        textGenInstanceId,
+                                        textGenModel,
+                                        nextOptions,
+                                      ),
+                                    },
+                                    serverProviders,
+                                  ),
+                                });
+                              }}
+                            />
+                          </div>
+                        }
+                      />
+                    </SettingsSection>
+
+                    {/* Group 3: Diff & Display */}
+                    <SettingsSection title="Diff & Display">
+                      <SettingsRow
+                        title="Diff line wrapping"
+                        description="Set the default wrap state when the diff panel opens. The in-panel wrap toggle only affects the current diff session."
+                        resetAction={
+                          settings.diffWordWrap !== DEFAULT_UNIFIED_SETTINGS.diffWordWrap ? (
+                            <SettingResetButton
+                              label="diff line wrapping"
+                              onClick={() =>
+                                updateSettings({
+                                  diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Switch
+                            checked={settings.diffWordWrap}
+                            onCheckedChange={(checked) =>
+                              updateSettings({
+                                diffWordWrap: Boolean(checked),
+                              })
+                            }
+                            aria-label="Wrap diff lines by default"
+                          />
+                        }
+                      />
+
+                      <SettingsRow
+                        title="Colorize permissions"
+                        description="Apply distinct semantic colors to the different permission levels in the composer."
+                        resetAction={
+                          !settings.colorizePermissions ? (
+                            <SettingResetButton
+                              label="colorize permissions"
+                              onClick={() =>
+                                updateSettings({
+                                  colorizePermissions: true,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Switch
+                            checked={settings.colorizePermissions}
+                            onCheckedChange={(checked) => {
+                              updateSettings({ colorizePermissions: checked });
+                            }}
+                            aria-label="Colorize permissions"
+                          />
+                        }
+                      />
+                    </SettingsSection>
+
+                    {/* Group 4: Workspace & Confirmations */}
+                    <SettingsSection title="Workspace & Confirmations">
+                      <SettingsRow
+                        title="New threads"
+                        description="Pick the default workspace mode for newly created draft threads."
+                        resetAction={
+                          settings.defaultThreadEnvMode !==
+                          DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode ? (
+                            <SettingResetButton
+                              label="new threads"
+                              onClick={() =>
+                                updateSettings({
+                                  defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
                                 })
                               }
                             />
@@ -1420,306 +1632,106 @@ function SettingsRouteView() {
                         }
                         control={
                           <Select
-                            value={settings.desktopIconTheme}
+                            value={settings.defaultThreadEnvMode}
                             onValueChange={(value) => {
-                              if (value !== "dark" && value !== "light") {
-                                return;
-                              }
+                              if (value !== "local" && value !== "worktree") return;
                               updateSettings({
-                                desktopIconTheme: value,
+                                defaultThreadEnvMode: value,
                               });
                             }}
                           >
                             <SelectTrigger
                               className="w-full sm:w-44"
-                              aria-label="Desktop icon theme"
+                              aria-label="Default thread mode"
                             >
                               <SelectValue>
-                                {DESKTOP_ICON_OPTIONS.find(
-                                  (option) => option.value === settings.desktopIconTheme,
-                                )?.label ?? "Dark icon"}
+                                {settings.defaultThreadEnvMode === "worktree"
+                                  ? "New worktree"
+                                  : "Local"}
                               </SelectValue>
                             </SelectTrigger>
                             <SelectPopup align="end" alignItemWithTrigger={false}>
-                              {DESKTOP_ICON_OPTIONS.map((option) => (
-                                <SelectItem hideIndicator key={option.value} value={option.value}>
-                                  {option.label}
-                                </SelectItem>
-                              ))}
+                              <SelectItem hideIndicator value="local">
+                                Local
+                              </SelectItem>
+                              <SelectItem hideIndicator value="worktree">
+                                New worktree
+                              </SelectItem>
                             </SelectPopup>
                           </Select>
                         }
                       />
-                    ) : null}
 
-                    <SettingsRow
-                      title="Diff line wrapping"
-                      description="Set the default wrap state when the diff panel opens. The in-panel wrap toggle only affects the current diff session."
-                      resetAction={
-                        settings.diffWordWrap !== DEFAULT_UNIFIED_SETTINGS.diffWordWrap ? (
-                          <SettingResetButton
-                            label="diff line wrapping"
-                            onClick={() =>
+                      <SettingsRow
+                        title="Delete confirmation"
+                        description="Ask before deleting a thread and its chat history."
+                        resetAction={
+                          settings.confirmThreadDelete !==
+                          DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
+                            <SettingResetButton
+                              label="delete confirmation"
+                              onClick={() =>
+                                updateSettings({
+                                  confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Switch
+                            checked={settings.confirmThreadDelete}
+                            onCheckedChange={(checked) =>
                               updateSettings({
-                                diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
+                                confirmThreadDelete: Boolean(checked),
                               })
                             }
+                            aria-label="Confirm thread deletion"
                           />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.diffWordWrap}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              diffWordWrap: Boolean(checked),
-                            })
-                          }
-                          aria-label="Wrap diff lines by default"
-                        />
-                      }
-                    />
+                        }
+                      />
 
-                    <SettingsRow
-                      title="Assistant output"
-                      description="Show token-by-token output while a response is in progress."
-                      resetAction={
-                        settings.enableAssistantStreaming !==
-                        DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming ? (
-                          <SettingResetButton
-                            label="assistant output"
-                            onClick={() =>
+                      <SettingsRow
+                        title="Confirm tab close"
+                        description="Ask before closing a project tab (cmd/ctrl+W or the tab's × button)."
+                        resetAction={
+                          settings.confirmTabClose !== DEFAULT_UNIFIED_SETTINGS.confirmTabClose ? (
+                            <SettingResetButton
+                              label="confirm tab close"
+                              onClick={() =>
+                                updateSettings({
+                                  confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <Switch
+                            checked={settings.confirmTabClose}
+                            onCheckedChange={(checked) =>
                               updateSettings({
-                                enableAssistantStreaming:
-                                  DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+                                confirmTabClose: Boolean(checked),
                               })
                             }
+                            aria-label="Confirm before closing a tab"
                           />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.enableAssistantStreaming}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              enableAssistantStreaming: Boolean(checked),
-                            })
-                          }
-                          aria-label="Stream assistant messages"
-                        />
-                      }
-                    />
-
-                    <SettingsRow
-                      title="Always create tasks"
-                      description="Synthesize task progress for providers that do not emit native task events."
-                      resetAction={
-                        settings.alwaysCreateTasks !==
-                        DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks ? (
-                          <SettingResetButton
-                            label="always create tasks"
-                            onClick={() =>
-                              updateSettings({
-                                alwaysCreateTasks: DEFAULT_UNIFIED_SETTINGS.alwaysCreateTasks,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.alwaysCreateTasks}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              alwaysCreateTasks: Boolean(checked),
-                            })
-                          }
-                          aria-label="Always create tasks"
-                        />
-                      }
-                    />
-
-                    <SettingsRow
-                      title="New threads"
-                      description="Pick the default workspace mode for newly created draft threads."
-                      resetAction={
-                        settings.defaultThreadEnvMode !==
-                        DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode ? (
-                          <SettingResetButton
-                            label="new threads"
-                            onClick={() =>
-                              updateSettings({
-                                defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Select
-                          value={settings.defaultThreadEnvMode}
-                          onValueChange={(value) => {
-                            if (value !== "local" && value !== "worktree") return;
-                            updateSettings({
-                              defaultThreadEnvMode: value,
-                            });
-                          }}
-                        >
-                          <SelectTrigger
-                            className="w-full sm:w-44"
-                            aria-label="Default thread mode"
-                          >
-                            <SelectValue>
-                              {settings.defaultThreadEnvMode === "worktree"
-                                ? "New worktree"
-                                : "Local"}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectPopup align="end" alignItemWithTrigger={false}>
-                            <SelectItem hideIndicator value="local">
-                              Local
-                            </SelectItem>
-                            <SelectItem hideIndicator value="worktree">
-                              New worktree
-                            </SelectItem>
-                          </SelectPopup>
-                        </Select>
-                      }
-                    />
-
-                    <SettingsRow
-                      title="Delete confirmation"
-                      description="Ask before deleting a thread and its chat history."
-                      resetAction={
-                        settings.confirmThreadDelete !==
-                        DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete ? (
-                          <SettingResetButton
-                            label="delete confirmation"
-                            onClick={() =>
-                              updateSettings({
-                                confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.confirmThreadDelete}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              confirmThreadDelete: Boolean(checked),
-                            })
-                          }
-                          aria-label="Confirm thread deletion"
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      title="Confirm tab close"
-                      description="Ask before closing a project tab (cmd/ctrl+W or the tab's × button)."
-                      resetAction={
-                        settings.confirmTabClose !== DEFAULT_UNIFIED_SETTINGS.confirmTabClose ? (
-                          <SettingResetButton
-                            label="confirm tab close"
-                            onClick={() =>
-                              updateSettings({
-                                confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
-                              })
-                            }
-                          />
-                        ) : null
-                      }
-                      control={
-                        <Switch
-                          checked={settings.confirmTabClose}
-                          onCheckedChange={(checked) =>
-                            updateSettings({
-                              confirmTabClose: Boolean(checked),
-                            })
-                          }
-                          aria-label="Confirm before closing a tab"
-                        />
-                      }
-                    />
-                    <SettingsRow
-                      title="Text generation model"
-                      description="Configure the model used for text generation (commit messages, PR content etc.)"
-                      resetAction={
-                        JSON.stringify(settings.textGenerationModelSelection ?? null) !==
-                        JSON.stringify(
-                          DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
-                        ) ? (
-                          <SettingResetButton
-                            label="text generation model"
-                            onClick={() => {
-                              updateSettings({
-                                textGenerationModelSelection:
-                                  DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                              });
-                            }}
-                          />
-                        ) : null
-                      }
-                      control={
-                        <div className="flex w-full flex-wrap items-center justify-end gap-2">
-                          <SettingsProviderModelPicker
-                            activeInstanceId={textGenInstanceId}
-                            model={textGenModel}
-                            instanceEntries={gitModelInstanceEntries}
-                            modelOptionsByInstance={gitModelOptionsByInstance}
-                            triggerVariant="outline"
-                            triggerClassName="min-w-0 max-w-none shrink-0"
-                            onInstanceModelChange={(instanceId, model) => {
-                              updateSettings({
-                                textGenerationModelSelection: resolveAppModelSelectionState(
-                                  {
-                                    ...settings,
-                                    textGenerationModelSelection: createModelSelection(
-                                      instanceId,
-                                      model,
-                                    ),
-                                  },
-                                  serverProviders,
-                                ),
-                              });
-                            }}
-                          />
-                          <TraitsPicker
-                            provider={textGenProvider as any}
-                            models={textGenInstanceEntry?.models ?? []}
-                            model={textGenModel}
-                            prompt=""
-                            onPromptChange={() => {}}
-                            modelOptions={textGenModelOptions}
-                            allowPromptInjectedEffort={false}
-                            triggerVariant="outline"
-                            triggerClassName="min-w-0 max-w-none shrink-0"
-                            onModelOptionsChange={(nextOptions) => {
-                              updateSettings({
-                                textGenerationModelSelection: resolveAppModelSelectionState(
-                                  {
-                                    ...settings,
-                                    textGenerationModelSelection: createModelSelection(
-                                      textGenInstanceId,
-                                      textGenModel,
-                                      nextOptions,
-                                    ),
-                                  },
-                                  serverProviders,
-                                ),
-                              });
-                            }}
-                          />
-                        </div>
-                      }
-                    />
-                  </SettingsSection>
+                        }
+                      />
+                    </SettingsSection>
+                  </div>
                 ) : null}
                 {activeSettingsSection === "startup-animation" ? (
-                  <SettingsSection
-                    title="Animations"
-                    headerAction={
+                  <div className="space-y-6">
+                    <div className="mb-2 flex items-start justify-between">
+                      <div className="space-y-1.5">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          Animations
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Customize interactive UI transitions and startup animation preferences.
+                        </p>
+                      </div>
                       <SettingsHeaderPortal>
                         <Button
                           size="xs"
@@ -1743,8 +1755,9 @@ function SettingsRouteView() {
                           Restore defaults
                         </Button>
                       </SettingsHeaderPortal>
-                    }
-                  >
+                    </div>
+
+                    <SettingsSection title="Animation Controls">
                     <div className="flex flex-col gap-10">
                       {/* ANIMATION CONTROLS (Toggled) */}
                       <div className="flex flex-col gap-5">
@@ -2017,6 +2030,7 @@ function SettingsRouteView() {
                       </div>
                     </div>
                   </SettingsSection>
+                </div>
                 ) : null}
                 {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
                 {activeSettingsSection === "source-control" ? (
@@ -2027,9 +2041,19 @@ function SettingsRouteView() {
                 ) : null}
                 {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
                 {activeSettingsSection === "providers" ? (
-                  <SettingsSection
-                    title="Providers"
-                    headerAction={
+                  <div className="space-y-6">
+                    <div className="mb-2 space-y-1.5">
+                      <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                        Providers
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Manage AI providers, API keys, custom model endpoints, and status checks.
+                      </p>
+                    </div>
+
+                    <SettingsSection
+                      title="Configured Providers"
+                      headerAction={
                       <div className="flex items-center gap-1.5">
                         {serverProviders.length > 0 ? (
                           <span className="text-[11px] text-muted-foreground/60">
@@ -2527,6 +2551,7 @@ function SettingsRouteView() {
                       );
                     })}
                   </SettingsSection>
+                </div>
                 ) : null}
                 {activeSettingsSection === "keybindings" ? (
                   <KeybindingsSettings
@@ -2538,90 +2563,99 @@ function SettingsRouteView() {
                   />
                 ) : null}
                 {activeSettingsSection === "about" ? (
-                  <SettingsSection title="About">
-                    <SettingsRow
-                      title="Version"
-                      description="The version of Tabs currently installed."
-                      control={
-                        <code className="text-xs font-medium text-muted-foreground">
-                          {APP_VERSION}
-                        </code>
-                      }
-                    />
+                  <div className="space-y-6">
+                    <div className="mb-2 space-y-1.5">
+                      <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                        About
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        Application build details, software updates, and diagnostic information.
+                      </p>
+                    </div>
 
-                    {isElectron && updateState ? (
+                    <SettingsSection title="Application Details">
                       <SettingsRow
-                        title="Software update"
-                        description={describeDesktopUpdate(updateState)}
-                        status={
-                          updateActionError ? (
-                            <span className="text-destructive">{updateActionError}</span>
-                          ) : updateState.status === "downloading" &&
-                            typeof updateState.downloadPercent === "number" ? (
-                            <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-border">
-                              <div
-                                className="h-full rounded-full bg-primary transition-[width]"
-                                style={{ width: `${Math.floor(updateState.downloadPercent)}%` }}
-                              />
-                            </div>
-                          ) : null
+                        title="Version"
+                        description="The version of Tabs currently installed."
+                        control={
+                          <code className="text-xs font-medium text-muted-foreground">
+                            {APP_VERSION}
+                          </code>
                         }
-                        control={(() => {
-                          const action = resolveDesktopUpdateButtonAction(updateState);
-                          if (action === "none") {
-                            // When auto-update is unavailable (e.g. unsigned macOS),
-                            // point the user to the GitHub releases page instead.
-                            if (
-                              updateState.status === "disabled" ||
-                              updateState.status === "error"
-                            ) {
+                      />
+
+                      {isElectron && updateState ? (
+                        <SettingsRow
+                          title="Software update"
+                          description={describeDesktopUpdate(updateState)}
+                          status={
+                            updateActionError ? (
+                              <span className="text-destructive">{updateActionError}</span>
+                            ) : updateState.status === "downloading" &&
+                              typeof updateState.downloadPercent === "number" ? (
+                              <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-border">
+                                <div
+                                  className="h-full rounded-full bg-primary transition-[width]"
+                                  style={{ width: `${Math.floor(updateState.downloadPercent)}%` }}
+                                />
+                              </div>
+                            ) : null
+                          }
+                          control={(() => {
+                            const action = resolveDesktopUpdateButtonAction(updateState);
+                            if (action === "none") {
+                              if (
+                                updateState.status === "disabled" ||
+                                updateState.status === "error"
+                              ) {
+                                return (
+                                  <Button
+                                    size="xs"
+                                    variant="outline"
+                                    onClick={() =>
+                                      void window.desktopBridge?.openExternal(TABS_RELEASES_URL)
+                                    }
+                                  >
+                                    View releases
+                                  </Button>
+                                );
+                              }
                               return (
-                                <Button
-                                  size="xs"
-                                  variant="outline"
-                                  onClick={() =>
-                                    void window.desktopBridge?.openExternal(TABS_RELEASES_URL)
-                                  }
-                                >
-                                  View releases
-                                </Button>
+                                <span className="text-xs text-muted-foreground">
+                                  {updateState.status === "checking" ? "Checking…" : "Up to date"}
+                                </span>
                               );
                             }
                             return (
-                              <span className="text-xs text-muted-foreground">
-                                {updateState.status === "checking" ? "Checking…" : "Up to date"}
-                              </span>
+                              <Button
+                                size="xs"
+                                variant="outline"
+                                disabled={isDesktopUpdateButtonDisabled(updateState)}
+                                title={getDesktopUpdateButtonTooltip(updateState)}
+                                onClick={() => runUpdateAction(action)}
+                              >
+                                {desktopUpdateButtonLabel(action)}
+                              </Button>
                             );
-                          }
-                          return (
-                            <Button
-                              size="xs"
-                              variant="outline"
-                              disabled={isDesktopUpdateButtonDisabled(updateState)}
-                              title={getDesktopUpdateButtonTooltip(updateState)}
-                              onClick={() => runUpdateAction(action)}
-                            >
-                              {desktopUpdateButtonLabel(action)}
-                            </Button>
-                          );
-                        })()}
-                      />
-                    ) : null}
+                          })()}
+                        />
+                      ) : null}
 
-                    {isElectron ? (
-                      <SettingsRow
-                        title="Uninstall Tabs"
-                        description="Remove Tabs from this computer."
-                        status={
-                          <ol className="ms-4 list-decimal space-y-0.5">
-                            {uninstallInstructions(detectDesktopOs()).map((step) => (
-                              <li key={step}>{step}</li>
-                            ))}
-                          </ol>
-                        }
-                      />
-                    ) : null}
-                  </SettingsSection>
+                      {isElectron ? (
+                        <SettingsRow
+                          title="Uninstall Tabs"
+                          description="Remove Tabs from this computer."
+                          status={
+                            <ol className="ms-4 list-decimal space-y-0.5">
+                              {uninstallInstructions(detectDesktopOs()).map((step) => (
+                                <li key={step}>{step}</li>
+                              ))}
+                            </ol>
+                          }
+                        />
+                      ) : null}
+                    </SettingsSection>
+                  </div>
                 ) : null}
               </div>
             </div>

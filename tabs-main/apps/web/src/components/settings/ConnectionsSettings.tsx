@@ -132,6 +132,16 @@ export function ConnectionsSettings() {
   return (
     <div className="space-y-6">
       {confirmDialog}
+
+      <div className="mb-2 space-y-1.5">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          Connections
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Configure network access, Tailscale HTTPS tunnels, and remote environment connections.
+        </p>
+      </div>
+
       <SettingsSection
         title="This Environment"
         headerAction={
@@ -738,6 +748,10 @@ export function ConnectionsSettings() {
           </div>
         </div>
       </SettingsSection>
+
+      <p className="text-xs text-muted-foreground/60 px-0.5">
+        Remote environments let Tabs connect to other machines, VMs, or instances running the editor. Use Tailscale for secure encrypted access without port forwarding.
+      </p>
     </div>
   );
 }

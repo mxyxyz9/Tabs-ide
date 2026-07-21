@@ -999,7 +999,7 @@ const ModelRow = memo(function ModelRow(props: {
               textShadow: props.ultra ? `0 0 8px ${props.themeColor.hex}99` : undefined,
             }}
           >
-            {getCleanModelName(props.model.name, props.activeTab)}
+            {getCleanModelName(props.model.name, props.activeTab ?? null)}
           </span>
         </div>
 

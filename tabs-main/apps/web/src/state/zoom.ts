@@ -9,7 +9,7 @@ export const ZOOM_SNAP_POINTS = [0.75, 0.9, 1.0, 1.1, 1.25, 1.5] as const;
 let memoryZoomStorage: string | null = null;
 
 export function snapZoomFactor(factor: number): number {
-  let closest = ZOOM_SNAP_POINTS[0];
+  let closest: typeof ZOOM_SNAP_POINTS[number] = ZOOM_SNAP_POINTS[0];
   let minDiff = Math.abs(factor - closest);
   for (const point of ZOOM_SNAP_POINTS) {
     const diff = Math.abs(factor - point);
@@ -49,14 +49,14 @@ export function zoomIn(): number {
   const current = getZoomFactor();
   const index = ZOOM_SNAP_POINTS.findIndex((p) => p >= current);
   const nextIndex = index < 0 ? ZOOM_SNAP_POINTS.length - 1 : Math.min(ZOOM_SNAP_POINTS.length - 1, index + 1);
-  return applyZoomFactor(ZOOM_SNAP_POINTS[nextIndex]);
+  return applyZoomFactor(ZOOM_SNAP_POINTS[nextIndex] ?? DEFAULT_ZOOM);
 }
 
 export function zoomOut(): number {
   const current = getZoomFactor();
   const index = ZOOM_SNAP_POINTS.findIndex((p) => p >= current);
   const nextIndex = index <= 0 ? 0 : index - 1;
-  return applyZoomFactor(ZOOM_SNAP_POINTS[nextIndex]);
+  return applyZoomFactor(ZOOM_SNAP_POINTS[nextIndex] ?? DEFAULT_ZOOM);
 }
 
 export function resetZoom(): number {

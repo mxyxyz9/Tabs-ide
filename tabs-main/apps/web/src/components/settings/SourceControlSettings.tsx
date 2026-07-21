@@ -103,6 +103,14 @@ export function SourceControlSettingsPanel({
   if (isLoading && !data) {
     return (
       <div className="space-y-6">
+        <div className="mb-2 space-y-1.5">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            Source Control
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage version control systems, code hosting providers, and authentication status.
+          </p>
+        </div>
         <SettingsSection title="Version Control" headerAction={scanButton}>
           <div className="p-6 text-center text-xs text-muted-foreground">
             Scanning environment...
@@ -115,6 +123,14 @@ export function SourceControlSettingsPanel({
   if (error) {
     return (
       <div className="space-y-6">
+        <div className="mb-2 space-y-1.5">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            Source Control
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage version control systems, code hosting providers, and authentication status.
+          </p>
+        </div>
         <SettingsSection title="Version Control" headerAction={scanButton}>
           <div className="p-6 text-center text-xs text-destructive">
             Failed to scan environment: {error instanceof Error ? error.message : String(error)}
@@ -140,6 +156,15 @@ export function SourceControlSettingsPanel({
 
   return (
     <div className="space-y-6">
+      <div className="mb-2 space-y-1.5">
+        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          Source Control
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Manage version control systems, code hosting providers, and authentication status.
+        </p>
+      </div>
+
       <SettingsSection title="Version Control" headerAction={scanButton}>
         {vcs.map((item) => {
           const Icon = VCS_ICONS[item.system as keyof typeof VCS_ICONS];
@@ -355,6 +380,10 @@ export function SourceControlSettingsPanel({
           );
         })}
       </SettingsSection>
+
+      <p className="text-xs text-muted-foreground/60 px-0.5">
+        Install the required CLI tools to enable provider authentication and pull request integrations. Tabs scans your environment automatically — hit the refresh icon above to re-scan.
+      </p>
     </div>
   );
 }

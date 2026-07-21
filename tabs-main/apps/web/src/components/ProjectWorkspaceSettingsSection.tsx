@@ -659,11 +659,19 @@ export function ProjectWorkspaceSettingsSection() {
     <>
       {confirmDialog}
       <section className="space-y-6">
-        <div className="mb-6 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Project Workspace
-            </h2>
+        <div className="mb-2 space-y-4">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-3">
+                <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                  Project Workspace
+                </h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Configure tools, browser tabs, terminals, and workspace settings for this project.
+              </p>
+            </div>
+
             <SettingsHeaderPortal>
               <Button
                 size="xs"
@@ -685,15 +693,26 @@ export function ProjectWorkspaceSettingsSection() {
               </Button>
             </SettingsHeaderPortal>
           </div>
-          <div className="flex flex-col gap-2">
-            <h3 className="text-2xl font-semibold text-foreground tracking-tight break-words">
-              {activeProject.name}
-            </h3>
-            <div className="text-xs text-muted-foreground font-mono bg-muted/40 px-2 py-1.5 rounded-md w-fit break-all border border-border/50">
-              {activeProject.cwd}
-            </div>
-          </div>
         </div>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold">Active Project</CardTitle>
+            <CardDescription>
+              Current workspace folder and path details.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-2">
+              <div className="text-lg font-semibold text-foreground tracking-tight break-words">
+                {activeProject.name}
+              </div>
+              <div className="text-xs text-muted-foreground font-mono bg-muted/40 px-2.5 py-1.5 rounded-md w-fit break-all border border-border/50">
+                {activeProject.cwd}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
