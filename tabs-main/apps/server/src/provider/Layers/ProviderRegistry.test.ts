@@ -61,6 +61,8 @@ const disabledCodexSettings: CodexSettings = Schema.decodeSync(CodexSettings)({
 
 process.env.T3CODE_CURSOR_ENABLED = "1";
 
+const itLive = it.live;
+
 // ── Test helpers ────────────────────────────────────────────────────
 
 const encoder = new TextEncoder();
@@ -977,7 +979,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
       // breaks — the `codex_personal`-never-probes bug we are guarding
       // against — that snapshot never lands in `getProviders` and the
       // assertions below fail.
-      it.effect("propagates real Codex probe failures to the aggregator at boot", () =>
+      //
+      // Uses `itLive` (real wall clock) because the asynchronous boot
+      // probe uses `Effect.sleep` and `Effect.timeoutOption` internally;
+      // under the default `it.effect` TestClock those timers never fire,
+      // so the probe never completes and the test deadlocks.
+      itLive("propagates real Codex probe failures to the aggregator at boot", () =>
         Effect.gen(function* () {
           const missingBinary = `t3code_codex_missing_`;
           const serverSettings = yield* makeMutableServerSettingsService(
@@ -1030,11 +1037,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             Layer.provideMerge(TestHttpClientLive),
             Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
             Layer.provideMerge(OpenCodeRuntimeLive),
-            // NO spawner mock — `ChildProcessSpawner` is supplied by the
-            // outer `NodeServices.layer` on `it.layer(...)` and will
-            // genuinely spawn a subprocess. The missing-binary ENOENT is
-            // what exercises the same failure mode as a misconfigured
-            // production `binaryPath`.
+            // `it.live` does not inherit layers from the outer `it.layer`
+            // wrapper, so provide `NodeServices.layer` inline for the real
+            // `ChildProcessSpawner` + `FileSystem` + `Path` services.
+            Layer.provideMerge(NodeServices.layer),
           );
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
             Scope.provide(scope),
@@ -1088,7 +1094,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
       // rebuilt instance's refresh (previous bug mode), the aggregator
       // keeps the old snapshot and this test fails.
       //
-      it.effect("re-probes when settings change the codex binaryPath", () =>
+      // Uses `itLive` (real wall clock) because the asynchronous boot
+      // probe and the re-probe both use `Effect.sleep` and
+      // `Effect.timeoutOption` internally; under TestClock those timers
+      // never fire and the test deadlocks.
+      itLive("re-probes when settings change the codex binaryPath", () =>
         Effect.gen(function* () {
           const firstMissing = `t3code_codex_first_`;
           const secondMissing = `t3code_codex_second_`;
@@ -1157,11 +1167,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             const initialCheckedAt = initialCodex?.checkedAt;
             assert.notStrictEqual(initialCheckedAt, undefined);
 
-            // The rebuilt instance may re-probe synchronously during the
-            // settings update. Advance the TestClock first so `checkedAt`
-            // can safely act as the fresh-probe marker this assertion uses.
-            yield* TestClock.adjust("1 second");
-
             // Drive a settings change. The Hydration layer's
             // `SettingsWatcherLive` consumes this via `streamChanges`,
             // calls `reconcile`, which rebuilds the codex instance (the
@@ -1176,16 +1181,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
               },
             });
 
-            // Poll with TestClock until `checkedAt` advances or we hit a
-            // generous virtual 3-second ceiling.
+            // Poll with real wall-clock sleep until `checkedAt` advances
+            // or we hit a generous 10-second ceiling.
             const refreshed = yield* Effect.gen(function* () {
-              for (let attempts = 0; attempts < 60; attempts += 1) {
+              for (let attempts = 0; attempts < 200; attempts += 1) {
                 const providers = yield* registry.getProviders;
                 const codex = providers.find((provider) => provider.instanceId === "codex");
                 if (codex !== undefined && codex.checkedAt !== initialCheckedAt) {
                   return providers;
                 }
-                yield* TestClock.adjust("50 millis");
+                yield* Effect.sleep("50 millis");
                 yield* Effect.yieldNow;
               }
               return yield* registry.getProviders;
