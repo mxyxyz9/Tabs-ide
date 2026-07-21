@@ -338,6 +338,24 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       }
     }
 
+    if (activeTab === "favorites") {
+      const finalStops: ProviderOptionChoice[] = [];
+      for (const id of standardOrder) {
+        const opt = allOptionsMap.get(id);
+        if (opt) {
+          finalStops.push(opt);
+        }
+      }
+
+      for (const [id, opt] of allOptionsMap.entries()) {
+        if (!standardOrder.includes(id) && !finalStops.some((s) => s.id === id)) {
+          finalStops.push(opt);
+        }
+      }
+
+      return finalStops;
+    }
+
     let maxStandardIndex = -1;
     for (const id of allOptionsMap.keys()) {
       const idx = standardOrder.indexOf(id);
@@ -360,13 +378,22 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     }
 
     for (const [id, opt] of allOptionsMap.entries()) {
-      if (!standardOrder.includes(id)) {
+      if (!standardOrder.includes(id) && !finalStops.some((s) => s.id === id)) {
         finalStops.push(opt);
       }
     }
 
     return finalStops;
   }, [models, activeTab]);
+
+  const matrixMinWidthClass =
+    globalStops.length >= 8
+      ? "min-w-[38rem]"
+      : globalStops.length >= 7
+        ? "min-w-[36rem]"
+        : globalStops.length >= 6
+          ? "min-w-[34rem]"
+          : "min-w-[32rem]";
 
   // Group models hierarchically by subProvider or provider name
   const groupedModels = useMemo(() => {
@@ -388,6 +415,11 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     const standardOrder = getStandardOrderForProvider(activeTab);
 
     const sortedList = [...models].sort((a, b) => {
+      const isAutoA = a.slug === "auto" || a.name.toLowerCase() === "auto";
+      const isAutoB = b.slug === "auto" || b.name.toLowerCase() === "auto";
+      if (isAutoA && !isAutoB) return -1;
+      if (!isAutoA && isAutoB) return 1;
+
       const descA = getProviderOptionDescriptors({
         caps: a.capabilities ?? EMPTY_CAPABILITIES,
         selections: undefined,
@@ -477,6 +509,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const ActiveIcon = PROVIDER_ICON_BY_PROVIDER[activeProvider];
 
+  const isExpandedPicker = Boolean(leverDescriptor) || globalStops.length >= 8;
+
   return (
     <Menu
       open={isOpen}
@@ -493,7 +527,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
             size="sm"
             variant="ghost"
             className={cn(
-              "min-w-0 max-w-56 justify-start gap-2 overflow-hidden whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80",
+              "min-w-0 max-w-72 justify-start gap-2 overflow-hidden whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80",
               props.triggerClassName,
             )}
           />
@@ -506,8 +540,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       <MenuPopup
         side="top"
         sideOffset={8}
-        align={leverDescriptor ? "center" : "start"}
-        alignOffset={leverDescriptor ? 0 : 8}
+        align={isExpandedPicker ? "center" : "start"}
+        alignOffset={isExpandedPicker ? 0 : 8}
         anchor={props.popupAnchorRef}
         collisionPadding={collisionPadding}
         className="w-auto p-0 border-0 bg-transparent shadow-none before:hidden before:shadow-none dark:before:hidden [&>div]:p-0"
@@ -582,11 +616,11 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           )}
 
           {/* Matrix Core containing model rows with horizontal aligned tracks */}
-          <div className="flex min-w-[32rem] flex-col justify-center">
-            <div className="flex flex-col max-h-[380px] overflow-y-auto pr-1.5 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 dark:[&::-webkit-scrollbar-thumb]:bg-white/10 dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div className={cn("flex flex-col justify-center overflow-x-hidden", matrixMinWidthClass)}>
+            <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 dark:[&::-webkit-scrollbar-thumb]:bg-white/10 dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full">
               {/* Header labels aligned absolutely to the global columns */}
               {globalStops.length > 0 && (
-                <div className="sticky top-0 z-30 h-6 mb-1.5 select-none w-full bg-popover/95 border-b border-border/60 pb-2 dark:bg-[#18181b]/95 dark:border-white/5">
+                <div className="sticky top-0 z-30 h-14 mb-2 select-none w-full bg-popover border-b border-border/60 pt-2 pb-3 dark:bg-[#18181b] dark:border-white/5">
                   {globalStops.map((stop, idx) => {
                     const cleanedLabel = stop.label
                       .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -596,9 +630,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                     return (
                       <div
                         key={stop.id}
-                        className="absolute -translate-x-1/2 w-12 text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors break-words leading-[1.15]"
+                        className="absolute top-2 -translate-x-1/2 w-12 text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors break-words leading-[1.1]"
                         style={{
-                          left: `calc(128px + 20px + (100% - 128px - 40px) * ${idx / (globalStops.length - 1)})`,
+                          left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
                         }}
                       >
                         {cleanedLabel}
@@ -636,6 +670,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                             model={model}
                             isActive={isCurrentActive}
                             ultra={isCurrentActive && isUltra}
+                            activeTab={activeTab}
                             isFavorite={isFav}
                             onToggleFavorite={() => handleToggleFavorite(modelProvider, model.slug)}
                             themeColor={
@@ -677,11 +712,36 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   );
 });
 
+function getCleanModelName(
+  name: string,
+  activeTab: ProviderPickerKind | "favorites" | null,
+): string {
+  if (activeTab === "favorites" || activeTab === null) {
+    return name;
+  }
+  const prefixes: Record<string, ReadonlyArray<string>> = {
+    claudeAgent: ["Claude "],
+    opencode: ["OpenCode ", "opencode/"],
+    codex: ["Codex "],
+    cursor: ["Cursor "],
+    grok: ["Grok "],
+  };
+  const list = prefixes[activeTab];
+  if (!list) return name;
+  for (const prefix of list) {
+    if (name.startsWith(prefix)) {
+      return name.slice(prefix.length);
+    }
+  }
+  return name;
+}
+
 // ── ModelRow Component: aligned stops layout with compact dynamic heights
 const ModelRow = memo(function ModelRow(props: {
   model: ServerProviderModel;
   isActive: boolean;
   ultra: boolean;
+  activeTab?: ProviderPickerKind | "favorites" | null;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   themeColor: (typeof THEME_COLORS)[number];
@@ -910,7 +970,7 @@ const ModelRow = memo(function ModelRow(props: {
       )}
 
       {/* Model Name + inline Segmented Sub-controls */}
-      <div className="w-32 pl-3 flex flex-col justify-center leading-none">
+      <div className="w-44 pl-3 flex flex-col justify-center leading-none">
         <div className="flex items-center gap-1 min-w-0">
           {props.onToggleFavorite && (
             <button
@@ -939,7 +999,7 @@ const ModelRow = memo(function ModelRow(props: {
               textShadow: props.ultra ? `0 0 8px ${props.themeColor.hex}99` : undefined,
             }}
           >
-            {props.model.name}
+            {getCleanModelName(props.model.name, props.activeTab)}
           </span>
         </div>
 
