@@ -1042,10 +1042,22 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
 
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry;
-            const providers = yield* registry.getProviders;
-            const codexPersonal = providers.find(
+            let providers = yield* registry.getProviders;
+            let codexPersonal = providers.find(
               (provider) => provider.instanceId === "codex_personal",
             );
+            for (
+              let attempt = 0;
+              attempt < 100 && codexPersonal?.status !== "error";
+              attempt += 1
+            ) {
+              yield* Effect.sleep("50 millis");
+              yield* Effect.yieldNow;
+              providers = yield* registry.getProviders;
+              codexPersonal = providers.find(
+                (provider) => provider.instanceId === "codex_personal",
+              );
+            }
             assert.notStrictEqual(
               codexPersonal,
               undefined,
@@ -1124,10 +1136,22 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             // the two probe runs is `checkedAt` — each probe stamps a
             // fresh DateTime, so we capture it and assert it advances
             // after the settings mutation.
-            const initialProviders = yield* registry.getProviders;
-            const initialCodex = initialProviders.find(
+            let initialProviders = yield* registry.getProviders;
+            let initialCodex = initialProviders.find(
               (provider) => provider.instanceId === "codex",
             );
+            for (
+              let attempt = 0;
+              attempt < 100 && initialCodex?.status !== "error";
+              attempt += 1
+            ) {
+              yield* Effect.sleep("50 millis");
+              yield* Effect.yieldNow;
+              initialProviders = yield* registry.getProviders;
+              initialCodex = initialProviders.find(
+                (provider) => provider.instanceId === "codex",
+              );
+            }
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);
             const initialCheckedAt = initialCodex?.checkedAt;
