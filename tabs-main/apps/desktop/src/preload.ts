@@ -7,6 +7,7 @@ const PICK_FILE_CHANNEL = "desktop:pick-file";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
+const SET_ZOOM_FACTOR_CHANNEL = "desktop:set-zoom-factor";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
@@ -59,6 +60,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   confirm: (message) => ipcRenderer.invoke(CONFIRM_CHANNEL, message),
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
   setIconTheme: (theme) => ipcRenderer.invoke(SET_ICON_THEME_CHANNEL, theme),
+  setZoomFactor: (factor) => ipcRenderer.invoke(SET_ZOOM_FACTOR_CHANNEL, factor),
   showContextMenu: (items, position) => ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, items, position),
   openExternal: (url: string) => ipcRenderer.invoke(OPEN_EXTERNAL_CHANNEL, url),
   onMenuAction: (listener) => {

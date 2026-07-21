@@ -31,8 +31,20 @@ export function getZoomFactor(): number {
 
 export function applyZoomFactor(factor: number): number {
   const clamped = snapZoomFactor(factor);
-  if (typeof document !== "undefined" && document.documentElement) {
-    (document.documentElement.style as unknown as { zoom: string }).zoom = String(clamped);
+  if (typeof window !== "undefined" && window.desktopBridge?.setZoomFactor) {
+    void window.desktopBridge.setZoomFactor(clamped).catch(() => undefined);
+    if (document.documentElement) {
+      (document.documentElement.style as unknown as { zoom: string }).zoom = "";
+      document.documentElement.style.width = "";
+      document.documentElement.style.height = "";
+      document.documentElement.style.minHeight = "";
+    }
+  } else if (typeof document !== "undefined" && document.documentElement) {
+    const el = document.documentElement;
+    (el.style as unknown as { zoom: string }).zoom = String(clamped);
+    el.style.width = "";
+    el.style.height = "";
+    el.style.minHeight = "";
   }
   if (typeof localStorage !== "undefined") {
     localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped));

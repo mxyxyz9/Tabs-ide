@@ -165,7 +165,8 @@ export function SourceControlSettingsPanel({
             Manage version control systems, code hosting providers, and authentication status.
           </p>
         </div>
-        <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
+        <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
+        <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
       </div>
 
       <SettingsSection title="Version Control" headerAction={scanButton}>

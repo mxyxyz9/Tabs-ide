@@ -86,6 +86,7 @@ const PICK_FILE_CHANNEL = "desktop:pick-file";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
+const SET_ZOOM_FACTOR_CHANNEL = "desktop:set-zoom-factor";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
@@ -1982,6 +1983,15 @@ function registerIpcHandlers(): void {
     }
 
     applyDesktopIconTheme(theme);
+  });
+
+  ipcMain.removeHandler(SET_ZOOM_FACTOR_CHANNEL);
+  ipcMain.handle(SET_ZOOM_FACTOR_CHANNEL, async (_event, rawFactor: unknown) => {
+    if (typeof rawFactor === "number" && !isNaN(rawFactor) && rawFactor > 0) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.setZoomFactor(rawFactor);
+      }
+    }
   });
 
   ipcMain.removeHandler(CONTEXT_MENU_CHANNEL);
