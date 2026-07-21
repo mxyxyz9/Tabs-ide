@@ -48,8 +48,10 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
       (descriptor.id === "reasoningEffort" ||
         descriptor.id === "effort" ||
         descriptor.id === "reasoning" ||
+        descriptor.id === "variant" ||
         descriptor.id.toLowerCase().includes("effort") ||
-        descriptor.id.toLowerCase().includes("reasoning")),
+        descriptor.id.toLowerCase().includes("reasoning") ||
+        descriptor.id.toLowerCase().includes("variant")),
   );
   const primaryValue = getProviderOptionCurrentValue(primarySelectDescriptor ?? null);
   const promptEffort = typeof primaryValue === "string" ? primaryValue : null;

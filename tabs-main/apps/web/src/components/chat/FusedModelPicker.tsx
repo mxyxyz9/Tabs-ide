@@ -266,8 +266,10 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           d.id === "reasoningEffort" ||
           d.id === "effort" ||
           d.id === "reasoning" ||
+          d.id === "variant" ||
           d.id.toLowerCase().includes("effort") ||
-          d.id.toLowerCase().includes("reasoning"),
+          d.id.toLowerCase().includes("reasoning") ||
+          d.id.toLowerCase().includes("variant"),
       ) ?? null,
     [selectDescriptors],
   );
@@ -639,8 +641,10 @@ const ModelRow = memo(function ModelRow(props: {
       d.id === "reasoningEffort" ||
       d.id === "effort" ||
       d.id === "reasoning" ||
+      d.id === "variant" ||
       d.id.toLowerCase().includes("effort") ||
-      d.id.toLowerCase().includes("reasoning"),
+      d.id.toLowerCase().includes("reasoning") ||
+      d.id.toLowerCase().includes("variant"),
   );
   const secondarySelects = primarySelect
     ? selects.filter((d) => d.id !== primarySelect.id)

@@ -74,8 +74,10 @@ export function collectReasoningChoices(
         d.id === "reasoningEffort" ||
         d.id === "effort" ||
         d.id === "reasoning" ||
+        d.id === "variant" ||
         d.id.toLowerCase().includes("effort") ||
-        d.id.toLowerCase().includes("reasoning"),
+        d.id.toLowerCase().includes("reasoning") ||
+        d.id.toLowerCase().includes("variant"),
     );
 
     if (primary && primary.type === "select" && Array.isArray(primary.options)) {
