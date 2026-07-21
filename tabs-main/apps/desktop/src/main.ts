@@ -119,6 +119,8 @@ const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-sessi
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
+const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
+const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
 
 function readBrowserSessionId(input: unknown): string | undefined {
   const value = (input as { sessionId?: unknown }).sessionId;
@@ -203,9 +205,9 @@ const codeHostConfig = resolveCodeHostConfig({
   rootDir: ROOT_DIR,
   env: process.env,
 });
-const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig);
-const browserHostManager = new BrowserHostManager(() => mainWindow);
 const codeControlChannel = new CodeControlChannel();
+const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig, codeControlChannel);
+const browserHostManager = new BrowserHostManager(() => mainWindow);
 const CODE_OSS_FILE_PROTOCOL = "vscode-file";
 const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
@@ -2179,6 +2181,18 @@ function registerIpcHandlers(): void {
     codeHostManager.syncSessions(projectIds);
   });
 
+  ipcMain.removeHandler(CODE_HOST_RECREATE_SESSION_CHANNEL);
+  ipcMain.handle(CODE_HOST_RECREATE_SESSION_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      return;
+    }
+    await codeHostManager.recreateSession((input as { projectId: string }).projectId);
+  });
+
   ipcMain.removeHandler(CODE_HOST_RUN_COMMAND_CHANNEL);
   ipcMain.handle(CODE_HOST_RUN_COMMAND_CHANNEL, async (_event, input: unknown) => {
     // The control channel re-validates against the allowlist; this is just the
@@ -2374,6 +2388,21 @@ function registerIpcHandlers(): void {
       return;
     }
     browserHostManager.syncSessions(projectIds);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_RECREATE_SESSION_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_RECREATE_SESSION_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      return;
+    }
+    await browserHostManager.recreateSession(
+      (input as { projectId: string }).projectId,
+      readBrowserSessionId(input),
+    );
   });
 
   ipcMain.removeHandler(VSCODE_FETCH_SHELL_ENV_CHANNEL);

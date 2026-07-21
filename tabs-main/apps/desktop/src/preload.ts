@@ -40,6 +40,8 @@ const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtoo
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const BROWSER_HOST_SESSION_STATE_CHANNEL = "desktop:browser-host:session-state";
+const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
+const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
 
 // Persistence channels
 const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
@@ -80,6 +82,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   openCodeFile: (input) => ipcRenderer.invoke(CODE_HOST_OPEN_FILE_CHANNEL, input),
   setCodeBounds: (input) => ipcRenderer.invoke(CODE_HOST_SET_BOUNDS_CHANNEL, input),
   syncCodeSessions: (projectIds) => ipcRenderer.invoke(CODE_HOST_SYNC_SESSIONS_CHANNEL, projectIds),
+  recreateCodeSession: (input) => ipcRenderer.invoke(CODE_HOST_RECREATE_SESSION_CHANNEL, input),
   runCodeCommand: (projectId: string, commandId: string) =>
     ipcRenderer.invoke(CODE_HOST_RUN_COMMAND_CHANNEL, { projectId, commandId }),
   onCodeChromeState: (listener) => {
@@ -110,6 +113,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   setBrowserBounds: (input) => ipcRenderer.invoke(BROWSER_HOST_SET_BOUNDS_CHANNEL, input),
   syncBrowserSessions: (projectIds) =>
     ipcRenderer.invoke(BROWSER_HOST_SYNC_SESSIONS_CHANNEL, projectIds),
+  recreateBrowserSession: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_RECREATE_SESSION_CHANNEL, input),
   onBrowserSessionState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;

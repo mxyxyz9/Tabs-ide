@@ -104,6 +104,7 @@ import { CloseScreen } from "../components/CloseScreen";
 import { useConfirm } from "~/hooks/useConfirm";
 import { createPortal } from "react-dom";
 import { useZoomFactor, ZOOM_SNAP_POINTS } from "../state/zoom";
+import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
 
 export function SettingsHeaderPortal({ children }: { children: React.ReactNode }) {
   const [target, setTarget] = useState<Element | null>(null);
@@ -595,6 +596,7 @@ function SettingsRouteView() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const [zoomFactor, updateZoom] = useZoomFactor();
+  const activeProjectId = useWorkspaceActiveProjectId();
   const settings = useSettings();
   const { updateSettings, resetSettings } = useUpdateSettings();
   const { copyToClipboard } = useCopyToClipboard<{ providerName: string }>({
@@ -1716,6 +1718,76 @@ function SettingsRouteView() {
                             }
                             aria-label="Confirm before closing a tab"
                           />
+                        }
+                      />
+                    </SettingsSection>
+
+                    <SettingsSection title="Troubleshooting & Recovery">
+                      <SettingsRow
+                        title="Reload Embedded Code OSS"
+                        description="If the embedded editor visual state becomes corrupted, click reload to recreate the editor view without restarting Tabs."
+                        control={
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            disabled={!isElectron || !activeProjectId}
+                            onClick={async () => {
+                              if (!activeProjectId) return;
+                              try {
+                                const bridge = window.desktopBridge;
+                                if (bridge) {
+                                  await bridge.recreateCodeSession({ projectId: activeProjectId });
+                                  toastManager.add({
+                                    type: "success",
+                                    title: "Code OSS reloaded",
+                                    description: "Re-created the Code OSS BrowserView successfully.",
+                                  });
+                                }
+                              } catch (e) {
+                                toastManager.add({
+                                  type: "error",
+                                  title: "Reload failed",
+                                  description: String(e),
+                                });
+                              }
+                            }}
+                          >
+                            Reload Code OSS
+                          </Button>
+                        }
+                      />
+                      
+                      <SettingsRow
+                        title="Reload Embedded Browser Previews"
+                        description="If browser previews or custom embeds fail to synchronize, click reload to recreate the browser preview view."
+                        control={
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            disabled={!isElectron || !activeProjectId}
+                            onClick={async () => {
+                              if (!activeProjectId) return;
+                              try {
+                                const bridge = window.desktopBridge;
+                                if (bridge) {
+                                  await bridge.recreateBrowserSession({ projectId: activeProjectId });
+                                  toastManager.add({
+                                    type: "success",
+                                    title: "Browser Preview reloaded",
+                                    description: "Re-created the Browser Preview BrowserView successfully.",
+                                  });
+                                }
+                              } catch (e) {
+                                toastManager.add({
+                                  type: "error",
+                                  title: "Reload failed",
+                                  description: String(e),
+                                });
+                              }
+                            }}
+                          >
+                            Reload Browser Preview
+                          </Button>
                         }
                       />
                     </SettingsSection>

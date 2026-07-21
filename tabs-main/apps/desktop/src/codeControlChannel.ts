@@ -206,6 +206,16 @@ export class CodeControlChannel {
     return true;
   }
 
+  openFile(projectId: string, filePath: string): boolean {
+    const socket = this.socketsByProject.get(projectId);
+    if (!socket || socket.destroyed || !socket.writable) {
+      return false;
+    }
+    const message: CodeControlServerMessage = { type: "openFile", filePath };
+    socket.write(`${JSON.stringify(message)}\n`);
+    return true;
+  }
+
   url(): string {
     return `tcp://127.0.0.1:${this.port}/?token=${this.token}`;
   }

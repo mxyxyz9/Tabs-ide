@@ -112,6 +112,9 @@ export class BrowserHostManager {
     });
     view.setBackgroundColor("#111111");
 
+    const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
+    view.webContents?.setZoomFactor(initialZoom);
+
     const allowedPermissions = new Set([
       "clipboard-read",
       "clipboard-write",
@@ -174,6 +177,64 @@ export class BrowserHostManager {
     }
   }
 
+  async recreateSession(projectId: string, sessionId?: string): Promise<void> {
+    const key = this.sessionKey(projectId, sessionId);
+    const session = this.sessions.get(key);
+    if (!session) return;
+
+    const currentUrl = session.currentUrl;
+
+    this.detachSession(session);
+    session.view.webContents.close({ waitForBeforeUnload: false });
+
+    const view = new BrowserView({
+      webPreferences: {
+        contextIsolation: true,
+        sandbox: true,
+        nodeIntegration: false,
+        partition: `persist:tabs-browser:${projectId}`,
+      },
+    });
+    view.setBackgroundColor("#111111");
+
+    const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
+    view.webContents?.setZoomFactor(initialZoom);
+
+    const allowedPermissions = new Set([
+      "clipboard-read",
+      "clipboard-write",
+      "clipboard-sanitized-write",
+      "pointerLock",
+      "notifications",
+    ]);
+    if (view.webContents?.session) {
+      view.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
+        callback(allowedPermissions.has(permission));
+      });
+      view.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
+        return allowedPermissions.has(permission);
+      });
+    }
+
+    view.webContents.setUserAgent(
+      sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
+    );
+
+    session.view = view;
+    this.registerSessionEvents(session);
+
+    if (this.activeKey === key) {
+      this.attachSession(session);
+      if (session.bounds) {
+        session.view.setBounds(session.bounds);
+      }
+    }
+
+    if (currentUrl) {
+      await this.loadUrl(session, currentUrl);
+    }
+  }
+
   hideActiveSession(): void {
     if (!this.activeKey) return;
     const session = this.sessions.get(this.activeKey);
@@ -198,12 +259,43 @@ export class BrowserHostManager {
       return;
     }
 
-    session.bounds = {
-      x: Math.round(input.x),
-      y: Math.round(input.y),
-      width: Math.round(input.width),
-      height: Math.round(input.height),
-    };
+    const mainWindow = this.getWindow();
+    const zoomFactor = mainWindow?.webContents?.getZoomFactor() ?? 1.0;
+
+    let x = Math.round(input.x * zoomFactor);
+    let y = Math.round(input.y * zoomFactor);
+    let width = Math.round(input.width * zoomFactor);
+    let height = Math.round(input.height * zoomFactor);
+
+    const isDestroyed = typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
+    const getContentSize = typeof mainWindow?.getContentSize === "function" ? mainWindow.getContentSize.bind(mainWindow) : null;
+
+    if (mainWindow && !isDestroyed && getContentSize) {
+      try {
+        const [contentWidth, contentHeight] = getContentSize();
+        if (typeof contentWidth === "number" && typeof contentHeight === "number") {
+          const rightEdgeDip = Math.round((input.x + input.width) * zoomFactor);
+          if (Math.abs(contentWidth - rightEdgeDip) <= 12) {
+            width = Math.max(0, contentWidth - x);
+          }
+          const bottomEdgeDip = Math.round((input.y + input.height) * zoomFactor);
+          if (Math.abs(contentHeight - bottomEdgeDip) <= 12) {
+            height = Math.max(0, contentHeight - y);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    session.bounds = { x, y, width, height };
+
+    if (session.view) {
+      const currentZoom = session.view.webContents?.getZoomFactor() ?? 1.0;
+      if (Math.abs(currentZoom - zoomFactor) > 0.001) {
+        session.view.webContents?.setZoomFactor(zoomFactor);
+      }
+    }
 
     if (this.activeKey === key) {
       this.attachSession(session);

@@ -1720,13 +1720,14 @@ function DesktopCodeTool(props: { project: Project }) {
     let lastSignature = "";
     const publishBounds = () => {
       frameId = 0;
+      const cssZoom = (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
+        x: rect.x * cssZoom,
+        y: rect.y * cssZoom,
+        width: rect.width * cssZoom,
+        height: rect.height * cssZoom,
         visible: rect.width > 0 && rect.height > 0,
       };
       const signature = [
@@ -1757,12 +1758,14 @@ function DesktopCodeTool(props: { project: Project }) {
     });
     resizeObserver.observe(hostNode);
     window.addEventListener("resize", scheduleBounds);
+    window.addEventListener("tabs-zoom-change", scheduleBounds);
     scheduleBounds();
 
     return () => {
       scheduleBoundsRef.current = null;
       resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleBounds);
+      window.removeEventListener("tabs-zoom-change", scheduleBounds);
       if (frameId !== 0) {
         window.cancelAnimationFrame(frameId);
       }
@@ -5911,13 +5914,14 @@ function DesktopBrowserTool(props: {
     let lastSignature = "";
     const publishBounds = () => {
       frameId = 0;
+      const cssZoom = (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
+        x: Math.round(rect.left * cssZoom),
+        y: Math.round(rect.top * cssZoom),
+        width: Math.round(rect.width * cssZoom),
+        height: Math.round(rect.height * cssZoom),
         visible: rect.width > 0 && rect.height > 0,
       };
       const signature = [
@@ -5945,11 +5949,13 @@ function DesktopBrowserTool(props: {
     });
     resizeObserver.observe(hostNode);
     window.addEventListener("resize", scheduleBounds);
+    window.addEventListener("tabs-zoom-change", scheduleBounds);
     scheduleBounds();
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleBounds);
+      window.removeEventListener("tabs-zoom-change", scheduleBounds);
       if (frameId !== 0) {
         window.cancelAnimationFrame(frameId);
       }
@@ -6537,14 +6543,15 @@ function DesktopCustomEmbedTool(props: {
     let lastSignature = "";
     const publishBounds = () => {
       frameId = 0;
+      const cssZoom = (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
         sessionId: props.sessionId,
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
+        x: Math.round(rect.left * cssZoom),
+        y: Math.round(rect.top * cssZoom),
+        width: Math.round(rect.width * cssZoom),
+        height: Math.round(rect.height * cssZoom),
         visible: rect.width > 0 && rect.height > 0,
       };
       const signature = [
@@ -6572,11 +6579,13 @@ function DesktopCustomEmbedTool(props: {
     });
     resizeObserver.observe(hostNode);
     window.addEventListener("resize", scheduleBounds);
+    window.addEventListener("tabs-zoom-change", scheduleBounds);
     scheduleBounds();
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener("resize", scheduleBounds);
+      window.removeEventListener("tabs-zoom-change", scheduleBounds);
       if (frameId !== 0) {
         window.cancelAnimationFrame(frameId);
       }

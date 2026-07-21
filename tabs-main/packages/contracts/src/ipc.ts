@@ -1035,6 +1035,7 @@ export interface DesktopBridge {
   openCodeFile: (input: DesktopCodeHostOpenFileInput) => Promise<void>;
   setCodeBounds: (input: DesktopCodeHostSetBoundsInput) => Promise<void>;
   syncCodeSessions: (projectIds: readonly string[]) => Promise<void>;
+  recreateCodeSession: (input: { projectId: string }) => Promise<void>;
   /** Forward an allowlisted workbench command to a project's embedded editor. Resolves true when delivered. */
   runCodeCommand: (projectId: string, commandId: string) => Promise<boolean>;
   /** Subscribe to chrome-state pushes from the embedded workbench (tagged by project). Returns an unsubscribe fn. */
@@ -1055,6 +1056,7 @@ export interface DesktopBridge {
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
   setBrowserBounds: (input: DesktopBrowserHostSetBoundsInput) => Promise<void>;
   syncBrowserSessions: (projectIds: readonly string[]) => Promise<void>;
+  recreateBrowserSession: (input: { projectId: string; sessionId?: string }) => Promise<void>;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
   getTailscaleStatus: () => Promise<{
     available: boolean;

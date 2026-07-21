@@ -333,12 +333,19 @@ export const CODE_OSS_THEME_CSS =
 }
 /* Each tab: rounded card, separated by a gap, vertically inset from the bar. */
 .monaco-workbench .tabs-container > .tab {
-  margin: 5px 4px 5px 0;
-  padding: 0 8px 0 11px;
-  height: calc(100% - 10px) !important;
-  min-height: 26px;
-  border-radius: 8px !important;
+  position: relative !important;
+  margin: 4px 4px 4px 0 !important;
+  padding: 0 6px 0 10px !important;
+  height: calc(100% - 8px) !important;
+  min-height: 26px !important;
+  border-radius: 6px !important;
   border: 1px solid transparent !important;
+  border-top-color: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+  --vscode-tab-activeBorderTop: transparent !important;
+  --vscode-tab-activeBorder: transparent !important;
   transition:
     background 120ms ease,
     border-color 120ms ease,
@@ -357,25 +364,70 @@ export const CODE_OSS_THEME_CSS =
 .monaco-workbench .tabs-container > .tab:not(.active):hover .tab-label {
   opacity: 0.9;
 }
-/* Active tab: elevated surface, hairline ring, thin accent top edge, soft lift. */
+/* Active tab: elevated surface, hairline ring, clean border without top accent line. */
 .monaco-workbench .tabs-container > .tab.active {
   background: var(--tabs-bg-elevated) !important;
   border-color: var(--tabs-hairline-strong) !important;
-  box-shadow:
-    inset 0 1.5px 0 0 var(--tabs-accent),
-    0 2px 10px rgba(0, 0, 0, 0.28);
+  border-top-color: var(--tabs-hairline-strong) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28) !important;
 }
 .monaco-workbench .tabs-container > .tab.active .tab-label {
   opacity: 1;
 }
+/* Completely suppress top blue accent borders/indicators across all VS Code DOM elements */
+.monaco-workbench .tabs-container > .tab .tab-border-top,
+.monaco-workbench .tabs-container > .tab > .tab-border-top,
+.monaco-workbench .tabs-container > .tab.active > .tab-border-top,
+.monaco-workbench .tabs-container > .tab.active::before,
 .monaco-workbench .tabs-container > .tab.active::after {
-  content: none;
+  display: none !important;
+  height: 0 !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  background: transparent !important;
+  border: none !important;
+  content: none !important;
 }
-.monaco-workbench .tabs-container > .tab .tab-label {
-  font-size: 12.5px;
+
+/* Tab text and file icon vertical alignment inside the tab pill. */
+.monaco-workbench .tabs-container > .tab .tab-label,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label-container {
+  display: flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  font-size: 12.5px !important;
 }
-/* Close button only on hover (or on the active tab). */
+.monaco-workbench .tabs-container > .tab .monaco-icon-label::before {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  line-height: 1 !important;
+  margin-right: 6px !important;
+  vertical-align: middle !important;
+}
+.monaco-workbench .tabs-container > .tab .monaco-icon-label .label-name {
+  display: inline-flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+  height: 100% !important;
+}
+
+/* Close button container & action icon alignment inside tab pill. */
 .monaco-workbench .tabs-container > .tab .tab-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  position: relative !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  margin-left: 4px !important;
   opacity: 0;
   transition: opacity 120ms ease;
 }
@@ -384,8 +436,42 @@ export const CODE_OSS_THEME_CSS =
 .monaco-workbench .tabs-container > .tab.dirty .tab-actions {
   opacity: 1;
 }
+.monaco-workbench .tabs-container > .tab .tab-actions .monaco-action-bar,
+.monaco-workbench .tabs-container > .tab .tab-actions .actions-container,
+.monaco-workbench .tabs-container > .tab .tab-actions .action-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
 .monaco-workbench .tabs-container > .tab .tab-actions .action-label {
-  border-radius: 5px;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+  position: relative !important;
+}
+.monaco-workbench .tabs-container > .tab .tab-actions .action-label::before {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  vertical-align: top !important;
+  text-align: center !important;
 }
 
 /* ============================================================ SIDEBAR === */

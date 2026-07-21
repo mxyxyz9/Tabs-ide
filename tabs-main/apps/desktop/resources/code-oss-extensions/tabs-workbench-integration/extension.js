@@ -705,6 +705,26 @@ function startCodeControlChannel(context) {
         if (parsed && parsed.type === "runCommand" && typeof parsed.commandId === "string") {
           log(`runCommand ${parsed.commandId}`);
           void runCommand(parsed.commandId);
+        } else if (parsed && parsed.type === "openFile" && typeof parsed.filePath === "string") {
+          log(`openFile ${parsed.filePath}`);
+          void (async () => {
+            try {
+              const workspaceFolder =
+                vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0];
+              let fileUri;
+              if (workspaceFolder) {
+                const relativePath = path.isAbsolute(parsed.filePath)
+                  ? path.relative(workspaceFolder.uri.fsPath, parsed.filePath)
+                  : parsed.filePath;
+                fileUri = vscode.Uri.joinPath(workspaceFolder.uri, relativePath);
+              } else {
+                fileUri = vscode.Uri.file(parsed.filePath);
+              }
+              await vscode.commands.executeCommand("vscode.open", fileUri);
+            } catch (err) {
+              log(`openFile error: ${err && err.message ? err.message : err}`);
+            }
+          })();
         }
       }
     });

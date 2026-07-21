@@ -456,7 +456,9 @@ export const DEFAULT_CODE_CHROME_STATE: CodeChromeState = {
 // ----------------------------------------------------------------------------
 
 /** Messages sent from the broker (Electron main) → extension. */
-export type CodeControlServerMessage = { type: "runCommand"; commandId: string };
+export type CodeControlServerMessage =
+  | { type: "runCommand"; commandId: string }
+  | { type: "openFile"; filePath: string };
 
 /**
  * Messages sent from the extension → broker (Electron main). Both carry the
@@ -507,6 +509,9 @@ export function parseCodeControlServerMessage(raw: string): CodeControlServerMes
   const record = value as Record<string, unknown>;
   if (record.type === "runCommand" && typeof record.commandId === "string") {
     return { type: "runCommand", commandId: record.commandId };
+  }
+  if (record.type === "openFile" && typeof record.filePath === "string") {
+    return { type: "openFile", filePath: record.filePath };
   }
   return null;
 }

@@ -27,6 +27,7 @@ import type {
 
 import { CODE_OSS_THEME_CSS } from "./codeOssThemeCss";
 import { GEIST_MONO_FONT_CSS } from "./geistMonoFontCss";
+import type { CodeControlChannel } from "./codeControlChannel";
 
 const CODE_OSS_SERVER_HOST = "127.0.0.1";
 const CODE_OSS_SERVER_START_TIMEOUT_MS = 20_000;
@@ -260,6 +261,37 @@ function trimTrailingSlash(input: string): string {
 
 function formatCodeHostPayload(entries: ReadonlyArray<readonly [string, string]>): string {
   return JSON.stringify(entries);
+}
+
+function findDefaultWorkspaceFile(workspaceRoot: string): string | null {
+  try {
+    const candidates = [
+      "README.md",
+      "readme.md",
+      "README.txt",
+      "package.json",
+      "index.ts",
+      "index.js",
+      "src/main.ts",
+      "src/index.ts",
+      "src/App.tsx",
+      "src/App.jsx",
+    ];
+    for (const cand of candidates) {
+      if (isFile(Path.join(workspaceRoot, cand), FS)) {
+        return cand;
+      }
+    }
+    const entries = FS.readdirSync(workspaceRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isFile() && !entry.name.startsWith(".")) {
+        return entry.name;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
@@ -1123,16 +1155,34 @@ async function waitForHttpReady(entry: string, timeoutMs: number): Promise<void>
 
 export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
+  private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
   private activeProjectId: string | null = null;
   private disposed = false;
 
   constructor(
     private readonly getWindow: () => BrowserWindow | null,
     private readonly config: CodeHostConfig,
+    private readonly controlChannel?: CodeControlChannel,
   ) {}
 
   async getState(): Promise<DesktopCodeHostState> {
     return { ...this.config.state };
+  }
+
+  async recreateSession(projectId: string): Promise<void> {
+    const session = this.sessions.get(projectId);
+    if (!session) return;
+
+    this.stopSessionServer(session);
+    session.entry = null;
+    session.workspaceUri = null;
+    session.runtimeStartPromise = null;
+    session.lastLoadedUrl = null;
+    session.desktopLoadPending = true;
+
+    if (this.activeProjectId === projectId) {
+      await this.loadSessionWhenVisible(session);
+    }
   }
 
   async ensureSession(input: DesktopCodeHostEnsureSessionInput): Promise<void> {
@@ -1188,6 +1238,12 @@ export class CodeHostManager {
       },
     });
     view.setBackgroundColor("#141414");
+
+    view.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+      if (level >= 2) {
+        console.error(`[code-oss webContents L${level}] ${message} (${sourceId}:${line})`);
+      }
+    });
 
     const allowedPermissions = new Set([
       "clipboard-read",
@@ -1425,12 +1481,26 @@ export class CodeHostManager {
     }
 
     const normalizedRelativePath = normalizeFilePath(input.relativePath);
-    const needsReload =
+    const needsUpdate =
       session.lastFocusedPath !== normalizedRelativePath ||
       session.lastNavigationNonce !== input.navigationNonce;
     session.lastFocusedPath = normalizedRelativePath;
     session.lastNavigationNonce = input.navigationNonce;
-    if (needsReload) {
+
+    if (!needsUpdate) {
+      return;
+    }
+
+    const fullFilePath = Path.resolve(Path.join(session.workspaceRoot, normalizedRelativePath));
+
+    if (this.controlChannel) {
+      const sent = this.controlChannel.openFile(input.projectId, fullFilePath);
+      if (sent) {
+        return;
+      }
+    }
+
+    if (session.lastLoadedUrl === null) {
       session.desktopLoadPending = true;
       await this.loadSessionWhenVisible(session);
     }
@@ -1453,12 +1523,55 @@ export class CodeHostManager {
       return;
     }
 
-    session.bounds = {
-      x: Math.round(input.x),
-      y: Math.round(input.y),
-      width: Math.round(input.width),
-      height: Math.round(input.height),
-    };
+    const mainWindow = this.getWindow();
+    const mainWebContents = mainWindow?.webContents as { getZoomFactor?: () => number } | undefined;
+    const zoomFactor = typeof mainWebContents?.getZoomFactor === "function" ? mainWebContents.getZoomFactor() : 1.0;
+
+    let x = Math.round(input.x * zoomFactor);
+    let y = Math.round(input.y * zoomFactor);
+    let width = Math.round(input.width * zoomFactor);
+    let height = Math.round(input.height * zoomFactor);
+
+    const isDestroyed = typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
+    const getContentSize = typeof mainWindow?.getContentSize === "function" ? mainWindow.getContentSize.bind(mainWindow) : null;
+
+    if (mainWindow && !isDestroyed && getContentSize) {
+      try {
+        const [contentWidth, contentHeight] = getContentSize();
+        if (typeof contentWidth === "number" && typeof contentHeight === "number") {
+          const rightEdgeDip = Math.round((input.x + input.width) * zoomFactor);
+          if (Math.abs(contentWidth - rightEdgeDip) <= 12) {
+            width = Math.max(0, contentWidth - x);
+          }
+          const bottomEdgeDip = Math.round((input.y + input.height) * zoomFactor);
+          if (Math.abs(contentHeight - bottomEdgeDip) <= 12) {
+            height = Math.max(0, contentHeight - y);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    session.bounds = { x, y, width, height };
+
+    if (session.view) {
+      const viewWebContents = session.view.webContents as {
+        getZoomFactor?: () => number;
+        setZoomFactor?: (factor: number) => void;
+      } | undefined;
+      const currentZoom =
+        typeof viewWebContents?.getZoomFactor === "function" ? viewWebContents.getZoomFactor() : 1.0;
+      if (Math.abs(currentZoom - zoomFactor) > 0.001 && typeof viewWebContents?.setZoomFactor === "function") {
+        viewWebContents.setZoomFactor(zoomFactor);
+      }
+    }
+
+    console.log("[BOUNDS_INSTRUMENTATION_MAIN]", {
+      input,
+      zoomFactor,
+      finalBounds: session.bounds,
+    });
 
     if (this.activeProjectId === input.projectId) {
       this.attachSession(session);
@@ -1561,32 +1674,49 @@ export class CodeHostManager {
   }
 
   private async loadSession(session: CodeSession): Promise<void> {
-    const runtime = await this.ensureSessionRuntime(session);
-    const nextUrl =
-      runtime.kind === "desktop-renderer"
-        ? buildDesktopSessionUrl(runtime.entry, session)
-        : buildSessionUrl(runtime.entry, session, {
-            workspaceUri: runtime.workspaceUri,
-            focusedFileUri: session.lastFocusedPath
-              ? this.buildMountedResourceUri(session, session.lastFocusedPath)
-              : null,
-          });
-    if (session.lastLoadedUrl === nextUrl) {
-      return;
+    const existing = this.loadPromiseByProjectId.get(session.projectId);
+    if (existing) {
+      return existing;
     }
-    if (runtime.kind === "desktop-renderer") {
-      const desktopRuntime = this.config.runtime;
-      if (!desktopRuntime || desktopRuntime.kind !== "desktop-renderer") {
-        throw new Error("Desktop Code-OSS runtime is unavailable.");
+
+    const promise = (async () => {
+      try {
+        const runtime = await this.ensureSessionRuntime(session);
+        if (!session.lastFocusedPath) {
+          session.lastFocusedPath = findDefaultWorkspaceFile(session.workspaceRoot);
+        }
+        const nextUrl =
+          runtime.kind === "desktop-renderer"
+            ? buildDesktopSessionUrl(runtime.entry, session)
+            : buildSessionUrl(runtime.entry, session, {
+                workspaceUri: runtime.workspaceUri,
+                focusedFileUri: session.lastFocusedPath
+                  ? this.buildMountedResourceUri(session, session.lastFocusedPath)
+                  : null,
+              });
+        if (session.lastLoadedUrl === nextUrl) {
+          return;
+        }
+        if (runtime.kind === "desktop-renderer") {
+          const desktopRuntime = this.config.runtime;
+          if (!desktopRuntime || desktopRuntime.kind !== "desktop-renderer") {
+            throw new Error("Desktop Code-OSS runtime is unavailable.");
+          }
+          this.ensureDesktopProtocol(session, desktopRuntime);
+          session.desktopLoadPending = false;
+        }
+        session.lastLoadedUrl = nextUrl;
+        if (!session.view) {
+          throw new Error("Embedded Code-OSS session view is unavailable.");
+        }
+        await session.view.webContents.loadURL(nextUrl);
+      } finally {
+        this.loadPromiseByProjectId.delete(session.projectId);
       }
-      this.ensureDesktopProtocol(session, desktopRuntime);
-      session.desktopLoadPending = false;
-    }
-    session.lastLoadedUrl = nextUrl;
-    if (!session.view) {
-      throw new Error("Embedded Code-OSS session view is unavailable.");
-    }
-    await session.view.webContents.loadURL(nextUrl);
+    })();
+
+    this.loadPromiseByProjectId.set(session.projectId, promise);
+    return promise;
   }
 
   private async loadSessionWhenVisible(session: CodeSession): Promise<void> {
@@ -1906,14 +2036,24 @@ export class CodeHostManager {
       return baseUri;
     }
 
-    return new URL(
-      normalizedRelativePath
-        .split("/")
-        .filter((segment) => segment.length > 0)
-        .map(encodeURIComponent)
-        .join("/"),
-      `${trimTrailingSlash(baseUri)}/`,
-    ).toString();
+    const fullPath = Path.resolve(Path.join(session.workspaceRoot, normalizedRelativePath));
+
+    if (baseUri.includes("://")) {
+      try {
+        return new URL(
+          normalizedRelativePath
+            .split("/")
+            .filter((segment) => segment.length > 0)
+            .map(encodeURIComponent)
+            .join("/"),
+          `${trimTrailingSlash(baseUri)}/`,
+        ).toString();
+      } catch {
+        /* fall through to fullPath */
+      }
+    }
+
+    return fullPath;
   }
 
   private attachSession(session: CodeSession): void {
