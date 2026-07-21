@@ -117,6 +117,7 @@ import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
 import GitCommitComposer from "./GitCommitComposer";
 import { Badge } from "./ui/badge";
+import { initializeZoom, resetZoom, zoomIn, zoomOut } from "../state/zoom";
 import { Button } from "./ui/button";
 import { CloneRepositoryDialog } from "./CloneRepositoryDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -8622,7 +8623,48 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           shellChromeFocus: document.hasFocus(),
         },
       });
-      if (!command) return;
+      if (!command) {
+        if (event.metaKey || event.ctrlKey) {
+          if (event.key === "=" || event.key === "+") {
+            event.preventDefault();
+            event.stopPropagation();
+            zoomIn();
+            return;
+          }
+          if (event.key === "-") {
+            event.preventDefault();
+            event.stopPropagation();
+            zoomOut();
+            return;
+          }
+          if (event.key === "0") {
+            event.preventDefault();
+            event.stopPropagation();
+            resetZoom();
+            return;
+          }
+        }
+        return;
+      }
+
+      if (command === "zoom.in") {
+        event.preventDefault();
+        event.stopPropagation();
+        zoomIn();
+        return;
+      }
+      if (command === "zoom.out") {
+        event.preventDefault();
+        event.stopPropagation();
+        zoomOut();
+        return;
+      }
+      if (command === "zoom.reset") {
+        event.preventDefault();
+        event.stopPropagation();
+        resetZoom();
+        return;
+      }
 
       if (command === "tab.new") {
         event.preventDefault();
@@ -8673,6 +8715,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     availableTools,
     handleSelectTool,
   ]);
+
+  useEffect(() => {
+    initializeZoom();
+  }, []);
 
   // Tool-switching shortcuts (cmd/ctrl+alt+1..9 → the Nth visible tool of the
   // active project), via menu accelerators so they work everywhere — including

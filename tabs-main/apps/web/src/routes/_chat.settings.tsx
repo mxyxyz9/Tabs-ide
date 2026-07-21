@@ -11,6 +11,7 @@ import {
   KeyboardIcon,
   LoaderIcon,
   LogInIcon,
+  MinusIcon,
   PlusIcon,
   RefreshCwIcon,
   RotateCcwIcon,
@@ -102,6 +103,7 @@ import { SplashScreen } from "../components/SplashScreen";
 import { CloseScreen } from "../components/CloseScreen";
 import { useConfirm } from "~/hooks/useConfirm";
 import { createPortal } from "react-dom";
+import { useZoomFactor, ZOOM_SNAP_POINTS } from "../state/zoom";
 
 export function SettingsHeaderPortal({ children }: { children: React.ReactNode }) {
   const [target, setTarget] = useState<Element | null>(null);
@@ -130,6 +132,18 @@ const THEME_OPTIONS = [
     label: "Dark",
     description: "Always use the dark theme.",
   },
+] as const;
+
+const ZOOM_PRESETS = [
+  { value: "0.5", label: "50%" },
+  { value: "0.75", label: "75%" },
+  { value: "0.9", label: "90%" },
+  { value: "1", label: "100% (Default)" },
+  { value: "1.1", label: "110%" },
+  { value: "1.25", label: "125%" },
+  { value: "1.5", label: "150%" },
+  { value: "1.75", label: "175%" },
+  { value: "2", label: "200%" },
 ] as const;
 
 const SPLASH_LOADER_STYLE_OPTIONS = [
@@ -575,6 +589,7 @@ function SettingsRouteView() {
   const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const [zoomFactor, updateZoom] = useZoomFactor();
   const settings = useSettings();
   const { updateSettings, resetSettings } = useUpdateSettings();
   const { copyToClipboard } = useCopyToClipboard<{ providerName: string }>({
@@ -1222,6 +1237,95 @@ function SettingsRouteView() {
                             ))}
                           </SelectPopup>
                         </Select>
+                      }
+                    />
+
+                    <SettingsRow
+                      title="Zoom & Scale"
+                      description="Adjust interface zoom level. Drag slider or use Cmd + / Cmd -."
+                      resetAction={
+                        zoomFactor !== 1.0 ? (
+                          <SettingResetButton label="zoom" onClick={() => updateZoom(1.0)} />
+                        ) : null
+                      }
+                      control={
+                        (() => {
+                          const currentIndex = Math.max(
+                            0,
+                            ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01)
+                          );
+                          return (
+                            <div className="flex flex-col gap-2 w-full sm:w-72">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground/70 font-medium">Scale Range</span>
+                                <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
+                                  {Math.round(zoomFactor * 100)}%
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                  onClick={() => updateZoom(ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)])}
+                                  title="Zoom Out (Cmd -)"
+                                  aria-label="Zoom Out"
+                                >
+                                  <MinusIcon className="h-3.5 w-3.5" />
+                                </Button>
+
+                                <div className="relative flex-1 flex items-center px-1">
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max={ZOOM_SNAP_POINTS.length - 1}
+                                    step="1"
+                                    value={currentIndex}
+                                    onChange={(e) =>
+                                      updateZoom(ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)])
+                                    }
+                                    aria-label="Zoom level slider"
+                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
+                                  />
+                                </div>
+
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                  onClick={() =>
+                                    updateZoom(
+                                      ZOOM_SNAP_POINTS[
+                                        Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
+                                      ]
+                                    )
+                                  }
+                                  title="Zoom In (Cmd +)"
+                                  aria-label="Zoom In"
+                                >
+                                  <PlusIcon className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+
+                              <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
+                                {ZOOM_SNAP_POINTS.map((pt) => (
+                                  <button
+                                    key={pt}
+                                    type="button"
+                                    onClick={() => updateZoom(pt)}
+                                    className={cn(
+                                      "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
+                                      Math.abs(zoomFactor - pt) < 0.01 ? "text-primary font-bold" : ""
+                                    )}
+                                  >
+                                    {Math.round(pt * 100)}%
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()
                       }
                     />
 
