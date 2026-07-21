@@ -16,7 +16,7 @@
     },
     "apps/desktop": {
       "name": "@tabs/desktop",
-      "version": "1.2.89",
+      "version": "1.2.91",
       "dependencies": {
         "effect": "catalog:",
         "electron": "40.6.0",
@@ -45,7 +45,7 @@
     },
     "apps/server": {
       "name": "tabs",
-      "version": "1.2.89",
+      "version": "1.2.91",
       "bin": {
         "tabs": "./dist/index.mjs",
       },

@@ -1,6 +1,8 @@
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
@@ -485,7 +487,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     });
   }
 
-  const probeResult = yield* probe({
+  const probeExit = yield* probe({
     binaryPath: codexSettings.binaryPath,
     homePath: codexSettings.homePath,
     cwd: process.cwd(),
@@ -494,12 +496,14 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),
-    Effect.result,
+    Effect.exit,
   );
 
-  if (Result.isFailure(probeResult)) {
-    const error = probeResult.failure;
-    const installed = !isCodexAppServerSpawnError(error);
+  if (Exit.isFailure(probeExit)) {
+    const cause = probeExit.cause;
+    const error = Cause.squash(cause);
+    const installed = !isCodexAppServerSpawnError(error) && !isCodexAppServerSpawnError(cause);
+    const errorMessage = (error as { message?: string })?.message ?? Cause.pretty(cause);
     return buildServerProvider({
       presentation: CODEX_PRESENTATION,
       enabled: codexSettings.enabled,
@@ -512,13 +516,14 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
         status: "error",
         auth: { status: "unknown" },
         message: installed
-          ? `Codex app-server provider probe failed: ${error.message}.`
+          ? `Codex app-server provider probe failed: ${errorMessage}.`
           : "Codex CLI (`codex`) is not installed or not on PATH.",
       },
     });
   }
 
-  if (Option.isNone(probeResult.success)) {
+  const probeResultValue = probeExit.value;
+  if (Option.isNone(probeResultValue)) {
     return buildServerProvider({
       presentation: CODEX_PRESENTATION,
       enabled: codexSettings.enabled,
@@ -535,7 +540,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     });
   }
 
-  const snapshot = probeResult.success.value;
+  const snapshot = probeResultValue.value;
   const accountStatus = accountProbeStatus(snapshot.account);
 
   return buildServerProvider({
