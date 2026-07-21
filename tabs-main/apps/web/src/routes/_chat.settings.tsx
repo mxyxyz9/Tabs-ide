@@ -699,9 +699,9 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-2.5">
+    <section className="space-y-3 pt-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
           {title}
         </h3>
         {headerAction}
@@ -1500,42 +1500,45 @@ function SettingsRouteView() {
               <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
                 {activeSettingsSection === "general" ? (
                   <div className="space-y-6">
-                    <div className="mb-2 flex items-start justify-between">
-                      <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                          General
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          Customize appearance, assistant behavior, display settings, and workspace preferences.
-                        </p>
+                    <div>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1.5">
+                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                            General
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            Customize appearance, assistant behavior, display settings, and workspace preferences.
+                          </p>
+                        </div>
+                        <SettingsHeaderPortal>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className="no-drag"
+                            onClick={async () => {
+                              const confirmed = await confirm(
+                                "Restore default settings?\n\nThis will reset: Theme, Time format, Diff wrapping, Assistant output, New threads, and Confirmations.",
+                              );
+                              if (confirmed) {
+                                setTheme("system");
+                                updateSettings({
+                                  timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
+                                  diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
+                                  enableAssistantStreaming:
+                                    DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
+                                  defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+                                  confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
+                                  confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
+                                });
+                              }
+                            }}
+                          >
+                            <RotateCcwIcon className="size-3.5 mr-1" />
+                            Restore defaults
+                          </Button>
+                        </SettingsHeaderPortal>
                       </div>
-                      <SettingsHeaderPortal>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          className="no-drag"
-                          onClick={async () => {
-                            const confirmed = await confirm(
-                              "Restore default settings?\n\nThis will reset: Theme, Time format, Diff wrapping, Assistant output, New threads, and Confirmations.",
-                            );
-                            if (confirmed) {
-                              setTheme("system");
-                              updateSettings({
-                                timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
-                                diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
-                                enableAssistantStreaming:
-                                  DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
-                                defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
-                                confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
-                                confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
-                              });
-                            }
-                          }}
-                        >
-                          <RotateCcwIcon className="size-3.5 mr-1" />
-                          Restore defaults
-                        </Button>
-                      </SettingsHeaderPortal>
+                      <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
                     </div>
 
                     {/* Group 1: Appearance & Interface */}
@@ -2112,38 +2115,41 @@ function SettingsRouteView() {
                 ) : null}
                 {activeSettingsSection === "startup-animation" ? (
                   <div className="space-y-6">
-                    <div className="mb-2 flex items-start justify-between">
-                      <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                          Animations
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          Customize interactive UI transitions and startup animation preferences.
-                        </p>
+                    <div>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1.5">
+                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                            Animations
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            Customize interactive UI transitions and startup animation preferences.
+                          </p>
+                        </div>
+                        <SettingsHeaderPortal>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className="no-drag"
+                            onClick={async () => {
+                              const confirmed = await confirm(
+                                "Restore default settings?\n\nThis will reset the animation toggles.",
+                              );
+                              if (confirmed) {
+                                updateSettings({
+                                  sliderAnimationsEnabled:
+                                    DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
+                                  animatedTrackFillEnabled:
+                                    DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                });
+                              }
+                            }}
+                          >
+                            <RotateCcwIcon className="size-3.5 mr-1" />
+                            Restore defaults
+                          </Button>
+                        </SettingsHeaderPortal>
                       </div>
-                      <SettingsHeaderPortal>
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          className="no-drag"
-                          onClick={async () => {
-                            const confirmed = await confirm(
-                              "Restore default settings?\n\nThis will reset the animation toggles.",
-                            );
-                            if (confirmed) {
-                              updateSettings({
-                                sliderAnimationsEnabled:
-                                  DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
-                                animatedTrackFillEnabled:
-                                  DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
-                              });
-                            }
-                          }}
-                        >
-                          <RotateCcwIcon className="size-3.5 mr-1" />
-                          Restore defaults
-                        </Button>
-                      </SettingsHeaderPortal>
+                      <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
                     </div>
 
                     <SettingsSection title="Animation Controls">
@@ -2431,13 +2437,16 @@ function SettingsRouteView() {
                 {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
                 {activeSettingsSection === "providers" ? (
                   <div className="space-y-6">
-                    <div className="mb-2 space-y-1.5">
-                      <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                        Providers
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        Manage AI providers, API keys, custom model endpoints, and status checks.
-                      </p>
+                    <div>
+                      <div className="space-y-1.5">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          Providers
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Manage AI providers, API keys, custom model endpoints, and status checks.
+                        </p>
+                      </div>
+                      <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
                     </div>
 
                     {/* 📌 Pinned Models Section */}
@@ -3210,13 +3219,16 @@ function SettingsRouteView() {
                 ) : null}
                 {activeSettingsSection === "about" ? (
                   <div className="space-y-6">
-                    <div className="mb-2 space-y-1.5">
-                      <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                        About
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        Application build details, software updates, and diagnostic information.
-                      </p>
+                    <div>
+                      <div className="space-y-1.5">
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          About
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          Application build details, software updates, and diagnostic information.
+                        </p>
+                      </div>
+                      <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
                     </div>
 
                     <SettingsSection title="Application Details">

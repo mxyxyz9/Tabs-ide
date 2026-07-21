@@ -1158,7 +1158,7 @@ export function KeybindingsSettings({
         platform={platform}
       />
       <section className="space-y-6">
-        <div className="mb-2 space-y-4">
+        <div className="border-b border-border/50 pb-5">
           <div className="flex items-start justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
@@ -1245,6 +1245,7 @@ export function KeybindingsSettings({
               </Button>
             </div>
           </div>
+          <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">

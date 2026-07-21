@@ -133,13 +133,16 @@ export function ConnectionsSettings() {
     <div className="space-y-6">
       {confirmDialog}
 
-      <div className="mb-2 space-y-1.5">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Connections
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Configure network access, Tailscale HTTPS tunnels, and remote environment connections.
-        </p>
+      <div>
+        <div className="space-y-1.5">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            Connections
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Configure network access, Tailscale HTTPS tunnels, and remote environment connections.
+          </p>
+        </div>
+        <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
       </div>
 
       <SettingsSection

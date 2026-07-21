@@ -659,7 +659,7 @@ export function ProjectWorkspaceSettingsSection() {
     <>
       {confirmDialog}
       <section className="space-y-6">
-        <div className="mb-2 space-y-4">
+        <div>
           <div className="flex items-start justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
@@ -683,7 +683,7 @@ export function ProjectWorkspaceSettingsSection() {
                   );
                   if (confirmed) {
                     workspaceShellActions.upsertProjectSettings(activeProjectId, {
-                      // Terminal shell and editor preferences will be reset here if/when they are added to the schema.
+                      // Reset to defaults
                     });
                   }
                 }}
@@ -693,6 +693,7 @@ export function ProjectWorkspaceSettingsSection() {
               </Button>
             </SettingsHeaderPortal>
           </div>
+          <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
         </div>
 
         <Card>

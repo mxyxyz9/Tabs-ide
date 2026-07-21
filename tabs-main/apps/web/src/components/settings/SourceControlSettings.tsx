@@ -156,13 +156,16 @@ export function SourceControlSettingsPanel({
 
   return (
     <div className="space-y-6">
-      <div className="mb-2 space-y-1.5">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Source Control
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Manage version control systems, code hosting providers, and authentication status.
-        </p>
+      <div>
+        <div className="space-y-1.5">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+            Source Control
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage version control systems, code hosting providers, and authentication status.
+          </p>
+        </div>
+        <div className="h-px w-full bg-border/80 dark:bg-white/15 my-4" />
       </div>
 
       <SettingsSection title="Version Control" headerAction={scanButton}>
