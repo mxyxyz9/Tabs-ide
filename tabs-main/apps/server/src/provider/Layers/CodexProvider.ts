@@ -31,7 +31,9 @@ import {
 } from "../providerSnapshot";
 import { expandHomePath } from "../../pathExpansion";
 import packageJson from "../../../package.json" with { type: "json" };
-const isCodexAppServerSpawnError = Schema.is(CodexErrors.CodexAppServerSpawnError);
+const isCodexAppServerSpawnError = (error: unknown): boolean =>
+  Schema.is(CodexErrors.CodexAppServerSpawnError)(error) ||
+  (typeof error === "object" && error !== null && (error as { _tag?: string })._tag === "CodexAppServerSpawnError");
 const CODEX_APP_SERVER_PROBE_FORCE_KILL_AFTER = "2 seconds" as const;
 const DEFAULT_SERVICE_TIER_ID = "default";
 
