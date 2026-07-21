@@ -135,6 +135,8 @@ export function normalizeCustomModelSlugs(
   return normalizedModels;
 }
 
+import { applyCustomModelOrdering } from "./modelOrdering";
+
 export function getAppModelOptions(
   settings: UnifiedSettings,
   providers: ReadonlyArray<ServerProvider>,
@@ -186,7 +188,8 @@ export function getAppModelOptions(
     });
   }
 
-  return options;
+  const customOrder = settings.providerModelPreferences?.[provider as any]?.modelOrder;
+  return applyCustomModelOrdering(options, customOrder);
 }
 
 export function resolveAppModelSelection(

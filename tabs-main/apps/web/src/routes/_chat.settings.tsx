@@ -7,11 +7,13 @@ import {
   ChevronDownIcon,
   DownloadIcon,
   FolderIcon,
+  GripVerticalIcon,
   InfoIcon,
   KeyboardIcon,
   LoaderIcon,
   LogInIcon,
   MinusIcon,
+  PinIcon,
   PlusIcon,
   RefreshCwIcon,
   RotateCcwIcon,
@@ -23,8 +25,17 @@ import {
   Link2Icon,
   MonitorPlayIcon,
   SaveIcon,
+  SearchIcon,
 } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { UnifiedSettings } from "@tabs/contracts/settings";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { applyCustomModelOrdering, resetModelOrder, updateModelOrder } from "../modelOrdering";
+import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../modelPinning";
+import { getProviderModels } from "../providerModels";
 import {
   type DesktopUpdateState,
   type KeybindingRule,
@@ -63,6 +74,14 @@ import {
   OpenAI,
   OpenCodeIcon,
 } from "../components/Icons";
+
+const PROVIDER_ICONS_BY_KIND: Record<string, Icon> = {
+  codex: OpenAI,
+  claudeAgent: ClaudeAI,
+  cursor: CursorIcon,
+  grok: GrokIcon,
+  opencode: OpenCodeIcon,
+};
 import { Badge } from "../components/ui/badge";
 import {
   getCustomModelOptionsByInstance,
@@ -75,7 +94,15 @@ import ThreadTerminalDrawer from "../components/ThreadTerminalDrawer";
 import { DEFAULT_THREAD_TERMINAL_HEIGHT, DEFAULT_THREAD_TERMINAL_ID } from "../types";
 import { Button } from "../components/ui/button";
 import { Collapsible, CollapsibleContent } from "../components/ui/collapsible";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPopup,
+  DialogPortal,
+  DialogViewport,
+} from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
+import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/ui/menu";
 import {
   Select,
   SelectItem,
@@ -314,6 +341,27 @@ const PROVIDER_STATUS_STYLES = {
   },
 } as const;
 
+function SortableModelRowItem({
+  id,
+  children,
+}: {
+  id: string;
+  children: (handle: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "relative z-10 opacity-70")}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  );
+}
+
 function getProviderSummary(provider: ServerProvider | undefined): {
   readonly headline: string;
   readonly detail: string | null;
@@ -371,6 +419,240 @@ function getProviderSummary(provider: ServerProvider | undefined): {
 function getProviderVersionLabel(version: string | null | undefined): string | null {
   if (!version) return null;
   return version.startsWith("v") ? version : `v${version}`;
+}
+
+function PinModelCommandPalette({
+  serverProviders,
+  settings,
+  updateSettings,
+  providerCards,
+}: {
+  serverProviders: ReadonlyArray<ServerProvider>;
+  settings: Partial<UnifiedSettings> | null | undefined;
+  updateSettings: (next: Partial<UnifiedSettings>) => void;
+  providerCards: ReadonlyArray<{ provider: string; title: string }>;
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeProviderFilter, setActiveProviderFilter] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const pinnedEntries = getPinnedModels(settings);
+
+  const allModels = useMemo(() => {
+    const items: Array<{
+      provider: string;
+      providerName: string;
+      model: ServerProviderModel;
+    }> = [];
+
+    for (const card of providerCards) {
+      const providerName =
+        PROVIDER_DISPLAY_NAMES[card.provider as keyof typeof PROVIDER_DISPLAY_NAMES] ?? card.title;
+      const models = getProviderModels(serverProviders, card.provider);
+      for (const m of models) {
+        items.push({
+          provider: card.provider,
+          providerName,
+          model: m,
+        });
+      }
+    }
+    return items;
+  }, [providerCards, serverProviders]);
+
+  const filteredModels = useMemo(() => {
+    return allModels.filter((item: { provider: string; providerName: string; model: ServerProviderModel }) => {
+      if (activeProviderFilter && item.provider !== activeProviderFilter) {
+        return false;
+      }
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        item.model.name.toLowerCase().includes(q) ||
+        item.model.slug.toLowerCase().includes(q) ||
+        item.providerName.toLowerCase().includes(q)
+      );
+    });
+  }, [allModels, activeProviderFilter, searchQuery]);
+
+  if (allModels.length === 0) return null;
+
+  return (
+    <>
+      <Button
+        size="xs"
+        variant="outline"
+        className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+        onClick={() => setIsOpen(true)}
+      >
+        <PlusIcon className="size-3.5" />
+        Pin Model
+      </Button>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogPortal>
+          <DialogBackdrop />
+          <DialogViewport>
+            <DialogPopup
+              showCloseButton={false}
+              className="w-full max-w-xl p-0 overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl isolate dark:bg-[#18181b] dark:border-white/10 my-auto"
+            >
+              {/* Search Header */}
+              <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 bg-muted/20">
+                <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search models to pin across all providers..."
+                  className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+                  autoFocus
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="text-muted-foreground/60 hover:text-foreground p-1 rounded cursor-pointer"
+                  >
+                    <XIcon className="size-4" />
+                  </button>
+                ) : null}
+                <kbd className="hidden sm:inline-flex items-center gap-1 rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground select-none">
+                  ESC
+                </kbd>
+              </div>
+
+              {/* Provider Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-border/40 bg-muted/10 [&::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setActiveProviderFilter(null)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-full transition-all whitespace-nowrap cursor-pointer",
+                    activeProviderFilter === null
+                      ? "bg-foreground text-background font-semibold shadow-xs"
+                      : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
+                  )}
+                >
+                  All Providers
+                </button>
+                {providerCards.map((card) => {
+                  const providerName =
+                    PROVIDER_DISPLAY_NAMES[card.provider as keyof typeof PROVIDER_DISPLAY_NAMES] ??
+                    card.title;
+                  const isSelected = activeProviderFilter === card.provider;
+                  return (
+                    <button
+                      key={card.provider}
+                      type="button"
+                      onClick={() => setActiveProviderFilter(isSelected ? null : card.provider)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs font-medium rounded-full transition-all whitespace-nowrap cursor-pointer",
+                        isSelected
+                          ? "bg-foreground text-background font-semibold shadow-xs"
+                          : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
+                      )}
+                    >
+                      {providerName}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Model Results List */}
+              <div className="max-h-96 overflow-y-auto p-2 divide-y divide-border/20">
+                {filteredModels.length === 0 ? (
+                  <div className="py-12 px-4 text-center select-none">
+                    <SearchIcon className="size-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <div className="text-sm font-medium text-foreground">No Matching Models</div>
+                    <div className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
+                      No models match "{searchQuery}"
+                    </div>
+                  </div>
+                ) : (
+                  filteredModels.map((item: { provider: string; providerName: string; model: ServerProviderModel }) => {
+                    const IconComponent = PROVIDER_ICONS_BY_KIND[item.provider] ?? BotIcon;
+                    const caps = item.model.capabilities;
+                    const capLabels: string[] = [];
+                    if (caps?.supportsFastMode) capLabels.push("Fast");
+                    if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
+                    if (caps?.reasoningEffortLevels && caps.reasoningEffortLevels.length > 0)
+                      capLabels.push("Reasoning");
+
+                    const isPinned = isPinnedModel(pinnedEntries, item.provider, item.model.slug);
+
+                    return (
+                      <div
+                        key={`${item.provider}:${item.model.slug}`}
+                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-accent/50 transition-all group cursor-pointer"
+                        onClick={() => {
+                          const nextPinned = togglePinnedModel(
+                            settings,
+                            item.provider,
+                            item.model.slug,
+                          );
+                          updateSettings({ pinnedModels: nextPinned as any });
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground group-hover:bg-muted">
+                            <IconComponent className="size-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {item.model.name}
+                              </span>
+                              <span className="text-xs font-mono text-muted-foreground/60 shrink-0">
+                                ({item.providerName})
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-xs font-mono text-muted-foreground/50 truncate">
+                                {item.model.slug}
+                              </span>
+                              {capLabels.map((label) => (
+                                <span
+                                  key={label}
+                                  className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/50 text-muted-foreground/70 shrink-0 border border-border/30"
+                                >
+                                  {label}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isPinned ? (
+                          <Button
+                            size="xs"
+                            variant="secondary"
+                            className="h-7 gap-1 px-2.5 text-xs font-medium text-foreground bg-muted/80 hover:bg-muted cursor-pointer shrink-0"
+                          >
+                            <PinIcon className="size-3.5 fill-current" />
+                            Pinned
+                          </Button>
+                        ) : (
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            className="h-7 gap-1 px-2.5 text-xs font-medium text-muted-foreground group-hover:text-foreground group-hover:bg-accent cursor-pointer shrink-0"
+                          >
+                            <PlusIcon className="size-3.5" />
+                            Pin
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </DialogPopup>
+          </DialogViewport>
+        </DialogPortal>
+      </Dialog>
+    </>
+  );
 }
 
 interface ProviderUpdatePrompt {
@@ -622,20 +904,34 @@ function SettingsRouteView() {
   const [openProviderDetails, setOpenProviderDetails] = useState<
     Partial<Record<ProviderSettingsKey, boolean>>
   >({
-    codex: Boolean(
-      settings.providers.codex.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.binaryPath ||
-      settings.providers.codex.homePath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.homePath ||
-      settings.providers.codex.customModels.length > 0,
-    ),
-    claudeAgent: Boolean(
-      settings.providers.claudeAgent.binaryPath !==
-        DEFAULT_UNIFIED_SETTINGS.providers.claudeAgent.binaryPath ||
-      settings.providers.claudeAgent.customModels.length > 0,
-    ),
+    codex: true,
   });
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string>>
   >({});
+  const [draftModelOrders, setDraftModelOrders] = useState<
+    Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>
+  >({});
+
+  const handleSaveModelOrder = useCallback(
+    (provider: ProviderSettingsKey) => {
+      const pendingOrder = draftModelOrders[provider];
+      if (pendingOrder) {
+        const nextPrefs = updateModelOrder(
+          settings.providerModelPreferences,
+          provider,
+          [...pendingOrder],
+        );
+        updateSettings({ providerModelPreferences: nextPrefs as any });
+        setDraftModelOrders((existing) => {
+          const next = { ...existing };
+          delete next[provider];
+          return next;
+        });
+      }
+    },
+    [draftModelOrders, settings.providerModelPreferences, updateSettings],
+  );
 
   const [previewStyle, setPreviewStyle] = useState(settings.splashLoaderStyle);
   const [previewPalette, setPreviewPalette] = useState(settings.splashLoaderPalette);
@@ -1049,14 +1345,34 @@ function SettingsRouteView() {
     const statusKey = liveProvider?.status ?? (providerConfig.enabled ? "warning" : "disabled");
     const statusStyle = PROVIDER_STATUS_STYLES[statusKey];
     const summary = getProviderSummary(liveProvider);
-    const models: ReadonlyArray<ServerProviderModel> =
-      liveProvider?.models ??
-      providerConfig.customModels.map((slug) => ({
-        slug,
-        name: slug,
-        isCustom: true,
-        capabilities: null,
-      }));
+    const baseModels =
+      liveProvider?.models && liveProvider.models.length > 0
+        ? liveProvider.models
+        : getProviderModels(serverProviders, providerSettings.provider);
+    const seenSlugs = new Set(baseModels.map((m: ServerProviderModel) => m.slug));
+    const mergedModels: ServerProviderModel[] = [...baseModels];
+    for (const customSlug of providerConfig.customModels ?? []) {
+      if (!seenSlugs.has(customSlug)) {
+        seenSlugs.add(customSlug);
+        mergedModels.push({
+          slug: customSlug,
+          name: customSlug,
+          isCustom: true,
+          capabilities: null,
+        });
+      }
+    }
+    const customOrder =
+      draftModelOrders[providerSettings.provider] ??
+      settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder;
+    const models = applyCustomModelOrdering(mergedModels, customOrder, providerSettings.provider);
+    const hasPendingOrderChanges = Boolean(
+      draftModelOrders[providerSettings.provider] &&
+        !Equal.equals(
+          draftModelOrders[providerSettings.provider],
+          settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder ?? [],
+        ),
+    );
     const binaryPathValue = providerConfig.binaryPath;
     const isDirty = !Equal.equals(providerConfig, defaultProviderConfig);
 
@@ -1072,6 +1388,7 @@ function SettingsRouteView() {
       homeDescription: providerSettings.homeDescription,
       binaryPathValue,
       isDirty,
+      hasPendingOrderChanges,
       liveProvider,
       models,
       providerConfig,
@@ -2123,9 +2440,121 @@ function SettingsRouteView() {
                       </p>
                     </div>
 
-                    <SettingsSection
-                      title="Configured Providers"
-                      headerAction={
+                    {/* 📌 Pinned Models Section */}
+                    {(() => {
+                      const pinnedEntries = getPinnedModels(settings);
+                      return (
+                        <div className="rounded-xl border border-border/60 bg-card/60 p-4 sm:p-5 space-y-3.5 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex size-7 items-center justify-center rounded-lg bg-muted/80 text-foreground">
+                                <PinIcon className="size-4" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-sm font-semibold text-foreground">Pinned Models</h3>
+                                  <span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
+                                    {pinnedEntries.length}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Quick access models pinned across all providers. Appears at the top of FusedModelPicker.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Cockpit Command Palette for Pinning Models */}
+                            <PinModelCommandPalette
+                              serverProviders={serverProviders}
+                              settings={settings}
+                              updateSettings={updateSettings}
+                              providerCards={providerCards}
+                            />
+                          </div>
+
+                          {pinnedEntries.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 py-6 px-4 text-center">
+                              <PinIcon className="size-6 text-muted-foreground/40 mb-1.5" />
+                              <div className="text-xs font-medium text-foreground">No Pinned Models Yet</div>
+                              <div className="text-[11px] text-muted-foreground max-w-sm mt-0.5">
+                                Click "+ Pin Model" above or the pin icon next to any model in your provider lists below to pin it.
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {pinnedEntries.map((entry) => {
+                                const providerName =
+                                  PROVIDER_DISPLAY_NAMES[
+                                    entry.provider as keyof typeof PROVIDER_DISPLAY_NAMES
+                                  ] ?? entry.provider;
+                                const IconComponent =
+                                  PROVIDER_ICONS_BY_KIND[entry.provider] ?? BotIcon;
+
+                                const providerModels = getProviderModels(
+                                  serverProviders,
+                                  entry.provider,
+                                );
+                                const matchedModel = providerModels.find(
+                                  (m) => m.slug === entry.model,
+                                );
+                                const displayName = matchedModel?.name ?? entry.model;
+
+                                return (
+                                  <div
+                                    key={`${entry.provider}:${entry.model}`}
+                                    className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-all hover:bg-muted/40 hover:border-border"
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                                        <IconComponent className="size-3.5 text-muted-foreground" />
+                                      </div>
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 truncate">
+                                          <span className="text-xs font-semibold text-foreground truncate">
+                                            {displayName}
+                                          </span>
+                                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">
+                                            ({providerName})
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        render={
+                                          <Button
+                                            size="icon-xs"
+                                            variant="ghost"
+                                            className="size-6 shrink-0 rounded text-foreground/80 hover:text-muted-foreground hover:bg-muted/50 cursor-pointer"
+                                            onClick={() => {
+                                              const nextPinned = togglePinnedModel(
+                                                settings.pinnedModels,
+                                                entry.provider,
+                                                entry.model,
+                                              );
+                                              updateSettings({ pinnedModels: nextPinned as any });
+                                            }}
+                                            aria-label={`Unpin ${displayName}`}
+                                          >
+                                            <PinIcon className="size-3.5 fill-current" />
+                                          </Button>
+                                        }
+                                      />
+                                      <TooltipPopup side="top">Unpin model</TooltipPopup>
+                                    </Tooltip>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex items-center justify-between pb-1">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
+                        Configured Providers
+                      </div>
                       <div className="flex items-center gap-1.5">
                         {serverProviders.length > 0 ? (
                           <span className="text-[11px] text-muted-foreground/60">
@@ -2155,7 +2584,7 @@ function SettingsRouteView() {
                               <Button
                                 size="icon-xs"
                                 variant="ghost"
-                                className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
+                                className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground cursor-pointer"
                                 disabled={isRefreshingProviders}
                                 onClick={() => void refreshProviders()}
                                 aria-label="Refresh provider status"
@@ -2171,158 +2600,157 @@ function SettingsRouteView() {
                           <TooltipPopup side="top">Refresh provider status</TooltipPopup>
                         </Tooltip>
                       </div>
-                    }
-                  >
-                    {providerCards.map((providerCard) => {
-                      const customModelInput = customModelInputByProvider[providerCard.provider];
-                      const customModelError =
-                        customModelErrorByProvider[providerCard.provider] ?? null;
-                      const providerDisplayName =
-                        PROVIDER_DISPLAY_NAMES[
-                          providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
-                        ] ?? providerCard.title;
-                      const RowIcon = providerCard.icon;
-                      // A provider action terminal is already open (this row or another).
-                      const providerActionBusy = providerActionSession !== null;
+                    </div>
 
-                      return (
-                        <div
-                          key={providerCard.provider}
-                          className="border-t border-border first:border-t-0"
-                          data-slot="settings-row"
-                        >
-                          <div className="px-4 py-4 sm:px-5">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="min-w-0 flex-1 space-y-1">
-                                <div className="flex min-h-5 items-center gap-1.5">
-                                  <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-                                    <RowIcon
-                                      aria-hidden="true"
-                                      className={cn(
-                                        "size-4",
-                                        providerCard.provider === "claudeAgent"
-                                          ? "text-[#d97757]"
-                                          : "text-muted-foreground/85",
-                                      )}
-                                    />
-                                    <span
-                                      className={cn(
-                                        "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-background",
-                                        providerCard.statusStyle.dot,
-                                      )}
-                                    />
-                                  </span>
-                                  <h3 className="text-sm font-medium text-foreground">
-                                    {providerDisplayName}
-                                  </h3>
-                                  {providerCard.versionLabel ? (
-                                    <code className="text-xs text-muted-foreground">
-                                      {providerCard.versionLabel}
-                                    </code>
-                                  ) : null}
+                    <div className="space-y-4">
+                      {providerCards.map((providerCard) => {
+                        const customModelInput = customModelInputByProvider[providerCard.provider];
+                        const customModelError =
+                          customModelErrorByProvider[providerCard.provider] ?? null;
+                        const providerDisplayName =
+                          PROVIDER_DISPLAY_NAMES[
+                            providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
+                          ] ?? providerCard.title;
+                        const RowIcon = providerCard.icon;
+                        // A provider action terminal is already open (this row or another).
+                        const providerActionBusy = providerActionSession !== null;
+
+                        return (
+                          <div
+                            key={providerCard.provider}
+                            className="rounded-xl border border-border bg-card p-0 overflow-hidden shadow-2xs hover:border-border/90 transition-all"
+                            data-slot="settings-row"
+                          >
+                            <div className="px-4 py-4 sm:px-5">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <div className="flex min-h-5 items-center gap-1.5">
+                                    <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                                      <RowIcon
+                                        aria-hidden="true"
+                                        className={cn(
+                                          "size-4",
+                                          providerCard.provider === "claudeAgent"
+                                            ? "text-[#d97757]"
+                                            : "text-muted-foreground/85",
+                                        )}
+                                      />
+                                      <span
+                                        className={cn(
+                                          "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-background",
+                                          providerCard.statusStyle.dot,
+                                        )}
+                                      />
+                                    </span>
+                                    <h3 className="text-sm font-medium text-foreground">
+                                      {providerDisplayName}
+                                    </h3>
+                                    {providerCard.versionLabel ? (
+                                      <code className="text-xs text-muted-foreground">
+                                        {providerCard.versionLabel}
+                                      </code>
+                                    ) : null}
+                                    {providerCard.updatePrompt ? (
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <button
+                                              type="button"
+                                              aria-label={`${providerDisplayName} update available`}
+                                              className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
+                                              onClick={() =>
+                                                providerCard.updatePrompt?.command &&
+                                                copyToClipboard(providerCard.updatePrompt.command, {
+                                                  providerName: providerDisplayName,
+                                                })
+                                              }
+                                            >
+                                              <ArrowUpCircleIcon className="size-3.5" />
+                                            </button>
+                                          }
+                                        />
+                                        <TooltipPopup side="top">
+                                          Update available: click to copy installer command
+                                        </TooltipPopup>
+                                      </Tooltip>
+                                    ) : null}
+                                    {providerCard.isDirty ? (
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                updateSettings({
+                                                  providers: {
+                                                    ...settings.providers,
+                                                    [providerCard.provider]:
+                                                      DEFAULT_UNIFIED_SETTINGS.providers[
+                                                        providerCard.provider
+                                                      ],
+                                                  },
+                                                })
+                                              }
+                                              className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/65 hover:text-foreground"
+                                              aria-label={`Reset ${providerDisplayName} to default settings`}
+                                            >
+                                              <Undo2Icon className="size-3.5" />
+                                            </button>
+                                          }
+                                        />
+                                        <TooltipPopup side="top">
+                                          Reset provider settings to defaults
+                                        </TooltipPopup>
+                                      </Tooltip>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                    <span className="text-muted-foreground">
+                                      {providerCard.summary.headline}
+                                      {providerCard.summary.detail
+                                        ? ` — ${providerCard.summary.detail}`
+                                        : null}
+                                    </span>
+                                    {providerCard.badgeLabel ? (
+                                      <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+                                        {providerCard.badgeLabel}
+                                      </span>
+                                    ) : null}
+                                  </div>
+
                                   {providerCard.updatePrompt ? (
-                                    <Tooltip>
-                                      <TooltipTrigger
-                                        render={
-                                          <button
-                                            type="button"
-                                            aria-label={`${providerDisplayName} update available`}
-                                            className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
+                                    <div className="pt-1">
+                                      {providerCard.installCommand ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-7 gap-1.5 px-2.5 text-xs"
+                                            disabled={providerActionBusy}
                                             onClick={() =>
-                                              providerCard.updatePrompt?.command &&
-                                              copyToClipboard(providerCard.updatePrompt.command, {
+                                              startProviderAction({
+                                                provider: providerCard.provider,
                                                 providerName: providerDisplayName,
+                                                command: providerCard.installCommand!,
+                                                kind: "update",
                                               })
                                             }
-                                          />
-                                        }
-                                      >
-                                        <ArrowUpCircleIcon className="size-3.5" />
-                                      </TooltipTrigger>
-                                      <TooltipPopup>
-                                        {providerCard.updatePrompt.headline} — click to copy update
-                                        command
-                                      </TooltipPopup>
-                                    </Tooltip>
-                                  ) : null}
-                                  {providerCard.badgeLabel ? (
-                                    <Badge variant="warning" size="sm">
-                                      {providerCard.badgeLabel}
-                                    </Badge>
-                                  ) : null}
-                                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
-                                    {providerCard.isDirty ? (
-                                      <SettingResetButton
-                                        label={`${providerDisplayName} provider settings`}
-                                        onClick={() => {
-                                          updateSettings({
-                                            providers: {
-                                              ...settings.providers,
-                                              [providerCard.provider]:
-                                                DEFAULT_UNIFIED_SETTINGS.providers[
-                                                  providerCard.provider
-                                                ],
-                                            },
-                                          });
-                                          setCustomModelErrorByProvider((existing) => ({
-                                            ...existing,
-                                            [providerCard.provider]: null,
-                                          }));
-                                        }}
-                                      />
-                                    ) : null}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {providerCard.summary.headline}
-                                  {providerCard.summary.detail
-                                    ? ` — ${providerCard.summary.detail}`
-                                    : null}
-                                </p>
-                                {(providerCard.needsInstall && providerCard.installCommand) ||
-                                providerCard.updatePrompt?.command ||
-                                (providerCard.needsAuth && providerCard.loginCommand) ? (
-                                  <div className="mt-2 flex flex-col gap-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                      {providerCard.needsInstall && providerCard.installCommand ? (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 gap-1.5 px-2.5 text-xs"
-                                          disabled={providerActionBusy}
-                                          onClick={() =>
-                                            startProviderAction({
-                                              provider: providerCard.provider,
-                                              providerName: providerDisplayName,
-                                              command: providerCard.installCommand ?? "",
-                                              kind: "install",
-                                            })
-                                          }
-                                        >
-                                          <DownloadIcon className="size-3.5" />
-                                          Install
-                                        </Button>
+                                          >
+                                            <ArrowUpCircleIcon className="size-3.5" />
+                                            Update
+                                          </Button>
+                                          <span className="text-[11px] text-muted-foreground/70">
+                                            Opens a terminal below and runs the command.
+                                          </span>
+                                        </div>
                                       ) : null}
-                                      {providerCard.updatePrompt?.command ? (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 gap-1.5 px-2.5 text-xs"
-                                          disabled={providerActionBusy}
-                                          onClick={() =>
-                                            startProviderAction({
-                                              provider: providerCard.provider,
-                                              providerName: providerDisplayName,
-                                              command: providerCard.updatePrompt?.command ?? "",
-                                              kind: "update",
-                                            })
-                                          }
-                                        >
-                                          <ArrowUpCircleIcon className="size-3.5" />
-                                          Update
-                                        </Button>
-                                      ) : null}
-                                      {providerCard.needsAuth && providerCard.loginCommand ? (
+                                    </div>
+                                  ) : null}
+
+                                  {providerCard.needsAuth && providerCard.loginCommand ? (
+                                    <div className="pt-1">
+                                      <div className="flex flex-wrap items-center gap-2">
                                         <Button
                                           size="sm"
                                           variant="outline"
@@ -2340,290 +2768,436 @@ function SettingsRouteView() {
                                           <LogInIcon className="size-3.5" />
                                           Sign in
                                         </Button>
-                                      ) : null}
+                                        <span className="text-[11px] text-muted-foreground/70">
+                                          Opens a terminal below and runs the command.
+                                        </span>
+                                      </div>
                                     </div>
-                                    <span className="text-[11px] text-muted-foreground/70">
-                                      Opens a terminal below and runs the command.
-                                    </span>
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                                  onClick={() =>
-                                    setOpenProviderDetails((existing) => ({
-                                      ...existing,
-                                      [providerCard.provider]: !existing[providerCard.provider],
-                                    }))
-                                  }
-                                  aria-label={`Toggle ${providerDisplayName} details`}
-                                >
-                                  <ChevronDownIcon
-                                    className={cn(
-                                      "size-3.5 transition-transform",
-                                      openProviderDetails[providerCard.provider] && "rotate-180",
-                                    )}
-                                  />
-                                </Button>
-                                <Switch
-                                  checked={providerCard.providerConfig.enabled}
-                                  onCheckedChange={(checked) => {
-                                    const isDisabling = !checked;
-                                    // When disabling the provider that's currently used for
-                                    // text generation, clear the selection so it falls back to
-                                    // the next available provider's default model.
-                                    const shouldClearModelSelection =
-                                      isDisabling && textGenInstanceId === providerCard.provider;
-                                    updateSettings({
-                                      providers: {
-                                        ...settings.providers,
-                                        [providerCard.provider]: {
-                                          ...settings.providers[providerCard.provider],
-                                          enabled: Boolean(checked),
-                                        },
-                                      },
-                                      ...(shouldClearModelSelection
-                                        ? {
-                                            textGenerationModelSelection:
-                                              DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                                          }
-                                        : {}),
-                                    });
-                                  }}
-                                  aria-label={`Enable ${providerDisplayName}`}
-                                />
-                              </div>
-                            </div>
-                          </div>
-
-                          <Collapsible
-                            open={openProviderDetails[providerCard.provider]}
-                            onOpenChange={(open) =>
-                              setOpenProviderDetails((existing) => ({
-                                ...existing,
-                                [providerCard.provider]: open,
-                              }))
-                            }
-                          >
-                            <CollapsibleContent>
-                              <div className="space-y-0">
-                                {/* Binary path */}
-                                <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                  <label
-                                    htmlFor={`provider-install-${providerCard.provider}-binary-path`}
-                                    className="block"
-                                  >
-                                    <span className="text-xs font-medium text-foreground">
-                                      {providerDisplayName} binary path
-                                    </span>
-                                    <Input
-                                      id={`provider-install-${providerCard.provider}-binary-path`}
-                                      className="mt-1.5"
-                                      value={providerCard.binaryPathValue}
-                                      onChange={(event) =>
-                                        updateSettings({
-                                          providers: {
-                                            ...settings.providers,
-                                            [providerCard.provider]: {
-                                              ...settings.providers[providerCard.provider],
-                                              binaryPath: event.target.value,
-                                            },
-                                          },
-                                        })
-                                      }
-                                      placeholder={providerCard.binaryPlaceholder}
-                                      spellCheck={false}
-                                    />
-                                    <span className="mt-1 block text-xs text-muted-foreground">
-                                      {providerCard.binaryDescription}
-                                    </span>
-                                  </label>
+                                  ) : null}
                                 </div>
 
-                                {/* Home path (Codex only) */}
-                                {providerCard.homePathKey ? (
+                                <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                                    onClick={() =>
+                                      setOpenProviderDetails((existing) => {
+                                        const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
+                                        if (isCurrentlyOpen) {
+                                          return {};
+                                        }
+                                        return {
+                                          [providerCard.provider]: true,
+                                        };
+                                      })
+                                    }
+                                    aria-label={`Toggle ${providerDisplayName} details`}
+                                  >
+                                    <ChevronDownIcon
+                                      className={cn(
+                                        "size-3.5 transition-transform duration-200",
+                                        openProviderDetails[providerCard.provider] && "rotate-180",
+                                      )}
+                                    />
+                                  </Button>
+                                  <Switch
+                                    checked={providerCard.providerConfig.enabled}
+                                    onCheckedChange={(checked) => {
+                                      const isDisabling = !checked;
+                                      // When disabling the provider that's currently used for
+                                      // text generation, clear the selection so it falls back to
+                                      // the next available provider's default model.
+                                      const shouldClearModelSelection =
+                                        isDisabling && textGenInstanceId === providerCard.provider;
+                                      updateSettings({
+                                        providers: {
+                                          ...settings.providers,
+                                          [providerCard.provider]: {
+                                            ...settings.providers[providerCard.provider],
+                                            enabled: Boolean(checked),
+                                          },
+                                        },
+                                        ...(shouldClearModelSelection
+                                          ? {
+                                              textGenerationModelSelection:
+                                                DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+                                            }
+                                          : {}),
+                                      });
+                                    }}
+                                    aria-label={`Enable ${providerDisplayName}`}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <Collapsible
+                              open={Boolean(openProviderDetails[providerCard.provider])}
+                              onOpenChange={(open) =>
+                                setOpenProviderDetails((existing) => {
+                                  const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
+                                  if (open && !isCurrentlyOpen) {
+                                    return { [providerCard.provider]: true };
+                                  }
+                                  if (!open && isCurrentlyOpen) {
+                                    return {};
+                                  }
+                                  return existing;
+                                })
+                              }
+                            >
+                              <CollapsibleContent>
+                                <div className="space-y-0">
+                                  {/* Binary path */}
                                   <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                                     <label
-                                      htmlFor={`provider-install-${providerCard.homePathKey}`}
+                                      htmlFor={`provider-install-${providerCard.provider}-binary-path`}
                                       className="block"
                                     >
                                       <span className="text-xs font-medium text-foreground">
-                                        CODEX_HOME path
+                                        {providerDisplayName} binary path
                                       </span>
                                       <Input
-                                        id={`provider-install-${providerCard.homePathKey}`}
+                                        id={`provider-install-${providerCard.provider}-binary-path`}
                                         className="mt-1.5"
-                                        value={codexHomePath}
+                                        value={providerCard.binaryPathValue}
                                         onChange={(event) =>
                                           updateSettings({
                                             providers: {
                                               ...settings.providers,
-                                              codex: {
-                                                ...settings.providers.codex,
-                                                homePath: event.target.value,
+                                              [providerCard.provider]: {
+                                                ...settings.providers[providerCard.provider],
+                                                binaryPath: event.target.value,
                                               },
                                             },
                                           })
                                         }
-                                        placeholder={providerCard.homePlaceholder}
+                                        placeholder={providerCard.binaryPlaceholder}
                                         spellCheck={false}
                                       />
-                                      {providerCard.homeDescription ? (
-                                        <span className="mt-1 block text-xs text-muted-foreground">
-                                          {providerCard.homeDescription}
-                                        </span>
-                                      ) : null}
+                                      <span className="mt-1 block text-xs text-muted-foreground">
+                                        {providerCard.binaryDescription}
+                                      </span>
                                     </label>
                                   </div>
-                                ) : null}
 
-                                {/* Models */}
-                                <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                  <div className="text-xs font-medium text-foreground">Models</div>
-                                  <div className="mt-1 text-xs text-muted-foreground">
-                                    {providerCard.models.length} model
-                                    {providerCard.models.length === 1 ? "" : "s"} available.
-                                  </div>
-                                  <div
-                                    ref={(el) => {
-                                      modelListRefs.current[providerCard.provider] = el;
-                                    }}
-                                    className="mt-2 max-h-40 overflow-y-auto pb-1"
-                                  >
-                                    {providerCard.models.map((model) => {
-                                      const caps = model.capabilities;
-                                      const capLabels: string[] = [];
-                                      if (caps?.supportsFastMode) capLabels.push("Fast mode");
-                                      if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
-                                      if (
-                                        caps?.reasoningEffortLevels &&
-                                        caps.reasoningEffortLevels.length > 0
-                                      )
-                                        capLabels.push("Reasoning");
-                                      const hasDetails =
-                                        capLabels.length > 0 || model.name !== model.slug;
-
-                                      return (
-                                        <div
-                                          key={`${providerCard.provider}:${model.slug}`}
-                                          className="flex items-center gap-2 py-1"
-                                        >
-                                          <span className="min-w-0 truncate text-xs text-foreground/90">
-                                            {model.name}
+                                  {/* Home path (Codex only) */}
+                                  {providerCard.homePathKey ? (
+                                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                      <label
+                                        htmlFor={`provider-install-${providerCard.homePathKey}`}
+                                        className="block"
+                                      >
+                                        <span className="text-xs font-medium text-foreground">
+                                          CODEX_HOME path
+                                        </span>
+                                        <Input
+                                          id={`provider-install-${providerCard.homePathKey}`}
+                                          className="mt-1.5"
+                                          value={codexHomePath}
+                                          onChange={(event) =>
+                                            updateSettings({
+                                              providers: {
+                                                ...settings.providers,
+                                                codex: {
+                                                  ...settings.providers.codex,
+                                                  homePath: event.target.value,
+                                                },
+                                              },
+                                            })
+                                          }
+                                          placeholder={providerCard.homePlaceholder}
+                                          spellCheck={false}
+                                        />
+                                        {providerCard.homeDescription ? (
+                                          <span className="mt-1 block text-xs text-muted-foreground">
+                                            {providerCard.homeDescription}
                                           </span>
-                                          {hasDetails ? (
-                                            <Tooltip>
-                                              <TooltipTrigger
-                                                render={
-                                                  <button
-                                                    type="button"
-                                                    className="shrink-0 text-muted-foreground/40 transition-colors hover:text-muted-foreground"
-                                                    aria-label={`Details for ${model.name}`}
-                                                  />
-                                                }
-                                              >
-                                                <InfoIcon className="size-3" />
-                                              </TooltipTrigger>
-                                              <TooltipPopup side="top" className="max-w-56">
-                                                <div className="space-y-1">
-                                                  <code className="block text-[11px] text-foreground">
-                                                    {model.slug}
-                                                  </code>
-                                                  {capLabels.length > 0 ? (
-                                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                                                      {capLabels.map((label) => (
-                                                        <span
-                                                          key={label}
-                                                          className="text-[10px] text-muted-foreground"
-                                                        >
-                                                          {label}
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                  ) : null}
-                                                </div>
-                                              </TooltipPopup>
-                                            </Tooltip>
+                                        ) : null}
+                                      </label>
+                                    </div>
+                                  ) : null}
+
+                                  {/* Models Section */}
+                                  <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+                                    <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
+                                      {/* Section Header */}
+                                      <div className="flex items-center justify-between px-3.5 py-2.5 bg-muted/20 border-b border-border/40">
+                                        <div>
+                                          <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                            Models
+                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                                              {providerCard.models.length}
+                                            </Badge>
+                                          </div>
+                                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                            Drag handles to reorder model preference.
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {providerCard.hasPendingOrderChanges ? (
+                                            <Button
+                                              size="xs"
+                                              variant="default"
+                                              className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
+                                              onClick={() => handleSaveModelOrder(providerCard.provider)}
+                                              title="Save model order changes"
+                                            >
+                                              <SaveIcon className="size-3" />
+                                              Save Order
+                                            </Button>
                                           ) : null}
-                                          {model.isCustom ? (
-                                            <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                                              <span className="text-[10px] text-muted-foreground">
-                                                custom
-                                              </span>
-                                              <button
-                                                type="button"
-                                                className="text-muted-foreground transition-colors hover:text-foreground"
-                                                aria-label={`Remove ${model.slug}`}
-                                                onClick={() =>
-                                                  removeCustomModel(
-                                                    providerCard.provider,
-                                                    model.slug,
-                                                  )
-                                                }
-                                              >
-                                                <XIcon className="size-3" />
-                                              </button>
-                                            </div>
+                                          {settings.providerModelPreferences?.[providerCard.provider as any]?.modelOrder?.length ? (
+                                            <Button
+                                              size="xs"
+                                              variant="ghost"
+                                              className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                                              onClick={() => {
+                                                setDraftModelOrders((existing) => {
+                                                  const next = { ...existing };
+                                                  delete next[providerCard.provider];
+                                                  return next;
+                                                });
+                                                const nextPrefs = resetModelOrder(
+                                                  settings.providerModelPreferences,
+                                                  providerCard.provider,
+                                                );
+                                                updateSettings({ providerModelPreferences: nextPrefs as any });
+                                              }}
+                                              title="Restore default model order"
+                                            >
+                                              <RotateCcwIcon className="size-3" />
+                                              Restore Default Order
+                                            </Button>
                                           ) : null}
                                         </div>
-                                      );
-                                    })}
+                                      </div>
+
+                                      {/* Sortable Model List */}
+                                      <div
+                                        ref={(el) => {
+                                          modelListRefs.current[providerCard.provider] = el;
+                                        }}
+                                        className="divide-y divide-border/30 p-1"
+                                      >
+                                        <DndContext
+                                          collisionDetection={closestCenter}
+                                          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                                          onDragEnd={(event: DragEndEvent) => {
+                                            const { active, over } = event;
+                                            if (!over || active.id === over.id) return;
+                                            const oldIndex = providerCard.models.findIndex(
+                                              (m: ServerProviderModel) => m.slug === active.id,
+                                            );
+                                            const newIndex = providerCard.models.findIndex(
+                                              (m: ServerProviderModel) => m.slug === over.id,
+                                            );
+                                            if (oldIndex !== -1 && newIndex !== -1) {
+                                              const reordered = arrayMove(
+                                                [...providerCard.models],
+                                                oldIndex,
+                                                newIndex,
+                                              );
+                                              const newOrder = reordered.map((m: ServerProviderModel) => m.slug);
+                                              setDraftModelOrders((existing) => ({
+                                                ...existing,
+                                                [providerCard.provider]: newOrder,
+                                              }));
+                                            }
+                                          }}
+                                        >
+                                          <SortableContext
+                                            items={providerCard.models.map((m: ServerProviderModel) => m.slug)}
+                                            strategy={verticalListSortingStrategy}
+                                          >
+                                            {providerCard.models.map((model: ServerProviderModel) => {
+                                              const caps = model.capabilities;
+                                              const capLabels: string[] = [];
+                                              if (caps?.supportsFastMode) capLabels.push("Fast");
+                                              if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
+                                              if (
+                                                caps?.reasoningEffortLevels &&
+                                                caps.reasoningEffortLevels.length > 0
+                                              )
+                                                capLabels.push("Reasoning");
+                                              const isPinned = isPinnedModel(
+                                                getPinnedModels(settings),
+                                                providerCard.provider,
+                                                model.slug,
+                                              );
+
+                                              return (
+                                                <SortableModelRowItem
+                                                  key={`${providerCard.provider}:${model.slug}`}
+                                                  id={model.slug}
+                                                >
+                                                  {(handle) => (
+                                                    <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
+                                                      <div className="flex items-center gap-2 min-w-0">
+                                                        <button
+                                                          type="button"
+                                                          className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
+                                                          aria-label={`Reorder ${model.name}`}
+                                                          {...handle.attributes}
+                                                          {...handle.listeners}
+                                                        >
+                                                          <GripVerticalIcon className="size-3.5" />
+                                                        </button>
+                                                        <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
+                                                          {model.name}
+                                                        </span>
+                                                        {capLabels.map((label) => (
+                                                          <span
+                                                            key={label}
+                                                            className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                          >
+                                                            {label}
+                                                          </span>
+                                                        ))}
+                                                      </div>
+
+                                                      <div className="flex items-center gap-1 shrink-0">
+                                                        <button
+                                                          type="button"
+                                                          aria-label={
+                                                            isPinned
+                                                              ? `Unpin ${model.name}`
+                                                              : `Pin ${model.name}`
+                                                          }
+                                                          className={cn(
+                                                            "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
+                                                            isPinned
+                                                              ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
+                                                              : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
+                                                          )}
+                                                          onClick={() => {
+                                                            const nextPinned = togglePinnedModel(
+                                                              settings,
+                                                              providerCard.provider,
+                                                              model.slug,
+                                                            );
+                                                            updateSettings({ pinnedModels: nextPinned as any });
+                                                          }}
+                                                        >
+                                                          <PinIcon className="size-3.5 fill-current" />
+                                                        </button>
+
+                                                        {model.name !== model.slug ? (
+                                                          <Tooltip>
+                                                            <TooltipTrigger
+                                                              render={
+                                                                <button
+                                                                  type="button"
+                                                                  className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
+                                                                  aria-label={`Details for ${model.name}`}
+                                                                >
+                                                                  <InfoIcon className="size-3.5" />
+                                                                </button>
+                                                              }
+                                                            />
+                                                            <TooltipPopup side="top" className="max-w-56">
+                                                              <code className="text-[11px] text-foreground">
+                                                                {model.slug}
+                                                              </code>
+                                                            </TooltipPopup>
+                                                          </Tooltip>
+                                                        ) : null}
+
+                                                        {model.isCustom ? (
+                                                          <div className="flex items-center gap-1 pl-1">
+                                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">
+                                                              custom
+                                                            </Badge>
+                                                            <button
+                                                              type="button"
+                                                              className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                                                              aria-label={`Remove ${model.slug}`}
+                                                              onClick={() =>
+                                                                removeCustomModel(
+                                                                  providerCard.provider,
+                                                                  model.slug,
+                                                                )
+                                                              }
+                                                            >
+                                                              <XIcon className="size-3" />
+                                                            </button>
+                                                          </div>
+                                                        ) : null}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </SortableModelRowItem>
+                                              );
+                                            })}
+                                          </SortableContext>
+                                        </DndContext>
+                                      </div>
+
+                                      {/* Custom Model Input Footer */}
+                                      <div className="p-2.5 bg-muted/20 border-t border-border/40">
+                                        <div className="flex items-center gap-2">
+                                          <Input
+                                            value={customModelInput ?? ""}
+                                            onChange={(event) =>
+                                              setCustomModelInputByProvider((existing) => ({
+                                                ...existing,
+                                                [providerCard.provider]: event.target.value,
+                                              }))
+                                            }
+                                            placeholder="gpt-6.7-codex-ultra-preview"
+                                            className="h-8 text-xs font-mono bg-background"
+                                            onKeyDown={(event) => {
+                                              if (event.key === "Enter") {
+                                                event.preventDefault();
+                                                addCustomModel(providerCard.provider);
+                                              }
+                                            }}
+                                          />
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-8 gap-1 text-xs shrink-0 cursor-pointer"
+                                            onClick={() => addCustomModel(providerCard.provider)}
+                                          >
+                                            <PlusIcon className="size-3.5" />
+                                            Add
+                                          </Button>
+                                        </div>
+                                        {customModelError ? (
+                                          <div className="mt-1.5 text-[11px] font-medium text-destructive">
+                                            {customModelError}
+                                          </div>
+                                        ) : null}
+                                      </div>
+
+                                      {/* Save Order Footer Bar */}
+                                      {providerCard.hasPendingOrderChanges ? (
+                                        <div className="flex items-center justify-between p-2.5 bg-primary/10 border-t border-primary/20">
+                                          <span className="text-xs text-primary font-medium">
+                                            Model preference order changed.
+                                          </span>
+                                          <Button
+                                            size="sm"
+                                            variant="default"
+                                            className="h-7 gap-1.5 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
+                                            onClick={() => handleSaveModelOrder(providerCard.provider)}
+                                          >
+                                            <SaveIcon className="size-3.5" />
+                                            Save Order
+                                          </Button>
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   </div>
-                                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                                    <Input
-                                      id={`custom-model-${providerCard.provider}`}
-                                      value={customModelInput ?? ""}
-                                      onChange={(event) => {
-                                        const value = event.target.value;
-                                        setCustomModelInputByProvider((existing) => ({
-                                          ...existing,
-                                          [providerCard.provider]: value,
-                                        }));
-                                        if (customModelError) {
-                                          setCustomModelErrorByProvider((existing) => ({
-                                            ...existing,
-                                            [providerCard.provider]: null,
-                                          }));
-                                        }
-                                      }}
-                                      onKeyDown={(event) => {
-                                        if (event.key !== "Enter") return;
-                                        event.preventDefault();
-                                        addCustomModel(providerCard.provider);
-                                      }}
-                                      placeholder={
-                                        providerCard.provider === "codex"
-                                          ? "gpt-6.7-codex-ultra-preview"
-                                          : "claude-sonnet-5-0"
-                                      }
-                                      spellCheck={false}
-                                    />
-                                    <Button
-                                      className="shrink-0"
-                                      variant="outline"
-                                      onClick={() => addCustomModel(providerCard.provider)}
-                                    >
-                                      <PlusIcon className="size-3.5" />
-                                      Add
-                                    </Button>
-                                  </div>
-                                  {customModelError ? (
-                                    <p className="mt-2 text-xs text-destructive">
-                                      {customModelError}
-                                    </p>
-                                  ) : null}
                                 </div>
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
-                        </div>
-                      );
-                    })}
-                  </SettingsSection>
-                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ) : null}
                 {activeSettingsSection === "keybindings" ? (
                   <KeybindingsSettings

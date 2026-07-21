@@ -67,6 +67,12 @@ export const DEFAULT_CLOSE_LOADER_STYLE: SplashLoaderStyle = "glass";
 export const DEFAULT_CLOSE_LOADER_PALETTE: SplashLoaderPalette = "mono";
 export const DEFAULT_CLOSE_LOADER_THEME: SplashLoaderTheme = "system";
 
+export const PinnedModelEntry = Schema.Struct({
+  provider: ProviderInstanceId,
+  model: TrimmedNonEmptyString,
+});
+export type PinnedModelEntry = typeof PinnedModelEntry.Type;
+
 export const ClientSettingsSchema = Schema.Struct({
   desktopIconTheme: DesktopIconTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DESKTOP_ICON_THEME)),
@@ -80,22 +86,14 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   diffIgnoreWhitespace: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   diffWordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
-  // Model favorites. Historically keyed by provider kind, now
-  // widened to `ProviderInstanceId` so users can favorite a specific model
-  // on a custom provider instance (e.g. "Codex Personal · gpt-5") without
-  // the UI collapsing it into the same bucket as the default Codex. The
-  // widening is backward-compatible by construction: prior provider-kind
-  // strings satisfy the `ProviderInstanceId` slug schema, so previously
-  // persisted favorites decode unchanged and continue to point at the
-  // default instance for their kind (because `defaultInstanceIdForDriver(kind)`
-  // uses the same slug). The field name is kept as `provider` for storage
-  // stability; new call sites should treat the value as an instance id.
-  favorites: Schema.Array(
-    Schema.Struct({
-      provider: ProviderInstanceId,
-      model: TrimmedNonEmptyString,
-    }),
-  ).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  // Model pinned state. Keyed by ProviderInstanceId.
+  // Preserves decoding fallback for legacy `favorites` array.
+  pinnedModels: Schema.Array(PinnedModelEntry).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
+  favorites: Schema.Array(PinnedModelEntry).pipe(
+    Schema.withDecodingDefault(Effect.succeed([])),
+  ),
   providerModelPreferences: Schema.Record(
     ProviderInstanceId,
     Schema.Struct({

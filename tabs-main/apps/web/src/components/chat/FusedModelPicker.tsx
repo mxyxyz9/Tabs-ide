@@ -13,7 +13,7 @@ import {
   getProviderOptionDescriptors,
 } from "@tabs/shared/model";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDownIcon, StarIcon } from "lucide-react";
+import { ChevronDownIcon, PinIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
@@ -21,6 +21,9 @@ import { cn } from "~/lib/utils";
 import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../../modelPinning";
+import { applyCustomModelOrdering, getModelScore, sortModelsByDefaultSequence } from "../../modelOrdering";
+import { collectReasoningChoices } from "../../reasoningOrdering";
 
 // ─────────────────────────────────────────────────────────────────────────
 // FusedModelPicker — AI Cockpit Matrix design (Aligned Columns & Compact Rows)
@@ -62,47 +65,6 @@ const THUMB_PX = 32; // size-8
 const PAD_PX = 4;
 const RANGE_PX = TRACK_PX - THUMB_PX - PAD_PX * 2;
 
-const getStandardOrderForProvider = (provider: string): string[] => {
-  if (provider === "claudeAgent") {
-    return ["low", "medium", "high", "xhigh", "max", "ultracode", "ultrathink"];
-  }
-  if (provider === "codex" || provider === "cursor") {
-    return ["low", "medium", "high", "xhigh", "max", "ultra"];
-  }
-  return ["none", "low", "medium", "high", "xhigh", "max"];
-};
-
-const FALLBACK_LABELS: Record<string, string> = {
-  none: "None",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "Extra High",
-  max: "Max",
-  ultra: "Ultra",
-  ultracode: "Ultra Code",
-  ultrathink: "Ultra Think",
-};
-
-const getModelScore = (name: string): number => {
-  const lower = name.toLowerCase();
-  let familyScore = 0;
-
-  if (lower.includes("fable")) familyScore = 10000;
-  else if (lower.includes("opus")) familyScore = 8000;
-  else if (lower.includes("sonnet")) familyScore = 6000;
-  else if (lower.includes("haiku")) familyScore = 4000;
-  else if (lower.includes("sol")) familyScore = 10000;
-  else if (lower.includes("terra")) familyScore = 8000;
-  else if (lower.includes("luna")) familyScore = 6000;
-
-  const match = name.match(/\d+(\.\d+)?/);
-  const version = match ? parseFloat(match[0]) : 0;
-  const miniPenalty = lower.includes("mini") ? -100 : 0;
-
-  return familyScore + version * 10 + miniPenalty;
-};
-
 interface FusedModelPickerProps {
   provider: ProviderPickerKind;
   model: ModelSlug;
@@ -124,7 +86,7 @@ interface FusedModelPickerProps {
 
 export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<ProviderPickerKind | "favorites" | null>(null);
+  const [selectedTab, setSelectedTab] = useState<ProviderPickerKind | "pinned" | null>(null);
 
   const activeTab = selectedTab ?? (props.lockedProvider ?? props.provider);
   const activeProvider = props.lockedProvider ?? props.provider;
@@ -134,13 +96,11 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
-  const favorites = useMemo(() => settings.favorites ?? [], [settings.favorites]);
+  const pinnedList = useMemo(() => getPinnedModels(settings), [settings]);
 
   const [leftCollisionPadding, setLeftCollisionPadding] = useState(16);
 
   useEffect(() => {
-    // When anchored to the composer card, we don't need aggressive left padding —
-    // the card is already positioned correctly relative to the sidebar.
     if (props.popupAnchorRef) return;
     if (!isOpen) return;
 
@@ -171,28 +131,19 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     [leftCollisionPadding, props.popupAnchorRef],
   );
 
-  const isModelFavorite = useCallback(
+  const checkIsPinned = useCallback(
     (providerId: string, modelSlug: string) => {
-      return favorites.some(
-        (f) => (f.provider === providerId || f.provider === "") && f.model === modelSlug,
-      );
+      return isPinnedModel(pinnedList, providerId, modelSlug);
     },
-    [favorites],
+    [pinnedList],
   );
 
-  const handleToggleFavorite = useCallback(
+  const handleTogglePinned = useCallback(
     (providerId: string, modelSlug: string) => {
-      const exists = favorites.some(
-        (f) => (f.provider === providerId || f.provider === "") && f.model === modelSlug,
-      );
-      const nextFavorites = exists
-        ? favorites.filter(
-            (f) => !((f.provider === providerId || f.provider === "") && f.model === modelSlug),
-          )
-        : [...favorites, { provider: providerId as any, model: modelSlug }];
-      updateSettings({ favorites: nextFavorites });
+      const nextPinned = togglePinnedModel(settings, providerId, modelSlug);
+      updateSettings({ pinnedModels: nextPinned as any });
     },
-    [favorites, updateSettings],
+    [settings, updateSettings],
   );
 
   // Aggregated models with provider attribution across all providers
@@ -213,36 +164,34 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     return result;
   }, [providerOptions, props.providers]);
 
-  const favoriteModels = useMemo(() => {
+  const pinnedModels = useMemo(() => {
     return allProviderModels.filter((m) =>
-      favorites.some(
-        (f) =>
-          (f.provider === m.providerId || f.provider === "") &&
-          f.model === m.slug,
-      ),
+      isPinnedModel(pinnedList, m.providerId, m.slug),
     );
-  }, [allProviderModels, favorites]);
+  }, [allProviderModels, pinnedList]);
 
   const models = useMemo(() => {
-    if (activeTab === "favorites") {
-      return favoriteModels;
+    if (activeTab === "pinned") {
+      return pinnedModels;
     }
-    return getProviderModels(props.providers, activeTab);
-  }, [activeTab, favoriteModels, props.providers]);
+    const raw = getProviderModels(props.providers, activeTab);
+    const customOrder = settings.providerModelPreferences?.[activeTab as any]?.modelOrder;
+    return applyCustomModelOrdering(raw, customOrder, activeTab);
+  }, [activeTab, pinnedModels, props.providers, settings.providerModelPreferences]);
 
   const activeModel = useMemo(() => {
-    if (activeTab === "favorites") {
+    if (activeTab === "pinned") {
       return (
-        favoriteModels.find(
+        pinnedModels.find(
           (m) => m.providerId === props.provider && m.slug === props.model,
         ) ??
-        favoriteModels[0] ??
+        pinnedModels[0] ??
         getProviderModels(props.providers, props.provider).find((m) => m.slug === props.model)
       );
     }
     const provModels = getProviderModels(props.providers, activeTab);
     return provModels.find((m) => m.slug === props.model) ?? provModels[0];
-  }, [activeTab, favoriteModels, props.providers, props.provider, props.model]);
+  }, [activeTab, pinnedModels, props.providers, props.provider, props.model]);
 
   const setModelAndOptions = useCallback(
     (
@@ -312,79 +261,33 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   // Identify the primary select descriptor (reasoning effort)
   const activePrimarySelect = useMemo(
     () =>
-      selectDescriptors.find((d) => d.id === "reasoningEffort" || d.id === "effort") ??
+      selectDescriptors.find(
+        (d) =>
+          d.id === "reasoningEffort" ||
+          d.id === "effort" ||
+          d.id === "reasoning" ||
+          d.id.toLowerCase().includes("effort") ||
+          d.id.toLowerCase().includes("reasoning"),
+      ) ??
       selectDescriptors[0] ??
       null,
     [selectDescriptors],
   );
 
-  // Build union of reasoning stops across all models of the provider to form the global columns
-  const globalStops = useMemo(() => {
-    const standardOrder = getStandardOrderForProvider(activeTab);
-    const allOptionsMap = new Map<string, ProviderOptionChoice>();
-
-    for (const m of models) {
+  // Precompute option descriptors for models once to prevent redundant calculations during render
+  const modelDescriptorsList = useMemo(() => {
+    return models.map((m) => {
       const caps = m.capabilities ?? EMPTY_CAPABILITIES;
-      const desc = getProviderOptionDescriptors({ caps, selections: undefined }).filter(
+      return getProviderOptionDescriptors({ caps, selections: undefined }).filter(
         (d) => d.id !== "agent",
       );
-      const primary = desc.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? desc[0];
-      if (primary && primary.type === "select") {
-        for (const opt of primary.options) {
-          if (!allOptionsMap.has(opt.id)) {
-            allOptionsMap.set(opt.id, opt);
-          }
-        }
-      }
-    }
+    });
+  }, [models]);
 
-    if (activeTab === "favorites") {
-      const finalStops: ProviderOptionChoice[] = [];
-      for (const id of standardOrder) {
-        const opt = allOptionsMap.get(id);
-        if (opt) {
-          finalStops.push(opt);
-        }
-      }
-
-      for (const [id, opt] of allOptionsMap.entries()) {
-        if (!standardOrder.includes(id) && !finalStops.some((s) => s.id === id)) {
-          finalStops.push(opt);
-        }
-      }
-
-      return finalStops;
-    }
-
-    let maxStandardIndex = -1;
-    for (const id of allOptionsMap.keys()) {
-      const idx = standardOrder.indexOf(id);
-      if (idx > maxStandardIndex) {
-        maxStandardIndex = idx;
-      }
-    }
-
-    const finalStops: ProviderOptionChoice[] = [];
-    if (maxStandardIndex >= 0) {
-      for (let i = 0; i <= maxStandardIndex; i++) {
-        const id = standardOrder[i]!;
-        const opt = allOptionsMap.get(id);
-        if (opt) {
-          finalStops.push(opt);
-        } else {
-          finalStops.push({ id, label: FALLBACK_LABELS[id] ?? id });
-        }
-      }
-    }
-
-    for (const [id, opt] of allOptionsMap.entries()) {
-      if (!standardOrder.includes(id) && !finalStops.some((s) => s.id === id)) {
-        finalStops.push(opt);
-      }
-    }
-
-    return finalStops;
-  }, [models, activeTab]);
+  // Build union of reasoning stops dynamically from model capabilities via reasoningOrdering
+  const globalStops = useMemo(() => {
+    return collectReasoningChoices(modelDescriptorsList);
+  }, [modelDescriptorsList]);
 
   const matrixMinWidthClass =
     globalStops.length >= 8
@@ -399,9 +302,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   const groupedModels = useMemo(() => {
     const groups: Array<{ name: string | null; items: Array<ServerProviderModel & { providerId?: string }> }> = [];
 
-    if (activeTab === "favorites") {
-      for (const model of favoriteModels) {
-        const groupName = model.providerName ?? model.subProvider ?? "Favorites";
+    if (activeTab === "pinned") {
+      for (const model of pinnedModels) {
+        const groupName = model.providerName ?? model.subProvider ?? "Pinned";
         let group = groups.find((g) => g.name === groupName);
         if (!group) {
           group = { name: groupName, items: [] };
@@ -412,56 +315,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       return groups;
     }
 
-    const standardOrder = getStandardOrderForProvider(activeTab);
-
-    const sortedList = [...models].sort((a, b) => {
-      const isAutoA = a.slug === "auto" || a.name.toLowerCase() === "auto";
-      const isAutoB = b.slug === "auto" || b.name.toLowerCase() === "auto";
-      if (isAutoA && !isAutoB) return -1;
-      if (!isAutoA && isAutoB) return 1;
-
-      const descA = getProviderOptionDescriptors({
-        caps: a.capabilities ?? EMPTY_CAPABILITIES,
-        selections: undefined,
-      }).filter((d) => d.id !== "agent");
-      const primaryA =
-        descA.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descA[0];
-      const hasReasoningA = primaryA && primaryA.type === "select" && primaryA.options.length > 0;
-
-      const descB = getProviderOptionDescriptors({
-        caps: b.capabilities ?? EMPTY_CAPABILITIES,
-        selections: undefined,
-      }).filter((d) => d.id !== "agent");
-      const primaryB =
-        descB.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? descB[0];
-      const hasReasoningB = primaryB && primaryB.type === "select" && primaryB.options.length > 0;
-
-      if (hasReasoningA && !hasReasoningB) return -1;
-      if (!hasReasoningA && hasReasoningB) return 1;
-
-      if (hasReasoningA && hasReasoningB) {
-        let maxIdxA = -1;
-        for (const opt of (primaryA as Extract<ProviderOptionDescriptor, { type: "select" }>)
-          .options) {
-          const idx = standardOrder.indexOf(opt.id);
-          if (idx > maxIdxA) maxIdxA = idx;
-        }
-
-        let maxIdxB = -1;
-        for (const opt of (primaryB as Extract<ProviderOptionDescriptor, { type: "select" }>)
-          .options) {
-          const idx = standardOrder.indexOf(opt.id);
-          if (idx > maxIdxB) maxIdxB = idx;
-        }
-
-        if (maxIdxA !== maxIdxB) {
-          return maxIdxB - maxIdxA;
-        }
-      }
-
-      // Tie-break by hierarchy/version descending
-      return getModelScore(b.name) - getModelScore(a.name);
-    });
+    const sortedList = models;
 
     for (const model of sortedList) {
       const groupName = model.subProvider ?? null;
@@ -473,7 +327,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       group.items.push(model);
     }
     return groups;
-  }, [activeTab, favoriteModels, models]);
+  }, [activeTab, pinnedModels, models]);
 
   const triggerLabel = useMemo(() => {
     if (!activeModel) return "Select model";
@@ -554,30 +408,30 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           {/* Provider Sidebar navigation on Left */}
           {providerOptions.length > 1 && (
             <div className="flex flex-col gap-2.5 border-r border-border pr-6 dark:border-white/8">
-              {/* ⭐ Favorites Tab */}
+              {/* 📌 Pinned Models Tab */}
               <button
-                key="favorites"
+                key="pinned"
                 type="button"
-                title="Favorites"
-                onClick={() => setSelectedTab("favorites")}
+                title="Pinned"
+                onClick={() => setSelectedTab("pinned")}
                 className={cn(
                   "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative dark:bg-white/3 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-white",
-                  activeTab === "favorites" &&
+                  activeTab === "pinned" &&
                     "bg-accent border-border text-foreground shadow-xs dark:bg-white/10 dark:border-white/20 dark:text-white dark:shadow-md",
                 )}
               >
-                <StarIcon
+                <PinIcon
                   aria-hidden="true"
                   className={cn(
                     "size-5 transition-colors",
-                    activeTab === "favorites"
+                    activeTab === "pinned"
                       ? "text-foreground dark:text-white"
                       : "text-muted-foreground dark:text-zinc-400",
                   )}
                 />
-                {favoriteModels.length > 0 && (
+                {pinnedModels.length > 0 && (
                   <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground dark:bg-white/10 dark:border-white/20 dark:text-zinc-300">
-                    {favoriteModels.length}
+                    {pinnedModels.length}
                   </span>
                 )}
               </button>
@@ -622,11 +476,12 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
               {globalStops.length > 0 && (
                 <div className="sticky top-0 z-30 h-14 mb-2 select-none w-full bg-popover border-b border-border/60 pt-2 pb-3 dark:bg-[#18181b] dark:border-white/5">
                   {globalStops.map((stop, idx) => {
-                    const cleanedLabel = stop.label
-                      .replace(/([a-z])([A-Z])/g, "$1 $2")
-                      .replace(/([a-zA-Z])([0-9])/g, "$1 $2")
-                      .replace("Ultracode", "Ultra Code")
-                      .replace("Ultrathink", "Ultra Think");
+                    const displayLabel =
+                      stop.label ||
+                      stop.id
+                        .replace(/([a-z])([A-Z])/g, "$1 $2")
+                        .replace(/[-_]/g, " ")
+                        .replace(/\b\w/g, (l) => l.toUpperCase());
                     return (
                       <div
                         key={stop.id}
@@ -635,19 +490,19 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                           left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
                         }}
                       >
-                        {cleanedLabel}
+                        {displayLabel}
                       </div>
                     );
                   })}
                 </div>
               )}
 
-              {activeTab === "favorites" && favoriteModels.length === 0 ? (
+              {activeTab === "pinned" && pinnedModels.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none">
-                  <StarIcon className="size-8 text-muted-foreground/40 mb-2.5" />
-                  <div className="text-xs font-semibold text-foreground">No Favorites Yet</div>
+                  <PinIcon className="size-8 text-muted-foreground/40 mb-2.5" />
+                  <div className="text-xs font-semibold text-foreground">No Pinned Models Yet</div>
                   <div className="text-[11px] text-muted-foreground max-w-52 mt-1 leading-normal">
-                    Click the star icon next to any model to add it to your favorites list.
+                    Click the pin icon next to any model to pin it to your pinned models list.
                   </div>
                 </div>
               ) : (
@@ -661,7 +516,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                       )}
                       {group.items.map((model) => {
                         const modelProvider = (model as { providerId?: string }).providerId ?? activeProvider;
-                        const isFav = isModelFavorite(modelProvider, model.slug);
+                        const isFav = checkIsPinned(modelProvider, model.slug);
                         const isCurrentActive =
                           modelProvider === props.provider && model.slug === activeModel?.slug;
                         return (
@@ -672,7 +527,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                             ultra={isCurrentActive && isUltra}
                             activeTab={activeTab}
                             isFavorite={isFav}
-                            onToggleFavorite={() => handleToggleFavorite(modelProvider, model.slug)}
+                            onToggleFavorite={() => handleTogglePinned(modelProvider, model.slug)}
                             themeColor={
                               THEME_COLORS[
                                 models.findIndex((m) => m.slug === model.slug) % THEME_COLORS.length
@@ -714,9 +569,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
 function getCleanModelName(
   name: string,
-  activeTab: ProviderPickerKind | "favorites" | null,
+  activeTab: ProviderPickerKind | "pinned" | null,
 ): string {
-  if (activeTab === "favorites" || activeTab === null) {
+  if (activeTab === "pinned" || activeTab === null) {
     return name;
   }
   const prefixes: Record<string, ReadonlyArray<string>> = {
@@ -741,7 +596,7 @@ const ModelRow = memo(function ModelRow(props: {
   model: ServerProviderModel;
   isActive: boolean;
   ultra: boolean;
-  activeTab?: ProviderPickerKind | "favorites" | null;
+  activeTab?: ProviderPickerKind | "pinned" | null;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   themeColor: (typeof THEME_COLORS)[number];
@@ -775,7 +630,14 @@ const ModelRow = memo(function ModelRow(props: {
     .filter((d) => d.id !== "fastMode");
 
   const primarySelect =
-    selects.find((d) => d.id === "reasoningEffort" || d.id === "effort") ?? selects[0];
+    selects.find(
+      (d) =>
+        d.id === "reasoningEffort" ||
+        d.id === "effort" ||
+        d.id === "reasoning" ||
+        d.id.toLowerCase().includes("effort") ||
+        d.id.toLowerCase().includes("reasoning"),
+    ) ?? selects[0];
   const secondarySelects = primarySelect
     ? selects.filter((d) => d.id !== primarySelect.id)
     : selects;
@@ -975,18 +837,18 @@ const ModelRow = memo(function ModelRow(props: {
           {props.onToggleFavorite && (
             <button
               type="button"
-              title={props.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
+              title={props.isFavorite ? "Unpin model" : "Pin model"}
               onClick={(e) => {
                 e.stopPropagation();
                 props.onToggleFavorite?.();
               }}
               className="shrink-0 p-0.5 rounded-full hover:bg-muted transition-colors focus:outline-none dark:hover:bg-white/10"
             >
-              <StarIcon
+              <PinIcon
                 className={cn(
                   "size-3.5 transition-all",
                   props.isFavorite
-                    ? "fill-current text-foreground dark:text-white opacity-100 scale-100"
+                    ? "fill-current text-amber-500 opacity-100 scale-100"
                     : "text-muted-foreground opacity-40 hover:opacity-100 hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 scale-90",
                 )}
               />

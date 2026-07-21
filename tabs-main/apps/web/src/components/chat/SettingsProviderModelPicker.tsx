@@ -13,7 +13,7 @@ import {
 } from "@tabs/contracts";
 import { memo, useState } from "react";
 import type { VariantProps } from "class-variance-authority";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, PinIcon } from "lucide-react";
 import { Button, buttonVariants } from "../ui/button";
 import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -21,6 +21,8 @@ import { cn } from "~/lib/utils";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import type { AppModelOption } from "../../modelSelection";
 import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
+import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import { getPinnedModels, isPinnedModel, sortModelsWithPinnedFirst, togglePinnedModel } from "../../modelPinning";
 
 /** Map driver kind slugs to their icon components. */
 const DRIVER_ICON: Record<string, Icon> = {
@@ -46,6 +48,9 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
   onInstanceModelChange: (instanceId: ProviderInstanceId, model: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const settings = useSettings();
+  const { updateSettings } = useUpdateSettings();
+  const pinnedModels = getPinnedModels(settings);
 
   // Resolve the active entry for display
   const activeEntry =
@@ -60,6 +65,12 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
   const handleSelect = (instanceId: ProviderInstanceId, modelSlug: string) => {
     props.onInstanceModelChange(instanceId, modelSlug);
     setIsOpen(false);
+  };
+
+  const handleTogglePin = (e: React.MouseEvent, instanceId: ProviderInstanceId, modelSlug: string) => {
+    e.stopPropagation();
+    const nextPinned = togglePinnedModel(settings, instanceId, modelSlug);
+    updateSettings({ pinnedModels: nextPinned as any });
   };
 
   // Group entries by driver for display
@@ -124,7 +135,8 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
             </div>
           ) : (
             enabledEntries.map((entry, entryIndex) => {
-              const models = props.modelOptionsByInstance.get(entry.instanceId) ?? [];
+              const rawModels = props.modelOptionsByInstance.get(entry.instanceId) ?? [];
+              const models = sortModelsWithPinnedFirst(rawModels, pinnedModels, entry.instanceId);
               const DriverIcon = DRIVER_ICON[entry.driverKind];
               if (models.length === 0) return null;
               return (
@@ -144,12 +156,12 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
                   {models.map((m) => {
                     const isActive =
                       entry.instanceId === props.activeInstanceId && m.slug === props.model;
+                    const isPinned = isPinnedModel(pinnedModels, entry.instanceId, m.slug);
                     return (
-                      <button
+                      <div
                         key={`${entry.instanceId}:${m.slug}`}
-                        type="button"
                         className={cn(
-                          "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors",
+                          "group/row flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs transition-colors cursor-pointer",
                           isActive
                             ? "bg-accent text-accent-foreground font-medium"
                             : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
@@ -157,10 +169,23 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
                         onClick={() => handleSelect(entry.instanceId, m.slug)}
                       >
                         <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                        <button
+                          type="button"
+                          aria-label={isPinned ? `Unpin ${m.name}` : `Pin ${m.name}`}
+                          className={cn(
+                            "size-5 p-0.5 rounded-sm flex items-center justify-center transition-all",
+                            isPinned
+                              ? "text-amber-500 hover:text-amber-600"
+                              : "text-muted-foreground/30 opacity-0 group-hover/row:opacity-100 hover:text-foreground",
+                          )}
+                          onClick={(e) => handleTogglePin(e, entry.instanceId, m.slug)}
+                        >
+                          <PinIcon className="size-3 fill-current" />
+                        </button>
                         {isActive ? (
                           <span className="size-1.5 shrink-0 rounded-full bg-primary" />
                         ) : null}
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

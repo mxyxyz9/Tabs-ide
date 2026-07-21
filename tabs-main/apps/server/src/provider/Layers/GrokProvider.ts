@@ -38,8 +38,29 @@ const GROK_PRESENTATION = {
   requiresNewThreadForModelChange: true,
 } as const;
 const PROVIDER = "grok" as ProviderDriverKind;
-const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
-  optionDescriptors: [],
+const DEFAULT_GROK_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
+  optionDescriptors: [
+    {
+      id: "reasoningEffort",
+      type: "select",
+      label: "Reasoning Effort",
+      currentValue: "high",
+      options: [
+        { id: "low", label: "Low" },
+        { id: "medium", label: "Medium" },
+        { id: "high", label: "High" },
+        { id: "xhigh", label: "Extra High" },
+        { id: "max", label: "Max" },
+        { id: "ultra", label: "Ultra" },
+      ],
+    },
+    {
+      id: "fastMode",
+      type: "boolean",
+      label: "Fast Mode",
+      currentValue: false,
+    },
+  ],
 });
 
 const VERSION_PROBE_TIMEOUT_MS = 4_000;
@@ -54,7 +75,7 @@ const GROK_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
     slug: "grok-build",
     name: "Grok Build",
     isCustom: false,
-    capabilities: EMPTY_CAPABILITIES,
+    capabilities: DEFAULT_GROK_MODEL_CAPABILITIES,
   },
 ];
 
@@ -105,7 +126,7 @@ function grokModelsFromSettings(
     builtInModels,
     PROVIDER,
     customModels ?? [],
-    EMPTY_CAPABILITIES,
+    DEFAULT_GROK_MODEL_CAPABILITIES,
   );
 }
 
@@ -127,7 +148,7 @@ function buildGrokDiscoveredModelsFromSessionModelState(
         slug,
         name: model.name.trim() || slug,
         isCustom: false,
-        capabilities: EMPTY_CAPABILITIES,
+        capabilities: DEFAULT_GROK_MODEL_CAPABILITIES,
       };
     })
     .filter((model): model is ServerProviderModel => model !== undefined);
