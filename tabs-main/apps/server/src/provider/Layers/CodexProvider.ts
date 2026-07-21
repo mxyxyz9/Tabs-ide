@@ -36,12 +36,47 @@ import packageJson from "../../../package.json" with { type: "json" };
 const isCodexAppServerSpawnError = (error: unknown): boolean => {
   if (Schema.is(CodexErrors.CodexAppServerSpawnError)(error)) return true;
   if (typeof error === "object" && error !== null) {
-    const err = error as { _tag?: string; code?: string; message?: string; cause?: unknown };
-    if (err._tag === "CodexAppServerSpawnError" || err._tag === "ChildProcessSpawnerError") return true;
-    if (err.code === "ENOENT") return true;
+    const err = error as {
+      _tag?: string;
+      code?: string;
+      reason?: string;
+      syscall?: string;
+      message?: string;
+      cause?: unknown;
+    };
+    if (
+      err._tag === "CodexAppServerSpawnError" ||
+      err._tag === "ChildProcessSpawnerError" ||
+      err._tag === "SystemError" ||
+      err._tag === "PlatformError" ||
+      err._tag === "BadArgument"
+    ) {
+      return true;
+    }
+    if (err.code === "ENOENT" || err.reason === "NotFound" || err.syscall === "spawn") return true;
     if (err.cause && isCodexAppServerSpawnError(err.cause)) return true;
-    const str = String(err.message ?? "");
-    if (str.includes("ENOENT") || str.includes("CodexAppServerSpawnError")) return true;
+    const str = (String(err.message ?? "") + " " + String(error)).toLowerCase();
+    if (
+      str.includes("enoent") ||
+      str.includes("codexappserverspawnerror") ||
+      str.includes("childprocessspawnererror") ||
+      str.includes("notfound") ||
+      str.includes("systemerror") ||
+      str.includes("spawn")
+    ) {
+      return true;
+    }
+  }
+  const str = String(error).toLowerCase();
+  if (
+    str.includes("enoent") ||
+    str.includes("codexappserverspawnerror") ||
+    str.includes("childprocessspawnererror") ||
+    str.includes("notfound") ||
+    str.includes("systemerror") ||
+    str.includes("spawn")
+  ) {
+    return true;
   }
   return false;
 };
