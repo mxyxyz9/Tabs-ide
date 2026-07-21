@@ -268,15 +268,17 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           d.id === "reasoning" ||
           d.id.toLowerCase().includes("effort") ||
           d.id.toLowerCase().includes("reasoning"),
-      ) ??
-      selectDescriptors[0] ??
-      null,
+      ) ?? null,
     [selectDescriptors],
   );
 
   // Precompute option descriptors for models once to prevent redundant calculations during render
   const modelDescriptorsList = useMemo(() => {
     return models.map((m) => {
+      const providerId = (m as any).providerId;
+      if (providerId === "grok" || m.slug.toLowerCase().startsWith("grok")) {
+        return [];
+      }
       const caps = m.capabilities ?? EMPTY_CAPABILITIES;
       return getProviderOptionDescriptors({ caps, selections: undefined }).filter(
         (d) => d.id !== "agent",
@@ -485,7 +487,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                     return (
                       <div
                         key={stop.id}
-                        className="absolute top-2 -translate-x-1/2 w-12 text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors break-words leading-[1.1]"
+                        className="absolute top-2 -translate-x-1/2 w-20 text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors whitespace-nowrap leading-[1.1]"
                         style={{
                           left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
                         }}
@@ -615,8 +617,11 @@ const ModelRow = memo(function ModelRow(props: {
   ) => void;
 }) {
   const { sliderAnimationsEnabled, animatedTrackFillEnabled } = useSettings();
+  const providerId = props.modelProvider ?? (props.model as any).providerId;
+  const isGrok = providerId === "grok" || props.model.slug.toLowerCase().startsWith("grok");
+  const caps = isGrok ? EMPTY_CAPABILITIES : (props.model.capabilities ?? EMPTY_CAPABILITIES);
   const descriptors = getProviderOptionDescriptors({
-    caps: props.model.capabilities ?? EMPTY_CAPABILITIES,
+    caps,
     selections: props.isActive ? props.selections : undefined,
   }).filter((d) => d.id !== "agent");
 
@@ -629,15 +634,14 @@ const ModelRow = memo(function ModelRow(props: {
     )
     .filter((d) => d.id !== "fastMode");
 
-  const primarySelect =
-    selects.find(
-      (d) =>
-        d.id === "reasoningEffort" ||
-        d.id === "effort" ||
-        d.id === "reasoning" ||
-        d.id.toLowerCase().includes("effort") ||
-        d.id.toLowerCase().includes("reasoning"),
-    ) ?? selects[0];
+  const primarySelect = selects.find(
+    (d) =>
+      d.id === "reasoningEffort" ||
+      d.id === "effort" ||
+      d.id === "reasoning" ||
+      d.id.toLowerCase().includes("effort") ||
+      d.id.toLowerCase().includes("reasoning"),
+  );
   const secondarySelects = primarySelect
     ? selects.filter((d) => d.id !== primarySelect.id)
     : selects;
@@ -957,7 +961,7 @@ const ModelRow = memo(function ModelRow(props: {
             </div>
           )}
 
-          {/* Aligned stops: solid dots if supported, empty circles if not */}
+          {/* Aligned stops: solid dots if supported, invisible if not (preserves layout) */}
           <div className="absolute top-1/2 -translate-y-1/2 left-5 right-5 flex justify-between pointer-events-none z-10">
             {props.globalStops.map((stop, oIdx) => {
               const isSupported = allowedOptionIds.includes(stop.id);
@@ -969,7 +973,7 @@ const ModelRow = memo(function ModelRow(props: {
                     "size-1.5 rounded-full transition-colors",
                     isSupported
                       ? "bg-foreground/30 dark:bg-zinc-600"
-                      : "border border-border bg-transparent dark:border-white/15",
+                      : "opacity-0",
                     isDotActive && isSupported && "bg-foreground/60 dark:bg-white/30",
                   )}
                 />
@@ -1072,7 +1076,7 @@ const Lever = memo(function Lever(props: {
           color: isEngaged ? props.themeColor.hex : undefined,
           textShadow: isEngaged ? `0 0 10px ${props.themeColor.hex}aa` : undefined,
         }}
-        dangerouslySetInnerHTML={{ __html: props.label.replace(" ", "<br>") }}
+        dangerouslySetInnerHTML={{ __html: props.label }}
       />
       <div
         ref={trackRef}

@@ -39,28 +39,7 @@ const GROK_PRESENTATION = {
 } as const;
 const PROVIDER = "grok" as ProviderDriverKind;
 const DEFAULT_GROK_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
-  optionDescriptors: [
-    {
-      id: "reasoningEffort",
-      type: "select",
-      label: "Reasoning Effort",
-      currentValue: "high",
-      options: [
-        { id: "low", label: "Low" },
-        { id: "medium", label: "Medium" },
-        { id: "high", label: "High" },
-        { id: "xhigh", label: "Extra High" },
-        { id: "max", label: "Max" },
-        { id: "ultra", label: "Ultra" },
-      ],
-    },
-    {
-      id: "fastMode",
-      type: "boolean",
-      label: "Fast Mode",
-      currentValue: false,
-    },
-  ],
+  optionDescriptors: [],
 });
 
 const VERSION_PROBE_TIMEOUT_MS = 4_000;

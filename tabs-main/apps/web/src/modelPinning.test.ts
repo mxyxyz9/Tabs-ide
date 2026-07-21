@@ -13,13 +13,20 @@ describe("modelPinning", () => {
     expect(getPinnedModels({ pinnedModels: [{ provider: "codex" as ProviderInstanceId, model: "gpt-5.4" }] })).toEqual([
       { provider: "codex", model: "gpt-5.4" },
     ]);
-    // Fallback to legacy favorites
+    // Fallback to legacy favorites only when pinnedModels is undefined
+    expect(
+      getPinnedModels({
+        favorites: [{ provider: "claudeAgent" as ProviderInstanceId, model: "claude-sonnet-5" }],
+      } as any),
+    ).toEqual([{ provider: "claudeAgent", model: "claude-sonnet-5" }]);
+
+    // Preserve empty pinnedModels array when explicitly set
     expect(
       getPinnedModels({
         pinnedModels: [],
         favorites: [{ provider: "claudeAgent" as ProviderInstanceId, model: "claude-sonnet-5" }],
       } as any),
-    ).toEqual([{ provider: "claudeAgent", model: "claude-sonnet-5" }]);
+    ).toEqual([]);
   });
 
   it("pin and unpin model immutably without duplicates", () => {

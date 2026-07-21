@@ -44,7 +44,12 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   const descriptors = getProviderOptionDescriptors({ caps, selections: modelOptions });
   const primarySelectDescriptor = descriptors.find(
     (descriptor): descriptor is Extract<(typeof descriptors)[number], { type: "select" }> =>
-      descriptor.type === "select",
+      descriptor.type === "select" &&
+      (descriptor.id === "reasoningEffort" ||
+        descriptor.id === "effort" ||
+        descriptor.id === "reasoning" ||
+        descriptor.id.toLowerCase().includes("effort") ||
+        descriptor.id.toLowerCase().includes("reasoning")),
   );
   const primaryValue = getProviderOptionCurrentValue(primarySelectDescriptor ?? null);
   const promptEffort = typeof primaryValue === "string" ? primaryValue : null;

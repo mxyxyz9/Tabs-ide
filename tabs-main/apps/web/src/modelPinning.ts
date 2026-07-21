@@ -16,12 +16,12 @@ export function getPinnedModels(
   if (!input) return [];
   if (Array.isArray(input)) return input as ReadonlyArray<PinnedModelEntry>;
   const pinned = (input as Record<string, unknown>).pinnedModels;
-  if (Array.isArray(pinned) && pinned.length > 0) {
+  if (Array.isArray(pinned)) {
     return pinned as ReadonlyArray<PinnedModelEntry>;
   }
-  // Fallback to legacy favorites if pinnedModels is not yet set
+  // Fallback to legacy favorites if pinnedModels is not set at all
   const legacyFavorites = (input as Record<string, unknown>).favorites;
-  if (Array.isArray(legacyFavorites) && legacyFavorites.length > 0) {
+  if (Array.isArray(legacyFavorites)) {
     return legacyFavorites as ReadonlyArray<PinnedModelEntry>;
   }
   return [];
@@ -40,7 +40,7 @@ export function isPinnedModel(
   const targetModel = modelSlug.trim();
   return pinnedModels.some(
     (entry) =>
-      (entry.provider === targetInstance || entry.provider === "") &&
+      (entry.provider === targetInstance || (entry.provider === "" && targetInstance === "codex")) &&
       entry.model === targetModel,
   );
 }

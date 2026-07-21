@@ -59,6 +59,15 @@ const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });
 
+const CURSOR_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
+  {
+    slug: "composer-2",
+    name: "Composer 2",
+    isCustom: false,
+    capabilities: EMPTY_CAPABILITIES,
+  },
+];
+
 const CURSOR_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
 const CURSOR_PARAMETERIZED_MODEL_PICKER_MIN_VERSION_DATE = 2026_04_08;
 export const CURSOR_PARAMETERIZED_MODEL_PICKER_CAPABILITIES = {
@@ -565,7 +574,7 @@ export const discoverCursorModelsViaAcp = (
 export function getCursorFallbackModels(
   cursorSettings: Pick<CursorSettings, "customModels">,
 ): ReadonlyArray<ServerProviderModel> {
-  return providerModelsFromSettings([], PROVIDER, cursorSettings.customModels, EMPTY_CAPABILITIES);
+  return providerModelsFromSettings(CURSOR_BUILT_IN_MODELS, PROVIDER, cursorSettings.customModels, EMPTY_CAPABILITIES);
 }
 
 /** Timeout for `agent about` — it's slower than a simple `--version` probe. */
