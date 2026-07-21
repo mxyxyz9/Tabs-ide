@@ -31,9 +31,18 @@ import {
 } from "../providerSnapshot";
 import { expandHomePath } from "../../pathExpansion";
 import packageJson from "../../../package.json" with { type: "json" };
-const isCodexAppServerSpawnError = (error: unknown): boolean =>
-  Schema.is(CodexErrors.CodexAppServerSpawnError)(error) ||
-  (typeof error === "object" && error !== null && (error as { _tag?: string })._tag === "CodexAppServerSpawnError");
+const isCodexAppServerSpawnError = (error: unknown): boolean => {
+  if (Schema.is(CodexErrors.CodexAppServerSpawnError)(error)) return true;
+  if (typeof error === "object" && error !== null) {
+    const err = error as { _tag?: string; code?: string; message?: string; cause?: unknown };
+    if (err._tag === "CodexAppServerSpawnError" || err._tag === "ChildProcessSpawnerError") return true;
+    if (err.code === "ENOENT") return true;
+    if (err.cause && isCodexAppServerSpawnError(err.cause)) return true;
+    const str = String(err.message ?? "");
+    if (str.includes("ENOENT") || str.includes("CodexAppServerSpawnError")) return true;
+  }
+  return false;
+};
 const CODEX_APP_SERVER_PROBE_FORCE_KILL_AFTER = "2 seconds" as const;
 const DEFAULT_SERVICE_TIER_ID = "default";
 
