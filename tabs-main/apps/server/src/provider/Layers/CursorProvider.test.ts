@@ -68,7 +68,7 @@ const makeMockAgentWrapper = Effect.fn("makeMockAgentWrapper")(function* (
     prefix: "cursor-provider-mock-",
   });
   const wrapperPath = path.join(dir, "fake-agent.sh");
-  const mockAgentCommand = ["node", mockAgentPath].map((arg) => JSON.stringify(arg)).join(" ");
+  const mockAgentCommand = ["bun", mockAgentPath].map((arg) => JSON.stringify(arg)).join(" ");
   const envExports = Object.entries(extraEnv ?? {})
     .map(([key, value]) => `export ${key}=${JSON.stringify(value)}`)
     .join("\n");
@@ -90,7 +90,7 @@ const makeMockAgentWithAboutWrapper = Effect.fn("makeMockAgentWithAboutWrapper")
     prefix: "cursor-provider-about-mock-",
   });
   const wrapperPath = path.join(dir, "fake-agent.sh");
-  const mockAgentCommand = ["node", mockAgentPath].map((arg) => JSON.stringify(arg)).join(" ");
+  const mockAgentCommand = ["bun", mockAgentPath].map((arg) => JSON.stringify(arg)).join(" ");
   const script = `#!/bin/sh
 if [ "$1" = "about" ]; then
   printf 'CLI Version         2026.04.09-f2b0fcd\\n'
@@ -295,12 +295,12 @@ const baseCursorSettings: CursorSettings = {
 };
 
 describe("getCursorFallbackModels", () => {
-  it("does not publish any built-in cursor models before ACP discovery", () => {
+  it("includes composer-2 built-in fallback alongside custom models before ACP discovery", () => {
     expect(
       getCursorFallbackModels({
         customModels: ["internal/cursor-model"],
       }).map((model) => model.slug),
-    ).toEqual(["internal/cursor-model"]);
+    ).toEqual(["composer-2", "internal/cursor-model"]);
   });
 });
 

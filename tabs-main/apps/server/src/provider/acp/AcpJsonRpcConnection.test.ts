@@ -15,7 +15,7 @@ import type * as EffectAcpProtocol from "effect-acp/protocol";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockAgentPath = path.join(__dirname, "../../../scripts/acp-mock-agent.ts");
-const mockAgentCommand = "node";
+const mockAgentCommand = "bun";
 const mockAgentArgs = [mockAgentPath];
 
 describe("AcpSessionRuntime", () => {

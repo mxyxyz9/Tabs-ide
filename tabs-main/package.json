@@ -2,6 +2,7 @@
   "name": "@tabs/monorepo",
   "private": true,
   "engines": {
+    "bun": "^1.3.9",
     "node": ">=22.12.0"
   },
   "workspaces": {
@@ -66,10 +67,6 @@
   },
   "overrides": {
     "vite": "^8.0.16"
-  },
-  "engines": {
-    "bun": "^1.3.9",
-    "node": "^24.13.1"
   },
   "packageManager": "bun@1.3.9",
   "msw": {
