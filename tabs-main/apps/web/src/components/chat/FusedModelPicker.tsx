@@ -619,7 +619,7 @@ const ModelRow = memo(function ModelRow(props: {
   ) => void;
 }) {
   const { sliderAnimationsEnabled, animatedTrackFillEnabled } = useSettings();
-  const providerId = props.modelProvider ?? (props.model as any).providerId;
+  const providerId = (props.model as { providerId?: string }).providerId;
   const isGrok = providerId === "grok" || props.model.slug.toLowerCase().startsWith("grok");
   const caps = isGrok ? EMPTY_CAPABILITIES : (props.model.capabilities ?? EMPTY_CAPABILITIES);
   const descriptors = getProviderOptionDescriptors({
