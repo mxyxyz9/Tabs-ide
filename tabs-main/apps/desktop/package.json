@@ -1,6 +1,6 @@
 {
   "name": "@tabs/desktop",
-  "version": "1.2.100",
+  "version": "1.2.101",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
