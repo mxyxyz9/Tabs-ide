@@ -114,9 +114,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleAlertIcon,
+  ImageIcon,
   ListTodoIcon,
   LockIcon,
   LockOpenIcon,
+  PaperclipIcon,
   PenIcon,
   XIcon,
 } from "lucide-react";
@@ -464,6 +466,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const composerFormRef = useRef<HTMLFormElement>(null);
   const composerCardRef = useRef<HTMLDivElement>(null);
   const composerFooterRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const composerFormHeightRef = useRef(0);
   const composerImagesRef = useRef<ComposerImageAttachment[]>([]);
   const composerSelectLockRef = useRef(false);
@@ -3589,7 +3592,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         )}
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <p className="text-sm">Select a thread or create a new one to get started.</p>
+            <p className="text-sm text-muted-foreground/50">Select a thread or create a new one to get started.</p>
           </div>
         </div>
       </div>
@@ -3603,16 +3606,28 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   });
   const composerSection = (
     <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
-      {activeTaskNodes.length > 0 && <TaskListPanel tasks={activeTaskNodes} />}
       <form
         ref={composerFormRef}
         onSubmit={onSend}
         className="mx-auto w-full min-w-0 max-w-3xl"
         data-chat-composer-form="true"
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(event) => {
+            if (event.target.files && event.target.files.length > 0) {
+              addComposerImages(Array.from(event.target.files));
+              event.target.value = "";
+            }
+          }}
+        />
         <div
           className={cn(
-            "group rounded-[22px] bg-card p-0.5 transition-colors duration-200",
+            "group rounded-2xl p-0.5 transition-all duration-200",
             composerProviderState.composerFrameClassName,
           )}
           onDragEnter={onComposerDragEnter}
@@ -3623,20 +3638,205 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
           <div
             ref={composerCardRef}
             className={cn(
-              "rounded-[20px] border bg-card transition-colors duration-200 has-focus-visible:border-ring/45",
-              isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border",
+              "rounded-2xl border bg-card/90 shadow-md transition-all duration-200 overflow-hidden flex flex-col",
+              isDragOverComposer
+                ? "border-foreground/40 bg-accent/30"
+                : "border-border/60 hover:border-border/80 has-focus-visible:border-foreground/30 has-focus-visible:ring-1 has-focus-visible:ring-foreground/20",
               composerProviderState.composerSurfaceClassName,
             )}
           >
+            {/* Top Toolbar Row inside Prompt Box */}
+            <div
+              ref={composerFooterRef}
+              data-chat-composer-footer="true"
+              className={cn(
+                "flex items-center justify-between border-b border-border/40 bg-muted/10 px-3 py-2",
+                isComposerFooterCompact ? "gap-1.5" : "flex-wrap gap-2 sm:flex-nowrap sm:gap-0",
+              )}
+            >
+              <div
+                className={cn(
+                  "flex min-w-0 flex-1 items-center gap-1.5",
+                  isComposerFooterCompact
+                    ? "overflow-hidden"
+                    : "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible",
+                )}
+              >
+                {isComposerFooterCompact ? (
+                  <>
+                    <ProviderModelPicker
+                      compact={isComposerFooterCompact}
+                      provider={selectedProvider}
+                      model={selectedModelForPickerWithCustomFallback}
+                      lockedProvider={lockedProvider}
+                      providers={providerStatuses}
+                      modelOptionsByProvider={modelOptionsByProvider}
+                      {...(composerProviderState.modelPickerIconClassName
+                        ? {
+                            activeProviderIconClassName:
+                              composerProviderState.modelPickerIconClassName,
+                          }
+                        : {})}
+                      onProviderModelChange={onProviderModelSelect}
+                    />
+                    <CompactComposerControlsMenu
+                      activePlan={Boolean(activePlan || sidebarProposedPlan || planSidebarOpen)}
+                      interactionMode={interactionMode}
+                      planSidebarOpen={planSidebarOpen}
+                      runtimeMode={runtimeMode}
+                      traitsMenuContent={providerTraitsMenuContent}
+                      onToggleInteractionMode={toggleInteractionMode}
+                      onTogglePlanSidebar={togglePlanSidebar}
+                      onToggleRuntimeMode={toggleRuntimeMode}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <FusedModelPicker
+                      provider={selectedProvider}
+                      model={selectedModelForPickerWithCustomFallback}
+                      lockedProvider={lockedProvider}
+                      providers={providerStatuses}
+                      prompt={prompt}
+                      onPromptChange={setPromptFromTraits}
+                      modelOptions={composerModelOptions?.[selectedProvider]}
+                      onProviderModelChange={onProviderModelSelect}
+                      onModelOptionsChange={onFusedModelOptionsChange}
+                      popupAnchorRef={composerFooterRef}
+                    />
+
+                    <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "shrink-0 whitespace-nowrap px-2.5 sm:px-3 text-xs font-medium transition-colors",
+                        interactionMode === "plan"
+                          ? "text-foreground font-semibold"
+                          : "text-muted-foreground/70 hover:text-foreground/80",
+                      )}
+                      size="sm"
+                      type="button"
+                      onClick={toggleInteractionMode}
+                      title={
+                        interactionMode === "plan"
+                          ? "Plan mode — click to return to normal chat mode"
+                          : "Default mode — click to enter plan mode"
+                      }
+                    >
+                      {interactionMode === "plan" ? <ListTodoIcon /> : <BotIcon />}
+                      <span className="sr-only sm:not-sr-only">
+                        {interactionMode === "plan" ? "Plan" : "Build"}
+                      </span>
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      className={cn(
+                        "shrink-0 whitespace-nowrap px-2.5 sm:px-3 text-xs font-medium transition-colors",
+                        runtimeMode === "full-access"
+                          ? "text-foreground/90 font-semibold"
+                          : runtimeMode === "auto-accept-edits"
+                            ? "text-foreground/80 font-medium"
+                            : "text-muted-foreground/70 hover:text-foreground/80",
+                      )}
+                      size="sm"
+                      type="button"
+                      onClick={() => {
+                        const modes = [
+                          "approval-required",
+                          "auto-accept-edits",
+                          "full-access",
+                        ] as const;
+                        const currentMode = runtimeMode || "approval-required";
+                        const nextIndex = (modes.indexOf(currentMode) + 1) % modes.length;
+                        const nextMode = modes[nextIndex];
+                        if (nextMode) {
+                          void handleRuntimeModeChange(nextMode);
+                        }
+                      }}
+                      title={
+                        runtimeMode === "full-access"
+                          ? "Full access — click to require approvals"
+                          : runtimeMode === "auto-accept-edits"
+                            ? "Auto-accept edits — click for full access"
+                            : "Supervised — click for auto-accept edits"
+                      }
+                    >
+                      {runtimeMode === "full-access" ? (
+                        <LockOpenIcon />
+                      ) : runtimeMode === "auto-accept-edits" ? (
+                        <PenIcon />
+                      ) : (
+                        <LockIcon />
+                      )}
+                      <span className="sr-only sm:not-sr-only">
+                        {runtimeMode === "full-access"
+                          ? "Full access"
+                          : runtimeMode === "auto-accept-edits"
+                            ? "Auto-accept edits"
+                            : "Supervised"}
+                      </span>
+                    </Button>
+
+                    {activePlan || sidebarProposedPlan || planSidebarOpen ? (
+                      <>
+                        <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                        <Button
+                          variant="ghost"
+                          className={cn(
+                            "shrink-0 whitespace-nowrap px-2.5 sm:px-3 text-xs font-medium transition-colors",
+                            planSidebarOpen
+                              ? "text-foreground font-semibold"
+                              : "text-muted-foreground/70 hover:text-foreground/80",
+                          )}
+                          size="sm"
+                          type="button"
+                          onClick={togglePlanSidebar}
+                          title={planSidebarOpen ? "Hide plan sidebar" : "Show plan sidebar"}
+                        >
+                          <ListTodoIcon />
+                          <span className="sr-only sm:not-sr-only">Plan</span>
+                        </Button>
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                {activeContextWindow ? <ContextWindowMeter usage={activeContextWindow} /> : null}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-muted-foreground/70 hover:text-foreground/80 px-2 sm:px-2.5"
+                        onClick={() => fileInputRef.current?.click()}
+                        aria-label="Attach images"
+                        title="Attach images"
+                      >
+                        <ImageIcon className="size-4" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="top">Attach images</TooltipPopup>
+                </Tooltip>
+              </div>
+            </div>
+
+            {/* Approval / Question Banners if active */}
             {activePendingApproval ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+              <div className="border-b border-border/65 bg-muted/20">
                 <ComposerPendingApprovalPanel
                   approval={activePendingApproval}
                   pendingCount={pendingApprovals.length}
                 />
               </div>
             ) : pendingUserInputs.length > 0 ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+              <div className="border-b border-border/65 bg-muted/20">
                 <ComposerPendingUserInputPanel
                   pendingUserInputs={pendingUserInputs}
                   respondingRequestIds={respondingRequestIds}
@@ -3647,19 +3847,16 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                 />
               </div>
             ) : showPlanFollowUpPrompt && activeProposedPlan ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
+              <div className="border-b border-border/65 bg-muted/20">
                 <ComposerPlanFollowUpBanner
                   key={activeProposedPlan.id}
                   planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
                 />
               </div>
             ) : null}
-            <div
-              className={cn(
-                "relative px-3 pb-2 sm:px-4",
-                hasComposerHeader ? "pt-2.5 sm:pt-3" : "pt-3.5 sm:pt-4",
-              )}
-            >
+
+            {/* Main Textarea + Floating Action Area */}
+            <div className="relative flex min-h-[76px] flex-col justify-between p-3 sm:p-3.5">
               {composerMenuOpen && !isComposerApprovalState && (
                 <div className="absolute inset-x-0 bottom-full z-20 mb-2 px-1">
                   <ComposerCommandMenu
@@ -3677,7 +3874,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
               {!isComposerApprovalState &&
                 pendingUserInputs.length === 0 &&
                 composerImages.length > 0 && (
-                  <div className="mb-3 flex flex-wrap gap-2">
+                  <div className="mb-2.5 flex flex-wrap gap-2">
                     {composerImages.map((image) => (
                       <div
                         key={image.id}
@@ -3740,376 +3937,204 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                     ))}
                   </div>
                 )}
-              <ComposerPromptEditor
-                ref={composerEditorRef}
-                value={
-                  isComposerApprovalState
-                    ? ""
-                    : activePendingProgress
-                      ? activePendingProgress.customAnswer
-                      : prompt
-                }
-                cursor={composerCursor}
-                terminalContexts={
-                  !isComposerApprovalState && pendingUserInputs.length === 0
-                    ? composerTerminalContexts
-                    : []
-                }
-                onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
-                onChange={onPromptChange}
-                onCommandKeyDown={onComposerCommandKey}
-                onPaste={onComposerPaste}
-                placeholder={
-                  isComposerApprovalState
-                    ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
-                    : activePendingProgress
-                      ? "Type your own answer, or leave this blank to use the selected option"
-                      : showPlanFollowUpPrompt && activeProposedPlan
-                        ? "Add feedback to refine the plan, or leave this blank to implement it"
-                        : baseComposerPlaceholder
-                }
-                disabled={isConnecting || isComposerApprovalState}
-              />
-            </div>
 
-            {activePendingApproval ? (
-              <div className="flex items-center justify-end gap-2 px-2.5 pb-2.5 sm:px-3 sm:pb-3">
-                <ComposerPendingApprovalActions
-                  requestId={activePendingApproval.requestId}
-                  isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
-                  onRespondToApproval={onRespondToApproval}
+              <div className="flex-1 pr-11">
+                <ComposerPromptEditor
+                  ref={composerEditorRef}
+                  value={
+                    isComposerApprovalState
+                      ? ""
+                      : activePendingProgress
+                        ? activePendingProgress.customAnswer
+                        : prompt
+                  }
+                  cursor={composerCursor}
+                  terminalContexts={
+                    !isComposerApprovalState && pendingUserInputs.length === 0
+                      ? composerTerminalContexts
+                      : []
+                  }
+                  onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
+                  onChange={onPromptChange}
+                  onCommandKeyDown={onComposerCommandKey}
+                  onPaste={onComposerPaste}
+                  placeholder={
+                    isComposerApprovalState
+                      ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
+                      : activePendingProgress
+                        ? "Type your own answer, or leave this blank to use the selected option"
+                        : showPlanFollowUpPrompt && activeProposedPlan
+                          ? "Add feedback to refine the plan, or leave this blank to implement it"
+                          : baseComposerPlaceholder
+                  }
+                  disabled={isConnecting || isComposerApprovalState}
                 />
               </div>
-            ) : (
-              <div
-                ref={composerFooterRef}
-                data-chat-composer-footer="true"
-                className={cn(
-                  "flex items-center justify-between px-2.5 pb-2.5 sm:px-3 sm:pb-3",
-                  isComposerFooterCompact ? "gap-1.5" : "flex-wrap gap-2 sm:flex-nowrap sm:gap-0",
-                )}
-              >
-                <div
-                  className={cn(
-                    "flex min-w-0 flex-1 items-center",
-                    isComposerFooterCompact
-                      ? "gap-1 overflow-hidden"
-                      : "gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:min-w-max sm:overflow-visible",
-                  )}
-                >
-                  {isComposerFooterCompact ? (
-                    <>
-                      <ProviderModelPicker
-                        compact={isComposerFooterCompact}
-                        provider={selectedProvider}
-                        model={selectedModelForPickerWithCustomFallback}
-                        lockedProvider={lockedProvider}
-                        providers={providerStatuses}
-                        modelOptionsByProvider={modelOptionsByProvider}
-                        {...(composerProviderState.modelPickerIconClassName
-                          ? {
-                              activeProviderIconClassName:
-                                composerProviderState.modelPickerIconClassName,
-                            }
-                          : {})}
-                        onProviderModelChange={onProviderModelSelect}
-                      />
-                      <CompactComposerControlsMenu
-                        activePlan={Boolean(activePlan || sidebarProposedPlan || planSidebarOpen)}
-                        interactionMode={interactionMode}
-                        planSidebarOpen={planSidebarOpen}
-                        runtimeMode={runtimeMode}
-                        traitsMenuContent={providerTraitsMenuContent}
-                        onToggleInteractionMode={toggleInteractionMode}
-                        onTogglePlanSidebar={togglePlanSidebar}
-                        onToggleRuntimeMode={toggleRuntimeMode}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <FusedModelPicker
-                        provider={selectedProvider}
-                        model={selectedModelForPickerWithCustomFallback}
-                        lockedProvider={lockedProvider}
-                        providers={providerStatuses}
-                        prompt={prompt}
-                        onPromptChange={setPromptFromTraits}
-                        modelOptions={composerModelOptions?.[selectedProvider]}
-                        onProviderModelChange={onProviderModelSelect}
-                        onModelOptionsChange={onFusedModelOptionsChange}
-                        popupAnchorRef={composerFooterRef}
-                      />
 
-                      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-
+              {/* Bottom Right Floating Send / Action Button */}
+              <div className="absolute bottom-3 right-3 sm:bottom-3.5 sm:right-3.5 flex items-center gap-2">
+                {activePendingApproval ? (
+                  <ComposerPendingApprovalActions
+                    requestId={activePendingApproval.requestId}
+                    isResponding={respondingRequestIds.includes(activePendingApproval.requestId)}
+                    onRespondToApproval={onRespondToApproval}
+                  />
+                ) : isPreparingWorktree ? (
+                  <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
+                ) : activePendingProgress ? (
+                  <div className="flex items-center gap-2">
+                    {activePendingProgress.questionIndex > 0 ? (
                       <Button
-                        variant="ghost"
-                        className={cn(
-                          "shrink-0 whitespace-nowrap px-2 sm:px-3",
-                          interactionMode === "plan"
-                            ? "text-blue-400 hover:text-blue-300"
-                            : "text-muted-foreground/70 hover:text-foreground/80",
-                        )}
                         size="sm"
-                        type="button"
-                        onClick={toggleInteractionMode}
-                        title={
-                          interactionMode === "plan"
-                            ? "Plan mode — click to return to normal chat mode"
-                            : "Default mode — click to enter plan mode"
-                        }
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={onPreviousActivePendingUserInputQuestion}
+                        disabled={activePendingIsResponding}
                       >
-                        {interactionMode === "plan" ? <ListTodoIcon /> : <BotIcon />}
-                        <span className="sr-only sm:not-sr-only">
-                          {interactionMode === "plan" ? "Plan" : "Build"}
-                        </span>
+                        Previous
                       </Button>
-
-                      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-
-                      <Button
-                        variant="ghost"
-                        className={cn(
-                          "shrink-0 whitespace-nowrap px-2 sm:px-3",
-                          settings.colorizePermissions
-                            ? runtimeMode === "full-access"
-                              ? "text-[#c27070]/80 hover:text-[#c27070]"
-                              : runtimeMode === "auto-accept-edits"
-                                ? "text-[#a683c2]/80 hover:text-[#a683c2]"
-                                : "text-muted-foreground/70 hover:text-foreground/80"
-                            : "text-muted-foreground/70 hover:text-foreground/80",
-                        )}
-                        size="sm"
-                        type="button"
-                        onClick={() => {
-                          const modes = [
-                            "approval-required",
-                            "auto-accept-edits",
-                            "full-access",
-                          ] as const;
-                          const currentMode = runtimeMode || "approval-required";
-                          const nextIndex = (modes.indexOf(currentMode) + 1) % modes.length;
-                          const nextMode = modes[nextIndex];
-                          if (nextMode) {
-                            void handleRuntimeModeChange(nextMode);
-                          }
-                        }}
-                        title={
-                          runtimeMode === "full-access"
-                            ? "Full access — click to require approvals"
-                            : runtimeMode === "auto-accept-edits"
-                              ? "Auto-accept edits — click for full access"
-                              : "Supervised — click for auto-accept edits"
-                        }
-                      >
-                        {runtimeMode === "full-access" ? (
-                          <LockOpenIcon />
-                        ) : runtimeMode === "auto-accept-edits" ? (
-                          <PenIcon />
-                        ) : (
-                          <LockIcon />
-                        )}
-                        <span className="sr-only sm:not-sr-only">
-                          {runtimeMode === "full-access"
-                            ? "Full access"
-                            : runtimeMode === "auto-accept-edits"
-                              ? "Auto-accept edits"
-                              : "Supervised"}
-                        </span>
-                      </Button>
-
-                      {activePlan || sidebarProposedPlan || planSidebarOpen ? (
-                        <>
-                          <Separator
-                            orientation="vertical"
-                            className="mx-0.5 hidden h-4 sm:block"
-                          />
-                          <Button
-                            variant="ghost"
-                            className={cn(
-                              "shrink-0 whitespace-nowrap px-2 sm:px-3",
-                              planSidebarOpen
-                                ? "text-blue-400 hover:text-blue-300"
-                                : "text-muted-foreground/70 hover:text-foreground/80",
-                            )}
-                            size="sm"
-                            type="button"
-                            onClick={togglePlanSidebar}
-                            title={planSidebarOpen ? "Hide plan sidebar" : "Show plan sidebar"}
-                          >
-                            <ListTodoIcon />
-                            <span className="sr-only sm:not-sr-only">Plan</span>
-                          </Button>
-                        </>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-
-                <div
-                  data-chat-composer-actions="right"
-                  className="flex shrink-0 items-center gap-2"
-                >
-                  {activeContextWindow ? <ContextWindowMeter usage={activeContextWindow} /> : null}
-                  {isPreparingWorktree ? (
-                    <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
-                  ) : null}
-                  {activePendingProgress ? (
-                    <div className="flex items-center gap-2">
-                      {activePendingProgress.questionIndex > 0 ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={onPreviousActivePendingUserInputQuestion}
-                          disabled={activePendingIsResponding}
-                        >
-                          Previous
-                        </Button>
-                      ) : null}
+                    ) : null}
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="rounded-full px-4"
+                      disabled={
+                        activePendingIsResponding ||
+                        (activePendingProgress.isLastQuestion
+                          ? !activePendingResolvedAnswers
+                          : !activePendingProgress.canAdvance)
+                      }
+                    >
+                      {activePendingIsResponding
+                        ? "Submitting..."
+                        : activePendingProgress.isLastQuestion
+                          ? "Submit answers"
+                          : "Next question"}
+                    </Button>
+                  </div>
+                ) : phase === "running" ? (
+                  <button
+                    type="button"
+                    className="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
+                    onClick={() => void onInterrupt()}
+                    aria-label="Stop generation"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 12 12"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                    </svg>
+                  </button>
+                ) : pendingUserInputs.length === 0 ? (
+                  showPlanFollowUpPrompt ? (
+                    prompt.trim().length > 0 ? (
                       <Button
                         type="submit"
                         size="sm"
-                        className="rounded-full px-4"
-                        disabled={
-                          activePendingIsResponding ||
-                          (activePendingProgress.isLastQuestion
-                            ? !activePendingResolvedAnswers
-                            : !activePendingProgress.canAdvance)
-                        }
+                        className="h-9 rounded-full px-4 sm:h-8"
+                        disabled={isSendBusy || isConnecting}
                       >
-                        {activePendingIsResponding
-                          ? "Submitting..."
-                          : activePendingProgress.isLastQuestion
-                            ? "Submit answers"
-                            : "Next question"}
+                        {isConnecting || isSendBusy ? "Sending..." : "Refine"}
                       </Button>
-                    </div>
-                  ) : phase === "running" ? (
-                    <button
-                      type="button"
-                      className="flex size-8 cursor-pointer items-center justify-center rounded-lg bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
-                      onClick={() => void onInterrupt()}
-                      aria-label="Stop generation"
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <rect x="2" y="2" width="8" height="8" rx="1.5" />
-                      </svg>
-                    </button>
-                  ) : pendingUserInputs.length === 0 ? (
-                    showPlanFollowUpPrompt ? (
-                      prompt.trim().length > 0 ? (
+                    ) : (
+                      <div className="flex items-center">
                         <Button
                           type="submit"
                           size="sm"
-                          className="h-9 rounded-full px-4 sm:h-8"
+                          className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
                           disabled={isSendBusy || isConnecting}
                         >
-                          {isConnecting || isSendBusy ? "Sending..." : "Refine"}
+                          {isConnecting || isSendBusy ? "Sending..." : "Implement"}
                         </Button>
-                      ) : (
-                        <div className="flex items-center">
-                          <Button
-                            type="submit"
-                            size="sm"
-                            className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
-                            disabled={isSendBusy || isConnecting}
-                          >
-                            {isConnecting || isSendBusy ? "Sending..." : "Implement"}
-                          </Button>
-                          <Menu>
-                            <MenuTrigger
-                              render={
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
-                                  aria-label="Implementation actions"
-                                  disabled={isSendBusy || isConnecting}
-                                />
-                              }
-                            >
-                              <ChevronDownIcon className="size-3.5" />
-                            </MenuTrigger>
-                            <MenuPopup align="end" side="top">
-                              <MenuItem
+                        <Menu>
+                          <MenuTrigger
+                            render={
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
+                                aria-label="Implementation actions"
                                 disabled={isSendBusy || isConnecting}
-                                onClick={() => void onImplementPlanInNewThread()}
                               >
-                                Implement in a new thread
-                              </MenuItem>
-                            </MenuPopup>
-                          </Menu>
-                        </div>
-                      )
-                    ) : (
-                      <button
-                        type="submit"
-                        className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-lg bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
-                        disabled={
-                          isSendBusy || isConnecting || !composerSendState.hasSendableContent
-                        }
-                        aria-label={
-                          isConnecting
-                            ? "Connecting"
-                            : isPreparingWorktree
-                              ? "Preparing worktree"
-                              : isSendBusy
-                                ? "Sending"
-                                : "Send message"
-                        }
-                      >
-                        {isConnecting || isSendBusy ? (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            className="animate-spin"
-                            aria-hidden="true"
-                          >
-                            <circle
-                              cx="7"
-                              cy="7"
-                              r="5.5"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeDasharray="20 12"
-                            />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 14 14"
-                            fill="none"
-                            aria-hidden="true"
-                          >
-                            <path
-                              d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </button>
+                                <ChevronDownIcon className="size-3.5" />
+                              </Button>
+                            }
+                          />
+                          <MenuPopup align="end" side="top">
+                            <MenuItem
+                              disabled={isSendBusy || isConnecting}
+                              onClick={() => void onImplementPlanInNewThread()}
+                            >
+                              Implement in a new thread
+                            </MenuItem>
+                          </MenuPopup>
+                        </Menu>
+                      </div>
                     )
-                  ) : null}
+                  ) : (
+                    <button
+                      type="submit"
+                      className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-lg bg-foreground text-background transition-all duration-150 hover:bg-foreground/90 hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+                      disabled={
+                        isSendBusy || isConnecting || !composerSendState.hasSendableContent
+                      }
+                      aria-label={
+                        isConnecting
+                          ? "Connecting"
+                          : isPreparingWorktree
+                            ? "Preparing worktree"
+                            : isSendBusy
+                              ? "Sending"
+                              : "Send message"
+                      }
+                    >
+                      {isConnecting || isSendBusy ? (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          className="animate-spin"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            cx="7"
+                            cy="7"
+                            r="5.5"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeDasharray="28"
+                            strokeDashoffset="10"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M7 11.5V2.5" />
+                          <path d="M2.5 7L7 2.5L11.5 7" />
+                        </svg>
+                      )}
+                    </button>
+                  )
+                ) : null}
                 </div>
               </div>
-            )}
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
     </div>
   );
   const branchToolbar = isGitRepo ? (
@@ -4206,6 +4231,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                   workspaceRoot={activeProject?.cwd ?? undefined}
                   latestTaskDescription={latestTaskDescription}
                   activeTaskNodes={activeTaskNodes}
+                  providerInstanceId={selectedProvider}
                 />
               </div>
 

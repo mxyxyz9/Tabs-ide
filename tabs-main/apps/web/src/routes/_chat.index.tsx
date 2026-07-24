@@ -24,14 +24,14 @@ function ChatIndexRouteView() {
     return (
       <div className="flex h-full min-h-0 items-center justify-center px-6 py-10">
         <div className="max-w-3xl text-center">
-          <h1 className="text-balance text-3xl font-semibold tracking-tight text-foreground/92 sm:text-4xl">
+          <h1 className="text-balance text-3xl font-semibold tracking-tight text-foreground/90 sm:text-4xl">
             {`What should we build in ${activeProject.name}?`}
           </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground/65 sm:text-base">
+          <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground/60 sm:text-base">
             This project does not have any agent threads yet. Create the first thread when you are
             ready to start working with the project context and workspace tools.
           </p>
-          <div className="mt-6 flex justify-center">
+          <div className="mt-7 flex justify-center">
             <Button
               size="lg"
               className="rounded-full px-5"
@@ -52,8 +52,8 @@ function ChatIndexRouteView() {
   return (
     <div className="flex h-full min-h-0 items-center justify-center p-6">
       <div className="max-w-md text-center">
-        <p className="text-sm font-medium text-foreground">No agent thread selected</p>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="text-sm font-medium text-foreground/70">No agent thread selected</p>
+        <p className="mt-2 text-sm text-muted-foreground/50">
           Pick a thread from the current project or create a new one from the Agents panel.
         </p>
       </div>

@@ -54,6 +54,8 @@ import {
   TerminalSquareIcon,
   WorkflowIcon,
   XIcon,
+  PanelLeftIcon,
+  PanelLeftCloseIcon,
 } from "lucide-react";
 import {
   type ReactNode,
@@ -115,6 +117,7 @@ const isWindowsDesktop =
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
+import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, CursorIcon, type Icon } from "./Icons";
 import GitCommitComposer from "./GitCommitComposer";
 import { Badge } from "./ui/badge";
 import { initializeZoom, resetZoom, zoomIn, zoomOut } from "../state/zoom";
@@ -906,6 +909,73 @@ function ProjectToolBar(props: {
   );
 }
 
+const AGENTS_SIDEBAR_COLLAPSED_KEY = "tabs.agentsSidebarCollapsed";
+
+/** Maps provider instanceId → brand color */
+const PROVIDER_COLOR_MAP: Record<string, string> = {
+  opencode: "#38bdf8",
+  claudeAgent: "#f97316",
+  claude: "#f97316",
+  codex: "#10b981",
+  openai: "#10b981",
+  cursor: "#8b5cf6",
+  grok: "#ec4899",
+};
+
+/** Maps provider instanceId → SVG icon component */
+const PROVIDER_ICON_MAP: Record<string, Icon> = {
+  claudeAgent: ClaudeAI,
+  claude: ClaudeAI,
+  codex: OpenAI,
+  openai: OpenAI,
+  grok: GrokIcon,
+  opencode: OpenCodeIcon,
+  cursor: CursorIcon,
+};
+
+function ProviderIcon({ instanceId, className }: { instanceId: string; className?: string }) {
+  const normalizedKey = (instanceId ?? "").toLowerCase();
+  const IconComp =
+    PROVIDER_ICON_MAP[instanceId] ??
+    PROVIDER_ICON_MAP[normalizedKey] ??
+    (normalizedKey.includes("cursor")
+      ? CursorIcon
+      : normalizedKey.includes("opencode")
+        ? OpenCodeIcon
+        : normalizedKey.includes("claude")
+          ? ClaudeAI
+          : normalizedKey.includes("codex") || normalizedKey.includes("openai") || normalizedKey.includes("gpt")
+            ? OpenAI
+            : normalizedKey.includes("grok")
+              ? GrokIcon
+              : BotIcon);
+
+  // Monotone icon style matching prototype design system
+  return <IconComp className={className} />;
+}
+
+/** Derive what attention badge (if any) to show on a thread's icon in the sidebar rail. */
+function deriveThreadAttention(thread: Thread): {
+  tone: "amber" | "red" | "pulse";
+  spin: boolean;
+} | null {
+  const state = thread.latestTurn?.state;
+  const sessionStatus = thread.session?.status;
+
+  if (state === "running" || sessionStatus === "running") {
+    return { tone: "pulse", spin: true };
+  }
+  if (state === "error" || sessionStatus === "error") {
+    return { tone: "red", spin: false };
+  }
+  if (state === "interrupted") {
+    return { tone: "amber", spin: false };
+  }
+  // Completed threads do NOT show a permanent green dot
+  return null;
+}
+
+
 function AgentsThreadList(props: {
   project: Project;
   threads: ReadonlyArray<Thread>;
@@ -918,165 +988,347 @@ function AgentsThreadList(props: {
   children: ReactNode;
 }) {
   const [threadPendingDelete, setThreadPendingDelete] = useState<Thread | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  // 'current' | 'archived'
+  const [view, setView] = useState<"current" | "archived">("current");
+
+  // Persistent collapse state
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem(AGENTS_SIDEBAR_COLLAPSED_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage?.setItem(AGENTS_SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   const activeThreads = props.threads.filter((thread) => thread.archivedAt === null);
   const archivedThreads = props.threads.filter((thread) => thread.archivedAt !== null);
+  const visibleThreads = view === "current" ? activeThreads : archivedThreads;
+
   return (
     <div className="flex h-full min-h-0 min-w-0">
-      <div className="flex w-72 shrink-0 flex-col border-r border-border/70 bg-card/40">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Agents
-            </div>
-            <div className="text-sm font-medium text-foreground">{props.project.name}</div>
+      {/* ── Sidebar ── */}
+      <div
+        className={cn(
+          "agents-tab flex shrink-0 flex-col border-r border-border/60 bg-card/30 transition-[width] duration-200 ease-in-out",
+          collapsed ? "w-12" : "w-72",
+        )}
+        data-collapsed={collapsed ? "true" : "false"}
+      >
+        {/* ── Header ── */}
+        {collapsed ? (
+          // Collapsed: Bot icon that crossfades to ChevronRight on hover = expand button
+          <div className="flex shrink-0 flex-col items-center gap-2 border-b border-border/40 py-3">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="Expand sidebar"
+                    onClick={toggleCollapsed}
+                    className="group relative flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/40 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                  />
+                }
+              >
+                <BotIcon className="size-4 transition-opacity duration-150 group-hover:opacity-0" />
+                <ChevronRightIcon className="absolute size-4 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+              </TooltipTrigger>
+              <TooltipPopup side="right" align="center">
+                <span className="font-medium">{props.project.name}</span>
+                <span className="ml-1.5 text-muted-foreground">Expand sidebar</span>
+              </TooltipPopup>
+            </Tooltip>
+            {/* New thread icon */}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="New thread"
+                    onClick={props.onCreateThread}
+                    className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/20 text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
+                  />
+                }
+              >
+                <PlusIcon className="size-4" />
+              </TooltipTrigger>
+              <TooltipPopup side="right" align="center">
+                New thread
+              </TooltipPopup>
+            </Tooltip>
           </div>
-          <Button type="button" size="sm" variant="outline" onClick={props.onCreateThread}>
-            <PlusIcon className="size-3.5" />
-            Thread
-          </Button>
-        </div>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-1 p-2">
-            {activeThreads.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">
-                No threads yet for this project.
+        ) : (
+          // Expanded header
+          <div className="shrink-0 px-3 pb-2 pt-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
+                  AGENTS
+                </div>
+                <div
+                  className="truncate text-sm font-semibold tracking-tight text-foreground"
+                  title={props.project.name}
+                >
+                  {props.project.name.toLowerCase().includes("tabs") ? "Tabs IDE" : props.project.name}
+                </div>
               </div>
-            ) : (
-              activeThreads.map((thread) => {
-                const active = props.activeThreadId === thread.id;
-                return (
-                  <div
-                    key={thread.id}
-                    className={cn(
-                      "group relative flex items-center rounded-xl border transition-colors",
-                      active
-                        ? "border-primary/40 bg-primary/10"
-                        : "border-transparent hover:border-border/70 hover:bg-accent/50",
-                    )}
-                  >
+              <Tooltip>
+                <TooltipTrigger
+                  render={
                     <button
                       type="button"
-                      onClick={() => props.onSelectThread(thread.id)}
-                      className="min-w-0 flex-1 px-3 py-2 text-left"
-                    >
-                      <div className="truncate text-sm font-medium text-foreground">
-                        {thread.title}
-                      </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {thread.modelSelection.instanceId} · {thread.runtimeMode}
-                      </div>
-                    </button>
-                    <Menu>
-                      <MenuTrigger
+                      aria-label="Collapse sidebar"
+                      onClick={toggleCollapsed}
+                      className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-border/40 bg-muted/20 text-muted-foreground/70 transition-all hover:border-border/70 hover:bg-accent hover:text-foreground"
+                    />
+                  }
+                >
+                  <PanelLeftCloseIcon className="size-4" />
+                </TooltipTrigger>
+                <TooltipPopup side="bottom" align="center">Collapse sidebar</TooltipPopup>
+              </Tooltip>
+            </div>
+
+            {/* Prominent full-width New Thread button */}
+            <button
+              type="button"
+              onClick={props.onCreateThread}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/70 bg-accent/60 py-2.5 text-sm font-semibold text-foreground shadow-sm transition-all hover:border-border hover:bg-accent hover:shadow"
+            >
+              <PlusIcon className="size-4 text-foreground/80" />
+              New Thread
+            </button>
+
+            {/* Current / Archived pill switcher with clean font-sans typography */}
+            {archivedThreads.length > 0 && (
+              <div className="mt-2.5 flex items-center gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
+                <button
+                  type="button"
+                  onClick={() => setView("current")}
+                  className={cn(
+                    "flex-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
+                    view === "current"
+                      ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
+                      : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
+                  )}
+                >
+                  Current
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("archived")}
+                  className={cn(
+                    "flex flex-1 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
+                    view === "archived"
+                      ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
+                      : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
+                  )}
+                >
+                  Archived
+                  <span className={view === "archived" ? "text-foreground/70 font-normal" : "text-muted-foreground/50 font-normal"}>
+                    ({archivedThreads.length})
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Thread list ── */}
+        <ScrollArea hideScrollbars className="min-h-0 flex-1">
+          <div className={cn("space-y-0.5", collapsed ? "p-1.5" : "px-2 pb-2")}>
+            {visibleThreads.length === 0 && !collapsed && (
+              <div className="rounded-xl border border-dashed border-border/60 p-4 text-xs text-muted-foreground/60">
+                {view === "current"
+                  ? "No active threads. Create the first one above."
+                  : "No archived threads."}
+              </div>
+            )}
+
+            {visibleThreads.map((thread) => {
+              const active = props.activeThreadId === thread.id;
+              const isArchived = thread.archivedAt !== null;
+
+              return (
+                <div
+                  key={thread.id}
+                  className={cn(
+                    "group relative flex items-center rounded-lg transition-all duration-150",
+                    collapsed ? "justify-center" : "",
+                    "bg-transparent hover:bg-accent/30",
+                  )}
+                >
+                  {/* Single tall left accent line for active thread (expanded) */}
+                  {active && !collapsed && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-foreground" />
+                  )}
+                  {collapsed ? (
+                    // ── Icon-rail: provider logo chip + tooltip matching prototype ──
+                    <Tooltip>
+                      <TooltipTrigger
                         render={
                           <button
                             type="button"
-                            aria-label={`Thread actions for ${thread.title}`}
-                            className="mr-1.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+                            aria-label={thread.title}
+                            onClick={() => props.onSelectThread(thread.id)}
+                            className={cn(
+                              "relative flex size-9 items-center justify-center rounded-lg transition-colors",
+                              active
+                                ? "text-foreground"
+                                : "text-muted-foreground/60 hover:bg-accent/40 hover:text-foreground",
+                            )}
                           />
                         }
                       >
-                        <MoreHorizontalIcon className="size-4" />
-                      </MenuTrigger>
-                      <MenuPopup align="end" side="bottom" className="min-w-40">
-                        <MenuItem onClick={() => void props.onArchiveThread(thread)}>
-                          <ArchiveIcon className="size-3.5" />
-                          Archive thread
-                        </MenuItem>
-                        <MenuItem
-                          variant="destructive"
-                          onClick={() => setThreadPendingDelete(thread)}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                          Delete thread
-                        </MenuItem>
-                      </MenuPopup>
-                    </Menu>
-                  </div>
-                );
-              })
-            )}
-
-            {archivedThreads.length > 0 ? (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowArchived((value) => !value)}
-                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
-                >
-                  {showArchived ? (
-                    <ChevronDownIcon className="size-3.5" />
-                  ) : (
-                    <ChevronRightIcon className="size-3.5" />
-                  )}
-                  Archived ({archivedThreads.length})
-                </button>
-                {showArchived ? (
-                  <div className="space-y-1 pt-1">
-                    {archivedThreads.map((thread) => {
-                      const active = props.activeThreadId === thread.id;
-                      return (
-                        <div
-                          key={thread.id}
-                          className={cn(
-                            "group relative flex items-center rounded-xl border transition-colors",
-                            active
-                              ? "border-primary/40 bg-primary/10"
-                              : "border-transparent hover:border-border/70 hover:bg-accent/50",
-                          )}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => props.onSelectThread(thread.id)}
-                            className="min-w-0 flex-1 px-3 py-2 text-left"
-                          >
-                            <div className="truncate text-sm font-medium text-muted-foreground">
-                              {thread.title}
-                            </div>
-                            <div className="truncate text-xs text-muted-foreground/70">
-                              {thread.modelSelection.instanceId} · {thread.runtimeMode}
-                            </div>
-                          </button>
-                          <Menu>
-                            <MenuTrigger
-                              render={
-                                <button
-                                  type="button"
-                                  aria-label={`Thread actions for ${thread.title}`}
-                                  className="mr-1.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+                        {/* Single tall left accent line for active thread (collapsed) */}
+                        {active && (
+                          <span className="absolute -left-1 top-1.5 bottom-1.5 w-0.5 rounded-full bg-foreground" />
+                        )}
+                        <ProviderIcon
+                          instanceId={thread.modelSelection.instanceId}
+                          className="size-4 shrink-0"
+                        />
+                        {/* ── Status dot badge (only for active attention like running/error/interrupted) ── */}
+                        {(() => {
+                          const attn = deriveThreadAttention(thread);
+                          if (!attn) return null;
+                          return (
+                            <span className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-background border border-border/40">
+                              {attn.spin ? (
+                                <LoaderIcon className="size-2.5 animate-spin text-primary" />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    "size-2 rounded-full",
+                                    attn.tone === "red"
+                                      ? "bg-red-400"
+                                      : attn.tone === "amber"
+                                        ? "bg-amber-400"
+                                        : "bg-primary",
+                                  )}
                                 />
-                              }
-                            >
-                              <MoreHorizontalIcon className="size-4" />
-                            </MenuTrigger>
-                            <MenuPopup align="end" side="bottom" className="min-w-40">
-                              <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
-                                <ArchiveRestoreIcon className="size-3.5" />
-                                Unarchive thread
-                              </MenuItem>
-                              <MenuItem
-                                variant="destructive"
-                                onClick={() => setThreadPendingDelete(thread)}
-                              >
-                                <Trash2Icon className="size-3.5" />
-                                Delete thread
-                              </MenuItem>
-                            </MenuPopup>
-                          </Menu>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </TooltipTrigger>
+                      <TooltipPopup side="right" align="center" className="max-w-[200px]">
+                        <p className="truncate font-semibold text-xs text-foreground">{thread.title}</p>
+                        <p className="text-[10px] text-muted-foreground/70">
+                          {thread.modelSelection.instanceId} · {thread.runtimeMode}
+                        </p>
+                      </TooltipPopup>
+                    </Tooltip>
+                  ) : (
+                    // ── Full expanded row matching prototype ──
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => props.onSelectThread(thread.id)}
+                        className="min-w-0 flex-1 p-2.5 text-left"
+                      >
+                        <div className="flex items-center gap-2 pr-6">
+                          {/* Status dot or spinner for active attention */}
+                          {(() => {
+                            const attn = deriveThreadAttention(thread);
+                            if (!attn) return null;
+                            if (attn.spin) {
+                              return <LoaderIcon className="size-3 shrink-0 animate-spin text-primary" />;
+                            }
+                            return (
+                              <span
+                                className={cn(
+                                  "size-1.5 shrink-0 rounded-full",
+                                  attn.tone === "red"
+                                    ? "bg-red-400"
+                                    : attn.tone === "amber"
+                                      ? "bg-amber-400"
+                                      : "bg-primary",
+                                )}
+                              />
+                            );
+                          })()}
+                          <div
+                            className={cn(
+                              "truncate text-sm font-semibold tracking-tight transition-colors flex-1",
+                              active
+                                ? "text-foreground font-semibold"
+                                : isArchived
+                                  ? "text-muted-foreground/40"
+                                  : "text-muted-foreground/60 group-hover:text-foreground",
+                            )}
+                          >
+                            {thread.title}
+                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/50">
+                          <ProviderIcon
+                            instanceId={thread.modelSelection.instanceId}
+                            className="size-3 shrink-0 text-muted-foreground/60 group-hover:text-foreground/75"
+                          />
+                          <span className="truncate">
+                            {thread.modelSelection.instanceId} · {thread.runtimeMode}
+                          </span>
+                        </div>
+                      </button>
+                      <Menu>
+                        <MenuTrigger
+                          render={
+                            <button
+                              type="button"
+                              aria-label={`Thread actions for ${thread.title}`}
+                              className="mr-2 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/40 opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+                            />
+                          }
+                        >
+                          <MoreHorizontalIcon className="size-4" />
+                        </MenuTrigger>
+                        <MenuPopup align="end" side="bottom" className="min-w-40">
+                          {isArchived ? (
+                            <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
+                              <ArchiveRestoreIcon className="size-3.5" />
+                              Unarchive thread
+                            </MenuItem>
+                          ) : (
+                            <MenuItem onClick={() => void props.onArchiveThread(thread)}>
+                              <ArchiveIcon className="size-3.5" />
+                              Archive thread
+                            </MenuItem>
+                          )}
+                          <MenuItem
+                            variant="destructive"
+                            onClick={() => setThreadPendingDelete(thread)}
+                          >
+                            <Trash2Icon className="size-3.5" />
+                            Delete thread
+                          </MenuItem>
+                        </MenuPopup>
+                      </Menu>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </ScrollArea>
       </div>
+
+      {/* ── Main content ── */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {props.children}
       </div>
+
+      {/* ── Delete confirmation dialog ── */}
       <AlertDialog
         open={threadPendingDelete !== null}
         onOpenChange={(open) => {
@@ -1088,7 +1340,7 @@ function AgentsThreadList(props: {
             <AlertDialogTitle>Delete thread?</AlertDialogTitle>
             <AlertDialogDescription>
               {threadPendingDelete
-                ? `“${threadPendingDelete.title}” will be removed and its conversation history permanently cleared.`
+                ? `"${threadPendingDelete.title}" will be removed and its conversation history permanently cleared.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1110,6 +1362,7 @@ function AgentsThreadList(props: {
     </div>
   );
 }
+
 
 function FallbackCodeTool(props: { project: Project }) {
   const api = readNativeApi();

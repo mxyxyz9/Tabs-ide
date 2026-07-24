@@ -1,5 +1,6 @@
 import { type MessageId, type TurnId } from "@tabs/contracts";
-import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import gsap from "gsap";
 import { deriveTimelineEntries, formatElapsed, type TaskNode } from "../../session-logic";
 import { TaskProgressCard } from "./TaskProgressCard";
 import { type TurnDiffSummary } from "../../types";
@@ -8,6 +9,7 @@ import ChatMarkdown from "../ChatMarkdown";
 import {
   BotIcon,
   CheckIcon,
+  ChevronDownIcon,
   CircleAlertIcon,
   EyeIcon,
   GlobeIcon,
@@ -39,8 +41,18 @@ import {
   formatInlineTerminalContextLabel,
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
+import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, CursorIcon, type Icon } from "../Icons";
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
+
+/** Maps provider instanceId → SVG icon component for the assistant message header */
+const TIMELINE_PROVIDER_ICON_MAP: Record<string, Icon> = {
+  claudeAgent: ClaudeAI,
+  codex: OpenAI,
+  grok: GrokIcon,
+  opencode: OpenCodeIcon,
+  cursor: CursorIcon,
+};
 
 interface MessagesTimelineProps {
   hasMessages: boolean;
@@ -66,6 +78,8 @@ interface MessagesTimelineProps {
   workspaceRoot: string | undefined;
   latestTaskDescription: string | null;
   activeTaskNodes: ReadonlyArray<TaskNode>;
+  /** Provider instanceId for the active thread (e.g. "claudeAgent", "codex", "grok") */
+  providerInstanceId?: string;
 }
 
 export const MessagesTimeline = memo(function MessagesTimeline({
@@ -73,7 +87,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
   activeTurnInProgress: _activeTurnInProgress,
   activeTurnStartedAt,
-  scrollContainer: _scrollContainer,
+  scrollContainer,
   timelineEntries,
   completionDividerBeforeEntryId,
   completionSummary,
@@ -92,6 +106,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workspaceRoot,
   latestTaskDescription,
   activeTaskNodes,
+  providerInstanceId,
 }: MessagesTimelineProps) {
   const rows = useMemo<TimelineRow[]>(() => {
     const nextRows: TimelineRow[] = [];
@@ -189,7 +204,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 (entry as unknown as { activityKind?: string }).activityKind ?? "",
               ),
           );
-          const hasTaskEntries = activeTaskNodes.length > 0;
 
           const hasOverflow = regularEntries.length > MAX_VISIBLE_WORK_LOG_ENTRIES;
           const visibleEntries =
@@ -198,42 +212,106 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               : regularEntries;
           const hiddenCount = regularEntries.length - visibleEntries.length;
           const onlyToolEntries = regularEntries.every((entry) => entry.tone === "tool");
-          const showHeader = hasOverflow || !onlyToolEntries;
-          const groupLabel = onlyToolEntries ? "Tool calls" : "Work log";
+          const groupLabel = onlyToolEntries ? "Tool call" : "Work log";
+
+          // Collect all log entry texts for copying (uses same label as rendered rows)
+          const allLogsText = regularEntries.map((e) => {
+            const heading = toolWorkEntryHeading(e);
+            const detail = e.command ?? e.detail ?? null;
+            return detail ? `${heading} — ${detail}` : heading;
+          }).join("\n");
 
           return (
-            <>
-              {hasTaskEntries && (
-                <div className="mb-1">
-                  <TaskProgressCard tasks={activeTaskNodes} />
-                </div>
-              )}
+            <div className="space-y-2">
               {regularEntries.length > 0 && (
-                <div className="rounded-xl border border-border/45 bg-card/25 px-2 py-1.5">
-                  {showHeader && (
-                    <div className="mb-1.5 flex items-center justify-between gap-2 px-0.5">
-                      <p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground/55">
-                        {groupLabel} ({regularEntries.length})
-                      </p>
+                <div className="w-full">
+                  {/* ── Prototype-style: icon + label header row ── */}
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onToggleWorkGroup(groupId)}
+                      className="flex items-center gap-2 group/header"
+                    >
+                      {onlyToolEntries ? (
+                        <WrenchIcon className="size-3.5 text-muted-foreground/60 shrink-0" />
+                      ) : (
+                        <TerminalIcon className="size-3.5 text-muted-foreground/60 shrink-0" />
+                      )}
+                      <span className="text-xs font-sans font-medium text-muted-foreground/70 group-hover/header:text-foreground transition-colors">
+                        {groupLabel}
+                      </span>
+                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <MessageCopyButton text={allLogsText} />
                       {hasOverflow && (
                         <button
                           type="button"
-                          className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/55 transition-colors duration-150 hover:text-foreground/75"
+                          className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground/40 hover:text-foreground/60 transition-colors"
                           onClick={() => onToggleWorkGroup(groupId)}
                         >
-                          {isExpanded ? "Show less" : `Show ${hiddenCount} more`}
+                          <span>{isExpanded ? "Hide details" : `View details`}</span>
+                          <ChevronDownIcon
+                            className={cn(
+                              "size-3 transition-transform duration-200",
+                              isExpanded && "rotate-180",
+                            )}
+                          />
                         </button>
                       )}
                     </div>
-                  )}
-                  <div className="space-y-0.5">
-                    {visibleEntries.map((workEntry) => (
-                      <SimpleWorkEntryRow key={`work-row:${workEntry.id}`} workEntry={workEntry} />
-                    ))}
+                  </div>
+
+                  {/* ── Numbered monospace log card ── */}
+                  <div
+                    className={cn(
+                      "rounded-lg border border-border/40 bg-card/50 p-4 flex flex-col gap-2.5",
+                      hasOverflow && "cursor-pointer hover:border-border/60 transition-colors",
+                    )}
+                    onClick={() => hasOverflow && onToggleWorkGroup(groupId)}
+                  >
+                    {visibleEntries.map((workEntry, idx) => {
+                      const heading = toolWorkEntryHeading(workEntry);
+                      const detail = workEntry.command ?? workEntry.detail ?? null;
+                      const entryNum = hasOverflow && !isExpanded
+                        ? regularEntries.length - visibleEntries.length + idx + 1
+                        : idx + 1;
+                      return (
+                        <div
+                          key={`work-row:${workEntry.id}`}
+                          className="flex items-center gap-3.5 text-xs font-sans leading-relaxed"
+                        >
+                          <span className="font-mono text-[11px] text-muted-foreground/25 select-none shrink-0">
+                            [{String(entryNum).padStart(2, "0")}]
+                          </span>
+                          <div className="min-w-0 flex-1 truncate flex items-center gap-2">
+                            <span className="font-sans font-medium text-foreground/85">
+                              {heading}
+                            </span>
+                            {detail && (
+                              <>
+                                <span className="text-muted-foreground/30">•</span>
+                                <span className="font-mono text-[11px] text-muted-foreground/55 truncate">
+                                  {detail}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Blinking cursor — only while actively working */}
+                    {isWorking && (
+                      <div className="flex items-start gap-4 text-sm font-mono leading-relaxed">
+                        <span className="text-muted-foreground/20 select-none shrink-0">
+                          [{String(regularEntries.length + 1).padStart(2, "0")}]
+                        </span>
+                        <span className="inline-block h-3.5 w-2 animate-pulse bg-muted-foreground/30" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
-            </>
+            </div>
           );
         })()}
 
@@ -245,10 +323,45 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           const terminalContexts = displayedUserMessage.contexts;
           const canRevertAgentWork = revertTurnCountByUserMessageId.has(row.message.id);
           return (
+            // Prototype-style: right-aligned, no bubble, right-border accent + large text
             <div className="flex justify-end">
-              <div className="group relative max-w-[80%] rounded-2xl rounded-br-sm border border-border bg-secondary px-4 py-3">
+              <div className="group relative max-w-[80%]">
+                {/* Hover-reveal row: timestamp + copy + revert */}
+                <div className="mb-1.5 flex items-center justify-end gap-2 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+                  <div className="flex items-center gap-1.5">
+                    {displayedUserMessage.copyText && (
+                      <MessageCopyButton text={displayedUserMessage.copyText} />
+                    )}
+                    {canRevertAgentWork && (
+                      <button
+                        type="button"
+                        disabled={isRevertingCheckpoint || isWorking}
+                        onClick={() => onRevertUserMessage(row.message.id)}
+                        title="Revert to this message"
+                        className={cn(
+                          "flex size-6 items-center justify-center rounded-md transition-colors",
+                          "text-muted-foreground/40 hover:bg-muted/60 hover:text-foreground/70",
+                          (isRevertingCheckpoint || isWorking) && "cursor-not-allowed opacity-40",
+                        )}
+                      >
+                        <Undo2Icon className="size-3" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-right text-[10px] text-muted-foreground/30 transition-colors duration-150 hover:text-foreground/60 cursor-default">
+                    {formatTimestamp(row.message.createdAt, timestampFormat)}
+                  </p>
+                </div>
+                {/* Image attachments above text */}
                 {userImages.length > 0 && (
-                  <div className="mb-2 grid max-w-[420px] grid-cols-2 gap-2">
+                  <div
+                    className={cn(
+                      "mb-2 ml-auto grid gap-2",
+                      userImages.length === 1
+                        ? "max-w-[280px] grid-cols-1"
+                        : "max-w-[420px] grid-cols-2",
+                    )}
+                  >
                     {userImages.map(
                       (image: NonNullable<TimelineMessage["attachments"]>[number]) => (
                         <div
@@ -282,35 +395,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     )}
                   </div>
                 )}
+                {/* Main message text — large, right-aligned, right-border accent */}
                 {(displayedUserMessage.visibleText.trim().length > 0 ||
                   terminalContexts.length > 0) && (
-                  <UserMessageBody
-                    text={displayedUserMessage.visibleText}
-                    terminalContexts={terminalContexts}
-                  />
-                )}
-                <div className="mt-1.5 flex items-center justify-end gap-2">
-                  <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
-                    {displayedUserMessage.copyText && (
-                      <MessageCopyButton text={displayedUserMessage.copyText} />
-                    )}
-                    {canRevertAgentWork && (
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant="outline"
-                        disabled={isRevertingCheckpoint || isWorking}
-                        onClick={() => onRevertUserMessage(row.message.id)}
-                        title="Revert to this message"
-                      >
-                        <Undo2Icon className="size-3" />
-                      </Button>
-                    )}
+                  <div
+                    className="border-r-2 border-foreground/80 pr-4 text-right text-lg font-sans leading-tight tracking-tight text-foreground"
+                  >
+                    <UserMessageBody
+                      text={displayedUserMessage.visibleText}
+                      terminalContexts={terminalContexts}
+                    />
                   </div>
-                  <p className="text-right text-[10px] text-muted-foreground/30">
-                    {formatTimestamp(row.message.createdAt, timestampFormat)}
-                  </p>
-                </div>
+                )}
               </div>
             </div>
           );
@@ -320,6 +416,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         row.message.role === "assistant" &&
         (() => {
           const messageText = row.message.text || (row.message.streaming ? "" : "(empty response)");
+          // Resolve provider icon for the header
+          const ProviderIconComp = providerInstanceId
+            ? (TIMELINE_PROVIDER_ICON_MAP[providerInstanceId] ?? BotIcon)
+            : BotIcon;
+          const providerLabel = providerInstanceId ?? "agent";
           return (
             <>
               {row.showCompletionDivider && (
@@ -331,78 +432,36 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                   <span className="h-px flex-1 bg-border" />
                 </div>
               )}
-              <div className="min-w-0 px-1 py-0.5">
-                <ChatMarkdown
-                  text={messageText}
-                  cwd={markdownCwd}
-                  isStreaming={Boolean(row.message.streaming)}
-                />
-                {(() => {
-                  const turnSummary = turnDiffSummaryByAssistantMessageId.get(row.message.id);
-                  if (!turnSummary) return null;
-                  const checkpointFiles = turnSummary.files;
-                  if (checkpointFiles.length === 0) return null;
-                  const summaryStat = summarizeTurnDiffStats(checkpointFiles);
-                  const changedFileCountLabel = String(checkpointFiles.length);
-                  const allDirectoriesExpanded =
-                    allDirectoriesExpandedByTurnId[turnSummary.turnId] ?? true;
-                  return (
-                    <div className="mt-2 rounded-lg border border-border/80 bg-card/45 p-2.5">
-                      <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
-                          <span>Changed files ({changedFileCountLabel})</span>
-                          {hasNonZeroStat(summaryStat) && (
-                            <>
-                              <span className="mx-1">•</span>
-                              <DiffStatLabel
-                                additions={summaryStat.additions}
-                                deletions={summaryStat.deletions}
-                              />
-                            </>
-                          )}
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            onClick={() => onToggleAllDirectories(turnSummary.turnId)}
-                          >
-                            {allDirectoriesExpanded ? "Collapse all" : "Expand all"}
-                          </Button>
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            onClick={() =>
-                              onOpenTurnDiff(turnSummary.turnId, checkpointFiles[0]?.path)
-                            }
-                          >
-                            View diff
-                          </Button>
-                        </div>
-                      </div>
-                      <ChangedFilesTree
-                        key={`changed-files-tree:${turnSummary.turnId}`}
-                        turnId={turnSummary.turnId}
-                        files={checkpointFiles}
-                        allDirectoriesExpanded={allDirectoriesExpanded}
-                        resolvedTheme={resolvedTheme}
-                        onOpenTurnDiff={onOpenTurnDiff}
-                      />
-                    </div>
-                  );
-                })()}
-                <p className="mt-1.5 text-[10px] text-muted-foreground/30">
-                  {formatMessageMeta(
-                    row.message.createdAt,
-                    row.message.streaming
-                      ? formatElapsed(row.durationStart, nowIso)
-                      : formatElapsed(row.durationStart, row.message.completedAt),
-                    timestampFormat,
-                  )}
-                </p>
-              </div>
+              {/* Prototype-style: left-border accent with single-pass hover sweep + scroll-driven light bar + tiny provider header + softer body text + hover-reveal copy */}
+              <AssistantMessageBorder scrollContainer={scrollContainer}>
+                {/* Tiny provider header: icon + label (brightens on hover) */}
+                <div className="mb-1.5 flex items-center gap-1.5 text-muted-foreground/30 transition-colors duration-200 group-hover:text-foreground/75">
+                  <ProviderIconComp className="size-3" />
+                  <span className="font-mono text-[10px]">
+                    {providerLabel}
+                  </span>
+                </div>
+                {/* Body text */}
+                <div className="text-base font-sans leading-relaxed text-foreground/85">
+                  <ChatMarkdown
+                    text={messageText}
+                    cwd={markdownCwd}
+                    isStreaming={Boolean(row.message.streaming)}
+                  />
+                </div>
+                {/* Hover-reveal copy + timestamp footer */}
+                <div className="-ml-1.5 mt-1 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
+                  <MessageCopyButton text={messageText} />
+                  <p className="text-[10px] text-muted-foreground/30 transition-colors duration-150 hover:text-foreground/60 cursor-default">
+                    {formatMessageMeta(
+                      row.message.createdAt,
+                      row.message.streaming
+                        ? formatElapsed(row.durationStart, nowIso)
+                        : formatElapsed(row.durationStart, row.message.completedAt),
+                    )}
+                  </p>
+                </div>
+              </AssistantMessageBorder>
             </>
           );
         })()}
@@ -419,11 +478,11 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
       {row.kind === "working" && (
         <div className="py-0.5 pl-1.5">
-          <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/70">
+          <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground/50">
             <span className="inline-flex items-center gap-[3px]">
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse" />
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:200ms]" />
-              <span className="h-1 w-1 rounded-full bg-muted-foreground/30 animate-pulse [animation-delay:400ms]" />
+              <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-pulse" />
+              <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:200ms]" />
+              <span className="h-1 w-1 rounded-full bg-muted-foreground/40 animate-pulse [animation-delay:400ms]" />
             </span>
             <span>
               {latestTaskDescription
@@ -440,6 +499,90 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     </div>
   );
 
+  // Helper: render the changed-files card for a given assistant message.
+  // Extracted so it can be deferred to after any following work row.
+  const renderChangedFilesForMessage = (messageId: MessageId) => {
+    const turnSummary = turnDiffSummaryByAssistantMessageId.get(messageId);
+    if (!turnSummary) return null;
+    const checkpointFiles = turnSummary.files;
+    if (checkpointFiles.length === 0) return null;
+    const summaryStat = summarizeTurnDiffStats(checkpointFiles);
+    const changedFileCountLabel = String(checkpointFiles.length);
+    const allDirectoriesExpanded = allDirectoriesExpandedByTurnId[turnSummary.turnId] ?? true;
+    return (
+      <div className="pb-4">
+        <div className="rounded-lg border border-border/80 bg-card/45 p-2.5">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/65">
+              <span>Changed files ({changedFileCountLabel})</span>
+              {hasNonZeroStat(summaryStat) && (
+                <>
+                  <span className="mx-1">•</span>
+                  <DiffStatLabel
+                    additions={summaryStat.additions}
+                    deletions={summaryStat.deletions}
+                  />
+                </>
+              )}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => onToggleAllDirectories(turnSummary.turnId)}
+              >
+                {allDirectoriesExpanded ? "Collapse all" : "Expand all"}
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                onClick={() => onOpenTurnDiff(turnSummary.turnId, checkpointFiles[0]?.path)}
+              >
+                View diff
+              </Button>
+            </div>
+          </div>
+          <ChangedFilesTree
+            key={`changed-files-tree:${turnSummary.turnId}`}
+            turnId={turnSummary.turnId}
+            files={checkpointFiles}
+            allDirectoriesExpanded={allDirectoriesExpanded}
+            resolvedTheme={resolvedTheme}
+            onOpenTurnDiff={onOpenTurnDiff}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // Map each row index to any assistant message IDs whose Changed Files card should be rendered AFTER that row.
+  // This guarantees that Changed Files ALWAYS renders at the very end of a turn (after all text and tool call boxes).
+  const changedFilesMapByIndex = useMemo(() => {
+    const map = new Map<number, MessageId[]>();
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i];
+      if (row && row.kind === "message" && row.message.role === "assistant") {
+        const messageId = row.message.id;
+        if (turnDiffSummaryByAssistantMessageId.has(messageId)) {
+          let turnEndIndex = i;
+          for (let j = i + 1; j < rows.length; j += 1) {
+            const candidate = rows[j];
+            if (candidate && candidate.kind === "message" && candidate.message.role === "user") {
+              break;
+            }
+            turnEndIndex = j;
+          }
+          const existing = map.get(turnEndIndex) ?? [];
+          existing.push(messageId);
+          map.set(turnEndIndex, existing);
+        }
+      }
+    }
+    return map;
+  }, [rows, turnDiffSummaryByAssistantMessageId]);
+
   if (!hasMessages && !isWorking) {
     return (
       <div className="flex items-center justify-center py-4">
@@ -452,9 +595,20 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   return (
     <div data-timeline-root="true" className="mx-auto w-full min-w-0 max-w-3xl overflow-x-hidden">
-      {rows.map((row) => (
-        <div key={`timeline-row:${row.id}`}>{renderRowContent(row)}</div>
+      {rows.map((row, index) => (
+        <div key={`timeline-row-group:${row.id}`}>
+          <div key={`timeline-row:${row.id}`}>{renderRowContent(row)}</div>
+          {changedFilesMapByIndex.get(index)?.map((msgId) => (
+            <div key={`changed-files-for:${msgId}`}>{renderChangedFilesForMessage(msgId)}</div>
+          ))}
+        </div>
       ))}
+      {/* TaskProgressCard shown once, after all rows, only when tasks are active */}
+      {activeTaskNodes.length > 0 && (
+        <div className="pb-4">
+          <TaskProgressCard tasks={activeTaskNodes} />
+        </div>
+      )}
     </div>
   );
 });
@@ -577,7 +731,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
         }
 
         return (
-          <div className="wrap-break-word whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground">
+          <div className="wrap-break-word whitespace-pre-wrap font-sans text-lg leading-tight text-foreground">
             {inlineNodes}
           </div>
         );
@@ -605,7 +759,7 @@ const UserMessageBody = memo(function UserMessageBody(props: {
     }
 
     return (
-      <div className="wrap-break-word whitespace-pre-wrap font-mono text-sm leading-relaxed text-foreground">
+      <div className="wrap-break-word whitespace-pre-wrap font-sans text-lg leading-tight text-foreground">
         {inlineNodes}
       </div>
     );
@@ -616,9 +770,9 @@ const UserMessageBody = memo(function UserMessageBody(props: {
   }
 
   return (
-    <pre className="whitespace-pre-wrap wrap-break-word font-mono text-sm leading-relaxed text-foreground">
+    <p className="whitespace-pre-wrap wrap-break-word font-sans text-lg leading-tight text-foreground">
       {props.text}
-    </pre>
+    </p>
   );
 });
 
@@ -764,6 +918,119 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
           )}
         </div>
       )}
+    </div>
+  );
+});
+
+const AssistantMessageBorder = memo(function AssistantMessageBorder({
+  scrollContainer,
+  children,
+}: {
+  scrollContainer: HTMLDivElement | null;
+  children: ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const sweepRef = useRef<HTMLDivElement>(null);
+  const lightBarRef = useRef<HTMLDivElement>(null);
+  const tweenRef = useRef<gsap.core.Tween | null>(null);
+  const isScrolledActiveRef = useRef(false);
+
+  // Single-pass hover sweep using GSAP — suppressed if scroll light bar is active
+  const handleMouseEnter = useCallback(() => {
+    if (isScrolledActiveRef.current) return;
+    if (!sweepRef.current) return;
+    if (tweenRef.current) tweenRef.current.kill();
+
+    // GSAP silky-smooth sweep from top to bottom
+    tweenRef.current = gsap.fromTo(
+      sweepRef.current,
+      { y: "-100%", opacity: 0 },
+      {
+        y: "280%",
+        opacity: 1,
+        duration: 1.5,
+        ease: "power2.inOut",
+        onComplete: () => {
+          if (sweepRef.current) {
+            gsap.to(sweepRef.current, { opacity: 0, duration: 0.35 });
+          }
+        },
+      },
+    );
+  }, []);
+
+  // GSAP scroll progress listener — silky smooth tweening with light-to-dark gradient
+  useEffect(() => {
+    const el = containerRef.current;
+    const bar = lightBarRef.current;
+    if (!el || !bar) return;
+    const target = scrollContainer ?? (typeof window !== "undefined" ? window : null);
+    if (!target) return;
+
+    const updateProgress = () => {
+      if (!containerRef.current || !lightBarRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const viewportHeight = scrollContainer ? scrollContainer.clientHeight : window.innerHeight;
+      const containerTop = scrollContainer ? scrollContainer.getBoundingClientRect().top : 0;
+      const elementTop = rect.top - containerTop;
+      const elementHeight = rect.height;
+
+      if (elementHeight <= 0) return;
+
+      const scrolled = viewportHeight * 0.45 - elementTop;
+      const rawProgress = scrolled / elementHeight;
+      const isActivelyScrolled = rawProgress > 0.05 && rawProgress < 0.95;
+      isScrolledActiveRef.current = isActivelyScrolled;
+
+      // Kill any running hover sweep if active scroll takes over
+      if (isActivelyScrolled && tweenRef.current) {
+        tweenRef.current.kill();
+        if (sweepRef.current) {
+          gsap.set(sweepRef.current, { opacity: 0 });
+        }
+      }
+
+      const progress = Math.max(0, Math.min(1, rawProgress));
+
+      // GSAP smooth tween to target height & opacity with zero jitter
+      gsap.to(lightBarRef.current, {
+        height: `${Math.max(6, Math.min(100, progress * 100))}%`,
+        opacity: isActivelyScrolled ? 1 : 0,
+        duration: 0.3,
+        ease: "power1.out",
+        overwrite: "auto",
+      });
+    };
+
+    updateProgress();
+    target.addEventListener("scroll", updateProgress, { passive: true });
+    return () => target.removeEventListener("scroll", updateProgress);
+  }, [scrollContainer]);
+
+  return (
+    <div
+      ref={containerRef}
+      onMouseEnter={handleMouseEnter}
+      className="group relative min-w-0 pl-4"
+    >
+      {/* Static base line — single 1px left track */}
+      <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-px bg-border/40 transition-colors duration-200 group-hover:bg-border/60" />
+
+      {/* 1. GSAP Single-pass hover sweep beam — perfectly aligned at left-0 */}
+      <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-px overflow-hidden">
+        <div
+          ref={sweepRef}
+          className="h-44 w-full opacity-0 bg-gradient-to-b from-foreground/10 via-foreground/90 to-foreground/30 shadow-[0_0_8px_rgba(255,255,255,0.3)]"
+        />
+      </div>
+
+      {/* 2. GSAP Scroll Light Bar — perfectly aligned at left-0 */}
+      <div
+        ref={lightBarRef}
+        className="pointer-events-none absolute left-0 top-0 w-px opacity-0 bg-gradient-to-b from-foreground/95 via-foreground/60 to-foreground/20"
+      />
+
+      {children}
     </div>
   );
 });

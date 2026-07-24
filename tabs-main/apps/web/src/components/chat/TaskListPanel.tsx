@@ -41,7 +41,7 @@ interface TaskListPanelProps {
 }
 
 export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPanelProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   if (tasks.length === 0) return null;
 
@@ -58,7 +58,7 @@ export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPane
   return (
     <div
       className={cn(
-        "mx-auto mb-2 w-full min-w-0 max-w-3xl overflow-hidden rounded-2xl border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm",
+        "mx-auto mb-2 w-full min-w-0 max-w-3xl overflow-hidden rounded-2xl border border-border/40 bg-card/70 shadow-sm backdrop-blur-sm",
         "transition-all duration-200",
       )}
     >
@@ -108,8 +108,8 @@ export const TaskListPanel = memo(function TaskListPanel({ tasks }: TaskListPane
                       isDone
                         ? "text-muted-foreground/50"
                         : isRunning
-                          ? "text-blue-400/70"
-                          : "text-muted-foreground/40",
+                          ? "text-primary/70"
+                          : "text-foreground/30",
                     )}
                   >
                     {isDone ? (

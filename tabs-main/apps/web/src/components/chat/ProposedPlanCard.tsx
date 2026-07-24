@@ -8,12 +8,11 @@ import {
   stripDisplayedPlanMarkdown,
 } from "../../proposedPlan";
 import ChatMarkdown from "../ChatMarkdown";
-import { EllipsisIcon } from "lucide-react";
+import { EllipsisIcon, ListChecksIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { cn } from "~/lib/utils";
-import { Badge } from "../ui/badge";
 import {
   Dialog,
   DialogDescription,
@@ -114,15 +113,19 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
   };
 
   return (
-    <div className="rounded-[24px] border border-border/80 bg-card/70 p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="w-full rounded-xl border border-border/50 bg-card/60 overflow-hidden">
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-2 border-b border-border/50 px-5 py-3">
         <div className="flex min-w-0 items-center gap-2">
-          <Badge variant="secondary">Plan</Badge>
-          <p className="truncate text-sm font-medium text-foreground">{title}</p>
+          <ListChecksIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
+          <span className="shrink-0 text-[11px] font-mono font-bold uppercase tracking-widest text-muted-foreground/60">
+            Proposed plan
+          </span>
+          <span className="truncate text-sm font-medium text-foreground/80">{title}</span>
         </div>
         <Menu>
           <MenuTrigger
-            render={<Button aria-label="Plan actions" size="icon-xs" variant="outline" />}
+            render={<Button aria-label="Plan actions" size="icon-xs" variant="ghost" />}
           >
             <EllipsisIcon aria-hidden="true" className="size-4" />
           </MenuTrigger>
@@ -134,7 +137,9 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
           </MenuPopup>
         </Menu>
       </div>
-      <div className="mt-4">
+
+      {/* ── Plan content ── */}
+      <div className="px-5 py-4">
         <div className={cn("relative", canCollapse && !expanded && "max-h-104 overflow-hidden")}>
           {canCollapse && !expanded ? (
             <ChatMarkdown text={collapsedPreview ?? ""} cwd={cwd} isStreaming={false} />

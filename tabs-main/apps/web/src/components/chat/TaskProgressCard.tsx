@@ -1,51 +1,7 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { CheckIcon, ChevronDownIcon, ListChecksIcon, LoaderIcon, XIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { TaskNode } from "../../session-logic";
-
-// ---------------------------------------------------------------------------
-// Icons
-// ---------------------------------------------------------------------------
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("animate-spin", className)}
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle cx="8" cy="8" r="6" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
-      <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M3.5 8.5L6.5 11.5L12.5 4.5"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function XIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path
-        d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Self-ticking elapsed timer (direct DOM mutation — no React re-renders)
@@ -70,63 +26,72 @@ const TaskElapsed = memo(function TaskElapsed({ startedAt }: { startedAt: string
     return () => clearInterval(id);
   }, [startedAt]);
   return (
-    <span ref={ref} className="tabular-nums text-muted-foreground/55">
+    <span ref={ref} className="tabular-nums text-[10px] font-sans text-muted-foreground/40 shrink-0">
       {formatElapsed(startedAt)}
     </span>
   );
 });
 
 // ---------------------------------------------------------------------------
-// Single task row
+// Single task row — prototype style
 // ---------------------------------------------------------------------------
 
 const TaskRow = memo(function TaskRow({ task }: { task: TaskNode }) {
   const isRunning = task.status === "running";
   const isFailed = task.status === "failed";
   const isStopped = task.status === "stopped";
-
-  const StatusIcon = isRunning ? SpinnerIcon : isFailed || isStopped ? XIcon : CheckIcon;
-
-  const iconColor = isRunning
-    ? "text-blue-400"
-    : isFailed
-      ? "text-red-400"
-      : isStopped
-        ? "text-amber-400"
-        : "text-emerald-400";
+  const isDone = task.status === "completed";
 
   const description = task.latestDetail ?? task.lastToolName ?? task.description;
 
   return (
-    <div className="flex items-start gap-2 rounded-lg px-1 py-1 transition-[opacity] duration-200">
-      <span className={cn("mt-0.5 flex size-4 shrink-0 items-center justify-center", iconColor)}>
-        <StatusIcon className="size-3" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p
-            className={cn(
-              "truncate text-[11px] leading-5 text-foreground/80",
-              isFailed && "text-red-400",
-            )}
-            title={description}
-          >
-            {description}
-          </p>
-          {isRunning && <TaskElapsed startedAt={task.startedAt} />}
-        </div>
-        {task.taskType && (
-          <span className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/45">
-            {task.taskType}
-          </span>
+    <div className="flex items-center gap-3 py-1">
+      {/* Status icon */}
+      <span className="shrink-0 flex size-4 items-center justify-center">
+        {isRunning ? (
+          <LoaderIcon className="size-3 animate-spin text-primary/70" />
+        ) : isFailed || isStopped ? (
+          <XIcon className={cn("size-3", isFailed ? "text-red-400" : "text-amber-400")} />
+        ) : isDone ? (
+          <CheckIcon className="size-3 text-emerald-400" />
+        ) : (
+          /* pending — empty circle */
+          <svg viewBox="0 0 14 14" fill="none" className="size-3">
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1.25" strokeDasharray="2 2" />
+          </svg>
         )}
-      </div>
+      </span>
+
+      {/* Task name */}
+      <span
+        className={cn(
+          "flex-1 min-w-0 truncate text-sm font-sans",
+          isDone
+            ? "text-muted-foreground/40"
+            : isFailed || isStopped
+              ? "text-red-400/80"
+              : "text-foreground/80",
+        )}
+        title={description}
+      >
+        {description}
+      </span>
+
+      {/* Type label */}
+      {task.taskType && (
+        <span className="text-[10px] font-sans uppercase tracking-wider text-muted-foreground/25 shrink-0">
+          {task.taskType}
+        </span>
+      )}
+
+      {/* Timer */}
+      {isRunning && <TaskElapsed startedAt={task.startedAt} />}
     </div>
   );
 });
 
 // ---------------------------------------------------------------------------
-// Task Progress Card — replaces generic "Reasoning update" entries
+// TaskProgressCard — collapsible, prototype-style
 // ---------------------------------------------------------------------------
 
 export const TaskProgressCard = memo(function TaskProgressCard({
@@ -134,34 +99,63 @@ export const TaskProgressCard = memo(function TaskProgressCard({
 }: {
   tasks: ReadonlyArray<TaskNode>;
 }) {
+  const [expanded, setExpanded] = useState(false);
   if (tasks.length === 0) return null;
 
+  const completedCount = tasks.filter(
+    (t) => t.status === "completed" || t.status === "failed" || t.status === "stopped",
+  ).length;
+  const failedCount = tasks.filter((t) => t.status === "failed" || t.status === "stopped").length;
   const runningCount = tasks.filter((t) => t.status === "running").length;
-  const completedCount = tasks.filter((t) => t.status === "completed").length;
   const totalCount = tasks.length;
+  const allSettled = completedCount === totalCount;
 
-  const headerLabel =
-    runningCount > 0 ? `Tasks (${completedCount}/${totalCount})` : `Tasks (${totalCount})`;
+  const headerLabel = allSettled
+    ? `${completedCount} of ${totalCount} task${totalCount === 1 ? "" : "s"} completed`
+    : `Tasks (${completedCount}/${totalCount})`;
 
   return (
-    <div className="rounded-xl border border-border/45 bg-card/25 px-2 py-1.5">
-      <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
-        <p className="text-[9px] uppercase tracking-[0.16em] text-muted-foreground/55">
-          {headerLabel}
-        </p>
-        {runningCount > 0 && (
-          <span className="inline-flex items-center gap-[3px]">
-            <span className="h-1 w-1 rounded-full bg-blue-400/60 animate-pulse" />
-            <span className="h-1 w-1 rounded-full bg-blue-400/60 animate-pulse [animation-delay:200ms]" />
-            <span className="h-1 w-1 rounded-full bg-blue-400/60 animate-pulse [animation-delay:400ms]" />
+    <div className="w-full rounded-xl border border-border/50 bg-card/60 overflow-hidden">
+      {/* Header */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/20"
+      >
+        <div className="flex items-center gap-2">
+          <ListChecksIcon className="size-3.5 text-muted-foreground/50 shrink-0" />
+          <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-muted-foreground/60">
+            {headerLabel}
           </span>
-        )}
-      </div>
-      <div className="space-y-0.5">
-        {tasks.map((task) => (
-          <TaskRow key={task.taskId} task={task} />
-        ))}
-      </div>
+          {failedCount > 0 && (
+            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-red-400">
+              · {failedCount} failed
+            </span>
+          )}
+          {runningCount > 0 && (
+            <span className="inline-flex items-center gap-[3px] ml-1">
+              <span className="h-1 w-1 rounded-full bg-primary/60 animate-pulse" />
+              <span className="h-1 w-1 rounded-full bg-primary/60 animate-pulse [animation-delay:200ms]" />
+              <span className="h-1 w-1 rounded-full bg-primary/60 animate-pulse [animation-delay:400ms]" />
+            </span>
+          )}
+        </div>
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 text-muted-foreground/40 transition-transform duration-200",
+            expanded && "rotate-180",
+          )}
+        />
+      </button>
+
+      {/* Task rows */}
+      {expanded && (
+        <div className="flex flex-col gap-0 px-4 pb-3 animate-in fade-in slide-in-from-top-1 duration-150">
+          {tasks.map((task) => (
+            <TaskRow key={task.taskId} task={task} />
+          ))}
+        </div>
+      )}
     </div>
   );
 });

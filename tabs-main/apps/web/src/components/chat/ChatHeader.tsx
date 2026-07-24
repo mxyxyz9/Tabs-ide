@@ -43,28 +43,34 @@ export const ChatHeader = memo(function ChatHeader({
   onToggleTerminal,
   onToggleDiff,
 }: ChatHeaderProps) {
+  const formattedProjectName = activeProjectName
+    ? activeProjectName.toLowerCase().includes("tabs")
+      ? "Tabs IDE"
+      : activeProjectName
+    : null;
+
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden sm:gap-3">
+    <div className="flex min-w-0 flex-1 items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
         <SidebarTrigger className="size-7 shrink-0 md:hidden" />
         <h2
-          className="min-w-0 shrink truncate text-sm font-medium text-foreground"
+          className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground"
           title={activeThreadTitle}
         >
           {activeThreadTitle}
         </h2>
-        {activeProjectName && (
-          <Badge variant="outline" className="min-w-0 shrink truncate">
-            {activeProjectName}
-          </Badge>
+        {formattedProjectName && (
+          <span className="hidden shrink-0 text-xs font-sans text-muted-foreground/50 sm:inline" title={activeProjectName}>
+            · {formattedProjectName}
+          </span>
         )}
-        {activeProjectName && !isGitRepo && (
-          <Badge variant="outline" className="shrink-0 text-[10px] text-amber-700">
+        {!isGitRepo && activeProjectName && (
+          <span className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
             No Git
-          </Badge>
+          </span>
         )}
       </div>
-      <div className="@container/header-actions flex min-w-0 flex-1 items-center justify-end gap-2 @sm/header-actions:gap-3">
+      <div className="flex shrink-0 items-center gap-2">
         {activeProjectName && (
           <OpenInPicker
             keybindings={keybindings}
@@ -81,11 +87,11 @@ export const ChatHeader = memo(function ChatHeader({
                 pressed={terminalOpen}
                 onPressedChange={onToggleTerminal}
                 aria-label="Toggle terminal drawer"
-                variant="outline"
+                variant="ghost"
                 size="xs"
                 disabled={!terminalAvailable}
               >
-                <TerminalSquareIcon className="size-3" />
+                <TerminalSquareIcon className="size-3.5" />
               </Toggle>
             }
           />
@@ -105,11 +111,11 @@ export const ChatHeader = memo(function ChatHeader({
                 pressed={diffOpen}
                 onPressedChange={onToggleDiff}
                 aria-label="Toggle diff panel"
-                variant="outline"
+                variant="ghost"
                 size="xs"
                 disabled={!isGitRepo}
               >
-                <DiffIcon className="size-3" />
+                <DiffIcon className="size-3.5" />
               </Toggle>
             }
           />
