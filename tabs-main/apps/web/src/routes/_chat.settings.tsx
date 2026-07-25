@@ -903,9 +903,7 @@ function SettingsRouteView() {
   }, [activeSettingsSection]);
   const [openProviderDetails, setOpenProviderDetails] = useState<
     Partial<Record<ProviderSettingsKey, boolean>>
-  >({
-    codex: true,
-  });
+  >({});
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string>>
   >({});
@@ -995,13 +993,51 @@ function SettingsRouteView() {
     const api = ensureNativeApi();
     api.server
       .refreshProviders()
-      .then(() => {
+      .then((res: any) => {
+        try {
+          localStorage.setItem("tabs_last_models_refresh_time", String(Date.now()));
+        } catch {}
         void refreshServerConfig();
         void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
         void queryClient.invalidateQueries({ queryKey: ["source-control-discovery"] });
+
+        const providersList: ReadonlyArray<ServerProvider> = res?.providers ?? [];
+        if (providersList.length > 0) {
+          const readyCount = providersList.filter(
+            (p) => p.status === "ready" || p.auth.status === "authenticated",
+          ).length;
+          const failedProviders = providersList
+            .filter((p) => p.status === "error")
+            .map((p) => PROVIDER_DISPLAY_NAMES[p.driver as keyof typeof PROVIDER_DISPLAY_NAMES] ?? p.driver);
+
+          if (failedProviders.length > 0) {
+            toastManager.add({
+              type: "warning",
+              title: "Providers refreshed with warnings",
+              description: `${readyCount} of ${providersList.length} providers refreshed — ${failedProviders.join(", ")} failed.`,
+            });
+          } else {
+            toastManager.add({
+              type: "success",
+              title: "Models refreshed",
+              description: `${providersList.length} of ${providersList.length} providers refreshed successfully.`,
+            });
+          }
+        } else {
+          toastManager.add({
+            type: "success",
+            title: "Models refreshed",
+            description: "Provider model discovery refresh completed.",
+          });
+        }
       })
       .catch((error: unknown) => {
         console.warn("Failed to refresh providers", error);
+        toastManager.add({
+          type: "error",
+          title: "Refresh failed",
+          description: error instanceof Error ? error.message : "Failed to query provider model endpoints.",
+        });
       })
       .finally(() => {
         refreshingRef.current = false;
@@ -1417,10 +1453,7 @@ function SettingsRouteView() {
 
     setTheme("system");
     resetSettings();
-    setOpenProviderDetails({
-      codex: false,
-      claudeAgent: false,
-    });
+    setOpenProviderDetails({});
     setCustomModelInputByProvider({
       codex: "",
       claudeAgent: "",
@@ -2440,13 +2473,31 @@ function SettingsRouteView() {
                 {activeSettingsSection === "providers" ? (
                   <div className="space-y-6">
                     <div>
-                      <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                          Providers
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          Manage AI providers, API keys, custom model endpoints, and status checks.
-                        </p>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1.5">
+                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                            Providers
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            Manage AI providers, API keys, custom model endpoints, and status checks.
+                          </p>
+                        </div>
+                        <SettingsHeaderPortal>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className="no-drag gap-1.5 cursor-pointer"
+                            disabled={isRefreshingProviders}
+                            onClick={() => refreshProviders()}
+                          >
+                            {isRefreshingProviders ? (
+                              <LoaderIcon className="size-3.5 animate-spin text-primary" />
+                            ) : (
+                              <RefreshCwIcon className="size-3.5" />
+                            )}
+                            {isRefreshingProviders ? "Refreshing..." : "Refresh models"}
+                          </Button>
+                        </SettingsHeaderPortal>
                       </div>
                       <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
                       <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />

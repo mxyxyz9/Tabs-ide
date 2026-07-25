@@ -27,6 +27,7 @@ import {
   getProviderOptionBooleanSelectionValue,
   getProviderOptionStringSelectionValue,
 } from "@tabs/shared/model";
+import { validateServerProviderModelList } from "@tabs/contracts";
 import { resolveSpawnCommand } from "@tabs/shared/shell";
 
 import {
@@ -383,7 +384,7 @@ function buildCursorDiscoveredModels(
 function buildCursorDiscoveredModelsFromAvailableModelsResponse(
   response: typeof CursorListAvailableModelsResponse.Type,
 ): ReadonlyArray<ServerProviderModel> {
-  return buildCursorDiscoveredModels(
+  const rawDiscovered = buildCursorDiscoveredModels(
     response.models.flatMap((model) => {
       const slug = model.value.trim();
       const name = model.name.trim();
@@ -395,11 +396,14 @@ function buildCursorDiscoveredModelsFromAvailableModelsResponse(
         {
           slug,
           name,
+          isCustom: false,
           capabilities: buildCursorCapabilitiesFromConfigOptions(model.configOptions),
+          source: "known" as const,
         },
       ];
     }),
   );
+  return validateServerProviderModelList(rawDiscovered);
 }
 
 const makeCursorAcpProbeRuntime = (

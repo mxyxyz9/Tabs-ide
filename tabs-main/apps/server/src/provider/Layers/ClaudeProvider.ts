@@ -5,6 +5,8 @@ import {
   ProviderDriverKind,
   type ServerProviderModel,
   type ServerProviderSlashCommand,
+  validateServerProviderModelList,
+  inferModelCapabilitiesFromSlug,
 } from "@tabs/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -79,6 +81,41 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
           options: [
             { value: "200k", label: "200k", isDefault: true },
             { value: "1m", label: "1M" },
+          ],
+        }),
+      ],
+    }),
+  },
+  {
+    slug: "claude-opus-5",
+    name: "Claude Opus 5",
+    isCustom: false,
+    capabilities: createModelCapabilities({
+      optionDescriptors: [
+        buildSelectOptionDescriptor({
+          id: "effort",
+          label: "Reasoning",
+          options: [
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High", isDefault: true },
+            { value: "xhigh", label: "Extra High" },
+            { value: "max", label: "Max" },
+            { value: "ultracode", label: "Ultracode" },
+            { value: "ultrathink", label: "Ultrathink" },
+          ],
+          promptInjectedValues: ["ultrathink"],
+        }),
+        buildBooleanOptionDescriptor({
+          id: "fastMode",
+          label: "Fast Mode",
+        }),
+        buildSelectOptionDescriptor({
+          id: "contextWindow",
+          label: "Context Window",
+          options: [
+            { value: "200k", label: "200k" },
+            { value: "1m", label: "1M", isDefault: true },
           ],
         }),
       ],
@@ -298,7 +335,7 @@ function supportsClaudeOpus47(version: string | null | undefined): boolean {
 function getBuiltInClaudeModelsForVersion(
   version: string | null | undefined,
 ): ReadonlyArray<ServerProviderModel> {
-  return BUILT_IN_MODELS.filter((model) => {
+  const filtered = BUILT_IN_MODELS.filter((model) => {
     if (model.slug === "claude-fable-5") {
       return supportsClaudeFable5(version);
     }
@@ -309,7 +346,11 @@ function getBuiltInClaudeModelsForVersion(
       return supportsClaudeOpus47(version);
     }
     return true;
-  });
+  }).map((model) => ({
+    ...model,
+    source: model.source ?? ("known" as const),
+  }));
+  return validateServerProviderModelList(filtered);
 }
 
 function formatClaudeFable5UpgradeMessage(version: string | null): string {

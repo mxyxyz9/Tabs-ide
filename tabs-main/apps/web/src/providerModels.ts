@@ -61,6 +61,7 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<string, ReadonlyArray<S
     { slug: "gpt-5.3-codex", name: "GPT-5.3 Codex", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
   ],
   claudeAgent: [
+    { slug: "claude-opus-5", name: "Claude Opus 5", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
     { slug: "claude-fable-5", name: "Claude Fable 5", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
     { slug: "claude-sonnet-5", name: "Claude Sonnet 5", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
     { slug: "claude-opus-4-8", name: "Claude Opus 4.8", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
@@ -130,7 +131,10 @@ export function getProviderModelCapabilities(
     return EMPTY_CAPABILITIES;
   }
   const slug = normalizeModelSlug(model, provider);
-  return models.find((candidate) => candidate.slug === slug)?.capabilities ?? EMPTY_CAPABILITIES;
+  return (
+    models.find((candidate) => candidate.slug === slug)?.capabilities ??
+    DEFAULT_FALLBACK_MODEL_CAPABILITIES
+  );
 }
 
 export function getDefaultServerModel(

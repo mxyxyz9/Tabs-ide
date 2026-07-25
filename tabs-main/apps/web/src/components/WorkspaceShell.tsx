@@ -69,6 +69,7 @@ import {
 } from "react";
 
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
+import { useAutoRefreshModelsOnStartup } from "../hooks/useAutoRefreshModelsOnStartup";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { composerDraftActions } from "../state/composerDrafts";
 import { useSettings } from "../hooks/useSettings";
@@ -8209,6 +8210,7 @@ function ServerTool(props: {
 
 export function WorkspaceShell(props: { agentsContent: ReactNode; settingsContent: ReactNode }) {
   useDesktopIconThemeSync();
+  useAutoRefreshModelsOnStartup();
   const openAddProjectCommandPalette = useOpenAddProjectCommandPalette();
   const navigate = useNavigate();
   const location = useLocation();

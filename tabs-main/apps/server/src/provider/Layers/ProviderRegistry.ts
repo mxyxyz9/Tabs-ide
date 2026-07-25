@@ -28,6 +28,7 @@ import {
   type ProviderInstanceId,
   type ServerProvider,
   type ServerProviderUpdateState,
+  validateServerProviderModelList,
 } from "@tabs/contracts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
@@ -43,6 +44,7 @@ import * as Semaphore from "effect/Semaphore";
 import { ServerConfig } from "../../config";
 import { ProviderInstanceRegistry } from "../Services/ProviderInstanceRegistry";
 import { ProviderRegistry, type ProviderRegistryShape } from "../Services/ProviderRegistry";
+import { fetchRemoteModelCatalog } from "./remoteModelCatalog";
 import {
   hydrateCachedProvider,
   isCachedProviderCorrelated,
@@ -82,12 +84,14 @@ const mergeProviderModels = (
   previousModels: ReadonlyArray<ServerProvider["models"][number]>,
   nextModels: ReadonlyArray<ServerProvider["models"][number]>,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
-  if (nextModels.length === 0 && previousModels.length > 0) {
+  const validatedNext = validateServerProviderModelList(nextModels);
+  if (validatedNext.length === 0 && previousModels.length > 0) {
     return previousModels;
   }
+  const modelsToUse = validatedNext.length > 0 ? validatedNext : nextModels;
 
   const previousBySlug = new Map(previousModels.map((model) => [model.slug, model] as const));
-  const mergedModels = nextModels.map((model) => {
+  const mergedModels = modelsToUse.map((model) => {
     const previousModel = previousBySlug.get(model.slug);
     if (!previousModel || hasModelCapabilities(model) || !hasModelCapabilities(previousModel)) {
       return model;
@@ -97,7 +101,7 @@ const mergeProviderModels = (
       capabilities: previousModel.capabilities,
     };
   });
-  const nextSlugs = new Set(nextModels.map((model) => model.slug));
+  const nextSlugs = new Set(modelsToUse.map((model) => model.slug));
   return [...mergedModels, ...previousModels.filter((model) => !nextSlugs.has(model.slug))];
 };
 
@@ -443,10 +447,30 @@ export const ProviderRegistryLive = Layer.effect(
 
     const refreshAll = Effect.fn("refreshAll")(function* () {
       const sources = yield* getLiveSources;
-      return yield* Effect.forEach(sources, (source) => refreshOneSource(source), {
-        concurrency: "unbounded",
-        discard: true,
-      }).pipe(Effect.andThen(Ref.get(providersRef)));
+      const remoteCatalog = yield* fetchRemoteModelCatalog();
+
+      yield* Effect.forEach(
+        sources,
+        (source) =>
+          refreshOneSource(source).pipe(
+            Effect.tap((provider) => {
+              const remoteModels =
+                remoteCatalog.modelsByProvider[provider.driver] ||
+                remoteCatalog.modelsByProvider[provider.instanceId];
+              if (remoteModels && remoteModels.length > 0) {
+                const mergedModels = mergeProviderModels(provider.models, remoteModels);
+                return syncProvider({ ...provider, models: mergedModels });
+              }
+              return Effect.void;
+            }),
+          ),
+        {
+          concurrency: "unbounded",
+          discard: true,
+        },
+      );
+
+      return yield* Ref.get(providersRef);
     });
 
     const refresh = Effect.fn("refresh")(function* (provider?: ProviderDriverKind) {

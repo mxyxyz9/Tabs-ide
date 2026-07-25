@@ -571,6 +571,19 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   );
 });
 
+function isModelSourceBadgeEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      window.localStorage.getItem("tabs_debug_model_sources") === "true" ||
+      window.localStorage.getItem("TABS_DEBUG_MODEL_SOURCES") === "true" ||
+      Boolean((window as any).__TABS_DEBUG_MODEL_SOURCES__)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getCleanModelName(
   name: string,
   activeTab: ProviderPickerKind | "pinned" | null,
@@ -871,6 +884,15 @@ const ModelRow = memo(function ModelRow(props: {
           >
             {getCleanModelName(props.model.name, props.activeTab ?? null)}
           </span>
+          {isModelSourceBadgeEnabled() &&
+            (props.model.source === "inferred" || props.model.source === "remote-fallback") && (
+              <span
+                className="shrink-0 text-[8px] font-semibold tracking-wide uppercase px-1 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                title={`Model capability source: ${props.model.source}`}
+              >
+                auto-detected
+              </span>
+            )}
         </div>
 
         {props.isActive && (secondarySelects.length > 0 || booleans.length > 0) && (

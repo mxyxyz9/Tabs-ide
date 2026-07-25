@@ -58,6 +58,9 @@ export const ServerProviderAuth = Schema.Struct({
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;
 
+export const ModelSourceKind = Schema.Literals(["known", "inferred", "remote-fallback"]);
+export type ModelSourceKind = typeof ModelSourceKind.Type;
+
 export const ServerProviderModel = Schema.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
@@ -65,6 +68,7 @@ export const ServerProviderModel = Schema.Struct({
   subProvider: Schema.optional(TrimmedNonEmptyString),
   isCustom: Schema.Boolean,
   capabilities: Schema.NullOr(ModelCapabilities),
+  source: Schema.optional(ModelSourceKind),
 });
 export type ServerProviderModel = typeof ServerProviderModel.Type;
 
