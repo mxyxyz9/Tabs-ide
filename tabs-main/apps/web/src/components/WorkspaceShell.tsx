@@ -766,7 +766,8 @@ function ProjectTabs(props: {
   return (
     <div
       className={cn(
-        "drag-region flex items-end gap-2 overflow-x-auto border-b border-border/60 bg-muted/40 px-3 pt-2.5 select-none dark:border-white/8 dark:bg-zinc-950/60 backdrop-blur-md",
+        "drag-region flex items-end gap-2 overflow-x-auto border-b px-3 pt-2 select-none backdrop-blur-md transition-colors duration-200",
+        "border-zinc-200/90 bg-zinc-100/90 text-zinc-900 dark:border-white/10 dark:bg-zinc-950/80 dark:text-zinc-100",
         // Reserve space for the OS window controls: traffic lights (left) on
         // macOS/Linux, the overlaid caption buttons (right) on Windows.
         isElectron && (isWindowsDesktop ? "pr-[140px]" : "pl-[92px]"),
@@ -782,25 +783,32 @@ function ProjectTabs(props: {
                 key={project.id}
                 data-active={active ? "true" : undefined}
                 className={cn(
-                  "drag-region group relative inline-flex min-w-[9rem] max-w-[14rem] items-center gap-2.5 rounded-t-xl border px-3.5 py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none",
+                  "drag-region group relative inline-flex min-w-[9.5rem] max-w-[15rem] items-center gap-2 rounded-t-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
                   active
-                    ? "relative -mb-px border-border/80 border-b-transparent bg-background text-foreground shadow-xs dark:border-white/12 dark:border-b-transparent dark:bg-zinc-900 dark:text-zinc-100"
-                    : "border-transparent text-muted-foreground/75 hover:bg-background/50 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200",
+                    ? "relative -mb-px border-zinc-300 border-b-white bg-white text-zinc-950 shadow-sm ring-1 ring-black/5 dark:border-white/15 dark:border-b-zinc-900 dark:bg-zinc-900 dark:text-zinc-50 dark:shadow-md dark:ring-white/5"
+                    : "border-transparent text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100",
                 )}
                 onClick={() => props.onActivateProject(project.id)}
               >
                 <button
                   type="button"
                   className={cn(
-                    "min-w-0 flex-1 truncate text-left leading-none",
-                    active ? "font-semibold text-foreground dark:text-zinc-100" : "font-medium",
+                    "min-w-0 flex-1 truncate text-left leading-none tracking-tight",
+                    active
+                      ? "font-semibold text-zinc-950 dark:text-zinc-50"
+                      : "font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-950 dark:group-hover:text-zinc-100",
                   )}
                 >
                   {project.name}
                 </button>
                 <button
                   type="button"
-                  className="no-drag shrink-0 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"
+                  className={cn(
+                    "no-drag shrink-0 rounded-md p-1 transition-all duration-150 cursor-pointer",
+                    active
+                      ? "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                      : "text-zinc-400 opacity-60 group-hover:opacity-100 hover:bg-zinc-300/80 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-700/80 dark:hover:text-zinc-100",
+                  )}
                   onClick={(event) => {
                     event.stopPropagation();
                     props.onCloseProject(project.id);
@@ -820,25 +828,32 @@ function ProjectTabs(props: {
               key={pendingId}
               data-active={active ? "true" : undefined}
               className={cn(
-                "drag-region group relative inline-flex min-w-[9rem] max-w-[14rem] items-center gap-2.5 rounded-t-xl border px-3.5 py-2 text-xs font-medium transition-all duration-150 cursor-pointer select-none",
+                "drag-region group relative inline-flex min-w-[9.5rem] max-w-[15rem] items-center gap-2 rounded-t-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
                 active
-                  ? "relative -mb-px border-border/80 border-b-transparent bg-background text-foreground shadow-xs dark:border-white/12 dark:border-b-transparent dark:bg-zinc-900 dark:text-zinc-100"
-                  : "border-transparent text-muted-foreground/75 hover:bg-background/50 hover:text-foreground dark:text-zinc-400 dark:hover:bg-white/[0.05] dark:hover:text-zinc-200",
+                  ? "relative -mb-px border-zinc-300 border-b-white bg-white text-zinc-950 shadow-sm ring-1 ring-black/5 dark:border-white/15 dark:border-b-zinc-900 dark:bg-zinc-900 dark:text-zinc-50 dark:shadow-md dark:ring-white/5"
+                  : "border-transparent text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100",
               )}
               onClick={() => props.onActivatePendingTab(pendingId)}
             >
               <button
                 type="button"
                 className={cn(
-                  "min-w-0 flex-1 truncate text-left leading-none",
-                  active ? "font-semibold text-foreground dark:text-zinc-100" : "font-medium",
+                  "min-w-0 flex-1 truncate text-left leading-none tracking-tight",
+                  active
+                    ? "font-semibold text-zinc-950 dark:text-zinc-50"
+                    : "font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-950 dark:group-hover:text-zinc-100",
                 )}
               >
                 New Tab
               </button>
               <button
                 type="button"
-                className="no-drag shrink-0 rounded-md p-1 text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"
+                className={cn(
+                  "no-drag shrink-0 rounded-md p-1 transition-all duration-150 cursor-pointer",
+                  active
+                    ? "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                    : "text-zinc-400 opacity-60 group-hover:opacity-100 hover:bg-zinc-300/80 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-700/80 dark:hover:text-zinc-100",
+                )}
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onClosePendingTab(pendingId);
@@ -853,7 +868,7 @@ function ProjectTabs(props: {
         {/* Integrated "+" button */}
         <button
           type="button"
-          className="no-drag mb-1 shrink-0 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-background hover:text-foreground hover:shadow-xs dark:hover:bg-zinc-800/80 dark:hover:text-white"
+          className="no-drag mb-1 shrink-0 rounded-lg p-1.5 text-zinc-600 transition-all hover:bg-zinc-200/80 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white cursor-pointer"
           aria-label="New tab"
           onClick={props.onNewTab}
         >
