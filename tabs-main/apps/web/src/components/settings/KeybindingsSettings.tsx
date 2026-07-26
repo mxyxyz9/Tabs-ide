@@ -129,54 +129,94 @@ function ExpandableHeaderSearch({
   inputRef?: RefObject<HTMLInputElement | null>;
   collapsedAccessory?: ReactNode;
 }) {
-  if (!isOpen) {
-    return (
-      <>
-        {collapsedAccessory}
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => {
+        inputRef?.current?.focus();
+        inputRef?.current?.select();
+      });
+    }
+  }, [isOpen, inputRef]);
+
+  return (
+    <div
+      className={cn(
+        "relative flex h-8 items-center rounded-md border text-xs transition-all duration-300 ease-in-out overflow-hidden shrink-0",
+        isOpen
+          ? "w-64 border-border bg-background shadow-xs ring-1 ring-ring/30"
+          : "w-9 border-border/60 bg-background/60 hover:bg-accent/50 hover:border-border text-muted-foreground hover:text-foreground cursor-pointer justify-center",
+      )}
+      onClick={() => {
+        if (!isOpen) {
+          onOpenChange(true);
+        }
+      }}
+    >
+      {collapsedAccessory && !isOpen ? collapsedAccessory : null}
+
+      {!isOpen ? (
         <Tooltip>
           <TooltipTrigger
             render={
-              <Button
+              <button
                 type="button"
-                size="icon-xs"
-                variant="ghost"
-                className="size-5 rounded-sm p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => onOpenChange(true)}
+                className="flex size-full items-center justify-center text-muted-foreground transition-colors hover:text-foreground outline-none"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenChange(true);
+                }}
                 aria-label="Search keybindings"
               >
-                <SearchIcon className="size-3" />
-              </Button>
+                <SearchIcon className="size-4 shrink-0" />
+              </button>
             }
           />
-          <TooltipPopup side="top">Search keybindings</TooltipPopup>
+          <TooltipPopup side="top">Search keybindings (⌘F)</TooltipPopup>
         </Tooltip>
-      </>
-    );
-  }
-
-  return (
-    <div className="relative">
-      <SearchIcon className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
-      <input
-        ref={inputRef}
-        autoFocus
-        type="text"
-        value={query}
-        onChange={(event) => onChange(event.currentTarget.value)}
-        onBlur={() => {
-          if (query.length === 0) onOpenChange(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            onChange("");
-            onOpenChange(false);
-          }
-        }}
-        placeholder="Search keybindings"
-        aria-label="Search keybindings"
-        className="h-6 w-44 rounded-md border border-input bg-background pl-7 pr-2 text-[11px] text-foreground outline-none placeholder:text-muted-foreground/72 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/24"
-      />
+      ) : (
+        <div className="flex w-full items-center px-2.5">
+          <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(event) => onChange(event.currentTarget.value)}
+            onBlur={() => {
+              if (query.trim().length === 0) {
+                onOpenChange(false);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onChange("");
+                onOpenChange(false);
+              }
+            }}
+            placeholder="Search keybindings..."
+            aria-label="Search keybindings"
+            className="w-full bg-transparent pl-2 pr-1 text-xs text-foreground placeholder:text-muted-foreground/70 outline-none"
+          />
+          {query.length > 0 ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange("");
+                inputRef?.current?.focus();
+              }}
+              className="flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <XIcon className="size-3" />
+            </button>
+          ) : (
+            <Kbd className="h-4 px-1 text-[9px] text-muted-foreground/70 bg-muted/40 border-border/30 shrink-0">
+              Esc
+            </Kbd>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -592,11 +632,13 @@ export function WhenExpressionBuilder({
   variables,
   onChange,
   onValidityChange,
+  className,
 }: {
   value: KeybindingWhenNode | undefined;
   variables: ReadonlyArray<WhenVariableOption>;
   onChange: (value: KeybindingWhenNode | undefined) => void;
   onValidityChange?: (valid: boolean) => void;
+  className?: string;
 }) {
   const expression = whenAstToExpression(value);
   const [expressionDraft, setExpressionDraft] = useState(expression);
@@ -637,10 +679,12 @@ export function WhenExpressionBuilder({
   };
 
   return (
-    <div className="w-full space-y-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
-      <div className="flex items-start justify-between gap-3">
+    <div className={cn("w-full space-y-3", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-sm font-medium text-foreground">When</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            When Expression <span className="font-normal text-muted-foreground/60">(Optional)</span>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -650,7 +694,7 @@ export function WhenExpressionBuilder({
             className="h-7 sm:h-7"
             onClick={addRootCondition}
           >
-            <PlusIcon className="size-3.5" />
+            <PlusIcon className="size-3.5 mr-1" />
             Condition
           </Button>
           <Button
@@ -660,7 +704,7 @@ export function WhenExpressionBuilder({
             className="h-7 sm:h-7"
             onClick={addRootGroup}
           >
-            <PlusIcon className="size-3.5" />
+            <PlusIcon className="size-3.5 mr-1" />
             Group
           </Button>
         </div>
@@ -671,11 +715,11 @@ export function WhenExpressionBuilder({
           <Input
             value={expressionDraft}
             onChange={(event) => updateExpressionDraft(event.currentTarget.value)}
-            placeholder="Always"
+            placeholder="e.g. editorTextFocus && !inQuickOpen"
             aria-invalid={Boolean(parseError)}
             aria-label="When expression"
             className={cn(
-              "h-7 rounded-md font-mono text-[12px] leading-7 sm:h-7 sm:leading-7",
+              "h-8 rounded-md font-mono text-[12px] leading-8 sm:h-8 sm:leading-8",
               unknownIdentifiers.length > 0 && "pr-9",
               parseError && "border-destructive/70 focus-visible:border-destructive",
             )}
@@ -703,23 +747,8 @@ export function WhenExpressionBuilder({
             onRemove={() => updateExpressionValue(undefined)}
           />
         ) : (
-          <div className="rounded-md border border-dashed border-border/80 bg-muted/15 p-3">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="xs" className="h-7 sm:h-7" onClick={addRootCondition}>
-                <PlusIcon className="size-3.5" />
-                Condition
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                className="h-7 sm:h-7"
-                onClick={addRootGroup}
-              >
-                <PlusIcon className="size-3.5" />
-                Group
-              </Button>
-            </div>
+          <div className="rounded-md border border-dashed border-border/60 bg-muted/10 p-3 text-center text-xs text-muted-foreground">
+            Applies in all contexts. Click <span className="font-medium text-foreground">+ Condition</span> or <span className="font-medium text-foreground">+ Group</span> above to restrict when this shortcut is active.
           </div>
         )}
         {parseError ? (
@@ -1172,81 +1201,81 @@ export function KeybindingsSettings({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <SettingsHeaderPortal>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="no-drag"
-                  disabled={!rows.some((r) => r.source === "Custom")}
-                  onClick={async () => {
-                    const confirmed = await confirm(
-                      "Restore default keybindings?\n\nThis will remove all custom shortcuts.",
-                    );
-                    if (confirmed) {
-                      const customRows = rows.filter((r) => r.source === "Custom");
-                      customRows.forEach((row) => {
-                        void Promise.resolve(onRemove(rowKeybindingTarget(row)));
-                      });
-                    }
-                  }}
-                >
-                  <RotateCcwIcon className="size-3.5 mr-1" />
-                  Restore defaults
-                </Button>
-              </SettingsHeaderPortal>
-              <ExpandableHeaderSearch
-                query={query}
-                onChange={setQuery}
-                isOpen={isSearchOpen}
-                onOpenChange={setIsSearchOpen}
-                inputRef={searchInputRef}
-              />
+            <SettingsHeaderPortal>
               <Button
-                type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
-                className="gap-2 px-3"
-                onClick={() => setIsAddDialogOpen(true)}
-                aria-label="Add keybinding"
+                className="no-drag"
+                disabled={!rows.some((r) => r.source === "Custom")}
+                onClick={async () => {
+                  const confirmed = await confirm(
+                    "Restore default keybindings?\n\nThis will remove all custom shortcuts.",
+                  );
+                  if (confirmed) {
+                    const customRows = rows.filter((r) => r.source === "Custom");
+                    customRows.forEach((row) => {
+                      void Promise.resolve(onRemove(rowKeybindingTarget(row)));
+                    });
+                  }
+                }}
               >
-                <PlusIcon className="size-4" />
-                Add keybinding
+                <RotateCcwIcon className="size-3.5 mr-1" />
+                Restore defaults
               </Button>
-              <input
-                type="file"
-                accept=".json"
-                className="hidden"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="gap-2 px-3"
-                onClick={handleImportClick}
-                aria-label="Import keybindings"
-              >
-                <DownloadIcon className="size-4" />
-                Import
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="gap-2 px-3"
-                disabled={!keybindingsConfigPath}
-                onClick={openKeybindingsFile}
-                aria-label="Open keybindings.json"
-              >
-                <FileJsonIcon className="size-4" />
-                Open JSON
-              </Button>
-            </div>
+            </SettingsHeaderPortal>
           </div>
           <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
           <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+          <div className="flex items-center justify-start gap-2 pt-1">
+            <ExpandableHeaderSearch
+              query={query}
+              onChange={setQuery}
+              isOpen={isSearchOpen}
+              onOpenChange={setIsSearchOpen}
+              inputRef={searchInputRef}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2 px-3"
+              onClick={() => setIsAddDialogOpen(true)}
+              aria-label="Add keybinding"
+            >
+              <PlusIcon className="size-4" />
+              Add keybinding
+            </Button>
+            <input
+              type="file"
+              accept=".json"
+              className="hidden"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2 px-3"
+              onClick={handleImportClick}
+              aria-label="Import keybindings"
+            >
+              <DownloadIcon className="size-4" />
+              Import
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2 px-3"
+              disabled={!keybindingsConfigPath}
+              onClick={openKeybindingsFile}
+              aria-label="Open keybindings.json"
+            >
+              <FileJsonIcon className="size-4" />
+              Open JSON
+            </Button>
+          </div>
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">

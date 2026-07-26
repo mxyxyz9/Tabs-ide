@@ -54,23 +54,7 @@ function RootRouteView() {
   const ready = useMinimumDuration(isNativeApiReady && threadsHydrated, 3500);
   const [mounted, setMounted] = useState(true);
   const settings = useSettings();
-  const [splashConfig, setSplashConfig] = useState(() => ({
-    loader: settings.splashLoaderStyle,
-    palette: settings.splashLoaderPalette,
-    theme: settings.splashLoaderTheme,
-  }));
-  const [hasHydratedSplash, setHasHydratedSplash] = useState(false);
 
-  useEffect(() => {
-    if (!hasHydratedSplash) {
-      setHasHydratedSplash(true);
-      setSplashConfig({
-        loader: settings.splashLoaderStyle,
-        palette: settings.splashLoaderPalette,
-        theme: settings.splashLoaderTheme,
-      });
-    }
-  }, [hasHydratedSplash, settings]);
   useEffect(() => {
     if (ready) {
       const timer = setTimeout(() => setMounted(false), 1200);
@@ -90,9 +74,9 @@ function RootRouteView() {
           )}
         >
           <SplashScreen
-            loader={splashConfig.loader}
-            palette={splashConfig.palette}
-            theme={splashConfig.theme}
+            loader={settings.splashLoaderStyle}
+            palette={settings.splashLoaderPalette}
+            theme={settings.splashLoaderTheme}
           />
         </div>
       )}
