@@ -407,22 +407,40 @@ export function ProjectWorkspaceSettingsSection() {
   }, [projectSettings, activeProjectId]);
 
   const customEmbedsDirty = useMemo(
-    () => customEmbedDrafts.some(isCustomEmbedDraftDirty),
-    [customEmbedDrafts],
+    () =>
+      customEmbedDrafts.some(isCustomEmbedDraftDirty) ||
+      customEmbedDrafts.length !== (projectSettings?.customEmbeds?.length ?? 0),
+    [customEmbedDrafts, projectSettings?.customEmbeds],
   );
 
   const serverPresetsDirty = useMemo(
-    () => serverPresetDrafts.some(isServerProcessDraftDirty),
-    [serverPresetDrafts],
+    () =>
+      serverPresetDrafts.some(isServerProcessDraftDirty) ||
+      serverPresetDrafts.length !== (projectSettings?.serverPresets?.length ?? 0),
+    [serverPresetDrafts, projectSettings?.serverPresets],
   );
 
   const serverProcessesDirty = useMemo(
-    () => serverProcessDrafts.some(isServerProcessDraftDirty),
-    [serverProcessDrafts],
+    () =>
+      serverProcessDrafts.some(isServerProcessDraftDirty) ||
+      serverProcessDrafts.length !== (projectSettings?.terminalProcesses?.length ?? 0),
+    [serverProcessDrafts, projectSettings?.terminalProcesses],
   );
   const toolbarPreviewTools = useMemo(() => {
-    return projectSettings?.tools ?? [];
-  }, [projectSettings?.tools]);
+    return (projectSettings?.tools ?? []).filter((tool) => {
+      if (tool.kind === "custom_embed") {
+        return customEmbedDrafts.some(
+          (draft) => createCustomEmbedToolId(draft.id) === tool.id,
+        );
+      }
+      if (tool.kind === "custom_process") {
+        return serverProcessDrafts.some(
+          (draft) => createServerProcessToolId(draft.id) === tool.id,
+        );
+      }
+      return true;
+    });
+  }, [projectSettings?.tools, customEmbedDrafts, serverProcessDrafts]);
 
   const dndSensors = useSensors(
     // Require a small drag distance so taps/clicks on the row still work.
