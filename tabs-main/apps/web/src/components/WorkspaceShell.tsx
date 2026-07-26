@@ -695,9 +695,11 @@ function resolveProjectDefaultBrowserUrl(
   _project: Project,
   settings: ProjectWorkspaceSettings,
 ): string {
-  // Empty default = a blank "new tab" (don't force localhost:3000). The browser
-  // tool renders a start state and waits for the user to enter a URL.
-  return settings.browser.defaultUrl.trim();
+  const custom = settings.browser.defaultUrl.trim();
+  if (custom.length > 0) {
+    return custom;
+  }
+  return "https://www.google.com";
 }
 
 function normalizeBrowserUrl(rawUrl: string): string {
@@ -6072,7 +6074,7 @@ function DesktopBrowserTool(props: {
     createEmptyBrowserSessionState(props.project.id),
   );
   const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
-  const [isChromeExpanded, setIsChromeExpanded] = useState(false);
+  const [isChromeExpanded, setIsChromeExpanded] = useState(true);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
 
