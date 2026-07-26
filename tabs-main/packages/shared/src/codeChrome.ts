@@ -458,7 +458,8 @@ export const DEFAULT_CODE_CHROME_STATE: CodeChromeState = {
 /** Messages sent from the broker (Electron main) → extension. */
 export type CodeControlServerMessage =
   | { type: "runCommand"; commandId: string }
-  | { type: "openFile"; filePath: string };
+  | { type: "openFile"; filePath: string }
+  | { type: "setTheme"; theme: string };
 
 /**
  * Messages sent from the extension → broker (Electron main). Both carry the
@@ -512,6 +513,9 @@ export function parseCodeControlServerMessage(raw: string): CodeControlServerMes
   }
   if (record.type === "openFile" && typeof record.filePath === "string") {
     return { type: "openFile", filePath: record.filePath };
+  }
+  if (record.type === "setTheme" && typeof record.theme === "string") {
+    return { type: "setTheme", theme: record.theme };
   }
   return null;
 }

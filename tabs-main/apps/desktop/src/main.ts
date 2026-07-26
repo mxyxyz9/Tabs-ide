@@ -1973,6 +1973,7 @@ function registerIpcHandlers(): void {
     }
 
     nativeTheme.themeSource = theme;
+    codeControlChannel.setTheme(theme);
   });
 
   ipcMain.removeHandler(SET_ICON_THEME_CHANNEL);

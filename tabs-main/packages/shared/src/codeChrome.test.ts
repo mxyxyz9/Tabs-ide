@@ -57,6 +57,14 @@ describe("parseCodeControlServerMessage", () => {
       commandId: "x",
     });
   });
+  it("parses a valid setTheme", () => {
+    expect(
+      parseCodeControlServerMessage(JSON.stringify({ type: "setTheme", theme: "light" })),
+    ).toEqual({
+      type: "setTheme",
+      theme: "light",
+    });
+  });
   it("rejects malformed JSON and unknown/invalid shapes", () => {
     expect(parseCodeControlServerMessage("not json")).toBeNull();
     expect(parseCodeControlServerMessage(JSON.stringify({ type: "runCommand" }))).toBeNull();

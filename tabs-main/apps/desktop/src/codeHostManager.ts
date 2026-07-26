@@ -1011,15 +1011,17 @@ export function buildSessionUrl(
   url.searchParams.set("tabs_workspaceRoot", session.workspaceRoot);
   url.searchParams.set("tabs_navigationNonce", String(session.lastNavigationNonce));
 
-  if (session.lastFocusedPath) {
-    const focusedFilePath = Path.resolve(Path.join(session.workspaceRoot, session.lastFocusedPath));
-    const fileUri = options?.focusedFileUri ?? focusedFilePath;
-    url.searchParams.set("payload", formatCodeHostPayload([["openFile", fileUri]]));
-    url.searchParams.set("tabs_relativePath", normalizeFilePath(session.lastFocusedPath));
-  } else {
-    url.searchParams.delete("payload");
-    url.searchParams.delete("tabs_relativePath");
-  }
+  // Do NOT embed payload/openFile or tabs_relativePath in the startup URL.
+  // The extension host (and thus the remoteFilesystem WebSocket channel)
+  // connects ~15 seconds AFTER loadURL fires (proven by live [PROOF] trace:
+  // T=A loadURL at ms 1785095157547, T=C ext-host connected at 1785095172232,
+  // gap = 14,685ms). Opening the file via the startup URL races and loses
+  // every time — the workbench resolves the file URI before the FS provider
+  // is ready, resulting in a blank editor pane. Instead we send openFile
+  // over CodeControlChannel once the extension host connects
+  // (see CodeHostManager._onExtensionHostConnected).
+  url.searchParams.delete("payload");
+  url.searchParams.delete("tabs_relativePath");
 
   return url.toString();
 }
@@ -1120,6 +1122,7 @@ async function reserveLoopbackPort(): Promise<number> {
           return;
         }
 
+        console.log(`[PROOF] reserveLoopbackPort selected random port: ${port}`);
         resolve(port);
       });
     });
@@ -1163,7 +1166,24 @@ export class CodeHostManager {
     private readonly getWindow: () => BrowserWindow | null,
     private readonly config: CodeHostConfig,
     private readonly controlChannel?: CodeControlChannel,
-  ) {}
+  ) {
+    // Fix for the race condition between loadURL (T=A) and extension host ready
+    // (T=C): proven gap of ~14.7 s in live traces. Instead of relying on the
+    // startup URL's `payload=openFile` (which always fires before the remote
+    // filesystem WebSocket channel is established), we send the openFile command
+    // the moment the extension host connects over the control channel.
+    this.controlChannel?.onExtensionHostConnected((projectId) => {
+      // 1. Sync the current app theme to the newly connected extension host
+      const currentTheme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+      this.controlChannel?.setTheme(currentTheme);
+
+      // 2. Open any pending file
+      const session = this.sessions.get(projectId);
+      if (!session?.lastFocusedPath) return;
+      const fullFilePath = Path.resolve(Path.join(session.workspaceRoot, session.lastFocusedPath));
+      this.controlChannel?.openFile(projectId, fullFilePath);
+    });
+  }
 
   async getState(): Promise<DesktopCodeHostState> {
     return { ...this.config.state };
@@ -2290,6 +2310,30 @@ export class CodeHostManager {
 
     if (isDirectory(embedExtensionPath, FS)) {
       configuration.extensionDevelopmentPath = [embedExtensionPath];
+    }
+
+    // Ensure user settings file has window.customContextMenu and window.dialogStyle set on initial boot
+    try {
+      const userSettingsDir = Path.join(sessionStateRoot, "User");
+      const userSettingsFile = Path.join(userSettingsDir, "settings.json");
+      if (!FS.existsSync(userSettingsDir)) {
+        FS.mkdirSync(userSettingsDir, { recursive: true });
+      }
+      let existingSettings: Record<string, unknown> = {};
+      if (FS.existsSync(userSettingsFile)) {
+        try {
+          existingSettings = JSON.parse(FS.readFileSync(userSettingsFile, "utf8"));
+        } catch {
+          existingSettings = {};
+        }
+      }
+      if (existingSettings["window.customContextMenu"] !== true || existingSettings["window.dialogStyle"] !== "custom") {
+        existingSettings["window.customContextMenu"] = true;
+        existingSettings["window.dialogStyle"] = "custom";
+        FS.writeFileSync(userSettingsFile, JSON.stringify(existingSettings, null, 2), "utf8");
+      }
+    } catch {
+      /* best-effort */
     }
 
     return configuration;

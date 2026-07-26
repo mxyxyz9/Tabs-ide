@@ -57,6 +57,7 @@ export class CodeControlChannel {
   private token = "";
   private port = 0;
   private chromeStateListener: ((projectId: string, state: CodeChromeState) => void) | null = null;
+  private extensionHostConnectedListener: ((projectId: string) => void) | null = null;
   private urlFilePath: string | null = null;
 
   /**
@@ -118,6 +119,9 @@ export class CodeControlChannel {
           }
           authed = true;
           this.registerForProject(message.projectId, socket);
+          // Notify manager: the extension host + remoteFilesystem client are now running.
+          // This is the correct moment to send openFile — not at loadURL time.
+          this.extensionHostConnectedListener?.(message.projectId);
           continue;
         }
         if (message.type === "chromeState") {
@@ -184,6 +188,11 @@ export class CodeControlChannel {
     this.chromeStateListener = listener;
   }
 
+  /** Register a callback fired the moment an extension host connects (hello handshake). */
+  onExtensionHostConnected(listener: (projectId: string) => void): void {
+    this.extensionHostConnectedListener = listener;
+  }
+
   /**
    * Forward an allowlisted command to a specific project's extension. Returns
    * true if that project had a live connection and the (allowed) command was
@@ -214,6 +223,16 @@ export class CodeControlChannel {
     const message: CodeControlServerMessage = { type: "openFile", filePath };
     socket.write(`${JSON.stringify(message)}\n`);
     return true;
+  }
+
+  setTheme(theme: string): void {
+    const message: CodeControlServerMessage = { type: "setTheme", theme };
+    const payload = `${JSON.stringify(message)}\n`;
+    for (const socket of this.socketsByProject.values()) {
+      if (!socket.destroyed && socket.writable) {
+        socket.write(payload);
+      }
+    }
   }
 
   url(): string {

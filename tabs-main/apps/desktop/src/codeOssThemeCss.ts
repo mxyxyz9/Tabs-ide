@@ -97,7 +97,6 @@ export const CODE_OSS_THEME_CSS =
   --vscode-tab-hoverBackground: var(--tabs-ov-04);
   --vscode-tab-activeForeground: var(--tabs-text);
   --vscode-tab-inactiveForeground: var(--tabs-text-muted);
-  --vscode-tab-activeBorderTop: var(--tabs-accent);
   --vscode-breadcrumb-background: transparent;
   --vscode-menu-background: var(--tabs-bg-popover);
   --vscode-menu-foreground: var(--tabs-text);
@@ -183,6 +182,10 @@ export const CODE_OSS_THEME_CSS =
   --tabs-ov-30: rgba(0,0,0,0.32);
   --tabs-text: #262626;
   --tabs-text-muted: #5f5f5f;
+  --vscode-textLink-foreground: #2563eb;
+  --vscode-textLink-activeForeground: #1d4ed8;
+  --vscode-pickerGroup-foreground: #2563eb;
+  --vscode-activityBar-inactiveForeground: #8a8a8a;
 }
 /* Editor glows/selections that hardcode blue alpha read fine on white, but the
    cursor glow + line-highlight want the light overlay; those already use tokens.
@@ -344,6 +347,7 @@ export const CODE_OSS_THEME_CSS =
   display: flex !important;
   align-items: center !important;
   box-sizing: border-box !important;
+  overflow: hidden !important;
   --vscode-tab-activeBorderTop: transparent !important;
   --vscode-tab-activeBorder: transparent !important;
   transition:
@@ -470,8 +474,47 @@ export const CODE_OSS_THEME_CSS =
   line-height: 1 !important;
   margin: 0 !important;
   padding: 0 !important;
-  vertical-align: top !important;
-  text-align: center !important;
+}
+
+/* Tab SCM modification indicators ("M", "U", "D") and suffix alignment */
+.monaco-workbench .tabs-container > .tab .monaco-icon-label-container > .monaco-icon-suffix-container,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label-container > .monaco-icon-suffix-container > .label-suffix,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label-container > .monaco-icon-description-container > .label-description,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label::after,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label-container::after {
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 100% !important;
+  line-height: 1 !important;
+  margin: 0 0 0 5px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  vertical-align: middle !important;
+}
+
+/* Tab count badge / decoration positioning fix (Issue D) */
+.monaco-workbench .tabs-container > .tab .monaco-count-badge,
+.monaco-workbench .tabs-container > .tab .badge,
+.monaco-workbench .tabs-container > .tab .tab-badge {
+  position: static !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  align-self: center !important;
+  margin-left: 6px !important;
+  margin-right: 2px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  line-height: 1 !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 1px 5px !important;
+  border-radius: 999px !important;
+  background: var(--vscode-badge-background) !important;
+  color: var(--vscode-badge-foreground) !important;
+  border: none !important;
+  box-sizing: border-box !important;
 }
 
 /* ============================================================ SIDEBAR === */
@@ -772,8 +815,8 @@ export const CODE_OSS_THEME_CSS =
   --vscode-keybindingLabel-foreground: var(--tabs-text);
   --vscode-keybindingLabel-border: var(--tabs-hairline);
   --vscode-keybindingLabel-bottomBorder: var(--tabs-hairline);
-  --vscode-badge-background: var(--tabs-accent-strong);
-  --vscode-badge-foreground: #ffffff;
+  --vscode-badge-background: var(--tabs-ov-08);
+  --vscode-badge-foreground: var(--tabs-text);
   --vscode-extensionButton-prominentBackground: var(--tabs-accent-strong);
   --vscode-extensionButton-prominentForeground: #ffffff;
   --vscode-extensionButton-background: var(--tabs-ov-06);
@@ -887,8 +930,51 @@ export const CODE_OSS_THEME_CSS =
   border: 1px solid var(--tabs-hairline-strong) !important;
   background: var(--tabs-input-bg) !important;
 }
+.monaco-workbench .settings-editor .settings-tabs-widget .monaco-action-bar .action-item {
+  margin-right: 4px !important;
+}
 .monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label {
-  border-radius: 7px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--tabs-hairline) !important;
+  background: var(--tabs-ov-03) !important;
+  color: var(--tabs-text-muted) !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  transition: all 120ms ease !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label:hover {
+  background: var(--tabs-ov-06) !important;
+  color: var(--tabs-text) !important;
+  border-color: var(--tabs-hairline-strong) !important;
+}
+.monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label.checked {
+  background: var(--tabs-bg-elevated) !important;
+  color: var(--tabs-text) !important;
+  border-color: var(--tabs-hairline-strong) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+}
+.monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label:focus,
+.monaco-workbench .settings-editor .settings-tabs-widget .action-item:focus {
+  outline: none !important;
+  border-color: var(--tabs-accent) !important;
+}
+
+/* General count badges (file tree badges, search count badges, open editor count badges) */
+.monaco-workbench .monaco-count-badge {
+  background: var(--vscode-badge-background) !important;
+  color: var(--vscode-badge-foreground) !important;
+  border-radius: 999px !important;
+  border: none !important;
+  font-weight: 500 !important;
+  padding: 2px 6px !important;
+}
+.monaco-workbench .monaco-list-row.selected .monaco-count-badge,
+.monaco-workbench .monaco-list-row.focused .monaco-count-badge {
+  background: var(--tabs-accent-soft) !important;
+  color: var(--tabs-text) !important;
 }
 /* Table-of-contents rail (left): tighter, quieter, accent selection. */
 .monaco-workbench .settings-editor .settings-toc-container .monaco-list-row {
@@ -899,6 +985,24 @@ export const CODE_OSS_THEME_CSS =
   background: var(--tabs-accent-soft) !important;
   color: var(--tabs-text) !important;
   box-shadow: inset 2px 0 0 0 var(--tabs-accent) !important;
+}
+/* Settings sidebar table of contents twistie / chevron icon (Issue A) */
+.monaco-workbench .settings-editor .settings-toc-container .monaco-tl-twistie,
+.monaco-workbench .settings-editor .settings-toc-container .monaco-tl-twistie.codicon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 0.75 !important;
+  color: var(--tabs-text) !important;
+  font-size: 12px !important;
+  width: 16px !important;
+  height: 100% !important;
+  visibility: visible !important;
+}
+.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row:hover .monaco-tl-twistie,
+.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row.selected .monaco-tl-twistie {
+  opacity: 1 !important;
+  color: var(--tabs-text) !important;
 }
 /* Tame the giant category header (level-1 is 26px stock) into a clean heading. */
 .monaco-workbench .settings-editor .settings-group-title-label,

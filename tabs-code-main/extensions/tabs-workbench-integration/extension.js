@@ -61,6 +61,8 @@ const EMBED_CHROME_DEFAULTS = {
   "editor.renderLineHighlight": "gutter",
   "editor.overviewRulerBorder": false,
   "editor.hideCursorInOverviewRuler": true,
+  "window.dialogStyle": "custom",
+  "window.customContextMenu": true,
 };
 
 // Allowlist of workbench commands the native Tabs chrome (activity rail /
@@ -723,6 +725,19 @@ function startCodeControlChannel(context) {
               await vscode.commands.executeCommand("vscode.open", fileUri);
             } catch (err) {
               log(`openFile error: ${err && err.message ? err.message : err}`);
+            }
+          })();
+        } else if (parsed && parsed.type === "setTheme" && typeof parsed.theme === "string") {
+          log(`setTheme ${parsed.theme}`);
+          void (async () => {
+            try {
+              const targetTheme =
+                parsed.theme === "light" ? "Default Light Modern" : "Default Dark Modern";
+              await vscode.workspace
+                .getConfiguration()
+                .update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
+            } catch (err) {
+              log(`setTheme error: ${err && err.message ? err.message : err}`);
             }
           })();
         }
