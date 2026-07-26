@@ -5976,17 +5976,25 @@ function DesktopBrowserChrome(props: {
                   Go
                 </Button>
               </div>
-              <Button
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() =>
-                  void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
-                }
-              >
-                <ExternalLinkIcon className="size-3.5" />
-                External
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      className="hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
+                      onClick={() =>
+                        void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+                      }
+                    >
+                      <ExternalLinkIcon className="size-3.5" />
+                      External
+                    </Button>
+                  }
+                />
+                <TooltipPopup side="bottom">Open page in default system browser</TooltipPopup>
+              </Tooltip>
               <div className="flex items-center gap-1.5">
                 <Button
                   type="button"
@@ -6008,15 +6016,23 @@ function DesktopBrowserChrome(props: {
                   setBrowserViewport={props.setBrowserViewport}
                   onOpenChange={props.setViewportSelectorOpen}
                 />
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  variant="outline"
-                  onClick={() => props.setIsChromeExpanded(false)}
-                  aria-label={`Collapse ${props.title} controls`}
-                >
-                  <PanelTopCloseIcon className="size-3.5" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="outline"
+                        className="hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
+                        onClick={() => props.setIsChromeExpanded(false)}
+                        aria-label={`Collapse ${props.title} controls`}
+                      >
+                        <PanelTopCloseIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="bottom">Collapse browser controls</TooltipPopup>
+                </Tooltip>
               </div>
             </div>
           </CardContent>
@@ -6025,28 +6041,46 @@ function DesktopBrowserChrome(props: {
         createPortal(
           <div className="flex items-center">
             <div className="flex items-center gap-1 pr-2">
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="rounded-md text-muted-foreground"
-                onClick={() => props.setIsChromeExpanded(true)}
-                aria-label={`Show ${props.title} controls`}
-              >
-                <PanelTopOpenIcon className="size-4" />
-              </Button>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="rounded-md text-muted-foreground"
-                onClick={() =>
-                  void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
-                }
-                aria-label={`Open ${props.title} externally`}
-              >
-                <ExternalLinkIcon className="size-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      className="rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground hover:shadow-xs transition-all duration-150 active:scale-95"
+                      onClick={() => props.setIsChromeExpanded(true)}
+                      aria-label={`Show ${props.title} controls`}
+                    >
+                      <PanelTopOpenIcon className="size-4" />
+                    </Button>
+                  }
+                />
+                <TooltipPopup side="left" align="center" sideOffset={6}>
+                  Show browser controls
+                </TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      className="rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground hover:shadow-xs transition-all duration-150 active:scale-95"
+                      onClick={() =>
+                        void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+                      }
+                      aria-label={`Open ${props.title} externally`}
+                    >
+                      <ExternalLinkIcon className="size-4" />
+                    </Button>
+                  }
+                />
+                <TooltipPopup side="left" align="center" sideOffset={6}>
+                  Open in external browser
+                </TooltipPopup>
+              </Tooltip>
             </div>
             <div className="h-4 w-px bg-border/60" />
           </div>,
@@ -6084,6 +6118,7 @@ function DesktopBrowserTool(props: {
       customWidth: null,
       customHeight: null,
       landscape: false,
+      chromeExpanded: false,
     } as const;
   });
   const setBrowserCurrentUrl = workspaceShellActions.setBrowserCurrentUrl;
@@ -6096,7 +6131,13 @@ function DesktopBrowserTool(props: {
     createEmptyBrowserSessionState(props.project.id),
   );
   const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
-  const [isChromeExpanded, setIsChromeExpanded] = useState(true);
+  const isChromeExpanded = browserState.chromeExpanded ?? false;
+  const setIsChromeExpanded = useCallback(
+    (expanded: boolean) => {
+      workspaceShellActions.setBrowserChromeExpanded(props.project.id, expanded);
+    },
+    [props.project.id],
+  );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
 
@@ -6916,6 +6957,7 @@ function DesktopCustomEmbedTool(props: {
       customWidth: null,
       customHeight: null,
       landscape: false,
+      chromeExpanded: false,
     } as const;
   });
   const setBrowserViewport = workspaceShellActions.setBrowserViewport;
@@ -6926,7 +6968,13 @@ function DesktopCustomEmbedTool(props: {
     createEmptyBrowserSessionState(props.project.id, props.sessionId),
   );
   const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
-  const [isChromeExpanded, setIsChromeExpanded] = useState(false);
+  const isChromeExpanded = browserState.chromeExpanded ?? false;
+  const setIsChromeExpanded = useCallback(
+    (expanded: boolean) => {
+      workspaceShellActions.setBrowserChromeExpanded(props.project.id, expanded);
+    },
+    [props.project.id],
+  );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
   const sessionKey = `${props.project.id}:${props.sessionId}`;

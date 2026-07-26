@@ -46,6 +46,7 @@ export interface ProjectBrowserToolState {
   customWidth: number | null;
   customHeight: number | null;
   landscape: boolean;
+  chromeExpanded?: boolean;
 }
 
 export interface ProjectCodeToolState {
@@ -93,6 +94,7 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
       | ((current: ProjectWorkspaceSettingsType) => ProjectWorkspaceSettingsType),
   ) => void;
   setBrowserCurrentUrl: (projectId: ProjectId, url: string) => void;
+  setBrowserChromeExpanded: (projectId: ProjectId, expanded: boolean) => void;
   setBrowserSessionUrl: (projectId: ProjectId, sessionId: string, url: string) => void;
   setBrowserViewport: (
     projectId: ProjectId,
@@ -560,6 +562,28 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
               [projectId]: {
                 ...currentState,
                 currentUrl: url,
+              },
+            },
+          };
+        }),
+      setBrowserChromeExpanded: (projectId, expanded) =>
+        set((state) => {
+          const currentState =
+            state.browserStateByProjectId[projectId] ??
+            defaultBrowserToolState(
+              state.projectSettingsByProjectId[projectId] ??
+                createDefaultProjectWorkspaceSettings(),
+            );
+          if (currentState.chromeExpanded === expanded) {
+            return state;
+          }
+          return {
+            ...state,
+            browserStateByProjectId: {
+              ...state.browserStateByProjectId,
+              [projectId]: {
+                ...currentState,
+                chromeExpanded: expanded,
               },
             },
           };
