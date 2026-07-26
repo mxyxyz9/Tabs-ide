@@ -45,14 +45,14 @@ describe("Dynamic Model Discovery & Effect/Schema Safety Tests", () => {
 
   it("infers capabilities for unknown slugs using family patterns", () => {
     const opusCaps = inferModelCapabilitiesFromSlug("custom-claude-opus-next");
-    expect(opusCaps.optionDescriptors.some((d) => d.id === "effort")).toBe(true);
+    expect(opusCaps.optionDescriptors?.some((d) => d.id === "effort")).toBe(true);
 
     const haikuCaps = inferModelCapabilitiesFromSlug("custom-claude-haiku-lightning");
-    expect(haikuCaps.optionDescriptors.some((d) => d.id === "fastMode")).toBe(true);
+    expect(haikuCaps.optionDescriptors?.some((d) => d.id === "fastMode")).toBe(true);
 
     const unknownCaps = inferModelCapabilitiesFromSlug("completely-unrecognized-model-v1");
-    expect(unknownCaps.optionDescriptors.length).toBe(1);
-    expect(unknownCaps.optionDescriptors[0]?.id).toBe("contextWindow");
+    expect(unknownCaps.optionDescriptors?.length).toBe(1);
+    expect(unknownCaps.optionDescriptors?.[0]?.id).toBe("contextWindow");
   });
 
   it("preserves prior good model state when receiving a malformed payload mid-session", () => {

@@ -453,16 +453,18 @@ export const ProviderRegistryLive = Layer.effect(
         sources,
         (source) =>
           refreshOneSource(source).pipe(
-            Effect.tap((provider) => {
-              const remoteModels =
-                remoteCatalog.modelsByProvider[provider.driver] ||
-                remoteCatalog.modelsByProvider[provider.instanceId];
-              if (remoteModels && remoteModels.length > 0) {
-                const mergedModels = mergeProviderModels(provider.models, remoteModels);
-                return syncProvider({ ...provider, models: mergedModels });
-              }
-              return Effect.void;
-            }),
+            Effect.tap((providers) =>
+              Effect.forEach(providers, (provider) => {
+                const remoteModels =
+                  remoteCatalog.modelsByProvider[provider.driver] ||
+                  remoteCatalog.modelsByProvider[provider.instanceId];
+                if (remoteModels && remoteModels.length > 0) {
+                  const mergedModels = mergeProviderModels(provider.models, remoteModels);
+                  return syncProvider({ ...provider, models: mergedModels });
+                }
+                return Effect.void;
+              }),
+            ),
           ),
         {
           concurrency: "unbounded",

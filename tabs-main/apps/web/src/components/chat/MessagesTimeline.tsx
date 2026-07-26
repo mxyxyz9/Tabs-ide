@@ -458,6 +458,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                       row.message.streaming
                         ? formatElapsed(row.durationStart, nowIso)
                         : formatElapsed(row.durationStart, row.message.completedAt),
+                      timestampFormat,
                     )}
                   </p>
                 </div>

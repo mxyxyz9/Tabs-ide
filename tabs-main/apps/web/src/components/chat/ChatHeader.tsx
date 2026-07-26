@@ -87,7 +87,6 @@ export const ChatHeader = memo(function ChatHeader({
                 pressed={terminalOpen}
                 onPressedChange={onToggleTerminal}
                 aria-label="Toggle terminal drawer"
-                variant="ghost"
                 size="xs"
                 disabled={!terminalAvailable}
               >
@@ -111,7 +110,6 @@ export const ChatHeader = memo(function ChatHeader({
                 pressed={diffOpen}
                 onPressedChange={onToggleDiff}
                 aria-label="Toggle diff panel"
-                variant="ghost"
                 size="xs"
                 disabled={!isGitRepo}
               >
