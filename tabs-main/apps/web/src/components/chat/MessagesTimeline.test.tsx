@@ -40,8 +40,10 @@ beforeAll(() => {
     },
   });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-    callback(0);
-    return 0;
+    return setTimeout(() => callback(Date.now()), 16) as unknown as number;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+    clearTimeout(id);
   });
 });
 
