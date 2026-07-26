@@ -51,6 +51,18 @@ export function inferModelCapabilitiesFromSlug(
     lower.includes("fable")
   ) {
     return {
+      reasoningEffortLevels: [
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium" },
+        { value: "high", label: "High", isDefault: true },
+        { value: "xhigh", label: "Extra High" },
+        { value: "max", label: "Max" },
+        { value: "ultracode", label: "Ultracode" },
+        { value: "ultrathink", label: "Ultrathink" },
+      ],
+      supportsFastMode: true,
+      supportsThinkingToggle: false,
+      promptInjectedEffortLevels: ["ultrathink"],
       optionDescriptors: [
         {
           id: "effort",
@@ -88,6 +100,10 @@ export function inferModelCapabilitiesFromSlug(
   // Pattern B: Fast lightweight models (Haiku, Mini, Flash)
   if (lower.includes("haiku") || lower.includes("mini") || lower.includes("flash")) {
     return {
+      reasoningEffortLevels: [],
+      supportsFastMode: true,
+      supportsThinkingToggle: false,
+      promptInjectedEffortLevels: [],
       optionDescriptors: [
         {
           id: "fastMode",
@@ -100,6 +116,10 @@ export function inferModelCapabilitiesFromSlug(
 
   // Pattern C: Conservative generic defaults for unrecognised model families
   return {
+    reasoningEffortLevels: [],
+    supportsFastMode: false,
+    supportsThinkingToggle: false,
+    promptInjectedEffortLevels: [],
     optionDescriptors: [
       {
         id: "contextWindow",

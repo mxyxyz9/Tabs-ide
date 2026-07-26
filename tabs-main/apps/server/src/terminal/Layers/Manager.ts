@@ -353,13 +353,8 @@ function capHistory(history: string, maxLines: number): string {
   return hasTrailingNewline ? `${capped}\n` : capped;
 }
 
-function shouldSkipHistory(threadId: string, terminalId: string): boolean {
-  return (
-    threadId.startsWith("server:") ||
-    threadId.startsWith("preset:") ||
-    terminalId.startsWith("server:") ||
-    terminalId.startsWith("preset:")
-  );
+function shouldSkipHistory(_threadId: string, _terminalId: string): boolean {
+  return false;
 }
 
 function isCsiFinalByte(codePoint: number): boolean {
@@ -697,9 +692,6 @@ export class TerminalManagerRuntime extends EventEmitter<TerminalManagerEvents> 
         await this.persistHistory(existing.threadId, existing.terminalId, existing.history);
       } else if (existing.status === "exited" || existing.status === "error") {
         existing.runtimeEnv = nextRuntimeEnv;
-        existing.history = "";
-        existing.pendingHistoryControlSequence = "";
-        await this.persistHistory(existing.threadId, existing.terminalId, existing.history);
       } else if (currentRuntimeEnv !== nextRuntimeEnv) {
         existing.runtimeEnv = nextRuntimeEnv;
       }

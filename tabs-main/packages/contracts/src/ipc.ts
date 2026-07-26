@@ -1512,4 +1512,9 @@ export interface DesktopBrowserSessionState {
   canGoForward: boolean;
   devToolsOpen: boolean;
   lastError: string | null;
+  /** Set when did-fail-load fires with ERR_CONNECTION_REFUSED (-102).
+   * Unlike lastError, this is treated as a transient startup condition and
+   * does NOT switch the browser UI into an offline/error state — the overlay
+   * instead shows "Starting..." and retries automatically. */
+  transientError: string | null;
 }

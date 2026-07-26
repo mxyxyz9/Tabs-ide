@@ -478,6 +478,7 @@ function createEmptyBrowserSessionState(
     canGoForward: false,
     devToolsOpen: false,
     lastError: null,
+    transientError: null,
   };
 }
 
@@ -6043,6 +6044,8 @@ function DesktopBrowserChrome(props: {
 function DesktopBrowserTool(props: {
   project: Project;
   projectSettings: ProjectWorkspaceSettings;
+  runningProcessIds?: ReadonlyArray<string> | undefined;
+  onRunProcess?: ((processId: string) => void) | undefined;
 }) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
@@ -6081,6 +6084,82 @@ function DesktopBrowserTool(props: {
     browserState.currentUrl ||
       resolveProjectDefaultBrowserUrl(props.project, props.projectSettings),
   );
+
+  // Find a preset that matches the current URL.
+  const allServerPresets = props.projectSettings.serverPresets ?? [];
+  const runningProcessIds = props.runningProcessIds ?? [];
+  const matchingIdlePreset = findMatchingIdleServerPreset(
+    normalizedUrl,
+    allServerPresets,
+    runningProcessIds,
+  );
+  // A "matching running preset" is a preset whose previewUrl matches the current
+  // URL AND whose terminal is actively running (i.e. it's in runningProcessIds).
+  const matchingRunningPreset = (() => {
+    if (!normalizedUrl || normalizedUrl.length === 0 || allServerPresets.length === 0) return null;
+    const runningSet = new Set(runningProcessIds);
+    const targetNorm = normalizeBrowserUrl(normalizedUrl).toLowerCase();
+    for (const preset of allServerPresets) {
+      if (!preset.previewUrl || preset.previewUrl.trim().length === 0) continue;
+      const presetNorm = normalizeBrowserUrl(preset.previewUrl).toLowerCase();
+      if (presetNorm === targetNorm || isMatchingHostPort(targetNorm, presetNorm)) {
+        if (runningSet.has(preset.id)) {
+          return preset;
+        }
+      }
+    }
+    return null;
+  })();
+
+  // Transient startup: the preset IS running but Chromium got ERR_CONNECTION_REFUSED
+  // because the dev server hasn't finished binding. Show "Starting..." and retry.
+  const isTransientStartup =
+    Boolean(matchingRunningPreset) && Boolean(sessionState.transientError);
+
+  // Definitive offline: there's a matching preset but it's NOT running at all,
+  // OR the page failed with a non-transient error.
+  const isLocalOffline =
+    !isTransientStartup &&
+    (Boolean(matchingIdlePreset) ||
+      (Boolean(sessionState.lastError) && isLocalOrDevServerUrl(normalizedUrl)));
+
+  // ── Auto-retry while in transient startup ──────────────────────────────────
+  // When the dev server eventually starts, it emits terminal output. We listen
+  // for that and trigger a throttled reload so the browser connects as soon as
+  // the port is ready, without the user ever clicking anything.
+  const lastRetryAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (!bridge || !isTransientStartup || !matchingRunningPreset) {
+      return;
+    }
+    const api = readNativeApi();
+    if (!api) return;
+    const serverThreadId = `server:${props.project.id}`;
+    const targetTerminalId = matchingRunningPreset.id;
+
+    const unsubscribe = api.terminal.onEvent((event) => {
+      // Only react to output from the matching server preset terminal.
+      if (event.threadId !== serverThreadId || event.terminalId !== targetTerminalId) {
+        return;
+      }
+      if (event.type !== "output" && event.type !== "activity") {
+        return;
+      }
+      // Throttle: at most one retry per 2 seconds.
+      const now = Date.now();
+      if (now - lastRetryAtRef.current < 2000) {
+        return;
+      }
+      lastRetryAtRef.current = now;
+      void bridge
+        .reloadBrowserSession({ projectId: props.project.id })
+        .catch(() => undefined);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [bridge, isTransientStartup, matchingRunningPreset, props.project.id]);
 
   useEffect(() => {
     if (!bridge) {
@@ -6243,7 +6322,7 @@ function DesktopBrowserTool(props: {
 
   useEffect(() => {
     if (!bridge || !hostState.available) return;
-    if (viewportSelectorOpen) {
+    if (viewportSelectorOpen || isLocalOffline || isTransientStartup) {
       void bridge.hideBrowserSession().catch(() => undefined);
     } else {
       void bridge
@@ -6252,7 +6331,7 @@ function DesktopBrowserTool(props: {
         })
         .catch(() => undefined);
     }
-  }, [bridge, hostState.available, viewportSelectorOpen, props.project.id]);
+  }, [bridge, hostState.available, viewportSelectorOpen, isLocalOffline, props.project.id]);
 
   useEffect(() => {
     if (!bridge || !hostState.available) {
@@ -6357,6 +6436,50 @@ function DesktopBrowserTool(props: {
       toolbarTarget={toolbarTarget}
     >
       {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
+      {isTransientStartup && matchingRunningPreset ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-zinc-950/80 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-zinc-800/80 bg-zinc-900/90 shadow-2xl p-5 space-y-5">
+            <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3.5">
+              <div className="flex items-center gap-2.5">
+                <ServerIcon className="size-4 text-zinc-400 shrink-0" />
+                <div>
+                  <h2 className="text-xs font-semibold text-zinc-100 tracking-tight">
+                    Starting {matchingRunningPreset.label}...
+                  </h2>
+                  <p className="text-[11px] text-zinc-400 font-mono">
+                    {normalizedUrl}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-800/60 bg-blue-900/30 px-2.5 py-1 text-[10px] font-medium text-blue-300">
+                <LoaderIcon className="size-3 animate-spin" />
+                Starting
+              </span>
+            </div>
+            <p className="text-xs text-zinc-400">
+              The dev server is starting up. The browser will load automatically once the server is ready.
+            </p>
+            <div className="flex items-center justify-between pt-1">
+              <button
+                type="button"
+                onClick={() => workspaceShellActions.setActiveTool(props.project.id, "server")}
+                className="inline-flex h-8 items-center justify-center gap-2 rounded-lg bg-zinc-800 border border-zinc-700/80 px-3.5 text-xs font-medium text-zinc-100 hover:bg-zinc-700 transition-colors cursor-pointer"
+              >
+                <TerminalSquareIcon className="size-3.5" />
+                Open Server Tab
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : isLocalOffline ? (
+        <UniversalDevServerOfflineNotice
+          preset={matchingIdlePreset}
+          allPresets={props.projectSettings.serverPresets ?? []}
+          url={normalizedUrl}
+          onRunProcess={props.onRunProcess}
+          onOpenServerTab={() => workspaceShellActions.setActiveTool(props.project.id, "server")}
+        />
+      ) : null}
       <div className="flex h-full min-h-0 items-center justify-center overflow-hidden">
         <div
           className="relative overflow-hidden rounded-xl border border-border/70 bg-background shadow-lg"
@@ -6415,6 +6538,8 @@ function DesktopBrowserTool(props: {
 function EmbeddedBrowserTool(props: {
   project: Project;
   projectSettings: ProjectWorkspaceSettings;
+  runningProcessIds?: ReadonlyArray<string> | undefined;
+  onRunProcess?: ((processId: string) => void) | undefined;
 }) {
   const api = readNativeApi();
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
@@ -6446,6 +6571,16 @@ function EmbeddedBrowserTool(props: {
     browserState.currentUrl ||
       resolveProjectDefaultBrowserUrl(props.project, props.projectSettings),
   );
+
+  const matchingIdlePreset = findMatchingIdleServerPreset(
+    normalizedUrl,
+    props.projectSettings.serverPresets ?? [],
+    props.runningProcessIds ?? [],
+  );
+
+  const isLocalOffline =
+    Boolean(matchingIdlePreset) ||
+    (Boolean(embedBlocked) && isLocalOrDevServerUrl(normalizedUrl));
 
   useEffect(() => {
     setEmbedBlocked(false);
@@ -6539,7 +6674,15 @@ function EmbeddedBrowserTool(props: {
 
       <div className="relative z-0 min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/70 bg-card p-1.5">
         {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
-        {embedBlocked ? (
+        {isLocalOffline ? (
+          <UniversalDevServerOfflineNotice
+            preset={matchingIdlePreset}
+            allPresets={props.projectSettings.serverPresets ?? []}
+            url={normalizedUrl}
+            onRunProcess={props.onRunProcess}
+            onOpenServerTab={() => workspaceShellActions.setActiveTool(props.project.id, "server")}
+          />
+        ) : embedBlocked ? (
           <div className="flex h-full min-h-[24rem] items-center justify-center">
             <Card className="max-w-lg">
               <CardHeader>
@@ -6593,12 +6736,138 @@ function EmbeddedBrowserTool(props: {
   );
 }
 
-function BrowserTool(props: { project: Project; projectSettings: ProjectWorkspaceSettings }) {
+function isMatchingHostPort(urlA: string, urlB: string): boolean {
+  try {
+    const a = new URL(urlA);
+    const b = new URL(urlB);
+    return a.protocol === b.protocol && a.host === b.host;
+  } catch {
+    return false;
+  }
+}
+
+function isLocalOrDevServerUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("localhost") ||
+    lower.includes("127.0.0.1") ||
+    lower.includes("0.0.0.0") ||
+    /^https?:\/\/[^/]+:[0-9]+/i.test(lower)
+  );
+}
+
+function findMatchingIdleServerPreset(
+  normalizedUrl: string,
+  serverPresets: ReadonlyArray<ProjectWorkspaceSettings["serverPresets"][number]>,
+  runningProcessIds: ReadonlyArray<string> = [],
+) {
+  if (!normalizedUrl || normalizedUrl.length === 0 || !serverPresets || serverPresets.length === 0) {
+    return null;
+  }
+  const runningSet = new Set(runningProcessIds);
+  const targetNorm = normalizeBrowserUrl(normalizedUrl).toLowerCase();
+
+  for (const preset of serverPresets) {
+    if (!preset.previewUrl || preset.previewUrl.trim().length === 0) continue;
+    const presetNorm = normalizeBrowserUrl(preset.previewUrl).toLowerCase();
+    if (presetNorm === targetNorm || isMatchingHostPort(targetNorm, presetNorm)) {
+      if (!runningSet.has(preset.id)) {
+        return preset;
+      }
+    }
+  }
+  return null;
+}
+
+function UniversalDevServerOfflineNotice(props: {
+  preset: ProjectWorkspaceSettings["serverPresets"][number] | null;
+  allPresets: ReadonlyArray<ProjectWorkspaceSettings["serverPresets"][number]>;
+  url: string;
+  onRunProcess?: ((processId: string) => void) | undefined;
+  onOpenServerTab?: (() => void) | undefined;
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-zinc-950/80 backdrop-blur-xl animate-in fade-in duration-200">
+      <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-zinc-800/80 bg-zinc-900/90 shadow-2xl p-5 space-y-5">
+        {/* Header section with clean unboxed icon and subtle monotone pill */}
+        <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <ServerIcon className="size-4 text-zinc-400 shrink-0" />
+            <div>
+              <h2 className="text-xs font-semibold text-zinc-100 tracking-tight">
+                Server Offline
+              </h2>
+              <p className="text-[11px] text-zinc-400 font-mono">
+                {props.url}
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-800/50 px-2.5 py-1 text-[10px] font-medium text-zinc-400">
+            <span className="size-1.5 rounded-full bg-zinc-500" />
+            Not responding
+          </span>
+        </div>
+
+        <p className="text-xs text-zinc-400 leading-relaxed">
+          The local development server is not running. Switch to the Server tab to start server presets and view live terminal logs.
+        </p>
+
+        {/* Bottom Actions */}
+        <div className="flex items-center justify-between border-t border-zinc-800/60 pt-3.5">
+          {props.onOpenServerTab ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2 border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-700 hover:text-white cursor-pointer font-medium"
+              onClick={props.onOpenServerTab}
+            >
+              <TerminalSquareIcon className="size-4" />
+              Open Server Tab
+            </Button>
+          ) : <div />}
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="gap-1.5 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200 cursor-pointer"
+            onClick={() => window.location.reload()}
+          >
+            <RefreshCwIcon className="size-3.5" />
+            Reload Page
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrowserTool(props: {
+  project: Project;
+  projectSettings: ProjectWorkspaceSettings;
+  runningProcessIds?: ReadonlyArray<string> | undefined;
+  onRunProcess?: ((processId: string) => void) | undefined;
+}) {
   if (window.desktopBridge) {
-    return <DesktopBrowserTool project={props.project} projectSettings={props.projectSettings} />;
+    return (
+      <DesktopBrowserTool
+        project={props.project}
+        projectSettings={props.projectSettings}
+        runningProcessIds={props.runningProcessIds}
+        onRunProcess={props.onRunProcess}
+      />
+    );
   }
 
-  return <EmbeddedBrowserTool project={props.project} projectSettings={props.projectSettings} />;
+  return (
+    <EmbeddedBrowserTool
+      project={props.project}
+      projectSettings={props.projectSettings}
+      runningProcessIds={props.runningProcessIds}
+      onRunProcess={props.onRunProcess}
+    />
+  );
 }
 
 function DesktopCustomEmbedTool(props: {
@@ -7638,40 +7907,9 @@ function ServerTool(props: {
 
   const handleRunProcessWithDependencies = useCallback(
     (processId: string) => {
-      if (dependencyTimeoutsRef.current.has(processId)) {
-        clearTimeout(dependencyTimeoutsRef.current.get(processId)!);
-        dependencyTimeoutsRef.current.delete(processId);
-      }
-      const process =
-        processes.find((p: any) => p.id === processId) ||
-        presetDrafts.find((p) => p.id === processId);
-      if (process?.dependsOn && process.dependsOn.length > 0) {
-        let delayRun = false;
-        process.dependsOn.forEach((depId: string) => {
-          const depStatus = resolveServerPresetRuntimeStatus({
-            processId: depId,
-            runningProcessIds: runningProcessIdSet,
-            terminalIds: terminalIdSet,
-          });
-          if (depStatus !== "running") {
-            props.onRunProcess(depId);
-            delayRun = true;
-          }
-        });
-        if (delayRun) {
-          const timeoutId = setTimeout(() => {
-            dependencyTimeoutsRef.current.delete(processId);
-            props.onRunProcess(processId);
-          }, 3500);
-          dependencyTimeoutsRef.current.set(processId, timeoutId);
-        } else {
-          props.onRunProcess(processId);
-        }
-      } else {
-        props.onRunProcess(processId);
-      }
+      props.onRunProcess(processId);
     },
-    [processes, presetDrafts, runningProcessIdSet, terminalIdSet, props],
+    [props],
   );
 
   const selectedPreset = selectedPresetId
@@ -7789,7 +8027,7 @@ function ServerTool(props: {
                       variant="ghost"
                       disabled={!hasRunnableCommands(process.commands)}
                       onClick={() =>
-                        status === "running"
+                        terminalIdSet.has(process.id)
                           ? props.onOpenProcessTerminal(process.id)
                           : handleRunProcessWithDependencies(process.id)
                       }
@@ -7801,7 +8039,11 @@ function ServerTool(props: {
                       <span
                         className={cn(
                           "inline-block size-2 rounded-full mr-2",
-                          status === "running" ? "bg-success" : "bg-muted-foreground/30",
+                          status === "running"
+                            ? "bg-success"
+                            : terminalIdSet.has(process.id)
+                              ? "bg-sky-400"
+                              : "bg-muted-foreground/30",
                         )}
                       />
                       <span className="truncate">{process.label}</span>
@@ -9297,9 +9539,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       try {
         await api.terminal.open({ threadId: input.threadId, terminalId, cwd, env });
         const runKey = `${input.threadId}:${terminalId}`;
-        const isAlreadyRunningLocally =
-          executedCommandsRef.current.has(runKey) &&
-          Date.now() - (executedCommandsRef.current.get(runKey) || 0) < 2000;
+        const isAlreadyRunningLocally = executedCommandsRef.current.has(runKey);
         const isAlreadyRunningRemotely =
           input.terminalState?.runningTerminalIds.includes(terminalId);
 
@@ -9435,6 +9675,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       );
       if (!process) return;
 
+      const liveState = getThreadTerminalState(serverThreadId);
+      if (liveState?.runningTerminalIds.includes(processId)) {
+        revealServerTerminal();
+        activateServerTerminal(processId);
+        return;
+      }
+
+      executedCommandsRef.current.delete(`${serverThreadId}:${processId}`);
       revealServerTerminal();
       await openProcessTerminal({
         threadId: serverThreadId,
@@ -9466,7 +9714,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
             workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
             window.desktopBridge?.reloadBrowserSession({ projectId: activeProject.id });
           }
-          if (process.autoOpenPreview && activeProject?.id) {
+          if (process.autoOpenPreview && activeProject?.id && activeTool?.kind !== "server") {
             workspaceShellActions.setActiveTool(activeProject.id, "browser");
           }
         }
@@ -9475,18 +9723,51 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [
       activeProjectSettings,
+      activateServerTerminal,
+      getThreadTerminalState,
       openProcessTerminal,
       revealServerTerminal,
       serverThreadId,
       activeProject?.id,
+      activeTool?.kind,
     ],
+  );
+  const dependencyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const runServerProcessWithDependencies = useCallback(
+    async (processId: string) => {
+      if (!activeProjectSettings || !serverThreadId) return;
+      const presets = activeProjectSettings.serverPresets ?? [];
+      const process = presets.find((entry: any) => entry.id === processId);
+      if (!process) return;
+
+      const liveTerminalState = getThreadTerminalState(serverThreadId);
+      const runningIds = new Set(liveTerminalState?.runningTerminalIds ?? []);
+      const currentTerminalIds = new Set(liveTerminalState?.terminalIds ?? []);
+
+      if (process.dependsOn && process.dependsOn.length > 0) {
+        for (const depId of process.dependsOn) {
+          const depStatus = resolveServerPresetRuntimeStatus({
+            processId: depId,
+            runningProcessIds: runningIds,
+            terminalIds: currentTerminalIds,
+          });
+          if (depStatus === "idle") {
+            await runServerProcess(depId);
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+          }
+        }
+      }
+
+      await runServerProcess(processId);
+    },
+    [activeProjectSettings, serverThreadId, getThreadTerminalState, runServerProcess],
   );
   const restartServerProcess = useCallback(
     async (processId: string) => {
       await stopServerProcess(processId);
-      await runServerProcess(processId);
+      await runServerProcessWithDependencies(processId);
     },
-    [runServerProcess, stopServerProcess],
+    [runServerProcessWithDependencies, stopServerProcess],
   );
   // ── Custom terminal-tab handlers (isolated per-process thread) ────────
   const runCustomProcess = useCallback(
@@ -9496,6 +9777,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         | ProjectWorkspaceSettings["serverPresets"][number],
       threadId: ThreadId,
     ) => {
+      executedCommandsRef.current.delete(`${threadId}:${process.id}`);
       await openProcessTerminal({
         threadId,
         terminalState: getThreadTerminalState(threadId),
@@ -9556,12 +9838,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     serverAutoStartedProcessIdsRef.current.clear();
   }, [activeProject?.id]);
   useEffect(() => {
-    if (activeTool?.kind !== "server") {
-      serverAutoStartedProcessIdsRef.current.clear();
-    }
-  }, [activeTool?.kind]);
-  useEffect(() => {
-    if (activeTool?.kind !== "server" || !activeProjectSettings) return;
+    if (!activeProjectSettings) return;
     // Processes backing custom terminal tabs auto-start in their own tab — the
     // Server tab must not also launch them in the shared server thread.
     for (const process of activeProjectSettings.serverPresets ?? []) {
@@ -9575,7 +9852,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       serverAutoStartedProcessIdsRef.current.add(process.id);
       void runServerProcess(process.id);
     }
-  }, [activeProjectSettings, activeTool?.kind, runServerProcess]);
+  }, [activeProjectSettings, runServerProcess]);
 
   const gitTool = activeProject ? (
     <GitTool
@@ -9597,7 +9874,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   ) : null;
   const browserTool =
     activeProject && activeProjectSettings ? (
-      <BrowserTool project={activeProject} projectSettings={activeProjectSettings} />
+      <BrowserTool
+        project={activeProject}
+        projectSettings={activeProjectSettings}
+        runningProcessIds={serverTerminalState?.runningTerminalIds ?? []}
+        onRunProcess={(processId) => void runServerProcessWithDependencies(processId)}
+      />
     ) : null;
   const serverTool =
     activeProject && activeProjectSettings ? (
@@ -9605,7 +9887,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         project={activeProject}
         projectSettings={activeProjectSettings}
         onOpenSettings={() => void navigate({ to: "/settings" })}
-        onRunProcess={(processId) => void runServerProcess(processId)}
+        onRunProcess={(processId) => void runServerProcessWithDependencies(processId)}
         onRestartProcess={(processId) => void restartServerProcess(processId)}
         onStopProcess={(processId) => void stopServerProcess(processId)}
         onOpenProcessTerminal={focusServerProcessTerminal}

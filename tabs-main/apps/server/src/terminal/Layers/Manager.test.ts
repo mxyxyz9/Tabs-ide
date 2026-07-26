@@ -410,9 +410,8 @@ describe("TerminalManager", () => {
     await waitFor(() => events.some((event) => event.type === "exited"));
     const reopened = await manager.open(openInput());
 
-    expect(reopened.history).toBe("");
-    expect(ptyAdapter.spawnInputs).toHaveLength(2);
-    expect(fs.readFileSync(historyLogPath(logsDir), "utf8")).toBe("");
+    expect(reopened.history).toBe("old data\n");
+    expect(fs.readFileSync(historyLogPath(logsDir), "utf8")).toBe("old data\n");
 
     manager.dispose();
   });

@@ -49,7 +49,11 @@ type BrowserSession = {
   canGoForward: boolean;
   devToolsOpen: boolean;
   lastError: string | null;
+  /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
+   * Cleared as soon as any successful navigation or page load occurs. */
+  transientError: string | null;
 };
+
 
 export class BrowserHostManager {
   // Keyed by `${projectId}::${sessionId}` so each browser tab keeps its own
@@ -80,6 +84,7 @@ export class BrowserHostManager {
         canGoForward: false,
         devToolsOpen: false,
         lastError: null,
+        transientError: null,
       };
     }
 
@@ -148,6 +153,7 @@ export class BrowserHostManager {
       canGoForward: false,
       devToolsOpen: view.webContents.isDevToolsOpened(),
       lastError: null,
+      transientError: null,
     };
 
     this.registerSessionEvents(session);
@@ -367,6 +373,7 @@ export class BrowserHostManager {
   private async loadUrl(session: BrowserSession, url: string): Promise<void> {
     session.currentUrl = url;
     session.lastError = null;
+    session.transientError = null;
     this.emitState(session);
     await session.view.webContents.loadURL(url);
   }
@@ -382,6 +389,7 @@ export class BrowserHostManager {
       canGoForward: session.canGoForward,
       devToolsOpen: session.devToolsOpen,
       lastError: session.lastError,
+      transientError: session.transientError,
     };
   }
 
@@ -422,6 +430,7 @@ export class BrowserHostManager {
     contents.on("did-start-loading", () => {
       session.loading = true;
       session.lastError = null;
+      session.transientError = null;
       refreshNavigationState();
       this.emitState(session);
     });
@@ -440,6 +449,7 @@ export class BrowserHostManager {
     contents.on("did-navigate", (_event, url) => {
       session.currentUrl = url;
       session.lastError = null;
+      session.transientError = null;
       refreshNavigationState();
       this.emitState(session);
     });
@@ -456,7 +466,16 @@ export class BrowserHostManager {
         }
         session.loading = false;
         session.currentUrl = validatedUrl || session.currentUrl;
-        session.lastError = errorDescription || "Unable to load page.";
+        // ERR_CONNECTION_REFUSED (-102): dev server hasn't bound to the port yet.
+        // Treat as a transient startup condition — the frontend will show a
+        // "Starting..." overlay and retry. Do NOT set lastError here.
+        if (errorCode === -102) {
+          session.transientError = errorDescription || "ERR_CONNECTION_REFUSED";
+          session.lastError = null;
+        } else {
+          session.lastError = errorDescription || "Unable to load page.";
+          session.transientError = null;
+        }
         refreshNavigationState();
         this.emitState(session);
       },
