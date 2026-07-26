@@ -713,7 +713,29 @@ function normalizeBrowserUrl(rawUrl: string): string {
   if (trimmed.startsWith("//")) {
     return `https:${trimmed}`;
   }
-  return `http://${trimmed}`;
+  if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?/i.test(trimmed)) {
+    return `http://${trimmed}`;
+  }
+  return `https://${trimmed}`;
+}
+
+function isSameWebUrl(urlA: string | null | undefined, urlB: string | null | undefined): boolean {
+  if (!urlA || !urlB) return false;
+  const normA = normalizeBrowserUrl(urlA).replace(/\/+$/, "");
+  const normB = normalizeBrowserUrl(urlB).replace(/\/+$/, "");
+  if (normA === normB) return true;
+  try {
+    const parsedA = new URL(normA);
+    const parsedB = new URL(normB);
+    return (
+      parsedA.hostname.toLowerCase() === parsedB.hostname.toLowerCase() &&
+      parsedA.pathname.replace(/\/+$/, "") === parsedB.pathname.replace(/\/+$/, "") &&
+      parsedA.search === parsedB.search &&
+      parsedA.port === parsedB.port
+    );
+  } catch {
+    return false;
+  }
 }
 
 function resolveProjectById(
@@ -6214,11 +6236,11 @@ function DesktopBrowserTool(props: {
     if (!bridge || !hostState.available || normalizedUrl.length === 0) {
       return;
     }
-    if (sessionState.currentUrl === normalizedUrl) {
+    if (isSameWebUrl(sessionState.currentUrl, normalizedUrl)) {
       lastRequestedUrlRef.current = normalizedUrl;
       return;
     }
-    if (lastRequestedUrlRef.current === normalizedUrl) {
+    if (isSameWebUrl(lastRequestedUrlRef.current, normalizedUrl)) {
       return;
     }
     lastRequestedUrlRef.current = normalizedUrl;
@@ -6235,7 +6257,7 @@ function DesktopBrowserTool(props: {
   }, [bridge, hostState.available, normalizedUrl, props.project.id, sessionState.currentUrl]);
 
   useEffect(() => {
-    if (!sessionState.currentUrl || sessionState.currentUrl === browserState.currentUrl) {
+    if (!sessionState.currentUrl || isSameWebUrl(sessionState.currentUrl, browserState.currentUrl)) {
       return;
     }
     setBrowserCurrentUrl(props.project.id, sessionState.currentUrl);
