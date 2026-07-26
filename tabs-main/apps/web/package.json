@@ -1,12 +1,11 @@
 {
   "name": "@tabs/web",
-  "version": "1.2.111",
+  "version": "1.2.112",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "prepare": "effect-language-service patch || true",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
