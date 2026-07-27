@@ -2711,8 +2711,49 @@ function TagsPanel({
   onRunInTerminal: (cmd: string) => void;
 }) {
   const [form, setForm] = useState(false);
+  const [realTags, setRealTags] = useState<string[]>([]);
+  const [loadingTags, setLoadingTags] = useState(true);
   const api = readNativeApi();
   const queryClient = useQueryClient();
+
+  const fetchTags = useCallback(async () => {
+    if (!api || !cwd) {
+      setLoadingTags(false);
+      return;
+    }
+    const foundTags = new Set<string>();
+    try {
+      const browse = await api.projects.filesystemBrowse({ cwd, relativePath: ".git/refs/tags" });
+      if (browse?.entries) {
+        for (const entry of browse.entries) {
+          if (entry.name && !entry.name.startsWith(".")) foundTags.add(entry.name);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
+    try {
+      const packed = await api.projects.readFile({ cwd, relativePath: ".git/packed-refs" });
+      if (packed?.contents) {
+        for (const line of packed.contents.split("\n")) {
+          const match = line.match(/refs\/tags\/(.+)$/);
+          if (match && match[1]) {
+            foundTags.add(match[1].replace(/\^{}$/, ""));
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+
+    setRealTags(Array.from(foundTags).sort());
+    setLoadingTags(false);
+  }, [api, cwd]);
+
+  useEffect(() => {
+    void fetchTags();
+  }, [fetchTags]);
 
   const createTag = useCallback(
     async (name: string) => {
@@ -2720,28 +2761,43 @@ function TagsPanel({
       try {
         await api.git.createTag({ cwd, name });
         await invalidateGitQueries(queryClient);
+        await fetchTags();
         setForm(false);
         toastManager.add({ type: "success", title: `Tag ${name} created` });
       } catch (error) {
         toastManager.add({ type: "error", title: "Create tag failed", description: toGitUserFacingErrorMessage(error) });
       }
     },
-    [api, cwd, queryClient],
+    [api, cwd, fetchTags, queryClient],
   );
 
   return (
     <div>
-      <Card className="p-2">
-        {commits.slice(0, 3).map((c) => (
-          <div key={c.sha} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border bd-2 bg-o1 text-xs tx-80">
-              <Tag size={11} /> {c.shortSha}
-            </span>
-            <span className="fs-11 font-mono tx-30 flex-1">{c.subject}</span>
-            <span className="fs-11 tx-25">{c.authoredAt.slice(0, 10)}</span>
-          </div>
-        ))}
-      </Card>
+      {loadingTags ? (
+        <div className="flex items-center justify-center p-8 text-xs tx-40">
+          <Loader2 className="animate-spin mr-2" size={14} /> Loading tags…
+        </div>
+      ) : realTags.length === 0 ? (
+        <Card className="p-6 text-center">
+          <Tag className="mx-auto mb-2 tx-30" size={24} />
+          <p className="fs-12 font-medium tx-80 mb-1">No tags created yet</p>
+          <p className="fs-11 tx-40 mb-4">Tags mark specific points in your repository history (e.g. v1.0.0).</p>
+        </Card>
+      ) : (
+        <Card className="p-2 mb-3">
+          {realTags.map((tagName) => (
+            <div key={tagName} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border bd-2 bg-o1 text-xs font-mono tx-80">
+                <Tag size={11} /> {tagName}
+              </span>
+              <span className="fs-11 tx-30 flex-1">Tag release ref</span>
+              <Btn sm ghost onClick={() => onRunInTerminal(`git push origin ${tagName}`)}>
+                Push tag
+              </Btn>
+            </div>
+          ))}
+        </Card>
+      )}
 
       {form && (
         <div className="mt-3">
