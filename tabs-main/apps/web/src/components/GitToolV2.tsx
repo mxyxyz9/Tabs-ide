@@ -1927,14 +1927,92 @@ function ChangesPanel({
     }
   };
 
+  const [realConflictFiles, setRealConflictFiles] = useState<ConflictFile[]>([]);
+
+  useEffect(() => {
+    if (!hasConflict || conflictedFiles.length === 0 || !api) return;
+    let cancelled = false;
+
+    Promise.all(
+      conflictedFiles.map(async (f) => {
+        let hunks: ConflictHunk[] = [];
+        try {
+          const res = await api.projects.readFile({ cwd, relativePath: f.path });
+          if (res?.contents) {
+            const lines = res.contents.split("\n");
+            let inConflict = false;
+            let inTheirs = false;
+            let header = "";
+            let ours: string[] = [];
+            let theirs: string[] = [];
+
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i]!;
+              if (line.startsWith("<<<<<<<")) {
+                inConflict = true;
+                inTheirs = false;
+                header = `@@ Line ${i + 1}: ${line} @@`;
+                ours = [];
+                theirs = [];
+              } else if (inConflict && line.startsWith("=======")) {
+                inTheirs = true;
+              } else if (inConflict && line.startsWith(">>>>>>>")) {
+                inConflict = false;
+                hunks.push({ header, ours, theirs });
+              } else if (inConflict) {
+                if (inTheirs) theirs.push(line);
+                else ours.push(line);
+              }
+            }
+          }
+        } catch {
+          // Ignore read error
+        }
+
+        if (hunks.length === 0) {
+          try {
+            const snap = await api.git.readConflictSnapshot({ cwd, path: f.path });
+            if (snap.oursContents || snap.theirsContents) {
+              hunks.push({
+                header: `@@ Conflict in ${f.path} @@`,
+                ours: snap.oursContents ? snap.oursContents.split("\n") : [],
+                theirs: snap.theirsContents ? snap.theirsContents.split("\n") : [],
+              });
+            }
+          } catch {
+            // Ignore snapshot error
+          }
+        }
+
+        if (hunks.length === 0) {
+          hunks.push({
+            header: `@@ Conflict in ${f.path} @@`,
+            ours: ["<<<<<<< HEAD (Current branch)"],
+            theirs: [">>>>>>> incoming (Incoming branch)"],
+          });
+        }
+
+        return { path: f.path, hunks };
+      })
+    ).then((resolvedFiles) => {
+      if (!cancelled) {
+        setRealConflictFiles(resolvedFiles);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, cwd, hasConflict, conflictedFiles]);
+
   if (hasConflict) {
-    const mockConflictFiles: ConflictFile[] = conflictedFiles.map((f) => ({
+    const activeFiles = realConflictFiles.length > 0 ? realConflictFiles : conflictedFiles.map((f) => ({
       path: f.path,
       hunks: [
         {
-          header: "@@ -1,5 +1,5 @@ conflict in " + f.path.split("/").pop(),
-          ours: ["<<<<<<< HEAD", "Current branch changes"],
-          theirs: [">>>>>>> incoming", "Incoming branch changes"],
+          header: `@@ Conflict in ${f.path.split("/").pop()} @@`,
+          ours: ["<<<<<<< HEAD"],
+          theirs: [">>>>>>> incoming"],
         },
       ],
     }));
@@ -1945,7 +2023,7 @@ function ChangesPanel({
           title={`${conflictedFiles.length} conflicting files`}
           body="Resolve each hunk below, then continue the merge. Nothing is written until you choose a resolution."
         />
-        <ConflictResolver files={mockConflictFiles} resolutions={conflictResolutions} setResolutions={setConflictResolutions} />
+        <ConflictResolver files={activeFiles} resolutions={conflictResolutions} setResolutions={setConflictResolutions} />
         <div className="flex items-center gap-2 mt-4">
           <Btn primary icon={GitMerge} onClick={() => onRunInTerminal("git commit --no-edit")}>
             Continue merge
