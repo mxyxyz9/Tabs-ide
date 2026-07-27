@@ -770,48 +770,67 @@ function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; url: st
 }
 
 function DeviceAuthModal({
+  cwd,
   title = "Sign in to GitHub",
-  subtitle = "Enter this user code on github.com to complete sign in.",
+  subtitle = "Interactive GitHub authentication will open in the integrated terminal drawer.",
+  onRunGitHubLogin,
   onConfirm,
   onClose,
 }: {
+  cwd: string;
   title?: string;
   subtitle?: string;
+  onRunGitHubLogin: () => void | Promise<void>;
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const [code] = useState(() => Math.random().toString(36).slice(2, 6).toUpperCase() + "-" + Math.random().toString(36).slice(2, 6).toUpperCase());
-  const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [authStatusText, setAuthStatusText] = useState<string | null>(null);
+  const api = readNativeApi();
+  const queryClient = useQueryClient();
 
-  const copyCode = () => {
-    navigator.clipboard?.writeText(code).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const handleStartAuth = () => {
+    void onRunGitHubLogin();
   };
-  const handleConfirm = () => {
+
+  const handleConfirm = async () => {
     setConfirming(true);
-    setTimeout(() => onConfirm(), 700);
+    setAuthStatusText("Checking GitHub auth status…");
+    try {
+      if (api) {
+        const env = await api.git.environment({ cwd });
+        await invalidateGitQueries(queryClient);
+        if (env.gitHub.authenticated) {
+          toastManager.add({ type: "success", title: "GitHub authenticated successfully" });
+          onConfirm();
+          return;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+    setAuthStatusText("Auth check complete");
+    setTimeout(() => {
+      onConfirm();
+    }, 500);
   };
 
   return (
     <Modal title={title} onClose={onClose} width="max-w-sm">
       <p className="text-xs tx-50 leading-relaxed mb-4">{subtitle}</p>
-      <div className="flex items-center justify-between gap-2 border bd-2 rounded-lg px-3 py-2.5 mb-3" style={{ backgroundColor: "var(--bg-base)" }}>
-        <span className="fs-13 font-mono tracking-widest tx">{code}</span>
-        <button type="button" onClick={copyCode} className="w-6 h-6 rounded-md hov-bg-o1 flex items-center justify-center tx-40 hov-tx transition-colors" title="Copy code">
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-        </button>
+      <div className="border bd-2 rounded-lg p-3 mb-4 flex flex-col gap-2" style={{ backgroundColor: "var(--bg-base)" }}>
+        <p className="fs-11 tx-60">Click below to launch interactive sign in in your terminal:</p>
+        <Btn sm primary icon={ExternalLink} onClick={handleStartAuth}>
+          Start `gh auth login` in terminal
+        </Btn>
       </div>
-      <Btn as="a" href="https://github.com/login/device" ghost className="w-full justify-center mb-4">
-        Open github.com/login/device <ExternalLink size={11} />
-      </Btn>
+      {authStatusText && <p className="fs-11 text-center font-mono tx-40 mb-3">{authStatusText}</p>}
       <div className="flex items-center justify-end gap-2">
         <Btn ghost onClick={onClose}>
           Cancel
         </Btn>
-        <Btn primary icon={confirming ? Loader2 : undefined} disabled={confirming} onClick={handleConfirm}>
-          {confirming ? "Confirming…" : "I've authorized it"}
+        <Btn primary icon={confirming ? Loader2 : undefined} disabled={confirming} onClick={() => void handleConfirm()}>
+          {confirming ? "Verifying…" : "I've authorized it"}
         </Btn>
       </div>
     </Modal>
@@ -3634,9 +3653,10 @@ export function GitToolV2({
       )}
       {modal === "deviceAuth" && (
         <DeviceAuthModal
+          cwd={cwd}
+          onRunGitHubLogin={onRunGitHubLogin}
           onClose={closeModal}
           onConfirm={() => {
-            void onRunGitHubLogin();
             closeModal();
           }}
         />
