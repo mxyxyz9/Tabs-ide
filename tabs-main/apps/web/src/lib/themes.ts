@@ -320,7 +320,7 @@ export const THEME_DEFINITIONS: Record<ThemeId, ThemeDefinition> = {
       },
     },
   },
-  "custom": {
+  custom: {
     id: "custom",
     name: "Custom",
     description: "User-defined custom colors and font choices",
@@ -425,7 +425,10 @@ export const UI_FONT_OPTIONS = [
   { value: "'Outfit', sans-serif", label: "Outfit" },
   { value: "'Nunito', sans-serif", label: "Nunito" },
   { value: "'Quicksand', sans-serif", label: "Quicksand" },
-  { value: "'-apple-system', BlinkMacSystemFont, 'SF Pro Display', sans-serif", label: "SF Pro / Apple System" },
+  {
+    value: "'-apple-system', BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+    label: "SF Pro / Apple System",
+  },
   { value: "'Segoe UI', Tahoma, Geneva, sans-serif", label: "Segoe UI" },
   { value: "'Roboto', sans-serif", label: "Roboto" },
 ] as const;
@@ -458,7 +461,10 @@ export const EDITOR_FONT_OPTIONS = [
 export function calculateLuminance(hex: string): number {
   let clean = hex.replace("#", "").trim();
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6) return 0.5;
 
@@ -475,7 +481,10 @@ export function calculateLuminance(hex: string): number {
 /**
  * Calculates WCAG contrast ratio between two hex colors.
  */
-export function calculateContrastRatio(fgHex: string, bgHex: string): {
+export function calculateContrastRatio(
+  fgHex: string,
+  bgHex: string,
+): {
   ratio: number;
   isLowContrast: boolean;
 } {
@@ -507,7 +516,10 @@ export function getOptimalPrimaryForeground(primaryHex: string): string {
 export function hexToHsv(hex: string): { h: number; s: number; v: number } {
   let clean = hex.replace("#", "").trim();
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6) return { h: 220, s: 0.8, v: 0.8 };
 
@@ -541,15 +553,39 @@ export function hsvToHex(h: number, s: number, v: number): string {
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = v - c;
 
-  let r = 0, g = 0, b = 0;
-  if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
-  else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
-  else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
-  else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
-  else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
-  else { r = c; g = 0; b = x; }
+  let r = 0,
+    g = 0,
+    b = 0;
+  if (h >= 0 && h < 60) {
+    r = c;
+    g = x;
+    b = 0;
+  } else if (h >= 60 && h < 120) {
+    r = x;
+    g = c;
+    b = 0;
+  } else if (h >= 120 && h < 180) {
+    r = 0;
+    g = c;
+    b = x;
+  } else if (h >= 180 && h < 240) {
+    r = 0;
+    g = x;
+    b = c;
+  } else if (h >= 240 && h < 300) {
+    r = x;
+    g = 0;
+    b = c;
+  } else {
+    r = c;
+    g = 0;
+    b = x;
+  }
 
-  const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, "0");
+  const toHex = (n: number) =>
+    Math.round((n + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -559,7 +595,10 @@ export function hsvToHex(h: number, s: number, v: number): string {
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   let clean = hex.replace("#", "").trim();
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6) return { r: 99, g: 102, b: 241 };
 

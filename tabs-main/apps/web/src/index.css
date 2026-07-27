@@ -36,12 +36,39 @@
 
 @theme inline {
   --animate-skeleton: skeleton 2s -1s infinite linear;
-  --font-sans:
-    var(--font-sans, "DM Sans Variable", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
-  --font-display:
-    var(--font-display, var(--font-sans, "DM Sans Variable", "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif));
-  --font-mono:
-    var(--font-mono, "SF Mono", "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", Menlo, monospace);
+  --font-sans: var(
+    --font-sans,
+    "DM Sans Variable",
+    "DM Sans",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    system-ui,
+    sans-serif
+  );
+  --font-display: var(
+    --font-display,
+    var(
+      --font-sans,
+      "DM Sans Variable",
+      "DM Sans",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      system-ui,
+      sans-serif
+    )
+  );
+  --font-mono: var(
+    --font-mono,
+    "SF Mono",
+    "SFMono-Regular",
+    "JetBrains Mono",
+    Consolas,
+    "Liberation Mono",
+    Menlo,
+    monospace
+  );
   --color-warning-foreground: var(--warning-foreground);
   --color-warning: var(--warning);
   --color-success-foreground: var(--success-foreground);
@@ -354,7 +381,7 @@
   --accent: rgba(0, 0, 0, 0.04);
   --accent-foreground: #262626;
   --border: rgba(0, 0, 0, 0.08);
-  --input: rgba(0, 0, 0, 0.10);
+  --input: rgba(0, 0, 0, 0.1);
   --ring: oklch(0.488 0.217 264);
   --fg-90: color-mix(in srgb, var(--foreground) 90%, transparent);
   --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
@@ -407,11 +434,11 @@
   --popover-foreground: #f8f8f2;
   --primary: #bd93f9;
   --primary-foreground: #282a36;
-  --secondary: rgba(189, 147, 249, 0.10);
+  --secondary: rgba(189, 147, 249, 0.1);
   --secondary-foreground: #f8f8f2;
   --muted: rgba(255, 255, 255, 0.05);
   --muted-foreground: #6272a4;
-  --accent: rgba(189, 147, 249, 0.10);
+  --accent: rgba(189, 147, 249, 0.1);
   --accent-foreground: #ffffff;
   --border: rgba(98, 114, 164, 0.35);
   --input: rgba(98, 114, 164, 0.25);
@@ -482,8 +509,8 @@
   --fg-50: color-mix(in srgb, var(--foreground) 50%, transparent);
   --fg-40: color-mix(in srgb, var(--foreground) 40%, transparent);
   --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
-  --accent-wash-bg: rgba(38, 139, 210, 0.10);
-  --accent-wash-border: rgba(38, 139, 210, 0.30);
+  --accent-wash-bg: rgba(38, 139, 210, 0.1);
+  --accent-wash-border: rgba(38, 139, 210, 0.3);
 }
 
 body {
@@ -1165,5 +1192,3 @@ label:has(> select#reasoning-effort) select {
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
 }
-
-

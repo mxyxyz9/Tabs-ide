@@ -40,7 +40,12 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { UnifiedSettings } from "@tabs/contracts/settings";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { applyCustomModelOrdering, resetModelOrder, updateModelOrder } from "../modelOrdering";
 import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../modelPinning";
@@ -170,8 +175,6 @@ export function SettingsHeaderPortal({ children }: { children: React.ReactNode }
 }
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
-
-
 
 const ZOOM_PRESETS = [
   { value: "0.5", label: "50%" },
@@ -474,18 +477,20 @@ function PinModelCommandPalette({
   }, [providerCards, serverProviders]);
 
   const filteredModels = useMemo(() => {
-    return allModels.filter((item: { provider: string; providerName: string; model: ServerProviderModel }) => {
-      if (activeProviderFilter && item.provider !== activeProviderFilter) {
-        return false;
-      }
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase().trim();
-      return (
-        item.model.name.toLowerCase().includes(q) ||
-        item.model.slug.toLowerCase().includes(q) ||
-        item.providerName.toLowerCase().includes(q)
-      );
-    });
+    return allModels.filter(
+      (item: { provider: string; providerName: string; model: ServerProviderModel }) => {
+        if (activeProviderFilter && item.provider !== activeProviderFilter) {
+          return false;
+        }
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase().trim();
+        return (
+          item.model.name.toLowerCase().includes(q) ||
+          item.model.slug.toLowerCase().includes(q) ||
+          item.providerName.toLowerCase().includes(q)
+        );
+      },
+    );
   }, [allModels, activeProviderFilter, searchQuery]);
 
   if (allModels.length === 0) return null;
@@ -583,81 +588,87 @@ function PinModelCommandPalette({
                     </div>
                   </div>
                 ) : (
-                  filteredModels.map((item: { provider: string; providerName: string; model: ServerProviderModel }) => {
-                    const IconComponent = PROVIDER_ICONS_BY_KIND[item.provider] ?? BotIcon;
-                    const caps = item.model.capabilities;
-                    const capLabels: string[] = [];
-                    if (caps?.supportsFastMode) capLabels.push("Fast");
-                    if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
-                    if (caps?.reasoningEffortLevels && caps.reasoningEffortLevels.length > 0)
-                      capLabels.push("Reasoning");
+                  filteredModels.map(
+                    (item: {
+                      provider: string;
+                      providerName: string;
+                      model: ServerProviderModel;
+                    }) => {
+                      const IconComponent = PROVIDER_ICONS_BY_KIND[item.provider] ?? BotIcon;
+                      const caps = item.model.capabilities;
+                      const capLabels: string[] = [];
+                      if (caps?.supportsFastMode) capLabels.push("Fast");
+                      if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
+                      if (caps?.reasoningEffortLevels && caps.reasoningEffortLevels.length > 0)
+                        capLabels.push("Reasoning");
 
-                    const isPinned = isPinnedModel(pinnedEntries, item.provider, item.model.slug);
+                      const isPinned = isPinnedModel(pinnedEntries, item.provider, item.model.slug);
 
-                    return (
-                      <div
-                        key={`${item.provider}:${item.model.slug}`}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-accent/50 transition-all group cursor-pointer"
-                        onClick={() => {
-                          const nextPinned = togglePinnedModel(
-                            settings,
-                            item.provider,
-                            item.model.slug,
-                          );
-                          updateSettings({ pinnedModels: nextPinned as any });
-                        }}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground group-hover:bg-muted">
-                            <IconComponent className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 truncate">
-                              <span className="text-sm font-medium text-foreground truncate">
-                                {item.model.name}
-                              </span>
-                              <span className="text-xs font-mono text-muted-foreground/60 shrink-0">
-                                ({item.providerName})
-                              </span>
+                      return (
+                        <div
+                          key={`${item.provider}:${item.model.slug}`}
+                          className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-accent/50 transition-all group cursor-pointer"
+                          onClick={() => {
+                            const nextPinned = togglePinnedModel(
+                              settings,
+                              item.provider,
+                              item.model.slug,
+                            );
+                            updateSettings({ pinnedModels: nextPinned as any });
+                          }}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground group-hover:bg-muted">
+                              <IconComponent className="size-4" />
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-xs font-mono text-muted-foreground/50 truncate">
-                                {item.model.slug}
-                              </span>
-                              {capLabels.map((label) => (
-                                <span
-                                  key={label}
-                                  className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/50 text-muted-foreground/70 shrink-0 border border-border/30"
-                                >
-                                  {label}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 truncate">
+                                <span className="text-sm font-medium text-foreground truncate">
+                                  {item.model.name}
                                 </span>
-                              ))}
+                                <span className="text-xs font-mono text-muted-foreground/60 shrink-0">
+                                  ({item.providerName})
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-xs font-mono text-muted-foreground/50 truncate">
+                                  {item.model.slug}
+                                </span>
+                                {capLabels.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/50 text-muted-foreground/70 shrink-0 border border-border/30"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {isPinned ? (
-                          <Button
-                            size="xs"
-                            variant="secondary"
-                            className="h-7 gap-1 px-2.5 text-xs font-medium text-foreground bg-muted/80 hover:bg-muted cursor-pointer shrink-0"
-                          >
-                            <PinIcon className="size-3.5 fill-current" />
-                            Pinned
-                          </Button>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            className="h-7 gap-1 px-2.5 text-xs font-medium text-muted-foreground group-hover:text-foreground group-hover:bg-accent cursor-pointer shrink-0"
-                          >
-                            <PlusIcon className="size-3.5" />
-                            Pin
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })
+                          {isPinned ? (
+                            <Button
+                              size="xs"
+                              variant="secondary"
+                              className="h-7 gap-1 px-2.5 text-xs font-medium text-foreground bg-muted/80 hover:bg-muted cursor-pointer shrink-0"
+                            >
+                              <PinIcon className="size-3.5 fill-current" />
+                              Pinned
+                            </Button>
+                          ) : (
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="h-7 gap-1 px-2.5 text-xs font-medium text-muted-foreground group-hover:text-foreground group-hover:bg-accent cursor-pointer shrink-0"
+                            >
+                              <PlusIcon className="size-3.5" />
+                              Pin
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    },
+                  )
                 )}
               </div>
             </DialogPopup>
@@ -806,16 +817,61 @@ export const RANDOM_STYLE_OPTIONS: { id: RandomStyleMode; label: string }[] = [
 ];
 
 const AESTHETIC_PREFIXES = [
-  "Tokyo", "Cyber", "Aesthetic", "Midnight", "Matcha", "Sakura", "Velvet",
-  "Obsidian", "Pixel", "Lunar", "Vibe", "Neon", "Ghost", "Solar", "Chai",
-  "Cosmic", "Electric", "Retro", "Emerald", "Twilight", "Solstice", "Oasis",
-  "Zenith", "Nebula", "Monaco", "Kyoto", "Mochi", "Indigo", "Lumina"
+  "Tokyo",
+  "Cyber",
+  "Aesthetic",
+  "Midnight",
+  "Matcha",
+  "Sakura",
+  "Velvet",
+  "Obsidian",
+  "Pixel",
+  "Lunar",
+  "Vibe",
+  "Neon",
+  "Ghost",
+  "Solar",
+  "Chai",
+  "Cosmic",
+  "Electric",
+  "Retro",
+  "Emerald",
+  "Twilight",
+  "Solstice",
+  "Oasis",
+  "Zenith",
+  "Nebula",
+  "Monaco",
+  "Kyoto",
+  "Mochi",
+  "Indigo",
+  "Lumina",
 ];
 
 const AESTHETIC_SUFFIXES = [
-  "Drift", "Haze", "Glow", "Pulse", "Check", "Bloom", "Latte", "Signal",
-  "Wave", "Dust", "Aura", "Flare", "Syntax", "Shift", "Echo", "Mirage",
-  "Vibes", "Mist", "Realm", "Matrix", "Chroma", "Radiance", "Spark"
+  "Drift",
+  "Haze",
+  "Glow",
+  "Pulse",
+  "Check",
+  "Bloom",
+  "Latte",
+  "Signal",
+  "Wave",
+  "Dust",
+  "Aura",
+  "Flare",
+  "Syntax",
+  "Shift",
+  "Echo",
+  "Mirage",
+  "Vibes",
+  "Mist",
+  "Realm",
+  "Matrix",
+  "Chroma",
+  "Radiance",
+  "Spark",
 ];
 
 export function generateAestheticThemeName(): string {
@@ -895,9 +951,10 @@ function generateHarmonizedPalette(
     return baseVariant === "dark" ? isDarkBg : !isDarkBg;
   });
 
-  const selected = matched.length > 0
-    ? matched[Math.floor(Math.random() * matched.length)]!
-    : pool[Math.floor(Math.random() * pool.length)]!;
+  const selected =
+    matched.length > 0
+      ? matched[Math.floor(Math.random() * matched.length)]!
+      : pool[Math.floor(Math.random() * pool.length)]!;
 
   let fg = selected.fg;
   let bg = selected.bg;
@@ -1000,8 +1057,14 @@ function ThemePickerGrid({
                 >
                   <div className="flex items-center gap-1.5">
                     <div className="size-2 rounded-full" style={{ backgroundColor: t.accent }} />
-                    <div className="size-1.5 rounded-full opacity-40" style={{ backgroundColor: t.accent }} />
-                    <div className="size-1.5 rounded-full opacity-20" style={{ backgroundColor: t.accent }} />
+                    <div
+                      className="size-1.5 rounded-full opacity-40"
+                      style={{ backgroundColor: t.accent }}
+                    />
+                    <div
+                      className="size-1.5 rounded-full opacity-20"
+                      style={{ backgroundColor: t.accent }}
+                    />
                   </div>
                   <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
                 </div>
@@ -1018,14 +1081,23 @@ function ThemePickerGrid({
 
                   <div className="flex-1 p-2 flex flex-col gap-1.5">
                     <div className="flex items-center gap-1">
-                      <div className="h-1 w-6 rounded-full opacity-80" style={{ backgroundColor: t.codeKeyword }} />
+                      <div
+                        className="h-1 w-6 rounded-full opacity-80"
+                        style={{ backgroundColor: t.codeKeyword }}
+                      />
                       <div className="h-1 w-10 rounded-full opacity-50 bg-foreground" />
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="h-1 w-4 rounded-full opacity-30 bg-foreground" />
-                      <div className="h-1 w-12 rounded-full opacity-70" style={{ backgroundColor: t.codeString }} />
+                      <div
+                        className="h-1 w-12 rounded-full opacity-70"
+                        style={{ backgroundColor: t.codeString }}
+                      />
                     </div>
-                    <div className="h-1 w-8 rounded-full opacity-90" style={{ backgroundColor: t.accent }} />
+                    <div
+                      className="h-1 w-8 rounded-full opacity-90"
+                      style={{ backgroundColor: t.accent }}
+                    />
                   </div>
                 </div>
               </div>
@@ -1126,19 +1198,31 @@ function ThemePickerGrid({
                     style={{ backgroundColor: preset.config.colors.card }}
                   >
                     <div className="flex items-center gap-1.5">
-                      <div className="size-2 rounded-full" style={{ backgroundColor: preset.config.colors.primary }} />
+                      <div
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: preset.config.colors.primary }}
+                      />
                     </div>
                     <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
                   </div>
 
                   <div className="flex h-full p-2 flex-col gap-1.5">
-                    <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: preset.config.colors.primary }} />
-                    <div className="h-1.5 w-20 rounded-full opacity-70" style={{ backgroundColor: preset.config.colors.foreground }} />
+                    <div
+                      className="h-1.5 w-12 rounded-full"
+                      style={{ backgroundColor: preset.config.colors.primary }}
+                    />
+                    <div
+                      className="h-1.5 w-20 rounded-full opacity-70"
+                      style={{ backgroundColor: preset.config.colors.foreground }}
+                    />
                   </div>
                 </div>
 
                 {isEditing ? (
-                  <div className="mt-3 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="mt-3 flex items-center gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Input
                       autoFocus
                       value={editingNameInput}
@@ -1280,7 +1364,8 @@ function CustomStudioDrawer({
   };
 
   const handleReset = () => {
-    const isLightMode = config.baseVariant === "light" || document.documentElement.classList.contains("light");
+    const isLightMode =
+      config.baseVariant === "light" || document.documentElement.classList.contains("light");
     onChange(isLightMode ? DEFAULT_CUSTOM_THEME_LIGHT : DEFAULT_CUSTOM_THEME);
   };
 
@@ -1292,7 +1377,9 @@ function CustomStudioDrawer({
           <div className="flex items-center gap-2.5">
             <PaletteIcon className="size-5 text-muted-foreground shrink-0" />
             <div>
-              <h3 className="text-base font-bold text-foreground tracking-tight">Custom Theme Studio</h3>
+              <h3 className="text-base font-bold text-foreground tracking-tight">
+                Custom Theme Studio
+              </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Design, randomize, and save personalized color palettes and typography suites.
               </p>
@@ -1343,13 +1430,20 @@ function CustomStudioDrawer({
                   <TooltipPopup side="top" className="max-w-64 text-center p-2">
                     {contrastInfo.isLowContrast ? (
                       <p className="text-xs leading-relaxed">
-                        <strong className="text-amber-400 block mb-0.5 font-semibold">Low Text Contrast ({contrastInfo.ratio}:1)</strong>
-                        Text color has low contrast against the background color, which may make text hard to read. Try brightening your text color or darkening the background.
+                        <strong className="text-amber-400 block mb-0.5 font-semibold">
+                          Low Text Contrast ({contrastInfo.ratio}:1)
+                        </strong>
+                        Text color has low contrast against the background color, which may make
+                        text hard to read. Try brightening your text color or darkening the
+                        background.
                       </p>
                     ) : (
                       <p className="text-xs leading-relaxed">
-                        <strong className="text-foreground block mb-0.5 font-semibold">Sufficient Contrast ({contrastInfo.ratio}:1)</strong>
-                        Text and background colors have strong contrast, ensuring all UI typography is clear and comfortable to read.
+                        <strong className="text-foreground block mb-0.5 font-semibold">
+                          Sufficient Contrast ({contrastInfo.ratio}:1)
+                        </strong>
+                        Text and background colors have strong contrast, ensuring all UI typography
+                        is clear and comfortable to read.
                       </p>
                     )}
                   </TooltipPopup>
@@ -1359,8 +1453,12 @@ function CustomStudioDrawer({
               {/* Base Variant Switcher */}
               <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-background/50 p-3">
                 <div>
-                  <span className="text-xs font-semibold text-foreground block">Base Window Variant</span>
-                  <span className="text-[11px] text-muted-foreground">Native titlebar theme source</span>
+                  <span className="text-xs font-semibold text-foreground block">
+                    Base Window Variant
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Native titlebar theme source
+                  </span>
                 </div>
                 <div className="flex rounded-xl bg-muted p-1 border border-border/40">
                   <button
@@ -1440,9 +1538,15 @@ function CustomStudioDrawer({
                     fontFamily: config.fonts.uiFont,
                   }}
                 >
-                  <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: config.colors.border }}>
+                  <div
+                    className="flex items-center justify-between border-b pb-2.5"
+                    style={{ borderColor: config.colors.border }}
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold" style={{ color: config.colors.foreground }}>
+                      <span
+                        className="text-xs font-bold"
+                        style={{ color: config.colors.foreground }}
+                      >
                         Tabs Custom Shell
                       </span>
                       <span
@@ -1481,8 +1585,12 @@ function CustomStudioDrawer({
                     <span style={{ color: config.colors.foreground }}>renderCustomTheme</span>
                     <span style={{ color: config.colors.foreground }}>() &#123;</span>
                     <br />
-                    <span className="pl-4" style={{ color: config.colors.primary }}>return </span>
-                    <span style={{ color: config.colors.foreground }}>&quot;Ultra Premium UI&quot;;</span>
+                    <span className="pl-4" style={{ color: config.colors.primary }}>
+                      return{" "}
+                    </span>
+                    <span style={{ color: config.colors.foreground }}>
+                      &quot;Ultra Premium UI&quot;;
+                    </span>
                     <br />
                     <span style={{ color: config.colors.foreground }}>&#125;</span>
                   </div>
@@ -1496,7 +1604,9 @@ function CustomStudioDrawer({
                 </h4>
 
                 <div className="space-y-2 rounded-2xl border border-border/80 bg-background/50 p-4">
-                  <label className="text-xs font-semibold text-foreground block">UI Sans-Serif Font</label>
+                  <label className="text-xs font-semibold text-foreground block">
+                    UI Sans-Serif Font
+                  </label>
                   <Select
                     value={config.fonts.uiFont}
                     onValueChange={(val) => val && updateFont("uiFont", val)}
@@ -1515,7 +1625,9 @@ function CustomStudioDrawer({
                 </div>
 
                 <div className="space-y-2 rounded-2xl border border-border/80 bg-background/50 p-4">
-                  <label className="text-xs font-semibold text-foreground block">Editor Monospace Font</label>
+                  <label className="text-xs font-semibold text-foreground block">
+                    Editor Monospace Font
+                  </label>
                   <Select
                     value={config.fonts.editorFont}
                     onValueChange={(val) => val && updateFont("editorFont", val)}
@@ -1606,9 +1718,16 @@ function CustomStudioDrawer({
 }
 
 const CURATED_STUDIO_SWATCHES = [
-  "#6366F1", "#06B6D4", "#10B981", "#F43F5E",
-  "#F59E0B", "#A855F7", "#EC4899", "#3B82F6",
-  "#1E293B", "#F8FAFC"
+  "#6366F1",
+  "#06B6D4",
+  "#10B981",
+  "#F43F5E",
+  "#F59E0B",
+  "#A855F7",
+  "#EC4899",
+  "#3B82F6",
+  "#1E293B",
+  "#F8FAFC",
 ];
 
 function StudioColorPickerPopover({
@@ -1719,7 +1838,10 @@ function StudioColorPickerPopover({
             <PipetteIcon className="size-4" />
           </button>
         ) : (
-          <div className="size-8 shrink-0 rounded-xl border border-border shadow-xs" style={{ backgroundColor: value }} />
+          <div
+            className="size-8 shrink-0 rounded-xl border border-border shadow-xs"
+            style={{ backgroundColor: value }}
+          />
         )}
 
         {/* Custom Hue Track */}
@@ -1753,7 +1875,9 @@ function StudioColorPickerPopover({
               onClick={() => setFormat("hex")}
               className={cn(
                 "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
-                format === "hex" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                format === "hex"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               HEX
@@ -1763,7 +1887,9 @@ function StudioColorPickerPopover({
               onClick={() => setFormat("rgb")}
               className={cn(
                 "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
-                format === "rgb" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                format === "rgb"
+                  ? "bg-background text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               RGB
@@ -1776,7 +1902,7 @@ function StudioColorPickerPopover({
                 "text-[10px] font-mono px-1.5 py-0.5 rounded-full border",
                 contrastInfo.isLowContrast
                   ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
-                  : "border-border/80 bg-muted/60 text-muted-foreground"
+                  : "border-border/80 bg-muted/60 text-muted-foreground",
               )}
             >
               {contrastInfo.ratio}:1
@@ -1787,7 +1913,11 @@ function StudioColorPickerPopover({
               title="Copy hex code"
               className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
             >
-              {copied ? <CheckIcon className="size-3.5 text-primary" /> : <CopyIcon className="size-3.5" />}
+              {copied ? (
+                <CheckIcon className="size-3.5 text-primary" />
+              ) : (
+                <CopyIcon className="size-3.5" />
+              )}
             </button>
           </div>
         </div>
@@ -1804,35 +1934,47 @@ function StudioColorPickerPopover({
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">R</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">
+                R
+              </span>
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={currentRgb.r}
-                onChange={(e) => onChange(rgbToHex(Number(e.target.value), currentRgb.g, currentRgb.b))}
+                onChange={(e) =>
+                  onChange(rgbToHex(Number(e.target.value), currentRgb.g, currentRgb.b))
+                }
                 className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
             </div>
             <div>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">G</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">
+                G
+              </span>
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={currentRgb.g}
-                onChange={(e) => onChange(rgbToHex(currentRgb.r, Number(e.target.value), currentRgb.b))}
+                onChange={(e) =>
+                  onChange(rgbToHex(currentRgb.r, Number(e.target.value), currentRgb.b))
+                }
                 className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
             </div>
             <div>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">B</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">
+                B
+              </span>
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={currentRgb.b}
-                onChange={(e) => onChange(rgbToHex(currentRgb.r, currentRgb.g, Number(e.target.value)))}
+                onChange={(e) =>
+                  onChange(rgbToHex(currentRgb.r, currentRgb.g, Number(e.target.value)))
+                }
                 className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
             </div>
@@ -1849,7 +1991,8 @@ function StudioColorPickerPopover({
             onClick={() => onChange(swatch)}
             className={cn(
               "size-4.5 rounded-full border border-black/20 shadow-xs transition-transform hover:scale-125 cursor-pointer",
-              value.toLowerCase() === swatch.toLowerCase() && "ring-2 ring-primary ring-offset-1 ring-offset-card"
+              value.toLowerCase() === swatch.toLowerCase() &&
+                "ring-2 ring-primary ring-offset-1 ring-offset-card",
             )}
             style={{ backgroundColor: swatch }}
           />
@@ -1886,7 +2029,10 @@ function ColorPickerRow({
   }, [isOpen]);
 
   return (
-    <div ref={popoverRef} className="relative flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/50 p-3 transition-all hover:border-border">
+    <div
+      ref={popoverRef}
+      className="relative flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/50 p-3 transition-all hover:border-border"
+    >
       <div className="min-w-0 flex-1">
         <span className="text-xs font-semibold text-foreground block truncate">{label}</span>
         <p className="text-[11px] text-muted-foreground truncate">{description}</p>
@@ -2087,11 +2233,9 @@ function SettingsRouteView() {
     (provider: ProviderSettingsKey) => {
       const pendingOrder = draftModelOrders[provider];
       if (pendingOrder) {
-        const nextPrefs = updateModelOrder(
-          settings.providerModelPreferences,
-          provider,
-          [...pendingOrder],
-        );
+        const nextPrefs = updateModelOrder(settings.providerModelPreferences, provider, [
+          ...pendingOrder,
+        ]);
         updateSettings({ providerModelPreferences: nextPrefs as any });
         setDraftModelOrders((existing) => {
           const next = { ...existing };
@@ -2120,49 +2264,57 @@ function SettingsRouteView() {
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
-  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() => getStoredSavedPresets());
+  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() =>
+    getStoredSavedPresets(),
+  );
 
-  const handleSavePreset = useCallback((name: string, config: CustomThemeConfig) => {
-    const newPreset: SavedCustomPreset = {
-      id: `custom-saved-${Date.now()}`,
-      name,
-      config,
-      createdAt: Date.now(),
-    };
-    setSavedPresets((prev) => {
-      const next = [newPreset, ...prev];
-      saveSavedPresetsToStorage(next);
-      return next;
-    });
-    setCustomThemeConfig(config);
-    setTheme("custom");
-    setIsStudioOpen(false);
-    toastManager.add({
-      type: "success",
-      title: "Preset Saved",
-      description: `"${name}" saved to your theme presets.`,
-    });
-  }, [setCustomThemeConfig, setTheme]);
+  const handleSavePreset = useCallback(
+    (name: string, config: CustomThemeConfig) => {
+      const newPreset: SavedCustomPreset = {
+        id: `custom-saved-${Date.now()}`,
+        name,
+        config,
+        createdAt: Date.now(),
+      };
+      setSavedPresets((prev) => {
+        const next = [newPreset, ...prev];
+        saveSavedPresetsToStorage(next);
+        return next;
+      });
+      setCustomThemeConfig(config);
+      setTheme("custom");
+      setIsStudioOpen(false);
+      toastManager.add({
+        type: "success",
+        title: "Preset Saved",
+        description: `"${name}" saved to your theme presets.`,
+      });
+    },
+    [setCustomThemeConfig, setTheme],
+  );
 
-  const handleDeletePreset = useCallback(async (presetId: string) => {
-    const preset = savedPresets.find((p) => p.id === presetId);
-    const presetName = preset ? `"${preset.name}"` : "this custom preset";
-    const confirmed = await confirm(
-      `Delete Theme Preset?\n\nAre you sure you want to delete ${presetName}? This action cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const handleDeletePreset = useCallback(
+    async (presetId: string) => {
+      const preset = savedPresets.find((p) => p.id === presetId);
+      const presetName = preset ? `"${preset.name}"` : "this custom preset";
+      const confirmed = await confirm(
+        `Delete Theme Preset?\n\nAre you sure you want to delete ${presetName}? This action cannot be undone.`,
+      );
+      if (!confirmed) return;
 
-    setSavedPresets((prev) => {
-      const next = prev.filter((p) => p.id !== presetId);
-      saveSavedPresetsToStorage(next);
-      return next;
-    });
-    toastManager.add({
-      type: "info",
-      title: "Preset Deleted",
-      description: "Custom theme preset removed.",
-    });
-  }, [confirm, savedPresets]);
+      setSavedPresets((prev) => {
+        const next = prev.filter((p) => p.id !== presetId);
+        saveSavedPresetsToStorage(next);
+        return next;
+      });
+      toastManager.add({
+        type: "info",
+        title: "Preset Deleted",
+        description: "Custom theme preset removed.",
+      });
+    },
+    [confirm, savedPresets],
+  );
 
   const handleRenamePreset = useCallback((presetId: string, newName: string) => {
     if (!newName.trim()) return;
@@ -2239,7 +2391,10 @@ function SettingsRouteView() {
           ).length;
           const failedProviders = providersList
             .filter((p) => p.status === "error")
-            .map((p) => PROVIDER_DISPLAY_NAMES[p.driver as keyof typeof PROVIDER_DISPLAY_NAMES] ?? p.driver);
+            .map(
+              (p) =>
+                PROVIDER_DISPLAY_NAMES[p.driver as keyof typeof PROVIDER_DISPLAY_NAMES] ?? p.driver,
+            );
 
           if (failedProviders.length > 0) {
             toastManager.add({
@@ -2267,7 +2422,8 @@ function SettingsRouteView() {
         toastManager.add({
           type: "error",
           title: "Refresh failed",
-          description: error instanceof Error ? error.message : "Failed to query provider model endpoints.",
+          description:
+            error instanceof Error ? error.message : "Failed to query provider model endpoints.",
         });
       })
       .finally(() => {
@@ -2635,10 +2791,10 @@ function SettingsRouteView() {
     const models = applyCustomModelOrdering(mergedModels, customOrder, providerSettings.provider);
     const hasPendingOrderChanges = Boolean(
       draftModelOrders[providerSettings.provider] &&
-        !Equal.equals(
-          draftModelOrders[providerSettings.provider],
-          settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder ?? [],
-        ),
+      !Equal.equals(
+        draftModelOrders[providerSettings.provider],
+        settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder ?? [],
+      ),
     );
     const binaryPathValue = providerConfig.binaryPath;
     const isDirty = !Equal.equals(providerConfig, defaultProviderConfig);
@@ -2771,7 +2927,8 @@ function SettingsRouteView() {
                             General
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Customize appearance, assistant behavior, display settings, and workspace preferences.
+                            Customize appearance, assistant behavior, display settings, and
+                            workspace preferences.
                           </p>
                         </div>
                         <SettingsHeaderPortal>
@@ -2790,7 +2947,8 @@ function SettingsRouteView() {
                                   diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
                                   enableAssistantStreaming:
                                     DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
-                                  defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+                                  defaultThreadEnvMode:
+                                    DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
                                   confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
                                   confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
                                 });
@@ -2802,13 +2960,23 @@ function SettingsRouteView() {
                           </Button>
                         </SettingsHeaderPortal>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     {/* Group 1: Appearance & Interface */}
                     <SettingsSection title="Appearance & Interface">
-
                       <SettingsRow
                         title="Zoom & Scale"
                         description="Adjust interface zoom level. Drag slider or use Cmd + / Cmd -."
@@ -2817,85 +2985,93 @@ function SettingsRouteView() {
                             <SettingResetButton label="zoom" onClick={() => updateZoom(1.0)} />
                           ) : null
                         }
-                        control={
-                          (() => {
-                            const currentIndex = Math.max(
-                              0,
-                              ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01)
-                            );
-                            return (
-                              <div className="flex flex-col gap-2 w-full sm:w-72">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground/70 font-medium">Scale Range</span>
-                                  <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
-                                    {Math.round(zoomFactor * 100)}%
-                                  </span>
-                                </div>
+                        control={(() => {
+                          const currentIndex = Math.max(
+                            0,
+                            ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01),
+                          );
+                          return (
+                            <div className="flex flex-col gap-2 w-full sm:w-72">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground/70 font-medium">
+                                  Scale Range
+                                </span>
+                                <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
+                                  {Math.round(zoomFactor * 100)}%
+                                </span>
+                              </div>
 
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-                                    onClick={() => updateZoom(ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)] ?? 1.0)}
-                                    title="Zoom Out (Cmd -)"
-                                    aria-label="Zoom Out"
-                                  >
-                                    <MinusIcon className="h-3.5 w-3.5" />
-                                  </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                  onClick={() =>
+                                    updateZoom(
+                                      ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)] ?? 1.0,
+                                    )
+                                  }
+                                  title="Zoom Out (Cmd -)"
+                                  aria-label="Zoom Out"
+                                >
+                                  <MinusIcon className="h-3.5 w-3.5" />
+                                </Button>
 
-                                  <div className="relative flex-1 flex items-center px-1">
-                                    <input
-                                      type="range"
-                                      min="0"
-                                      max={ZOOM_SNAP_POINTS.length - 1}
-                                      step="1"
-                                      value={currentIndex}
-                                      onChange={(e) =>
-                                        updateZoom(ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)] ?? 1.0)
-                                      }
-                                      aria-label="Zoom level slider"
-                                      className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
-                                    />
-                                  </div>
-
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-                                    onClick={() =>
+                                <div className="relative flex-1 flex items-center px-1">
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max={ZOOM_SNAP_POINTS.length - 1}
+                                    step="1"
+                                    value={currentIndex}
+                                    onChange={(e) =>
                                       updateZoom(
-                                        ZOOM_SNAP_POINTS[
-                                          Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
-                                        ] ?? 1.0
+                                        ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)] ?? 1.0,
                                       )
                                     }
-                                    title="Zoom In (Cmd +)"
-                                    aria-label="Zoom In"
-                                  >
-                                    <PlusIcon className="h-3.5 w-3.5" />
-                                  </Button>
+                                    aria-label="Zoom level slider"
+                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
+                                  />
                                 </div>
 
-                                <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
-                                  {ZOOM_SNAP_POINTS.map((pt) => (
-                                    <button
-                                      key={pt}
-                                      type="button"
-                                      onClick={() => updateZoom(pt)}
-                                      className={cn(
-                                        "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
-                                        Math.abs(zoomFactor - pt) < 0.01 ? "text-primary font-bold" : ""
-                                      )}
-                                    >
-                                      {Math.round(pt * 100)}%
-                                    </button>
-                                  ))}
-                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                  onClick={() =>
+                                    updateZoom(
+                                      ZOOM_SNAP_POINTS[
+                                        Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
+                                      ] ?? 1.0,
+                                    )
+                                  }
+                                  title="Zoom In (Cmd +)"
+                                  aria-label="Zoom In"
+                                >
+                                  <PlusIcon className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
-                            );
-                          })()
-                        }
+
+                              <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
+                                {ZOOM_SNAP_POINTS.map((pt) => (
+                                  <button
+                                    key={pt}
+                                    type="button"
+                                    onClick={() => updateZoom(pt)}
+                                    className={cn(
+                                      "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
+                                      Math.abs(zoomFactor - pt) < 0.01
+                                        ? "text-primary font-bold"
+                                        : "",
+                                    )}
+                                  >
+                                    {Math.round(pt * 100)}%
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       />
 
                       {isElectron ? (
@@ -2921,8 +3097,15 @@ function SettingsRouteView() {
                                   key={option.value}
                                   type="button"
                                   onClick={() => {
-                                    if (option.value !== "dark" && option.value !== "light" && option.value !== "system") return;
-                                    updateSettings({ desktopIconTheme: option.value as "dark" | "light" });
+                                    if (
+                                      option.value !== "dark" &&
+                                      option.value !== "light" &&
+                                      option.value !== "system"
+                                    )
+                                      return;
+                                    updateSettings({
+                                      desktopIconTheme: option.value as "dark" | "light",
+                                    });
                                   }}
                                   aria-label={`Desktop icon: ${option.label}`}
                                   className={cn(
@@ -3182,7 +3365,8 @@ function SettingsRouteView() {
                               label="new threads"
                               onClick={() =>
                                 updateSettings({
-                                  defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+                                  defaultThreadEnvMode:
+                                    DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
                                 })
                               }
                             />
@@ -3296,7 +3480,8 @@ function SettingsRouteView() {
                                   toastManager.add({
                                     type: "success",
                                     title: "Code OSS reloaded",
-                                    description: "Re-created the Code OSS BrowserView successfully.",
+                                    description:
+                                      "Re-created the Code OSS BrowserView successfully.",
                                   });
                                 }
                               } catch (e) {
@@ -3312,7 +3497,7 @@ function SettingsRouteView() {
                           </Button>
                         }
                       />
-                      
+
                       <SettingsRow
                         title="Reload Embedded Browser Previews"
                         description="If browser previews or custom embeds fail to synchronize, click reload to recreate the browser preview view."
@@ -3326,11 +3511,14 @@ function SettingsRouteView() {
                               try {
                                 const bridge = window.desktopBridge;
                                 if (bridge) {
-                                  await bridge.recreateBrowserSession({ projectId: activeProjectId });
+                                  await bridge.recreateBrowserSession({
+                                    projectId: activeProjectId,
+                                  });
                                   toastManager.add({
                                     type: "success",
                                     title: "Browser Preview reloaded",
-                                    description: "Re-created the Browser Preview BrowserView successfully.",
+                                    description:
+                                      "Re-created the Browser Preview BrowserView successfully.",
                                   });
                                 }
                               } catch (e) {
@@ -3358,7 +3546,8 @@ function SettingsRouteView() {
                             Themes
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Choose from curated palettes or build a fully personalized custom color and typography theme.
+                            Choose from curated palettes or build a fully personalized custom color
+                            and typography theme.
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -3389,8 +3578,19 @@ function SettingsRouteView() {
                           </Button>
                         </div>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     <SettingsSection title="App Themes & Styling">
@@ -3575,284 +3775,296 @@ function SettingsRouteView() {
                           </Button>
                         </SettingsHeaderPortal>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     <SettingsSection title="Animation Controls">
-                    <div className="flex flex-col gap-10">
-                      {/* ANIMATION CONTROLS (Toggled) */}
-                      <div className="flex flex-col gap-5">
-                        <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex items-center justify-between">
-                          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
-                          </h2>
-                          <div className="flex bg-muted p-1 rounded-lg gap-1">
-                            <button
-                              onClick={() => setAnimationTab("startup")}
-                              className={cn(
-                                "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
-                                animationTab === "startup"
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                              )}
-                            >
-                              Startup
-                            </button>
-                            <button
-                              onClick={() => setAnimationTab("close")}
-                              className={cn(
-                                "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
-                                animationTab === "close"
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                              )}
-                            >
-                              Close
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Live Preview Container */}
-                        <div className="px-4 sm:px-5">
-                          <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
-                            <div
-                              className={cn(
-                                "aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300",
-                                activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white",
-                              )}
-                            >
-                              {/* Wrap in fixed 1280x720 scaled to 50% */}
-                              <div
-                                className="absolute"
-                                style={{
-                                  width: "1280px",
-                                  height: "720px",
-                                  transform: "scale(0.5)",
-                                }}
-                              >
-                                {animationTab === "startup" ? (
-                                  <SplashScreen
-                                    loader={activeStyle}
-                                    palette={activePalette}
-                                    theme={activeTheme}
-                                  />
-                                ) : (
-                                  <CloseScreen
-                                    key={closeReplayKey}
-                                    loader={activeStyle}
-                                    palette={activePalette}
-                                    theme={activeTheme}
-                                    phase="closing"
-                                    onIntroEnd={() => {}}
-                                  />
+                      <div className="flex flex-col gap-10">
+                        {/* ANIMATION CONTROLS (Toggled) */}
+                        <div className="flex flex-col gap-5">
+                          <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex items-center justify-between">
+                            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
+                            </h2>
+                            <div className="flex bg-muted p-1 rounded-lg gap-1">
+                              <button
+                                onClick={() => setAnimationTab("startup")}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  animationTab === "startup"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
                                 )}
-                              </div>
+                              >
+                                Startup
+                              </button>
+                              <button
+                                onClick={() => setAnimationTab("close")}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  animationTab === "close"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                )}
+                              >
+                                Close
+                              </button>
                             </div>
-                            <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground mr-2">
-                                  Preview Theme:
-                                </span>
-                                <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
-                                  {["system", "dark", "light"].map((t) => (
-                                    <button
-                                      key={t}
-                                      onClick={() => setActiveTheme(t as any)}
-                                      className={cn(
-                                        "px-3 py-1 text-xs font-medium rounded transition-colors capitalize",
-                                        activeTheme === t
-                                          ? "bg-background text-foreground shadow-sm"
-                                          : "text-muted-foreground hover:text-foreground",
-                                      )}
-                                    >
-                                      {t === "system" ? "Auto" : t}
-                                    </button>
-                                  ))}
+                          </div>
+
+                          {/* Live Preview Container */}
+                          <div className="px-4 sm:px-5">
+                            <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
+                              <div
+                                className={cn(
+                                  "aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300",
+                                  activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white",
+                                )}
+                              >
+                                {/* Wrap in fixed 1280x720 scaled to 50% */}
+                                <div
+                                  className="absolute"
+                                  style={{
+                                    width: "1280px",
+                                    height: "720px",
+                                    transform: "scale(0.5)",
+                                  }}
+                                >
+                                  {animationTab === "startup" ? (
+                                    <SplashScreen
+                                      loader={activeStyle}
+                                      palette={activePalette}
+                                      theme={activeTheme}
+                                    />
+                                  ) : (
+                                    <CloseScreen
+                                      key={closeReplayKey}
+                                      loader={activeStyle}
+                                      palette={activePalette}
+                                      theme={activeTheme}
+                                      phase="closing"
+                                      onIntroEnd={() => {}}
+                                    />
+                                  )}
                                 </div>
                               </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => {
-                                  updateSettings({
-                                    splashLoaderStyle: previewStyle,
-                                    splashLoaderPalette: previewPalette,
-                                    splashLoaderTheme: previewTheme,
-                                    closeLoaderStyle: closePreviewStyle,
-                                    closeLoaderPalette: closePreviewPalette,
-                                    closeLoaderTheme: closePreviewTheme,
-                                  });
-                                  if (animationTab === "startup") {
-                                    setTimeout(() => window.location.reload(), 150);
-                                  } else {
-                                    setCloseReplayKey((k) => k + 1);
-                                    setFullscreenClosePreview(true);
-                                  }
-                                }}
-                              >
-                                {animationTab === "startup" ? (
-                                  <>
-                                    <RefreshCwIcon className="mr-1.5 size-3" /> Reload App
-                                  </>
-                                ) : (
-                                  <>
-                                    <MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen
-                                  </>
-                                )}
-                              </Button>
+                              <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground mr-2">
+                                    Preview Theme:
+                                  </span>
+                                  <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
+                                    {["system", "dark", "light"].map((t) => (
+                                      <button
+                                        key={t}
+                                        onClick={() => setActiveTheme(t as any)}
+                                        className={cn(
+                                          "px-3 py-1 text-xs font-medium rounded transition-colors capitalize",
+                                          activeTheme === t
+                                            ? "bg-background text-foreground shadow-sm"
+                                            : "text-muted-foreground hover:text-foreground",
+                                        )}
+                                      >
+                                        {t === "system" ? "Auto" : t}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => {
+                                    updateSettings({
+                                      splashLoaderStyle: previewStyle,
+                                      splashLoaderPalette: previewPalette,
+                                      splashLoaderTheme: previewTheme,
+                                      closeLoaderStyle: closePreviewStyle,
+                                      closeLoaderPalette: closePreviewPalette,
+                                      closeLoaderTheme: closePreviewTheme,
+                                    });
+                                    if (animationTab === "startup") {
+                                      setTimeout(() => window.location.reload(), 150);
+                                    } else {
+                                      setCloseReplayKey((k) => k + 1);
+                                      setFullscreenClosePreview(true);
+                                    }
+                                  }}
+                                >
+                                  {animationTab === "startup" ? (
+                                    <>
+                                      <RefreshCwIcon className="mr-1.5 size-3" /> Reload App
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MonitorPlayIcon className="mr-1.5 size-3" /> Preview
+                                      Fullscreen
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <SettingsRow
-                          title="Style"
-                          description={`Choose the visual aesthetic for the ${animationTab} animation.`}
-                          control={
-                            <div className="flex bg-muted p-1 rounded-lg gap-1">
-                              {[
-                                { value: "glass", label: "Molten Glass" },
-                                { value: "solari", label: "Solari Grid" },
-                              ].map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => setActiveStyle(option.value as any)}
-                                  className={cn(
-                                    "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
-                                    activeStyle === option.value
-                                      ? "bg-background text-foreground shadow-sm"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          }
-                        />
-
-                        <SettingsRow
-                          title="Color palette"
-                          description={`Choose the color palette for the ${animationTab} animation.`}
-                          control={
-                            <div className="flex bg-muted p-1 rounded-lg gap-1">
-                              {[
-                                { value: "block", label: "Solid Block" },
-                                { value: "mono", label: "Monochrome" },
-                              ].map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => setActivePalette(option.value as any)}
-                                  className={cn(
-                                    "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
-                                    activePalette === option.value
-                                      ? "bg-background text-foreground shadow-sm"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          }
-                        />
-                      </div>
-
-                      {(previewStyle !== settings.splashLoaderStyle ||
-                        previewPalette !== settings.splashLoaderPalette ||
-                        previewTheme !== settings.splashLoaderTheme ||
-                        closePreviewStyle !== settings.closeLoaderStyle ||
-                        closePreviewPalette !== settings.closeLoaderPalette ||
-                        closePreviewTheme !== settings.closeLoaderTheme) && (
-                        <div className="flex justify-end p-4 sm:p-5 border-t border-border">
-                          <Button
-                            onClick={() =>
-                              updateSettings({
-                                splashLoaderStyle: previewStyle,
-                                splashLoaderPalette: previewPalette,
-                                splashLoaderTheme: previewTheme,
-                                closeLoaderStyle: closePreviewStyle,
-                                closeLoaderPalette: closePreviewPalette,
-                                closeLoaderTheme: closePreviewTheme,
-                              })
+                          <SettingsRow
+                            title="Style"
+                            description={`Choose the visual aesthetic for the ${animationTab} animation.`}
+                            control={
+                              <div className="flex bg-muted p-1 rounded-lg gap-1">
+                                {[
+                                  { value: "glass", label: "Molten Glass" },
+                                  { value: "solari", label: "Solari Grid" },
+                                ].map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setActiveStyle(option.value as any)}
+                                    className={cn(
+                                      "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
+                                      activeStyle === option.value
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                    )}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
                             }
-                            className="gap-2"
-                          >
-                            <SaveIcon className="size-4" />
-                            Save Settings
-                          </Button>
-                        </div>
-                      )}
+                          />
 
-                      {/* INTERFACE GROUP */}
-                      <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
-                        <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          Interface
-                        </h2>
-                        <SettingsRow
-                          title="Slider animations"
-                          description="Smoothly animate the model picker's reasoning-effort slider."
-                          resetAction={
-                            settings.sliderAnimationsEnabled !==
-                            DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
-                              <SettingResetButton
-                                label="slider animations"
-                                onClick={() =>
-                                  updateSettings({
-                                    sliderAnimationsEnabled:
-                                      DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <Switch
-                              checked={settings.sliderAnimationsEnabled}
-                              onCheckedChange={(checked) =>
+                          <SettingsRow
+                            title="Color palette"
+                            description={`Choose the color palette for the ${animationTab} animation.`}
+                            control={
+                              <div className="flex bg-muted p-1 rounded-lg gap-1">
+                                {[
+                                  { value: "block", label: "Solid Block" },
+                                  { value: "mono", label: "Monochrome" },
+                                ].map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setActivePalette(option.value as any)}
+                                    className={cn(
+                                      "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
+                                      activePalette === option.value
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                    )}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            }
+                          />
+                        </div>
+
+                        {(previewStyle !== settings.splashLoaderStyle ||
+                          previewPalette !== settings.splashLoaderPalette ||
+                          previewTheme !== settings.splashLoaderTheme ||
+                          closePreviewStyle !== settings.closeLoaderStyle ||
+                          closePreviewPalette !== settings.closeLoaderPalette ||
+                          closePreviewTheme !== settings.closeLoaderTheme) && (
+                          <div className="flex justify-end p-4 sm:p-5 border-t border-border">
+                            <Button
+                              onClick={() =>
                                 updateSettings({
-                                  sliderAnimationsEnabled: Boolean(checked),
+                                  splashLoaderStyle: previewStyle,
+                                  splashLoaderPalette: previewPalette,
+                                  splashLoaderTheme: previewTheme,
+                                  closeLoaderStyle: closePreviewStyle,
+                                  closeLoaderPalette: closePreviewPalette,
+                                  closeLoaderTheme: closePreviewTheme,
                                 })
                               }
-                              aria-label="Slider animations"
-                            />
-                          }
-                        />
+                              className="gap-2"
+                            >
+                              <SaveIcon className="size-4" />
+                              Save Settings
+                            </Button>
+                          </div>
+                        )}
 
-                        <SettingsRow
-                          title="Animated slider fill"
-                          description="Smoothly animate the fill color of sliders when value changes."
-                          resetAction={
-                            settings.animatedTrackFillEnabled !==
-                            DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
-                              <SettingResetButton
-                                label="animated slider fill"
-                                onClick={() =>
+                        {/* INTERFACE GROUP */}
+                        <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
+                          <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Interface
+                          </h2>
+                          <SettingsRow
+                            title="Slider animations"
+                            description="Smoothly animate the model picker's reasoning-effort slider."
+                            resetAction={
+                              settings.sliderAnimationsEnabled !==
+                              DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
+                                <SettingResetButton
+                                  label="slider animations"
+                                  onClick={() =>
+                                    updateSettings({
+                                      sliderAnimationsEnabled:
+                                        DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <Switch
+                                checked={settings.sliderAnimationsEnabled}
+                                onCheckedChange={(checked) =>
                                   updateSettings({
-                                    animatedTrackFillEnabled:
-                                      DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                    sliderAnimationsEnabled: Boolean(checked),
                                   })
                                 }
+                                aria-label="Slider animations"
                               />
-                            ) : null
-                          }
-                          control={
-                            <Switch
-                              checked={settings.animatedTrackFillEnabled}
-                              onCheckedChange={(checked) =>
-                                updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
-                              }
-                              aria-label="Animated slider fill"
-                            />
-                          }
-                        />
+                            }
+                          />
+
+                          <SettingsRow
+                            title="Animated slider fill"
+                            description="Smoothly animate the fill color of sliders when value changes."
+                            resetAction={
+                              settings.animatedTrackFillEnabled !==
+                              DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
+                                <SettingResetButton
+                                  label="animated slider fill"
+                                  onClick={() =>
+                                    updateSettings({
+                                      animatedTrackFillEnabled:
+                                        DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <Switch
+                                checked={settings.animatedTrackFillEnabled}
+                                onCheckedChange={(checked) =>
+                                  updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
+                                }
+                                aria-label="Animated slider fill"
+                              />
+                            }
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </SettingsSection>
-                </div>
+                    </SettingsSection>
+                  </div>
                 ) : null}
                 {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
                 {activeSettingsSection === "source-control" ? (
@@ -3871,7 +4083,8 @@ function SettingsRouteView() {
                             Providers
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Manage AI providers, API keys, custom model endpoints, and status checks.
+                            Manage AI providers, API keys, custom model endpoints, and status
+                            checks.
                           </p>
                         </div>
                         <SettingsHeaderPortal>
@@ -3891,8 +4104,19 @@ function SettingsRouteView() {
                           </Button>
                         </SettingsHeaderPortal>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     {/* 📌 Pinned Models Section */}
@@ -3907,13 +4131,16 @@ function SettingsRouteView() {
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <h3 className="text-sm font-semibold text-foreground">Pinned Models</h3>
+                                  <h3 className="text-sm font-semibold text-foreground">
+                                    Pinned Models
+                                  </h3>
                                   <span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                                     {pinnedEntries.length}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  Quick access models pinned across all providers. Appears at the top of FusedModelPicker.
+                                  Quick access models pinned across all providers. Appears at the
+                                  top of FusedModelPicker.
                                 </p>
                               </div>
                             </div>
@@ -3930,9 +4157,12 @@ function SettingsRouteView() {
                           {pinnedEntries.length === 0 ? (
                             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 py-6 px-4 text-center">
                               <PinIcon className="size-6 text-muted-foreground/40 mb-1.5" />
-                              <div className="text-xs font-medium text-foreground">No Pinned Models Yet</div>
+                              <div className="text-xs font-medium text-foreground">
+                                No Pinned Models Yet
+                              </div>
                               <div className="text-[11px] text-muted-foreground max-w-sm mt-0.5">
-                                Click "+ Pin Model" above or the pin icon next to any model in your provider lists below to pin it.
+                                Click "+ Pin Model" above or the pin icon next to any model in your
+                                provider lists below to pin it.
                               </div>
                             </div>
                           ) : (
@@ -4238,7 +4468,9 @@ function SettingsRouteView() {
                                     className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                                     onClick={() =>
                                       setOpenProviderDetails((existing) => {
-                                        const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
+                                        const isCurrentlyOpen = Boolean(
+                                          existing[providerCard.provider],
+                                        );
                                         if (isCurrentlyOpen) {
                                           return {};
                                         }
@@ -4382,7 +4614,10 @@ function SettingsRouteView() {
                                         <div>
                                           <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                                             Models
-                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[10px] px-1.5 py-0 font-mono"
+                                            >
                                               {providerCard.models.length}
                                             </Badge>
                                           </div>
@@ -4396,14 +4631,18 @@ function SettingsRouteView() {
                                               size="xs"
                                               variant="default"
                                               className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
-                                              onClick={() => handleSaveModelOrder(providerCard.provider)}
+                                              onClick={() =>
+                                                handleSaveModelOrder(providerCard.provider)
+                                              }
                                               title="Save model order changes"
                                             >
                                               <SaveIcon className="size-3" />
                                               Save Order
                                             </Button>
                                           ) : null}
-                                          {settings.providerModelPreferences?.[providerCard.provider as any]?.modelOrder?.length ? (
+                                          {settings.providerModelPreferences?.[
+                                            providerCard.provider as any
+                                          ]?.modelOrder?.length ? (
                                             <Button
                                               size="xs"
                                               variant="ghost"
@@ -4418,7 +4657,9 @@ function SettingsRouteView() {
                                                   settings.providerModelPreferences,
                                                   providerCard.provider,
                                                 );
-                                                updateSettings({ providerModelPreferences: nextPrefs as any });
+                                                updateSettings({
+                                                  providerModelPreferences: nextPrefs as any,
+                                                });
                                               }}
                                               title="Restore default model order"
                                             >
@@ -4438,7 +4679,10 @@ function SettingsRouteView() {
                                       >
                                         <DndContext
                                           collisionDetection={closestCenter}
-                                          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                                          modifiers={[
+                                            restrictToVerticalAxis,
+                                            restrictToParentElement,
+                                          ]}
                                           onDragEnd={(event: DragEndEvent) => {
                                             const { active, over } = event;
                                             if (!over || active.id === over.id) return;
@@ -4454,7 +4698,9 @@ function SettingsRouteView() {
                                                 oldIndex,
                                                 newIndex,
                                               );
-                                              const newOrder = reordered.map((m: ServerProviderModel) => m.slug);
+                                              const newOrder = reordered.map(
+                                                (m: ServerProviderModel) => m.slug,
+                                              );
                                               setDraftModelOrders((existing) => ({
                                                 ...existing,
                                                 [providerCard.provider]: newOrder,
@@ -4463,128 +4709,141 @@ function SettingsRouteView() {
                                           }}
                                         >
                                           <SortableContext
-                                            items={providerCard.models.map((m: ServerProviderModel) => m.slug)}
+                                            items={providerCard.models.map(
+                                              (m: ServerProviderModel) => m.slug,
+                                            )}
                                             strategy={verticalListSortingStrategy}
                                           >
-                                            {providerCard.models.map((model: ServerProviderModel) => {
-                                              const caps = model.capabilities;
-                                              const capLabels: string[] = [];
-                                              if (caps?.supportsFastMode) capLabels.push("Fast");
-                                              if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
-                                              if (
-                                                caps?.reasoningEffortLevels &&
-                                                caps.reasoningEffortLevels.length > 0
-                                              )
-                                                capLabels.push("Reasoning");
-                                              const isPinned = isPinnedModel(
-                                                getPinnedModels(settings),
-                                                providerCard.provider,
-                                                model.slug,
-                                              );
+                                            {providerCard.models.map(
+                                              (model: ServerProviderModel) => {
+                                                const caps = model.capabilities;
+                                                const capLabels: string[] = [];
+                                                if (caps?.supportsFastMode) capLabels.push("Fast");
+                                                if (caps?.supportsThinkingToggle)
+                                                  capLabels.push("Thinking");
+                                                if (
+                                                  caps?.reasoningEffortLevels &&
+                                                  caps.reasoningEffortLevels.length > 0
+                                                )
+                                                  capLabels.push("Reasoning");
+                                                const isPinned = isPinnedModel(
+                                                  getPinnedModels(settings),
+                                                  providerCard.provider,
+                                                  model.slug,
+                                                );
 
-                                              return (
-                                                <SortableModelRowItem
-                                                  key={`${providerCard.provider}:${model.slug}`}
-                                                  id={model.slug}
-                                                >
-                                                  {(handle) => (
-                                                    <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
-                                                      <div className="flex items-center gap-2 min-w-0">
-                                                        <button
-                                                          type="button"
-                                                          className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
-                                                          aria-label={`Reorder ${model.name}`}
-                                                          {...handle.attributes}
-                                                          {...handle.listeners}
-                                                        >
-                                                          <GripVerticalIcon className="size-3.5" />
-                                                        </button>
-                                                        <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
-                                                          {model.name}
-                                                        </span>
-                                                        {capLabels.map((label) => (
-                                                          <span
-                                                            key={label}
-                                                            className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                return (
+                                                  <SortableModelRowItem
+                                                    key={`${providerCard.provider}:${model.slug}`}
+                                                    id={model.slug}
+                                                  >
+                                                    {(handle) => (
+                                                      <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <button
+                                                            type="button"
+                                                            className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
+                                                            aria-label={`Reorder ${model.name}`}
+                                                            {...handle.attributes}
+                                                            {...handle.listeners}
                                                           >
-                                                            {label}
+                                                            <GripVerticalIcon className="size-3.5" />
+                                                          </button>
+                                                          <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
+                                                            {model.name}
                                                           </span>
-                                                        ))}
-                                                      </div>
-
-                                                      <div className="flex items-center gap-1 shrink-0">
-                                                        <button
-                                                          type="button"
-                                                          aria-label={
-                                                            isPinned
-                                                              ? `Unpin ${model.name}`
-                                                              : `Pin ${model.name}`
-                                                          }
-                                                          className={cn(
-                                                            "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
-                                                            isPinned
-                                                              ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
-                                                              : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
-                                                          )}
-                                                          onClick={() => {
-                                                            const nextPinned = togglePinnedModel(
-                                                              settings,
-                                                              providerCard.provider,
-                                                              model.slug,
-                                                            );
-                                                            updateSettings({ pinnedModels: nextPinned as any });
-                                                          }}
-                                                        >
-                                                          <PinIcon className="size-3.5 fill-current" />
-                                                        </button>
-
-                                                        {model.name !== model.slug ? (
-                                                          <Tooltip>
-                                                            <TooltipTrigger
-                                                              render={
-                                                                <button
-                                                                  type="button"
-                                                                  className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
-                                                                  aria-label={`Details for ${model.name}`}
-                                                                >
-                                                                  <InfoIcon className="size-3.5" />
-                                                                </button>
-                                                              }
-                                                            />
-                                                            <TooltipPopup side="top" className="max-w-56">
-                                                              <code className="text-[11px] text-foreground">
-                                                                {model.slug}
-                                                              </code>
-                                                            </TooltipPopup>
-                                                          </Tooltip>
-                                                        ) : null}
-
-                                                        {model.isCustom ? (
-                                                          <div className="flex items-center gap-1 pl-1">
-                                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">
-                                                              custom
-                                                            </Badge>
-                                                            <button
-                                                              type="button"
-                                                              className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                                                              aria-label={`Remove ${model.slug}`}
-                                                              onClick={() =>
-                                                                removeCustomModel(
-                                                                  providerCard.provider,
-                                                                  model.slug,
-                                                                )
-                                                              }
+                                                          {capLabels.map((label) => (
+                                                            <span
+                                                              key={label}
+                                                              className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
                                                             >
-                                                              <XIcon className="size-3" />
-                                                            </button>
-                                                          </div>
-                                                        ) : null}
+                                                              {label}
+                                                            </span>
+                                                          ))}
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                          <button
+                                                            type="button"
+                                                            aria-label={
+                                                              isPinned
+                                                                ? `Unpin ${model.name}`
+                                                                : `Pin ${model.name}`
+                                                            }
+                                                            className={cn(
+                                                              "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
+                                                              isPinned
+                                                                ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
+                                                                : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
+                                                            )}
+                                                            onClick={() => {
+                                                              const nextPinned = togglePinnedModel(
+                                                                settings,
+                                                                providerCard.provider,
+                                                                model.slug,
+                                                              );
+                                                              updateSettings({
+                                                                pinnedModels: nextPinned as any,
+                                                              });
+                                                            }}
+                                                          >
+                                                            <PinIcon className="size-3.5 fill-current" />
+                                                          </button>
+
+                                                          {model.name !== model.slug ? (
+                                                            <Tooltip>
+                                                              <TooltipTrigger
+                                                                render={
+                                                                  <button
+                                                                    type="button"
+                                                                    className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
+                                                                    aria-label={`Details for ${model.name}`}
+                                                                  >
+                                                                    <InfoIcon className="size-3.5" />
+                                                                  </button>
+                                                                }
+                                                              />
+                                                              <TooltipPopup
+                                                                side="top"
+                                                                className="max-w-56"
+                                                              >
+                                                                <code className="text-[11px] text-foreground">
+                                                                  {model.slug}
+                                                                </code>
+                                                              </TooltipPopup>
+                                                            </Tooltip>
+                                                          ) : null}
+
+                                                          {model.isCustom ? (
+                                                            <div className="flex items-center gap-1 pl-1">
+                                                              <Badge
+                                                                variant="secondary"
+                                                                className="text-[9px] px-1 py-0 font-normal"
+                                                              >
+                                                                custom
+                                                              </Badge>
+                                                              <button
+                                                                type="button"
+                                                                className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                                                                aria-label={`Remove ${model.slug}`}
+                                                                onClick={() =>
+                                                                  removeCustomModel(
+                                                                    providerCard.provider,
+                                                                    model.slug,
+                                                                  )
+                                                                }
+                                                              >
+                                                                <XIcon className="size-3" />
+                                                              </button>
+                                                            </div>
+                                                          ) : null}
+                                                        </div>
                                                       </div>
-                                                    </div>
-                                                  )}
-                                                </SortableModelRowItem>
-                                              );
-                                            })}
+                                                    )}
+                                                  </SortableModelRowItem>
+                                                );
+                                              },
+                                            )}
                                           </SortableContext>
                                         </DndContext>
                                       </div>
@@ -4636,7 +4895,9 @@ function SettingsRouteView() {
                                             size="sm"
                                             variant="default"
                                             className="h-7 gap-1.5 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
-                                            onClick={() => handleSaveModelOrder(providerCard.provider)}
+                                            onClick={() =>
+                                              handleSaveModelOrder(providerCard.provider)
+                                            }
                                           >
                                             <SaveIcon className="size-3.5" />
                                             Save Order
@@ -4667,15 +4928,24 @@ function SettingsRouteView() {
                   <div className="space-y-6">
                     <div>
                       <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                          About
-                        </h2>
+                        <h2 className="text-2xl font-bold tracking-tight text-foreground">About</h2>
                         <p className="text-sm text-muted-foreground">
                           Application build details, software updates, and diagnostic information.
                         </p>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     <SettingsSection title="Application Details">

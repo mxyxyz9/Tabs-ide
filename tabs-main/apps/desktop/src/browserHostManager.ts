@@ -54,7 +54,6 @@ type BrowserSession = {
   transientError: string | null;
 };
 
-
 export class BrowserHostManager {
   // Keyed by `${projectId}::${sessionId}` so each browser tab keeps its own
   // BrowserView alive — switching tabs shows/hides instead of reloading.
@@ -273,8 +272,12 @@ export class BrowserHostManager {
     let width = Math.round(input.width * zoomFactor);
     let height = Math.round(input.height * zoomFactor);
 
-    const isDestroyed = typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
-    const getContentSize = typeof mainWindow?.getContentSize === "function" ? mainWindow.getContentSize.bind(mainWindow) : null;
+    const isDestroyed =
+      typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
+    const getContentSize =
+      typeof mainWindow?.getContentSize === "function"
+        ? mainWindow.getContentSize.bind(mainWindow)
+        : null;
 
     if (mainWindow && !isDestroyed && getContentSize) {
       try {

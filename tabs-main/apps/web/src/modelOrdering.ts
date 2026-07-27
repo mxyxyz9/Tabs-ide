@@ -1,5 +1,3 @@
-
-
 export interface ProviderModelPreference {
   readonly hiddenModels: ReadonlyArray<string>;
   readonly modelOrder: ReadonlyArray<string>;
@@ -14,8 +12,6 @@ export type ProviderModelPreferencesMap = Readonly<
     }
   >
 >;
-
-
 
 export function getModelScore(name: string): number {
   const lower = name.toLowerCase();
@@ -36,9 +32,9 @@ export function getModelScore(name: string): number {
   return familyScore + version * 10 + miniPenalty;
 }
 
-export function sortModelsByDefaultSequence<
-  T extends { slug: string; name?: string },
->(models: ReadonlyArray<T>): T[] {
+export function sortModelsByDefaultSequence<T extends { slug: string; name?: string }>(
+  models: ReadonlyArray<T>,
+): T[] {
   if (!models || models.length <= 1) return [...models];
 
   const autoModel = models.find(
@@ -58,9 +54,7 @@ export function sortModelsByDefaultSequence<
 /**
  * Sorts models according to custom user modelOrder while ensuring "auto" models remain at index 0.
  */
-export function applyCustomModelOrdering<
-  T extends { slug: string; name?: string },
->(
+export function applyCustomModelOrdering<T extends { slug: string; name?: string }>(
   models: ReadonlyArray<T>,
   modelOrder: ReadonlyArray<string> | null | undefined,
   _provider?: string,

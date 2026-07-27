@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { AUTO_REFRESH_MIN_INTERVAL_MS, LAST_MODEL_REFRESH_KEY } from "./useAutoRefreshModelsOnStartup";
+import {
+  AUTO_REFRESH_MIN_INTERVAL_MS,
+  LAST_MODEL_REFRESH_KEY,
+} from "./useAutoRefreshModelsOnStartup";
 
 describe("Restart-triggered & Manual Model Discovery Refresh Guard Tests", () => {
   it("defines a 5-minute (300,000ms) minimum interval guard for auto-refresh", () => {

@@ -88,12 +88,8 @@ export const ClientSettingsSchema = Schema.Struct({
   diffWordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Model pinned state. Keyed by ProviderInstanceId.
   // Preserves decoding fallback for legacy `favorites` array.
-  pinnedModels: Schema.Array(PinnedModelEntry).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
-  favorites: Schema.Array(PinnedModelEntry).pipe(
-    Schema.withDecodingDefault(Effect.succeed([])),
-  ),
+  pinnedModels: Schema.Array(PinnedModelEntry).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  favorites: Schema.Array(PinnedModelEntry).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   providerModelPreferences: Schema.Record(
     ProviderInstanceId,
     Schema.Struct({

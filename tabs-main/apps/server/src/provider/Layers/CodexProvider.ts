@@ -528,11 +528,7 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     cwd: process.cwd(),
     customModels: codexSettings.customModels,
     environment,
-  }).pipe(
-    Effect.scoped,
-    Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)),
-    Effect.exit,
-  );
+  }).pipe(Effect.scoped, Effect.timeoutOption(Duration.millis(AUTH_PROBE_TIMEOUT_MS)), Effect.exit);
 
   if (Exit.isFailure(probeExit)) {
     const cause = probeExit.cause;

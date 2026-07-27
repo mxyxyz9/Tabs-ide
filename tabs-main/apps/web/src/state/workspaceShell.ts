@@ -122,6 +122,8 @@ export const workspaceShellActions = {
     ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserViewport"]>
   ) => useWorkspaceShellStore.getState().setBrowserViewport(...args),
   setBrowserChromeExpanded: (
-    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserChromeExpanded"]>
+    ...args: Parameters<
+      ReturnType<typeof useWorkspaceShellStore.getState>["setBrowserChromeExpanded"]
+    >
   ) => useWorkspaceShellStore.getState().setBrowserChromeExpanded(...args),
 };

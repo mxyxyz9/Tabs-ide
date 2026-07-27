@@ -3592,7 +3592,9 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         )}
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <p className="text-sm text-muted-foreground/50">Select a thread or create a new one to get started.</p>
+            <p className="text-sm text-muted-foreground/50">
+              Select a thread or create a new one to get started.
+            </p>
           </div>
         </div>
       </div>
@@ -3960,7 +3962,8 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                   onPaste={onComposerPaste}
                   placeholder={
                     isComposerApprovalState
-                      ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
+                      ? (activePendingApproval?.detail ??
+                        "Resolve this approval request to continue")
                       : activePendingProgress
                         ? "Type your own answer, or leave this blank to use the selected option"
                         : showPlanFollowUpPrompt && activeProposedPlan
@@ -4079,9 +4082,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                     <button
                       type="submit"
                       className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-lg bg-foreground text-background transition-all duration-150 hover:bg-foreground/90 hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
-                      disabled={
-                        isSendBusy || isConnecting || !composerSendState.hasSendableContent
-                      }
+                      disabled={isSendBusy || isConnecting || !composerSendState.hasSendableContent}
                       aria-label={
                         isConnecting
                           ? "Connecting"
@@ -4130,11 +4131,11 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                     </button>
                   )
                 ) : null}
-                </div>
               </div>
             </div>
           </div>
-        </form>
+        </div>
+      </form>
     </div>
   );
   const branchToolbar = isGitRepo ? (

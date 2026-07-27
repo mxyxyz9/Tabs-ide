@@ -578,7 +578,12 @@ export const discoverCursorModelsViaAcp = (
 export function getCursorFallbackModels(
   cursorSettings: Pick<CursorSettings, "customModels">,
 ): ReadonlyArray<ServerProviderModel> {
-  return providerModelsFromSettings(CURSOR_BUILT_IN_MODELS, PROVIDER, cursorSettings.customModels, EMPTY_CAPABILITIES);
+  return providerModelsFromSettings(
+    CURSOR_BUILT_IN_MODELS,
+    PROVIDER,
+    cursorSettings.customModels,
+    EMPTY_CAPABILITIES,
+  );
 }
 
 /** Timeout for `agent about` — it's slower than a simple `--version` probe. */

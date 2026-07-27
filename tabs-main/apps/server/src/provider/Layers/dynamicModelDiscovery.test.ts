@@ -73,10 +73,7 @@ describe("Dynamic Model Discovery & Effect/Schema Safety Tests", () => {
       },
     ];
 
-    const garbageIncomingPayload = [
-      { invalidSlug: 123 },
-      { corruptedField: true },
-    ];
+    const garbageIncomingPayload = [{ invalidSlug: 123 }, { corruptedField: true }];
 
     const validatedNext = validateServerProviderModelList(garbageIncomingPayload);
     expect(validatedNext.length).toBe(0);

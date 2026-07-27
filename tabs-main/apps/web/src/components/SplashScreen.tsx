@@ -144,9 +144,7 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
         <div
           className={cn(
             "relative z-10 text-[80px] font-[800] tracking-[-0.02em]",
-            isBlock
-              ? "text-primary-foreground"
-              : "text-foreground",
+            isBlock ? "text-primary-foreground" : "text-foreground",
           )}
           style={{ filter: `url(#${filterId})` }}
         >
@@ -155,11 +153,7 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
 
         <RotatingLabel
           messages={GLASS_MESSAGES}
-          className={
-            isBlock
-              ? "text-primary-foreground/80"
-              : "text-muted-foreground"
-          }
+          className={isBlock ? "text-primary-foreground/80" : "text-muted-foreground"}
         />
       </div>
     </div>
@@ -222,9 +216,7 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: bo
         <div
           className={cn(
             "flex items-center justify-center text-[54px] sm:text-[68px] font-bold tracking-wider",
-            isBlock
-              ? "text-primary-foreground"
-              : "text-foreground",
+            isBlock ? "text-primary-foreground" : "text-foreground",
           )}
         >
           {word.map((ch, i) => (
@@ -233,11 +225,7 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: bo
         </div>
         <RotatingLabel
           messages={SOLARI_MESSAGES}
-          className={
-            isBlock
-              ? "text-primary-foreground/80"
-              : "text-muted-foreground"
-          }
+          className={isBlock ? "text-primary-foreground/80" : "text-muted-foreground"}
         />
       </div>
     </div>

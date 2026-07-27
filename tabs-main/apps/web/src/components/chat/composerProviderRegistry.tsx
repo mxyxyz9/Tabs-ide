@@ -66,7 +66,8 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
     ...(ultrathinkActive
       ? {
           composerFrameClassName: "ultrathink-frame",
-          composerSurfaceClassName: "border-transparent shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]",
+          composerSurfaceClassName:
+            "border-transparent shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]",
           modelPickerIconClassName: "ultrathink-chroma",
         }
       : {}),

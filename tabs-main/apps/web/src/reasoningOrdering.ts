@@ -29,9 +29,7 @@ export function getReasoningChoiceRank(id: string): number {
  * Known level IDs are sorted according to `REASONING_LEVEL_RANKS`.
  * Unknown level IDs are never discarded; they are sorted after known IDs deterministically.
  */
-export function sortReasoningChoices<T extends { id: string }>(
-  choices: ReadonlyArray<T>,
-): T[] {
+export function sortReasoningChoices<T extends { id: string }>(choices: ReadonlyArray<T>): T[] {
   if (!choices || choices.length <= 1) return [...choices];
 
   return [...choices].sort((a, b) => {

@@ -12,7 +12,8 @@ describe("Remote Model Catalog Registry Tests", () => {
   it("handles offline network failure gracefully without throwing (fail closed)", async () => {
     // Override remote URL to an invalid endpoint
     const originalUrl = process.env.TABS_REMOTE_MODEL_CATALOG_URL;
-    process.env.TABS_REMOTE_MODEL_CATALOG_URL = "https://invalid.domain.that.does.not.exist/catalog.json";
+    process.env.TABS_REMOTE_MODEL_CATALOG_URL =
+      "https://invalid.domain.that.does.not.exist/catalog.json";
 
     const result = await Effect.runPromise(fetchRemoteModelCatalog());
     expect(result.modelsByProvider).toEqual({});

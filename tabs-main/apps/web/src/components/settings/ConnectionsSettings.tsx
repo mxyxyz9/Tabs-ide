@@ -135,15 +135,19 @@ export function ConnectionsSettings() {
 
       <div>
         <div className="space-y-1.5">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Connections
-          </h2>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">Connections</h2>
           <p className="text-sm text-muted-foreground">
             Configure network access, Tailscale HTTPS tunnels, and remote environment connections.
           </p>
         </div>
-        <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-        <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+        <div
+          className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+          style={{ background: "linear-gradient(to right, rgba(255,255,255,0.25), transparent)" }}
+        />
+        <div
+          className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+          style={{ background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)" }}
+        />
       </div>
 
       <SettingsSection
@@ -754,7 +758,8 @@ export function ConnectionsSettings() {
       </SettingsSection>
 
       <p className="text-xs text-muted-foreground/60 px-0.5">
-        Remote environments let Tabs connect to other machines, VMs, or instances running the editor. Use Tailscale for secure encrypted access without port forwarding.
+        Remote environments let Tabs connect to other machines, VMs, or instances running the
+        editor. Use Tailscale for secure encrypted access without port forwarding.
       </p>
     </div>
   );

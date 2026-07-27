@@ -54,35 +54,133 @@ const EMPTY_FALLBACK_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabili
   optionDescriptors: [],
 });
 
-export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<string, ReadonlyArray<ServerProviderModel>> = {
+export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
+  string,
+  ReadonlyArray<ServerProviderModel>
+> = {
   codex: [
-    { slug: "gpt-5.4", name: "GPT-5.4", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "gpt-5.4-mini", name: "GPT-5.4 Mini", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "gpt-5.3-codex", name: "GPT-5.3 Codex", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
+    {
+      slug: "gpt-5.4",
+      name: "GPT-5.4",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "gpt-5.4-mini",
+      name: "GPT-5.4 Mini",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "gpt-5.3-codex",
+      name: "GPT-5.3 Codex",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
   ],
   claudeAgent: [
-    { slug: "claude-opus-5", name: "Claude Opus 5", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "claude-fable-5", name: "Claude Fable 5", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "claude-sonnet-5", name: "Claude Sonnet 5", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "claude-opus-4-8", name: "Claude Opus 4.8", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "claude-opus-4-7", name: "Claude Opus 4.7", isCustom: false, capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "claude-haiku-4-5", name: "Claude Haiku 4.5", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
+    {
+      slug: "claude-opus-5",
+      name: "Claude Opus 5",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-fable-5",
+      name: "Claude Fable 5",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-sonnet-5",
+      name: "Claude Sonnet 5",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-opus-4-8",
+      name: "Claude Opus 4.8",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-opus-4-7",
+      name: "Claude Opus 4.7",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-haiku-4-5",
+      name: "Claude Haiku 4.5",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
   ],
   cursor: [
-    { slug: "auto", name: "Auto (Recommended)", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "composer-2", name: "Composer 2", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "composer-1.5", name: "Composer 1.5", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
+    {
+      slug: "auto",
+      name: "Auto (Recommended)",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "composer-2",
+      name: "Composer 2",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "composer-1.5",
+      name: "Composer 1.5",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-sonnet-4-6",
+      name: "Claude Sonnet 4.6",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
   ],
   grok: [
-    { slug: "grok-build", name: "Grok Build", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "grok-code", name: "Grok Code", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "grok-3", name: "Grok 3", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
+    {
+      slug: "grok-build",
+      name: "Grok Build",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "grok-code",
+      name: "Grok Code",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "grok-3",
+      name: "Grok 3",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
   ],
   opencode: [
-    { slug: "openai/gpt-5", name: "OpenAI GPT-5", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "anthropic/claude-sonnet-5", name: "Claude Sonnet 5", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
+    {
+      slug: "openai/gpt-5",
+      name: "OpenAI GPT-5",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "anthropic/claude-sonnet-5",
+      name: "Claude Sonnet 5",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "google/gemini-2.5-pro",
+      name: "Gemini 2.5 Pro",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
   ],
 };
 
@@ -127,7 +225,10 @@ export function getProviderModelCapabilities(
   model: string | null | undefined,
   provider: string,
 ): ModelCapabilities {
-  if (provider === "grok" || (typeof model === "string" && model.toLowerCase().startsWith("grok"))) {
+  if (
+    provider === "grok" ||
+    (typeof model === "string" && model.toLowerCase().startsWith("grok"))
+  ) {
     return EMPTY_CAPABILITIES;
   }
   const slug = normalizeModelSlug(model, provider);

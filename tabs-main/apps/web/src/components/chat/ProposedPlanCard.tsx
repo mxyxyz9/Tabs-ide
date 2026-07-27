@@ -124,9 +124,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
           <span className="truncate text-sm font-medium text-foreground/80">{title}</span>
         </div>
         <Menu>
-          <MenuTrigger
-            render={<Button aria-label="Plan actions" size="icon-xs" variant="ghost" />}
-          >
+          <MenuTrigger render={<Button aria-label="Plan actions" size="icon-xs" variant="ghost" />}>
             <EllipsisIcon aria-hidden="true" className="size-4" />
           </MenuTrigger>
           <MenuPopup align="end">

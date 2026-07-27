@@ -779,6 +779,8 @@ function ProjectTabs(props: {
   onNewTab: () => void;
   onActivatePendingTab: (pendingId: string) => void;
   onClosePendingTab: (pendingId: string) => void;
+  showSettings?: boolean;
+  onOpenSettings?: () => void;
 }) {
   // Merge real + pending tabs in a stable order: real projects first (as ordered
   // in openProjects), then pending slots appended at the end.
@@ -792,7 +794,7 @@ function ProjectTabs(props: {
   return (
     <div
       className={cn(
-        "drag-region flex items-end gap-2 overflow-x-auto border-b px-3 pt-2 select-none backdrop-blur-md transition-colors duration-200",
+        "drag-region flex items-end justify-between gap-2 overflow-x-auto border-b px-3 pt-2 select-none backdrop-blur-md transition-colors duration-200",
         "border-border/80 bg-background/95 text-foreground",
         // Reserve space for the OS window controls: traffic lights (left) on
         // macOS/Linux, the overlaid caption buttons (right) on Windows.
@@ -901,6 +903,22 @@ function ProjectTabs(props: {
           <PlusIcon className="size-4" />
         </button>
       </div>
+
+      {props.showSettings ? (
+        <div className="no-drag mb-1 flex shrink-0 items-center gap-2">
+          <div id="project-toolbar-extra-controls" className="flex items-center empty:hidden" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="shrink-0 rounded-full text-muted-foreground hover:text-foreground text-xs h-7 px-2.5"
+            onClick={props.onOpenSettings}
+          >
+            <SettingsIcon className="size-3.5" />
+            Settings
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -986,7 +1004,9 @@ function ProviderIcon({ instanceId, className }: { instanceId: string; className
         ? OpenCodeIcon
         : normalizedKey.includes("claude")
           ? ClaudeAI
-          : normalizedKey.includes("codex") || normalizedKey.includes("openai") || normalizedKey.includes("gpt")
+          : normalizedKey.includes("codex") ||
+              normalizedKey.includes("openai") ||
+              normalizedKey.includes("gpt")
             ? OpenAI
             : normalizedKey.includes("grok")
               ? GrokIcon
@@ -1016,7 +1036,6 @@ function deriveThreadAttention(thread: Thread): {
   // Completed threads do NOT show a permanent green dot
   return null;
 }
-
 
 function AgentsThreadList(props: {
   project: Project;
@@ -1121,7 +1140,9 @@ function AgentsThreadList(props: {
                   className="truncate text-sm font-semibold tracking-tight text-foreground"
                   title={props.project.name}
                 >
-                  {props.project.name.toLowerCase().includes("tabs") ? "Tabs IDE" : props.project.name}
+                  {props.project.name.toLowerCase().includes("tabs")
+                    ? "Tabs IDE"
+                    : props.project.name}
                 </div>
               </div>
               <Tooltip>
@@ -1137,7 +1158,9 @@ function AgentsThreadList(props: {
                 >
                   <PanelLeftCloseIcon className="size-4" />
                 </TooltipTrigger>
-                <TooltipPopup side="bottom" align="center">Collapse sidebar</TooltipPopup>
+                <TooltipPopup side="bottom" align="center">
+                  Collapse sidebar
+                </TooltipPopup>
               </Tooltip>
             </div>
 
@@ -1177,7 +1200,13 @@ function AgentsThreadList(props: {
                   )}
                 >
                   Archived
-                  <span className={view === "archived" ? "text-foreground/70 font-normal" : "text-muted-foreground/50 font-normal"}>
+                  <span
+                    className={
+                      view === "archived"
+                        ? "text-foreground/70 font-normal"
+                        : "text-muted-foreground/50 font-normal"
+                    }
+                  >
                     ({archivedThreads.length})
                   </span>
                 </button>
@@ -1265,7 +1294,9 @@ function AgentsThreadList(props: {
                         })()}
                       </TooltipTrigger>
                       <TooltipPopup side="right" align="center" className="max-w-[200px]">
-                        <p className="truncate font-semibold text-xs text-foreground">{thread.title}</p>
+                        <p className="truncate font-semibold text-xs text-foreground">
+                          {thread.title}
+                        </p>
                         <p className="text-[10px] text-muted-foreground/70">
                           {thread.modelSelection.instanceId} · {thread.runtimeMode}
                         </p>
@@ -1285,7 +1316,9 @@ function AgentsThreadList(props: {
                             const attn = deriveThreadAttention(thread);
                             if (!attn) return null;
                             if (attn.spin) {
-                              return <LoaderIcon className="size-3 shrink-0 animate-spin text-primary" />;
+                              return (
+                                <LoaderIcon className="size-3 shrink-0 animate-spin text-primary" />
+                              );
                             }
                             return (
                               <span
@@ -1404,7 +1437,6 @@ function AgentsThreadList(props: {
     </div>
   );
 }
-
 
 function FallbackCodeTool(props: { project: Project }) {
   const api = readNativeApi();
@@ -2015,7 +2047,8 @@ function DesktopCodeTool(props: { project: Project }) {
     let lastSignature = "";
     const publishBounds = () => {
       frameId = 0;
-      const cssZoom = (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
+      const cssZoom =
+        (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
@@ -5986,7 +6019,9 @@ function DesktopBrowserChrome(props: {
                       variant="outline"
                       className="hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
                       onClick={() =>
-                        void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+                        void api?.shell.openExternal(
+                          props.sessionState.currentUrl ?? props.normalizedUrl,
+                        )
                       }
                     >
                       <ExternalLinkIcon className="size-3.5" />
@@ -6070,7 +6105,9 @@ function DesktopBrowserChrome(props: {
                       variant="ghost"
                       className="rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground hover:shadow-xs transition-all duration-150 active:scale-95"
                       onClick={() =>
-                        void api?.shell.openExternal(props.sessionState.currentUrl ?? props.normalizedUrl)
+                        void api?.shell.openExternal(
+                          props.sessionState.currentUrl ?? props.normalizedUrl,
+                        )
                       }
                       aria-label={`Open ${props.title} externally`}
                     >
@@ -6179,8 +6216,7 @@ function DesktopBrowserTool(props: {
 
   // Transient startup: the preset IS running but Chromium got ERR_CONNECTION_REFUSED
   // because the dev server hasn't finished binding. Show "Starting..." and retry.
-  const isTransientStartup =
-    Boolean(matchingRunningPreset) && Boolean(sessionState.transientError);
+  const isTransientStartup = Boolean(matchingRunningPreset) && Boolean(sessionState.transientError);
 
   // Definitive offline: there's a matching preset but it's NOT running at all,
   // OR the page failed with a non-transient error.
@@ -6217,9 +6253,7 @@ function DesktopBrowserTool(props: {
         return;
       }
       lastRetryAtRef.current = now;
-      void bridge
-        .reloadBrowserSession({ projectId: props.project.id })
-        .catch(() => undefined);
+      void bridge.reloadBrowserSession({ projectId: props.project.id }).catch(() => undefined);
     });
 
     return () => {
@@ -6299,7 +6333,10 @@ function DesktopBrowserTool(props: {
   }, [bridge, hostState.available, normalizedUrl, props.project.id, sessionState.currentUrl]);
 
   useEffect(() => {
-    if (!sessionState.currentUrl || isSameWebUrl(sessionState.currentUrl, browserState.currentUrl)) {
+    if (
+      !sessionState.currentUrl ||
+      isSameWebUrl(sessionState.currentUrl, browserState.currentUrl)
+    ) {
       return;
     }
     setBrowserCurrentUrl(props.project.id, sessionState.currentUrl);
@@ -6328,7 +6365,8 @@ function DesktopBrowserTool(props: {
     let lastSignature = "";
     const publishBounds = () => {
       frameId = 0;
-      const cssZoom = (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
+      const cssZoom =
+        (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
@@ -6456,7 +6494,13 @@ function DesktopBrowserTool(props: {
   const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    setToolbarTarget(document.getElementById("project-toolbar-extra-controls"));
+    const updateTarget = () => {
+      setToolbarTarget(document.getElementById("project-toolbar-extra-controls"));
+    };
+    updateTarget();
+    const observer = new MutationObserver(updateTarget);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, []);
 
   const submitDraftUrl = useCallback(() => {
@@ -6512,9 +6556,7 @@ function DesktopBrowserTool(props: {
                   <h2 className="text-xs font-semibold text-foreground tracking-tight">
                     Starting {matchingRunningPreset.label}...
                   </h2>
-                  <p className="text-[11px] text-muted-foreground font-mono">
-                    {normalizedUrl}
-                  </p>
+                  <p className="text-[11px] text-muted-foreground font-mono">{normalizedUrl}</p>
                 </div>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-medium text-primary">
@@ -6523,7 +6565,8 @@ function DesktopBrowserTool(props: {
               </span>
             </div>
             <p className="text-xs text-muted-foreground">
-              The dev server is starting up. The browser will load automatically once the server is ready.
+              The dev server is starting up. The browser will load automatically once the server is
+              ready.
             </p>
             <div className="flex items-center justify-between pt-1">
               <Button
@@ -6647,8 +6690,7 @@ function EmbeddedBrowserTool(props: {
   );
 
   const isLocalOffline =
-    Boolean(matchingIdlePreset) ||
-    (Boolean(embedBlocked) && isLocalOrDevServerUrl(normalizedUrl));
+    Boolean(matchingIdlePreset) || (Boolean(embedBlocked) && isLocalOrDevServerUrl(normalizedUrl));
 
   useEffect(() => {
     setEmbedBlocked(false);
@@ -6830,7 +6872,12 @@ function findMatchingIdleServerPreset(
   serverPresets: ReadonlyArray<ProjectWorkspaceSettings["serverPresets"][number]>,
   runningProcessIds: ReadonlyArray<string> = [],
 ) {
-  if (!normalizedUrl || normalizedUrl.length === 0 || !serverPresets || serverPresets.length === 0) {
+  if (
+    !normalizedUrl ||
+    normalizedUrl.length === 0 ||
+    !serverPresets ||
+    serverPresets.length === 0
+  ) {
     return null;
   }
   const runningSet = new Set(runningProcessIds);
@@ -6866,9 +6913,7 @@ function UniversalDevServerOfflineNotice(props: {
               <h2 className="text-xs font-semibold text-foreground tracking-tight">
                 Server Offline
               </h2>
-              <p className="text-[11px] text-muted-foreground font-mono">
-                {props.url}
-              </p>
+              <p className="text-[11px] text-muted-foreground font-mono">{props.url}</p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
@@ -6878,7 +6923,8 @@ function UniversalDevServerOfflineNotice(props: {
         </div>
 
         <p className="text-xs text-muted-foreground leading-relaxed">
-          The local development server is not running. Switch to the Server tab to start server presets and view live terminal logs.
+          The local development server is not running. Switch to the Server tab to start server
+          presets and view live terminal logs.
         </p>
 
         {/* Bottom Actions */}
@@ -6894,7 +6940,9 @@ function UniversalDevServerOfflineNotice(props: {
               <TerminalSquareIcon className="size-4" />
               Open Server Tab
             </Button>
-          ) : <div />}
+          ) : (
+            <div />
+          )}
           <Button
             type="button"
             variant="ghost"
@@ -7156,7 +7204,8 @@ function DesktopCustomEmbedTool(props: {
     let lastSignature = "";
     const publishBounds = () => {
       frameId = 0;
-      const cssZoom = (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
+      const cssZoom =
+        (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1.0;
       const rect = hostNode.getBoundingClientRect();
       const nextBounds = {
         projectId: props.project.id,
@@ -7288,7 +7337,13 @@ function DesktopCustomEmbedTool(props: {
   const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    setToolbarTarget(document.getElementById("project-toolbar-extra-controls"));
+    const updateTarget = () => {
+      setToolbarTarget(document.getElementById("project-toolbar-extra-controls"));
+    };
+    updateTarget();
+    const observer = new MutationObserver(updateTarget);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
   }, []);
 
   if (!bridge || !hostState.available) {
@@ -8243,8 +8298,7 @@ function ServerTool(props: {
                           isSelected
                             ? "bg-accent text-accent-foreground font-medium shadow-xs border-border/70"
                             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                          draggedPresetId === preset.id &&
-                            "opacity-40 border-dashed border-border",
+                          draggedPresetId === preset.id && "opacity-40 border-dashed border-border",
                         )}
                       >
                         <span className="truncate mr-2">{preset.label || "Untitled Preset"}</span>
@@ -10417,10 +10471,12 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           onClosePendingTab={(pendingId) => {
             closePendingTab(pendingId);
           }}
+          showSettings={!isSettingsRoute && Boolean(activeProject) && availableTools.length <= 1}
+          onOpenSettings={() => void navigate({ to: "/settings" })}
         />
       )}
 
-      {!shouldHideShellChrome && !isSettingsRoute && activeProject && availableTools.length > 0 ? (
+      {!shouldHideShellChrome && !isSettingsRoute && activeProject && availableTools.length >= 2 ? (
         <ProjectToolBar
           activeToolId={activeTool?.id ?? ""}
           availableTools={availableTools}

@@ -22,7 +22,12 @@ import type { ProviderInstanceEntry } from "../../providerInstances";
 import type { AppModelOption } from "../../modelSelection";
 import { ClaudeAI, CursorIcon, GrokIcon, type Icon, OpenAI, OpenCodeIcon } from "../Icons";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
-import { getPinnedModels, isPinnedModel, sortModelsWithPinnedFirst, togglePinnedModel } from "../../modelPinning";
+import {
+  getPinnedModels,
+  isPinnedModel,
+  sortModelsWithPinnedFirst,
+  togglePinnedModel,
+} from "../../modelPinning";
 
 /** Map driver kind slugs to their icon components. */
 const DRIVER_ICON: Record<string, Icon> = {
@@ -67,7 +72,11 @@ export const SettingsProviderModelPicker = memo(function SettingsProviderModelPi
     setIsOpen(false);
   };
 
-  const handleTogglePin = (e: React.MouseEvent, instanceId: ProviderInstanceId, modelSlug: string) => {
+  const handleTogglePin = (
+    e: React.MouseEvent,
+    instanceId: ProviderInstanceId,
+    modelSlug: string,
+  ) => {
     e.stopPropagation();
     const nextPinned = togglePinnedModel(settings, instanceId, modelSlug);
     updateSettings({ pinnedModels: nextPinned as any });

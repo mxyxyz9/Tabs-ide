@@ -26,6 +26,7 @@ import {
   SaveIcon,
   Trash2Icon,
   InfoIcon,
+  LockIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -57,6 +58,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
+import { toastManager } from "./ui/toast";
 import { Separator } from "./ui/separator";
 import { cn } from "../lib/utils";
 import {
@@ -429,18 +431,20 @@ export function ProjectWorkspaceSettingsSection() {
   const toolbarPreviewTools = useMemo(() => {
     return (projectSettings?.tools ?? []).filter((tool) => {
       if (tool.kind === "custom_embed") {
-        return customEmbedDrafts.some(
-          (draft) => createCustomEmbedToolId(draft.id) === tool.id,
-        );
+        return customEmbedDrafts.some((draft) => createCustomEmbedToolId(draft.id) === tool.id);
       }
       if (tool.kind === "custom_process") {
-        return serverProcessDrafts.some(
-          (draft) => createServerProcessToolId(draft.id) === tool.id,
-        );
+        return serverProcessDrafts.some((draft) => createServerProcessToolId(draft.id) === tool.id);
       }
       return true;
     });
   }, [projectSettings?.tools, customEmbedDrafts, serverProcessDrafts]);
+
+  const visibleToolsCount = useMemo(
+    () => toolbarPreviewTools.filter((tool) => tool.visible).length,
+    [toolbarPreviewTools],
+  );
+  const [lastToolWarning, setLastToolWarning] = useState<string | null>(null);
 
   const dndSensors = useSensors(
     // Require a small drag distance so taps/clicks on the row still work.
@@ -714,16 +718,20 @@ export function ProjectWorkspaceSettingsSection() {
               </Button>
             </SettingsHeaderPortal>
           </div>
-          <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-          <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+          <div
+            className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+            style={{ background: "linear-gradient(to right, rgba(255,255,255,0.25), transparent)" }}
+          />
+          <div
+            className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+            style={{ background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)" }}
+          />
         </div>
 
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">Active Project</CardTitle>
-            <CardDescription>
-              Current workspace folder and path details.
-            </CardDescription>
+            <CardDescription>Current workspace folder and path details.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
@@ -738,11 +746,19 @@ export function ProjectWorkspaceSettingsSection() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Toolbar Tools</CardTitle>
-            <CardDescription>
-              Toggle and reorder the tools shown in the project toolbar.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+            <div>
+              <CardTitle>Toolbar Tools</CardTitle>
+              <CardDescription>
+                Toggle and reorder the tools shown in the project toolbar.
+              </CardDescription>
+            </div>
+            {visibleToolsCount <= 1 ? (
+              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                <LockIcon className="size-3 text-muted-foreground/70" />
+                <span>Min. 1 tool required</span>
+              </div>
+            ) : null}
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
@@ -770,6 +786,7 @@ export function ProjectWorkspaceSettingsSection() {
                             (entry) => createServerProcessToolId(entry.id) === tool.id,
                           ) ?? null)
                         : null;
+                    const isLastToolLocked = visibleToolsCount <= 1 && tool.visible;
 
                     return (
                       <SortableToolRow key={tool.id} id={tool.id}>
@@ -786,26 +803,47 @@ export function ProjectWorkspaceSettingsSection() {
                                 <GripVerticalIcon className="size-4" />
                               </button>
                               <div className="min-w-0 flex-1">
-                                <div className="text-sm font-medium text-foreground">
-                                  {tool.label}
+                                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                  <span>{tool.label}</span>
+                                  {isLastToolLocked ? (
+                                    <span className="inline-flex items-center gap-1 rounded border border-border/50 bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground font-normal">
+                                      <LockIcon className="size-2.5 text-muted-foreground/80" />
+                                      <span>Required</span>
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                   {describeToolKind(tool.kind)}
                                 </div>
                               </div>
-                              <Switch
-                                checked={tool.visible}
-                                onCheckedChange={(checked) => {
-                                  const nextVisible = Boolean(checked);
-                                  setPendingToggle({
-                                    toolId: tool.id,
-                                    toolLabel: tool.label,
-                                    toolKind: tool.kind,
-                                    nextVisible,
-                                  });
-                                }}
-                                aria-label={`Toggle ${tool.label}`}
-                              />
+                              {isLastToolLocked ? (
+                                <Tooltip>
+                                  <TooltipTrigger className="inline-flex items-center cursor-not-allowed">
+                                    <Switch
+                                      checked={tool.visible}
+                                      disabled={true}
+                                      aria-label={`Toggle ${tool.label}`}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipPopup side="left">
+                                    At least one tool must stay enabled in your project toolbar.
+                                  </TooltipPopup>
+                                </Tooltip>
+                              ) : (
+                                <Switch
+                                  checked={tool.visible}
+                                  onCheckedChange={(checked) => {
+                                    const nextVisible = Boolean(checked);
+                                    setPendingToggle({
+                                      toolId: tool.id,
+                                      toolLabel: tool.label,
+                                      toolKind: tool.kind,
+                                      nextVisible,
+                                    });
+                                  }}
+                                  aria-label={`Toggle ${tool.label}`}
+                                />
+                              )}
                             </div>
                           </div>
                         )}
@@ -1557,7 +1595,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (tabToDeleteId) {
-                  const nextDrafts = customEmbedDrafts.filter((entry) => entry.id !== tabToDeleteId);
+                  const nextDrafts = customEmbedDrafts.filter(
+                    (entry) => entry.id !== tabToDeleteId,
+                  );
                   setCustomEmbedDrafts(nextDrafts);
                   saveCustomEmbeds(nextDrafts);
                   if (activeCustomEmbedId === tabToDeleteId) setActiveCustomEmbedId(null);
@@ -1594,7 +1634,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (terminalToDeleteId) {
-                  const nextDrafts = serverProcessDrafts.filter((entry) => entry.id !== terminalToDeleteId);
+                  const nextDrafts = serverProcessDrafts.filter(
+                    (entry) => entry.id !== terminalToDeleteId,
+                  );
                   setServerProcessDrafts(nextDrafts);
                   saveServerProcesses(nextDrafts);
                   if (activeServerProcessId === terminalToDeleteId) setActiveServerProcessId(null);
@@ -1631,7 +1673,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (presetToDeleteId) {
-                  const nextDrafts = serverPresetDrafts.filter((entry) => entry.id !== presetToDeleteId);
+                  const nextDrafts = serverPresetDrafts.filter(
+                    (entry) => entry.id !== presetToDeleteId,
+                  );
                   setServerPresetDrafts(nextDrafts);
                   saveServerPresets(nextDrafts);
                   if (activeServerPresetId === presetToDeleteId) setActiveServerPresetId(null);

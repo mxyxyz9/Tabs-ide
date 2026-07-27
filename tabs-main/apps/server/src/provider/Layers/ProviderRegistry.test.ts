@@ -1147,20 +1147,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             // fresh DateTime, so we capture it and assert it advances
             // after the settings mutation.
             let initialProviders = yield* registry.getProviders;
-            let initialCodex = initialProviders.find(
-              (provider) => provider.instanceId === "codex",
-            );
-            for (
-              let attempt = 0;
-              attempt < 100 && initialCodex?.status !== "error";
-              attempt += 1
-            ) {
+            let initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
+            for (let attempt = 0; attempt < 100 && initialCodex?.status !== "error"; attempt += 1) {
               yield* Effect.sleep("50 millis");
               yield* Effect.yieldNow;
               initialProviders = yield* registry.getProviders;
-              initialCodex = initialProviders.find(
-                (provider) => provider.instanceId === "codex",
-              );
+              initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
             }
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);

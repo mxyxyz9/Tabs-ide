@@ -748,7 +748,10 @@ export function WhenExpressionBuilder({
           />
         ) : (
           <div className="rounded-md border border-dashed border-border/60 bg-muted/10 p-3 text-center text-xs text-muted-foreground">
-            Applies in all contexts. Click <span className="font-medium text-foreground">+ Condition</span> or <span className="font-medium text-foreground">+ Group</span> above to restrict when this shortcut is active.
+            Applies in all contexts. Click{" "}
+            <span className="font-medium text-foreground">+ Condition</span> or{" "}
+            <span className="font-medium text-foreground">+ Group</span> above to restrict when this
+            shortcut is active.
           </div>
         )}
         {parseError ? (
@@ -1224,8 +1227,14 @@ export function KeybindingsSettings({
               </Button>
             </SettingsHeaderPortal>
           </div>
-          <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-          <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+          <div
+            className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+            style={{ background: "linear-gradient(to right, rgba(255,255,255,0.25), transparent)" }}
+          />
+          <div
+            className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+            style={{ background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)" }}
+          />
           <div className="flex items-center justify-start gap-2 pt-1">
             <ExpandableHeaderSearch
               query={query}

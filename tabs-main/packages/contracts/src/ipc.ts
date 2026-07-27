@@ -223,7 +223,17 @@ export type DesktopUpdateStatus =
   | "error";
 
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
-export type DesktopTheme = "light" | "dark" | "system" | "tabs-dark" | "tabs-light" | "abyss" | "dracula" | "deep-blue" | "solarized-light" | (string & {});
+export type DesktopTheme =
+  | "light"
+  | "dark"
+  | "system"
+  | "tabs-dark"
+  | "tabs-light"
+  | "abyss"
+  | "dracula"
+  | "deep-blue"
+  | "solarized-light"
+  | (string & {});
 export type DesktopUpdateChannel = "latest" | "nightly";
 export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
 

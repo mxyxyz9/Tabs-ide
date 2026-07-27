@@ -1192,9 +1192,7 @@ export class CodeHostManager {
             document.documentElement.style.removeProperty('--tabs-accent');
           `;
         }
-        void session.view.webContents
-          .executeJavaScript(script)
-          .catch(() => {});
+        void session.view.webContents.executeJavaScript(script).catch(() => {});
       }
     }
   }
@@ -1589,15 +1587,20 @@ export class CodeHostManager {
 
     const mainWindow = this.getWindow();
     const mainWebContents = mainWindow?.webContents as { getZoomFactor?: () => number } | undefined;
-    const zoomFactor = typeof mainWebContents?.getZoomFactor === "function" ? mainWebContents.getZoomFactor() : 1.0;
+    const zoomFactor =
+      typeof mainWebContents?.getZoomFactor === "function" ? mainWebContents.getZoomFactor() : 1.0;
 
     let x = Math.round(input.x * zoomFactor);
     let y = Math.round(input.y * zoomFactor);
     let width = Math.round(input.width * zoomFactor);
     let height = Math.round(input.height * zoomFactor);
 
-    const isDestroyed = typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
-    const getContentSize = typeof mainWindow?.getContentSize === "function" ? mainWindow.getContentSize.bind(mainWindow) : null;
+    const isDestroyed =
+      typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
+    const getContentSize =
+      typeof mainWindow?.getContentSize === "function"
+        ? mainWindow.getContentSize.bind(mainWindow)
+        : null;
 
     if (mainWindow && !isDestroyed && getContentSize) {
       try {
@@ -1620,13 +1623,20 @@ export class CodeHostManager {
     session.bounds = { x, y, width, height };
 
     if (session.view) {
-      const viewWebContents = session.view.webContents as {
-        getZoomFactor?: () => number;
-        setZoomFactor?: (factor: number) => void;
-      } | undefined;
+      const viewWebContents = session.view.webContents as
+        | {
+            getZoomFactor?: () => number;
+            setZoomFactor?: (factor: number) => void;
+          }
+        | undefined;
       const currentZoom =
-        typeof viewWebContents?.getZoomFactor === "function" ? viewWebContents.getZoomFactor() : 1.0;
-      if (Math.abs(currentZoom - zoomFactor) > 0.001 && typeof viewWebContents?.setZoomFactor === "function") {
+        typeof viewWebContents?.getZoomFactor === "function"
+          ? viewWebContents.getZoomFactor()
+          : 1.0;
+      if (
+        Math.abs(currentZoom - zoomFactor) > 0.001 &&
+        typeof viewWebContents?.setZoomFactor === "function"
+      ) {
         viewWebContents.setZoomFactor(zoomFactor);
       }
     }
@@ -2371,7 +2381,10 @@ export class CodeHostManager {
           existingSettings = {};
         }
       }
-      if (existingSettings["window.customContextMenu"] !== true || existingSettings["window.dialogStyle"] !== "custom") {
+      if (
+        existingSettings["window.customContextMenu"] !== true ||
+        existingSettings["window.dialogStyle"] !== "custom"
+      ) {
         existingSettings["window.customContextMenu"] = true;
         existingSettings["window.dialogStyle"] = "custom";
         FS.writeFileSync(userSettingsFile, JSON.stringify(existingSettings, null, 2), "utf8");

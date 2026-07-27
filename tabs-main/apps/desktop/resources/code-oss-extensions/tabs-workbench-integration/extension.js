@@ -739,7 +739,11 @@ function startCodeControlChannel(context) {
               }
               const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
               const workspaceConfig = vscode.workspace.getConfiguration();
-              await workspaceConfig.update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
+              await workspaceConfig.update(
+                "workbench.colorTheme",
+                targetTheme,
+                vscode.ConfigurationTarget.Global,
+              );
 
               const CUSTOM_THEME_COLOR_KEYS = [
                 "focusBorder",
@@ -806,8 +810,8 @@ function startCodeControlChannel(context) {
               if (themeId === "custom" && parsed.customConfig && parsed.customConfig.colors) {
                 const c = parsed.customConfig.colors;
                 const customOverrides = {
-                  "focusBorder": c.primary,
-                  "foreground": c.foreground,
+                  focusBorder: c.primary,
+                  foreground: c.foreground,
                   "widget.shadow": "transparent",
                   "selection.background": c.primary ? `${c.primary}40` : undefined,
                   "editor.background": c.background,
@@ -896,7 +900,9 @@ function startCodeControlChannel(context) {
                 }
                 if (hasManagedKey) {
                   const finalVal =
-                    Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined;
+                    Object.keys(currentCustomizations).length > 0
+                      ? currentCustomizations
+                      : undefined;
                   await workspaceConfig.update(
                     "workbench.colorCustomizations",
                     finalVal,
@@ -907,9 +913,15 @@ function startCodeControlChannel(context) {
 
               const editorFont =
                 (parsed.fontPreferences && parsed.fontPreferences.editorFont) ||
-                (parsed.customConfig && parsed.customConfig.fonts && parsed.customConfig.fonts.editorFont);
+                (parsed.customConfig &&
+                  parsed.customConfig.fonts &&
+                  parsed.customConfig.fonts.editorFont);
               if (editorFont) {
-                await workspaceConfig.update("editor.fontFamily", editorFont, vscode.ConfigurationTarget.Global);
+                await workspaceConfig.update(
+                  "editor.fontFamily",
+                  editorFont,
+                  vscode.ConfigurationTarget.Global,
+                );
               }
             } catch (err) {
               log(`setTheme error: ${err && err.message ? err.message : err}`);
