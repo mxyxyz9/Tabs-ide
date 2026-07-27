@@ -1,10 +1,10 @@
 {
   "name": "@tabs/desktop",
-  "version": "1.2.114",
+  "version": "1.2.115",
   "private": true,
   "main": "dist-electron/main.js",
   "scripts": {
-    "dev": "bun run --parallel dev:bundle dev:backend-bundle dev:electron",
+    "dev": "bun run dev:bundle & bun run dev:backend-bundle & bun run dev:electron",
     "dev:bundle": "tsdown --watch",
     "dev:backend-bundle": "bun --cwd ../server run dev:bundle",
     "dev:electron": "bun run scripts/dev-electron.mjs",

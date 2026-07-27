@@ -155,6 +155,112 @@ export const CODE_OSS_THEME_CSS =
   --vscode-scrollbarSlider-activeBackground: var(--tabs-ov-30);
 }
 
+/* --- Per-Theme Token Overrides ------------------------------------ */
+[data-theme="tabs-dark"] .monaco-workbench,
+.monaco-workbench[data-theme="tabs-dark"],
+html[data-theme="tabs-dark"] .monaco-workbench,
+body[data-theme="tabs-dark"] .monaco-workbench {
+  --tabs-bg: #141414;
+  --tabs-bg-sidebar: #181818;
+  --tabs-bg-elevated: #1f1f1f;
+  --tabs-bg-popover: #181818;
+  --tabs-input-bg: #1c1c1c;
+  --tabs-text: #f5f5f5;
+  --tabs-text-muted: #a3a3a3;
+  --tabs-accent: #366ffb;
+  --tabs-accent-strong: #366ffb;
+}
+
+[data-theme="true-black"] .monaco-workbench,
+.monaco-workbench[data-theme="true-black"],
+html[data-theme="true-black"] .monaco-workbench,
+body[data-theme="true-black"] .monaco-workbench {
+  --tabs-bg: #000000;
+  --tabs-bg-sidebar: #050505;
+  --tabs-bg-elevated: #0d0d0d;
+  --tabs-bg-popover: #0a0a0a;
+  --tabs-input-bg: #0f0f0f;
+  --tabs-text: #ffffff;
+  --tabs-text-muted: #888888;
+  --tabs-accent: #366ffb;
+  --tabs-accent-strong: #366ffb;
+}
+
+[data-theme="tabs-light"] .monaco-workbench,
+.monaco-workbench[data-theme="tabs-light"],
+html[data-theme="tabs-light"] .monaco-workbench,
+body[data-theme="tabs-light"] .monaco-workbench {
+  --tabs-bg: #ffffff;
+  --tabs-bg-sidebar: #f6f5f2;
+  --tabs-bg-elevated: #ffffff;
+  --tabs-bg-popover: #ffffff;
+  --tabs-input-bg: #f0eee9;
+  --tabs-text: #3a3936;
+  --tabs-text-muted: #73726d;
+  --tabs-accent: #366ffb;
+  --tabs-accent-strong: #366ffb;
+}
+
+[data-theme="abyss"] .monaco-workbench,
+.monaco-workbench[data-theme="abyss"],
+html[data-theme="abyss"] .monaco-workbench,
+body[data-theme="abyss"] .monaco-workbench {
+  --tabs-bg: #000c18;
+  --tabs-bg-sidebar: #001122;
+  --tabs-bg-elevated: #041930;
+  --tabs-bg-popover: #041930;
+  --tabs-input-bg: #072240;
+  --tabs-text: #bec8da;
+  --tabs-text-muted: #667898;
+  --tabs-accent: #007acc;
+  --tabs-accent-strong: #007acc;
+}
+
+[data-theme="dracula"] .monaco-workbench,
+.monaco-workbench[data-theme="dracula"],
+html[data-theme="dracula"] .monaco-workbench,
+body[data-theme="dracula"] .monaco-workbench {
+  --tabs-bg: #282a36;
+  --tabs-bg-sidebar: #21222c;
+  --tabs-bg-elevated: #343746;
+  --tabs-bg-popover: #343746;
+  --tabs-input-bg: #44475a;
+  --tabs-text: #f8f8f2;
+  --tabs-text-muted: #6272a4;
+  --tabs-accent: #bd93f9;
+  --tabs-accent-strong: #bd93f9;
+}
+
+[data-theme="deep-blue"] .monaco-workbench,
+.monaco-workbench[data-theme="deep-blue"],
+html[data-theme="deep-blue"] .monaco-workbench,
+body[data-theme="deep-blue"] .monaco-workbench {
+  --tabs-bg: #0f172a;
+  --tabs-bg-sidebar: #0b1120;
+  --tabs-bg-elevated: #1e293b;
+  --tabs-bg-popover: #1e293b;
+  --tabs-input-bg: #334155;
+  --tabs-text: #f8fafc;
+  --tabs-text-muted: #64748b;
+  --tabs-accent: #38bdf8;
+  --tabs-accent-strong: #38bdf8;
+}
+
+[data-theme="solarized-light"] .monaco-workbench,
+.monaco-workbench[data-theme="solarized-light"],
+html[data-theme="solarized-light"] .monaco-workbench,
+body[data-theme="solarized-light"] .monaco-workbench {
+  --tabs-bg: #fdf6e3;
+  --tabs-bg-sidebar: #eee8d5;
+  --tabs-bg-elevated: #fdf6e3;
+  --tabs-bg-popover: #eee8d5;
+  --tabs-input-bg: #eee8d5;
+  --tabs-text: #657b83;
+  --tabs-text-muted: #93a1a1;
+  --tabs-accent: #2aa198;
+  --tabs-accent-strong: #2aa198;
+}
+
 /* ===================================================== LIGHT THEME === */
 /* When the embedded workbench is in a light color theme (VS Code marks the
    workbench with the .vs class; dark is .vs-dark), flip ONLY the neutral

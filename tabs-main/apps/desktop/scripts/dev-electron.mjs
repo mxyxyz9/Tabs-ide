@@ -75,7 +75,7 @@ function startApp() {
 
   const app = spawn(
     resolveElectronPath(),
-    [`--tabs-dev-root=${desktopDir}`, "dist-electron/main.js"],
+    ["--tabs-dev-root=" + desktopDir, "--remote-debugging-port=9222", "dist-electron/main.js"],
     {
       cwd: desktopDir,
       env: {

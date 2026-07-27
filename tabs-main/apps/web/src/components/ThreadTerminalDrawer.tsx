@@ -59,18 +59,19 @@ function writeSystemMessage(terminal: Terminal, message: string): void {
 
 function terminalThemeFromApp(): ITheme {
   const isDark = document.documentElement.classList.contains("dark");
-  const bodyStyles = getComputedStyle(document.body);
+  const rootStyles = getComputedStyle(document.documentElement);
   const background =
-    bodyStyles.backgroundColor || (isDark ? "rgb(14, 18, 24)" : "rgb(255, 255, 255)");
-  const foreground = bodyStyles.color || (isDark ? "rgb(237, 241, 247)" : "rgb(28, 33, 41)");
+    rootStyles.getPropertyValue("--background").trim() || (isDark ? "#141414" : "#f6f5f2");
+  const foreground =
+    rootStyles.getPropertyValue("--foreground").trim() || (isDark ? "#f5f5f5" : "#3a3936");
 
   if (isDark) {
     return {
       background,
       foreground,
-      cursor: "rgb(180, 203, 255)",
-      selectionBackground: "rgba(180, 203, 255, 0.25)",
-      scrollbarSliderBackground: "rgba(255, 255, 255, 0.1)",
+      cursor: "var(--primary, rgb(180, 203, 255))",
+      selectionBackground: "var(--accent-wash-bg, rgba(180, 203, 255, 0.25))",
+      scrollbarSliderBackground: "var(--border, rgba(255, 255, 255, 0.1))",
       scrollbarSliderHoverBackground: "rgba(255, 255, 255, 0.18)",
       scrollbarSliderActiveBackground: "rgba(255, 255, 255, 0.22)",
       black: "rgb(24, 30, 38)",
@@ -95,9 +96,9 @@ function terminalThemeFromApp(): ITheme {
   return {
     background,
     foreground,
-    cursor: "rgb(38, 56, 78)",
-    selectionBackground: "rgba(37, 63, 99, 0.2)",
-    scrollbarSliderBackground: "rgba(0, 0, 0, 0.15)",
+    cursor: "var(--primary, rgb(38, 56, 78))",
+    selectionBackground: "var(--accent-wash-bg, rgba(37, 63, 99, 0.2))",
+    scrollbarSliderBackground: "var(--border, rgba(0, 0, 0, 0.15))",
     scrollbarSliderHoverBackground: "rgba(0, 0, 0, 0.25)",
     scrollbarSliderActiveBackground: "rgba(0, 0, 0, 0.3)",
     black: "rgb(44, 53, 66)",
@@ -625,29 +626,51 @@ function TerminalViewport({
   }, [autoFocus, focusRequestId]);
 
   useEffect(() => {
-    const api = readNativeApi();
-    const terminal = terminalRef.current;
-    const fitAddon = fitAddonRef.current;
-    if (!api || !terminal || !fitAddon) return;
-    const wasAtBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
-    const frame = window.requestAnimationFrame(() => {
-      fitAddon.fit();
-      if (wasAtBottom) {
-        terminal.scrollToBottom();
+    const mount = containerRef.current;
+    if (!mount) return;
+
+    let animationFrameId: number | null = null;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry || entry.contentRect.width === 0 || entry.contentRect.height === 0) return;
+
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
       }
-      void api.terminal
-        .resize({
-          threadId,
-          terminalId,
-          cols: terminal.cols,
-          rows: terminal.rows,
-        })
-        .catch(() => undefined);
+
+      animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = null;
+        const api = readNativeApi();
+        const terminal = terminalRef.current;
+        const fitAddon = fitAddonRef.current;
+        if (!api || !terminal || !fitAddon) return;
+
+        const wasAtBottom = terminal.buffer.active.viewportY >= terminal.buffer.active.baseY;
+        fitAddon.fit();
+        if (wasAtBottom) {
+          terminal.scrollToBottom();
+        }
+        void api.terminal
+          .resize({
+            threadId,
+            terminalId,
+            cols: terminal.cols,
+            rows: terminal.rows,
+          })
+          .catch(() => undefined);
+      });
     });
+
+    observer.observe(mount);
+
     return () => {
-      window.cancelAnimationFrame(frame);
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+      observer.disconnect();
     };
-  }, [drawerHeight, resizeEpoch, terminalId, threadId]);
+  }, [terminalId, threadId]);
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden rounded-[4px]" />
   );

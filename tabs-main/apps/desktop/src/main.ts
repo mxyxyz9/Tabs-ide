@@ -300,9 +300,9 @@ function getSafeExternalUrl(rawUrl: unknown): string | null {
   return parsedUrl.toString();
 }
 
-function getSafeTheme(rawTheme: unknown): DesktopTheme | null {
-  if (rawTheme === "light" || rawTheme === "dark" || rawTheme === "system") {
-    return rawTheme;
+function getSafeTheme(rawTheme: unknown): string | null {
+  if (typeof rawTheme === "string" && rawTheme.trim().length > 0) {
+    return rawTheme.trim();
   }
 
   return null;
@@ -1966,14 +1966,29 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeHandler(SET_THEME_CHANNEL);
-  ipcMain.handle(SET_THEME_CHANNEL, async (_event, rawTheme: unknown) => {
-    const theme = getSafeTheme(rawTheme);
-    if (!theme) {
+  ipcMain.handle(SET_THEME_CHANNEL, async (_event, payload: unknown) => {
+    let themeId: string | null = null;
+    let customConfig: any = null;
+
+    if (typeof payload === "object" && payload !== null && "themeId" in payload) {
+      themeId = getSafeTheme((payload as any).themeId);
+      customConfig = (payload as any).customConfig ?? null;
+    } else {
+      themeId = getSafeTheme(payload);
+    }
+
+    if (!themeId) {
       return;
     }
 
-    nativeTheme.themeSource = theme;
-    codeControlChannel.setTheme(theme);
+    let isLight = themeId === "tabs-light" || themeId === "solarized-light" || themeId === "light";
+    if (themeId === "custom" && customConfig?.baseVariant) {
+      isLight = customConfig.baseVariant === "light";
+    }
+
+    nativeTheme.themeSource = isLight ? "light" : "dark";
+    codeControlChannel.setTheme(themeId, customConfig);
+    codeHostManager.setTheme(themeId, customConfig);
   });
 
   ipcMain.removeHandler(SET_ICON_THEME_CHANNEL);

@@ -406,12 +406,12 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       >
         <style>{COSMIC_KEYFRAMES}</style>
         <div
-          className="relative flex gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-2xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150 dark:bg-[#18181b] dark:border-white/8 dark:text-white"
+          className="relative flex gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-2xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150"
           style={panelStyle}
         >
           {/* Provider Sidebar navigation on Left */}
           {providerOptions.length > 1 && (
-            <div className="flex flex-col gap-2.5 border-r border-border pr-6 dark:border-white/8">
+            <div className="flex flex-col gap-2.5 border-r border-border pr-6">
               {/* 📌 Pinned Models Tab */}
               <button
                 key="pinned"
@@ -419,9 +419,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                 title="Pinned"
                 onClick={() => setSelectedTab("pinned")}
                 className={cn(
-                  "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative dark:bg-white/3 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-white",
+                  "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative",
                   activeTab === "pinned" &&
-                    "bg-accent border-border text-foreground shadow-xs dark:bg-white/10 dark:border-white/20 dark:text-white dark:shadow-md",
+                    "bg-accent border-border text-foreground shadow-xs",
                 )}
               >
                 <PinIcon
@@ -429,18 +429,18 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                   className={cn(
                     "size-5 transition-colors",
                     activeTab === "pinned"
-                      ? "text-foreground dark:text-white"
-                      : "text-muted-foreground dark:text-zinc-400",
+                      ? "text-foreground"
+                      : "text-muted-foreground",
                   )}
                 />
                 {pinnedModels.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground dark:bg-white/10 dark:border-white/20 dark:text-zinc-300">
+                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground">
                     {pinnedModels.length}
                   </span>
                 )}
               </button>
 
-              <div className="h-px w-full bg-border my-0.5 dark:bg-white/8" />
+              <div className="h-px w-full bg-border my-0.5" />
 
               {providerOptions.map((option) => {
                 const OptionIcon = PROVIDER_ICON_BY_PROVIDER[option.value];
@@ -460,9 +460,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                       if (fallback) setModelAndOptions(option.value, fallback.slug);
                     }}
                     className={cn(
-                      "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all dark:bg-white/3 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-white",
+                      "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all",
                       isActive &&
-                        "bg-accent border-border text-foreground shadow-xs dark:bg-white/10 dark:border-white/20 dark:text-white dark:shadow-md",
+                        "bg-accent border-border text-foreground shadow-xs",
                       disabled && "cursor-not-allowed opacity-30",
                     )}
                   >
@@ -475,10 +475,10 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
           {/* Matrix Core containing model rows with horizontal aligned tracks */}
           <div className={cn("flex flex-col justify-center overflow-x-hidden", matrixMinWidthClass)}>
-            <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 dark:[&::-webkit-scrollbar-thumb]:bg-white/10 dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full">
+            <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
               {/* Header labels aligned absolutely to the global columns */}
               {globalStops.length > 0 && (
-                <div className="sticky top-0 z-30 h-14 mb-2 select-none w-full bg-popover border-b border-border/60 pt-2 pb-3 dark:bg-[#18181b] dark:border-white/5">
+                <div className="sticky top-0 z-30 h-14 mb-2 select-none w-full bg-popover border-b border-border/60 pt-2 pb-3">
                   {globalStops.map((stop, idx) => {
                     const displayLabel =
                       stop.label ||

@@ -731,11 +731,22 @@ function startCodeControlChannel(context) {
           log(`setTheme ${parsed.theme}`);
           void (async () => {
             try {
-              const targetTheme =
-                parsed.theme === "light" ? "Default Light Modern" : "Default Dark Modern";
+              const themeId = parsed.theme;
+              let isLight =
+                themeId === "tabs-light" || themeId === "solarized-light" || themeId === "light";
+              if (themeId === "custom" && parsed.customConfig && parsed.customConfig.baseVariant) {
+                isLight = parsed.customConfig.baseVariant === "light";
+              }
+              const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
               await vscode.workspace
                 .getConfiguration()
                 .update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
+
+              if (themeId === "custom" && parsed.customConfig && parsed.customConfig.fonts && parsed.customConfig.fonts.editorFont) {
+                await vscode.workspace
+                  .getConfiguration()
+                  .update("editor.fontFamily", parsed.customConfig.fonts.editorFont, vscode.ConfigurationTarget.Global);
+              }
             } catch (err) {
               log(`setTheme error: ${err && err.message ? err.message : err}`);
             }

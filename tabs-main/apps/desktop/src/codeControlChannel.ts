@@ -225,8 +225,8 @@ export class CodeControlChannel {
     return true;
   }
 
-  setTheme(theme: string): void {
-    const message: CodeControlServerMessage = { type: "setTheme", theme };
+  setTheme(theme: string, customConfig?: any): void {
+    const message = { type: "setTheme", theme, customConfig };
     const payload = `${JSON.stringify(message)}\n`;
     for (const socket of this.socketsByProject.values()) {
       if (!socket.destroyed && socket.writable) {

@@ -256,7 +256,7 @@ export function ServerPresetFormFields(props: {
 
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm font-medium text-foreground">Target Browser</div>
-              <div className="flex bg-zinc-950/50 border border-zinc-800/60 rounded-lg p-1">
+              <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() =>
@@ -268,7 +268,7 @@ export function ServerPresetFormFields(props: {
                   className={cn(
                     "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                     preset.previewOpenTarget !== "external"
-                      ? "bg-zinc-800 text-foreground shadow-sm"
+                      ? "bg-background text-foreground shadow-xs font-semibold"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -285,7 +285,7 @@ export function ServerPresetFormFields(props: {
                   className={cn(
                     "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                     preset.previewOpenTarget === "external"
-                      ? "bg-zinc-800 text-foreground shadow-sm"
+                      ? "bg-background text-foreground shadow-xs font-semibold"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -332,9 +332,9 @@ export function ServerPresetFormFields(props: {
                 return (
                   <div
                     key={dep.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-zinc-950/20 px-3 py-2.5"
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5"
                   >
-                    <span className="text-sm font-medium text-zinc-300">
+                    <span className="text-sm font-medium text-foreground">
                       {dep.label || "Untitled Preset"}
                     </span>
                     <Switch
@@ -354,7 +354,7 @@ export function ServerPresetFormFields(props: {
               })}
           </div>
         ) : (
-          <div className="text-xs text-muted-foreground/60 italic border border-border/40 rounded-xl px-3 py-3 text-center bg-zinc-950/20">
+          <div className="text-xs text-muted-foreground/60 italic border border-border/40 rounded-xl px-3 py-3 text-center bg-muted/20">
             No other presets available to depend on.
           </div>
         )}

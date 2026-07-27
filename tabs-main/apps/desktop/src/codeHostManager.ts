@@ -1160,7 +1160,44 @@ export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
   private activeProjectId: string | null = null;
+  private currentThemeId: string = "tabs-dark";
   private disposed = false;
+
+  setTheme(themeId: string, customConfig?: any): void {
+    this.currentThemeId = themeId;
+    for (const session of this.sessions.values()) {
+      if (session.view) {
+        let script = `document.documentElement.setAttribute('data-theme', '${themeId}'); document.body.setAttribute('data-theme', '${themeId}');`;
+        if (themeId === "custom" && customConfig?.colors) {
+          script += `
+            document.documentElement.style.setProperty('--tabs-bg', '${customConfig.colors.background}');
+            document.documentElement.style.setProperty('--tabs-bg-sidebar', '${customConfig.colors.card}');
+            document.documentElement.style.setProperty('--tabs-bg-elevated', '${customConfig.colors.card}');
+            document.documentElement.style.setProperty('--tabs-text', '${customConfig.colors.foreground}');
+            document.documentElement.style.setProperty('--tabs-accent', '${customConfig.colors.primary}');
+            const monaco = document.querySelector('.monaco-workbench');
+            if (monaco) {
+              monaco.style.setProperty('--tabs-bg', '${customConfig.colors.background}');
+              monaco.style.setProperty('--tabs-bg-sidebar', '${customConfig.colors.card}');
+              monaco.style.setProperty('--tabs-bg-elevated', '${customConfig.colors.card}');
+              monaco.style.setProperty('--tabs-text', '${customConfig.colors.foreground}');
+              monaco.style.setProperty('--tabs-accent', '${customConfig.colors.primary}');
+            }
+          `;
+        } else {
+          script += `
+            document.documentElement.style.removeProperty('--tabs-bg');
+            document.documentElement.style.removeProperty('--tabs-bg-sidebar');
+            document.documentElement.style.removeProperty('--tabs-text');
+            document.documentElement.style.removeProperty('--tabs-accent');
+          `;
+        }
+        void session.view.webContents
+          .executeJavaScript(script)
+          .catch(() => {});
+      }
+    }
+  }
 
   constructor(
     private readonly getWindow: () => BrowserWindow | null,
@@ -1315,6 +1352,13 @@ export class CodeHostManager {
         void view.webContents.insertCSS(CODE_OSS_THEME_CSS).catch(() => {
           /* view may have been torn down */
         });
+        if (this.currentThemeId) {
+          void view.webContents
+            .executeJavaScript(
+              `document.documentElement.setAttribute('data-theme', '${this.currentThemeId}'); document.body.setAttribute('data-theme', '${this.currentThemeId}');`,
+            )
+            .catch(() => {});
+        }
       };
       view.webContents.on("did-finish-load", applyThemeCss);
       view.webContents.on("dom-ready", applyThemeCss);

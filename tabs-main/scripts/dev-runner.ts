@@ -27,14 +27,13 @@ const MODE_ARGS = {
     "--filter=@tabs/contracts",
     "--filter=@tabs/web",
     "--filter=tabs",
-    "--parallel",
   ],
   "dev:server": ["run", "dev", "--filter=tabs"],
   "dev:web": ["run", "dev", "--filter=@tabs/web"],
   // The desktop package watches its own authenticated backend bundle via
   // `dev:backend-bundle`; do not run the standalone server here because it
   // competes for state and is not the process Electron connects to.
-  "dev:desktop": ["run", "dev", "--filter=@tabs/desktop", "--filter=@tabs/web", "--parallel"],
+  "dev:desktop": ["run", "dev", "--filter=@tabs/desktop", "--filter=@tabs/web"],
 } as const satisfies Record<string, ReadonlyArray<string>>;
 
 type DevMode = keyof typeof MODE_ARGS;

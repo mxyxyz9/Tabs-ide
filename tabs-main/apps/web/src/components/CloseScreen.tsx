@@ -390,14 +390,17 @@ export function CloseScreen({
 }: CloseScreenProps) {
   const { resolvedTheme } = useTheme();
   const theme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
-  const isDark = theme === "dark";
+  const isDark =
+    typeof document !== "undefined"
+      ? document.documentElement.classList.contains("dark")
+      : (theme?.includes("dark") ?? true);
   const isBlock = palette === "block";
 
   return (
     <div
       className={cn(
         "flex h-full w-full flex-col items-center justify-center",
-        isBlock ? "bg-primary" : isDark ? "bg-[#09090b]" : "bg-white",
+        isBlock ? "bg-primary text-primary-foreground" : "bg-background text-foreground",
       )}
     >
       {loader === "solari" ? (

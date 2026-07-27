@@ -223,7 +223,7 @@ export type DesktopUpdateStatus =
   | "error";
 
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
-export type DesktopTheme = "light" | "dark" | "system";
+export type DesktopTheme = "light" | "dark" | "system" | "tabs-dark" | "tabs-light" | "abyss" | "dracula" | "deep-blue" | "solarized-light" | (string & {});
 export type DesktopUpdateChannel = "latest" | "nightly";
 export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
 
@@ -238,7 +238,7 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
   "error",
 ]);
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
-export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
+export const DesktopThemeSchema = Schema.String;
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
 export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
 

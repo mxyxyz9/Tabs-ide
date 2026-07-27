@@ -792,7 +792,7 @@ function ProjectTabs(props: {
     <div
       className={cn(
         "drag-region flex items-end gap-2 overflow-x-auto border-b px-3 pt-2 select-none backdrop-blur-md transition-colors duration-200",
-        "border-zinc-200/90 bg-zinc-100/90 text-zinc-900 dark:border-white/10 dark:bg-zinc-950/80 dark:text-zinc-100",
+        "border-border/80 bg-background/95 text-foreground",
         // Reserve space for the OS window controls: traffic lights (left) on
         // macOS/Linux, the overlaid caption buttons (right) on Windows.
         isElectron && (isWindowsDesktop ? "pr-[140px]" : "pl-[92px]"),
@@ -810,8 +810,8 @@ function ProjectTabs(props: {
                 className={cn(
                   "drag-region group relative inline-flex min-w-[9.5rem] max-w-[15rem] items-center gap-2 rounded-t-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
                   active
-                    ? "relative -mb-px border-zinc-300 border-b-white bg-white text-zinc-950 shadow-sm ring-1 ring-black/5 dark:border-white/15 dark:border-b-zinc-900 dark:bg-zinc-900 dark:text-zinc-50 dark:shadow-md dark:ring-white/5"
-                    : "border-transparent text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100",
+                    ? "relative -mb-px border-border border-b-card bg-card text-card-foreground shadow-sm ring-1 ring-border/50"
+                    : "border-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                 )}
                 onClick={() => props.onActivateProject(project.id)}
               >
@@ -820,8 +820,8 @@ function ProjectTabs(props: {
                   className={cn(
                     "min-w-0 flex-1 truncate text-left leading-none tracking-tight",
                     active
-                      ? "font-semibold text-zinc-950 dark:text-zinc-50"
-                      : "font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-950 dark:group-hover:text-zinc-100",
+                      ? "font-semibold text-card-foreground"
+                      : "font-medium text-muted-foreground group-hover:text-foreground",
                   )}
                 >
                   {project.name}
@@ -831,8 +831,8 @@ function ProjectTabs(props: {
                   className={cn(
                     "no-drag shrink-0 rounded-md p-1 transition-all duration-150 cursor-pointer",
                     active
-                      ? "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                      : "text-zinc-400 opacity-60 group-hover:opacity-100 hover:bg-zinc-300/80 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-700/80 dark:hover:text-zinc-100",
+                      ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      : "text-muted-foreground/60 opacity-60 group-hover:opacity-100 hover:bg-muted/80 hover:text-foreground",
                   )}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -855,8 +855,8 @@ function ProjectTabs(props: {
               className={cn(
                 "drag-region group relative inline-flex min-w-[9.5rem] max-w-[15rem] items-center gap-2 rounded-t-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
                 active
-                  ? "relative -mb-px border-zinc-300 border-b-white bg-white text-zinc-950 shadow-sm ring-1 ring-black/5 dark:border-white/15 dark:border-b-zinc-900 dark:bg-zinc-900 dark:text-zinc-50 dark:shadow-md dark:ring-white/5"
-                  : "border-transparent text-zinc-600 hover:bg-zinc-200/70 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100",
+                  ? "relative -mb-px border-border border-b-card bg-card text-card-foreground shadow-sm ring-1 ring-border/50"
+                  : "border-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
               )}
               onClick={() => props.onActivatePendingTab(pendingId)}
             >
@@ -865,8 +865,8 @@ function ProjectTabs(props: {
                 className={cn(
                   "min-w-0 flex-1 truncate text-left leading-none tracking-tight",
                   active
-                    ? "font-semibold text-zinc-950 dark:text-zinc-50"
-                    : "font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-zinc-950 dark:group-hover:text-zinc-100",
+                    ? "font-semibold text-card-foreground"
+                    : "font-medium text-muted-foreground group-hover:text-foreground",
                 )}
               >
                 New Tab
@@ -876,8 +876,8 @@ function ProjectTabs(props: {
                 className={cn(
                   "no-drag shrink-0 rounded-md p-1 transition-all duration-150 cursor-pointer",
                   active
-                    ? "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                    : "text-zinc-400 opacity-60 group-hover:opacity-100 hover:bg-zinc-300/80 hover:text-zinc-900 dark:text-zinc-500 dark:hover:bg-zinc-700/80 dark:hover:text-zinc-100",
+                    ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    : "text-muted-foreground/60 opacity-60 group-hover:opacity-100 hover:bg-muted/80 hover:text-foreground",
                 )}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -893,7 +893,7 @@ function ProjectTabs(props: {
         {/* Integrated "+" button */}
         <button
           type="button"
-          className="no-drag mb-1 shrink-0 rounded-lg p-1.5 text-zinc-600 transition-all hover:bg-zinc-200/80 hover:text-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-white cursor-pointer"
+          className="no-drag mb-1 shrink-0 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-muted/80 hover:text-foreground cursor-pointer"
           aria-label="New tab"
           onClick={props.onNewTab}
         >
@@ -923,7 +923,7 @@ function ProjectToolBar(props: {
               className={cn(
                 "inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-cyan-500 text-black shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-sm font-semibold"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
               )}
             >
@@ -6502,37 +6502,39 @@ function DesktopBrowserTool(props: {
     >
       {viewportSelectorOpen ? <BrowserViewportHiddenNotice /> : null}
       {isTransientStartup && matchingRunningPreset ? (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-zinc-950/80 backdrop-blur-xl animate-in fade-in duration-200">
-          <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-zinc-800/80 bg-zinc-900/90 shadow-2xl p-5 space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3.5">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-background/80 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-border bg-card shadow-2xl p-5 space-y-5">
+            <div className="flex items-center justify-between border-b border-border/60 pb-3.5">
               <div className="flex items-center gap-2.5">
-                <ServerIcon className="size-4 text-zinc-400 shrink-0" />
+                <ServerIcon className="size-4 text-muted-foreground shrink-0" />
                 <div>
-                  <h2 className="text-xs font-semibold text-zinc-100 tracking-tight">
+                  <h2 className="text-xs font-semibold text-foreground tracking-tight">
                     Starting {matchingRunningPreset.label}...
                   </h2>
-                  <p className="text-[11px] text-zinc-400 font-mono">
+                  <p className="text-[11px] text-muted-foreground font-mono">
                     {normalizedUrl}
                   </p>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-800/60 bg-blue-900/30 px-2.5 py-1 text-[10px] font-medium text-blue-300">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-medium text-primary">
                 <LoaderIcon className="size-3 animate-spin" />
                 Starting
               </span>
             </div>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-muted-foreground">
               The dev server is starting up. The browser will load automatically once the server is ready.
             </p>
             <div className="flex items-center justify-between pt-1">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => workspaceShellActions.setActiveTool(props.project.id, "server")}
-                className="inline-flex h-8 items-center justify-center gap-2 rounded-lg bg-zinc-800 border border-zinc-700/80 px-3.5 text-xs font-medium text-zinc-100 hover:bg-zinc-700 transition-colors cursor-pointer"
+                className="gap-2 cursor-pointer font-medium"
               >
                 <TerminalSquareIcon className="size-3.5" />
                 Open Server Tab
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -6853,39 +6855,39 @@ function UniversalDevServerOfflineNotice(props: {
   onOpenServerTab?: (() => void) | undefined;
 }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-zinc-950/80 backdrop-blur-xl animate-in fade-in duration-200">
-      <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-zinc-800/80 bg-zinc-900/90 shadow-2xl p-5 space-y-5">
+    <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center p-6 bg-background/80 backdrop-blur-xl animate-in fade-in duration-200">
+      <div className="pointer-events-auto max-w-md w-full rounded-2xl border border-border bg-card shadow-2xl p-5 space-y-5">
         {/* Header section with clean unboxed icon and subtle monotone pill */}
-        <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3.5">
+        <div className="flex items-center justify-between border-b border-border/60 pb-3.5">
           <div className="flex items-center gap-2.5">
-            <ServerIcon className="size-4 text-zinc-400 shrink-0" />
+            <ServerIcon className="size-4 text-muted-foreground shrink-0" />
             <div>
-              <h2 className="text-xs font-semibold text-zinc-100 tracking-tight">
+              <h2 className="text-xs font-semibold text-foreground tracking-tight">
                 Server Offline
               </h2>
-              <p className="text-[11px] text-zinc-400 font-mono">
+              <p className="text-[11px] text-muted-foreground font-mono">
                 {props.url}
               </p>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-800/50 px-2.5 py-1 text-[10px] font-medium text-zinc-400">
-            <span className="size-1.5 rounded-full bg-zinc-500" />
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-[10px] font-medium text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-muted-foreground/60" />
             Not responding
           </span>
         </div>
 
-        <p className="text-xs text-zinc-400 leading-relaxed">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           The local development server is not running. Switch to the Server tab to start server presets and view live terminal logs.
         </p>
 
         {/* Bottom Actions */}
-        <div className="flex items-center justify-between border-t border-zinc-800/60 pt-3.5">
+        <div className="flex items-center justify-between border-t border-border/60 pt-3.5">
           {props.onOpenServerTab ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="gap-2 border-zinc-700 bg-zinc-800/80 text-zinc-100 hover:bg-zinc-700 hover:text-white cursor-pointer font-medium"
+              className="gap-2 cursor-pointer font-medium"
               onClick={props.onOpenServerTab}
             >
               <TerminalSquareIcon className="size-4" />
@@ -6896,7 +6898,7 @@ function UniversalDevServerOfflineNotice(props: {
             type="button"
             variant="ghost"
             size="xs"
-            className="gap-1.5 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200 cursor-pointer"
+            className="gap-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
             onClick={() => window.location.reload()}
           >
             <RefreshCwIcon className="size-3.5" />
@@ -8189,9 +8191,9 @@ function ServerTool(props: {
           setIsPresetDialogOpen(open);
         }}
       >
-        <DialogPopup className="max-w-4xl p-0 overflow-hidden flex flex-col h-[40rem] bg-zinc-900 border border-zinc-800">
+        <DialogPopup className="max-w-4xl p-0 overflow-hidden flex flex-col h-[40rem] bg-card border border-border text-card-foreground">
           {/* Global Header */}
-          <DialogHeader className="p-5 border-b border-zinc-800/40 shrink-0 relative flex flex-row items-start justify-between bg-zinc-950/20">
+          <DialogHeader className="p-5 border-b border-border/60 shrink-0 relative flex flex-row items-start justify-between bg-muted/20">
             <div className="text-left">
               <DialogTitle className="text-lg font-bold text-foreground">
                 Server Presets
@@ -8205,7 +8207,7 @@ function ServerTool(props: {
 
           <div className="flex flex-1 min-h-0">
             {/* Left Sidebar */}
-            <div className="w-60 bg-zinc-950/40 border-r border-zinc-800/60 p-4 flex flex-col gap-4 shrink-0">
+            <div className="w-60 bg-muted/30 border-r border-border/60 p-4 flex flex-col gap-4 shrink-0">
               <Button
                 type="button"
                 variant="outline"
@@ -8238,10 +8240,10 @@ function ServerTool(props: {
                         className={cn(
                           "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-sm transition-all border border-transparent cursor-pointer",
                           isSelected
-                            ? "bg-zinc-800/80 text-foreground font-medium shadow-xs border-zinc-700/50"
-                            : "text-muted-foreground hover:bg-zinc-800/30 hover:text-foreground",
+                            ? "bg-accent text-accent-foreground font-medium shadow-xs border-border/70"
+                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                           draggedPresetId === preset.id &&
-                            "opacity-40 border-dashed border-zinc-500",
+                            "opacity-40 border-dashed border-border",
                         )}
                       >
                         <span className="truncate mr-2">{preset.label || "Untitled Preset"}</span>
@@ -8273,7 +8275,7 @@ function ServerTool(props: {
             </div>
 
             {/* Right details / Edit pane */}
-            <div className="flex-1 flex flex-col min-w-0 bg-zinc-900/60">
+            <div className="flex-1 flex flex-col min-w-0 bg-card">
               <DialogPanel className="flex-1 overflow-y-auto p-6 min-h-0">
                 {isEditingRightPane && editingPresetDraft ? (
                   <div className="space-y-4">
@@ -8337,7 +8339,7 @@ function ServerTool(props: {
                       <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Command Steps
                       </div>
-                      <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 font-mono text-xs leading-relaxed text-zinc-300 space-y-1 max-h-48 overflow-y-auto">
+                      <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 font-mono text-xs leading-relaxed text-foreground space-y-1 max-h-48 overflow-y-auto">
                         {selectedPreset.commands.map((cmd, idx) => (
                           <div key={idx} className="truncate flex items-start gap-2">
                             <span className="text-muted-foreground/60 w-4 text-right shrink-0">
@@ -8362,8 +8364,8 @@ function ServerTool(props: {
                           <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                             Browser Tool Integration
                           </div>
-                          <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-300 space-y-3">
-                            <div className="flex justify-between border-b border-zinc-800/30 pb-3">
+                          <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-xs text-foreground space-y-3">
+                            <div className="flex justify-between border-b border-border/40 pb-3">
                               <span className="text-muted-foreground">URL Target</span>
                               {selectedPreset.previewUrl ? (
                                 <span className="font-mono">{selectedPreset.previewUrl}</span>
@@ -8373,7 +8375,7 @@ function ServerTool(props: {
                                 </span>
                               )}
                             </div>
-                            <div className="flex justify-between border-b border-zinc-800/30 pb-3">
+                            <div className="flex justify-between border-b border-border/40 pb-3">
                               <span className="text-muted-foreground">Target Browser</span>
                               <span>
                                 {selectedPreset.previewOpenTarget === "external"
@@ -8395,13 +8397,13 @@ function ServerTool(props: {
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                           Configuration
                         </div>
-                        <div className="rounded-xl border border-zinc-800/40 bg-zinc-950/40 px-4 py-3 text-xs text-zinc-300 space-y-3">
+                        <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-xs text-foreground space-y-3">
                           <div
                             className={cn(
                               "flex justify-between",
                               selectedPreset.dependsOn &&
                                 selectedPreset.dependsOn.length > 0 &&
-                                "border-b border-zinc-800/30 pb-3",
+                                "border-b border-border/40 pb-3",
                             )}
                           >
                             <span className="text-muted-foreground">Auto-start on launch</span>
@@ -8432,7 +8434,7 @@ function ServerTool(props: {
                 )}
               </DialogPanel>
 
-              <DialogFooter className="p-4 border-t border-zinc-800/40 shrink-0 bg-zinc-950/15 flex items-center justify-between gap-3">
+              <DialogFooter className="p-4 border-t border-border/60 shrink-0 bg-muted/20 flex items-center justify-between gap-3">
                 {isEditingRightPane && editingPresetDraft ? (
                   <>
                     <div className="flex gap-2 w-full justify-end">
@@ -8456,6 +8458,7 @@ function ServerTool(props: {
                   <div className="flex items-center gap-2">
                     <Button
                       type="button"
+                      variant="default"
                       size="sm"
                       disabled={!hasRunnableCommands(selectedPreset.commands)}
                       onClick={() => {
@@ -8466,7 +8469,6 @@ function ServerTool(props: {
                         }
                         setIsPresetDialogOpen(false);
                       }}
-                      className="bg-blue-600 hover:bg-blue-700 text-white border-transparent"
                     >
                       <PlayIcon className="size-3.5 mr-1.5" />
                       {selectedPresetStatus === "running" ? "Open" : "Run"}

@@ -1,9 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangleIcon,
   ArrowLeftIcon,
   ArrowUpCircleIcon,
   BotIcon,
+  CheckCircle2Icon,
+  CheckIcon,
   ChevronDownIcon,
   DownloadIcon,
   FolderIcon,
@@ -13,6 +16,8 @@ import {
   LoaderIcon,
   LogInIcon,
   MinusIcon,
+  PaletteIcon,
+  PencilIcon,
   PinIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -24,8 +29,12 @@ import {
   GitBranchIcon,
   Link2Icon,
   MonitorPlayIcon,
+  CopyIcon,
+  PipetteIcon,
   SaveIcon,
   SearchIcon,
+  ShuffleIcon,
+  Trash2Icon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
@@ -117,6 +126,22 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip"
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
+import {
+  DEFAULT_CUSTOM_THEME,
+  DEFAULT_CUSTOM_THEME_LIGHT,
+  EDITOR_FONT_OPTIONS,
+  THEME_DEFINITIONS,
+  UI_FONT_OPTIONS,
+  calculateContrastRatio,
+  calculateLuminance,
+  getOptimalPrimaryForeground,
+  hexToHsv,
+  hsvToHex,
+  hexToRgb,
+  rgbToHex,
+  type CustomThemeConfig,
+  type ThemePreference,
+} from "../lib/themes";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
 import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../timestampFormat";
@@ -144,23 +169,7 @@ export function SettingsHeaderPortal({ children }: { children: React.ReactNode }
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
 
-const THEME_OPTIONS = [
-  {
-    value: "system",
-    label: "System",
-    description: "Match your OS appearance setting.",
-  },
-  {
-    value: "light",
-    label: "Light",
-    description: "Always use the light theme.",
-  },
-  {
-    value: "dark",
-    label: "Dark",
-    description: "Always use the dark theme.",
-  },
-] as const;
+
 
 const ZOOM_PRESETS = [
   { value: "0.5", label: "50%" },
@@ -299,6 +308,7 @@ const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
 
 type SettingsSectionId =
   | "general"
+  | "themes"
   | "workspace"
   | "providers"
   | "source-control"
@@ -313,6 +323,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   icon: typeof SlidersHorizontalIcon;
 }> = [
   { id: "general", label: "General", icon: SlidersHorizontalIcon },
+  { id: "themes", label: "Themes", icon: PaletteIcon },
   { id: "startup-animation", label: "Animations", icon: MonitorPlayIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
   { id: "source-control", label: "Source Control", icon: GitBranchIcon },
@@ -495,7 +506,7 @@ function PinModelCommandPalette({
           <DialogViewport>
             <DialogPopup
               showCloseButton={false}
-              className="w-full max-w-xl p-0 overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl isolate dark:bg-[#18181b] dark:border-white/10 my-auto"
+              className="w-full max-w-xl p-0 overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-2xl isolate my-auto"
             >
               {/* Search Header */}
               <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 bg-muted/20">
@@ -755,6 +766,1158 @@ function SettingsRow({
   );
 }
 
+export interface SavedCustomPreset {
+  id: string;
+  name: string;
+  config: CustomThemeConfig;
+  createdAt: number;
+}
+
+const SAVED_PRESETS_KEY = "tabs:saved-custom-presets";
+
+function getStoredSavedPresets(): SavedCustomPreset[] {
+  try {
+    const raw = localStorage.getItem(SAVED_PRESETS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {}
+  return [];
+}
+
+function saveSavedPresetsToStorage(presets: SavedCustomPreset[]) {
+  try {
+    localStorage.setItem(SAVED_PRESETS_KEY, JSON.stringify(presets));
+  } catch (err) {}
+}
+
+export type RandomStyleMode = "balanced" | "pastel" | "vivid" | "minimal" | "cyberpunk" | "warm";
+
+export const RANDOM_STYLE_OPTIONS: { id: RandomStyleMode; label: string }[] = [
+  { id: "pastel", label: "Pastel Soft" },
+  { id: "vivid", label: "Vivid Electric" },
+  { id: "minimal", label: "Minimal Mono" },
+  { id: "cyberpunk", label: "Cyberpunk Neon" },
+  { id: "warm", label: "Warm Earthy" },
+  { id: "balanced", label: "Harmonized (Default)" },
+];
+
+const AESTHETIC_PREFIXES = [
+  "Tokyo", "Cyber", "Aesthetic", "Midnight", "Matcha", "Sakura", "Velvet",
+  "Obsidian", "Pixel", "Lunar", "Vibe", "Neon", "Ghost", "Solar", "Chai",
+  "Cosmic", "Electric", "Retro", "Emerald", "Twilight", "Solstice", "Oasis",
+  "Zenith", "Nebula", "Monaco", "Kyoto", "Mochi", "Indigo", "Lumina"
+];
+
+const AESTHETIC_SUFFIXES = [
+  "Drift", "Haze", "Glow", "Pulse", "Check", "Bloom", "Latte", "Signal",
+  "Wave", "Dust", "Aura", "Flare", "Syntax", "Shift", "Echo", "Mirage",
+  "Vibes", "Mist", "Realm", "Matrix", "Chroma", "Radiance", "Spark"
+];
+
+export function generateAestheticThemeName(): string {
+  const p = AESTHETIC_PREFIXES[Math.floor(Math.random() * AESTHETIC_PREFIXES.length)];
+  const s = AESTHETIC_SUFFIXES[Math.floor(Math.random() * AESTHETIC_SUFFIXES.length)];
+  return `${p} ${s}`;
+}
+
+const CURATED_PASTEL_HARMONIES = [
+  { bg: "#faf4f6", card: "#ffffff", border: "#f3dbe3", fg: "#2d1b22", primary: "#d9658b" }, // Sakura Bloom
+  { bg: "#f5f7f3", card: "#ffffff", border: "#dbe4d5", fg: "#182615", primary: "#4f8045" }, // Matcha Latte
+  { bg: "#f6f5fa", card: "#ffffff", border: "#e0dcf2", fg: "#1d162d", primary: "#6c56ce" }, // Lavender Haze
+  { bg: "#faf5f3", card: "#ffffff", border: "#f5dfd6", fg: "#2e1c15", primary: "#d46b50" }, // Peach Fizz
+  { bg: "#f4f7fb", card: "#ffffff", border: "#d9e4f5", fg: "#122033", primary: "#3174ed" }, // Sky Cloud
+  { bg: "#1a1721", card: "#231f2d", border: "#352e45", fg: "#ebdff7", primary: "#b388ff" }, // Muted Lilac
+  { bg: "#151a17", card: "#1d2420", border: "#2c3831", fg: "#dcf2e6", primary: "#70c497" }, // Sage Twilight
+];
+
+const CURATED_VIVID_HARMONIES = [
+  { bg: "#090d16", card: "#111827", border: "#1f2937", fg: "#f9fafb", primary: "#6366f1" }, // Vibe Check (Indigo)
+  { bg: "#06111e", card: "#0b1d32", border: "#143254", fg: "#f0f9ff", primary: "#06b6d4" }, // Electric Cyan
+  { bg: "#130a10", card: "#20101b", border: "#381a2f", fg: "#fdf2f8", primary: "#f43f5e" }, // Hot Coral
+  { bg: "#041410", card: "#08241d", border: "#104236", fg: "#ecfdf5", primary: "#10b981" }, // Emerald Pulse
+  { bg: "#161108", card: "#241c0e", border: "#3f3018", fg: "#fffbeb", primary: "#f59e0b" }, // Amber Gold
+];
+
+const CURATED_MINIMAL_HARMONIES = [
+  { bg: "#0f172a", card: "#1e293b", border: "#334155", fg: "#f8fafc", primary: "#38bdf8" }, // Slate Blue
+  { bg: "#121212", card: "#1e1e1e", border: "#2d2d2d", fg: "#ededed", primary: "#f5f5f5" }, // Pure Charcoal
+  { bg: "#fafafa", card: "#ffffff", border: "#e5e5e5", fg: "#171717", primary: "#2563eb" }, // Minimal Studio Light
+];
+
+const CURATED_CYBERPUNK_HARMONIES = [
+  { bg: "#080711", card: "#100e20", border: "#221c3d", fg: "#f3f0ff", primary: "#d946ef" }, // Cyber Haze
+  { bg: "#0d021a", card: "#190533", border: "#340a66", fg: "#fae8ff", primary: "#00f0ff" }, // Neon Synthwave
+  { bg: "#020d07", card: "#051a0e", border: "#0b381d", fg: "#dcffe4", primary: "#00ff66" }, // Matrix Terminal
+  { bg: "#0a0e1a", card: "#12192e", border: "#1e294d", fg: "#e0e8ff", primary: "#7aa2f7" }, // Tokyo Night
+];
+
+const CURATED_WARM_HARMONIES = [
+  { bg: "#18120e", card: "#251c16", border: "#3c2d24", fg: "#f7ede8", primary: "#e07a5f" }, // Chai Midnight
+  { bg: "#120e0b", card: "#1c1612", border: "#30261f", fg: "#f4eae1", primary: "#d4a373" }, // Espresso Dark
+  { bg: "#fcf8f5", card: "#ffffff", border: "#f0dfd5", fg: "#2c1a11", primary: "#c85a32" }, // Terracotta Sunset
+  { bg: "#fdfbf7", card: "#ffffff", border: "#f2e9d8", fg: "#241c10", primary: "#b58900" }, // Golden Oat
+];
+
+function generateHarmonizedPalette(
+  baseVariant: "dark" | "light",
+  styleMode: RandomStyleMode = "pastel",
+): CustomThemeConfig["colors"] {
+  let pool: typeof CURATED_PASTEL_HARMONIES;
+
+  switch (styleMode) {
+    case "pastel":
+      pool = CURATED_PASTEL_HARMONIES;
+      break;
+    case "vivid":
+      pool = CURATED_VIVID_HARMONIES;
+      break;
+    case "minimal":
+      pool = CURATED_MINIMAL_HARMONIES;
+      break;
+    case "cyberpunk":
+      pool = CURATED_CYBERPUNK_HARMONIES;
+      break;
+    case "warm":
+      pool = CURATED_WARM_HARMONIES;
+      break;
+    default:
+      pool = [...CURATED_PASTEL_HARMONIES, ...CURATED_VIVID_HARMONIES, ...CURATED_WARM_HARMONIES];
+      break;
+  }
+
+  // Filter pool matching baseVariant if necessary
+  const matched = pool.filter((p) => {
+    const isDarkBg = calculateLuminance(p.bg) < 0.2;
+    return baseVariant === "dark" ? isDarkBg : !isDarkBg;
+  });
+
+  const selected = matched.length > 0
+    ? matched[Math.floor(Math.random() * matched.length)]!
+    : pool[Math.floor(Math.random() * pool.length)]!;
+
+  let fg = selected.fg;
+  let bg = selected.bg;
+
+  // Guarantee WCAG AA contrast (>= 4.5:1)
+  let ratio = calculateContrastRatio(fg, bg).ratio;
+  if (ratio < 4.5) {
+    fg = baseVariant === "dark" ? "#f8fafc" : "#0f172a";
+  }
+
+  return {
+    background: bg,
+    foreground: fg,
+    card: selected.card,
+    border: selected.border,
+    primary: selected.primary,
+  };
+}
+
+function ThemePickerGrid({
+  activeTheme,
+  customConfig,
+  savedPresets,
+  onSelectTheme,
+  onOpenStudio,
+  onDeletePreset,
+  onRenamePreset,
+  onEditPresetInStudio,
+}: {
+  activeTheme: ThemePreference;
+  customConfig: CustomThemeConfig;
+  savedPresets: SavedCustomPreset[];
+  onSelectTheme: (theme: ThemePreference, customOverride?: CustomThemeConfig) => void;
+  onOpenStudio: () => void;
+  onDeletePreset: (presetId: string) => void;
+  onRenamePreset: (presetId: string, newName: string) => void;
+  onEditPresetInStudio?: (preset: SavedCustomPreset) => void;
+}) {
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingNameInput, setEditingNameInput] = useState("");
+
+  const curatedThemes = [
+    {
+      id: "system" as const,
+      name: "System Auto",
+      description: "Match OS color scheme",
+      baseVariant: "auto",
+      badge: "AUTO",
+      bg: "linear-gradient(135deg, #141414 50%, #f6f5f2 50%)",
+      card: "#181818",
+      accent: "#366ffb",
+      border: "rgba(255,255,255,0.15)",
+      codeKeyword: "#38bdf8",
+      codeString: "#a7f3d0",
+    },
+    ...Object.values(THEME_DEFINITIONS)
+      .filter((t) => t.id !== "custom")
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        baseVariant: t.baseVariant,
+        badge: t.id === "true-black" ? "OLED" : t.baseVariant.toUpperCase(),
+        bg: t.colors.background,
+        card: t.colors.card,
+        accent: t.colors.codeOss.accent || t.colors.primary,
+        border: t.colors.border,
+        codeKeyword: t.colors.primary,
+        codeString: t.colors.accentForeground || t.colors.foreground,
+      })),
+  ];
+
+  return (
+    <div className="p-5 sm:p-6 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4.5 w-full">
+        {/* Curated Themes */}
+        {curatedThemes.map((t) => {
+          const isSelected = activeTheme === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              data-theme-id={t.id}
+              aria-label={`Theme: ${t.name}`}
+              onClick={() => onSelectTheme(t.id)}
+              className={cn(
+                "group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-3.5 text-left transition-all duration-300 cursor-pointer select-none",
+                isSelected
+                  ? "border-foreground/50 bg-card/90 shadow-md"
+                  : "border-border/60 bg-card/40 backdrop-blur-md hover:border-border hover:bg-card/70 hover:shadow-lg hover:-translate-y-0.5",
+              )}
+            >
+              <div
+                className="relative h-24 w-full overflow-hidden rounded-xl border border-black/10 dark:border-white/10 shadow-xs transition-transform duration-300 group-hover:scale-[1.02]"
+                style={{ background: t.bg }}
+              >
+                <div
+                  className="flex items-center justify-between px-2.5 py-1.5 border-b border-black/10 dark:border-white/10"
+                  style={{ backgroundColor: t.card }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <div className="size-2 rounded-full" style={{ backgroundColor: t.accent }} />
+                    <div className="size-1.5 rounded-full opacity-40" style={{ backgroundColor: t.accent }} />
+                    <div className="size-1.5 rounded-full opacity-20" style={{ backgroundColor: t.accent }} />
+                  </div>
+                  <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
+                </div>
+
+                <div className="flex h-full">
+                  <div
+                    className="w-7 border-r border-black/10 dark:border-white/10 p-1 flex flex-col gap-1"
+                    style={{ backgroundColor: t.card }}
+                  >
+                    <div className="h-1 w-full rounded-sm opacity-40 bg-foreground" />
+                    <div className="h-1 w-3/4 rounded-sm opacity-20 bg-foreground" />
+                    <div className="h-1 w-1/2 rounded-sm opacity-20 bg-foreground" />
+                  </div>
+
+                  <div className="flex-1 p-2 flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1">
+                      <div className="h-1 w-6 rounded-full opacity-80" style={{ backgroundColor: t.codeKeyword }} />
+                      <div className="h-1 w-10 rounded-full opacity-50 bg-foreground" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="h-1 w-4 rounded-full opacity-30 bg-foreground" />
+                      <div className="h-1 w-12 rounded-full opacity-70" style={{ backgroundColor: t.codeString }} />
+                    </div>
+                    <div className="h-1 w-8 rounded-full opacity-90" style={{ backgroundColor: t.accent }} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3.5 flex items-end justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <span className="text-xs font-bold tracking-tight text-foreground block truncate">
+                    {t.name}
+                  </span>
+                  <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5 font-normal">
+                    {t.description}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider",
+                    isSelected
+                      ? "bg-foreground/10 text-foreground border border-foreground/20"
+                      : "bg-muted text-muted-foreground border border-border/40",
+                  )}
+                >
+                  {t.badge}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+
+        {/* User Saved Presets */}
+        {savedPresets.map((preset) => {
+          const isSelected =
+            activeTheme === "custom" &&
+            JSON.stringify(customConfig.colors) === JSON.stringify(preset.config.colors);
+          const isEditing = editingPresetId === preset.id;
+
+          return (
+            <div
+              key={preset.id}
+              className={cn(
+                "group relative flex flex-col justify-between overflow-hidden rounded-2xl border p-3.5 text-left transition-all duration-300 select-none",
+                isSelected
+                  ? "border-foreground/50 bg-card/90 shadow-md"
+                  : "border-border/60 bg-card/40 backdrop-blur-md hover:border-border hover:bg-card/70 hover:shadow-lg hover:-translate-y-0.5",
+              )}
+            >
+              {/* Edit in Studio / Rename / Delete Buttons on Hover */}
+              {!isEditing && (
+                <div className="absolute top-2.5 right-2.5 z-20 opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-0.5 rounded-xl border border-border/80 bg-background/95 p-1 shadow-lg backdrop-blur-md">
+                  <button
+                    type="button"
+                    title="Edit Theme in Studio"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEditPresetInStudio?.(preset);
+                    }}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    <SlidersHorizontalIcon className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Rename Preset"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingPresetId(preset.id);
+                      setEditingNameInput(preset.name);
+                    }}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+                  >
+                    <PencilIcon className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete Saved Preset"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeletePreset(preset.id);
+                    }}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors cursor-pointer"
+                  >
+                    <Trash2Icon className="size-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Card Click target */}
+              <button
+                type="button"
+                onClick={() => !isEditing && onSelectTheme("custom", preset.config)}
+                className="w-full text-left flex flex-col justify-between h-full"
+              >
+                <div
+                  className="relative h-24 w-full overflow-hidden rounded-xl border border-black/10 dark:border-white/10 shadow-xs transition-transform duration-300 group-hover:scale-[1.02]"
+                  style={{ background: preset.config.colors.background }}
+                >
+                  <div
+                    className="flex items-center justify-between px-2.5 py-1.5 border-b border-black/10 dark:border-white/10"
+                    style={{ backgroundColor: preset.config.colors.card }}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <div className="size-2 rounded-full" style={{ backgroundColor: preset.config.colors.primary }} />
+                    </div>
+                    <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
+                  </div>
+
+                  <div className="flex h-full p-2 flex-col gap-1.5">
+                    <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: preset.config.colors.primary }} />
+                    <div className="h-1.5 w-20 rounded-full opacity-70" style={{ backgroundColor: preset.config.colors.foreground }} />
+                  </div>
+                </div>
+
+                {isEditing ? (
+                  <div className="mt-3 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <Input
+                      autoFocus
+                      value={editingNameInput}
+                      onChange={(e) => setEditingNameInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          onRenamePreset(preset.id, editingNameInput);
+                          setEditingPresetId(null);
+                        } else if (e.key === "Escape") {
+                          setEditingPresetId(null);
+                        }
+                      }}
+                      className="h-7 text-xs rounded-lg bg-background border-border/80 text-foreground px-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRenamePreset(preset.id, editingNameInput);
+                        setEditingPresetId(null);
+                      }}
+                      className="p-1 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer shrink-0"
+                    >
+                      <CheckIcon className="size-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-3.5 flex items-end justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs font-bold tracking-tight text-foreground block truncate">
+                        {preset.name}
+                      </span>
+                      <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5 font-normal">
+                        User Saved Preset
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider bg-muted text-muted-foreground border border-border/80">
+                      SAVED
+                    </span>
+                  </div>
+                )}
+              </button>
+            </div>
+          );
+        })}
+
+        {/* Option B: Studio Launcher Card */}
+        <button
+          type="button"
+          onClick={onOpenStudio}
+          className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-dashed border-border/70 bg-card/20 p-3.5 text-left transition-all duration-300 hover:border-foreground/40 hover:bg-card/40 cursor-pointer select-none"
+        >
+          <div className="relative flex h-24 w-full flex-col items-center justify-center rounded-xl border border-border/40 bg-muted/20 gap-2 group-hover:bg-muted/40 transition-colors">
+            <PaletteIcon className="size-5 text-foreground transition-transform group-hover:scale-110" />
+            <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">
+              Launch Studio Drawer
+            </span>
+          </div>
+
+          <div className="mt-3.5 flex items-end justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-bold tracking-tight text-foreground block truncate">
+                Custom Theme Studio
+              </span>
+              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5 font-normal">
+                Build & randomize custom palettes
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider text-muted-foreground border border-border/40">
+              STUDIO
+            </span>
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CustomStudioDrawer({
+  isOpen,
+  onClose,
+  config,
+  onChange,
+  onSavePreset,
+  initialPresetName = "",
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  config: CustomThemeConfig;
+  onChange: (next: CustomThemeConfig) => void;
+  onSavePreset: (name: string, config: CustomThemeConfig) => void;
+  initialPresetName?: string;
+}) {
+  const [presetNameInput, setPresetNameInput] = useState(initialPresetName);
+  const [randomStyle, setRandomStyle] = useState<RandomStyleMode>("pastel");
+
+  useEffect(() => {
+    setPresetNameInput(initialPresetName);
+  }, [initialPresetName, isOpen]);
+
+  const contrastInfo = useMemo(() => {
+    return calculateContrastRatio(config.colors.foreground, config.colors.background);
+  }, [config.colors.foreground, config.colors.background]);
+
+  if (!isOpen) return null;
+
+  const updateColor = (key: keyof CustomThemeConfig["colors"], value: string) => {
+    onChange({
+      ...config,
+      colors: {
+        ...config.colors,
+        [key]: value,
+      },
+    });
+  };
+
+  const updateFont = (key: keyof CustomThemeConfig["fonts"], value: string) => {
+    onChange({
+      ...config,
+      fonts: {
+        ...config.fonts,
+        [key]: value,
+      },
+    });
+  };
+
+  const handleRandomize = () => {
+    const randomizedColors = generateHarmonizedPalette(config.baseVariant, randomStyle);
+    onChange({
+      ...config,
+      colors: randomizedColors,
+    });
+    setPresetNameInput(generateAestheticThemeName());
+  };
+
+  const handleSave = () => {
+    const name = presetNameInput.trim() || generateAestheticThemeName();
+    onSavePreset(name, config);
+    setPresetNameInput("");
+  };
+
+  const handleReset = () => {
+    const isLightMode = config.baseVariant === "light" || document.documentElement.classList.contains("light");
+    onChange(isLightMode ? DEFAULT_CUSTOM_THEME_LIGHT : DEFAULT_CUSTOM_THEME);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200">
+      <div className="relative flex h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border/80 bg-card shadow-2xl animate-in zoom-in-95 duration-200">
+        {/* Drawer Header */}
+        <div className="flex items-center justify-between border-b border-border/70 px-6 py-4 bg-background/50 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <PaletteIcon className="size-5 text-muted-foreground shrink-0" />
+            <div>
+              <h3 className="text-base font-bold text-foreground tracking-tight">Custom Theme Studio</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Design, randomize, and save personalized color palettes and typography suites.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+          >
+            <XIcon className="size-5" />
+          </button>
+        </div>
+
+        {/* Drawer Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Column: Color Controls */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-1">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Color Palette Tokens
+                </h4>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <div
+                        tabIndex={0}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium font-mono cursor-help transition-colors",
+                          contrastInfo.isLowContrast
+                            ? "text-amber-500 bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/15"
+                            : "text-muted-foreground bg-muted/60 border border-border/80 hover:bg-muted",
+                        )}
+                      >
+                        {contrastInfo.isLowContrast ? (
+                          <>
+                            <AlertTriangleIcon className="size-3.5 shrink-0 text-amber-500" />
+                            <span>Low Contrast ({contrastInfo.ratio}:1)</span>
+                          </>
+                        ) : (
+                          <span>Contrast {contrastInfo.ratio}:1</span>
+                        )}
+                      </div>
+                    }
+                  />
+                  <TooltipPopup side="top" className="max-w-64 text-center p-2">
+                    {contrastInfo.isLowContrast ? (
+                      <p className="text-xs leading-relaxed">
+                        <strong className="text-amber-400 block mb-0.5 font-semibold">Low Text Contrast ({contrastInfo.ratio}:1)</strong>
+                        Text color has low contrast against the background color, which may make text hard to read. Try brightening your text color or darkening the background.
+                      </p>
+                    ) : (
+                      <p className="text-xs leading-relaxed">
+                        <strong className="text-foreground block mb-0.5 font-semibold">Sufficient Contrast ({contrastInfo.ratio}:1)</strong>
+                        Text and background colors have strong contrast, ensuring all UI typography is clear and comfortable to read.
+                      </p>
+                    )}
+                  </TooltipPopup>
+                </Tooltip>
+              </div>
+
+              {/* Base Variant Switcher */}
+              <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-background/50 p-3">
+                <div>
+                  <span className="text-xs font-semibold text-foreground block">Base Window Variant</span>
+                  <span className="text-[11px] text-muted-foreground">Native titlebar theme source</span>
+                </div>
+                <div className="flex rounded-xl bg-muted p-1 border border-border/40">
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...config, baseVariant: "dark" })}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-lg transition-all",
+                      config.baseVariant === "dark"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Dark
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...config, baseVariant: "light" })}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-lg transition-all",
+                      config.baseVariant === "light"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Light
+                  </button>
+                </div>
+              </div>
+
+              <ColorPickerRow
+                label="Canvas Background"
+                description="App container & workbench background"
+                value={config.colors.background}
+                onChange={(val) => updateColor("background", val)}
+              />
+
+              <ColorPickerRow
+                label="Text / Foreground"
+                description="Headings, body typography, labels"
+                value={config.colors.foreground}
+                onChange={(val) => updateColor("foreground", val)}
+              />
+
+              <ColorPickerRow
+                label="Card / Surface"
+                description="Sidebars, modals, popovers"
+                value={config.colors.card}
+                onChange={(val) => updateColor("card", val)}
+              />
+
+              <ColorPickerRow
+                label="Border Outlines"
+                description="Dividers, card outlines, tab borders"
+                value={config.colors.border}
+                onChange={(val) => updateColor("border", val)}
+              />
+
+              <ColorPickerRow
+                label="Primary Accent"
+                description="Active highlights, buttons, indicators"
+                value={config.colors.primary}
+                onChange={(val) => updateColor("primary", val)}
+              />
+            </div>
+
+            {/* Right Column: Live Workbench Preview & Typography */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Live Workbench Preview
+                </span>
+                <div
+                  className="relative overflow-hidden rounded-2xl border p-4 shadow-lg transition-all duration-300 space-y-3"
+                  style={{
+                    backgroundColor: config.colors.background,
+                    borderColor: config.colors.border,
+                    fontFamily: config.fonts.uiFont,
+                  }}
+                >
+                  <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: config.colors.border }}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold" style={{ color: config.colors.foreground }}>
+                        Tabs Custom Shell
+                      </span>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
+                        style={{
+                          backgroundColor: config.colors.primary,
+                          color: getOptimalPrimaryForeground(config.colors.primary),
+                        }}
+                      >
+                        LIVE PREVIEW
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg px-2.5 py-1 text-xs font-bold shadow-xs transition-colors"
+                        style={{
+                          backgroundColor: config.colors.primary,
+                          color: getOptimalPrimaryForeground(config.colors.primary),
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    className="rounded-xl p-3 text-xs font-mono border"
+                    style={{
+                      backgroundColor: config.colors.card,
+                      borderColor: config.colors.border,
+                      fontFamily: config.fonts.editorFont,
+                    }}
+                  >
+                    <span style={{ color: config.colors.primary }}>function </span>
+                    <span style={{ color: config.colors.foreground }}>renderCustomTheme</span>
+                    <span style={{ color: config.colors.foreground }}>() &#123;</span>
+                    <br />
+                    <span className="pl-4" style={{ color: config.colors.primary }}>return </span>
+                    <span style={{ color: config.colors.foreground }}>&quot;Ultra Premium UI&quot;;</span>
+                    <br />
+                    <span style={{ color: config.colors.foreground }}>&#125;</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Typography Settings */}
+              <div className="space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Typography Suite
+                </h4>
+
+                <div className="space-y-2 rounded-2xl border border-border/80 bg-background/50 p-4">
+                  <label className="text-xs font-semibold text-foreground block">UI Sans-Serif Font</label>
+                  <Select
+                    value={config.fonts.uiFont}
+                    onValueChange={(val) => val && updateFont("uiFont", val)}
+                  >
+                    <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                      <SelectValue placeholder="Select UI Font" />
+                    </SelectTrigger>
+                    <SelectPopup align="start">
+                      {UI_FONT_OPTIONS.map((f) => (
+                        <SelectItem key={f.value} value={f.value} className="text-xs">
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+
+                <div className="space-y-2 rounded-2xl border border-border/80 bg-background/50 p-4">
+                  <label className="text-xs font-semibold text-foreground block">Editor Monospace Font</label>
+                  <Select
+                    value={config.fonts.editorFont}
+                    onValueChange={(val) => val && updateFont("editorFont", val)}
+                  >
+                    <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                      <SelectValue placeholder="Select Editor Font" />
+                    </SelectTrigger>
+                    <SelectPopup align="start">
+                      {EDITOR_FONT_OPTIONS.map((f) => (
+                        <SelectItem key={f.value} value={f.value} className="text-xs">
+                          {f.label}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Drawer Footer Action Bar */}
+        <div className="flex items-center justify-between border-t border-border/70 px-6 py-3.5 bg-muted/20 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-xl border border-border/80 bg-background/80 p-0.5 shadow-xs">
+              <Select
+                value={randomStyle}
+                onValueChange={(val) => val && setRandomStyle(val as RandomStyleMode)}
+              >
+                <SelectTrigger className="h-7 border-0 bg-transparent text-xs font-medium px-2.5 rounded-lg focus:ring-0 shadow-none">
+                  <SelectValue placeholder="Style" />
+                </SelectTrigger>
+                <SelectPopup align="start">
+                  {RANDOM_STYLE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.id} value={opt.id} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+              <div className="h-4 w-px bg-border/80 mx-0.5" />
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleRandomize}
+                className="gap-1.5 rounded-lg text-xs font-medium h-7 px-3 cursor-pointer hover:bg-muted"
+              >
+                <ShuffleIcon className="size-3.5 text-muted-foreground" />
+                Randomize
+              </Button>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReset}
+              className="gap-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <RotateCcwIcon className="size-3.5" />
+              Reset
+            </Button>
+          </div>
+
+          {/* Keybindings-inspired Palette Name Container */}
+          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-background/80 px-3 py-1 shadow-xs transition-all focus-within:border-foreground/50 focus-within:ring-1 focus-within:ring-foreground/20 w-72 sm:w-88">
+            <PaletteIcon className="size-3.5 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              value={presetNameInput}
+              onChange={(e) => setPresetNameInput(e.target.value)}
+              placeholder="Palette name..."
+              className="h-7 w-full border-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground font-sans outline-none focus:outline-none px-0 min-w-0 flex-1"
+            />
+            <Button
+              size="xs"
+              variant="default"
+              onClick={handleSave}
+              className="gap-1.5 rounded-lg text-xs font-medium px-3 h-7 shrink-0 cursor-pointer shadow-xs"
+            >
+              <SaveIcon className="size-3.5" />
+              Save Theme
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const CURATED_STUDIO_SWATCHES = [
+  "#6366F1", "#06B6D4", "#10B981", "#F43F5E",
+  "#F59E0B", "#A855F7", "#EC4899", "#3B82F6",
+  "#1E293B", "#F8FAFC"
+];
+
+function StudioColorPickerPopover({
+  value,
+  onChange,
+  onClose,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  onClose: () => void;
+}) {
+  const [hsv, setHsv] = useState(() => hexToHsv(value));
+  const [format, setFormat] = useState<"hex" | "rgb">("hex");
+  const [copied, setCopied] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const satValRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setHsv(hexToHsv(value));
+  }, [value]);
+
+  const updateColorFromHsv = (h: number, s: number, v: number) => {
+    const newHex = hsvToHex(h, s, v);
+    setHsv({ h, s, v });
+    onChange(newHex);
+  };
+
+  const handleSatValPointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!satValRef.current) return;
+    const rect = satValRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    const s = x / rect.width;
+    const v = 1 - y / rect.height;
+    updateColorFromHsv(hsv.h, s, v);
+  };
+
+  const handleHuePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const h = Math.round((x / rect.width) * 360);
+    updateColorFromHsv(h, hsv.s, hsv.v);
+  };
+
+  const handleEyedropper = async () => {
+    if ("EyeDropper" in window) {
+      try {
+        const eyeDropper = new (window as any).EyeDropper();
+        const result = await eyeDropper.open();
+        if (result?.sRGBHex) {
+          onChange(result.sRGBHex);
+        }
+      } catch (err) {}
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const contrastInfo = calculateContrastRatio(value, "#141414");
+  const currentRgb = hexToRgb(value);
+  const pureHueHex = hsvToHex(hsv.h, 1, 1);
+
+  return (
+    <div
+      ref={containerRef}
+      className="absolute top-full right-0 z-50 mt-2 w-72 rounded-3xl border border-border/80 bg-card/95 p-4 shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150"
+    >
+      {/* 2D Saturation / Value Canvas */}
+      <div
+        ref={satValRef}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          handleSatValPointer(e);
+        }}
+        onPointerMove={(e) => {
+          if (e.buttons === 1) handleSatValPointer(e);
+        }}
+        className="relative h-36 w-full rounded-2xl cursor-crosshair overflow-hidden shadow-inner select-none"
+        style={{ backgroundColor: pureHueHex }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
+
+        {/* Handle Ring */}
+        <div
+          className="pointer-events-none absolute size-4.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-xl ring-2 ring-primary/80 transition-transform active:scale-125"
+          style={{
+            left: `${hsv.s * 100}%`,
+            top: `${(1 - hsv.v) * 100}%`,
+            backgroundColor: value,
+          }}
+        />
+      </div>
+
+      {/* Controls Row: Eyedropper, Swatch, Hue Slider */}
+      <div className="mt-3.5 flex items-center gap-3">
+        {"EyeDropper" in window ? (
+          <button
+            type="button"
+            onClick={handleEyedropper}
+            title="Pick color from screen"
+            className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background/80 text-muted-foreground hover:bg-muted hover:text-foreground transition-all cursor-pointer"
+          >
+            <PipetteIcon className="size-4" />
+          </button>
+        ) : (
+          <div className="size-8 shrink-0 rounded-xl border border-border shadow-xs" style={{ backgroundColor: value }} />
+        )}
+
+        {/* Custom Hue Track */}
+        <div
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            handleHuePointer(e);
+          }}
+          onPointerMove={(e) => {
+            if (e.buttons === 1) handleHuePointer(e);
+          }}
+          className="relative flex-1 h-3.5 rounded-full cursor-pointer overflow-hidden select-none shadow-xs"
+          style={{
+            background:
+              "linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)",
+          }}
+        >
+          <div
+            className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-background shadow-md ring-1 ring-black/20"
+            style={{ left: `${(hsv.h / 360) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Inputs & Format Toggle */}
+      <div className="mt-3.5 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center rounded-lg border border-border/80 bg-muted/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setFormat("hex")}
+              className={cn(
+                "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
+                format === "hex" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              HEX
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormat("rgb")}
+              className={cn(
+                "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
+                format === "rgb" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              RGB
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span
+              className={cn(
+                "text-[10px] font-mono px-1.5 py-0.5 rounded-full border",
+                contrastInfo.isLowContrast
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+                  : "border-border/80 bg-muted/60 text-muted-foreground"
+              )}
+            >
+              {contrastInfo.ratio}:1
+            </span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              title="Copy hex code"
+              className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+            >
+              {copied ? <CheckIcon className="size-3.5 text-primary" /> : <CopyIcon className="size-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        {format === "hex" ? (
+          <div className="relative">
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className="w-full rounded-xl border border-border/80 bg-background px-3 py-1.5 text-xs font-mono font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase"
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            <div>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">R</span>
+              <input
+                type="number"
+                min={0}
+                max={255}
+                value={currentRgb.r}
+                onChange={(e) => onChange(rgbToHex(Number(e.target.value), currentRgb.g, currentRgb.b))}
+                className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">G</span>
+              <input
+                type="number"
+                min={0}
+                max={255}
+                value={currentRgb.g}
+                onChange={(e) => onChange(rgbToHex(currentRgb.r, Number(e.target.value), currentRgb.b))}
+                className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+            <div>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">B</span>
+              <input
+                type="number"
+                min={0}
+                max={255}
+                value={currentRgb.b}
+                onChange={(e) => onChange(rgbToHex(currentRgb.r, currentRgb.g, Number(e.target.value)))}
+                className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Swatches Bar */}
+      <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-2.5">
+        {CURATED_STUDIO_SWATCHES.map((swatch) => (
+          <button
+            key={swatch}
+            type="button"
+            onClick={() => onChange(swatch)}
+            className={cn(
+              "size-4.5 rounded-full border border-black/20 shadow-xs transition-transform hover:scale-125 cursor-pointer",
+              value.toLowerCase() === swatch.toLowerCase() && "ring-2 ring-primary ring-offset-1 ring-offset-card"
+            )}
+            style={{ backgroundColor: swatch }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ColorPickerRow({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  return (
+    <div ref={popoverRef} className="relative flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/50 p-3 transition-all hover:border-border">
+      <div className="min-w-0 flex-1">
+        <span className="text-xs font-semibold text-foreground block truncate">{label}</span>
+        <p className="text-[11px] text-muted-foreground truncate">{description}</p>
+      </div>
+      <div className="flex items-center gap-2.5 shrink-0">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="relative flex items-center justify-center size-8 rounded-xl border border-border/80 shadow-xs overflow-hidden transition-transform hover:scale-105 cursor-pointer ring-offset-background focus:ring-2 focus:ring-primary/40"
+          style={{ backgroundColor: value }}
+        >
+          <div className="absolute inset-0 bg-black/5 opacity-0 hover:opacity-100 transition-opacity" />
+        </button>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onClick={() => setIsOpen(true)}
+          className="w-24 rounded-xl border border-border/80 bg-background px-2.5 py-1.5 text-xs font-mono font-medium text-foreground uppercase focus:outline-none focus:ring-2 focus:ring-primary/40"
+        />
+      </div>
+
+      {isOpen && (
+        <StudioColorPickerPopover
+          value={value}
+          onChange={onChange}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 function SettingResetButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <Tooltip>
@@ -876,7 +2039,7 @@ function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
 function SettingsRouteView() {
   const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, customThemeConfig, setCustomThemeConfig } = useTheme();
   const [zoomFactor, updateZoom] = useZoomFactor();
   const activeProjectId = useWorkspaceActiveProjectId();
   const settings = useSettings();
@@ -946,6 +2109,65 @@ function SettingsRouteView() {
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
+  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() => getStoredSavedPresets());
+
+  const handleSavePreset = useCallback((name: string, config: CustomThemeConfig) => {
+    const newPreset: SavedCustomPreset = {
+      id: `custom-saved-${Date.now()}`,
+      name,
+      config,
+      createdAt: Date.now(),
+    };
+    setSavedPresets((prev) => {
+      const next = [newPreset, ...prev];
+      saveSavedPresetsToStorage(next);
+      return next;
+    });
+    setCustomThemeConfig(config);
+    setTheme("custom");
+    setIsStudioOpen(false);
+    toastManager.add({
+      type: "success",
+      title: "Preset Saved",
+      description: `"${name}" saved to your theme presets.`,
+    });
+  }, [setCustomThemeConfig, setTheme]);
+
+  const handleDeletePreset = useCallback(async (presetId: string) => {
+    const preset = savedPresets.find((p) => p.id === presetId);
+    const presetName = preset ? `"${preset.name}"` : "this custom preset";
+    const confirmed = await confirm(
+      `Delete Theme Preset?\n\nAre you sure you want to delete ${presetName}? This action cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setSavedPresets((prev) => {
+      const next = prev.filter((p) => p.id !== presetId);
+      saveSavedPresetsToStorage(next);
+      return next;
+    });
+    toastManager.add({
+      type: "info",
+      title: "Preset Deleted",
+      description: "Custom theme preset removed.",
+    });
+  }, [confirm, savedPresets]);
+
+  const handleRenamePreset = useCallback((presetId: string, newName: string) => {
+    if (!newName.trim()) return;
+    setSavedPresets((prev) => {
+      const next = prev.map((p) => (p.id === presetId ? { ...p, name: newName.trim() } : p));
+      saveSavedPresetsToStorage(next);
+      return next;
+    });
+    toastManager.add({
+      type: "success",
+      title: "Preset Renamed",
+      description: `Preset renamed to "${newName.trim()}".`,
+    });
+  }, []);
 
   const effectivePreviewTheme = previewTheme === "system" ? theme : previewTheme;
   const effectiveClosePreviewTheme = closePreviewTheme === "system" ? theme : closePreviewTheme;
@@ -1530,7 +2752,7 @@ function SettingsRouteView() {
               })}
             </nav>
             <div className="min-w-0 flex-1 overflow-y-auto overscroll-y-contain py-6">
-              <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-12">
+              <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-12">
                 {activeSettingsSection === "general" ? (
                   <div className="space-y-6">
                     <div>
@@ -1577,35 +2799,6 @@ function SettingsRouteView() {
 
                     {/* Group 1: Appearance & Interface */}
                     <SettingsSection title="Appearance & Interface">
-                      <SettingsRow
-                        title="Theme"
-                        description="Choose how Tabs looks across the app."
-                        resetAction={
-                          theme !== "system" ? (
-                            <SettingResetButton label="theme" onClick={() => setTheme("system")} />
-                          ) : null
-                        }
-                        control={
-                          <div className="flex gap-0.5 rounded-lg bg-muted p-1">
-                            {THEME_OPTIONS.map((option) => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => setTheme(option.value)}
-                                aria-label={`Theme: ${option.label}`}
-                                className={cn(
-                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
-                                  theme === option.value
-                                    ? "bg-background text-foreground shadow-xs"
-                                    : "text-muted-foreground hover:text-foreground",
-                                )}
-                              >
-                                {option.label}
-                              </button>
-                            ))}
-                          </div>
-                        }
-                      />
 
                       <SettingsRow
                         title="Zoom & Scale"
@@ -2145,6 +3338,76 @@ function SettingsRouteView() {
                         }
                       />
                     </SettingsSection>
+                  </div>
+                ) : null}
+                {activeSettingsSection === "themes" ? (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="flex items-start justify-between">
+                        <div className="space-y-1.5">
+                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                            Themes
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            Choose from curated palettes or build a fully personalized custom color and typography theme.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsStudioOpen(true)}
+                          className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs"
+                        >
+                          <PaletteIcon className="size-4 text-foreground" />
+                          Open Custom Studio
+                        </Button>
+                      </div>
+                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
+                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                    </div>
+
+                    <SettingsSection title="App Themes & Styling">
+                      <ThemePickerGrid
+                        activeTheme={theme}
+                        customConfig={customThemeConfig}
+                        savedPresets={savedPresets}
+                        onSelectTheme={(t, overrideConfig) => {
+                          if (overrideConfig) {
+                            setCustomThemeConfig(overrideConfig);
+                            setTheme("custom");
+                          } else {
+                            setTheme(t);
+                          }
+                        }}
+                        onOpenStudio={() => {
+                          setEditingStudioPresetName("");
+                          setIsStudioOpen(true);
+                        }}
+                        onDeletePreset={handleDeletePreset}
+                        onRenamePreset={handleRenamePreset}
+                        onEditPresetInStudio={(preset) => {
+                          setCustomThemeConfig(preset.config);
+                          setEditingStudioPresetName(preset.name);
+                          setTheme("custom");
+                          setIsStudioOpen(true);
+                        }}
+                      />
+                    </SettingsSection>
+
+                    {/* Dedicated Option B Custom Studio Drawer */}
+                    <CustomStudioDrawer
+                      isOpen={isStudioOpen}
+                      onClose={() => setIsStudioOpen(false)}
+                      config={customThemeConfig}
+                      initialPresetName={editingStudioPresetName}
+                      onChange={(next) => {
+                        setCustomThemeConfig(next);
+                        if (theme !== "custom") {
+                          setTheme("custom");
+                        }
+                      }}
+                      onSavePreset={handleSavePreset}
+                    />
                   </div>
                 ) : null}
                 {activeSettingsSection === "startup-animation" ? (

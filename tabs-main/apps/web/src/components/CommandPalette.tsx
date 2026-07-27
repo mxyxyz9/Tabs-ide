@@ -13,6 +13,7 @@ import {
   SettingsIcon,
   SquarePenIcon,
   GitBranchIcon,
+  LoaderCircleIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -980,7 +981,7 @@ function OpenCommandPaletteDialog(props: {
             </div>
           ) : isRemoteProjectCloning ? (
             <div className="py-12 text-center text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
-              <span className="animate-spin text-lg">⚡</span>
+              <LoaderCircleIcon className="size-6 animate-spin text-primary" />
               <span>Cloning repository to destination...</span>
             </div>
           ) : isBrowsePending ? (

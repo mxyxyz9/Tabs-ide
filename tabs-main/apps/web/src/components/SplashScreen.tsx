@@ -21,6 +21,8 @@ const SOLARI_MESSAGES = [
   "ALMOST READY (PROBABLY)",
 ];
 
+const SOLARI_WORD = "TABS IDE";
+
 const SOLARI_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ".split("");
 
 function RotatingLabel({
@@ -139,20 +141,12 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
           </defs>
         </svg>
 
-        {/*
-          #1c0f0e: A deliberate, warm near-black tone used to provide high legibility 
-          and depth against the vibrant indigo block background in dark mode. 
-        */}
         <div
           className={cn(
             "relative z-10 text-[80px] font-[800] tracking-[-0.02em]",
             isBlock
-              ? isDark
-                ? "text-[#1c0f0e]"
-                : "text-white"
-              : isDark
-                ? "text-white"
-                : "text-black",
+              ? "text-primary-foreground"
+              : "text-foreground",
           )}
           style={{ filter: `url(#${filterId})` }}
         >
@@ -163,12 +157,8 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
           messages={GLASS_MESSAGES}
           className={
             isBlock
-              ? isDark
-                ? "text-[#1c0f0e]/85"
-                : "text-white/75"
-              : isDark
-                ? "text-[#a1a1aa]"
-                : "text-[#71717a]"
+              ? "text-primary-foreground/80"
+              : "text-muted-foreground"
           }
         />
       </div>
@@ -192,18 +182,17 @@ function SolariTile({
 
   useEffect(() => {
     let cancelled = false;
-    // 280ms stagger per tile → T at ~400ms, E at ~2.3s: clear one-by-one lock-in
     const settleAt = 400 + index * 280;
     const iv = setInterval(() => {
       if (!cancelled) setCh(SOLARI_CHARS[Math.floor(Math.random() * SOLARI_CHARS.length)]!);
     }, 70);
     const to = setTimeout(() => {
+      cancelled = true;
       clearInterval(iv);
-      if (cancelled) return;
       setCh(target);
       setJustSettled(true);
-      setTimeout(() => !cancelled && setJustSettled(false), 420);
     }, settleAt);
+
     return () => {
       cancelled = true;
       clearInterval(iv);
@@ -212,44 +201,30 @@ function SolariTile({
   }, [target, index]);
 
   return (
-    <div
+    <span
       className={cn(
-        "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-bold transition-all duration-300",
-        isBlock
-          ? justSettled
-            ? "border-white/90 bg-white/22 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
-            : "border-white/24 bg-white/12 shadow-none"
-          : justSettled
-            ? cn(
-                "border-primary shadow-[0_0_0_1px_var(--primary)]",
-                isDark ? "bg-white/4" : "bg-black/3",
-              )
-            : cn("border-border shadow-none", isDark ? "bg-white/4" : "bg-black/3"),
+        "inline-block w-[0.72em] text-center font-mono font-bold tracking-tight transition-transform duration-200",
+        justSettled && "scale-105",
       )}
     >
-      <div className="absolute inset-x-0 top-1/2 h-px bg-black/35" />
-      {ch === " " ? "\u00A0" : ch}
-    </div>
+      {ch}
+    </span>
   );
 }
 
 function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: boolean }) {
-  const word = "TABS IDE".padEnd(8, " ").split("");
   const isBlock = palette === "block";
+  const word = SOLARI_WORD.split("");
 
   return (
     <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
-      <div className="relative flex w-full flex-col items-center justify-center gap-[20px]">
+      <div className="relative flex w-full flex-col items-center justify-center gap-[22px]">
         <div
           className={cn(
-            "relative z-10 grid grid-cols-4 gap-[6px]",
+            "flex items-center justify-center text-[54px] sm:text-[68px] font-bold tracking-wider",
             isBlock
-              ? isDark
-                ? "text-[#1c0f0e]"
-                : "text-white"
-              : isDark
-                ? "text-white"
-                : "text-black",
+              ? "text-primary-foreground"
+              : "text-foreground",
           )}
         >
           {word.map((ch, i) => (
@@ -260,12 +235,8 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: bo
           messages={SOLARI_MESSAGES}
           className={
             isBlock
-              ? isDark
-                ? "text-[#1c0f0e]/85"
-                : "text-white/75"
-              : isDark
-                ? "text-[#a1a1aa]"
-                : "text-[#71717a]"
+              ? "text-primary-foreground/80"
+              : "text-muted-foreground"
           }
         />
       </div>
@@ -282,13 +253,16 @@ export interface SplashScreenProps {
 export function SplashScreen({ loader, palette, theme: overrideTheme }: SplashScreenProps) {
   const { resolvedTheme } = useTheme();
   const theme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
-  const isDark = theme === "dark";
+  const isDark =
+    typeof document !== "undefined"
+      ? document.documentElement.classList.contains("dark")
+      : theme?.includes("dark");
   const isBlock = palette === "block";
   return (
     <div
       className={cn(
         "flex h-full w-full flex-col items-center justify-center",
-        isBlock ? "bg-primary" : isDark ? "bg-[#09090b]" : "bg-white",
+        isBlock ? "bg-primary text-primary-foreground" : "bg-background text-foreground",
       )}
     >
       {loader === "solari" ? (

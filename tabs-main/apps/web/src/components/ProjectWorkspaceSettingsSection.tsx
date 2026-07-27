@@ -564,9 +564,10 @@ export function ProjectWorkspaceSettingsSection() {
     setServerProcessDrafts((current) => current.filter((entry) => entry.id !== processId));
   };
 
-  const saveCustomEmbeds = () => {
+  const saveCustomEmbeds = (overrideDrafts?: CustomEmbedDraft[]) => {
+    const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : customEmbedDrafts;
     upsertProjectSettings(projectId, (current) => {
-      const nextCustomEmbeds = customEmbedDrafts.map((draft) => {
+      const nextCustomEmbeds = draftsToSave.map((draft) => {
         const existingEmbed = current.customEmbeds?.find((e) => e.id === draft.id);
         return {
           id: draft.id,
@@ -578,7 +579,7 @@ export function ProjectWorkspaceSettingsSection() {
             : {}),
         };
       });
-      const nextCustomEmbedTools = customEmbedDrafts.map((draft, index) => ({
+      const nextCustomEmbedTools = draftsToSave.map((draft, index) => ({
         id: createCustomEmbedToolId(draft.id),
         kind: "custom_embed" as const,
         label:
@@ -596,9 +597,10 @@ export function ProjectWorkspaceSettingsSection() {
     });
   };
 
-  const saveServerProcesses = () => {
+  const saveServerProcesses = (overrideDrafts?: ServerProcessDraft[]) => {
+    const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : serverProcessDrafts;
     upsertProjectSettings(projectId, (current) => {
-      const nextServerProcesses = serverProcessDrafts.map((draft) => ({
+      const nextServerProcesses = draftsToSave.map((draft) => ({
         id: draft.id,
         label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled terminal",
         commands: draft.commands,
@@ -606,7 +608,7 @@ export function ProjectWorkspaceSettingsSection() {
         env: {},
         autoStart: draft.autoStart,
       }));
-      const nextProcessTools = serverProcessDrafts.map((draft, index) => ({
+      const nextProcessTools = draftsToSave.map((draft, index) => ({
         id: createServerProcessToolId(draft.id),
         kind: "custom_process" as const,
         label:
@@ -624,10 +626,11 @@ export function ProjectWorkspaceSettingsSection() {
     });
   };
 
-  const saveServerPresets = () => {
+  const saveServerPresets = (overrideDrafts?: ServerProcessDraft[]) => {
+    const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : serverPresetDrafts;
     upsertProjectSettings(projectId, (current) => ({
       ...current,
-      serverPresets: serverPresetDrafts.map((draft) => {
+      serverPresets: draftsToSave.map((draft) => {
         const res: any = {
           id: draft.id,
           label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled preset",
@@ -1075,7 +1078,7 @@ export function ProjectWorkspaceSettingsSection() {
                                 </Button>
                                 <Button
                                   type="button"
-                                  onClick={saveCustomEmbeds}
+                                  onClick={() => saveCustomEmbeds()}
                                   disabled={!customEmbedsDirty}
                                 >
                                   Save Changes
@@ -1346,7 +1349,7 @@ export function ProjectWorkspaceSettingsSection() {
                                 </Button>
                                 <Button
                                   type="button"
-                                  onClick={saveServerProcesses}
+                                  onClick={() => saveServerProcesses()}
                                   disabled={!serverProcessesDirty}
                                 >
                                   Save Changes
@@ -1476,7 +1479,7 @@ export function ProjectWorkspaceSettingsSection() {
                                 </Button>
                                 <Button
                                   type="button"
-                                  onClick={saveServerPresets}
+                                  onClick={() => saveServerPresets()}
                                   disabled={!serverPresetsDirty}
                                 >
                                   Save Changes
@@ -1554,9 +1557,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (tabToDeleteId) {
-                  setCustomEmbedDrafts((current) =>
-                    current.filter((entry) => entry.id !== tabToDeleteId),
-                  );
+                  const nextDrafts = customEmbedDrafts.filter((entry) => entry.id !== tabToDeleteId);
+                  setCustomEmbedDrafts(nextDrafts);
+                  saveCustomEmbeds(nextDrafts);
                   if (activeCustomEmbedId === tabToDeleteId) setActiveCustomEmbedId(null);
                 }
                 setTabToDeleteId(null);
@@ -1591,9 +1594,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (terminalToDeleteId) {
-                  setServerProcessDrafts((current) =>
-                    current.filter((entry) => entry.id !== terminalToDeleteId),
-                  );
+                  const nextDrafts = serverProcessDrafts.filter((entry) => entry.id !== terminalToDeleteId);
+                  setServerProcessDrafts(nextDrafts);
+                  saveServerProcesses(nextDrafts);
                   if (activeServerProcessId === terminalToDeleteId) setActiveServerProcessId(null);
                 }
                 setTerminalToDeleteId(null);
@@ -1628,9 +1631,9 @@ export function ProjectWorkspaceSettingsSection() {
               variant="destructive"
               onClick={() => {
                 if (presetToDeleteId) {
-                  setServerPresetDrafts((current) =>
-                    current.filter((entry) => entry.id !== presetToDeleteId),
-                  );
+                  const nextDrafts = serverPresetDrafts.filter((entry) => entry.id !== presetToDeleteId);
+                  setServerPresetDrafts(nextDrafts);
+                  saveServerPresets(nextDrafts);
                   if (activeServerPresetId === presetToDeleteId) setActiveServerPresetId(null);
                 }
                 setPresetToDeleteId(null);
