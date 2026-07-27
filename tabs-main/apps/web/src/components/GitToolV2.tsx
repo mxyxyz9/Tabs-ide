@@ -2624,19 +2624,60 @@ interface MockPR {
 }
 
 function PRsPanel({
+  cwd,
   branchName,
   onOpenCreatePR,
   onRunInTerminal,
 }: {
+  cwd: string;
   branchName: string;
   onOpenCreatePR: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [prs, setPrs] = useState<MockPR[]>([
-    { n: 142, title: `feat: updates for ${branchName}`, state: "open", branch: `${branchName} → main`, body: "Adds new pull request features and updates." },
-  ]);
+  const [prs, setPrs] = useState<MockPR[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [mergeMethod, setMergeMethod] = useState<Record<number, string>>({});
+  const api = readNativeApi();
+
+  useEffect(() => {
+    if (!api || !cwd || !branchName) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+
+    api.git
+      .resolvePullRequest({ cwd, reference: branchName })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.pullRequest) {
+          const pr = res.pullRequest;
+          setPrs([
+            {
+              n: pr.number,
+              title: pr.title,
+              state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
+              branch: `${pr.headRefName} → ${pr.baseRefName}`,
+              body: pr.url,
+            },
+          ]);
+        } else {
+          setPrs([]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPrs([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [api, cwd, branchName]);
 
   const STATE_STYLE = {
     open: { color: "var(--sem-emerald)", bg: "var(--sem-emerald-soft)" },
@@ -2647,58 +2688,6 @@ function PRsPanel({
 
   return (
     <div>
-      <Card className="p-2">
-        {prs.map((pr) => (
-          <div key={pr.n} className="border-b bd-1 last:border-0">
-            <div className="flex items-center gap-2.5 flex-wrap px-2 py-2.5">
-              <span className="fs-10 uppercase font-semibold tracking-wide px-2 py-0.5 rounded-full shrink-0" style={{ color: STATE_STYLE[pr.state].color, backgroundColor: STATE_STYLE[pr.state].bg }}>
-                {pr.state}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs tx-80 truncate">
-                  #{pr.n} {pr.title}
-                </div>
-                <div className="fs-10 font-mono tx-30">{pr.branch}</div>
-              </div>
-              {pr.state === "draft" && (
-                <Btn sm ghost onClick={() => onRunInTerminal(`gh pr ready ${pr.n}`)}>
-                  Ready for review
-                </Btn>
-              )}
-              {pr.state === "open" && (
-                <>
-                  <Select
-                    value={mergeMethod[pr.n] || "merge"}
-                    onChange={(e) => setMergeMethod((m) => ({ ...m, [pr.n]: e.target.value }))}
-                    className="!w-auto !py-1 !text-xs"
-                  >
-                    <option value="merge">Merge commit</option>
-                    <option value="squash">Squash merge</option>
-                    <option value="rebase">Rebase merge</option>
-                  </Select>
-                  <Btn sm primary onClick={() => onRunInTerminal(`gh pr merge ${pr.n} --${mergeMethod[pr.n] || "merge"}`)}>
-                    Merge
-                  </Btn>
-                </>
-              )}
-              {(pr.state === "open" || pr.state === "draft") && (
-                <Btn sm ghost onClick={() => onRunInTerminal(`gh pr close ${pr.n}`)}>
-                  Close
-                </Btn>
-              )}
-              {pr.state === "closed" && (
-                <Btn sm ghost onClick={() => onRunInTerminal(`gh pr reopen ${pr.n}`)}>
-                  Reopen
-                </Btn>
-              )}
-              <Btn sm ghost onClick={() => setExpanded((e) => (e === pr.n ? null : pr.n))}>
-                {expanded === pr.n ? "Hide" : "View"}
-              </Btn>
-            </div>
-            {expanded === pr.n && <div className="px-2 pb-3 text-xs tx-50 leading-relaxed">{pr.body}</div>}
-          </div>
-        ))}
-      </Card>
       <div className="mt-4">
         <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
           Create pull request
@@ -3290,7 +3279,7 @@ export function GitToolV2({
           />
         );
       case "prs":
-        return <PRsPanel branchName={branchName} onOpenCreatePR={() => setModal("createPR")} onRunInTerminal={onRunInTerminal} />;
+        return <PRsPanel cwd={cwd} branchName={branchName} onOpenCreatePR={() => setModal("createPR")} onRunInTerminal={onRunInTerminal} />;
       case "tags":
         return (
           <TagsPanel
