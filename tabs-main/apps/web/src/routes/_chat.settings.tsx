@@ -129,7 +129,9 @@ import { useTheme } from "../hooks/useTheme";
 import {
   DEFAULT_CUSTOM_THEME,
   DEFAULT_CUSTOM_THEME_LIGHT,
+  DEFAULT_FONT_PREFERENCES,
   EDITOR_FONT_OPTIONS,
+  HEADING_FONT_OPTIONS,
   THEME_DEFINITIONS,
   UI_FONT_OPTIONS,
   calculateContrastRatio,
@@ -2039,7 +2041,14 @@ function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
 function SettingsRouteView() {
   const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
-  const { theme, setTheme, customThemeConfig, setCustomThemeConfig } = useTheme();
+  const {
+    theme,
+    setTheme,
+    customThemeConfig,
+    setCustomThemeConfig,
+    fontPreferences,
+    setFontPreferences,
+  } = useTheme();
   const [zoomFactor, updateZoom] = useZoomFactor();
   const activeProjectId = useWorkspaceActiveProjectId();
   const settings = useSettings();
@@ -3352,15 +3361,33 @@ function SettingsRouteView() {
                             Choose from curated palettes or build a fully personalized custom color and typography theme.
                           </p>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setIsStudioOpen(true)}
-                          className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs"
-                        >
-                          <PaletteIcon className="size-4 text-foreground" />
-                          Open Custom Studio
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setFontPreferences(DEFAULT_FONT_PREFERENCES);
+                              toastManager.add({
+                                type: "info",
+                                title: "Fonts Reset",
+                                description: "Typography preferences restored to defaults.",
+                              });
+                            }}
+                            className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs text-muted-foreground hover:text-foreground"
+                          >
+                            <RotateCcwIcon className="size-3.5" />
+                            Reset to Defaults
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setIsStudioOpen(true)}
+                            className="gap-2 rounded-xl text-xs px-3.5 py-2 font-medium shadow-xs"
+                          >
+                            <PaletteIcon className="size-4 text-foreground" />
+                            Open Custom Studio
+                          </Button>
+                        </div>
                       </div>
                       <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
                       <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
@@ -3392,6 +3419,108 @@ function SettingsRouteView() {
                           setIsStudioOpen(true);
                         }}
                       />
+                    </SettingsSection>
+
+                    <SettingsSection
+                      title="Typography & Fonts"
+                      headerAction={
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() => {
+                            setFontPreferences(DEFAULT_FONT_PREFERENCES);
+                            toastManager.add({
+                              type: "info",
+                              title: "Fonts Reset",
+                              description: "Typography preferences restored to defaults.",
+                            });
+                          }}
+                          className="gap-1.5 rounded-lg text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer h-6 px-2.5"
+                        >
+                          <RotateCcwIcon className="size-3" />
+                          Reset to Defaults
+                        </Button>
+                      }
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5 p-5">
+                        <div className="space-y-2 rounded-2xl border border-border/80 bg-card/40 p-4">
+                          <label className="text-xs font-semibold text-foreground block">
+                            Interface Font
+                          </label>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">
+                            UI labels, buttons, navigation
+                          </p>
+                          <Select
+                            value={fontPreferences.uiFont}
+                            onValueChange={(val) =>
+                              val && setFontPreferences((prev) => ({ ...prev, uiFont: val }))
+                            }
+                          >
+                            <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                              <SelectValue placeholder="Select Interface Font" />
+                            </SelectTrigger>
+                            <SelectPopup align="start">
+                              {UI_FONT_OPTIONS.map((f) => (
+                                <SelectItem key={f.value} value={f.value} className="text-xs">
+                                  {f.label}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-border/80 bg-card/40 p-4">
+                          <label className="text-xs font-semibold text-foreground block">
+                            Heading Font
+                          </label>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">
+                            Headings, section titles, headers
+                          </p>
+                          <Select
+                            value={fontPreferences.headingFont}
+                            onValueChange={(val) =>
+                              val && setFontPreferences((prev) => ({ ...prev, headingFont: val }))
+                            }
+                          >
+                            <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                              <SelectValue placeholder="Select Heading Font" />
+                            </SelectTrigger>
+                            <SelectPopup align="start">
+                              {HEADING_FONT_OPTIONS.map((f) => (
+                                <SelectItem key={f.value} value={f.value} className="text-xs">
+                                  {f.label}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2 rounded-2xl border border-border/80 bg-card/40 p-4">
+                          <label className="text-xs font-semibold text-foreground block">
+                            Editor Font
+                          </label>
+                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">
+                            Monospace code, terminals, inputs
+                          </p>
+                          <Select
+                            value={fontPreferences.editorFont}
+                            onValueChange={(val) =>
+                              val && setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                            }
+                          >
+                            <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                              <SelectValue placeholder="Select Editor Font" />
+                            </SelectTrigger>
+                            <SelectPopup align="start">
+                              {EDITOR_FONT_OPTIONS.map((f) => (
+                                <SelectItem key={f.value} value={f.value} className="text-xs">
+                                  {f.label}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                        </div>
+                      </div>
                     </SettingsSection>
 
                     {/* Dedicated Option B Custom Studio Drawer */}

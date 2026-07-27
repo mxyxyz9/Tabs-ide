@@ -738,14 +738,178 @@ function startCodeControlChannel(context) {
                 isLight = parsed.customConfig.baseVariant === "light";
               }
               const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
-              await vscode.workspace
-                .getConfiguration()
-                .update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
+              const workspaceConfig = vscode.workspace.getConfiguration();
+              await workspaceConfig.update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
 
-              if (themeId === "custom" && parsed.customConfig && parsed.customConfig.fonts && parsed.customConfig.fonts.editorFont) {
-                await vscode.workspace
-                  .getConfiguration()
-                  .update("editor.fontFamily", parsed.customConfig.fonts.editorFont, vscode.ConfigurationTarget.Global);
+              const CUSTOM_THEME_COLOR_KEYS = [
+                "focusBorder",
+                "foreground",
+                "widget.shadow",
+                "selection.background",
+                "editor.background",
+                "editor.foreground",
+                "editorLineNumber.foreground",
+                "editorLineNumber.activeForeground",
+                "editorCursor.foreground",
+                "editor.selectionBackground",
+                "editor.inactiveSelectionBackground",
+                "sideBar.background",
+                "sideBar.foreground",
+                "sideBar.border",
+                "sideBarTitle.foreground",
+                "sideBarSectionHeader.background",
+                "sideBarSectionHeader.foreground",
+                "sideBarSectionHeader.border",
+                "activityBar.background",
+                "activityBar.foreground",
+                "activityBar.inactiveForeground",
+                "activityBar.border",
+                "activityBarBadge.background",
+                "titleBar.activeBackground",
+                "titleBar.activeForeground",
+                "titleBar.inactiveBackground",
+                "titleBar.inactiveForeground",
+                "titleBar.border",
+                "statusBar.background",
+                "statusBar.foreground",
+                "statusBar.border",
+                "statusBar.noFolderBackground",
+                "statusBar.debuggingBackground",
+                "editorGroupHeader.tabsBackground",
+                "editorGroupHeader.tabsBorder",
+                "editorGroup.border",
+                "tab.activeBackground",
+                "tab.activeForeground",
+                "tab.activeBorderTop",
+                "tab.inactiveBackground",
+                "tab.inactiveForeground",
+                "tab.border",
+                "panel.background",
+                "panel.border",
+                "panelTitle.activeForeground",
+                "panelTitle.activeBorder",
+                "panelTitle.inactiveForeground",
+                "button.background",
+                "input.background",
+                "input.foreground",
+                "input.border",
+                "dropdown.background",
+                "dropdown.foreground",
+                "dropdown.border",
+                "list.hoverBackground",
+                "list.activeSelectionBackground",
+                "list.activeSelectionForeground",
+                "list.inactiveSelectionBackground",
+                "peekViewEditor.background",
+              ];
+
+              if (themeId === "custom" && parsed.customConfig && parsed.customConfig.colors) {
+                const c = parsed.customConfig.colors;
+                const customOverrides = {
+                  "focusBorder": c.primary,
+                  "foreground": c.foreground,
+                  "widget.shadow": "transparent",
+                  "selection.background": c.primary ? `${c.primary}40` : undefined,
+                  "editor.background": c.background,
+                  "editor.foreground": c.foreground,
+                  "editorLineNumber.foreground": c.foreground ? `${c.foreground}80` : undefined,
+                  "editorLineNumber.activeForeground": c.primary,
+                  "editorCursor.foreground": c.primary,
+                  "editor.selectionBackground": c.primary ? `${c.primary}33` : undefined,
+                  "editor.inactiveSelectionBackground": c.primary ? `${c.primary}1a` : undefined,
+                  "sideBar.background": c.card,
+                  "sideBar.foreground": c.foreground,
+                  "sideBar.border": c.border,
+                  "sideBarTitle.foreground": c.foreground,
+                  "sideBarSectionHeader.background": c.card,
+                  "sideBarSectionHeader.foreground": c.foreground,
+                  "sideBarSectionHeader.border": c.border,
+                  "activityBar.background": c.card,
+                  "activityBar.foreground": c.primary,
+                  "activityBar.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
+                  "activityBar.border": c.border,
+                  "activityBarBadge.background": c.primary,
+                  "titleBar.activeBackground": c.background,
+                  "titleBar.activeForeground": c.foreground,
+                  "titleBar.inactiveBackground": c.background,
+                  "titleBar.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
+                  "titleBar.border": c.border,
+                  "statusBar.background": c.card,
+                  "statusBar.foreground": c.foreground,
+                  "statusBar.border": c.border,
+                  "statusBar.noFolderBackground": c.card,
+                  "statusBar.debuggingBackground": c.card,
+                  "editorGroupHeader.tabsBackground": c.card,
+                  "editorGroupHeader.tabsBorder": c.border,
+                  "editorGroup.border": c.border,
+                  "tab.activeBackground": c.background,
+                  "tab.activeForeground": c.foreground,
+                  "tab.activeBorderTop": c.primary,
+                  "tab.inactiveBackground": c.card,
+                  "tab.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
+                  "tab.border": c.border,
+                  "panel.background": c.card,
+                  "panel.border": c.border,
+                  "panelTitle.activeForeground": c.foreground,
+                  "panelTitle.activeBorder": c.primary,
+                  "panelTitle.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
+                  "button.background": c.primary,
+                  "input.background": c.background,
+                  "input.foreground": c.foreground,
+                  "input.border": c.border,
+                  "dropdown.background": c.card,
+                  "dropdown.foreground": c.foreground,
+                  "dropdown.border": c.border,
+                  "list.hoverBackground": c.primary ? `${c.primary}1a` : undefined,
+                  "list.activeSelectionBackground": c.primary ? `${c.primary}33` : undefined,
+                  "list.activeSelectionForeground": c.foreground,
+                  "list.inactiveSelectionBackground": c.primary ? `${c.primary}20` : undefined,
+                  "peekViewEditor.background": c.background,
+                };
+
+                const currentCustomizations = {
+                  ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
+                };
+
+                for (const key of Object.keys(customOverrides)) {
+                  const val = customOverrides[key];
+                  if (val !== undefined) {
+                    currentCustomizations[key] = val;
+                  }
+                }
+
+                await workspaceConfig.update(
+                  "workbench.colorCustomizations",
+                  currentCustomizations,
+                  vscode.ConfigurationTarget.Global,
+                );
+              } else {
+                const currentCustomizations = {
+                  ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
+                };
+                let hasManagedKey = false;
+                for (const key of CUSTOM_THEME_COLOR_KEYS) {
+                  if (key in currentCustomizations) {
+                    delete currentCustomizations[key];
+                    hasManagedKey = true;
+                  }
+                }
+                if (hasManagedKey) {
+                  const finalVal =
+                    Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined;
+                  await workspaceConfig.update(
+                    "workbench.colorCustomizations",
+                    finalVal,
+                    vscode.ConfigurationTarget.Global,
+                  );
+                }
+              }
+
+              const editorFont =
+                (parsed.fontPreferences && parsed.fontPreferences.editorFont) ||
+                (parsed.customConfig && parsed.customConfig.fonts && parsed.customConfig.fonts.editorFont);
+              if (editorFont) {
+                await workspaceConfig.update("editor.fontFamily", editorFont, vscode.ConfigurationTarget.Global);
               }
             } catch (err) {
               log(`setTheme error: ${err && err.message ? err.message : err}`);

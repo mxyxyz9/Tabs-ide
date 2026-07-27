@@ -405,19 +405,48 @@ export const DEFAULT_CUSTOM_THEME_LIGHT: CustomThemeConfig = {
   },
 };
 
+export interface FontPreferences {
+  uiFont: string;
+  headingFont: string;
+  editorFont: string;
+}
+
+export const DEFAULT_FONT_PREFERENCES: FontPreferences = {
+  uiFont: "system-ui",
+  headingFont: "system-ui",
+  editorFont: "Menlo, Monaco, 'Courier New', monospace",
+};
+
 export const UI_FONT_OPTIONS = [
   { value: "system-ui", label: "System UI (Default)" },
-  { value: "Inter, system-ui, sans-serif", label: "Inter" },
+  { value: "'Space Grotesk', sans-serif", label: "Space Grotesk" },
+  { value: "'General Sans', sans-serif", label: "General Sans" },
+  { value: "'Inter', system-ui, sans-serif", label: "Inter" },
+  { value: "'Outfit', sans-serif", label: "Outfit" },
+  { value: "'Nunito', sans-serif", label: "Nunito" },
+  { value: "'Quicksand', sans-serif", label: "Quicksand" },
   { value: "'-apple-system', BlinkMacSystemFont, 'SF Pro Display', sans-serif", label: "SF Pro / Apple System" },
   { value: "'Segoe UI', Tahoma, Geneva, sans-serif", label: "Segoe UI" },
   { value: "'Roboto', sans-serif", label: "Roboto" },
+] as const;
+
+export const HEADING_FONT_OPTIONS = [
+  { value: "system-ui", label: "Match Interface Font (Default)" },
+  { value: "'Space Grotesk', sans-serif", label: "Space Grotesk" },
+  { value: "'Clash Display', sans-serif", label: "Clash Display" },
+  { value: "'Cabinet Grotesk', sans-serif", label: "Cabinet Grotesk" },
+  { value: "'Syne', sans-serif", label: "Syne" },
   { value: "'Outfit', sans-serif", label: "Outfit" },
+  { value: "'Quicksand', sans-serif", label: "Quicksand" },
+  { value: "'Comfortaa', cursive", label: "Comfortaa" },
 ] as const;
 
 export const EDITOR_FONT_OPTIONS = [
   { value: "Menlo, Monaco, 'Courier New', monospace", label: "Menlo / Monaco (Default)" },
   { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
   { value: "'Fira Code', monospace", label: "Fira Code" },
+  { value: "'IBM Plex Mono', monospace", label: "IBM Plex Mono" },
+  { value: "'Space Mono', monospace", label: "Space Mono" },
   { value: "'Cascadia Code', monospace", label: "Cascadia Code" },
   { value: "Consolas, 'Liberation Mono', monospace", label: "Consolas" },
   { value: "'Source Code Pro', monospace", label: "Source Code Pro" },

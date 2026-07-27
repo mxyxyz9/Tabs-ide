@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import {
   DEFAULT_CUSTOM_THEME,
+  DEFAULT_FONT_PREFERENCES,
   DEFAULT_THEME_ID,
   THEME_DEFINITIONS,
   getOptimalPrimaryForeground,
   type CustomThemeConfig,
+  type FontPreferences,
   type ThemeDefinition,
   type ThemeId,
   type ThemePreference,
@@ -17,6 +19,7 @@ type ThemeSnapshot = {
 
 const STORAGE_KEY = "tabs:theme";
 const CUSTOM_STORAGE_KEY = "tabs:custom-theme";
+const FONT_PREFERENCES_STORAGE_KEY = "tabs:font-preferences";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
 let listeners: Array<() => void> = [];
@@ -29,6 +32,33 @@ function emitChange() {
 
 function getSystemDark(): boolean {
   return window.matchMedia(MEDIA_QUERY).matches;
+}
+
+export function getStoredFontPreferences(): FontPreferences {
+  try {
+    const raw = localStorage.getItem(FONT_PREFERENCES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        return {
+          uiFont: parsed.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
+          headingFont: parsed.headingFont || parsed.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
+          editorFont: parsed.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
+        };
+      }
+    }
+    const customConfig = getStoredCustomThemeConfig();
+    if (customConfig && customConfig.fonts) {
+      return {
+        uiFont: customConfig.fonts.uiFont || DEFAULT_FONT_PREFERENCES.uiFont,
+        headingFont: customConfig.fonts.uiFont || DEFAULT_FONT_PREFERENCES.headingFont,
+        editorFont: customConfig.fonts.editorFont || DEFAULT_FONT_PREFERENCES.editorFont,
+      };
+    }
+  } catch (err) {
+    // Ignore JSON errors
+  }
+  return DEFAULT_FONT_PREFERENCES;
 }
 
 export function getStoredCustomThemeConfig(): CustomThemeConfig {
@@ -83,9 +113,18 @@ function applyTheme(
   preference: ThemePreference,
   suppressTransitions = false,
   customConfigOverride?: CustomThemeConfig,
+  fontPreferencesOverride?: FontPreferences,
 ) {
   if (suppressTransitions) {
     document.documentElement.classList.add("no-transitions");
+  }
+
+  const fonts = fontPreferencesOverride ?? getStoredFontPreferences();
+  const rootStyle = document.documentElement?.style;
+  if (rootStyle) {
+    rootStyle.setProperty("--font-sans", fonts.uiFont);
+    rootStyle.setProperty("--font-display", fonts.headingFont || fonts.uiFont);
+    rootStyle.setProperty("--font-mono", fonts.editorFont);
   }
 
   const activeThemeId = resolveActiveThemeId(preference);
@@ -121,12 +160,10 @@ function applyTheme(
     style.setProperty("--ring", config.colors.primary);
     style.setProperty("--primary", config.colors.primary);
     style.setProperty("--primary-foreground", primaryFg);
-    style.setProperty("--font-sans", config.fonts.uiFont);
-    style.setProperty("--font-mono", config.fonts.editorFont);
 
-    syncDesktopTheme("custom", config);
+    syncDesktopTheme("custom", config, fonts);
   } else {
-    // Clean up custom inline CSS properties when switching back to curated themes
+    // Clean up custom inline color CSS properties when switching back to curated themes
     const style = document.documentElement?.style;
     if (style && typeof style.removeProperty === "function") {
       style.removeProperty("--background");
@@ -147,8 +184,6 @@ function applyTheme(
       style.removeProperty("--ring");
       style.removeProperty("--primary");
       style.removeProperty("--primary-foreground");
-      style.removeProperty("--font-sans");
-      style.removeProperty("--font-mono");
     }
 
     const definition: ThemeDefinition =
@@ -158,7 +193,7 @@ function applyTheme(
     document.documentElement?.classList?.toggle("dark", isDark);
     document.documentElement?.setAttribute?.("data-theme", activeThemeId);
 
-    syncDesktopTheme(activeThemeId);
+    syncDesktopTheme(activeThemeId, undefined, fonts);
   }
 
   if (suppressTransitions && typeof document !== "undefined" && document.documentElement) {
@@ -171,13 +206,21 @@ function applyTheme(
   }
 }
 
-function syncDesktopTheme(themeId: string, customConfig?: CustomThemeConfig) {
+function syncDesktopTheme(
+  themeId: string,
+  customConfig?: CustomThemeConfig,
+  fontPreferences?: FontPreferences,
+) {
   const bridge = window.desktopBridge;
   if (!bridge) {
     return;
   }
 
-  const payload = themeId === "custom" && customConfig ? { themeId, customConfig } : themeId;
+  const fonts = fontPreferences ?? getStoredFontPreferences();
+  const payload =
+    themeId === "custom" && customConfig
+      ? { themeId, customConfig, fontPreferences: fonts }
+      : { themeId, fontPreferences: fonts };
   lastDesktopTheme = themeId;
   void bridge.setTheme(payload as any).catch(() => {
     if (lastDesktopTheme === themeId) {
@@ -214,7 +257,11 @@ function subscribe(listener: () => void): () => void {
 
   // Listen for storage changes from other tabs
   const handleStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY || e.key === CUSTOM_STORAGE_KEY) {
+    if (
+      e.key === STORAGE_KEY ||
+      e.key === CUSTOM_STORAGE_KEY ||
+      e.key === FONT_PREFERENCES_STORAGE_KEY
+    ) {
       applyTheme(getStoredPreference(), true);
       emitChange();
     }
@@ -250,6 +297,17 @@ export function useTheme() {
     emitChange();
   }, []);
 
+  const setFontPreferences = useCallback(
+    (next: FontPreferences | ((prev: FontPreferences) => FontPreferences)) => {
+      const current = getStoredFontPreferences();
+      const updated = typeof next === "function" ? next(current) : next;
+      localStorage.setItem(FONT_PREFERENCES_STORAGE_KEY, JSON.stringify(updated));
+      applyTheme(getStoredPreference(), true, undefined, updated);
+      emitChange();
+    },
+    [],
+  );
+
   // Keep DOM in sync on mount/change
   useEffect(() => {
     applyTheme(theme);
@@ -263,6 +321,8 @@ export function useTheme() {
     resolvedTheme,
     customThemeConfig: getStoredCustomThemeConfig(),
     setCustomThemeConfig,
+    fontPreferences: getStoredFontPreferences(),
+    setFontPreferences,
   } as const;
 }
 
