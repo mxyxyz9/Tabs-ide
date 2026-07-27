@@ -2188,19 +2188,19 @@ function DiffPage({
   const unstagedFiles = statusData?.unstaged?.files ?? [];
   const workingFiles = useMemo(() => [...stagedFiles, ...unstagedFiles], [stagedFiles, unstagedFiles]);
 
-  const [diffContent, setDiffContent] = useState<Array<{ type: string; text: string }>>([
-    { type: "hunk", text: "@@ -1,5 +1,5 @@" },
-    { type: "ctx", text: "import { useEffect } from 'react';" },
-    { type: "del", text: "- const cache = {};" },
-    { type: "add", text: "+ const cache = new Map();" },
-  ]);
+  const [diffContent, setDiffContent] = useState<Array<{ type: string; text: string }>>([]);
+  const [commitStats, setCommitStats] = useState<{ ins: number; del: number }>({ ins: 0, del: 0 });
 
   useEffect(() => {
-    if (diffMode === "working" && selectedFile && api) {
+    if (!api || !cwd) return;
+    let cancelled = false;
+
+    if (diffMode === "working" && selectedFile) {
       api.git
         .diff({ cwd, path: selectedFile.path })
         .then((res) => {
-          if (res.patch) {
+          if (cancelled) return;
+          if (res?.patch) {
             const lines = res.patch.split("\n").map((line) => {
               if (line.startsWith("@@")) return { type: "hunk", text: line };
               if (line.startsWith("+")) return { type: "add", text: line.slice(1) };
@@ -2208,11 +2208,51 @@ function DiffPage({
               return { type: "ctx", text: line };
             });
             setDiffContent(lines);
+          } else {
+            setDiffContent([]);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!cancelled) setDiffContent([]);
+        });
+    } else if (diffMode === "history" && selectedCommit) {
+      api.git
+        .diff({ cwd, commit: selectedCommit.sha })
+        .then((res) => {
+          if (cancelled) return;
+          if (res?.patch) {
+            let ins = 0;
+            let del = 0;
+            const lines = res.patch.split("\n").map((line) => {
+              if (line.startsWith("@@")) return { type: "hunk", text: line };
+              if (line.startsWith("+") && !line.startsWith("+++")) {
+                ins++;
+                return { type: "add", text: line.slice(1) };
+              }
+              if (line.startsWith("-") && !line.startsWith("---")) {
+                del++;
+                return { type: "del", text: line.slice(1) };
+              }
+              return { type: "ctx", text: line };
+            });
+            setDiffContent(lines);
+            setCommitStats({ ins: res.stats?.insertions ?? ins, del: res.stats?.deletions ?? del });
+          } else {
+            setDiffContent([]);
+            setCommitStats({ ins: 0, del: 0 });
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDiffContent([]);
+            setCommitStats({ ins: 0, del: 0 });
+          }
+        });
     }
-  }, [api, cwd, diffMode, selectedFile]);
+    return () => {
+      cancelled = true;
+    };
+  }, [api, cwd, diffMode, selectedFile, selectedCommit]);
 
   const list = diffMode === "working" ? workingFiles : commits;
 
@@ -2289,7 +2329,7 @@ function DiffPage({
                 <div className="text-center text-xs tx-25 py-10">Pick a file on the left.</div>
               )
             ) : selectedCommit ? (
-              <DiffCard path={selectedCommit.subject} ins={12} del={4} lines={diffContent} />
+              <DiffCard path={selectedCommit.subject} ins={commitStats.ins} del={commitStats.del} lines={diffContent} />
             ) : (
               <div className="text-center text-xs tx-25 py-10">Pick a commit on the left.</div>
             )}
