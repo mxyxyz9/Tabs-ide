@@ -435,21 +435,23 @@ body[data-theme="solarized-light"] .monaco-workbench {
   background: transparent !important;
   border-bottom: 1px solid var(--tabs-hairline);
   padding: 0 4px;
+  overflow: visible !important;
 }
 .monaco-workbench .breadcrumbs-control,
 .monaco-workbench .editor-group-container > .title .monaco-breadcrumbs {
   display: none !important;
 }
-/* Each tab: rounded card, separated by a gap, vertically inset from the bar. */
+/* Each tab item container */
 .monaco-workbench .tabs-container > .tab {
   position: relative !important;
-  margin: 4px 4px 4px 0 !important;
-  padding: 0 6px 0 10px !important;
-  height: calc(100% - 8px) !important;
-  min-height: 26px !important;
-  border-radius: 6px !important;
-  border: 1px solid transparent !important;
-  border-top-color: transparent !important;
+  margin: 3px 6px 0 0 !important;
+  padding: 0 10px !important;
+  height: calc(100% - 3px) !important;
+  min-height: 27px !important;
+  border-radius: 8px 8px 0 0 !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
   display: flex !important;
   align-items: center !important;
   box-sizing: border-box !important;
@@ -458,31 +460,47 @@ body[data-theme="solarized-light"] .monaco-workbench {
   --vscode-tab-activeBorder: transparent !important;
   transition:
     background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease;
+    opacity 120ms ease;
 }
-/* Inactive tabs read quiet; a soft fill on hover. */
+/* Inactive tabs: flat background, quiet muted text, no outline or shadow */
 .monaco-workbench .tabs-container > .tab:not(.active) {
   background: transparent !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 .monaco-workbench .tabs-container > .tab:not(.active) .tab-label {
-  opacity: 0.62;
+  opacity: 0.55 !important;
+  font-weight: 500 !important;
+}
+.monaco-workbench .tabs-container > .tab:not(.active) .monaco-icon-label::before {
+  opacity: 0.65 !important;
 }
 .monaco-workbench .tabs-container > .tab:not(.active):hover {
   background: var(--tabs-ov-04) !important;
+  border-radius: 8px 8px 0 0 !important;
 }
 .monaco-workbench .tabs-container > .tab:not(.active):hover .tab-label {
-  opacity: 0.9;
+  opacity: 0.85 !important;
 }
-/* Active tab: elevated surface, hairline ring, clean border without top accent line. */
+/* Active tab: clean, flat, 2D elevated card pill with 8px rounded top corners */
 .monaco-workbench .tabs-container > .tab.active {
+  margin: 2px 6px 0 0 !important;
+  height: calc(100% - 2px) !important;
+  border-radius: 8px 8px 0 0 !important;
   background: var(--tabs-bg-elevated) !important;
-  border-color: var(--tabs-hairline-strong) !important;
-  border-top-color: var(--tabs-hairline-strong) !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28) !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  z-index: 2 !important;
 }
 .monaco-workbench .tabs-container > .tab.active .tab-label {
-  opacity: 1;
+  opacity: 1 !important;
+  font-weight: 600 !important;
+  color: var(--tabs-text) !important;
+}
+.monaco-workbench .tabs-container > .tab.active .monaco-icon-label::before {
+  opacity: 1 !important;
 }
 /* Completely suppress top blue accent borders/indicators across all VS Code DOM elements */
 .monaco-workbench .tabs-container > .tab .tab-border-top,

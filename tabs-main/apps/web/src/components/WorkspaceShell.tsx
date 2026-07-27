@@ -91,6 +91,7 @@ import {
 } from "../lib/gitReactQuery";
 import { GitAccountMenu } from "./git/GitAccountMenu";
 import { GitEnvironmentGate } from "./git/GitEnvironmentGate";
+import { GitToolV2 } from "./GitToolV2";
 import {
   buildSingleHunkPatch,
   getRenderablePatch,
@@ -9929,21 +9930,15 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   }, [activeProjectSettings, runServerProcess]);
 
   const gitTool = activeProject ? (
-    <GitTool
-      project={activeProject}
+    <GitToolV2
+      cwd={activeProject.cwd}
       activeThreadId={gitActionThreadId}
       terminalAvailable
       terminalOpen={Boolean(gitTerminalState?.terminalOpen)}
       onToggleTerminal={toggleGitTerminalVisibility}
+      onRunInTerminal={(cmd) => void runCommandInGitTerminal(cmd, "Command failed")}
       onOpenAgents={() => openAgentsForProject(activeProject.id)}
-      onCreateAgentsThread={() => createAgentsThreadForProject(activeProject.id)}
       onRunGitHubLogin={() => void runGitHubLoginInGitTerminal()}
-      onOpenFileInCode={(relativePath) => {
-        setCodeFocusedPath(activeProject.id, relativePath);
-        setActiveTool(activeProject.id, "code");
-        void navigate({ to: "/" });
-      }}
-      onDispatchRelease={dispatchReleaseInGitTerminal}
     />
   ) : null;
   const browserTool =
