@@ -2718,7 +2718,7 @@ function PRsPanel({
               n: pr.number,
               title: pr.title,
               state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
-              branch: `${pr.headRefName} → ${pr.baseRefName}`,
+              branch: `${pr.headBranch ?? branchName} → ${pr.baseBranch ?? "main"}`,
               body: pr.url,
             },
           ]);
@@ -2782,7 +2782,7 @@ function TagsPanel({
     }
     const foundTags = new Set<string>();
     try {
-      const browse = await api.projects.filesystemBrowse({ cwd, relativePath: ".git/refs/tags" });
+      const browse = await api.projects.filesystemBrowse({ cwd, partialPath: ".git/refs/tags" });
       if (browse?.entries) {
         for (const entry of browse.entries) {
           if (entry.name && !entry.name.startsWith(".")) foundTags.add(entry.name);
@@ -3105,16 +3105,18 @@ function SettingsPanel({
   const api = readNativeApi();
 
   useEffect(() => {
-    if (!api || !cwd) {
+    const nativeApi = api;
+    if (!nativeApi || !cwd) {
       setLoading(false);
       return;
     }
     let cancelled = false;
 
     async function loadSettings() {
+      if (!nativeApi) return;
       // 1. Load .gitignore
       try {
-        const res = await api.projects.readFile({ cwd, relativePath: ".gitignore" });
+        const res = await nativeApi.projects.readFile({ cwd, relativePath: ".gitignore" });
         if (res?.contents && !cancelled) {
           setGitignore(res.contents);
           setGitignoreChanged(false);
@@ -3125,7 +3127,7 @@ function SettingsPanel({
 
       // 2. Load .git/config for identity & remotes
       try {
-        const configRes = await api.projects.readFile({ cwd, relativePath: ".git/config" });
+        const configRes = await nativeApi.projects.readFile({ cwd, relativePath: ".git/config" });
         if (configRes?.contents && !cancelled) {
           const text = configRes.contents;
 
@@ -3237,14 +3239,6 @@ function SettingsPanel({
           className="w-full border bd-2 rounded-lg tx font-mono fs-11 ph-25 p-3 outline-none foc-bd-3 transition-colors"
         />
         <div className="mt-2.5">
-          <Btn primary disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
-            Save .gitignore
-          </Btn>
-        </div>
-      </Card>
-    </div>
-  );
-}
           <Btn primary disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
             Save .gitignore
           </Btn>
