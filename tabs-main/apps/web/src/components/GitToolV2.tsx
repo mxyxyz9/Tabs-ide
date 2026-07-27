@@ -3039,9 +3039,73 @@ function SettingsPanel({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [gitignore, setGitignore] = useState("node_modules/\n.env\ndist/\n*.log");
+  const [gitignore, setGitignore] = useState("");
   const [gitignoreChanged, setGitignoreChanged] = useState(false);
+  const [remotes, setRemotes] = useState<Array<{ name: string; url: string }>>([]);
+  const [loading, setLoading] = useState(true);
   const api = readNativeApi();
+
+  useEffect(() => {
+    if (!api || !cwd) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+
+    async function loadSettings() {
+      // 1. Load .gitignore
+      try {
+        const res = await api.projects.readFile({ cwd, relativePath: ".gitignore" });
+        if (res?.contents && !cancelled) {
+          setGitignore(res.contents);
+          setGitignoreChanged(false);
+        }
+      } catch {
+        // Ignore if no .gitignore file
+      }
+
+      // 2. Load .git/config for identity & remotes
+      try {
+        const configRes = await api.projects.readFile({ cwd, relativePath: ".git/config" });
+        if (configRes?.contents && !cancelled) {
+          const text = configRes.contents;
+
+          const nameMatch = text.match(/name\s*=\s*(.+)/i);
+          const emailMatch = text.match(/email\s*=\s*(.+)/i);
+          if (nameMatch && nameMatch[1]) setName(nameMatch[1].trim());
+          if (emailMatch && emailMatch[1]) setEmail(emailMatch[1].trim());
+
+          const parsedRemotes: Array<{ name: string; url: string }> = [];
+          const lines = text.split("\n");
+          let currentRemote: string | null = null;
+          for (const line of lines) {
+            const remoteMatch = line.match(/\[remote\s+"([^"]+)"\]/);
+            if (remoteMatch && remoteMatch[1]) {
+              currentRemote = remoteMatch[1];
+            } else if (currentRemote) {
+              const urlMatch = line.match(/\s*url\s*=\s*(.+)/);
+              if (urlMatch && urlMatch[1]) {
+                parsedRemotes.push({ name: currentRemote, url: urlMatch[1].trim() });
+                currentRemote = null;
+              }
+            }
+          }
+          if (parsedRemotes.length > 0) {
+            setRemotes(parsedRemotes);
+          }
+        }
+      } catch {
+        // Ignore
+      }
+
+      if (!cancelled) setLoading(false);
+    }
+
+    void loadSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, cwd]);
 
   const handleSaveIdentity = () => {
     onRunInTerminal(`git config user.name "${name.trim()}" && git config user.email "${email.trim()}"`);
@@ -3082,15 +3146,21 @@ function SettingsPanel({
         <p className="fs-11 tx-40 leading-relaxed mb-3">
           The URLs this project pushes to and pulls from. Most projects only need "origin".
         </p>
-        <div className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
-          <div className="min-w-0 flex-1">
-            <div className="fs-12 font-mono tx-80">origin</div>
-            <div className="fs-10 font-mono tx-30 truncate">git@github.com:...</div>
-          </div>
-          <Btn sm ghost onClick={() => onRunInTerminal("git remote remove origin")}>
-            Remove
-          </Btn>
-        </div>
+        {remotes.length === 0 ? (
+          <div className="fs-11 tx-30 px-2 py-2">No remotes configured.</div>
+        ) : (
+          remotes.map((r) => (
+            <div key={r.name} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
+              <div className="min-w-0 flex-1">
+                <div className="fs-12 font-mono tx-80">{r.name}</div>
+                <div className="fs-10 font-mono tx-30 truncate">{r.url}</div>
+              </div>
+              <Btn sm ghost onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}>
+                Remove
+              </Btn>
+            </div>
+          ))
+        )}
       </Card>
 
       <SectionLabel>.gitignore</SectionLabel>
@@ -3108,6 +3178,14 @@ function SettingsPanel({
           className="w-full border bd-2 rounded-lg tx font-mono fs-11 ph-25 p-3 outline-none foc-bd-3 transition-colors"
         />
         <div className="mt-2.5">
+          <Btn primary disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
+            Save .gitignore
+          </Btn>
+        </div>
+      </Card>
+    </div>
+  );
+}
           <Btn primary disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
             Save .gitignore
           </Btn>
