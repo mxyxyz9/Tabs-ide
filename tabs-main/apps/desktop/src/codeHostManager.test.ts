@@ -275,7 +275,7 @@ describe("buildSessionUrl", () => {
     expect(url.searchParams.get("payload")).toBeNull();
   });
 
-  it("includes the focused file in the VS Code payload and tracks the nonce", () => {
+  it("tracks the navigation nonce without embedding race-prone startup payload", () => {
     const url = new URL(
       buildSessionUrl("http://127.0.0.1:3000/", {
         projectId: "project-1",
@@ -285,10 +285,8 @@ describe("buildSessionUrl", () => {
       }),
     );
 
-    expect(url.searchParams.get("payload")).toBe(
-      JSON.stringify([["openFile", "/tmp/workspace/src/example.ts"]]),
-    );
-    expect(url.searchParams.get("tabs_relativePath")).toBe("src/example.ts");
+    expect(url.searchParams.get("payload")).toBeNull();
+    expect(url.searchParams.get("tabs_relativePath")).toBeNull();
     expect(url.searchParams.get("tabs_navigationNonce")).toBe("3");
   });
 });

@@ -127,44 +127,46 @@ function applyTheme(
     syncDesktopTheme("custom", config);
   } else {
     // Clean up custom inline CSS properties when switching back to curated themes
-    const style = document.documentElement.style;
-    style.removeProperty("--background");
-    style.removeProperty("--app-chrome-background");
-    style.removeProperty("--foreground");
-    style.removeProperty("--card");
-    style.removeProperty("--card-foreground");
-    style.removeProperty("--popover");
-    style.removeProperty("--popover-foreground");
-    style.removeProperty("--muted");
-    style.removeProperty("--muted-foreground");
-    style.removeProperty("--secondary");
-    style.removeProperty("--secondary-foreground");
-    style.removeProperty("--accent");
-    style.removeProperty("--accent-foreground");
-    style.removeProperty("--border");
-    style.removeProperty("--input");
-    style.removeProperty("--ring");
-    style.removeProperty("--primary");
-    style.removeProperty("--primary-foreground");
-    style.removeProperty("--font-sans");
-    style.removeProperty("--font-mono");
+    const style = document.documentElement?.style;
+    if (style && typeof style.removeProperty === "function") {
+      style.removeProperty("--background");
+      style.removeProperty("--app-chrome-background");
+      style.removeProperty("--foreground");
+      style.removeProperty("--card");
+      style.removeProperty("--card-foreground");
+      style.removeProperty("--popover");
+      style.removeProperty("--popover-foreground");
+      style.removeProperty("--muted");
+      style.removeProperty("--muted-foreground");
+      style.removeProperty("--secondary");
+      style.removeProperty("--secondary-foreground");
+      style.removeProperty("--accent");
+      style.removeProperty("--accent-foreground");
+      style.removeProperty("--border");
+      style.removeProperty("--input");
+      style.removeProperty("--ring");
+      style.removeProperty("--primary");
+      style.removeProperty("--primary-foreground");
+      style.removeProperty("--font-sans");
+      style.removeProperty("--font-mono");
+    }
 
     const definition: ThemeDefinition =
       THEME_DEFINITIONS[activeThemeId] ?? THEME_DEFINITIONS[DEFAULT_THEME_ID];
     const isDark = definition.baseVariant === "dark";
 
-    document.documentElement.classList.toggle("dark", isDark);
-    document.documentElement.setAttribute("data-theme", activeThemeId);
+    document.documentElement?.classList?.toggle("dark", isDark);
+    document.documentElement?.setAttribute?.("data-theme", activeThemeId);
 
     syncDesktopTheme(activeThemeId);
   }
 
-  if (suppressTransitions) {
+  if (suppressTransitions && typeof document !== "undefined" && document.documentElement) {
     // Force a reflow so the no-transitions class takes effect before removal
     // oxlint-disable-next-line no-unused-expressions
     document.documentElement.offsetHeight;
     requestAnimationFrame(() => {
-      document.documentElement.classList.remove("no-transitions");
+      document.documentElement?.classList?.remove("no-transitions");
     });
   }
 }
