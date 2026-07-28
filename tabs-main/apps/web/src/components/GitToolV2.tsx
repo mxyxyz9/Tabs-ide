@@ -3725,7 +3725,7 @@ export function GitToolV2({
             onOpenSignIn={() => setModal("deviceAuth")}
           />
           <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
-            <div className="w-full mx-auto">{panelContent}</div>
+            <div className="w-full max-w-[1400px] mx-auto">{panelContent}</div>
           </div>
         </div>
       </div>
