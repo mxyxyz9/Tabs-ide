@@ -553,8 +553,8 @@ function Modal({
   }, [onClose]);
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-6"
-      style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+      className="fixed inset-0 z-[60] flex items-center justify-center p-6 backdrop-blur-sm"
+      style={{ backgroundColor: "color-mix(in srgb, var(--background) 65%, transparent)" }}
       onClick={onClose}
     >
       <div
@@ -3725,7 +3725,7 @@ export function GitToolV2({
             onOpenSignIn={() => setModal("deviceAuth")}
           />
           <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
-            <div style={{ maxWidth: "880px", margin: "0 auto" }}>{panelContent}</div>
+            <div className="w-full mx-auto">{panelContent}</div>
           </div>
         </div>
       </div>
