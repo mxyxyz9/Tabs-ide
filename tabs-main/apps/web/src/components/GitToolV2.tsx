@@ -2791,20 +2791,46 @@ function PRsPanel({
     };
   }, [api, cwd, branchName]);
 
-  const STATE_STYLE = {
-    open: { color: "var(--sem-emerald)", bg: "var(--sem-emerald-soft)" },
-    draft: { color: "var(--fg-50)", bg: "var(--overlay-10)" },
-    merged: { color: "var(--sem-purple)", bg: "var(--sem-purple-soft)" },
-    closed: { color: "var(--sem-red)", bg: "var(--sem-red-soft)" },
-  };
-
   return (
     <div>
-      <div className="mt-4">
-        <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
-          Create pull request
-        </Btn>
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center p-8 text-xs tx-40">
+          <Loader2 className="animate-spin mr-2" size={14} /> Loading pull requests…
+        </div>
+      ) : prs.length === 0 ? (
+        <Card className="p-6 text-center">
+          <GitPullRequest className="mx-auto mb-2 tx-30" size={24} />
+          <p className="fs-12 font-medium tx-80 mb-1">No open pull requests for {branchName}</p>
+          <p className="fs-11 tx-40 mb-4">Push your branch and open a pull request on GitHub to request feedback and merge changes.</p>
+          <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
+            Create pull request
+          </Btn>
+        </Card>
+      ) : (
+        <Card className="p-2 mb-3">
+          {prs.map((pr) => (
+            <div key={pr.n} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
+              <Badge tone={pr.state}>
+                #{pr.n} {pr.state}
+              </Badge>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs tx-80 truncate">{pr.title}</div>
+                <div className="fs-10 font-mono tx-30 truncate">{pr.branch}</div>
+              </div>
+              <Btn sm ghost onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}>
+                View on GitHub
+              </Btn>
+            </div>
+          ))}
+        </Card>
+      )}
+      {prs.length > 0 && (
+        <div className="mt-4">
+          <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
+            Create pull request
+          </Btn>
+        </div>
+      )}
     </div>
   );
 }
