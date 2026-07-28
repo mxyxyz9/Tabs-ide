@@ -3588,36 +3588,36 @@ export function GitToolV2({
           .git-tool-v2 .fs-13 { font-size: 13px; }
 
           .git-tool-v2 .tx { color: var(--fg); }
-          .git-tool-v2 .tx-85 { color: rgba(250, 250, 250, 0.85); }
-          .git-tool-v2 .tx-80 { color: rgba(250, 250, 250, 0.8); }
-          .git-tool-v2 .tx-70 { color: rgba(250, 250, 250, 0.7); }
-          .git-tool-v2 .tx-60 { color: rgba(250, 250, 250, 0.6); }
-          .git-tool-v2 .tx-50 { color: rgba(250, 250, 250, 0.5); }
-          .git-tool-v2 .tx-40 { color: rgba(250, 250, 250, 0.4); }
-          .git-tool-v2 .tx-30 { color: rgba(250, 250, 250, 0.3); }
-          .git-tool-v2 .tx-25 { color: rgba(250, 250, 250, 0.25); }
-          .git-tool-v2 .tx-20 { color: rgba(250, 250, 250, 0.2); }
+          .git-tool-v2 .tx-85 { color: color-mix(in srgb, var(--foreground) 85%, transparent); }
+          .git-tool-v2 .tx-80 { color: color-mix(in srgb, var(--foreground) 80%, transparent); }
+          .git-tool-v2 .tx-70 { color: color-mix(in srgb, var(--foreground) 70%, transparent); }
+          .git-tool-v2 .tx-60 { color: color-mix(in srgb, var(--foreground) 60%, transparent); }
+          .git-tool-v2 .tx-50 { color: color-mix(in srgb, var(--foreground) 50%, transparent); }
+          .git-tool-v2 .tx-40 { color: color-mix(in srgb, var(--foreground) 40%, transparent); }
+          .git-tool-v2 .tx-30 { color: color-mix(in srgb, var(--foreground) 30%, transparent); }
+          .git-tool-v2 .tx-25 { color: color-mix(in srgb, var(--foreground) 25%, transparent); }
+          .git-tool-v2 .tx-20 { color: color-mix(in srgb, var(--foreground) 20%, transparent); }
 
           .git-tool-v2 .hov-tx:hover { color: var(--fg); }
-          .git-tool-v2 .hov-tx-90:hover { color: rgba(250, 250, 250, 0.9); }
-          .git-tool-v2 .hov-tx-80:hover { color: rgba(250, 250, 250, 0.8); }
-          .git-tool-v2 .hov-tx-70:hover { color: rgba(250, 250, 250, 0.7); }
-          .git-tool-v2 .group:hover .ghov-tx-70 { color: rgba(250, 250, 250, 0.7); }
-          .git-tool-v2 .group:hover .ghov-tx-90 { color: rgba(250, 250, 250, 0.9); }
+          .git-tool-v2 .hov-tx-90:hover { color: color-mix(in srgb, var(--foreground) 90%, transparent); }
+          .git-tool-v2 .hov-tx-80:hover { color: color-mix(in srgb, var(--foreground) 80%, transparent); }
+          .git-tool-v2 .hov-tx-70:hover { color: color-mix(in srgb, var(--foreground) 70%, transparent); }
+          .git-tool-v2 .group:hover .ghov-tx-70 { color: color-mix(in srgb, var(--foreground) 70%, transparent); }
+          .git-tool-v2 .group:hover .ghov-tx-90 { color: color-mix(in srgb, var(--foreground) 90%, transparent); }
 
-          .git-tool-v2 .bd-1 { border-color: rgba(255, 255, 255, 0.08); }
-          .git-tool-v2 .bd-2 { border-color: rgba(255, 255, 255, 0.15); }
-          .git-tool-v2 .hov-bd-2:hover { border-color: rgba(255, 255, 255, 0.2); }
-          .git-tool-v2 .hov-bd-3:hover { border-color: rgba(255, 255, 255, 0.3); }
-          .git-tool-v2 .foc-bd-3:focus { border-color: rgba(255, 255, 255, 0.3); }
+          .git-tool-v2 .bd-1 { border-color: color-mix(in srgb, var(--foreground) 8%, transparent); }
+          .git-tool-v2 .bd-2 { border-color: color-mix(in srgb, var(--foreground) 15%, transparent); }
+          .git-tool-v2 .hov-bd-2:hover { border-color: color-mix(in srgb, var(--foreground) 20%, transparent); }
+          .git-tool-v2 .hov-bd-3:hover { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); }
+          .git-tool-v2 .foc-bd-3:focus { border-color: color-mix(in srgb, var(--foreground) 30%, transparent); }
 
-          .git-tool-v2 .bg-o05 { background-color: rgba(255, 255, 255, 0.03); }
-          .git-tool-v2 .bg-o1 { background-color: rgba(255, 255, 255, 0.06); }
-          .git-tool-v2 .bg-o2 { background-color: rgba(255, 255, 255, 0.12); }
-          .git-tool-v2 .hov-bg-o1:hover { background-color: rgba(255, 255, 255, 0.06); }
-          .git-tool-v2 .hov-bg-o2:hover { background-color: rgba(255, 255, 255, 0.12); }
+          .git-tool-v2 .bg-o05 { background-color: color-mix(in srgb, var(--foreground) 3%, transparent); }
+          .git-tool-v2 .bg-o1 { background-color: color-mix(in srgb, var(--foreground) 6%, transparent); }
+          .git-tool-v2 .bg-o2 { background-color: color-mix(in srgb, var(--foreground) 12%, transparent); }
+          .git-tool-v2 .hov-bg-o1:hover { background-color: color-mix(in srgb, var(--foreground) 6%, transparent); }
+          .git-tool-v2 .hov-bg-o2:hover { background-color: color-mix(in srgb, var(--foreground) 12%, transparent); }
 
-          .git-tool-v2 .ring-safe { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2); }
+          .git-tool-v2 .ring-safe { box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 20%, transparent); }
         `}</style>
 
         {/* Sidebar (w-64 expanded, w-16 collapsed) */}
