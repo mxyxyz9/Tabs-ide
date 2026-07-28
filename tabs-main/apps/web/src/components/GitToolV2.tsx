@@ -2502,10 +2502,9 @@ function BranchesPanel({
 
       <Card className="p-2">
         <div className="flex items-center gap-2.5 px-2 py-2 border-b bd-1">
-          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs" style={{ borderColor: "var(--sem-amber-border)", color: "var(--sem-amber)" }}>
-            <GitBranchIcon size={11} />
+          <Badge tone="amber" icon={GitBranchIcon}>
             {isDetached ? `${activeBranch?.name ?? "HEAD"} (detached)` : activeBranch?.name}
-          </span>
+          </Badge>
           <span className="fs-11 font-mono tx-30 flex-1">{aheadCount || behindCount ? `↑${aheadCount} ↓${behindCount}` : "up to date"}</span>
           {!isDetached && (
             <Btn sm ghost onClick={() => setForm("rename")}>
@@ -2516,7 +2515,7 @@ function BranchesPanel({
         {otherBranches.map((b) => (
           <div key={b.name} className="flex items-center gap-2.5 px-2 py-2 border-b bd-1 last:border-0">
             <span className="text-xs font-mono tx-70 flex-1">{b.name}</span>
-            <span className="fs-10 tx-25">{b.isRemote ? "remote" : "local"}</span>
+            <Badge tone="muted">{b.isRemote ? "remote" : "local"}</Badge>
             <Btn sm ghost onClick={() => void mergeBranch(b.name)}>
               Merge into current
             </Btn>
