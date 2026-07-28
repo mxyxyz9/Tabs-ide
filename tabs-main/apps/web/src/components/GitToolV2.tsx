@@ -444,16 +444,18 @@ function InlineForm({
   onSubmit,
   onCancel,
   submitLabel = "Save",
+  className = "",
 }: {
   placeholder: string;
   initial?: string;
   onSubmit: (val: string) => void;
   onCancel: () => void;
   submitLabel?: string;
+  className?: string;
 }) {
   const [value, setValue] = useState(initial);
   return (
-    <div className="flex items-center gap-2 bg-o1 border bd-2 rounded-lg px-2.5 py-2 mb-2">
+    <div className={`flex items-center gap-2 bg-o1 border bd-2 rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
       <input
         autoFocus
         value={value}
@@ -2934,20 +2936,34 @@ function TagsPanel({
               </Btn>
             </div>
           ))}
+          {form && (
+            <div className="pt-2 mt-1 border-t bd-1">
+              <InlineForm
+                placeholder="v1.5.0"
+                submitLabel="Create tag"
+                className="mb-0"
+                onSubmit={(name) => {
+                  void createTag(name);
+                }}
+                onCancel={() => setForm(false)}
+              />
+            </div>
+          )}
         </Card>
       )}
 
-      {form && (
-        <div className="mt-3">
+      {form && realTags.length === 0 && (
+        <Card className="p-2 mb-3">
           <InlineForm
             placeholder="v1.5.0"
-            submitLabel="Create"
+            submitLabel="Create tag"
+            className="mb-0"
             onSubmit={(name) => {
               void createTag(name);
             }}
             onCancel={() => setForm(false)}
           />
-        </div>
+        </Card>
       )}
       {!form && (
         <div className="flex items-center gap-2 mt-4">
