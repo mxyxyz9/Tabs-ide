@@ -277,6 +277,60 @@ function StatPill({ ins, del }: { ins: number; del: number }) {
   );
 }
 
+interface BadgeProps {
+  children: ReactNode;
+  icon?: LucideIcon | React.ComponentType<{ size?: number; className?: string }>;
+  tone?: "default" | "emerald" | "amber" | "red" | "purple" | "sky" | "muted" | "open" | "draft" | "merged" | "closed";
+  mono?: boolean;
+  className?: string;
+}
+
+function Badge({ children, icon: Icon, tone = "default", mono = true, className = "" }: BadgeProps) {
+  const TONES: Record<string, { color: string; bg: string; border?: string }> = {
+    default: {
+      color: "color-mix(in srgb, var(--foreground) 80%, transparent)",
+      bg: "color-mix(in srgb, var(--foreground) 6%, transparent)",
+      border: "color-mix(in srgb, var(--foreground) 15%, transparent)",
+    },
+    emerald: { color: "var(--sem-emerald)", bg: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
+    open: { color: "var(--sem-emerald)", bg: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
+    amber: { color: "var(--sem-amber)", bg: "var(--sem-amber-soft)", border: "var(--sem-amber-border)" },
+    red: { color: "var(--sem-red)", bg: "var(--sem-red-soft)", border: "var(--sem-red-border)" },
+    closed: { color: "var(--sem-red)", bg: "var(--sem-red-soft)", border: "var(--sem-red-border)" },
+    purple: { color: "var(--sem-purple)", bg: "var(--sem-purple-soft)", border: "rgba(192, 132, 252, 0.25)" },
+    merged: { color: "var(--sem-purple)", bg: "var(--sem-purple-soft)", border: "rgba(192, 132, 252, 0.25)" },
+    sky: { color: "var(--sem-sky)", bg: "var(--sem-sky-soft)", border: "var(--sem-sky-border)" },
+    muted: {
+      color: "color-mix(in srgb, var(--foreground) 50%, transparent)",
+      bg: "color-mix(in srgb, var(--foreground) 5%, transparent)",
+      border: "color-mix(in srgb, var(--foreground) 10%, transparent)",
+    },
+    draft: {
+      color: "color-mix(in srgb, var(--foreground) 50%, transparent)",
+      bg: "color-mix(in srgb, var(--foreground) 5%, transparent)",
+      border: "color-mix(in srgb, var(--foreground) 10%, transparent)",
+    },
+  };
+
+  const currentTone = TONES[tone] || TONES.default;
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border bd-2 fs-10 ${
+        mono ? "font-mono" : "font-medium"
+      } shrink-0 ${className}`}
+      style={{
+        color: currentTone.color,
+        backgroundColor: currentTone.bg,
+        borderColor: currentTone.border || "color-mix(in srgb, var(--foreground) 12%, transparent)",
+      }}
+    >
+      {Icon && <Icon size={11} className="shrink-0" />}
+      {children}
+    </span>
+  );
+}
+
 function withLineNumbers(lines: Array<{ type: string; text: string }>) {
   let oldNo = 0;
   let newNo = 0;
@@ -2284,7 +2338,7 @@ function DiffPage({
           {diffMode === "working" ? "Working tree is clean — nothing to diff." : "No commits yet."}
         </div>
       ) : (
-        <div className="flex flex-1 min-h-0 gap-4 overflow-hidden" style={{ minHeight: "500px" }}>
+        <div className="flex flex-1 min-h-0 gap-4 overflow-hidden">
           <div className="w-64 shrink-0 h-full overflow-y-auto custom-scrollbar">
             {diffMode === "working"
               ? workingFiles.map((f) => (
