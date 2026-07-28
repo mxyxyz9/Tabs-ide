@@ -334,12 +334,12 @@ function DiffLines({ lines }: { lines: Array<{ type: string; text: string }> }) 
 
 function DiffCard({ path, ins, del, lines }: { path: string; ins: number; del: number; lines: Array<{ type: string; text: string }> }) {
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b bd-2 bg-o05">
+    <Card className="flex flex-col h-full overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b bd-2 bg-o05 shrink-0">
         <PathBreadcrumb path={path} />
         <StatPill ins={ins} del={del} />
       </div>
-      <div className="py-2 overflow-x-auto">
+      <div className="flex-1 py-2 overflow-auto custom-scrollbar">
         <DiffLines lines={lines} />
       </div>
     </Card>
@@ -2284,8 +2284,8 @@ function DiffPage({
           {diffMode === "working" ? "Working tree is clean — nothing to diff." : "No commits yet."}
         </div>
       ) : (
-        <div className="flex gap-4">
-          <div className="w-64 shrink-0 overflow-y-auto custom-scrollbar" style={{ maxHeight: "560px" }}>
+        <div className="flex flex-1 min-h-0 gap-4 overflow-hidden" style={{ minHeight: "500px" }}>
+          <div className="w-64 shrink-0 h-full overflow-y-auto custom-scrollbar">
             {diffMode === "working"
               ? workingFiles.map((f) => (
                   <button
@@ -2321,7 +2321,7 @@ function DiffPage({
                   </button>
                 ))}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 h-full">
             {diffMode === "working" ? (
               selectedFile ? (
                 <DiffCard path={selectedFile.path} ins={selectedFile.insertions} del={selectedFile.deletions} lines={diffContent} />
@@ -3554,16 +3554,16 @@ export function GitToolV2({
             --bg-base: var(--background, #09090b);
             --bg-surface: var(--card, #121215);
             --fg: var(--foreground, #fafafa);
-            --fg-80: rgba(250, 250, 250, 0.8);
-            --fg-60: rgba(250, 250, 250, 0.6);
-            --fg-40: rgba(250, 250, 250, 0.4);
-            --fg-30: rgba(250, 250, 250, 0.3);
-            --fg-25: rgba(250, 250, 250, 0.25);
-            --fg-20: rgba(250, 250, 250, 0.2);
-            --overlay-5: rgba(255, 255, 255, 0.05);
-            --overlay-10: rgba(255, 255, 255, 0.1);
-            --overlay-20: rgba(255, 255, 255, 0.2);
-            --overlay-30: rgba(255, 255, 255, 0.3);
+            --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
+            --fg-60: color-mix(in srgb, var(--foreground) 60%, transparent);
+            --fg-40: color-mix(in srgb, var(--foreground) 40%, transparent);
+            --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
+            --fg-25: color-mix(in srgb, var(--foreground) 25%, transparent);
+            --fg-20: color-mix(in srgb, var(--foreground) 20%, transparent);
+            --overlay-5: color-mix(in srgb, var(--foreground) 5%, transparent);
+            --overlay-10: color-mix(in srgb, var(--foreground) 10%, transparent);
+            --overlay-20: color-mix(in srgb, var(--foreground) 20%, transparent);
+            --overlay-30: color-mix(in srgb, var(--foreground) 30%, transparent);
             --sem-emerald: #34d399;
             --sem-emerald-soft: rgba(52, 211, 153, 0.1);
             --sem-emerald-border: rgba(52, 211, 153, 0.25);
