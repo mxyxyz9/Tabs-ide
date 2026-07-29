@@ -378,26 +378,26 @@ export function Modal({
   const widthClass = width.startsWith("w-") || width.includes(" w-") ? width : `w-full ${width}`;
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm"
       style={{ backgroundColor: "color-mix(in srgb, var(--background) 65%, transparent)" }}
       onClick={onClose}
     >
       <div
-        className={`${widthClass} rounded-xl border bd-2 shadow-2xl overflow-hidden`}
+        className={`${widthClass} max-h-[88vh] flex flex-col rounded-xl border bd-2 shadow-2xl overflow-hidden`}
         style={{ backgroundColor: "var(--bg-surface)" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 border-b bd-1">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b bd-1 shrink-0">
           <span className="text-sm font-semibold tx">{title}</span>
           <button
             type="button"
             onClick={onClose}
-            className="w-6 h-6 rounded-md hov-bg-o1 flex items-center justify-center tx-40 hov-tx transition-colors"
+            className="w-6 h-6 rounded-md hov-bg-o1 flex items-center justify-center tx-40 hov-tx transition-colors cursor-pointer"
           >
             <X size={14} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );

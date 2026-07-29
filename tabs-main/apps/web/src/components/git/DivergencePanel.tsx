@@ -527,7 +527,7 @@ export function DivergencePanel({
                 <div
                   key={b.name}
                   className={`flex items-center justify-between gap-3 py-2.5 px-2 -mx-2 rounded-md transition-colors ${
-                    isSelected ? "bg-sky-950/30" : "hover:bg-neutral-900/40"
+                    isSelected ? "bg-o2" : "hov-bg-o1"
                   } ${idx === arr.length - 1 ? "" : "border-b bd-1"}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -585,21 +585,9 @@ export function DivergencePanel({
                       type="button"
                       title={isSpotlit ? "Remove from Spotlight" : "Add to Spotlight"}
                       onClick={() => handleToggleSpotlight(b.name)}
-                      className="p-1 rounded transition-colors cursor-pointer"
-                      style={{
-                        color: isSpotlit ? "var(--primary)" : undefined,
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                          "var(--accent-wash-bg)";
-                        if (!isSpotlit)
-                          (e.currentTarget as HTMLButtonElement).style.color = "var(--primary)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.backgroundColor = "";
-                        if (!isSpotlit)
-                          (e.currentTarget as HTMLButtonElement).style.color = "";
-                      }}
+                      className={`p-1 rounded transition-colors cursor-pointer ${
+                        isSpotlit ? "text-amber-400 hov-bg-o1" : "tx-40 hov-tx hov-bg-o1"
+                      }`}
                     >
                       <Telescope size={14} />
                     </button>
@@ -611,7 +599,7 @@ export function DivergencePanel({
                         activeView === "archived" ? "Remove from archive" : "Archive branch"
                       }
                       onClick={() => handleToggleArchive(b.name)}
-                      className="p-1 rounded text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+                      className="p-1 rounded tx-40 hov-tx hov-bg-o1 transition-colors cursor-pointer"
                     >
                       {activeView === "archived" ? (
                         <ArchiveRestore size={14} />

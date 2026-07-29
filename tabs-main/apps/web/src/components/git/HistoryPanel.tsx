@@ -210,7 +210,7 @@ export function CommitDetailModal({
 
   return (
     <Modal title={`Commit ${commit.shortSha}`} onClose={onClose} width="w-[92vw] max-w-[1300px]">
-      <div className="p-4 space-y-4 max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="flex flex-col h-[75vh] min-h-[400px] overflow-hidden">
         <div className="space-y-1.5 border-b bd-1 pb-3 shrink-0">
           <div className="text-sm font-semibold tx leading-snug">{commit.subject}</div>
           <div className="flex flex-wrap items-center gap-3 text-xs tx-40 font-mono">
@@ -232,7 +232,7 @@ export function CommitDetailModal({
         ) : fileDiffs.length === 0 ? (
           <div className="text-center text-xs tx-30 py-8">No file changes found in this commit.</div>
         ) : (
-          <div className="flex flex-1 min-h-[350px] gap-3 overflow-hidden">
+          <div className="flex flex-1 min-h-0 gap-3 overflow-hidden mt-3">
             <div className="w-64 shrink-0 border-r bd-1 pr-2 overflow-y-auto custom-scrollbar space-y-1">
               <div className="fs-10 uppercase tracking-widest tx-30 px-2 py-1">
                 Files ({fileDiffs.length})

@@ -27,15 +27,15 @@ export function StashesPanel({
   return (
     <div>
       <SectionLabel>Update safely</SectionLabel>
-      <Card className="p-3 mb-4">
-        <p className="fs-11 tx-40 leading-relaxed mb-3">
-          Set your current changes aside, pull the latest commits — from your own branch or a teammate's — then bring your changes back. Each step is reported as it happens. If your changes conflict with what came in, you'll resolve it right here.
-        </p>
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            {nothingToDo && <div className="fs-10 tx-25">Nothing to stash, and already up to date.</div>}
-            {hasConflict && <div className="fs-10" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
-          </div>
+      <Card className="p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="fs-11 tx-50 leading-relaxed max-w-2xl">
+            Set your current changes aside, pull the latest commits — from your own branch or a teammate's — then bring your changes back. Each step is reported as it happens. If your changes conflict with what came in, you'll resolve it right here.
+          </p>
+          {nothingToDo && <div className="fs-10 tx-30">Nothing to stash, and already up to date.</div>}
+          {hasConflict && <div className="fs-10 font-medium" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
+        </div>
+        <div className="shrink-0 sm:ml-auto">
           <Btn primary icon={RefreshCw} disabled={hasConflict || nothingToDo} onClick={onOpenStashPullReapply}>
             Stash, pull &amp; reapply
           </Btn>
