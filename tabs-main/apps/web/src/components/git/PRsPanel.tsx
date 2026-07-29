@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
 import { GitCheckingState } from "./GitCheckingState";
-import { Badge, Btn, Card, Modal, Select } from "./gitPrimitives";
+import { Badge, Btn, Card, Modal, PanelToolbar, Select } from "./gitPrimitives";
 
 interface MockPR {
   n: number;
@@ -111,6 +111,14 @@ export function PRsPanel({
 
   return (
     <div>
+      {prs.length > 0 && (
+        <PanelToolbar>
+          <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
+            Create pull request
+          </Btn>
+        </PanelToolbar>
+      )}
+
       {loading ? (
         <GitCheckingState message="Loading pull requests…" size={36} />
       ) : prs.length === 0 ? (
@@ -171,14 +179,6 @@ export function PRsPanel({
               )}
             </Card>
           ))}
-        </div>
-      )}
-
-      {prs.length > 0 && (
-        <div className="mt-4">
-          <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
-            Create pull request
-          </Btn>
         </div>
       )}
 

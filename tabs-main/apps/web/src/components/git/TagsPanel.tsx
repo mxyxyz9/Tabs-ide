@@ -8,7 +8,7 @@ import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
-import { Btn, Card, InlineForm } from "./gitPrimitives";
+import { Btn, Card, InlineForm, PanelToolbar } from "./gitPrimitives";
 
 export function TagsPanel({
   cwd,
@@ -102,14 +102,14 @@ export function TagsPanel({
   return (
     <div>
       {!form && (
-        <div className="flex items-center gap-2 mb-4">
+        <PanelToolbar>
           <Btn primary onClick={() => setForm(true)}>
             Create tag
           </Btn>
           <Btn ghost onClick={onOpenDraftRelease}>
             Draft a release
           </Btn>
-        </div>
+        </PanelToolbar>
       )}
 
       {form && (

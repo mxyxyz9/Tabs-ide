@@ -31,11 +31,15 @@ export function StashesPanel({
         <p className="fs-11 tx-40 leading-relaxed mb-3">
           Set your current changes aside, pull the latest commits — from your own branch or a teammate's — then bring your changes back. Each step is reported as it happens. If your changes conflict with what came in, you'll resolve it right here.
         </p>
-        <Btn primary icon={RefreshCw} disabled={hasConflict || nothingToDo} onClick={onOpenStashPullReapply}>
-          Stash, pull &amp; reapply
-        </Btn>
-        {nothingToDo && <div className="fs-10 tx-25 mt-2">Nothing to stash, and already up to date.</div>}
-        {hasConflict && <div className="fs-10 mt-2" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {nothingToDo && <div className="fs-10 tx-25">Nothing to stash, and already up to date.</div>}
+            {hasConflict && <div className="fs-10" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
+          </div>
+          <Btn primary icon={RefreshCw} disabled={hasConflict || nothingToDo} onClick={onOpenStashPullReapply}>
+            Stash, pull &amp; reapply
+          </Btn>
+        </div>
       </Card>
 
       <SectionLabel action={<Btn sm ghost disabled={!hasChanges} onClick={onOpenStash}>Stash current changes</Btn>}>

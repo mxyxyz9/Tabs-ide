@@ -1,7 +1,7 @@
 import type { GitHubAccount } from "@tabs/contracts";
 import { KeyRound } from "lucide-react";
 
-import { Banner, Btn, Card, SectionLabel } from "./gitPrimitives";
+import { Banner, Btn, Card, PanelToolbar, SectionLabel } from "./gitPrimitives";
 
 function AccountRow({
   account: a,
@@ -64,6 +64,12 @@ export function AccountsPanel({
 }) {
   return (
     <div>
+      <PanelToolbar>
+        <Btn primary onClick={onOpenConnectAccount}>
+          Connect an account
+        </Btn>
+      </PanelToolbar>
+
       {credentialMismatch && (
         <Banner
           tone="warn"
@@ -77,9 +83,6 @@ export function AccountsPanel({
         ))}
         {accounts.length === 0 && <div className="text-center fs-11 tx-25 py-4">No accounts connected</div>}
       </Card>
-      <Btn primary onClick={onOpenConnectAccount}>
-        Connect an account
-      </Btn>
 
       <SectionLabel>This project</SectionLabel>
       <p className="text-xs tx-40 leading-relaxed mb-2">

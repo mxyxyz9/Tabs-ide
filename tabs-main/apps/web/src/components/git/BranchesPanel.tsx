@@ -8,7 +8,7 @@ import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
-import { Badge, Banner, Btn, Card, InlineForm, Modal } from "./gitPrimitives";
+import { Badge, Banner, Btn, Card, InlineForm, Modal, PanelToolbar } from "./gitPrimitives";
 
 export function BranchesPanel({
   cwd,
@@ -142,6 +142,17 @@ export function BranchesPanel({
 
   return (
     <div>
+      {form === null && (
+        <PanelToolbar>
+          <Btn primary onClick={() => setForm("new")}>
+            New branch
+          </Btn>
+          <Btn ghost onClick={onOpenNewWorktree}>
+            New worktree
+          </Btn>
+        </PanelToolbar>
+      )}
+
       {conflictState.active && (
         <Banner
           tone="bad"
@@ -226,17 +237,6 @@ export function BranchesPanel({
             }}
             onCancel={() => setForm(null)}
           />
-        </div>
-      )}
-
-      {form === null && (
-        <div className="flex items-center gap-2 mt-4">
-          <Btn primary onClick={() => setForm("new")}>
-            New branch
-          </Btn>
-          <Btn ghost onClick={onOpenNewWorktree}>
-            New worktree
-          </Btn>
         </div>
       )}
 

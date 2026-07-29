@@ -293,81 +293,50 @@ export function OverviewPanel({
     <div>
       {/* Dynamic Repo State Banner */}
       {repoState.kind !== "clean_ready" && (
-        <div
-          className="w-full flex items-start gap-3 rounded-lg border px-4 py-3 mb-5"
-          style={{
-            borderColor:
-              repoState.severity === "error"
-                ? "var(--sem-red-border)"
-                : repoState.severity === "warning"
-                  ? "var(--sem-amber-border)"
-                  : "var(--sem-sky-border)",
-            backgroundColor:
-              repoState.severity === "error"
-                ? "var(--sem-red-soft)"
-                : repoState.severity === "warning"
-                  ? "var(--sem-amber-soft)"
-                  : "var(--sem-sky-soft)",
-          }}
-        >
-          {repoState.severity === "error" ? (
-            <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: "var(--sem-red)" }} />
-          ) : (
-            <CircleAlert size={15} className="shrink-0 mt-0.5" style={{ color: "var(--sem-amber)" }} />
-          )}
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
-            <span
-              className="text-xs font-semibold"
-              style={{
-                color: repoState.severity === "error" ? "var(--sem-red)" : "var(--sem-amber)",
-              }}
-            >
-              {repoState.title}
-            </span>
-            <span className="text-xs tx-50 leading-relaxed">
-              {forking ? "Creating a fork on GitHub and adding local remote..." : repoState.description}
-            </span>
-            {repoState.primaryAction && (
-              <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                <Btn
-                  primary
-                  sm
-                  disabled={forking}
-                  onClick={() => {
-                    switch (repoState.primaryAction?.actionType) {
-                      case "create_fork":
-                        void handleCreateFork();
-                        break;
-                      case "pull_merge":
-                        onRunInTerminal("git pull");
-                        break;
-                      case "push":
-                        onRunInTerminal(`git push origin ${branchName}`);
-                        break;
-                      case "init_repo":
-                        onInitRepo();
-                        break;
-                      case "add_remote":
-                        onOpenAddRemote();
-                        break;
-                      case "sign_in_gh":
-                        onOpenSignIn();
-                        break;
-                      case "create_branch":
-                        onOpenCreateBranch();
-                        break;
-                      case "resolve_conflicts":
-                        onGoToChanges();
-                        break;
-                    }
-                  }}
-                >
-                  {repoState.primaryAction.label}
-                </Btn>
-              </div>
-            )}
-          </div>
-        </div>
+        <Banner
+          tone={repoState.severity === "error" ? "bad" : repoState.severity === "warning" ? "warn" : "info"}
+          title={repoState.title}
+          body={forking ? "Creating a fork on GitHub and adding local remote..." : repoState.description}
+          actions={
+            repoState.primaryAction ? (
+              <Btn
+                primary
+                sm
+                disabled={forking}
+                onClick={() => {
+                  switch (repoState.primaryAction?.actionType) {
+                    case "create_fork":
+                      void handleCreateFork();
+                      break;
+                    case "pull_merge":
+                      onRunInTerminal("git pull");
+                      break;
+                    case "push":
+                      onRunInTerminal(`git push origin ${branchName}`);
+                      break;
+                    case "init_repo":
+                      onInitRepo();
+                      break;
+                    case "add_remote":
+                      onOpenAddRemote();
+                      break;
+                    case "sign_in_gh":
+                      onOpenSignIn();
+                      break;
+                    case "create_branch":
+                      onOpenCreateBranch();
+                      break;
+                    case "resolve_conflicts":
+                      onGoToChanges();
+                      break;
+                  }
+                }}
+              >
+                {repoState.primaryAction.label}
+              </Btn>
+            ) : undefined
+          }
+        />
       )}
 
       {/* Secondary Notices */}

@@ -49,6 +49,15 @@ export function Banner({
   );
 }
 
+export function PanelToolbar({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 mb-4 ${className}`}>
+      <div className="flex items-center gap-2 ms-auto">{children}</div>
+    </div>
+  );
+}
+
+
 export function Btn({
   children,
   icon: Icon,
