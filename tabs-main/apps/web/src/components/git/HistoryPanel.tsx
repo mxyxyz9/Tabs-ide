@@ -282,6 +282,7 @@ export function HistoryPanel({
   onReset,
   onRevert,
   onCherryPick,
+  onLoadMoreHistory,
 }: {
   cwd: string;
   commits: ReadonlyArray<GitHistoryCommit>;
@@ -289,6 +290,7 @@ export function HistoryPanel({
   onReset: (c: GitHistoryCommit) => void;
   onRevert: (c: GitHistoryCommit) => void;
   onCherryPick: (c: GitHistoryCommit) => void;
+  onLoadMoreHistory?: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [activeCommit, setActiveCommit] = useState<GitHistoryCommit | null>(null);
@@ -323,6 +325,13 @@ export function HistoryPanel({
           {filtered.map((c) => (
             <CommitRow key={c.sha} c={c} onClick={() => setActiveCommit(c)} onReset={onReset} onRevert={onRevert} onCherryPick={onCherryPick} />
           ))}
+          {onLoadMoreHistory && filtered.length >= 50 && (
+            <div className="pt-4 text-center">
+              <Btn ghost onClick={onLoadMoreHistory}>
+                Load more commits
+              </Btn>
+            </div>
+          )}
         </div>
       )}
       {activeCommit && (

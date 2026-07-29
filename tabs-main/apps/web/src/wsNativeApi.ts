@@ -243,6 +243,8 @@ export function createWsNativeApi(): NativeApi {
       revertCommit: (input) => transport.request(WS_METHODS.gitRevertCommit, input),
       cherryPick: (input) => transport.request(WS_METHODS.gitCherryPick, input),
       createTag: (input) => transport.request(WS_METHODS.gitCreateTag, input),
+      listTags: (input) => transport.request(WS_METHODS.gitListTags, input),
+
       onActionProgress: (callback) => {
         gitActionProgressListeners.add(callback);
         return () => {

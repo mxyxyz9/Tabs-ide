@@ -1146,6 +1146,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.createTag(body);
       }
 
+      case WS_METHODS.gitListTags: {
+        const body = stripRequestTag(request.body);
+        return yield* git.listTags(body);
+      }
+
+
       case WS_METHODS.terminalOpen: {
         const body = stripRequestTag(request.body);
         return yield* terminalManager.open(body);

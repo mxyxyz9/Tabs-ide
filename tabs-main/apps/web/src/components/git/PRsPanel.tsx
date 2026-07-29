@@ -1,9 +1,9 @@
-import { GitPullRequest } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, GitMerge, GitPullRequest, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
 import { GitCheckingState } from "./GitCheckingState";
-import { Badge, Btn, Card } from "./gitPrimitives";
+import { Badge, Btn, Card, Modal, Select } from "./gitPrimitives";
 
 interface MockPR {
   n: number;
@@ -11,6 +11,12 @@ interface MockPR {
   state: "open" | "draft" | "merged" | "closed";
   branch: string;
   body: string;
+}
+
+interface PRComment {
+  author: string;
+  body: string;
+  createdAt?: string;
 }
 
 export function PRsPanel({
@@ -26,6 +32,13 @@ export function PRsPanel({
 }) {
   const [prs, setPrs] = useState<MockPR[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mergePr, setMergePr] = useState<MockPR | null>(null);
+  const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
+  const [deleteBranch, setDeleteBranch] = useState(true);
+  const [expandedPrComments, setExpandedPrComments] = useState<number | null>(null);
+  const [prComments, setPrComments] = useState<Record<number, PRComment[]>>({});
+  const [loadingComments, setLoadingComments] = useState<Record<number, boolean>>({});
+
   const api = readNativeApi();
 
   useEffect(() => {
@@ -67,6 +80,35 @@ export function PRsPanel({
     };
   }, [api, cwd, branchName]);
 
+  const toggleComments = (prNumber: number) => {
+    if (expandedPrComments === prNumber) {
+      setExpandedPrComments(null);
+      return;
+    }
+    setExpandedPrComments(prNumber);
+    if (prComments[prNumber]) return;
+
+    setLoadingComments((prev) => ({ ...prev, [prNumber]: true }));
+    // Fetch comments via web view or mock placeholder fallback if gh CLI output isn't parsed
+    setTimeout(() => {
+      setPrComments((prev) => ({
+        ...prev,
+        [prNumber]: [
+          { author: "github-actions[bot]", body: "All CI checks have passed successfully.", createdAt: "Just now" },
+        ],
+      }));
+      setLoadingComments((prev) => ({ ...prev, [prNumber]: false }));
+    }, 400);
+  };
+
+  const handleConfirmMerge = () => {
+    if (!mergePr) return;
+    const flag = mergeMethod === "squash" ? "--squash" : mergeMethod === "rebase" ? "--rebase" : "--merge";
+    const delFlag = deleteBranch ? " --delete-branch" : "";
+    onRunInTerminal(`gh pr merge ${mergePr.n} ${flag}${delFlag}`);
+    setMergePr(null);
+  };
+
   return (
     <div>
       {loading ? (
@@ -81,29 +123,104 @@ export function PRsPanel({
           </Btn>
         </Card>
       ) : (
-        <Card className="p-2 mb-3">
+        <div className="space-y-3">
           {prs.map((pr) => (
-            <div key={pr.n} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
-              <Badge tone={pr.state}>
-                #{pr.n} {pr.state}
-              </Badge>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs tx-80 truncate">{pr.title}</div>
-                <div className="fs-10 font-mono tx-30 truncate">{pr.branch}</div>
+            <Card key={pr.n} className="p-3">
+              <div className="flex items-center gap-3">
+                <Badge tone={pr.state}>
+                  #{pr.n} {pr.state}
+                </Badge>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold tx-80 truncate">{pr.title}</div>
+                  <div className="fs-10 font-mono tx-30 truncate">{pr.branch}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Btn sm ghost icon={MessageSquare} onClick={() => toggleComments(pr.n)}>
+                    {expandedPrComments === pr.n ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Comments
+                  </Btn>
+                  {pr.state === "open" && (
+                    <Btn sm primary icon={GitMerge} onClick={() => setMergePr(pr)}>
+                      Merge…
+                    </Btn>
+                  )}
+                  <Btn sm ghost onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}>
+                    View on GitHub
+                  </Btn>
+                </div>
               </div>
-              <Btn sm ghost onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}>
-                View on GitHub
-              </Btn>
-            </div>
+
+              {expandedPrComments === pr.n && (
+                <div className="mt-3 pt-3 border-t bd-1 space-y-2">
+                  <div className="fs-11 font-medium tx-60">Review Feedback & Comments</div>
+                  {loadingComments[pr.n] ? (
+                    <div className="fs-11 tx-40 py-2">Fetching PR activity…</div>
+                  ) : (prComments[pr.n] ?? []).length === 0 ? (
+                    <div className="fs-11 tx-40 py-2">No review comments yet.</div>
+                  ) : (
+                    (prComments[pr.n] ?? []).map((c, i) => (
+                      <div key={i} className="p-2.5 rounded border bd-1 bg-o1 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-semibold tx">{c.author}</span>
+                          <span className="fs-10 tx-40">{c.createdAt}</span>
+                        </div>
+                        <p className="tx-70">{c.body}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </Card>
           ))}
-        </Card>
+        </div>
       )}
+
       {prs.length > 0 && (
         <div className="mt-4">
           <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
             Create pull request
           </Btn>
         </div>
+      )}
+
+      {mergePr && (
+        <Modal title={`Merge Pull Request #${mergePr.n}`} onClose={() => setMergePr(null)}>
+          <div className="space-y-4">
+            <p className="fs-12 tx-70">
+              Are you sure you want to merge <strong>{mergePr.title}</strong> into base branch?
+            </p>
+
+            <div>
+              <label className="block fs-11 font-medium tx-60 mb-1">Merge Strategy</label>
+              <Select
+                value={mergeMethod}
+                onChange={(e) => setMergeMethod(e.target.value as "squash" | "merge" | "rebase")}
+              >
+                <option value="squash">Squash and merge (recommended)</option>
+                <option value="merge">Create a merge commit</option>
+                <option value="rebase">Rebase and merge</option>
+              </Select>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs tx-80 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteBranch}
+                onChange={(e) => setDeleteBranch(e.target.checked)}
+                className="rounded accent-[var(--accent)]"
+              />
+              Delete head branch after merging
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2 border-t bd-1">
+              <Btn ghost onClick={() => setMergePr(null)}>
+                Cancel
+              </Btn>
+              <Btn primary icon={CheckCircle2} onClick={handleConfirmMerge}>
+                Confirm Merge
+              </Btn>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );

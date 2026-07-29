@@ -458,6 +458,24 @@ export const GitCreateTagInput = Schema.Struct({
 });
 export type GitCreateTagInput = typeof GitCreateTagInput.Type;
 
+export const GitTag = Schema.Struct({
+  name: TrimmedNonEmptyStringSchema,
+  sha: Schema.String,
+  subject: Schema.String,
+});
+export type GitTag = typeof GitTag.Type;
+
+export const GitListTagsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitListTagsInput = typeof GitListTagsInput.Type;
+
+export const GitListTagsResult = Schema.Struct({
+  tags: Schema.Array(GitTag),
+});
+export type GitListTagsResult = typeof GitListTagsResult.Type;
+
+
 export const GitCreateWorktreeResult = Schema.Struct({
   worktree: GitWorktree,
 });

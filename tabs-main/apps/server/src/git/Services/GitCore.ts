@@ -50,6 +50,9 @@ import type {
   GitRevertCommitInput,
   GitCherryPickInput,
   GitCreateTagInput,
+  GitListTagsInput,
+  GitListTagsResult,
+
 } from "@tabs/contracts";
 
 import type { GitCommandError } from "../Errors.ts";
@@ -229,10 +232,15 @@ export interface GitCoreShape {
    */
   readonly cherryPick: (input: GitCherryPickInput) => Effect.Effect<void, GitCommandError>;
 
-  /**
-   * Create a lightweight tag at a commit (defaults to HEAD).
-   */
   readonly createTag: (input: GitCreateTagInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * List all tags in the repository using git tag -l.
+   */
+  readonly listTags: (
+    input: GitListTagsInput,
+  ) => Effect.Effect<GitListTagsResult, GitCommandError>;
+
 
   /**
    * Save a stash entry.

@@ -1851,6 +1851,29 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         input.sha ? ["tag", input.name, input.sha] : ["tag", input.name],
       );
 
+    const listTags: GitCoreShape["listTags"] = (input) =>
+      runGitStdout("GitCore.listTags", input.cwd, [
+        "tag",
+        "-l",
+        "--format=%(refname:short)|%(objectname:short)|%(contents:subject)",
+      ]).pipe(
+        Effect.map((stdout) => {
+          const rawLines = stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+          const tags = rawLines
+            .map((line) => {
+              const parts = line.split("|");
+              return {
+                name: parts[0] || "",
+                sha: parts[1] || "",
+                subject: parts.slice(2).join("|") || "",
+              };
+            })
+            .filter((t) => t.name.length > 0);
+          return { tags };
+        }),
+      );
+
+
     const prepareCommitContext: GitCoreShape["prepareCommitContext"] = (cwd, filePaths) =>
       Effect.gen(function* () {
         if (filePaths && filePaths.length > 0) {
@@ -2665,6 +2688,8 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       revertCommit,
       cherryPick,
       createTag,
+      listTags,
+
       saveStash,
       listStashes,
       applyStash,

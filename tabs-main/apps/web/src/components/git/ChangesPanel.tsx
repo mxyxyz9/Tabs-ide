@@ -38,58 +38,128 @@ const STRATEGY_LABEL: Record<string, string> = {
   manual: "Manual edit",
 };
 
+import { DiffLines } from "./DiffPage";
+import { ChevronDown, ChevronRight, Eye } from "lucide-react";
+
 export function FileRow({
+  cwd,
   f,
   staged,
   onOpenDiff,
   onToggleStage,
   onDiscard,
 }: {
+  cwd?: string;
   f: GitStatusFile;
   staged: boolean;
   onOpenDiff: (f: GitStatusFile) => void;
   onToggleStage: (f: GitStatusFile) => void;
   onDiscard: (f: GitStatusFile) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const [diffLines, setDiffLines] = useState<Array<{ type: string; text: string }> | null>(null);
+  const [loadingDiff, setLoadingDiff] = useState(false);
+  const api = readNativeApi();
+
+  const toggleInlineDiff = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    setExpanded(true);
+    if (diffLines || !api || !cwd) return;
+
+    setLoadingDiff(true);
+    api.git
+      .diff({ cwd, path: f.path })
+      .then((res: { patch?: string }) => {
+        if (res?.patch) {
+          const lines = res.patch.split("\n").map((line: string) => {
+            if (line.startsWith("@@")) return { type: "hunk", text: line };
+            if (line.startsWith("+") && !line.startsWith("+++")) return { type: "add", text: line.slice(1) };
+            if (line.startsWith("-") && !line.startsWith("---")) return { type: "del", text: line.slice(1) };
+            return { type: "ctx", text: line };
+          });
+          setDiffLines(lines);
+        } else {
+          setDiffLines([]);
+        }
+      })
+      .catch(() => setDiffLines([]))
+      .finally(() => setLoadingDiff(false));
+  };
+
   return (
-    <div className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hov-bg-o1 transition-colors">
-      <button type="button" onClick={() => onOpenDiff(f)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer">
-        <span
-          className="w-1.5 h-1.5 rounded-full shrink-0"
-          style={{
-            backgroundColor: f.untracked ? "var(--sem-emerald)" : f.deletions > 0 && f.insertions === 0 ? "var(--sem-red)" : "var(--sem-amber)",
+    <div className="w-full border-b bd-1 last:border-0">
+      <div className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hov-bg-o1 transition-colors">
+        <button
+          type="button"
+          onClick={toggleInlineDiff}
+          title={expanded ? "Collapse inline diff" : "Preview inline diff"}
+          className="shrink-0 tx-40 hov-tx cursor-pointer"
+        >
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+
+        <button type="button" onClick={() => onOpenDiff(f)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer">
+          <span
+            className="w-1.5 h-1.5 rounded-full shrink-0"
+            style={{
+              backgroundColor: f.untracked ? "var(--sem-emerald)" : f.deletions > 0 && f.insertions === 0 ? "var(--sem-red)" : "var(--sem-amber)",
+            }}
+          />
+          <FilePathLabel path={f.path} size="text-xs" />
+        </button>
+        <span className="fs-11 font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
+          +{f.insertions}
+        </span>
+        <span className="fs-11 font-mono shrink-0" style={{ color: "var(--sem-red)", opacity: 0.85 }}>
+          -{f.deletions}
+        </span>
+        <button
+          type="button"
+          onClick={toggleInlineDiff}
+          title="Toggle inline diff preview"
+          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
+        >
+          <Eye size={10} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDiscard(f);
           }}
-        />
-        <FilePathLabel path={f.path} size="text-xs" />
-      </button>
-      <span className="fs-11 font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
-        +{f.insertions}
-      </span>
-      <span className="fs-11 font-mono shrink-0" style={{ color: "var(--sem-red)", opacity: 0.85 }}>
-        -{f.deletions}
-      </span>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDiscard(f);
-        }}
-        title="Discard changes to this file"
-        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
-      >
-        <Trash2 size={10} />
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onToggleStage(f);
-        }}
-        title={staged ? "Unstage file" : "Stage file"}
-        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
-      >
-        {staged ? <Minus size={10} /> : <Plus size={10} />}
-      </button>
+          title="Discard changes to this file"
+          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
+        >
+          <Trash2 size={10} />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStage(f);
+          }}
+          title={staged ? "Unstage file" : "Stage file"}
+          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
+        >
+          {staged ? <Minus size={10} /> : <Plus size={10} />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="my-2 ml-6 p-2 rounded border bd-1 bg-o05 max-h-72 overflow-auto custom-scrollbar">
+          {loadingDiff ? (
+            <div className="fs-11 tx-40 py-2">Loading diff preview…</div>
+          ) : !diffLines || diffLines.length === 0 ? (
+            <div className="fs-11 tx-40 py-2">No diff available</div>
+          ) : (
+            <DiffLines lines={diffLines} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -499,6 +569,7 @@ export function ChangesPanel({
           stagedFiles.map((f) => (
             <FileRow
               key={f.path}
+              cwd={cwd}
               f={f}
               staged
               onOpenDiff={onOpenDiff}
@@ -535,6 +606,7 @@ export function ChangesPanel({
           unstagedFiles.map((f) => (
             <FileRow
               key={f.path}
+              cwd={cwd}
               f={f}
               staged={false}
               onOpenDiff={onOpenDiff}

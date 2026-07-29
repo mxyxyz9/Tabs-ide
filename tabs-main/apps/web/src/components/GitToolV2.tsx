@@ -110,11 +110,14 @@ export function GitToolV2({
 
   const [collapsed, setCollapsed] = useState(false);
 
+  const [historyLimit, setHistoryLimit] = useState(50);
+
   // Queries
   const gitStatusQuery = useQuery(gitStatusQueryOptions(cwd));
   const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(cwd));
   const branchesQuery = useQuery(gitBranchesQueryOptions(cwd));
-  const historyQuery = useQuery(gitHistoryQueryOptions({ cwd, limit: 50 }));
+  const historyQuery = useQuery(gitHistoryQueryOptions({ cwd, limit: historyLimit }));
+
   const stashQuery = useQuery(gitStashListQueryOptions(cwd));
   const gitInitMutation = useMutation(gitInitMutationOptions({ cwd, queryClient }));
   const switchMutation = useMutation(gitHubSwitchAccountMutationOptions({ cwd, queryClient }));
@@ -310,6 +313,7 @@ export function GitToolV2({
             loadingBranches={branchesQuery.isLoading}
             onOpenNewBranch={() => setModal("newWorktree")}
             onOpenNewWorktree={() => setModal("newWorktree")}
+            onGoToChanges={() => setPanel("changes")}
           />
         );
         break;
@@ -322,6 +326,7 @@ export function GitToolV2({
             onReset={(c) => setModal({ kind: "reset", commit: c })}
             onRevert={(c) => onRunInTerminal(`git revert ${c.sha}`)}
             onCherryPick={(c) => onRunInTerminal(`git cherry-pick ${c.sha}`)}
+            onLoadMoreHistory={() => setHistoryLimit((l) => l + 50)}
           />
         );
         break;

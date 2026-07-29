@@ -73,7 +73,10 @@ import type {
   GitRevertCommitInput,
   GitCherryPickInput,
   GitCreateTagInput,
+  GitListTagsInput,
+  GitListTagsResult,
   GitActionProgressEvent,
+
 } from "./git.ts";
 import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult } from "./review.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
@@ -1387,6 +1390,7 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     revertCommit: (input: GitRevertCommitInput) => Promise<void>;
     cherryPick: (input: GitCherryPickInput) => Promise<void>;
     createTag: (input: GitCreateTagInput) => Promise<void>;
+    listTags: (input: GitListTagsInput) => Promise<GitListTagsResult>;
   };
   server: LocalApi["server"] & {
     cloneRepository: (

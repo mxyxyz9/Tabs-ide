@@ -37,22 +37,14 @@ export function TagsPanel({
     const foundTags = new Set<string>();
 
     try {
-      const packed = await api.projects.readFile({ cwd, relativePath: ".git/packed-refs" });
-      if (packed?.contents) {
-        for (const line of packed.contents.split("\n")) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith("#") || trimmed.startsWith("^")) continue;
-          const match = trimmed.match(/refs\/tags\/(.+)$/);
-          if (match && match[1]) {
-            const rawTag = match[1].replace(/\^{}$/, "").trim();
-            if (rawTag && !rawTag.includes(" ") && rawTag !== "heads" && rawTag !== "remotes" && rawTag !== "tags") {
-              foundTags.add(rawTag);
-            }
-          }
+      const res = await api.git.listTags({ cwd });
+      if (res?.tags) {
+        for (const t of res.tags) {
+          if (t.name) foundTags.add(t.name);
         }
       }
     } catch {
-      // Ignore
+      // Fallback to commits refs if RPC fails
     }
 
     for (const c of commits) {
