@@ -18,9 +18,15 @@ import {
   Stream,
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { type GitOperationState, type GitStatusFile } from "@tabs/contracts";
+import { type GitOperationState, type GitStatusFile, type GitWorkflowRun } from "@tabs/contracts";
 
 import { GitCommandError } from "../Errors.ts";
+import {
+  getCachedPushAccess,
+  resolvePushAccess,
+  setCachedPushAccess,
+  type GitPushAccess,
+} from "../Services/PushAccessCache.ts";
 import {
   GitCore,
   type ExecuteGitProgress,
@@ -30,6 +36,7 @@ import {
   type ExecuteGitResult,
 } from "../Services/GitCore.ts";
 import { ServerConfig } from "../../config.ts";
+import { runProcess } from "../../processRunner.ts";
 import { decodeJsonResult } from "@tabs/shared/schemaJson";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -2018,7 +2025,22 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
           ...(details.upstreamRef ? { upstreamBranch: details.upstreamRef } : {}),
           setUpstream: false,
         };
-      });
+      }).pipe(
+        Effect.tapError((error) =>
+          Effect.sync(() => {
+            const detail = (error as { detail?: string })?.detail ?? error?.message ?? String(error);
+            const lower = detail.toLowerCase();
+            if (
+              lower.includes("permission to") ||
+              lower.includes("403") ||
+              lower.includes("write access") ||
+              lower.includes("access denied")
+            ) {
+              setCachedPushAccess(cwd, "read_only");
+            }
+          }),
+        ),
+      );
 
     const pullCurrentBranch: GitCoreShape["pullCurrentBranch"] = (cwd) =>
       Effect.gen(function* () {
@@ -2278,8 +2300,19 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
             : [];
 
         const branches = [...localBranches, ...remoteBranches];
+        const primaryRemoteName = remoteNames.includes("origin") ? "origin" : (remoteNames[0] ?? null);
+        const hasOriginRemote = remoteNames.length > 0;
+        let pushAccess: GitPushAccess = getCachedPushAccess(input.cwd) ?? "unknown";
 
-        return { branches, isRepo: true, hasOriginRemote: remoteNames.includes("origin") };
+        if (hasOriginRemote && primaryRemoteName && pushAccess === "unknown") {
+          const remoteUrlRes = yield* executeGit("GitCore.getRemoteUrl", input.cwd, ["remote", "get-url", primaryRemoteName], {
+            allowNonZeroExit: true,
+          });
+          const remoteUrl = remoteUrlRes.code === 0 ? remoteUrlRes.stdout.trim() : null;
+          pushAccess = yield* Effect.promise(() => resolvePushAccess(input.cwd, remoteUrl));
+        }
+
+        return { branches, isRepo: true, hasOriginRemote, pushAccess, remoteName: primaryRemoteName };
       });
 
     const createWorktree: GitCoreShape["createWorktree"] = (input) =>
@@ -2412,6 +2445,36 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         fallbackErrorMessage: "git branch create failed",
       }).pipe(Effect.asVoid);
 
+    const createFork: GitCoreShape["createFork"] = (input) =>
+      Effect.gen(function* () {
+        const remoteName = input.remoteName ?? "fork";
+        const ghResult = yield* Effect.tryPromise({
+          try: () =>
+            runProcess("gh", ["repo", "fork", "--remote", "--remote-name", remoteName], {
+              cwd: input.cwd,
+              timeoutMs: 45_000,
+              allowNonZeroExit: true,
+            }),
+          catch: (err) =>
+            new GitCommandError({
+              operation: "GitCore.createFork",
+              command: `gh repo fork --remote --remote-name ${remoteName}`,
+              cwd: input.cwd,
+              detail: String(err),
+            }),
+        });
+
+        if (ghResult.code !== 0) {
+          const stderr = ghResult.stderr.trim();
+          return yield* new GitCommandError({
+            operation: "GitCore.createFork",
+            command: `gh repo fork --remote --remote-name ${remoteName}`,
+            cwd: input.cwd,
+            detail: stderr.length > 0 ? stderr : `gh repo fork failed with exit code ${ghResult.code}`,
+          });
+        }
+      });
+
     const checkoutBranch: GitCoreShape["checkoutBranch"] = (input) =>
       Effect.gen(function* () {
         const [localInputExists, remoteExists] = yield* Effect.all(
@@ -2519,6 +2582,75 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         ),
       );
 
+    const listWorkflowRuns: GitCoreShape["listWorkflowRuns"] = (input) =>
+      Effect.gen(function* () {
+        const hasWorkflows = yield* executeGit(
+          "GitCore.listWorkflowRuns.checkWorkflows",
+          input.cwd,
+          ["ls-files", ".github/workflows/*.yml", ".github/workflows/*.yaml"],
+          { allowNonZeroExit: true },
+        ).pipe(
+          Effect.map((res) => res.code === 0 && res.stdout.trim().length > 0),
+          Effect.catch(() => Effect.succeed(false)),
+        );
+
+        if (!hasWorkflows) {
+          return { hasWorkflows: false, runs: [] };
+        }
+
+        const limit = input.limit ?? 5;
+        const ghResult = yield* Effect.tryPromise({
+          try: () =>
+            runProcess(
+              "gh",
+              [
+                "run",
+                "list",
+                "--branch",
+                input.branch,
+                "--limit",
+                String(limit),
+                "--json",
+                "status,conclusion,name,headBranch,createdAt,url,workflowName",
+              ],
+              {
+                cwd: input.cwd,
+                allowNonZeroExit: true,
+                timeoutMs: 10_000,
+              },
+            ),
+          catch: () => ({ code: 1, stdout: "[]", stderr: "", signal: null, timedOut: false }),
+        }).pipe(
+          Effect.catch(() => Effect.succeed({ code: 1, stdout: "[]", stderr: "", signal: null, timedOut: false })),
+        );
+
+        if (ghResult.code !== 0) {
+          const stderr = ghResult.stderr.trim();
+          return yield* new GitCommandError({
+            operation: "GitCore.listWorkflowRuns",
+            command: "gh run list",
+            cwd: input.cwd,
+            detail: stderr.length > 0 ? stderr : `gh run list failed with exit code ${ghResult.code}`,
+          });
+        }
+
+        if (!ghResult.stdout.trim()) {
+          return { hasWorkflows: true, runs: [] };
+        }
+
+        const runs = yield* Effect.try({
+          try: () => {
+            const parsed = JSON.parse(ghResult.stdout.trim()) as Array<GitWorkflowRun>;
+            return Array.isArray(parsed) ? parsed : [];
+          },
+          catch: () => [] as Array<GitWorkflowRun>,
+        }).pipe(
+          Effect.catch(() => Effect.succeed([] as Array<GitWorkflowRun>)),
+        );
+
+        return { hasWorkflows: true, runs };
+      });
+
     return {
       execute,
       status,
@@ -2562,9 +2694,11 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       renameBranch,
       deleteBranch,
       createBranch,
+      createFork,
       checkoutBranch,
       initRepo,
       listLocalBranchNames,
+      listWorkflowRuns,
     } satisfies GitCoreShape;
   });
 

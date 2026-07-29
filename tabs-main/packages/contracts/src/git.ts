@@ -110,6 +110,12 @@ export const GitUnstageFilesInput = Schema.Struct({
 });
 export type GitUnstageFilesInput = typeof GitUnstageFilesInput.Type;
 
+export const GitCreateForkInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  remoteName: Schema.optional(TrimmedNonEmptyStringSchema),
+});
+export type GitCreateForkInput = typeof GitCreateForkInput.Type;
+
 export const GitDiscardChangesInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   paths: Schema.optional(Schema.Array(TrimmedNonEmptyStringSchema).check(Schema.isMinLength(1))),
@@ -367,12 +373,18 @@ export const GitStatusResult = Schema.Struct({
 });
 export type GitStatusResult = typeof GitStatusResult.Type;
 
+export const GitPushAccess = Schema.Literals(["write", "read_only", "unknown"]);
+export type GitPushAccess = typeof GitPushAccess.Type;
+
 export const GitListBranchesResult = Schema.Struct({
   branches: Schema.Array(GitBranch),
   isRepo: Schema.Boolean,
   hasOriginRemote: Schema.Boolean,
+  pushAccess: Schema.optional(GitPushAccess),
+  remoteName: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type GitListBranchesResult = typeof GitListBranchesResult.Type;
+
 
 // Environment + GitHub account management
 
@@ -593,6 +605,31 @@ export const GitStashListResult = Schema.Struct({
   entries: Schema.Array(GitStashEntry),
 });
 export type GitStashListResult = typeof GitStashListResult.Type;
+
+export const GitWorkflowRun = Schema.Struct({
+  status: Schema.NullOr(Schema.String),
+  conclusion: Schema.NullOr(Schema.String),
+  name: Schema.String,
+  headBranch: Schema.String,
+  createdAt: Schema.String,
+  url: Schema.String,
+  workflowName: Schema.String,
+});
+export type GitWorkflowRun = typeof GitWorkflowRun.Type;
+
+
+export const GitListWorkflowRunsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  branch: TrimmedNonEmptyStringSchema,
+  limit: Schema.optional(Schema.Number),
+});
+export type GitListWorkflowRunsInput = typeof GitListWorkflowRunsInput.Type;
+
+export const GitListWorkflowRunsResult = Schema.Struct({
+  hasWorkflows: Schema.Boolean,
+  runs: Schema.Array(GitWorkflowRun),
+});
+export type GitListWorkflowRunsResult = typeof GitListWorkflowRunsResult.Type;
 
 const GitActionProgressBase = Schema.Struct({
   actionId: TrimmedNonEmptyStringSchema,

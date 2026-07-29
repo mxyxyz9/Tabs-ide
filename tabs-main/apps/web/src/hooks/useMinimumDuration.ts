@@ -8,14 +8,10 @@ export function useMinimumDuration(ready: boolean, minMs: number): boolean {
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
   useEffect(() => {
-    const start = performance.now();
-    console.log(`[useMinimumDuration] Mounted with minMs=${minMs}`);
     const timer = setTimeout(() => {
-      console.log(`[useMinimumDuration] Fired after ${performance.now() - start}ms`);
       setMinTimeElapsed(true);
     }, minMs);
     return () => {
-      console.log(`[useMinimumDuration] Unmounted after ${performance.now() - start}ms`);
       clearTimeout(timer);
     };
   }, [minMs]);

@@ -3,6 +3,7 @@ import type { GitEnvironmentResult } from "@tabs/contracts";
 
 import { runProcess } from "../../processRunner";
 import { GitHubCliError } from "../Errors.ts";
+import { clearPushAccessCache } from "../Services/PushAccessCache.ts";
 import {
   GitEnvironment,
   type GitEnvironmentShape,
@@ -91,7 +92,9 @@ const makeGitEnvironment = Effect.sync(() => {
                 }),
               )
             : result.code === 0
-              ? detect({ cwd: process.cwd() })
+              ? Effect.sync(() => clearPushAccessCache()).pipe(
+                  Effect.flatMap(() => detect({ cwd: process.cwd() })),
+                )
               : Effect.fail(
                   new GitHubCliError({
                     operation: "execute",
@@ -113,7 +116,9 @@ const makeGitEnvironment = Effect.sync(() => {
                   detail: "GitHub CLI (`gh`) is required but not available on PATH.",
                 }),
               )
-            : detect({ cwd: process.cwd() }),
+            : Effect.sync(() => clearPushAccessCache()).pipe(
+                Effect.flatMap(() => detect({ cwd: process.cwd() })),
+              ),
         ),
       ),
   };

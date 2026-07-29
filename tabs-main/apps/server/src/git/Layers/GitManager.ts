@@ -15,7 +15,8 @@ import {
   sanitizeFeatureBranchName,
 } from "@tabs/shared/git";
 
-import { GitManagerError } from "../Errors.ts";
+import { GitManagerError, type GitManagerServiceError } from "../Errors.ts";
+import { setCachedPushAccess } from "../Services/PushAccessCache.ts";
 import {
   GitManager,
   type GitActionProgressReporter,
@@ -1161,6 +1162,7 @@ export const makeGitManager = Effect.gen(function* () {
     function* (input, options) {
       const progress = createProgressEmitter(input, options);
       let currentPhase: GitActionProgressPhase | null = null;
+      let createdCommitSha: string | undefined = undefined;
 
       const runAction = Effect.gen(function* () {
         const initialStatus = yield* gitCore.statusDetails(input.cwd);
@@ -1206,7 +1208,6 @@ export const makeGitManager = Effect.gen(function* () {
             "Cannot create a pull request from detached HEAD.",
           );
         }
-
         let branchStep: { status: "created" | "skipped_not_requested"; name?: string };
         let commitMessageForStep = input.commitMessage;
         let preResolvedCommitSuggestion: CommitAndBranchSuggestion | undefined = undefined;
@@ -1255,6 +1256,10 @@ export const makeGitManager = Effect.gen(function* () {
               progress.actionId,
             )
           : { status: "skipped_not_requested" as const };
+
+        if (commit.status === "created") {
+          createdCommitSha = commit.commitSha;
+        }
 
         const push = wantsPush
           ? yield* progress
@@ -1334,15 +1339,38 @@ export const makeGitManager = Effect.gen(function* () {
       });
 
       return yield* runAction.pipe(
-        Effect.catch((error) =>
-          progress
+        Effect.catch((error) => {
+          let finalError: GitManagerServiceError = error;
+          if (currentPhase === "push") {
+            const pushDetail = (error as { detail?: string })?.detail ?? error?.message ?? String(error);
+            const lower = pushDetail.toLowerCase();
+            if (
+              lower.includes("permission to") ||
+              lower.includes("403") ||
+              lower.includes("write access") ||
+              lower.includes("access denied")
+            ) {
+              setCachedPushAccess(input.cwd, "read_only");
+            }
+            if (createdCommitSha) {
+              finalError = new GitManagerError({
+                operation: "runStackedAction",
+                detail: pushDetail,
+                phase: "push",
+                createdCommitSha,
+                cause: error,
+              });
+            }
+          }
+
+          return progress
             .emit({
               kind: "action_failed",
               phase: currentPhase,
-              message: error.message,
+              message: finalError.message,
             })
-            .pipe(Effect.flatMap(() => Effect.fail(error))),
-        ),
+            .pipe(Effect.flatMap(() => Effect.fail(finalError)));
+        }),
       );
     },
   );

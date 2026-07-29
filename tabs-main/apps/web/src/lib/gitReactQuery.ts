@@ -19,6 +19,8 @@ export const gitQueryKeys = {
   branches: (cwd: string | null) => ["git", "branches", cwd] as const,
   history: (cwd: string | null, limit: number) => ["git", "history", cwd, limit] as const,
   stashes: (cwd: string | null) => ["git", "stashes", cwd] as const,
+  workflowRuns: (cwd: string | null, branch: string | null) =>
+    ["git", "workflowRuns", cwd, branch] as const,
   conflictSnapshot: (cwd: string | null, path: string | null) =>
     ["git", "conflict-snapshot", cwd, path] as const,
   diff: (input: { cwd: string | null; path?: string | null; commit?: string | null }) =>
@@ -358,5 +360,32 @@ export function gitPreparePullRequestThreadMutationOptions(input: {
     onSettled: async () => {
       await invalidateGitQueries(input.queryClient);
     },
+  });
+}
+
+const GIT_WORKFLOW_RUNS_STALE_TIME_MS = 60_000;
+const GIT_WORKFLOW_RUNS_NORMAL_INTERVAL_MS = 120_000;
+const GIT_WORKFLOW_RUNS_POST_PUSH_INTERVAL_MS = 10_000;
+
+export function gitWorkflowRunsQueryOptions(
+  cwd: string | null,
+  branch: string | null,
+  lastPushedAt: number | null,
+) {
+  const isPostPushWindow = lastPushedAt !== null && Date.now() - lastPushedAt < 60_000;
+  return queryOptions({
+    queryKey: gitQueryKeys.workflowRuns(cwd, branch),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd || !branch) throw new Error("Branch workflow runs are unavailable.");
+      return api.git.listWorkflowRuns({ cwd, branch, limit: 5 });
+    },
+    enabled: Boolean(cwd && branch),
+    staleTime: GIT_WORKFLOW_RUNS_STALE_TIME_MS,
+    refetchInterval: isPostPushWindow
+      ? GIT_WORKFLOW_RUNS_POST_PUSH_INTERVAL_MS
+      : GIT_WORKFLOW_RUNS_NORMAL_INTERVAL_MS,
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
   });
 }

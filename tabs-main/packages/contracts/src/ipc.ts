@@ -15,6 +15,8 @@ import type {
   GitPreparePullRequestThreadResult,
   GitPullRequestRefInput,
   GitResolvePullRequestResult,
+  GitListWorkflowRunsInput,
+  GitListWorkflowRunsResult,
   VcsStatusInput,
   VcsStatusResult,
 } from "./git.ts";
@@ -25,6 +27,7 @@ import type {
   GitCreateWorktreeResult,
   GitRemoveWorktreeInput,
   GitCreateBranchInput,
+  GitCreateForkInput,
   GitCheckoutInput,
   GitRenameBranchInput,
   GitRenameBranchResult,
@@ -1269,6 +1272,7 @@ export interface EnvironmentApi {
     preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
     ) => Promise<GitPreparePullRequestThreadResult>;
+    listWorkflowRuns: (input: GitListWorkflowRunsInput) => Promise<GitListWorkflowRunsResult>;
   };
   review: {
     getDiffPreview: (input: ReviewDiffPreviewInput) => Promise<ReviewDiffPreviewResult>;
@@ -1346,6 +1350,7 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     createWorktree: (input: GitCreateWorktreeInput) => Promise<GitCreateWorktreeResult>;
     removeWorktree: (input: GitRemoveWorktreeInput) => Promise<void>;
     createBranch: (input: GitCreateBranchInput) => Promise<void>;
+    createFork: (input: GitCreateForkInput) => Promise<void>;
     checkout: (input: GitCheckoutInput) => Promise<void>;
     renameBranch: (input: GitRenameBranchInput) => Promise<GitRenameBranchResult>;
     deleteBranch: (input: GitDeleteBranchInput) => Promise<void>;

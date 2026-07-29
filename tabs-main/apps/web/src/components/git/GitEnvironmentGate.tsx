@@ -3,9 +3,11 @@ import { DownloadIcon, FolderGitIcon, GitBranchIcon, TerminalIcon } from "lucide
 
 import type { GitEnvironmentResult } from "@tabs/contracts";
 import { isWindowsPlatform } from "../../lib/utils";
+import { useMinimumDuration } from "../../hooks/useMinimumDuration";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 import { MercuryChromeLoader } from "../MercuryChromeLoader";
+import { GitCheckingState } from "./GitCheckingState";
 
 const GIT_DOWNLOAD_URL = "https://git-scm.com/downloads";
 
@@ -49,11 +51,15 @@ export function GitEnvironmentGate(props: {
   environment: GitEnvironmentResult | undefined;
   isRepo: boolean | undefined;
   isLoading: boolean;
+  minDurationMs?: number;
   initPending: boolean;
   onInitRepo: () => void;
   children: ReactNode;
 }) {
-  const { environment, isRepo, isLoading, initPending, onInitRepo, children } = props;
+  const { environment, isRepo, isLoading, minDurationMs = 4000, initPending, onInitRepo, children } = props;
+
+  const isDataReady = !isLoading && environment !== undefined && isRepo !== undefined;
+  const isGateReady = useMinimumDuration(isDataReady, minDurationMs);
 
   // Git missing is a definitive, blocking state.
   if (environment && !environment.git.installed) {
@@ -96,16 +102,12 @@ export function GitEnvironmentGate(props: {
     );
   }
 
-  // Only block on loading while the core repository data (branches/status) is
-  // still resolving — never on the best-effort environment probe, so a slow or
-  // unavailable `git.environment` can't freeze the whole tab.
-  if (isRepo === undefined && isLoading) {
+  // Block on loading while core environment and repository data are resolving or minimum duration floor is active
+  if (!isGateReady) {
     return (
-      <GateShell
-        icon={<MercuryChromeLoader size={48} className="text-primary" />}
-        title="Checking your setup…"
-        description="Loading your repository."
-      />
+      <div className="flex h-full min-h-0 flex-col items-center justify-center p-12 text-center">
+        <GitCheckingState rotateMessages size={56} />
+      </div>
     );
   }
 

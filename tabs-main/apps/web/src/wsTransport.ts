@@ -323,7 +323,14 @@ export class WsTransport {
     this.pending.delete(message.id);
 
     if (message.error) {
-      pending.reject(new Error(message.error.message));
+      const err = new Error(message.error.message);
+      if ("phase" in message.error && message.error.phase) {
+        (err as any).phase = message.error.phase;
+      }
+      if ("createdCommitSha" in message.error && message.error.createdCommitSha) {
+        (err as any).createdCommitSha = message.error.createdCommitSha;
+      }
+      pending.reject(err);
       return;
     }
 

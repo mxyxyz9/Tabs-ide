@@ -17,6 +17,7 @@ import type {
   GitConflictSnapshotInput,
   GitConflictSnapshotResult,
   GitCreateBranchInput,
+  GitCreateForkInput,
   GitDiscardChangesInput,
   GitDiffInput,
   GitDiffResult,
@@ -29,6 +30,8 @@ import type {
   GitInitInput,
   GitListBranchesInput,
   GitListBranchesResult,
+  GitListWorkflowRunsInput,
+  GitListWorkflowRunsResult,
   GitMergeInput,
   GitPullResult,
   GitRebaseInput,
@@ -373,6 +376,13 @@ export interface GitCoreShape {
   ) => Effect.Effect<void, GitCommandError>;
 
   /**
+   * List GitHub Actions workflow runs for a branch.
+   */
+  readonly listWorkflowRuns: (
+    input: GitListWorkflowRunsInput,
+  ) => Effect.Effect<GitListWorkflowRunsResult, GitCommandError>;
+
+  /**
    * Ensure a named remote exists for the provided URL, returning the reused or created remote name.
    */
   readonly ensureRemote: (input: GitEnsureRemoteInput) => Effect.Effect<string, GitCommandError>;
@@ -412,6 +422,11 @@ export interface GitCoreShape {
    * Create a local branch.
    */
   readonly createBranch: (input: GitCreateBranchInput) => Effect.Effect<void, GitCommandError>;
+
+  /**
+   * Fork repository on GitHub and add local remote.
+   */
+  readonly createFork: (input: GitCreateForkInput) => Effect.Effect<void, GitCommandError>;
 
   /**
    * Checkout an existing branch and refresh its upstream metadata in background.

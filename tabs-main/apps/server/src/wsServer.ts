@@ -962,6 +962,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.listBranches(body);
       }
 
+      case WS_METHODS.gitListWorkflowRuns: {
+        const body = stripRequestTag(request.body);
+        return yield* git.listWorkflowRuns(body);
+      }
+
       case WS_METHODS.gitCreateWorktree: {
         const body = stripRequestTag(request.body);
         return yield* git.createWorktree(body);
@@ -975,6 +980,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.gitCreateBranch: {
         const body = stripRequestTag(request.body);
         return yield* git.createBranch(body);
+      }
+
+      case WS_METHODS.gitCreateFork: {
+        const body = stripRequestTag(request.body);
+        return yield* git.createFork(body);
       }
 
       case WS_METHODS.gitCheckout: {
@@ -1489,16 +1499,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     const result = yield* Effect.exit(routeRequest(ws, request.success));
     if (Exit.isFailure(result)) {
       const failure = Cause.findErrorOption(result.cause);
-      const userMessage =
-        Option.isSome(failure) &&
-        typeof failure.value === "object" &&
-        failure.value !== null &&
-        "message" in failure.value
-          ? String(failure.value.message)
-          : "Internal server error";
+      const errVal: any = Option.isSome(failure) && typeof failure.value === "object" && failure.value !== null ? failure.value : null;
+      const userMessage = errVal && "message" in errVal ? String(errVal.message) : "Internal server error";
+      const phase = errVal && "phase" in errVal && errVal.phase ? String(errVal.phase) : undefined;
+      const createdCommitSha = errVal && "createdCommitSha" in errVal && errVal.createdCommitSha ? String(errVal.createdCommitSha) : undefined;
       return yield* sendWsResponse({
         id: request.success.id,
-        error: { message: userMessage },
+        error: {
+          message: userMessage,
+          ...(phase ? { phase } : {}),
+          ...(createdCommitSha ? { createdCommitSha } : {}),
+        },
       });
     }
 

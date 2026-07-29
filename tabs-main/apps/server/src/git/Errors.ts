@@ -50,6 +50,8 @@ export class TextGenerationError extends Schema.TaggedErrorClass<TextGenerationE
 export class GitManagerError extends Schema.TaggedErrorClass<GitManagerError>()("GitManagerError", {
   operation: Schema.String,
   detail: Schema.String,
+  phase: Schema.optional(Schema.NullOr(Schema.String)),
+  createdCommitSha: Schema.optional(Schema.NullOr(Schema.String)),
   cause: Schema.optional(Schema.Unknown),
 }) {
   override get message(): string {
