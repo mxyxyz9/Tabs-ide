@@ -75,7 +75,10 @@ import type {
   GitCreateTagInput,
   GitListTagsInput,
   GitListTagsResult,
+  GitWatchedBranchStatusesInput,
+  GitWatchedBranchStatusesResult,
   GitActionProgressEvent,
+
 
 } from "./git.ts";
 import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult } from "./review.ts";
@@ -1391,6 +1394,7 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     cherryPick: (input: GitCherryPickInput) => Promise<void>;
     createTag: (input: GitCreateTagInput) => Promise<void>;
     listTags: (input: GitListTagsInput) => Promise<GitListTagsResult>;
+    watchedBranchStatuses: (input: GitWatchedBranchStatusesInput) => Promise<GitWatchedBranchStatusesResult>;
   };
   server: LocalApi["server"] & {
     cloneRepository: (

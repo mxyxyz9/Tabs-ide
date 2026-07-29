@@ -1,4 +1,4 @@
-import type { GitHistoryCommit, ThreadId } from "@tabs/contracts";
+import type { GitHistoryCommit, GitWatchedBranchStatus, ThreadId } from "@tabs/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -13,6 +13,7 @@ import {
   gitInitMutationOptions,
   gitStashListQueryOptions,
   gitStatusQueryOptions,
+  gitWatchedBranchesQueryOptions,
   invalidateGitQueries,
 } from "../lib/gitReactQuery";
 import { toGitUserFacingErrorMessage } from "../lib/gitErrorMessages";
@@ -21,6 +22,7 @@ import { AccountsPanel } from "./git/AccountsPanel";
 import { BranchesPanel } from "./git/BranchesPanel";
 import { ChangesPanel } from "./git/ChangesPanel";
 import { DiffPage } from "./git/DiffPage";
+import { DivergencePanel } from "./git/DivergencePanel";
 import { GitCheckingState } from "./git/GitCheckingState";
 import { GitEnvironmentGate } from "./git/GitEnvironmentGate";
 import { PanelErrorBoundary } from "./git/PanelErrorBoundary";
@@ -122,6 +124,77 @@ export function GitToolV2({
   const gitInitMutation = useMutation(gitInitMutationOptions({ cwd, queryClient }));
   const switchMutation = useMutation(gitHubSwitchAccountMutationOptions({ cwd, queryClient }));
   const logoutMutation = useMutation(gitHubLogoutMutationOptions({ cwd, queryClient }));
+
+  const [excludedWatchedBranches, setExcludedWatchedBranches] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`tabs_excluded_watched_branches_${cwd}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addExcludedBranch = useCallback(
+    (branch: string) => {
+      setExcludedWatchedBranches((prev) => {
+        if (prev.includes(branch)) return prev;
+        const updated = [...prev, branch];
+        try {
+          localStorage.setItem(`tabs_excluded_watched_branches_${cwd}`, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    },
+    [cwd],
+  );
+
+  const removeExcludedBranch = useCallback(
+    (branch: string) => {
+      setExcludedWatchedBranches((prev) => {
+        const updated = prev.filter((b) => b !== branch);
+        try {
+          localStorage.setItem(`tabs_excluded_watched_branches_${cwd}`, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    },
+    [cwd],
+  );
+
+  const watchedBranchesQuery = useQuery(
+    gitWatchedBranchesQueryOptions(cwd, excludedWatchedBranches),
+  );
+  const watchedBranchStatuses = watchedBranchesQuery.data?.branches ?? [];
+
+  const [isFullScanning, setIsFullScanning] = useState(false);
+  const [fullScanResult, setFullScanResult] = useState<ReadonlyArray<GitWatchedBranchStatus> | null>(null);
+
+  const handleScanAllBranches = useCallback(async () => {
+    if (!api || !cwd) return;
+    setIsFullScanning(true);
+    try {
+      const res = await api.git.watchedBranchStatuses({
+        cwd,
+        excludedBranches: excludedWatchedBranches,
+        maxCandidates: 0,
+      });
+      setFullScanResult(res.branches);
+      toastManager.add({
+        type: "success",
+        title: "Full scan completed",
+        description: `Scanned all branches in repository (${res.branches.length} diverged).`,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Scan failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
+    } finally {
+      setIsFullScanning(false);
+    }
+  }, [api, cwd, excludedWatchedBranches]);
+
 
   const statusData = gitStatusQuery.data ?? null;
   const environmentData = gitEnvironmentQuery.data ?? null;
@@ -276,8 +349,10 @@ export function GitToolV2({
             environmentData={environmentData}
             branchList={branchList}
             commits={commits}
+            watchedBranchStatuses={watchedBranchStatuses}
             onGoToChanges={() => setPanel("changes")}
             onGoToAccounts={() => setPanel("accounts")}
+            onGoToDivergence={() => setPanel("divergence")}
             onOpenSignIn={() => setModal("deviceAuth")}
             onOpenAddRemote={() => setModal("addRemote")}
             onOpenCreateBranch={() => setModal("newWorktree")}
@@ -300,6 +375,17 @@ export function GitToolV2({
         break;
       case "diff":
         content = <DiffPage cwd={cwd} statusData={statusData} commits={commits} />;
+        break;
+      case "divergence":
+        content = (
+          <DivergencePanel
+            cwd={cwd}
+            watchedBranchStatuses={fullScanResult ?? watchedBranchStatuses}
+            isFullScan={Boolean(fullScanResult)}
+            isScanning={isFullScanning}
+            onScanAllBranches={handleScanAllBranches}
+          />
+        );
         break;
       case "branches":
         content = (
@@ -376,6 +462,9 @@ export function GitToolV2({
           <SettingsPanel
             cwd={cwd}
             environmentData={environmentData}
+            excludedBranches={excludedWatchedBranches}
+            onAddExcludedBranch={addExcludedBranch}
+            onRemoveExcludedBranch={removeExcludedBranch}
             onOpenAddRemote={() => setModal("addRemote")}
             onRunInTerminal={onRunInTerminal}
           />

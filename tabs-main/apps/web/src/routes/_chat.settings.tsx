@@ -4173,65 +4173,49 @@ function SettingsRouteView() {
                                       </span>
                                     ) : null}
                                   </div>
+                                </div>
 
-                                  {providerCard.updatePrompt ? (
-                                    <div className="pt-1">
-                                      {providerCard.installCommand ? (
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-7 gap-1.5 px-2.5 text-xs"
-                                            disabled={providerActionBusy}
-                                            onClick={() =>
-                                              startProviderAction({
-                                                provider: providerCard.provider,
-                                                providerName: providerDisplayName,
-                                                command: providerCard.installCommand!,
-                                                kind: "update",
-                                              })
-                                            }
-                                          >
-                                            <ArrowUpCircleIcon className="size-3.5" />
-                                            Update
-                                          </Button>
-                                          <span className="text-[11px] text-muted-foreground/70">
-                                            Opens a terminal below and runs the command.
-                                          </span>
-                                        </div>
-                                      ) : null}
-                                    </div>
+                                <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+                                  {providerCard.updatePrompt && providerCard.installCommand ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                      disabled={providerActionBusy}
+                                      onClick={() =>
+                                        startProviderAction({
+                                          provider: providerCard.provider,
+                                          providerName: providerDisplayName,
+                                          command: providerCard.installCommand!,
+                                          kind: "update",
+                                        })
+                                      }
+                                    >
+                                      <ArrowUpCircleIcon className="size-3.5" />
+                                      Update
+                                    </Button>
                                   ) : null}
 
                                   {providerCard.needsAuth && providerCard.loginCommand ? (
-                                    <div className="pt-1">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 gap-1.5 px-2.5 text-xs"
-                                          disabled={providerActionBusy}
-                                          onClick={() =>
-                                            startProviderAction({
-                                              provider: providerCard.provider,
-                                              providerName: providerDisplayName,
-                                              command: providerCard.loginCommand ?? "",
-                                              kind: "login",
-                                            })
-                                          }
-                                        >
-                                          <LogInIcon className="size-3.5" />
-                                          Sign in
-                                        </Button>
-                                        <span className="text-[11px] text-muted-foreground/70">
-                                          Opens a terminal below and runs the command.
-                                        </span>
-                                      </div>
-                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                      disabled={providerActionBusy}
+                                      onClick={() =>
+                                        startProviderAction({
+                                          provider: providerCard.provider,
+                                          providerName: providerDisplayName,
+                                          command: providerCard.loginCommand ?? "",
+                                          kind: "login",
+                                        })
+                                      }
+                                    >
+                                      <LogInIcon className="size-3.5" />
+                                      Sign in
+                                    </Button>
                                   ) : null}
-                                </div>
 
-                                <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
                                   <Button
                                     size="sm"
                                     variant="ghost"

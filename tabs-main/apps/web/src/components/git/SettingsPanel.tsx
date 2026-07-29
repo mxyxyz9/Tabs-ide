@@ -104,11 +104,17 @@ export function verifyGitConfigUser(configText: string, expectedName: string, ex
 export function SettingsPanel({
   cwd,
   environmentData,
+  excludedBranches = [],
+  onAddExcludedBranch,
+  onRemoveExcludedBranch,
   onOpenAddRemote,
   onRunInTerminal,
 }: {
   cwd: string;
   environmentData: GitEnvironmentResult | null;
+  excludedBranches?: string[];
+  onAddExcludedBranch?: (name: string) => void;
+  onRemoveExcludedBranch?: (name: string) => void;
   onOpenAddRemote: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
@@ -116,8 +122,10 @@ export function SettingsPanel({
   const [email, setEmail] = useState("");
   const [gitignore, setGitignore] = useState("");
   const [gitignoreChanged, setGitignoreChanged] = useState(false);
+  const [newExclude, setNewExclude] = useState("");
   const [remotes, setRemotes] = useState<Array<{ name: string; url: string }>>([]);
   const api = readNativeApi();
+
 
   useEffect(() => {
     const nativeApi = api;
@@ -241,6 +249,45 @@ export function SettingsPanel({
         <Btn primary disabled={!name.trim() || !email.trim()} onClick={handleSaveIdentity}>
           Save identity
         </Btn>
+      </Card>
+
+      <SectionLabel>Excluded watched branches</SectionLabel>
+      <Card className="p-3 mb-1">
+        <p className="fs-11 tx-40 leading-relaxed mb-3">
+          By default, all local and remote-tracking branches with unmerged commits are watched on Overview. Add branch names here to exclude them from divergence checks.
+        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <TextInput
+            value={newExclude}
+            onChange={(e) => setNewExclude(e.target.value)}
+            placeholder="e.g. feature/old-experiment"
+            className="flex-1"
+          />
+          <Btn
+            primary
+            disabled={!newExclude.trim()}
+            onClick={() => {
+              if (newExclude.trim()) {
+                onAddExcludedBranch?.(newExclude.trim());
+                setNewExclude("");
+              }
+            }}
+          >
+            Exclude branch
+          </Btn>
+        </div>
+        {excludedBranches.length === 0 ? (
+          <div className="fs-11 tx-30 px-2 py-2">No branches excluded (watching all branches).</div>
+        ) : (
+          excludedBranches.map((b) => (
+            <div key={b} className="flex items-center justify-between gap-3 px-2 py-2 border-b bd-1 last:border-0">
+              <span className="fs-12 font-mono tx-80 truncate">{b}</span>
+              <Btn sm ghost onClick={() => onRemoveExcludedBranch?.(b)}>
+                Remove
+              </Btn>
+            </div>
+          ))
+        )}
       </Card>
 
       <SectionLabel action={<Btn sm ghost onClick={onOpenAddRemote}>Add remote</Btn>}>

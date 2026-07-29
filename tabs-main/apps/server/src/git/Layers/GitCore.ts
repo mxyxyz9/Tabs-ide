@@ -2338,6 +2338,93 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
         return { branches, isRepo: true, hasOriginRemote, pushAccess, remoteName: primaryRemoteName };
       });
 
+    const watchedBranchStatuses: GitCoreShape["watchedBranchStatuses"] = (input) =>
+      Effect.gen(function* () {
+        const branchesRes = yield* listBranches({ cwd: input.cwd });
+        const currentHead = branchesRes.branches.find((b) => b.current)?.name ?? null;
+        const excludedSet = new Set((input.excludedBranches ?? []).map((b) => b.toLowerCase()));
+
+        const localBranchNames = new Set(
+          branchesRes.branches.filter((b) => !b.isRemote).map((b) => b.name.toLowerCase()),
+        );
+
+        const allCandidates = branchesRes.branches.filter((b) => {
+          if (b.current || b.name === currentHead) return false;
+          if (excludedSet.has(b.name.toLowerCase())) return false;
+          if (b.name.includes("HEAD")) return false;
+
+          if (b.isRemote) {
+            const parts = b.name.split("/");
+            if (parts.length > 1) {
+              const shortName = parts.slice(1).join("/").toLowerCase();
+              if (localBranchNames.has(shortName)) {
+                return false;
+              }
+            }
+          }
+
+          return true;
+        });
+
+        const isFullScanRequested = input.maxCandidates === 0 || (input.maxCandidates !== undefined && input.maxCandidates < 0);
+        const maxCandidates = isFullScanRequested ? allCandidates.length : (input.maxCandidates ?? 30);
+        const defaultBranchCandidate = allCandidates.find(
+          (b) => b.isDefault || b.name === "main" || b.name === "master" || b.name === "origin/main",
+        );
+
+        let boundedCandidates = allCandidates.slice(0, maxCandidates);
+        if (defaultBranchCandidate && !boundedCandidates.some((b) => b.name === defaultBranchCandidate.name)) {
+          boundedCandidates = [defaultBranchCandidate, ...boundedCandidates];
+        }
+
+        const results = yield* Effect.forEach(
+          boundedCandidates,
+          (b) =>
+            Effect.gen(function* () {
+              const targetRef = b.name;
+              const behindStdout = yield* runGitStdout(
+                "GitCore.watchedBranchStatuses.behind",
+                input.cwd,
+                ["rev-list", "--count", `HEAD..${targetRef}`],
+              ).pipe(Effect.catch(() => Effect.succeed("0")));
+
+              const aheadStdout = yield* runGitStdout(
+                "GitCore.watchedBranchStatuses.ahead",
+                input.cwd,
+                ["rev-list", "--count", `${targetRef}..HEAD`],
+              ).pipe(Effect.catch(() => Effect.succeed("0")));
+
+              const behindCount = parseInt(behindStdout.trim(), 10) || 0;
+              const aheadCount = parseInt(aheadStdout.trim(), 10) || 0;
+              const isDefault = Boolean(b.isDefault || b.name === "main" || b.name === "master");
+
+              return {
+                name: b.name,
+                isRemote: Boolean(b.isRemote),
+                aheadCount,
+                behindCount,
+                isDefault,
+              };
+            }),
+          { concurrency: 5 },
+        );
+
+        const activeWatched = results
+          .filter((b) => b.aheadCount > 0 || b.behindCount > 0)
+          .sort((a, b) => {
+            // 1. Default/main branch always first
+            if (a.isDefault && !b.isDefault) return -1;
+            if (!a.isDefault && b.isDefault) return 1;
+            // 2. Smallest total divergence (quickest/most relevant to sync)
+            const totalA = a.behindCount + a.aheadCount;
+            const totalB = b.behindCount + b.aheadCount;
+            if (totalA !== totalB) return totalA - totalB;
+            return a.name.localeCompare(b.name);
+          });
+
+        return { branches: activeWatched, isFullScan: isFullScanRequested };
+      });
+
     const createWorktree: GitCoreShape["createWorktree"] = (input) =>
       Effect.gen(function* () {
         const targetBranch = input.newBranch ?? input.branch;
@@ -2689,6 +2776,8 @@ export const makeGitCore = (options?: { executeOverride?: GitCoreShape["execute"
       cherryPick,
       createTag,
       listTags,
+      watchedBranchStatuses,
+
 
       saveStash,
       listStashes,

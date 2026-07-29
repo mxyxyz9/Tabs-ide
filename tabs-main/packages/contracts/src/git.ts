@@ -475,6 +475,30 @@ export const GitListTagsResult = Schema.Struct({
 });
 export type GitListTagsResult = typeof GitListTagsResult.Type;
 
+export const GitWatchedBranchStatus = Schema.Struct({
+  name: TrimmedNonEmptyStringSchema,
+  isRemote: Schema.Boolean,
+  aheadCount: Schema.Number,
+  behindCount: Schema.Number,
+  isDefault: Schema.optional(Schema.Boolean),
+  lastCommitTimestamp: Schema.optional(Schema.Number),
+});
+export type GitWatchedBranchStatus = typeof GitWatchedBranchStatus.Type;
+
+export const GitWatchedBranchStatusesInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  excludedBranches: Schema.optional(Schema.Array(Schema.String)),
+  maxCandidates: Schema.optional(Schema.Number),
+});
+export type GitWatchedBranchStatusesInput = typeof GitWatchedBranchStatusesInput.Type;
+
+export const GitWatchedBranchStatusesResult = Schema.Struct({
+  branches: Schema.Array(GitWatchedBranchStatus),
+  isFullScan: Schema.optional(Schema.Boolean),
+});
+export type GitWatchedBranchStatusesResult = typeof GitWatchedBranchStatusesResult.Type;
+
+
 
 export const GitCreateWorktreeResult = Schema.Struct({
   worktree: GitWorktree,

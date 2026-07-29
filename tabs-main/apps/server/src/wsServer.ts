@@ -1151,6 +1151,12 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.listTags(body);
       }
 
+      case WS_METHODS.gitWatchedBranchStatuses: {
+        const body = stripRequestTag(request.body);
+        return yield* git.watchedBranchStatuses(body);
+      }
+
+
 
       case WS_METHODS.terminalOpen: {
         const body = stripRequestTag(request.body);

@@ -32,17 +32,19 @@ export function Banner({
   const Icon = tone === "warn" ? AlertTriangle : CircleAlert;
   return (
     <div
-      className="w-full flex items-start gap-3 rounded-lg border px-4 py-3 mb-4"
+      className="w-full flex items-center justify-between gap-4 rounded-lg border px-4 py-3 mb-4"
       style={{ borderColor: c.border, backgroundColor: c.soft }}
     >
-      <Icon size={14} className="shrink-0 mt-0.5" style={{ color: c.color }} />
-      <div className="flex flex-col gap-1 min-w-0">
-        <span className="text-xs font-semibold" style={{ color: c.color }}>
-          {title}
-        </span>
-        {body && <span className="text-xs tx-50 leading-relaxed">{body}</span>}
-        {actions && <div className="flex flex-wrap items-center gap-2 mt-1">{actions}</div>}
+      <div className="flex items-start gap-3 min-w-0 flex-1">
+        <Icon size={14} className="shrink-0 mt-0.5" style={{ color: c.color }} />
+        <div className="flex flex-col gap-1 min-w-0">
+          <span className="text-xs font-semibold" style={{ color: c.color }}>
+            {title}
+          </span>
+          {body && <span className="text-xs tx-50 leading-relaxed">{body}</span>}
+        </div>
       </div>
+      {actions && <div className="flex items-center gap-2 shrink-0 ml-auto">{actions}</div>}
     </div>
   );
 }

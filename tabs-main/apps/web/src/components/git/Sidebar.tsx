@@ -5,6 +5,7 @@ import {
   FolderGit2,
   GitBranch as GitBranchIcon,
   GitCommit,
+  GitCompare,
   GitPullRequest,
   Github,
   History as HistoryIcon,
@@ -19,6 +20,7 @@ export type NavPanel =
   | "overview"
   | "changes"
   | "diff"
+  | "divergence"
   | "branches"
   | "history"
   | "prs"
@@ -39,6 +41,7 @@ export const NAV: NavItem[] = [
   { id: "overview", label: "Overview", icon: FolderGit2, desc: "Repo health, quick actions, and sync status" },
   { id: "changes", label: "Changes", icon: GitCommit, badge: "changes", desc: "Stage, commit, and review working tree changes" },
   { id: "diff", label: "Diff", icon: FileDiff, desc: "Browse diffs for working tree files or past commits" },
+  { id: "divergence", label: "Divergence", icon: GitCompare, desc: "Full watched branch divergence list and branch comparison" },
   { id: "branches", label: "Branches", icon: GitBranchIcon, desc: "Switch, create, or rename branches" },
   { id: "history", label: "History", icon: HistoryIcon, desc: "Commit timeline for the current branch" },
   { id: "prs", label: "Pull requests", icon: GitPullRequest, badge: "prs", desc: "Open, review, and create pull requests" },

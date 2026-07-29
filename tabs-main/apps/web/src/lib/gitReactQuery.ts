@@ -25,6 +25,8 @@ export const gitQueryKeys = {
     ["git", "conflict-snapshot", cwd, path] as const,
   diff: (input: { cwd: string | null; path?: string | null; commit?: string | null }) =>
     ["git", "diff", input.cwd, input.path ?? null, input.commit ?? null] as const,
+  watchedBranches: (cwd: string | null, excluded: string[]) =>
+    ["git", "watchedBranches", cwd, excluded.join(",")] as const,
 };
 
 export const gitMutationKeys = {
@@ -389,3 +391,23 @@ export function gitWorkflowRunsQueryOptions(
     refetchOnReconnect: "always",
   });
 }
+
+export function gitWatchedBranchesQueryOptions(
+  cwd: string | null,
+  excludedBranches: string[] = [],
+) {
+  return queryOptions({
+    queryKey: gitQueryKeys.watchedBranches(cwd, excludedBranches),
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd) {
+        return { branches: [] };
+      }
+      return await api.git.watchedBranchStatuses({ cwd, excludedBranches });
+    },
+    enabled: Boolean(cwd),
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: "always",
+  });
+}
+

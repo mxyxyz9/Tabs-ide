@@ -244,6 +244,8 @@ export function createWsNativeApi(): NativeApi {
       cherryPick: (input) => transport.request(WS_METHODS.gitCherryPick, input),
       createTag: (input) => transport.request(WS_METHODS.gitCreateTag, input),
       listTags: (input) => transport.request(WS_METHODS.gitListTags, input),
+      watchedBranchStatuses: (input) => transport.request(WS_METHODS.gitWatchedBranchStatuses, input),
+
 
       onActionProgress: (callback) => {
         gitActionProgressListeners.add(callback);

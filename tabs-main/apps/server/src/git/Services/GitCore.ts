@@ -52,6 +52,9 @@ import type {
   GitCreateTagInput,
   GitListTagsInput,
   GitListTagsResult,
+  GitWatchedBranchStatusesInput,
+  GitWatchedBranchStatusesResult,
+
 
 } from "@tabs/contracts";
 
@@ -240,6 +243,14 @@ export interface GitCoreShape {
   readonly listTags: (
     input: GitListTagsInput,
   ) => Effect.Effect<GitListTagsResult, GitCommandError>;
+
+  /**
+   * Compare HEAD against watched branches to surface divergence (ahead/behind counts).
+   */
+  readonly watchedBranchStatuses: (
+    input: GitWatchedBranchStatusesInput,
+  ) => Effect.Effect<GitWatchedBranchStatusesResult, GitCommandError>;
+
 
 
   /**

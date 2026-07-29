@@ -57,6 +57,7 @@ import {
   GitCherryPickInput,
   GitCreateTagInput,
   GitListTagsInput,
+  GitWatchedBranchStatusesInput,
 } from "./git";
 import {
   TerminalClearInput,
@@ -107,6 +108,8 @@ export const WS_METHODS = {
   gitCreateFork: "git.createFork",
   gitCreateTag: "git.createTag",
   gitListTags: "git.listTags",
+  gitWatchedBranchStatuses: "git.watchedBranchStatuses",
+
 
   gitCreateWorktree: "git.createWorktree",
   gitDeleteBranch: "git.deleteBranch",
@@ -284,6 +287,8 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitCherryPick, GitCherryPickInput),
   tagRequestBody(WS_METHODS.gitCreateTag, GitCreateTagInput),
   tagRequestBody(WS_METHODS.gitListTags, GitListTagsInput),
+  tagRequestBody(WS_METHODS.gitWatchedBranchStatuses, GitWatchedBranchStatusesInput),
+
 
 
   // Terminal methods

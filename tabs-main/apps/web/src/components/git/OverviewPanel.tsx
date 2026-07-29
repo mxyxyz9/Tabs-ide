@@ -3,6 +3,7 @@ import type {
   GitHistoryCommit,
   GitListBranchesResult,
   GitStatusResult,
+  GitWatchedBranchStatus,
 } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,8 +31,10 @@ import {
   Banner,
   Btn,
   Card,
+  Modal,
   SectionLabel,
 } from "./gitPrimitives";
+
 
 const TONE = {
   ok: { color: "var(--sem-emerald)", dot: "var(--sem-emerald)", soft: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
@@ -47,8 +50,10 @@ export function OverviewPanel({
   environmentData,
   branchList,
   commits,
+  watchedBranchStatuses = [],
   onGoToChanges,
   onGoToAccounts,
+  onGoToDivergence,
   onOpenSignIn,
   onOpenAddRemote,
   onOpenCreateBranch,
@@ -61,8 +66,10 @@ export function OverviewPanel({
   environmentData: GitEnvironmentResult | null;
   branchList: GitListBranchesResult | null;
   commits: ReadonlyArray<GitHistoryCommit>;
+  watchedBranchStatuses?: ReadonlyArray<GitWatchedBranchStatus>;
   onGoToChanges: () => void;
   onGoToAccounts: () => void;
+  onGoToDivergence: () => void;
   onOpenSignIn: () => void;
   onOpenAddRemote: () => void;
   onOpenCreateBranch: () => void;
@@ -73,6 +80,10 @@ export function OverviewPanel({
   const [generating, setGenerating] = useState(false);
   const [forking, setForking] = useState(false);
   const [lastPushedAt, setLastPushedAt] = useState<number | null>(null);
+  const [confirmMergeBranch, setConfirmMergeBranch] = useState<string | null>(null);
+  const [confirmRebaseBranch, setConfirmRebaseBranch] = useState<string | null>(null);
+  const [showAllWatchedBranches, setShowAllWatchedBranches] = useState(false);
+
   const api = readNativeApi();
   const queryClient = useQueryClient();
 
@@ -92,6 +103,42 @@ export function OverviewPanel({
   const hasConflict = conflictedFiles.length > 0;
   const remoteName = branchList?.remoteName ?? "origin";
   const pushAccess = branchList?.pushAccess ?? "unknown";
+
+  const handleExecuteMergeWatched = async (targetBranch: string) => {
+    if (!api) return;
+    try {
+      await api.git.merge({ cwd, branch: targetBranch });
+      await invalidateGitQueries(queryClient);
+      setConfirmMergeBranch(null);
+      toastManager.add({ type: "success", title: `Merged ${targetBranch} into current branch` });
+    } catch (error) {
+      toastManager.add({ type: "error", title: "Merge failed", description: toGitUserFacingErrorMessage(error) });
+    }
+  };
+
+  const handleExecuteRebaseWatched = async (targetBranch: string) => {
+    if (!api) return;
+    try {
+      await api.git.rebase({ cwd, branch: targetBranch });
+      await invalidateGitQueries(queryClient);
+      setConfirmRebaseBranch(null);
+      toastManager.add({ type: "success", title: `Rebased current branch onto ${targetBranch}` });
+    } catch (error) {
+      toastManager.add({ type: "error", title: "Rebase failed", description: toGitUserFacingErrorMessage(error) });
+    }
+  };
+
+  const urgentWatchedBranch = useMemo(() => {
+    const mainBranch = watchedBranchStatuses.find(
+      (b) =>
+        b.behindCount > 0 &&
+        (b.name === "main" ||
+          b.name === "master" ||
+          b.name === "origin/main" ||
+          b.name === "origin/master"),
+    );
+    return mainBranch ?? watchedBranchStatuses.find((b) => b.behindCount > 0) ?? null;
+  }, [watchedBranchStatuses]);
 
   const handleCreateFork = async () => {
     if (!api) return;
@@ -343,6 +390,24 @@ export function OverviewPanel({
         />
       ))}
 
+      {/* Urgent Watched Branch Notice Banner */}
+      {urgentWatchedBranch && (
+        <Banner
+          tone="warn"
+          title={`${urgentWatchedBranch.name} has ${urgentWatchedBranch.behindCount} new commit${urgentWatchedBranch.behindCount === 1 ? "" : "s"} you don't have`}
+          actions={
+            <div className="flex items-center gap-2">
+              <Btn sm primary icon={Download} onClick={() => setConfirmMergeBranch(urgentWatchedBranch.name)}>
+                Merge {urgentWatchedBranch.name}
+              </Btn>
+              <Btn sm ghost onClick={() => setConfirmRebaseBranch(urgentWatchedBranch.name)}>
+                Rebase onto {urgentWatchedBranch.name}
+              </Btn>
+            </div>
+          }
+        />
+      )}
+
       {/* Stat grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <Card className="p-3">
@@ -391,6 +456,70 @@ export function OverviewPanel({
           </div>
         </Card>
       </div>
+
+      {/* Watched Branch Divergence Card */}
+      {watchedBranchStatuses.length > 0 && (
+        <div className="mb-6">
+          <SectionLabel>Watched branch divergence</SectionLabel>
+          <Card className="p-3">
+            <p className="fs-11 tx-40 leading-relaxed mb-3">
+              Branches in this repository with unmerged commits ahead of or behind your current branch.
+            </p>
+            <div className="flex flex-col">
+              {watchedBranchStatuses.slice(0, 5).map((b, idx, arr) => {
+                const isLast = idx === arr.length - 1 && watchedBranchStatuses.length <= 5;
+                return (
+                  <div
+                    key={b.name}
+                    className={`flex items-center justify-between gap-3 py-2 ${
+                      isLast ? "" : "border-b bd-1"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="fs-12 font-mono font-semibold tx-80 truncate">{b.name}</span>
+                      {b.isRemote && <Badge tone="default">remote</Badge>}
+                      {b.behindCount > 0 && (
+                        <span className="flex items-center gap-0.5 fs-11 font-mono shrink-0" style={{ color: "var(--sem-amber)" }}>
+                          <ArrowDown size={11} />
+                          {b.behindCount} behind
+                        </span>
+                      )}
+                      {b.aheadCount > 0 && (
+                        <span className="flex items-center gap-0.5 fs-11 font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
+                          <ArrowUp size={11} />
+                          {b.aheadCount} ahead
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-auto">
+                      <Btn sm ghost onClick={() => setConfirmMergeBranch(b.name)}>
+                        Merge
+                      </Btn>
+                      <Btn sm ghost onClick={() => setConfirmRebaseBranch(b.name)}>
+                        Rebase
+                      </Btn>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {watchedBranchStatuses.length > 5 && (
+              <div className="pt-2 mt-2 border-t bd-1 flex items-center justify-between">
+                <span className="fs-11 tx-40">Showing top 5 of {watchedBranchStatuses.length} diverged branches</span>
+                <button
+                  type="button"
+                  onClick={onGoToDivergence}
+                  className="fs-11 font-medium tx-60 hov-tx hover:underline cursor-pointer py-1 flex items-center gap-1"
+                >
+                  View all →
+                </button>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
 
       {/* Quick actions card */}
       <SectionLabel>Quick actions</SectionLabel>
@@ -535,6 +664,31 @@ export function OverviewPanel({
           </Card>
         </>
       )}
+
+      {confirmMergeBranch && (
+        <Modal title={`Merge ${confirmMergeBranch} into ${branchName}`} onClose={() => setConfirmMergeBranch(null)}>
+          <p className="fs-12 tx-60 mb-4">
+            This will merge commits from <strong>{confirmMergeBranch}</strong> into <strong>{branchName}</strong>.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Btn ghost onClick={() => setConfirmMergeBranch(null)}>Cancel</Btn>
+            <Btn primary onClick={() => void handleExecuteMergeWatched(confirmMergeBranch)}>Confirm merge</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {confirmRebaseBranch && (
+        <Modal title={`Rebase ${branchName} onto ${confirmRebaseBranch}`} onClose={() => setConfirmRebaseBranch(null)}>
+          <p className="fs-12 tx-60 mb-4">
+            This will reapply your local commits on top of <strong>{confirmRebaseBranch}</strong>.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Btn ghost onClick={() => setConfirmRebaseBranch(null)}>Cancel</Btn>
+            <Btn primary onClick={() => void handleExecuteRebaseWatched(confirmRebaseBranch)}>Confirm rebase</Btn>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
+
