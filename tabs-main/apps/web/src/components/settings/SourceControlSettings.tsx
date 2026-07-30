@@ -109,7 +109,7 @@ export function SourceControlSettingsPanel({
       <div className="space-y-6">
         <div className="mb-2 space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Source Control
@@ -132,7 +132,7 @@ export function SourceControlSettingsPanel({
       <div className="space-y-6">
         <div className="mb-2 space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Source Control
@@ -169,7 +169,7 @@ export function SourceControlSettingsPanel({
       <div>
         <div className="space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Source Control

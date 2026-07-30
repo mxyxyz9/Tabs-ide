@@ -515,9 +515,18 @@ export function ProjectWorkspaceSettingsSection() {
   if (!activeProjectId || !activeProject || !projectSettings) {
     return (
       <section className="space-y-3">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Project Workspace
-        </h2>
+        {activeFontCombo.isNeutral ? (
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            Project Workspace
+          </h2>
+        ) : (
+          <h2
+            className={cn("text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            Project Workspace
+          </h2>
+        )}
         <Card>
           <CardHeader>
             <CardTitle>No active project</CardTitle>
@@ -689,7 +698,7 @@ export function ProjectWorkspaceSettingsSection() {
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
                 <h2
-                  className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                  className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                   style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                 >
                   Workspace

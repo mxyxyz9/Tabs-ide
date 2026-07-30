@@ -925,7 +925,7 @@ function ProjectToolBar(props: {
                 "inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent",
               )}
             >
               {toolIcon(tool.kind)}

@@ -720,7 +720,7 @@ export function SettingsSection({
   );
 
   return (
-    <section className="space-y-3 pt-2">
+    <section className={cn("space-y-3", activeFontCombo.isNeutral ? "pt-2" : "pt-0 -mt-2")}>
       <div className="flex items-center justify-between">
         {activeFontCombo.isNeutral ? (
           <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -728,7 +728,7 @@ export function SettingsSection({
           </h3>
         ) : (
           <h2
-            className={cn("text-[18px] text-foreground/80 mb-4", activeFontCombo.serifClass)}
+            className={cn("text-[18px] leading-relaxed text-foreground/80", activeFontCombo.serifClass)}
             style={{ fontFamily: "var(--font-display)" }}
           >
             {title}
@@ -1397,7 +1397,7 @@ function CustomStudioDrawer({
                     className={cn(
                       "px-3 py-1 text-xs font-medium rounded-lg transition-all",
                       config.baseVariant === "dark"
-                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -1409,7 +1409,7 @@ function CustomStudioDrawer({
                     className={cn(
                       "px-3 py-1 text-xs font-medium rounded-lg transition-all",
                       config.baseVariant === "light"
-                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -1781,7 +1781,7 @@ function StudioColorPickerPopover({
               onClick={() => setFormat("hex")}
               className={cn(
                 "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
-                format === "hex" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                format === "hex" ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0" : "text-muted-foreground hover:text-foreground"
               )}
             >
               HEX
@@ -1791,7 +1791,7 @@ function StudioColorPickerPopover({
               onClick={() => setFormat("rgb")}
               className={cn(
                 "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
-                format === "rgb" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"
+                format === "rgb" ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0" : "text-muted-foreground hover:text-foreground"
               )}
             >
               RGB
@@ -2804,7 +2804,7 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             General
@@ -2967,7 +2967,7 @@ function SettingsRouteView() {
                                   className={cn(
                                     "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
                                     settings.desktopIconTheme === option.value
-                                      ? "bg-background text-foreground shadow-xs"
+                                      ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
                                       : "text-muted-foreground hover:text-foreground",
                                   )}
                                 >
@@ -3005,7 +3005,7 @@ function SettingsRouteView() {
                                 className={cn(
                                   "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
                                   settings.timestampFormat === fmt
-                                    ? "bg-background text-foreground shadow-xs"
+                                    ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
                                     : "text-muted-foreground hover:text-foreground",
                                 )}
                               >
@@ -3394,7 +3394,7 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             Themes
@@ -3808,7 +3808,7 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             Animations
@@ -3850,9 +3850,18 @@ function SettingsRouteView() {
                       {/* ANIMATION CONTROLS (Toggled) */}
                       <div className="flex flex-col gap-5">
                         <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex items-center justify-between">
-                          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
-                          </h2>
+                          {activeFontCombo.isNeutral ? (
+                            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
+                            </h2>
+                          ) : (
+                            <h2
+                              className={cn("text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
+                              style={{ fontFamily: "var(--font-display)" }}
+                            >
+                              {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
+                            </h2>
+                          )}
                           <div className="flex bg-muted p-1 rounded-lg gap-1">
                             <button
                               onClick={() => setAnimationTab("startup")}
@@ -4055,9 +4064,18 @@ function SettingsRouteView() {
 
                       {/* INTERFACE GROUP */}
                       <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
-                        <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                          Interface
-                        </h2>
+                        {activeFontCombo.isNeutral ? (
+                          <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                            Interface
+                          </h2>
+                        ) : (
+                          <h2
+                            className={cn("px-4 sm:px-5 text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
+                            style={{ fontFamily: "var(--font-display)" }}
+                          >
+                            Interface
+                          </h2>
+                        )}
                         <SettingsRow
                           title="Slider animations"
                           description="Smoothly animate the model picker's reasoning-effort slider."
@@ -4134,7 +4152,7 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             Providers
@@ -4912,8 +4930,8 @@ function SettingsRouteView() {
                     keybindings={resolvedKeybindings}
                     onUpsert={handleUpsertKeybinding}
                     onRemove={handleRemoveKeybinding}
-                    keybindingsConfigPath={keybindingsConfigPath}
-                    availableEditors={availableEditors}
+                    keybindingsConfigPath={keybindingsConfigPath as string}
+                    availableEditors={(availableEditors as any) ?? []}
                   />
                 ) : null}
                 {activeSettingsSection === "about" ? (
@@ -4921,7 +4939,7 @@ function SettingsRouteView() {
                     <div>
                       <div className="space-y-1.5">
                         <h2
-                          className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                          className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                           style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                         >
                           About

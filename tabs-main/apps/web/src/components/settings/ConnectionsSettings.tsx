@@ -140,7 +140,7 @@ export function ConnectionsSettings() {
       <div>
         <div className="space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Connections
@@ -642,7 +642,7 @@ export function ConnectionsSettings() {
                             className={cn(
                               "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
                               addMode === "remote"
-                                ? "bg-background text-foreground shadow-xs border border-border/40"
+                                ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                                 : "text-muted-foreground hover:text-foreground",
                             )}
                           >
@@ -655,7 +655,7 @@ export function ConnectionsSettings() {
                             className={cn(
                               "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
                               addMode === "ssh"
-                                ? "bg-background text-foreground shadow-xs border border-border/40"
+                                ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                                 : "text-muted-foreground hover:text-foreground",
                             )}
                           >

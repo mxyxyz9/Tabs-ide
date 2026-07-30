@@ -268,7 +268,7 @@ export function ServerPresetFormFields(props: {
                   className={cn(
                     "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                     preset.previewOpenTarget !== "external"
-                      ? "bg-background text-foreground shadow-xs font-semibold"
+                      ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
@@ -285,7 +285,7 @@ export function ServerPresetFormFields(props: {
                   className={cn(
                     "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
                     preset.previewOpenTarget === "external"
-                      ? "bg-background text-foreground shadow-xs font-semibold"
+                      ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >

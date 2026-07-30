@@ -100,12 +100,24 @@ function SettingsSection({
   headerAction?: ReactNode;
   children: ReactNode;
 }) {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = getActiveFontCombo(fontPreferences);
+
   return (
     <section className="flex flex-col space-y-3 h-full min-h-0">
       <div className="flex items-center justify-between shrink-0">
-        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          {title}
-        </h2>
+        {activeFontCombo.isNeutral ? (
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+            {title}
+          </h2>
+        ) : (
+          <h2
+            className={cn("text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {title}
+          </h2>
+        )}
         {headerAction}
       </div>
       <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
@@ -1201,7 +1213,7 @@ export function KeybindingsSettings({
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
                 <h2
-                  className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                  className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
                   style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                 >
                   Keybindings

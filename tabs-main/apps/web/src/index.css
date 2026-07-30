@@ -131,7 +131,7 @@
     background-color: var(--app-chrome-background);
   }
   body {
-    @apply text-foreground relative;
+    @apply text-foreground relative lining-nums;
     background-color: var(--app-chrome-background);
   }
 }
@@ -283,7 +283,7 @@
   --card-foreground: #f5f5f5;
   --popover: #181818;
   --popover-foreground: #f5f5f5;
-  --primary: oklch(0.588 0.217 264);
+  --primary: #1d4ed8;
   --primary-foreground: #ffffff;
   --secondary: rgba(255, 255, 255, 0.04);
   --secondary-foreground: #f5f5f5;
@@ -293,15 +293,45 @@
   --accent-foreground: #f5f5f5;
   --border: rgba(255, 255, 255, 0.06);
   --input: rgba(255, 255, 255, 0.08);
-  --ring: oklch(0.588 0.217 264);
+  --ring: #1d4ed8;
   --fg-90: color-mix(in srgb, var(--foreground) 90%, transparent);
   --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
   --fg-60: color-mix(in srgb, var(--foreground) 60%, transparent);
   --fg-50: color-mix(in srgb, var(--foreground) 50%, transparent);
   --fg-40: color-mix(in srgb, var(--foreground) 40%, transparent);
   --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
-  --accent-wash-bg: oklch(0.588 0.217 264 / 12%);
-  --accent-wash-border: oklch(0.588 0.217 264 / 32%);
+  --accent-wash-bg: rgba(29, 78, 216, 0.12);
+  --accent-wash-border: rgba(29, 78, 216, 0.32);
+}
+
+[data-theme="tabs-monotone"] {
+  color-scheme: dark;
+  --background: #09090b;
+  --app-chrome-background: var(--background);
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #e5e5e5;
+  --primary-foreground: #09090b;
+  --secondary: rgba(255, 255, 255, 0.08);
+  --secondary-foreground: #fafafa;
+  --muted: rgba(255, 255, 255, 0.08);
+  --muted-foreground: #a1a1aa;
+  --accent: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #fafafa;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.16);
+  --ring: #e5e5e5;
+  --fg-90: color-mix(in srgb, var(--foreground) 90%, transparent);
+  --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
+  --fg-60: color-mix(in srgb, var(--foreground) 60%, transparent);
+  --fg-50: color-mix(in srgb, var(--foreground) 50%, transparent);
+  --fg-40: color-mix(in srgb, var(--foreground) 40%, transparent);
+  --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --accent-wash-bg: rgba(255, 255, 255, 0.12);
+  --accent-wash-border: rgba(255, 255, 255, 0.25);
 }
 
 [data-theme="true-black"] {
@@ -313,7 +343,7 @@
   --card-foreground: #ffffff;
   --popover: #0a0a0a;
   --popover-foreground: #ffffff;
-  --primary: oklch(0.588 0.217 264);
+  --primary: #1d4ed8;
   --primary-foreground: #ffffff;
   --secondary: rgba(255, 255, 255, 0.05);
   --secondary-foreground: #ffffff;
@@ -323,7 +353,7 @@
   --accent-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.12);
   --input: rgba(255, 255, 255, 0.14);
-  --ring: oklch(0.588 0.217 264);
+  --ring: #1d4ed8;
   --fg-90: color-mix(in srgb, var(--foreground) 90%, transparent);
   --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
   --fg-60: color-mix(in srgb, var(--foreground) 60%, transparent);
@@ -332,8 +362,8 @@
   --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
   --fg-20: color-mix(in srgb, var(--foreground) 20%, transparent);
   --fg-10: color-mix(in srgb, var(--foreground) 10%, transparent);
-  --accent-wash-bg: oklch(0.588 0.217 264 / 15%);
-  --accent-wash-border: oklch(0.588 0.217 264 / 40%);
+  --accent-wash-bg: rgba(29, 78, 216, 0.15);
+  --accent-wash-border: rgba(29, 78, 216, 0.40);
 }
 
 [data-theme="tabs-light"] {
@@ -345,7 +375,7 @@
   --card-foreground: #262626;
   --popover: #ffffff;
   --popover-foreground: #262626;
-  --primary: oklch(0.488 0.217 264);
+  --primary: #1d4ed8;
   --primary-foreground: #ffffff;
   --secondary: rgba(0, 0, 0, 0.04);
   --secondary-foreground: #262626;
@@ -355,15 +385,15 @@
   --accent-foreground: #262626;
   --border: rgba(0, 0, 0, 0.08);
   --input: rgba(0, 0, 0, 0.10);
-  --ring: oklch(0.488 0.217 264);
+  --ring: #1d4ed8;
   --fg-90: color-mix(in srgb, var(--foreground) 90%, transparent);
   --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
   --fg-60: color-mix(in srgb, var(--foreground) 60%, transparent);
   --fg-50: color-mix(in srgb, var(--foreground) 50%, transparent);
   --fg-40: color-mix(in srgb, var(--foreground) 40%, transparent);
   --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
-  --accent-wash-bg: oklch(0.488 0.217 264 / 9%);
-  --accent-wash-border: oklch(0.488 0.217 264 / 28%);
+  --accent-wash-bg: rgba(29, 78, 216, 0.09);
+  --accent-wash-border: rgba(29, 78, 216, 0.28);
 }
 
 [data-theme="abyss"] {
