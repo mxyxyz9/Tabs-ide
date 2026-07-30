@@ -139,11 +139,12 @@ function applyTheme(
 
     // Live CSS variable injection for custom theme
     const style = document.documentElement.style;
-    const mutedFg = isDark ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)";
+    const mutedFg = `color-mix(in srgb, ${config.colors.foreground} 65%, transparent)`;
     const mutedBg = `color-mix(in srgb, ${config.colors.foreground} 6%, ${config.colors.card})`;
     const accentBg = `color-mix(in srgb, ${config.colors.primary} 12%, transparent)`;
     const accentBorder = `color-mix(in srgb, ${config.colors.primary} 32%, transparent)`;
 
+    // App shell core tokens
     style.setProperty("--background", config.colors.background);
     style.setProperty("--app-chrome-background", config.colors.background);
     style.setProperty("--foreground", config.colors.foreground);
@@ -165,6 +166,12 @@ function applyTheme(
     style.setProperty("--accent-wash-bg", accentBg);
     style.setProperty("--accent-wash-border", accentBorder);
 
+    // Text opacity scale
+    [90, 80, 60, 50, 40, 30, 20, 10].forEach((pct) => {
+      style.setProperty(`--fg-${pct}`, `color-mix(in srgb, ${config.colors.foreground} ${pct}%, transparent)`);
+    });
+
+    // Sidebar tokens
     style.setProperty("--sidebar-background", config.colors.card);
     style.setProperty("--sidebar-foreground", config.colors.foreground);
     style.setProperty("--sidebar-border", config.colors.border);
@@ -172,6 +179,18 @@ function applyTheme(
     style.setProperty("--sidebar-accent-foreground", config.colors.foreground);
     style.setProperty("--sidebar-primary", config.colors.primary);
     style.setProperty("--sidebar-primary-foreground", primaryFg);
+
+    // Code-OSS tokens
+    style.setProperty("--tabs-bg", config.colors.background);
+    style.setProperty("--tabs-bg-sidebar", config.colors.card);
+    style.setProperty("--tabs-bg-elevated", config.colors.card);
+    style.setProperty("--tabs-bg-popover", config.colors.card);
+    style.setProperty("--tabs-input-bg", config.colors.card);
+    style.setProperty("--tabs-text", config.colors.foreground);
+    style.setProperty("--tabs-text-muted", mutedFg);
+    style.setProperty("--tabs-accent", config.colors.primary);
+    style.setProperty("--tabs-accent-strong", config.colors.primary);
+    style.setProperty("--tabs-accent-soft", `color-mix(in srgb, ${config.colors.primary} 15%, transparent)`);
 
     style.setProperty("--code-oss-bg", config.colors.background);
     style.setProperty("--code-oss-bg-sidebar", config.colors.card);
@@ -208,6 +227,14 @@ function applyTheme(
         "--primary-foreground",
         "--accent-wash-bg",
         "--accent-wash-border",
+        "--fg-90",
+        "--fg-80",
+        "--fg-60",
+        "--fg-50",
+        "--fg-40",
+        "--fg-30",
+        "--fg-20",
+        "--fg-10",
         "--sidebar-background",
         "--sidebar-foreground",
         "--sidebar-border",
@@ -215,6 +242,16 @@ function applyTheme(
         "--sidebar-accent-foreground",
         "--sidebar-primary",
         "--sidebar-primary-foreground",
+        "--tabs-bg",
+        "--tabs-bg-sidebar",
+        "--tabs-bg-elevated",
+        "--tabs-bg-popover",
+        "--tabs-input-bg",
+        "--tabs-text",
+        "--tabs-text-muted",
+        "--tabs-accent",
+        "--tabs-accent-strong",
+        "--tabs-accent-soft",
         "--code-oss-bg",
         "--code-oss-bg-sidebar",
         "--code-oss-bg-elevated",

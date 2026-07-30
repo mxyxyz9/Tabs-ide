@@ -732,178 +732,267 @@ function startCodeControlChannel(context) {
           void (async () => {
             try {
               const themeId = parsed.theme;
-              let isLight =
-                themeId === "tabs-light" || themeId === "solarized-light" || themeId === "light";
-              if (themeId === "custom" && parsed.customConfig && parsed.customConfig.baseVariant) {
-                isLight = parsed.customConfig.baseVariant === "light";
-              }
-              const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
-              const workspaceConfig = vscode.workspace.getConfiguration();
-              await workspaceConfig.update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
 
-              const CUSTOM_THEME_COLOR_KEYS = [
-                "focusBorder",
-                "foreground",
-                "widget.shadow",
-                "selection.background",
-                "editor.background",
-                "editor.foreground",
-                "editorLineNumber.foreground",
-                "editorLineNumber.activeForeground",
-                "editorCursor.foreground",
-                "editor.selectionBackground",
-                "editor.inactiveSelectionBackground",
-                "sideBar.background",
-                "sideBar.foreground",
-                "sideBar.border",
-                "sideBarTitle.foreground",
-                "sideBarSectionHeader.background",
-                "sideBarSectionHeader.foreground",
-                "sideBarSectionHeader.border",
-                "activityBar.background",
-                "activityBar.foreground",
-                "activityBar.inactiveForeground",
-                "activityBar.border",
-                "activityBarBadge.background",
-                "titleBar.activeBackground",
-                "titleBar.activeForeground",
-                "titleBar.inactiveBackground",
-                "titleBar.inactiveForeground",
-                "titleBar.border",
-                "statusBar.background",
-                "statusBar.foreground",
-                "statusBar.border",
-                "statusBar.noFolderBackground",
-                "statusBar.debuggingBackground",
-                "editorGroupHeader.tabsBackground",
-                "editorGroupHeader.tabsBorder",
-                "editorGroup.border",
-                "tab.activeBackground",
-                "tab.activeForeground",
-                "tab.activeBorderTop",
-                "tab.inactiveBackground",
-                "tab.inactiveForeground",
-                "tab.border",
-                "panel.background",
-                "panel.border",
-                "panelTitle.activeForeground",
-                "panelTitle.activeBorder",
-                "panelTitle.inactiveForeground",
-                "button.background",
-                "input.background",
-                "input.foreground",
-                "input.border",
-                "dropdown.background",
-                "dropdown.foreground",
-                "dropdown.border",
-                "list.hoverBackground",
-                "list.activeSelectionBackground",
-                "list.activeSelectionForeground",
-                "list.inactiveSelectionBackground",
-                "peekViewEditor.background",
-              ];
+function getLuminance(hex) {
+  let clean = (hex || "").replace("#", "").trim();
+  if (clean.length === 3) clean = clean.split("").map((c) => c + c).join("");
+  if (clean.length !== 6) return 0.5;
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  const a = [r, g, b].map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.722;
+}
 
-              if (themeId === "custom" && parsed.customConfig && parsed.customConfig.colors) {
-                const c = parsed.customConfig.colors;
-                const customOverrides = {
-                  "focusBorder": c.primary,
-                  "foreground": c.foreground,
-                  "widget.shadow": "transparent",
-                  "selection.background": c.primary ? `${c.primary}40` : undefined,
-                  "editor.background": c.background,
-                  "editor.foreground": c.foreground,
-                  "editorLineNumber.foreground": c.foreground ? `${c.foreground}80` : undefined,
-                  "editorLineNumber.activeForeground": c.primary,
-                  "editorCursor.foreground": c.primary,
-                  "editor.selectionBackground": c.primary ? `${c.primary}33` : undefined,
-                  "editor.inactiveSelectionBackground": c.primary ? `${c.primary}1a` : undefined,
-                  "sideBar.background": c.card,
-                  "sideBar.foreground": c.foreground,
-                  "sideBar.border": c.border,
-                  "sideBarTitle.foreground": c.foreground,
-                  "sideBarSectionHeader.background": c.card,
-                  "sideBarSectionHeader.foreground": c.foreground,
-                  "sideBarSectionHeader.border": c.border,
-                  "activityBar.background": c.card,
-                  "activityBar.foreground": c.primary,
-                  "activityBar.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
-                  "activityBar.border": c.border,
-                  "activityBarBadge.background": c.primary,
-                  "titleBar.activeBackground": c.background,
-                  "titleBar.activeForeground": c.foreground,
-                  "titleBar.inactiveBackground": c.background,
-                  "titleBar.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
-                  "titleBar.border": c.border,
-                  "statusBar.background": c.card,
-                  "statusBar.foreground": c.foreground,
-                  "statusBar.border": c.border,
-                  "statusBar.noFolderBackground": c.card,
-                  "statusBar.debuggingBackground": c.card,
-                  "editorGroupHeader.tabsBackground": c.card,
-                  "editorGroupHeader.tabsBorder": c.border,
-                  "editorGroup.border": c.border,
-                  "tab.activeBackground": c.background,
-                  "tab.activeForeground": c.foreground,
-                  "tab.activeBorderTop": c.primary,
-                  "tab.inactiveBackground": c.card,
-                  "tab.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
-                  "tab.border": c.border,
-                  "panel.background": c.card,
-                  "panel.border": c.border,
-                  "panelTitle.activeForeground": c.foreground,
-                  "panelTitle.activeBorder": c.primary,
-                  "panelTitle.inactiveForeground": c.foreground ? `${c.foreground}80` : undefined,
-                  "button.background": c.primary,
-                  "input.background": c.background,
-                  "input.foreground": c.foreground,
-                  "input.border": c.border,
-                  "dropdown.background": c.card,
-                  "dropdown.foreground": c.foreground,
-                  "dropdown.border": c.border,
-                  "list.hoverBackground": c.primary ? `${c.primary}1a` : undefined,
-                  "list.activeSelectionBackground": c.primary ? `${c.primary}33` : undefined,
-                  "list.activeSelectionForeground": c.foreground,
-                  "list.inactiveSelectionBackground": c.primary ? `${c.primary}20` : undefined,
-                  "peekViewEditor.background": c.background,
-                };
+function getOptimalPrimaryForeground(primaryHex) {
+  const L1 = getLuminance(primaryHex);
+  const L_white = 1.0;
+  const L_dark = getLuminance("#090d16");
+  const contrastWhite = (Math.max(L1, L_white) + 0.05) / (Math.min(L1, L_white) + 0.05);
+  const contrastDark = (Math.max(L1, L_dark) + 0.05) / (Math.min(L1, L_dark) + 0.05);
+  return contrastWhite >= contrastDark ? "#ffffff" : "#090d16";
+}
 
-                const currentCustomizations = {
-                  ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
-                };
+function toHexColor(colorStr) {
+  if (!colorStr || typeof colorStr !== "string") return undefined;
+  const str = colorStr.trim();
+  if (str === "transparent") return "#00000000";
+  if (str.startsWith("#")) {
+    const clean = str.replace("#", "");
+    if (clean.length === 3) return `#${clean.split("").map((c) => c + c).join("")}ff`;
+    if (clean.length === 6) return `#${clean}ff`;
+    if (clean.length === 8) return `#${clean}`;
+    return str;
+  }
+  const rgbaMatch = str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/);
+  if (rgbaMatch) {
+    const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, "0");
+    const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, "0");
+    const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, "0");
+    const a = Math.round((rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1.0) * 255).toString(16).padStart(2, "0");
+    return `#${r}${g}${b}${a}`;
+  }
+  return str;
+}
 
-                for (const key of Object.keys(customOverrides)) {
-                  const val = customOverrides[key];
-                  if (val !== undefined) {
-                    currentCustomizations[key] = val;
-                  }
-                }
+function generateVsCodeColorCustomizations(customConfig) {
+  if (!customConfig || !customConfig.colors) return {};
+  const c = customConfig.colors;
+  const isDark = customConfig.baseVariant === "dark";
 
-                await workspaceConfig.update(
-                  "workbench.colorCustomizations",
-                  currentCustomizations,
-                  vscode.ConfigurationTarget.Global,
-                );
-              } else {
-                const currentCustomizations = {
-                  ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
-                };
-                let hasManagedKey = false;
-                for (const key of CUSTOM_THEME_COLOR_KEYS) {
-                  if (key in currentCustomizations) {
-                    delete currentCustomizations[key];
-                    hasManagedKey = true;
-                  }
-                }
-                if (hasManagedKey) {
-                  const finalVal =
-                    Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined;
-                  await workspaceConfig.update(
-                    "workbench.colorCustomizations",
-                    finalVal,
-                    vscode.ConfigurationTarget.Global,
-                  );
-                }
-              }
+  const alpha = (color, op) => {
+    const hex = toHexColor(color);
+    if (!hex || typeof hex !== "string") return undefined;
+    const norm = hex.replace("#", "").trim();
+    const baseRgb = norm.length >= 6 ? norm.slice(0, 6) : norm;
+    const intOp = Math.round(op * 255).toString(16).padStart(2, "0");
+    return `#${baseRgb}${intOp}`;
+  };
+
+  const primaryFg = getOptimalPrimaryForeground(c.primary);
+  const mutedFg = isDark ? "#ffffffa6" : "#0f172aa6";
+  const borderHex = toHexColor(c.border);
+  const cardHex = toHexColor(c.card);
+  const bgHex = toHexColor(c.background);
+  const fgHex = toHexColor(c.foreground);
+  const primaryHex = toHexColor(c.primary);
+
+  return {
+    "focusBorder": primaryHex,
+    "foreground": fgHex,
+    "disabledForeground": alpha(fgHex, 0.38),
+    "widget.shadow": "#00000000",
+    "widget.border": borderHex,
+    "selection.background": alpha(primaryHex, 0.25),
+    "descriptionForeground": mutedFg,
+    "errorForeground": "#f87171",
+    "icon.foreground": fgHex,
+    "titleBar.activeBackground": bgHex,
+    "titleBar.activeForeground": fgHex,
+    "titleBar.inactiveBackground": bgHex,
+    "titleBar.inactiveForeground": alpha(fgHex, 0.5),
+    "titleBar.border": borderHex,
+    "activityBar.background": cardHex,
+    "activityBar.foreground": primaryHex,
+    "activityBar.inactiveForeground": alpha(fgHex, 0.5),
+    "activityBar.border": borderHex,
+    "activityBarBadge.background": primaryHex,
+    "activityBarBadge.foreground": primaryFg,
+    "activityBar.activeBorder": primaryHex,
+    "activityBar.activeBackground": alpha(primaryHex, 0.1),
+    "sideBar.background": cardHex,
+    "sideBar.foreground": fgHex,
+    "sideBar.border": borderHex,
+    "sideBarTitle.foreground": fgHex,
+    "sideBarSectionHeader.background": cardHex,
+    "sideBarSectionHeader.foreground": fgHex,
+    "sideBarSectionHeader.border": borderHex,
+    "editorGroupHeader.tabsBackground": cardHex,
+    "editorGroupHeader.tabsBorder": borderHex,
+    "editorGroupHeader.noTabsBackground": cardHex,
+    "editorGroup.border": borderHex,
+    "tab.activeBackground": cardHex,
+    "tab.activeForeground": fgHex,
+    "tab.inactiveBackground": cardHex,
+    "tab.inactiveForeground": alpha(fgHex, 0.55),
+    "tab.hoverBackground": alpha(fgHex, 0.05),
+    "tab.hoverForeground": fgHex,
+    "tab.activeBorderTop": "#00000000",
+    "tab.activeBorder": "#00000000",
+    "tab.unfocusedActiveBorderTop": "#00000000",
+    "tab.unfocusedActiveBorder": "#00000000",
+    "tab.border": "#00000000",
+    "editor.background": bgHex,
+    "editor.foreground": fgHex,
+    "editorLineNumber.foreground": alpha(fgHex, 0.4),
+    "editorLineNumber.activeForeground": primaryHex,
+    "editorCursor.foreground": primaryHex,
+    "editor.selectionBackground": alpha(primaryHex, 0.2),
+    "editor.selectionHighlightBackground": alpha(primaryHex, 0.12),
+    "editor.inactiveSelectionBackground": alpha(primaryHex, 0.1),
+    "editor.lineHighlightBackground": alpha(fgHex, 0.04),
+    "editor.lineHighlightBorder": "#00000000",
+    "editorIndentGuide.background": alpha(fgHex, 0.08),
+    "editorIndentGuide.activeBackground": alpha(fgHex, 0.16),
+    "editorWhitespace.foreground": alpha(fgHex, 0.1),
+    "editorWidget.background": cardHex,
+    "editorWidget.foreground": fgHex,
+    "editorWidget.border": borderHex,
+    "editorSuggestWidget.background": cardHex,
+    "editorSuggestWidget.border": borderHex,
+    "editorSuggestWidget.foreground": fgHex,
+    "editorSuggestWidget.selectedBackground": alpha(primaryHex, 0.15),
+    "editorHoverWidget.background": cardHex,
+    "editorHoverWidget.border": borderHex,
+    "panel.background": cardHex,
+    "panel.border": borderHex,
+    "panelTitle.activeForeground": fgHex,
+    "panelTitle.activeBorder": primaryHex,
+    "panelTitle.inactiveForeground": alpha(fgHex, 0.5),
+    "terminal.background": cardHex,
+    "terminal.foreground": fgHex,
+    "statusBar.background": cardHex,
+    "statusBar.foreground": fgHex,
+    "statusBar.border": borderHex,
+    "statusBar.noFolderBackground": cardHex,
+    "statusBar.noFolderForeground": fgHex,
+    "statusBar.debuggingBackground": cardHex,
+    "statusBar.debuggingForeground": fgHex,
+    "statusBarItem.hoverBackground": alpha(fgHex, 0.08),
+    "statusBarItem.activeBackground": alpha(fgHex, 0.15),
+    "list.hoverBackground": alpha(primaryHex, 0.1),
+    "list.hoverForeground": fgHex,
+    "list.activeSelectionBackground": alpha(primaryHex, 0.2),
+    "list.activeSelectionForeground": fgHex,
+    "list.inactiveSelectionBackground": alpha(primaryHex, 0.12),
+    "list.inactiveSelectionForeground": fgHex,
+    "list.focusBackground": alpha(primaryHex, 0.15),
+    "list.focusForeground": fgHex,
+    "list.highlightForeground": primaryHex,
+    "tree.indentGuidesStroke": alpha(fgHex, 0.1),
+    "input.background": bgHex,
+    "input.foreground": fgHex,
+    "input.border": borderHex,
+    "input.placeholderForeground": alpha(fgHex, 0.4),
+    "dropdown.background": cardHex,
+    "dropdown.foreground": fgHex,
+    "dropdown.border": borderHex,
+    "button.background": primaryHex,
+    "button.foreground": primaryFg,
+    "button.hoverBackground": alpha(primaryHex, 0.85),
+    "checkbox.background": bgHex,
+    "checkbox.foreground": fgHex,
+    "checkbox.border": borderHex,
+    "scrollbar.shadow": "#00000000",
+    "scrollbarSlider.background": alpha(fgHex, 0.12),
+    "scrollbarSlider.hoverBackground": alpha(fgHex, 0.2),
+    "scrollbarSlider.activeBackground": alpha(fgHex, 0.3),
+    "badge.background": primaryHex,
+    "badge.foreground": primaryFg,
+    "menu.background": cardHex,
+    "menu.foreground": fgHex,
+    "menu.selectionBackground": alpha(primaryHex, 0.15),
+    "menu.selectionForeground": fgHex,
+    "menu.border": borderHex,
+    "quickInput.background": cardHex,
+    "quickInput.foreground": fgHex,
+    "quickInputList.focusBackground": alpha(primaryHex, 0.15),
+    "notifications.background": cardHex,
+    "notifications.foreground": fgHex,
+    "notifications.border": borderHex,
+    "notificationToast.border": borderHex,
+    "peekViewEditor.background": bgHex,
+    "peekViewResult.background": cardHex,
+    "peekViewResult.selectionBackground": alpha(primaryHex, 0.15),
+    "peekViewTitle.background": cardHex,
+    "breadcrumb.background": "#00000000",
+    "breadcrumb.foreground": alpha(fgHex, 0.5),
+    "breadcrumb.activeSelectionForeground": fgHex,
+  };
+}
+
+const BUILTIN_THEMES = {
+  "tabs-dark": {
+    baseVariant: "dark",
+    colors: { background: "#141414", card: "#181818", foreground: "#f5f5f5", border: "rgba(255, 255, 255, 0.06)", primary: "#366ffb" },
+  },
+  "true-black": {
+    baseVariant: "dark",
+    colors: { background: "#000000", card: "#0a0a0a", foreground: "#ffffff", border: "rgba(255, 255, 255, 0.12)", primary: "#366ffb" },
+  },
+  "tabs-light": {
+    baseVariant: "light",
+    colors: { background: "#ffffff", card: "#f6f6f6", foreground: "#262626", border: "rgba(0, 0, 0, 0.08)", primary: "#2563eb" },
+  },
+  "abyss": {
+    baseVariant: "dark",
+    colors: { background: "#000c18", card: "#041426", foreground: "#c0cbe0", border: "rgba(0, 153, 255, 0.14)", primary: "#0099ff" },
+  },
+  "dracula": {
+    baseVariant: "dark",
+    colors: { background: "#282a36", card: "#21222c", foreground: "#f8f8f2", border: "rgba(98, 114, 164, 0.35)", primary: "#bd93f9" },
+  },
+  "deep-blue": {
+    baseVariant: "dark",
+    colors: { background: "#0f172a", card: "#1e293b", foreground: "#f1f5f9", border: "rgba(51, 65, 85, 0.65)", primary: "#38bdf8" },
+  },
+  "solarized-light": {
+    baseVariant: "light",
+    colors: { background: "#fdf6e3", card: "#eee8d5", foreground: "#657b83", border: "rgba(147, 161, 161, 0.28)", primary: "#268bd2" },
+  },
+};
+
+const CUSTOM_THEME_COLOR_KEYS = Object.keys(generateVsCodeColorCustomizations({ baseVariant: 'dark', colors: { background: '#000000', card: '#000000', foreground: '#ffffff', border: '#000000', primary: '#000000' } }));
+
+const activeConfig =
+  themeId === "custom" && parsed.customConfig && parsed.customConfig.colors
+    ? parsed.customConfig
+    : BUILTIN_THEMES[themeId] || BUILTIN_THEMES["tabs-dark"];
+
+const isLight = activeConfig.baseVariant === "light";
+const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
+const workspaceConfig = vscode.workspace.getConfiguration();
+await workspaceConfig.update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
+
+const themeOverrides = generateVsCodeColorCustomizations(activeConfig);
+const currentCustomizations = {
+  ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
+};
+
+for (const key of CUSTOM_THEME_COLOR_KEYS) {
+  const val = themeOverrides[key];
+  if (val !== undefined) {
+    currentCustomizations[key] = val;
+  } else {
+    delete currentCustomizations[key];
+  }
+}
+
+await workspaceConfig.update(
+  "workbench.colorCustomizations",
+  Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined,
+  vscode.ConfigurationTarget.Global,
+);
 
               const editorFont =
                 (parsed.fontPreferences && parsed.fontPreferences.editorFont) ||

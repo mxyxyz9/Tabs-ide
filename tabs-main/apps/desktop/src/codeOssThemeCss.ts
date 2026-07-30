@@ -128,17 +128,17 @@ export const CODE_OSS_THEME_CSS =
   --vscode-activityBarBadge-background: var(--tabs-accent-strong);
   --vscode-activityBarBadge-foreground: #ffffff;
   --vscode-button-background: var(--tabs-accent-strong);
-  --vscode-button-hoverBackground: #5189ff;
+  --vscode-button-hoverBackground: var(--tabs-accent-strong);
   --vscode-button-foreground: #ffffff;
   --vscode-progressBar-background: var(--tabs-accent);
-  --vscode-textLink-foreground: #5189ff;
-  --vscode-textLink-activeForeground: #88a9ff;
+  --vscode-textLink-foreground: var(--tabs-accent);
+  --vscode-textLink-activeForeground: var(--tabs-accent);
   --vscode-list-activeSelectionBackground: var(--tabs-accent-soft);
   --vscode-list-activeSelectionForeground: var(--tabs-text);
   --vscode-list-inactiveSelectionBackground: var(--tabs-ov-05);
   --vscode-list-hoverBackground: var(--tabs-ov-04);
   --vscode-list-focusOutline: transparent;
-  --vscode-pickerGroup-foreground: #5189ff;
+  --vscode-pickerGroup-foreground: var(--tabs-accent);
   --vscode-statusBarItem-remoteBackground: transparent;
   --vscode-statusBarItem-remoteForeground: var(--tabs-accent);
   --vscode-statusBarItem-hoverBackground: var(--tabs-ov-06);
@@ -146,7 +146,7 @@ export const CODE_OSS_THEME_CSS =
   --vscode-statusBarItem-prominentForeground: var(--tabs-text);
   --vscode-statusBarItem-prominentBackground: var(--tabs-ov-08);
   --vscode-statusBarItem-prominentHoverBackground: var(--tabs-ov-14);
-  --vscode-selection-background: rgba(54,111,251,0.28);
+  --vscode-selection-background: var(--tabs-accent-soft);
 
   /* --- Scrollbars ------------------------------------------------------- */
   --vscode-scrollbar-shadow: transparent;
@@ -186,89 +186,17 @@ body[data-theme="true-black"] .monaco-workbench {
   --tabs-accent-strong: #366ffb;
 }
 
-[data-theme="tabs-light"] .monaco-workbench,
-.monaco-workbench[data-theme="tabs-light"],
-html[data-theme="tabs-light"] .monaco-workbench,
-body[data-theme="tabs-light"] .monaco-workbench {
-  --tabs-bg: #ffffff;
-  --tabs-bg-sidebar: #f6f5f2;
-  --tabs-bg-elevated: #ffffff;
-  --tabs-bg-popover: #ffffff;
-  --tabs-input-bg: #f0eee9;
-  --tabs-text: #3a3936;
-  --tabs-text-muted: #73726d;
-  --tabs-accent: #366ffb;
-  --tabs-accent-strong: #366ffb;
-}
-
-[data-theme="abyss"] .monaco-workbench,
-.monaco-workbench[data-theme="abyss"],
-html[data-theme="abyss"] .monaco-workbench,
-body[data-theme="abyss"] .monaco-workbench {
-  --tabs-bg: #000c18;
-  --tabs-bg-sidebar: #001122;
-  --tabs-bg-elevated: #041930;
-  --tabs-bg-popover: #041930;
-  --tabs-input-bg: #072240;
-  --tabs-text: #bec8da;
-  --tabs-text-muted: #667898;
-  --tabs-accent: #007acc;
-  --tabs-accent-strong: #007acc;
-}
-
-[data-theme="dracula"] .monaco-workbench,
-.monaco-workbench[data-theme="dracula"],
-html[data-theme="dracula"] .monaco-workbench,
-body[data-theme="dracula"] .monaco-workbench {
-  --tabs-bg: #282a36;
-  --tabs-bg-sidebar: #21222c;
-  --tabs-bg-elevated: #343746;
-  --tabs-bg-popover: #343746;
-  --tabs-input-bg: #44475a;
-  --tabs-text: #f8f8f2;
-  --tabs-text-muted: #6272a4;
-  --tabs-accent: #bd93f9;
-  --tabs-accent-strong: #bd93f9;
-}
-
-[data-theme="deep-blue"] .monaco-workbench,
-.monaco-workbench[data-theme="deep-blue"],
-html[data-theme="deep-blue"] .monaco-workbench,
-body[data-theme="deep-blue"] .monaco-workbench {
-  --tabs-bg: #0f172a;
-  --tabs-bg-sidebar: #0b1120;
-  --tabs-bg-elevated: #1e293b;
-  --tabs-bg-popover: #1e293b;
-  --tabs-input-bg: #334155;
-  --tabs-text: #f8fafc;
-  --tabs-text-muted: #64748b;
-  --tabs-accent: #38bdf8;
-  --tabs-accent-strong: #38bdf8;
-}
-
-[data-theme="solarized-light"] .monaco-workbench,
-.monaco-workbench[data-theme="solarized-light"],
-html[data-theme="solarized-light"] .monaco-workbench,
-body[data-theme="solarized-light"] .monaco-workbench {
-  --tabs-bg: #fdf6e3;
-  --tabs-bg-sidebar: #eee8d5;
-  --tabs-bg-elevated: #fdf6e3;
-  --tabs-bg-popover: #eee8d5;
-  --tabs-input-bg: #eee8d5;
-  --tabs-text: #657b83;
-  --tabs-text-muted: #93a1a1;
-  --tabs-accent: #2aa198;
-  --tabs-accent-strong: #2aa198;
-}
-
-[data-theme="custom"] .monaco-workbench,
-.monaco-workbench[data-theme="custom"],
-html[data-theme="custom"] .monaco-workbench,
-body[data-theme="custom"] .monaco-workbench {
-  --tabs-bg-popover: var(--tabs-bg-elevated, var(--tabs-bg-sidebar, #181818));
-  --tabs-input-bg: var(--tabs-bg-elevated, var(--tabs-bg-sidebar, #1c1c1c));
+/* Unified surface token fallback rule across built-in and custom themes */
+.monaco-workbench {
+  --tabs-bg-sidebar: var(--tabs-bg-sidebar, var(--tabs-bg, #181818));
+  --tabs-bg-elevated: var(--tabs-bg-elevated, var(--tabs-bg-sidebar, #1f1f1f));
+  --tabs-bg-popover: var(--tabs-bg-popover, var(--tabs-bg-elevated, #181818));
+  --tabs-input-bg: var(--tabs-input-bg, var(--tabs-bg-sidebar, #1c1c1c));
   --tabs-text-muted: color-mix(in srgb, var(--tabs-text, #ffffff) 65%, transparent);
   --tabs-accent-strong: var(--tabs-accent, #366ffb);
+  --tabs-accent-soft: color-mix(in srgb, var(--tabs-accent, #366ffb) 15%, transparent);
+  --tabs-hairline: color-mix(in srgb, var(--tabs-text, #ffffff) 6%, transparent);
+  --tabs-hairline-strong: color-mix(in srgb, var(--tabs-text, #ffffff) 12%, transparent);
 }
 
 /* ===================================================== LIGHT THEME === */
@@ -524,8 +452,12 @@ body[data-theme="custom"] .monaco-workbench {
 /* Completely suppress top blue accent borders, corner cutouts, and indicators across all VS Code tab states */
 .monaco-workbench .tabs-container > .tab .tab-border-top,
 .monaco-workbench .tabs-container > .tab > .tab-border-top,
+.monaco-workbench .tabs-container > .tab .tab-border-top-container,
+.monaco-workbench .tabs-container > .tab > .tab-border-top-container,
 .monaco-workbench .tabs-container > .tab .tab-border-bottom,
 .monaco-workbench .tabs-container > .tab > .tab-border-bottom,
+.monaco-workbench .tabs-container > .tab .tab-border-bottom-container,
+.monaco-workbench .tabs-container > .tab > .tab-border-bottom-container,
 .monaco-workbench .tabs-container > .tab::before,
 .monaco-workbench .tabs-container > .tab::after,
 .monaco-workbench .tabs-container > .tab:hover::before,

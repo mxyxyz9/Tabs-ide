@@ -486,6 +486,35 @@
   --accent-wash-border: rgba(38, 139, 210, 0.30);
 }
 
+[data-theme="custom"] {
+  --app-chrome-background: var(--background);
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--muted, color-mix(in srgb, var(--foreground) 6%, var(--card)));
+  --secondary-foreground: var(--foreground);
+  --accent: var(--muted, color-mix(in srgb, var(--foreground) 6%, var(--card)));
+  --accent-foreground: var(--foreground);
+  --input: var(--border);
+  --fg-90: color-mix(in srgb, var(--foreground) 90%, transparent);
+  --fg-80: color-mix(in srgb, var(--foreground) 80%, transparent);
+  --fg-60: color-mix(in srgb, var(--foreground) 60%, transparent);
+  --fg-50: color-mix(in srgb, var(--foreground) 50%, transparent);
+  --fg-40: color-mix(in srgb, var(--foreground) 40%, transparent);
+  --fg-30: color-mix(in srgb, var(--foreground) 30%, transparent);
+  --fg-20: color-mix(in srgb, var(--foreground) 20%, transparent);
+  --fg-10: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --accent-wash-bg: color-mix(in srgb, var(--primary) 12%, transparent);
+  --accent-wash-border: color-mix(in srgb, var(--primary) 32%, transparent);
+  --sidebar-background: var(--card);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-accent: var(--muted, color-mix(in srgb, var(--foreground) 6%, var(--card)));
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground, #ffffff);
+}
+
 body {
   font-family: var(
     --font-sans,
@@ -564,6 +593,10 @@ input {
   -webkit-app-region: drag;
 }
 
+.no-drag,
+.drag-region .no-drag,
+.drag-region .cursor-pointer,
+.drag-region [role="button"],
 .drag-region button,
 .drag-region input,
 .drag-region textarea,

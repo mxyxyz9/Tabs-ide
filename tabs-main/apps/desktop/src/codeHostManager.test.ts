@@ -563,4 +563,69 @@ describe("CodeHostManager", () => {
       expect.stringContaining("removeProperty(key)"),
     );
   });
+
+  it("verifies custom theme token completeness covers all 12 --tabs-* surface tokens", async () => {
+    const window = createMockWindow();
+    const manager = new CodeHostManager(() => window as never, {
+      state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+      runtime: null,
+    });
+
+    await manager.ensureSession({ projectId: "proj-token-check", workspaceRoot: "/tmp/tc" });
+    const view = browserViews[0]!;
+
+    manager.setTheme("custom", {
+      colors: {
+        background: "#121212",
+        card: "#1e1e1e",
+        foreground: "#ffffff",
+        primary: "#ff007f",
+      },
+    });
+
+    const lastCallArg = (view.webContents.executeJavaScript as any).mock.calls.slice(-1)[0][0];
+    const requiredTokens = [
+      "--tabs-bg",
+      "--tabs-bg-sidebar",
+      "--tabs-bg-elevated",
+      "--tabs-bg-popover",
+      "--tabs-input-bg",
+      "--tabs-text",
+      "--tabs-text-muted",
+      "--tabs-accent",
+      "--tabs-accent-strong",
+      "--tabs-accent-soft",
+      "--tabs-hairline",
+      "--tabs-hairline-strong",
+    ];
+
+    requiredTokens.forEach((token) => {
+      expect(lastCallArg).toContain(token);
+    });
+  });
+
+  it("verifies setTheme executes cleanly across all 7 built-in themes plus custom theme", async () => {
+    const window = createMockWindow();
+    const manager = new CodeHostManager(() => window as never, {
+      state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+      runtime: null,
+    });
+
+    await manager.ensureSession({ projectId: "proj-all-themes", workspaceRoot: "/tmp/at" });
+
+    const themesToTest = [
+      "tabs-dark",
+      "true-black",
+      "tabs-light",
+      "abyss",
+      "dracula",
+      "deep-blue",
+      "solarized-light",
+      "custom",
+    ];
+
+    for (const themeId of themesToTest) {
+      expect(() => manager.setTheme(themeId)).not.toThrow();
+    }
+  });
 });

@@ -1177,7 +1177,12 @@ export class CodeHostManager {
             "--tabs-bg-popover": customConfig.colors.card,
             "--tabs-input-bg": customConfig.colors.card,
             "--tabs-text": customConfig.colors.foreground,
+            "--tabs-text-muted": `color-mix(in srgb, ${customConfig.colors.foreground} 65%, transparent)`,
             "--tabs-accent": customConfig.colors.primary,
+            "--tabs-accent-strong": customConfig.colors.primary,
+            "--tabs-accent-soft": `color-mix(in srgb, ${customConfig.colors.primary} 15%, transparent)`,
+            "--tabs-hairline": `color-mix(in srgb, ${customConfig.colors.foreground} 6%, transparent)`,
+            "--tabs-hairline-strong": `color-mix(in srgb, ${customConfig.colors.foreground} 12%, transparent)`,
           })
         : "null";
 
@@ -1191,7 +1196,12 @@ export class CodeHostManager {
         '--tabs-bg-popover',
         '--tabs-input-bg',
         '--tabs-text',
+        '--tabs-text-muted',
         '--tabs-accent',
+        '--tabs-accent-strong',
+        '--tabs-accent-soft',
+        '--tabs-hairline',
+        '--tabs-hairline-strong',
       ];
 
       const targets = [
