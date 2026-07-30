@@ -58,6 +58,8 @@ export function PanelToolbar({ children, className = "" }: { children: ReactNode
 }
 
 
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+
 export function Btn({
   children,
   icon: Icon,
@@ -99,17 +101,23 @@ export function Btn({
       {children}
     </>
   );
-  if (As === "a") {
-    return (
-      <a href={href} target="_blank" rel="noopener noreferrer" title={title} className={cls} style={style}>
-        {content}
-      </a>
-    );
-  }
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} title={title} className={cls} style={style}>
+  const element = As === "a" ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={style}>
+      {content}
+    </a>
+  ) : (
+    <button type="button" onClick={onClick} disabled={disabled} className={cls} style={style}>
       {content}
     </button>
+  );
+
+  if (!title) return element;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={element} />
+      <TooltipPopup side="top">{title}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -133,11 +141,17 @@ export function Card({ children, className = "", style, onClick }: { children: R
 export function PathBreadcrumb({ path }: { path: string }) {
   const parts = path.split("/");
   const file = parts.pop();
-  return (
-    <span className="text-xs font-mono truncate flex items-center gap-1 min-w-0" title={path}>
+  const content = (
+    <span className="text-xs font-mono truncate flex items-center gap-1 min-w-0">
       {parts.length > 0 && <span className="tx-30 truncate">{parts.join("/")}/</span>}
       <span className="tx-85 font-medium shrink-0">{file}</span>
     </span>
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger render={content} />
+      <TooltipPopup side="top" className="max-w-md break-all">{path}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -145,11 +159,17 @@ export function FilePathLabel({ path, size = "fs-11" }: { path: string; size?: s
   const parts = path.split("/");
   const file = parts.pop();
   const dir = parts.join("/");
-  return (
-    <div className="min-w-0 flex-1" title={path}>
+  const content = (
+    <div className="min-w-0 flex-1">
       {dir && <div className="fs-10 font-mono tx-30 truncate leading-tight">{dir}/</div>}
       <div className={`${size} font-mono tx-80 truncate leading-tight`}>{file}</div>
     </div>
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger render={content} />
+      <TooltipPopup side="top" className="max-w-md break-all">{path}</TooltipPopup>
+    </Tooltip>
   );
 }
 

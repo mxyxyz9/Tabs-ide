@@ -811,7 +811,7 @@ function ProjectTabs(props: {
                 className={cn(
                   "drag-region group relative inline-flex min-w-[9.5rem] max-w-[15rem] items-center gap-2 rounded-t-xl border px-3.5 py-2 text-xs font-semibold transition-all duration-150 cursor-pointer select-none",
                   active
-                    ? "relative -mb-px border-border border-b-card bg-card text-card-foreground shadow-sm ring-1 ring-border/50"
+                    ? "relative -mb-px border-border border-b-card bg-card text-card-foreground shadow-sm"
                     : "border-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                 )}
                 onClick={() => props.onActivateProject(project.id)}

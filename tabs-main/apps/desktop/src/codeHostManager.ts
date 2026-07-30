@@ -1161,40 +1161,65 @@ export class CodeHostManager {
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
   private activeProjectId: string | null = null;
   private currentThemeId: string = "tabs-dark";
+  private currentCustomConfig: any = null;
   private disposed = false;
+
+  private applyThemeToWebContents(webContents: Electron.WebContents): void {
+    if (!webContents || webContents.isDestroyed?.()) return;
+    const themeId = this.currentThemeId;
+    const customConfig = this.currentCustomConfig;
+    const customPropsJson =
+      themeId === "custom" && customConfig?.colors
+        ? JSON.stringify({
+            "--tabs-bg": customConfig.colors.background,
+            "--tabs-bg-sidebar": customConfig.colors.card,
+            "--tabs-bg-elevated": customConfig.colors.card,
+            "--tabs-bg-popover": customConfig.colors.card,
+            "--tabs-input-bg": customConfig.colors.card,
+            "--tabs-text": customConfig.colors.foreground,
+            "--tabs-accent": customConfig.colors.primary,
+          })
+        : "null";
+
+    const script = `(() => {
+      const themeId = ${JSON.stringify(themeId)};
+      const customProps = ${customPropsJson};
+      const TABS_PROP_KEYS = [
+        '--tabs-bg',
+        '--tabs-bg-sidebar',
+        '--tabs-bg-elevated',
+        '--tabs-bg-popover',
+        '--tabs-input-bg',
+        '--tabs-text',
+        '--tabs-accent',
+      ];
+
+      const targets = [
+        document.documentElement,
+        document.body,
+        document.querySelector('.monaco-workbench'),
+      ].filter(Boolean);
+
+      targets.forEach((el) => {
+        el.setAttribute('data-theme', themeId);
+        TABS_PROP_KEYS.forEach((key) => {
+          if (customProps && customProps[key]) {
+            el.style.setProperty(key, customProps[key]);
+          } else {
+            el.style.removeProperty(key);
+          }
+        });
+      });
+    })()`;
+    void webContents.executeJavaScript?.(script)?.catch(() => {});
+  }
 
   setTheme(themeId: string, customConfig?: any): void {
     this.currentThemeId = themeId;
+    this.currentCustomConfig = customConfig ?? null;
     for (const session of this.sessions.values()) {
-      if (session.view) {
-        let script = `document.documentElement.setAttribute('data-theme', '${themeId}'); document.body.setAttribute('data-theme', '${themeId}');`;
-        if (themeId === "custom" && customConfig?.colors) {
-          script += `
-            document.documentElement.style.setProperty('--tabs-bg', '${customConfig.colors.background}');
-            document.documentElement.style.setProperty('--tabs-bg-sidebar', '${customConfig.colors.card}');
-            document.documentElement.style.setProperty('--tabs-bg-elevated', '${customConfig.colors.card}');
-            document.documentElement.style.setProperty('--tabs-text', '${customConfig.colors.foreground}');
-            document.documentElement.style.setProperty('--tabs-accent', '${customConfig.colors.primary}');
-            const monaco = document.querySelector('.monaco-workbench');
-            if (monaco) {
-              monaco.style.setProperty('--tabs-bg', '${customConfig.colors.background}');
-              monaco.style.setProperty('--tabs-bg-sidebar', '${customConfig.colors.card}');
-              monaco.style.setProperty('--tabs-bg-elevated', '${customConfig.colors.card}');
-              monaco.style.setProperty('--tabs-text', '${customConfig.colors.foreground}');
-              monaco.style.setProperty('--tabs-accent', '${customConfig.colors.primary}');
-            }
-          `;
-        } else {
-          script += `
-            document.documentElement.style.removeProperty('--tabs-bg');
-            document.documentElement.style.removeProperty('--tabs-bg-sidebar');
-            document.documentElement.style.removeProperty('--tabs-text');
-            document.documentElement.style.removeProperty('--tabs-accent');
-          `;
-        }
-        void session.view.webContents
-          .executeJavaScript(script)
-          .catch(() => {});
+      if (session.view && !session.view.webContents.isDestroyed()) {
+        this.applyThemeToWebContents(session.view.webContents);
       }
     }
   }
@@ -1210,9 +1235,8 @@ export class CodeHostManager {
     // filesystem WebSocket channel is established), we send the openFile command
     // the moment the extension host connects over the control channel.
     this.controlChannel?.onExtensionHostConnected((projectId) => {
-      // 1. Sync the current app theme to the newly connected extension host
-      const currentTheme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
-      this.controlChannel?.setTheme(currentTheme);
+      // 1. Sync the current active app theme (including custom themes) to the newly connected extension host
+      this.controlChannel?.setTheme(this.currentThemeId, this.currentCustomConfig);
 
       // 2. Open any pending file
       const session = this.sessions.get(projectId);
@@ -1346,22 +1370,17 @@ export class CodeHostManager {
       // geistMonoFontCss.ts). insertCSS is cleared on navigation, so re-apply on
       // every load.
       const applyThemeCss = () => {
-        void view.webContents.insertCSS(GEIST_MONO_FONT_CSS).catch(() => {
+        void view.webContents.insertCSS?.(GEIST_MONO_FONT_CSS)?.catch(() => {
           /* view may have been torn down */
         });
-        void view.webContents.insertCSS(CODE_OSS_THEME_CSS).catch(() => {
+        void view.webContents.insertCSS?.(CODE_OSS_THEME_CSS)?.catch(() => {
           /* view may have been torn down */
         });
-        if (this.currentThemeId) {
-          void view.webContents
-            .executeJavaScript(
-              `document.documentElement.setAttribute('data-theme', '${this.currentThemeId}'); document.body.setAttribute('data-theme', '${this.currentThemeId}');`,
-            )
-            .catch(() => {});
-        }
+        this.applyThemeToWebContents(view.webContents);
       };
       view.webContents.on("did-finish-load", applyThemeCss);
       view.webContents.on("dom-ready", applyThemeCss);
+      applyThemeCss();
       // One-shot layout probe: record where each stock workbench part actually
       // sits (left/width/display) so "the chrome has a weird gap" reports are
       // diagnosable from ~/.tabs/userdata/layout-diagnostic.json instead of

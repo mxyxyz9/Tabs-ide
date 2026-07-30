@@ -261,6 +261,16 @@ body[data-theme="solarized-light"] .monaco-workbench {
   --tabs-accent-strong: #2aa198;
 }
 
+[data-theme="custom"] .monaco-workbench,
+.monaco-workbench[data-theme="custom"],
+html[data-theme="custom"] .monaco-workbench,
+body[data-theme="custom"] .monaco-workbench {
+  --tabs-bg-popover: var(--tabs-bg-elevated, var(--tabs-bg-sidebar, #181818));
+  --tabs-input-bg: var(--tabs-bg-elevated, var(--tabs-bg-sidebar, #1c1c1c));
+  --tabs-text-muted: color-mix(in srgb, var(--tabs-text, #ffffff) 65%, transparent);
+  --tabs-accent-strong: var(--tabs-accent, #366ffb);
+}
+
 /* ===================================================== LIGHT THEME === */
 /* When the embedded workbench is in a light color theme (VS Code marks the
    workbench with the .vs class; dark is .vs-dark), flip ONLY the neutral
@@ -502,10 +512,15 @@ body[data-theme="solarized-light"] .monaco-workbench {
 .monaco-workbench .tabs-container > .tab.active .monaco-icon-label::before {
   opacity: 1 !important;
 }
-/* Completely suppress top blue accent borders/indicators across all VS Code DOM elements */
+/* Completely suppress top blue accent borders, corner cutouts, and indicators across all VS Code tab states */
 .monaco-workbench .tabs-container > .tab .tab-border-top,
 .monaco-workbench .tabs-container > .tab > .tab-border-top,
-.monaco-workbench .tabs-container > .tab.active > .tab-border-top,
+.monaco-workbench .tabs-container > .tab .tab-border-bottom,
+.monaco-workbench .tabs-container > .tab > .tab-border-bottom,
+.monaco-workbench .tabs-container > .tab::before,
+.monaco-workbench .tabs-container > .tab::after,
+.monaco-workbench .tabs-container > .tab:hover::before,
+.monaco-workbench .tabs-container > .tab:hover::after,
 .monaco-workbench .tabs-container > .tab.active::before,
 .monaco-workbench .tabs-container > .tab.active::after {
   display: none !important;
@@ -515,6 +530,7 @@ body[data-theme="solarized-light"] .monaco-workbench {
   background: transparent !important;
   border: none !important;
   content: none !important;
+  box-shadow: none !important;
 }
 
 /* Tab text and file icon vertical alignment inside the tab pill. */

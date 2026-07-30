@@ -5,19 +5,6 @@ import * as Path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { browserViews, MockBrowserView } = vi.hoisted(() => {
-  const browserViews: {
-    webContents: {
-      loadURL: ReturnType<typeof vi.fn>;
-      close: ReturnType<typeof vi.fn>;
-      on: ReturnType<typeof vi.fn>;
-      removeListener: ReturnType<typeof vi.fn>;
-    };
-    loadedUrls: string[];
-    bounds: { x: number; y: number; width: number; height: number } | null;
-    setBackgroundColor: (color: string) => void;
-    setBounds: (bounds: { x: number; y: number; width: number; height: number }) => void;
-  }[] = [];
-
   class MockBrowserView {
     readonly webContents = {
       loadURL: vi.fn(async (url: string) => {
@@ -27,6 +14,9 @@ const { browserViews, MockBrowserView } = vi.hoisted(() => {
       on: vi.fn(),
       removeListener: vi.fn(),
       setWindowOpenHandler: vi.fn(),
+      insertCSS: vi.fn(async () => ""),
+      executeJavaScript: vi.fn(async () => null),
+      isDestroyed: vi.fn(() => false),
     };
 
     readonly loadedUrls: string[] = [];
@@ -42,6 +32,8 @@ const { browserViews, MockBrowserView } = vi.hoisted(() => {
       this.bounds = bounds;
     }
   }
+
+  const browserViews: MockBrowserView[] = [];
 
   return { browserViews, MockBrowserView };
 });
@@ -487,5 +479,88 @@ describe("CodeHostManager", () => {
       waitForBeforeUnload: false,
     });
     expect(browserViews[1]!.webContents.close).not.toHaveBeenCalled();
+  });
+
+  it("re-syncs the active theme ID (not generic dark/light) on extension host reconnect", async () => {
+    let extensionHostConnectedHandler: ((projectId: string) => void) | null = null;
+    const mockControlChannel = {
+      onExtensionHostConnected: vi.fn((handler) => {
+        extensionHostConnectedHandler = handler;
+      }),
+      setTheme: vi.fn(),
+      openFile: vi.fn(),
+    };
+
+    const window = createMockWindow();
+    const manager = new CodeHostManager(
+      () => window as never,
+      {
+        state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+        runtime: null,
+      },
+      mockControlChannel as never,
+    );
+
+    // Set a non-default theme (e.g. dracula)
+    manager.setTheme("dracula", { colors: { background: "#282a36" } });
+
+    // Simulate extension host connection
+    expect(extensionHostConnectedHandler).not.toBeNull();
+    extensionHostConnectedHandler!("project-1");
+
+    // Verify controlChannel.setTheme was called with "dracula" and custom config, not generic "dark"
+    expect(mockControlChannel.setTheme).toHaveBeenCalledWith("dracula", { colors: { background: "#282a36" } });
+  });
+
+  it("applies the active theme immediately when a fresh session BrowserView is created", async () => {
+    const window = createMockWindow();
+    const manager = new CodeHostManager(() => window as never, {
+      state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+      runtime: null,
+    });
+
+    // Set theme before session creation
+    manager.setTheme("solarized-light");
+
+    // Create fresh session BrowserView
+    await manager.ensureSession({ projectId: "proj-new", workspaceRoot: "/tmp/new" });
+
+    const view = browserViews[0];
+    expect(view).toBeDefined();
+    expect(view!.webContents.executeJavaScript).toHaveBeenCalledWith(
+      expect.stringContaining("solarized-light"),
+    );
+  });
+
+  it("symmetrically removes all inline --tabs-* CSS properties from monaco-workbench and documentElement when switching from custom theme to True Black", async () => {
+    const window = createMockWindow();
+    const manager = new CodeHostManager(() => window as never, {
+      state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+      runtime: null,
+    });
+
+    await manager.ensureSession({ projectId: "proj-1", workspaceRoot: "/tmp/1" });
+    const view = browserViews[0]!;
+
+    // 1. Set Custom Theme ("Cosmic Glow")
+    manager.setTheme("custom", {
+      colors: {
+        background: "#ffffff",
+        card: "#f6f5f2",
+        foreground: "#3a3936",
+        primary: "#366ffb",
+      },
+    });
+
+    expect(view.webContents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining("setProperty(key, customProps[key])"),
+    );
+
+    // 2. Switch directly to True Black
+    manager.setTheme("true-black");
+
+    expect(view.webContents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining("removeProperty(key)"),
+    );
   });
 });

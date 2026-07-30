@@ -140,7 +140,9 @@ function applyTheme(
     // Live CSS variable injection for custom theme
     const style = document.documentElement.style;
     const mutedFg = isDark ? "rgba(255, 255, 255, 0.65)" : "rgba(15, 23, 42, 0.65)";
-    const mutedBg = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)";
+    const mutedBg = `color-mix(in srgb, ${config.colors.foreground} 6%, ${config.colors.card})`;
+    const accentBg = `color-mix(in srgb, ${config.colors.primary} 12%, transparent)`;
+    const accentBorder = `color-mix(in srgb, ${config.colors.primary} 32%, transparent)`;
 
     style.setProperty("--background", config.colors.background);
     style.setProperty("--app-chrome-background", config.colors.background);
@@ -160,30 +162,68 @@ function applyTheme(
     style.setProperty("--ring", config.colors.primary);
     style.setProperty("--primary", config.colors.primary);
     style.setProperty("--primary-foreground", primaryFg);
+    style.setProperty("--accent-wash-bg", accentBg);
+    style.setProperty("--accent-wash-border", accentBorder);
+
+    style.setProperty("--sidebar-background", config.colors.card);
+    style.setProperty("--sidebar-foreground", config.colors.foreground);
+    style.setProperty("--sidebar-border", config.colors.border);
+    style.setProperty("--sidebar-accent", mutedBg);
+    style.setProperty("--sidebar-accent-foreground", config.colors.foreground);
+    style.setProperty("--sidebar-primary", config.colors.primary);
+    style.setProperty("--sidebar-primary-foreground", primaryFg);
+
+    style.setProperty("--code-oss-bg", config.colors.background);
+    style.setProperty("--code-oss-bg-sidebar", config.colors.card);
+    style.setProperty("--code-oss-bg-elevated", config.colors.card);
+    style.setProperty("--code-oss-bg-popover", config.colors.card);
+    style.setProperty("--code-oss-input-bg", config.colors.card);
+    style.setProperty("--code-oss-text", config.colors.foreground);
+    style.setProperty("--code-oss-text-muted", mutedFg);
+    style.setProperty("--code-oss-accent", config.colors.primary);
 
     syncDesktopTheme("custom", config, fonts);
   } else {
     // Clean up custom inline color CSS properties when switching back to curated themes
     const style = document.documentElement?.style;
     if (style && typeof style.removeProperty === "function") {
-      style.removeProperty("--background");
-      style.removeProperty("--app-chrome-background");
-      style.removeProperty("--foreground");
-      style.removeProperty("--card");
-      style.removeProperty("--card-foreground");
-      style.removeProperty("--popover");
-      style.removeProperty("--popover-foreground");
-      style.removeProperty("--muted");
-      style.removeProperty("--muted-foreground");
-      style.removeProperty("--secondary");
-      style.removeProperty("--secondary-foreground");
-      style.removeProperty("--accent");
-      style.removeProperty("--accent-foreground");
-      style.removeProperty("--border");
-      style.removeProperty("--input");
-      style.removeProperty("--ring");
-      style.removeProperty("--primary");
-      style.removeProperty("--primary-foreground");
+      [
+        "--background",
+        "--app-chrome-background",
+        "--foreground",
+        "--card",
+        "--card-foreground",
+        "--popover",
+        "--popover-foreground",
+        "--muted",
+        "--muted-foreground",
+        "--secondary",
+        "--secondary-foreground",
+        "--accent",
+        "--accent-foreground",
+        "--border",
+        "--input",
+        "--ring",
+        "--primary",
+        "--primary-foreground",
+        "--accent-wash-bg",
+        "--accent-wash-border",
+        "--sidebar-background",
+        "--sidebar-foreground",
+        "--sidebar-border",
+        "--sidebar-accent",
+        "--sidebar-accent-foreground",
+        "--sidebar-primary",
+        "--sidebar-primary-foreground",
+        "--code-oss-bg",
+        "--code-oss-bg-sidebar",
+        "--code-oss-bg-elevated",
+        "--code-oss-bg-popover",
+        "--code-oss-input-bg",
+        "--code-oss-text",
+        "--code-oss-text-muted",
+        "--code-oss-accent",
+      ].forEach((prop) => style.removeProperty(prop));
     }
 
     const definition: ThemeDefinition =
@@ -196,11 +236,21 @@ function applyTheme(
     syncDesktopTheme(activeThemeId, undefined, fonts);
   }
 
+  if (typeof document !== "undefined" && document.documentElement) {
+    // Synchronous layout reflow to flush DOM style recalculation
+    void document.documentElement.offsetHeight;
+    if (document.body) {
+      void document.body.offsetHeight;
+    }
+    // Invalidate Chromium GPU compositor backdrop-filter texture layers
+    window.dispatchEvent(new Event("resize"));
+  }
+
   if (suppressTransitions && typeof document !== "undefined" && document.documentElement) {
-    // Force a reflow so the no-transitions class takes effect before removal
-    // oxlint-disable-next-line no-unused-expressions
-    document.documentElement.offsetHeight;
     requestAnimationFrame(() => {
+      if (typeof document !== "undefined" && document.documentElement) {
+        void document.documentElement.offsetHeight;
+      }
       document.documentElement?.classList?.remove("no-transitions");
     });
   }

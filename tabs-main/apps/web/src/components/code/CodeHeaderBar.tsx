@@ -72,14 +72,21 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
         ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.quickOpen)}
-        className="flex h-7 w-[34rem] max-w-[55%] items-center gap-2 rounded-md border border-border/70 bg-card/60 px-3 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <SearchIcon className="size-3.5" />
-        <span className="truncate">Go to file…</span>
-      </button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <button
+              type="button"
+              onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.quickOpen)}
+              className="flex h-7 w-[34rem] max-w-[55%] items-center gap-2 rounded-md border border-border/70 bg-card/60 px-3 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <SearchIcon className="size-3.5" />
+              <span className="truncate">Go to file…</span>
+            </button>
+          }
+        />
+        <TooltipPopup side="bottom">Quick open file search</TooltipPopup>
+      </Tooltip>
 
       <div className="flex flex-1 items-center justify-end gap-1">
         {props.branch ? (
