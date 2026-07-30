@@ -15,6 +15,8 @@ import {
 } from "~/components/Icons";
 import { cn } from "~/lib/utils";
 import { SettingsSection } from "~/routes/_chat.settings";
+import { useTheme } from "~/hooks/useTheme";
+import { getActiveFontCombo } from "~/lib/themes";
 
 const SOURCE_CONTROL_COMMANDS: Record<string, { name: string; install?: string; login?: string }> =
   {
@@ -80,6 +82,8 @@ export function SourceControlSettingsPanel({
   startProviderAction,
   providerActionBusy,
 }: SourceControlSettingsPanelProps) {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = getActiveFontCombo(fontPreferences);
   const { data, isLoading, error, refetch, isFetching } = useSourceControlDiscovery();
   const [isJjExpanded, setIsJjExpanded] = useState(false);
 
@@ -104,7 +108,10 @@ export function SourceControlSettingsPanel({
     return (
       <div className="space-y-6">
         <div className="mb-2 space-y-1.5">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2
+            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+          >
             Source Control
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -124,7 +131,10 @@ export function SourceControlSettingsPanel({
     return (
       <div className="space-y-6">
         <div className="mb-2 space-y-1.5">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2
+            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+          >
             Source Control
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -158,7 +168,10 @@ export function SourceControlSettingsPanel({
     <div className="space-y-6">
       <div>
         <div className="space-y-1.5">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2
+            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+          >
             Source Control
           </h2>
           <p className="text-sm text-muted-foreground">

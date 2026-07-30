@@ -40,6 +40,8 @@ import { ServerPresetFormFields } from "./ServerPresetFormFields";
 
 import { projectsAtom } from "../state/threads";
 import { useAtomValue } from "@effect/atom-react";
+import { useTheme } from "../hooks/useTheme";
+import { getActiveFontCombo } from "../lib/themes";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -315,6 +317,8 @@ function isServerProcessDraftDirty(draft: ServerProcessDraft) {
 }
 
 export function ProjectWorkspaceSettingsSection() {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = getActiveFontCombo(fontPreferences);
   const { confirm, confirmDialog } = useConfirm();
   const activeProjectId = useWorkspaceActiveProjectId();
   const activeProject = useAtomValue(projectsAtom, (state) =>
@@ -684,8 +688,11 @@ export function ProjectWorkspaceSettingsSection() {
           <div className="flex items-start justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                  Project Workspace
+                <h2
+                  className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                  style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                >
+                  Workspace
                 </h2>
               </div>
               <p className="text-sm text-muted-foreground">

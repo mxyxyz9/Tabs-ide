@@ -131,11 +131,13 @@ import {
   DEFAULT_CUSTOM_THEME_LIGHT,
   DEFAULT_FONT_PREFERENCES,
   EDITOR_FONT_OPTIONS,
+  FONT_COMBOS,
   HEADING_FONT_OPTIONS,
   THEME_DEFINITIONS,
   UI_FONT_OPTIONS,
   calculateContrastRatio,
   calculateLuminance,
+  getActiveFontCombo,
   getOptimalPrimaryForeground,
   hexToHsv,
   hsvToHex,
@@ -711,12 +713,27 @@ export function SettingsSection({
   headerAction?: ReactNode;
   children: ReactNode;
 }) {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = useMemo(
+    () => getActiveFontCombo(fontPreferences),
+    [fontPreferences],
+  );
+
   return (
     <section className="space-y-3 pt-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
-          {title}
-        </h3>
+        {activeFontCombo.isNeutral ? (
+          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            {title}
+          </h3>
+        ) : (
+          <h2
+            className={cn("text-[18px] text-foreground/80 mb-4", activeFontCombo.serifClass)}
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {title}
+          </h2>
+        )}
         {headerAction}
       </div>
       <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
@@ -741,6 +758,12 @@ function SettingsRow({
   control?: ReactNode;
   children?: ReactNode;
 }) {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = useMemo(
+    () => getActiveFontCombo(fontPreferences),
+    [fontPreferences],
+  );
+
   return (
     <div
       className="border-t border-border px-4 py-4 first:border-t-0 sm:px-5"
@@ -749,7 +772,12 @@ function SettingsRow({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex min-h-5 items-center gap-1.5">
-            <h3 className="text-sm font-medium text-foreground">{title}</h3>
+            <h3
+              className="text-[14.5px] font-bold text-foreground flex items-center gap-2"
+              style={{ fontFamily: "var(--font-sans)" }}
+            >
+              {title}
+            </h3>
             <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">
               {resetAction}
             </span>
@@ -2049,6 +2077,11 @@ function SettingsRouteView() {
     fontPreferences,
     setFontPreferences,
   } = useTheme();
+
+  const activeFontCombo = useMemo(
+    () => getActiveFontCombo(fontPreferences),
+    [fontPreferences],
+  );
   const [zoomFactor, updateZoom] = useZoomFactor();
   const activeProjectId = useWorkspaceActiveProjectId();
   const settings = useSettings();
@@ -2119,6 +2152,7 @@ function SettingsRouteView() {
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [isCustomFontMode, setIsCustomFontMode] = useState(false);
   const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
   const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() => getStoredSavedPresets());
 
@@ -2755,7 +2789,9 @@ function SettingsRouteView() {
                     )}
                   >
                     <NavIcon className="size-4 shrink-0" />
-                    {item.label}
+                    <span className="capitalize">
+                      {item.label}
+                    </span>
                   </button>
                 );
               })}
@@ -2767,7 +2803,10 @@ function SettingsRouteView() {
                     <div>
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
-                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          <h2
+                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                          >
                             General
                           </h2>
                           <p className="text-sm text-muted-foreground">
@@ -3354,7 +3393,10 @@ function SettingsRouteView() {
                     <div>
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
-                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          <h2
+                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                          >
                             Themes
                           </h2>
                           <p className="text-sm text-muted-foreground">
@@ -3442,86 +3484,307 @@ function SettingsRouteView() {
                         </Button>
                       }
                     >
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5 p-5">
-                        <div className="space-y-2 rounded-2xl border border-border/80 bg-card/40 p-4">
-                          <label className="text-xs font-semibold text-foreground block">
-                            Interface Font
-                          </label>
-                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">
-                            UI labels, buttons, navigation
-                          </p>
-                          <Select
-                            value={fontPreferences.uiFont}
-                            onValueChange={(val) =>
-                              val && setFontPreferences((prev) => ({ ...prev, uiFont: val }))
-                            }
-                          >
-                            <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
-                              <SelectValue placeholder="Select Interface Font" />
-                            </SelectTrigger>
-                            <SelectPopup align="start">
-                              {UI_FONT_OPTIONS.map((f) => (
-                                <SelectItem key={f.value} value={f.value} className="text-xs">
-                                  {f.label}
-                                </SelectItem>
-                              ))}
-                            </SelectPopup>
-                          </Select>
-                        </div>
+                      {/* Neutral Defaults + Custom Pick pill row */}
+                      {(() => {
+                        const isCustomSelection = !FONT_COMBOS.some(
+                          (combo) =>
+                            combo.id !== "custom" &&
+                            fontPreferences.uiFont === combo.uiFont &&
+                            fontPreferences.headingFont === combo.headingFont,
+                        );
+                        const showCustomMixer = isCustomFontMode || isCustomSelection;
 
-                        <div className="space-y-2 rounded-2xl border border-border/80 bg-card/40 p-4">
-                          <label className="text-xs font-semibold text-foreground block">
-                            Heading Font
-                          </label>
-                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">
-                            Headings, section titles, headers
-                          </p>
-                          <Select
-                            value={fontPreferences.headingFont}
-                            onValueChange={(val) =>
-                              val && setFontPreferences((prev) => ({ ...prev, headingFont: val }))
-                            }
-                          >
-                            <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
-                              <SelectValue placeholder="Select Heading Font" />
-                            </SelectTrigger>
-                            <SelectPopup align="start">
-                              {HEADING_FONT_OPTIONS.map((f) => (
-                                <SelectItem key={f.value} value={f.value} className="text-xs">
-                                  {f.label}
-                                </SelectItem>
-                              ))}
-                            </SelectPopup>
-                          </Select>
-                        </div>
+                        return (
+                          <>
+                            <div className="px-4 pt-4 pb-2 flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mr-1">Defaults</span>
+                              {FONT_COMBOS.filter((c) => c.isNeutral).map((combo) => {
+                                const isCustomCombo = combo.id === "custom";
+                                const isActive = isCustomCombo
+                                  ? showCustomMixer
+                                  : !showCustomMixer &&
+                                    fontPreferences.uiFont === combo.uiFont &&
+                                    fontPreferences.headingFont === combo.headingFont;
 
-                        <div className="space-y-2 rounded-2xl border border-border/80 bg-card/40 p-4">
-                          <label className="text-xs font-semibold text-foreground block">
-                            Editor Font
-                          </label>
-                          <p className="text-[11px] text-muted-foreground line-clamp-1 mb-2">
-                            Monospace code, terminals, inputs
-                          </p>
-                          <Select
-                            value={fontPreferences.editorFont}
-                            onValueChange={(val) =>
-                              val && setFontPreferences((prev) => ({ ...prev, editorFont: val }))
-                            }
-                          >
-                            <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
-                              <SelectValue placeholder="Select Editor Font" />
-                            </SelectTrigger>
-                            <SelectPopup align="start">
-                              {EDITOR_FONT_OPTIONS.map((f) => (
-                                <SelectItem key={f.value} value={f.value} className="text-xs">
-                                  {f.label}
-                                </SelectItem>
-                              ))}
-                            </SelectPopup>
-                          </Select>
-                        </div>
-                      </div>
+                                return (
+                                  <button
+                                    key={combo.id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isCustomCombo) {
+                                        setIsCustomFontMode(true);
+                                      } else {
+                                        setIsCustomFontMode(false);
+                                        setFontPreferences((prev) => ({
+                                          ...prev,
+                                          uiFont: combo.uiFont,
+                                          headingFont: combo.headingFont,
+                                        }));
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
+                                      isActive
+                                        ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
+                                        : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                                    )}
+                                    style={{ fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined }}
+                                  >
+                                    {isActive && (
+                                      <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M2 6l3 3 5-5" />
+                                      </svg>
+                                    )}
+                                    {combo.name}
+                                    <span className={cn(
+                                      "text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border",
+                                      isActive ? "border-primary/30 text-primary/70 bg-primary/5" : "border-border/50 text-muted-foreground/50",
+                                    )}>
+                                      {combo.tag}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Divider */}
+                            <div className="mx-4 border-t border-border/40 mb-0" />
+
+                            {/* 10 Personality Cards — split-word specimen */}
+                            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                              {FONT_COMBOS.filter((c) => !c.isNeutral).map((combo) => {
+                                const isActive =
+                                  !showCustomMixer &&
+                                  fontPreferences.uiFont === combo.uiFont &&
+                                  fontPreferences.headingFont === combo.headingFont;
+
+                                return (
+                                  <button
+                                    key={combo.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCustomFontMode(false);
+                                      setFontPreferences((prev) => ({
+                                        ...prev,
+                                        uiFont: combo.uiFont,
+                                        headingFont: combo.headingFont,
+                                      }));
+                                    }}
+                                    className={cn(
+                                      "group relative flex flex-col items-start rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer overflow-hidden",
+                                      isActive
+                                        ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3),0_4px_20px_hsl(var(--primary)/0.15)]"
+                                        : "border-border/70 bg-card hover:border-border hover:shadow-md hover:scale-[1.02]",
+                                    )}
+                                  >
+                                    {/* Selected checkmark dot */}
+                                    {isActive && (
+                                      <div className="absolute top-2.5 right-2.5 size-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_hsl(var(--primary)/0.6)]">
+                                        <svg className="size-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                          <path d="M2 6l3 3 5-5" />
+                                        </svg>
+                                      </div>
+                                    )}
+
+                                    {/* ── Split-word specimen ── */}
+                                    <div className="mb-3 leading-none">
+                                      {/* sansText — heavy UI font, lowercase, tight */}
+                                      <span
+                                        className={cn("text-[28px] leading-none", combo.sansClass)}
+                                        style={{
+                                          fontFamily: combo.uiFont,
+                                          color: "inherit",
+                                        }}
+                                      >
+                                        {combo.sansText}
+                                      </span>
+                                      {/* serifText — pairing/accent font, italic */}
+                                      <span
+                                        className={cn("text-[28px] leading-none", combo.serifClass)}
+                                        style={{
+                                          fontFamily: combo.headingFont,
+                                          color: "inherit",
+                                        }}
+                                      >
+                                        {combo.serifText}
+                                      </span>
+                                      {/* sansText2 — back to heavy UI font */}
+                                      {combo.sansText2 && (
+                                        <span
+                                          className={cn("text-[28px] leading-none", combo.sansClass)}
+                                          style={{
+                                            fontFamily: combo.uiFont,
+                                            color: "inherit",
+                                          }}
+                                        >
+                                          {combo.sansText2}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Bottom: name + tag */}
+                                    <div className="mt-auto w-full">
+                                      <div
+                                        className={cn(
+                                          "text-[11px] font-semibold leading-tight truncate",
+                                          isActive ? "text-primary" : "text-foreground",
+                                        )}
+                                        style={{ fontFamily: combo.uiFont }}
+                                      >
+                                        {combo.name}
+                                      </div>
+                                      <div className="flex items-center justify-between mt-1 gap-1">
+                                        <span className="text-[9.5px] text-muted-foreground/60 leading-none truncate">
+                                          {combo.desc}
+                                        </span>
+                                        <span
+                                          className={cn(
+                                            "text-[7.5px] font-bold tracking-widest px-1.5 py-0.5 rounded border shrink-0",
+                                            isActive
+                                              ? "border-primary/40 text-primary bg-primary/10"
+                                              : "border-border/50 text-muted-foreground/50",
+                                          )}
+                                        >
+                                          {combo.tag}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Custom Mix Dropdowns Panel when Custom Pick is selected */}
+                            {showCustomMixer && (
+                              <div className="mx-4 my-2 p-4 rounded-xl border border-primary/40 bg-primary/5 space-y-3 animate-in fade-in duration-300">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                                    Custom Typography Mixer
+                                  </h4>
+                                  <span className="text-[10px] text-muted-foreground font-medium">
+                                    Mix &amp; match any UI, heading, or editor font
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                                  {/* Interface Font */}
+                                  <div className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3">
+                                    <label className="text-xs font-semibold text-foreground block">
+                                      Interface Font
+                                    </label>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                      UI labels, buttons, navigation
+                                    </p>
+                                    <Select
+                                      value={fontPreferences.uiFont}
+                                      onValueChange={(val) =>
+                                        val && setFontPreferences((prev) => ({ ...prev, uiFont: val }))
+                                      }
+                                    >
+                                      <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
+                                        <SelectValue placeholder="Select Interface Font" />
+                                      </SelectTrigger>
+                                      <SelectPopup align="start">
+                                        {UI_FONT_OPTIONS.map((f) => (
+                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                            {f.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectPopup>
+                                    </Select>
+                                  </div>
+
+                                  {/* Heading Font */}
+                                  <div className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3">
+                                    <label className="text-xs font-semibold text-foreground block">
+                                      Heading Font
+                                    </label>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                      Headings, section titles, headers
+                                    </p>
+                                    <Select
+                                      value={fontPreferences.headingFont}
+                                      onValueChange={(val) =>
+                                        val && setFontPreferences((prev) => ({ ...prev, headingFont: val }))
+                                      }
+                                    >
+                                      <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
+                                        <SelectValue placeholder="Select Heading Font" />
+                                      </SelectTrigger>
+                                      <SelectPopup align="start">
+                                        {HEADING_FONT_OPTIONS.map((f) => (
+                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                            {f.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectPopup>
+                                    </Select>
+                                  </div>
+
+                                  {/* Editor Font */}
+                                  <div className="space-y-1.5 rounded-lg border border-border/60 bg-card/60 p-3">
+                                    <label className="text-xs font-semibold text-foreground block">
+                                      Editor Font
+                                    </label>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                      Monospace code, terminals, inputs
+                                    </p>
+                                    <Select
+                                      value={fontPreferences.editorFont}
+                                      onValueChange={(val) =>
+                                        val && setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                                      }
+                                    >
+                                      <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
+                                        <SelectValue placeholder="Select Editor Font" />
+                                      </SelectTrigger>
+                                      <SelectPopup align="start">
+                                        {EDITOR_FONT_OPTIONS.map((f) => (
+                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                            {f.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectPopup>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Editor (mono) Font — power-user row when not in custom mixer */}
+                            {!showCustomMixer && (
+                              <div className="border-t border-border/60 px-4 py-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                  <div className="min-w-0 flex-1">
+                                    <h4 className="text-sm font-medium text-foreground">Editor Font</h4>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Monospace font for code, terminals, and diff views.</p>
+                                  </div>
+                                  <div className="shrink-0 w-full sm:w-52">
+                                    <Select
+                                      value={fontPreferences.editorFont}
+                                      onValueChange={(val) =>
+                                        val && setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                                      }
+                                    >
+                                      <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
+                                        <SelectValue placeholder="Select Editor Font" />
+                                      </SelectTrigger>
+                                      <SelectPopup align="end">
+                                        {EDITOR_FONT_OPTIONS.map((f) => (
+                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                            {f.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectPopup>
+                                    </Select>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </SettingsSection>
+
 
                     {/* Dedicated Option B Custom Studio Drawer */}
                     <CustomStudioDrawer
@@ -3544,7 +3807,10 @@ function SettingsRouteView() {
                     <div>
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
-                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          <h2
+                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                          >
                             Animations
                           </h2>
                           <p className="text-sm text-muted-foreground">
@@ -3867,7 +4133,10 @@ function SettingsRouteView() {
                     <div>
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
-                          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                          <h2
+                            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                          >
                             Providers
                           </h2>
                           <p className="text-sm text-muted-foreground">
@@ -4651,7 +4920,10 @@ function SettingsRouteView() {
                   <div className="space-y-6">
                     <div>
                       <div className="space-y-1.5">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                        <h2
+                          className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                          style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                        >
                           About
                         </h2>
                         <p className="text-sm text-muted-foreground">

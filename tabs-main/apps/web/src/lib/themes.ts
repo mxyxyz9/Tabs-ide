@@ -419,26 +419,37 @@ export const DEFAULT_FONT_PREFERENCES: FontPreferences = {
 
 export const UI_FONT_OPTIONS = [
   { value: "system-ui", label: "System UI (Default)" },
+  { value: "'Open Sans', sans-serif", label: "Open Sans" },
+  { value: "'Inter Tight', sans-serif", label: "Inter Tight" },
+  { value: "'Syne', sans-serif", label: "Syne" },
   { value: "'Space Grotesk', sans-serif", label: "Space Grotesk" },
-  { value: "'General Sans', sans-serif", label: "General Sans" },
-  { value: "'Inter', system-ui, sans-serif", label: "Inter" },
+  { value: "'Bricolage Grotesque', sans-serif", label: "Bricolage Grotesque" },
+  { value: "'Plus Jakarta Sans', sans-serif", label: "Plus Jakarta Sans" },
   { value: "'Outfit', sans-serif", label: "Outfit" },
-  { value: "'Nunito', sans-serif", label: "Nunito" },
-  { value: "'Quicksand', sans-serif", label: "Quicksand" },
-  { value: "'-apple-system', BlinkMacSystemFont, 'SF Pro Display', sans-serif", label: "SF Pro / Apple System" },
-  { value: "'Segoe UI', Tahoma, Geneva, sans-serif", label: "Segoe UI" },
-  { value: "'Roboto', sans-serif", label: "Roboto" },
+  { value: "'Chivo', sans-serif", label: "Chivo" },
+  { value: "'Epilogue', sans-serif", label: "Epilogue" },
+  { value: "'Manrope', sans-serif", label: "Manrope" },
+  { value: "'Unbounded', sans-serif", label: "Unbounded" },
+  { value: "'Inter', system-ui, sans-serif", label: "Inter" },
+  { value: "'General Sans', sans-serif", label: "General Sans" },
 ] as const;
 
 export const HEADING_FONT_OPTIONS = [
   { value: "system-ui", label: "Match Interface Font (Default)" },
+  { value: "'Inter', system-ui, sans-serif", label: "Inter" },
+  { value: "'Instrument Serif', serif", label: "Instrument Serif" },
+  { value: "'Newsreader', serif", label: "Newsreader" },
+  { value: "'DotGothic16', sans-serif", label: "DotGothic16" },
+  { value: "'Fraunces', serif", label: "Fraunces" },
+  { value: "'Playfair Display', serif", label: "Playfair Display" },
+  { value: "'JetBrains Mono', monospace", label: "JetBrains Mono" },
+  { value: "'Cormorant Garamond', serif", label: "Cormorant Garamond" },
+  { value: "'IBM Plex Mono', monospace", label: "IBM Plex Mono" },
   { value: "'Space Grotesk', sans-serif", label: "Space Grotesk" },
   { value: "'Clash Display', sans-serif", label: "Clash Display" },
   { value: "'Cabinet Grotesk', sans-serif", label: "Cabinet Grotesk" },
   { value: "'Syne', sans-serif", label: "Syne" },
   { value: "'Outfit', sans-serif", label: "Outfit" },
-  { value: "'Quicksand', sans-serif", label: "Quicksand" },
-  { value: "'Comfortaa', cursive", label: "Comfortaa" },
 ] as const;
 
 export const EDITOR_FONT_OPTIONS = [
@@ -451,6 +462,210 @@ export const EDITOR_FONT_OPTIONS = [
   { value: "Consolas, 'Liberation Mono', monospace", label: "Consolas" },
   { value: "'Source Code Pro', monospace", label: "Source Code Pro" },
 ] as const;
+
+export interface FontCombo {
+  id: string;
+  name: string;
+  desc: string;
+  tag: string;
+  uiFont: string;
+  headingFont: string;
+  /** First part of the split-word specimen — rendered in heavy UI font, lowercase */
+  sansText: string;
+  /** Middle part of the split-word specimen — rendered in the pairing accent font */
+  serifText: string;
+  /** Optional trailing word rendered back in the UI font */
+  sansText2?: string;
+  /** Tailwind classes for sans elements */
+  sansClass: string;
+  /** Tailwind classes for serif elements */
+  serifClass: string;
+  /** If true, show as a small neutral pill rather than a big personality card */
+  isNeutral?: boolean;
+}
+
+export const FONT_COMBOS: FontCombo[] = [
+  // ── Neutral defaults (shown as pills, not big cards) ──────────────────────
+  {
+    id: "system",
+    name: "System UI",
+    desc: "Your OS, no opinions",
+    tag: "DEFAULT",
+    uiFont: "system-ui",
+    headingFont: "system-ui",
+    sansText: "sys",
+    serifText: "tem",
+    sansClass: "font-bold tracking-tight normal-case",
+    serifClass: "font-normal normal-case",
+    isNeutral: true,
+  },
+  {
+    id: "plaintext",
+    name: "Plaintext Energy",
+    desc: "Zero drama, max readability",
+    tag: "NEUTRAL",
+    uiFont: "'Open Sans', sans-serif",
+    headingFont: "'Inter', system-ui, sans-serif",
+    sansText: "open",
+    serifText: "sans",
+    sansClass: "font-bold tracking-tight normal-case",
+    serifClass: "font-normal normal-case",
+    isNeutral: true,
+  },
+  {
+    id: "custom",
+    name: "Custom Pick",
+    desc: "Mix & match any fonts",
+    tag: "CUSTOM",
+    uiFont: "custom",
+    headingFont: "custom",
+    sansText: "cus",
+    serifText: "tom",
+    sansClass: "font-bold tracking-tight normal-case",
+    serifClass: "font-normal normal-case",
+    isNeutral: true,
+  },
+
+  // ── 10 Personality combos (shown as big specimen cards) ───────────────────
+  {
+    id: "inter-supremacy",
+    name: "Inter Supremacy",
+    desc: "Inter Tight + Instrument Serif",
+    tag: "SHARP",
+    uiFont: "'Inter Tight', sans-serif",
+    headingFont: "'Instrument Serif', serif",
+    sansText: "pre",
+    serifText: "cision ",
+    sansText2: "scale",
+        sansClass: "font-bold tracking-tighter lowercase",
+    serifClass: "italic font-normal normal-case",
+  },
+  {
+    id: "syne-dropped",
+    name: "Syne Dropped",
+    desc: "Syne + Newsreader",
+    tag: "BRUTAL",
+    uiFont: "'Syne', sans-serif",
+    headingFont: "'Newsreader', serif",
+    sansText: "ab",
+    serifText: "stract ",
+    sansText2: "forms",
+        sansClass: "font-extrabold tracking-tighter lowercase",
+    serifClass: "italic font-normal normal-case",
+  },
+  {
+    id: "grotesk-diff",
+    name: "Grotesk Diff",
+    desc: "Space Grotesk + DotGothic16",
+    tag: "WEB3",
+    uiFont: "'Space Grotesk', sans-serif",
+    headingFont: "'DotGothic16', sans-serif",
+    sansText: "geo",
+    serifText: "metric ",
+    sansText2: "node",
+        sansClass: "font-bold tracking-tight lowercase",
+    serifClass: "font-normal normal-case",
+  },
+  {
+    id: "kerning-crimes",
+    name: "Kerning Crimes",
+    desc: "Bricolage Grotesque + Fraunces",
+    tag: "EDITORIAL",
+    uiFont: "'Bricolage Grotesque', sans-serif",
+    headingFont: "'Fraunces', serif",
+    sansText: "syn",
+    serifText: "thetic ",
+    sansText2: "mind",
+        sansClass: "font-black tracking-tighter lowercase",
+    serifClass: "italic font-light normal-case",
+  },
+  {
+    id: "liquid-capital",
+    name: "Liquid Capital",
+    desc: "Plus Jakarta Sans + Playfair Display",
+    tag: "FINTECH",
+    uiFont: "'Plus Jakarta Sans', sans-serif",
+    headingFont: "'Playfair Display', serif",
+    sansText: "liq",
+    serifText: "uidity ",
+    sansText2: "pool",
+        sansClass: "font-extrabold tracking-tighter lowercase",
+    serifClass: "italic font-medium normal-case",
+  },
+  {
+    id: "git-blame-era",
+    name: "git blame era",
+    desc: "Outfit + JetBrains Mono",
+    tag: "DEV",
+    uiFont: "'Outfit', sans-serif",
+    headingFont: "'JetBrains Mono', monospace",
+    sansText: "a",
+    serifText: "sync ",
+    sansText2: "ops",
+        sansClass: "font-black tracking-tighter lowercase",
+    serifClass: "italic font-normal normal-case",
+  },
+  {
+    id: "ink-trap-szn",
+    name: "Ink Trap Szn",
+    desc: "Chivo + Cormorant Garamond",
+    tag: "AVANT",
+    uiFont: "'Chivo', sans-serif",
+    headingFont: "'Cormorant Garamond', serif",
+    sansText: "ki",
+    serifText: "netic ",
+    sansText2: "type",
+        sansClass: "font-black tracking-tighter lowercase",
+    serifClass: "italic font-medium normal-case",
+  },
+  {
+    id: "big-iron",
+    name: "Big Iron",
+    desc: "Epilogue + IBM Plex Mono",
+    tag: "INDUSTRIAL",
+    uiFont: "'Epilogue', sans-serif",
+    headingFont: "'IBM Plex Mono', monospace",
+    sansText: "om",
+    serifText: "ni ",
+    sansText2: "base",
+        sansClass: "font-black tracking-tighter lowercase",
+    serifClass: "italic font-normal normal-case",
+  },
+  {
+    id: "neural-drip",
+    name: "Neural Drip",
+    desc: "Manrope + Instrument Serif",
+    tag: "SAAS",
+    uiFont: "'Manrope', sans-serif",
+    headingFont: "'Instrument Serif', serif",
+    sansText: "neu",
+    serifText: "ral ",
+    sansText2: "net",
+        sansClass: "font-extrabold tracking-tighter lowercase",
+    serifClass: "italic font-normal normal-case",
+  },
+  {
+    id: "unbounded-swag",
+    name: "Unbounded Swag",
+    desc: "Unbounded + Newsreader",
+    tag: "HYPE",
+    uiFont: "'Unbounded', sans-serif",
+    headingFont: "'Newsreader', serif",
+    sansText: "lu",
+    serifText: "cid ",
+    sansText2: "state",
+        sansClass: "font-black tracking-tighter lowercase",
+    serifClass: "italic font-normal normal-case",
+  },
+];
+
+export function getActiveFontCombo(fonts: FontPreferences): FontCombo {
+  const match = FONT_COMBOS.find(
+    (c) => c.uiFont === fonts.uiFont && c.headingFont === fonts.headingFont,
+  );
+  return match ?? FONT_COMBOS[0]!;
+}
+
 
 /**
  * Calculates sRGB relative luminance for contrast ratio checking.

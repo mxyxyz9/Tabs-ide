@@ -6,6 +6,8 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { SettingsSection, SettingsHeaderPortal } from "~/routes/_chat.settings";
 import { toastManager } from "~/components/ui/toast";
 import { useConfirm } from "~/hooks/useConfirm";
+import { useTheme } from "~/hooks/useTheme";
+import { getActiveFontCombo } from "~/lib/themes";
 import {
   Link2Icon,
   MonitorIcon,
@@ -41,6 +43,8 @@ interface TailscaleStatus {
 export function ConnectionsSettings() {
   const isDesktop = typeof window !== "undefined" && !!window.desktopBridge;
   const { confirm, confirmDialog } = useConfirm();
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = getActiveFontCombo(fontPreferences);
   const [networkAccess, setNetworkAccess] = useState(false);
   const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus>({
     available: false,
@@ -135,7 +139,10 @@ export function ConnectionsSettings() {
 
       <div>
         <div className="space-y-1.5">
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
+          <h2
+            className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+          >
             Connections
           </h2>
           <p className="text-sm text-muted-foreground">

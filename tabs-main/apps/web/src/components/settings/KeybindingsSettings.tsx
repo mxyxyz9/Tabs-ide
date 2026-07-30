@@ -41,8 +41,9 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@tabs/contracts";
 import { parseKeybindingShortcut } from "@tabs/shared/keybindings";
-
 import { isElectron } from "../../env";
+import { useTheme } from "../../hooks/useTheme";
+import { getActiveFontCombo } from "../../lib/themes";
 import { formatShortcutLabel } from "../../keybindings";
 import { cn, isMacPlatform } from "../../lib/utils";
 import { ensureNativeApi } from "../../nativeApi";
@@ -964,7 +965,6 @@ function KeybindingTableRow({
     </div>
   );
 }
-
 export function KeybindingsSettings({
   keybindings,
   onUpsert,
@@ -972,7 +972,16 @@ export function KeybindingsSettings({
   keybindingsConfigPath,
   availableEditors,
   platform = typeof navigator === "undefined" ? "" : navigator.platform,
-}: KeybindingsSettingsProps) {
+}: {
+  keybindings: ResolvedKeybindingsConfig;
+  onUpsert: (rule: KeybindingRule) => void;
+  onRemove: (rule: KeybindingRule) => void;
+  keybindingsConfigPath: string;
+  availableEditors: Array<{ id: string; name: string }>;
+  platform?: string;
+}) {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = getActiveFontCombo(fontPreferences);
   const { confirm, confirmDialog } = useConfirm();
   const [query, setQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1191,7 +1200,12 @@ export function KeybindingsSettings({
           <div className="flex items-start justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">Keybindings</h2>
+                <h2
+                  className={cn("text-[28px] leading-normal pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                  style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                >
+                  Keybindings
+                </h2>
                 <span className="flex h-5 items-center justify-center rounded-full bg-primary/10 px-2 text-[11px] font-medium text-primary">
                   {rows.length} {rows.length === 1 ? "binding" : "bindings"}
                 </span>
