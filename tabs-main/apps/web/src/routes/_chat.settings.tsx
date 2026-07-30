@@ -2066,6 +2066,64 @@ function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
   );
 }
 
+const TOOLBAR_STYLES = [
+  { id: "solid", label: "Elevated Solid", description: "Pure high-contrast accent block with a soft elastic slide." },
+  { id: "ghost-mesh", label: "Ambient Mesh", description: "Soft radial gradient mesh fading elegantly from the bottom edge." },
+  { id: "spotlight", label: "Edge Illumination", description: "Directional light emitting smoothly from the top boundary." },
+  { id: "dot", label: "Minimal Indicator", description: "Ultra-minimal glowing indicator tracking below the active tab." },
+  { id: "refraction", label: "Frosted Lens", description: "Physical glass effect distorting a micro-dot matrix track." },
+  { id: "titanium", label: "Brushed Titanium", description: "Metallic machined finish with an animated sweeping glare." },
+] as const;
+
+function ToolbarPreview({ styleId }: { styleId: string }) {
+  const [activeTab, setActiveTab] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!trackRef.current || !pillRef.current) return;
+    const timeoutId = setTimeout(() => {
+      const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>('.nav-tab');
+      if (!tabs) return;
+      const targetTab = tabs[activeTab];
+      if (!targetTab) return;
+
+      const targetLeft = targetTab.offsetLeft;
+      const targetWidth = targetTab.offsetWidth;
+
+      if (pillRef.current) {
+        pillRef.current.style.transform = `translateX(${targetLeft}px)`;
+        pillRef.current.style.width = `${targetWidth}px`;
+      }
+    }, 10);
+    return () => clearTimeout(timeoutId);
+  }, [activeTab]);
+
+  return (
+    <div 
+      className="flex items-center justify-center p-4 bg-background/50 rounded-xl border border-border/40 my-2"
+      onClick={(e) => {
+        // prevent clicks from bubbling
+        e.stopPropagation();
+      }}
+    >
+      <div ref={trackRef} className={cn("nav-track", `design-${styleId}`)}>
+        <div ref={pillRef} className="active-pill" />
+        {['Code', 'Agents', 'Browser'].map((label, i) => (
+          <button 
+            key={label}
+            type="button" 
+            className={cn("nav-tab", activeTab === i && "active")}
+            onClick={() => setActiveTab(i)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SettingsRouteView() {
   const { confirm, confirmDialog } = useConfirm();
   const navigate = useNavigate();
@@ -3785,6 +3843,80 @@ function SettingsRouteView() {
                       })()}
                     </SettingsSection>
 
+                    <SettingsSection title="Toolbar Style">
+                      <div className="flex flex-col gap-8 p-4 sm:p-5">
+                        {/* Top Stage: Live Interactive Preview */}
+                        <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-border shadow-sm">
+                          <div className="absolute inset-0 bg-gradient-to-br from-background via-card to-background opacity-80" />
+                          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent opacity-50" />
+                          <div className="relative flex flex-col items-center justify-center p-8 pt-14 pb-10 min-h-[260px] gap-6">
+                            <h3 className="absolute top-5 left-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/60">
+                              Preview Stage
+                            </h3>
+                            <div className="flex-1 flex items-center justify-center">
+                              <ToolbarPreview styleId={settings.toolbarStyle} />
+                            </div>
+                            
+                            {(() => {
+                              const activeStyle = TOOLBAR_STYLES.find((s) => s.id === settings.toolbarStyle) ?? TOOLBAR_STYLES[0];
+                              return (
+                                <div className="flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <h4 className="font-medium text-[15px] tracking-tight text-foreground">
+                                      {activeStyle?.label}
+                                    </h4>
+                                    <span className="bg-primary/10 text-primary ring-1 ring-primary/20 px-2 py-0.5 rounded-full text-[9px] uppercase font-bold tracking-wider">
+                                      Active
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground max-w-[280px] leading-relaxed">
+                                    {activeStyle?.description}
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* Grid Selector for Styles */}
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                          {TOOLBAR_STYLES.map((style) => {
+                            const isSelected = settings.toolbarStyle === style.id;
+                            return (
+                              <button
+                                key={style.id}
+                                type="button"
+                                onClick={() => updateSettings({ toolbarStyle: style.id })}
+                                className={cn(
+                                  "group relative flex flex-col items-start p-4 rounded-xl border transition-all duration-300 text-left overflow-hidden",
+                                  isSelected
+                                    ? "bg-card border-primary/40 shadow-sm"
+                                    : "bg-transparent border-transparent hover:bg-card/50 hover:border-border/50"
+                                )}
+                              >
+                                {isSelected && (
+                                  <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.03] to-transparent pointer-events-none" />
+                                )}
+                                <div className="relative flex items-center justify-between w-full mb-1.5">
+                                  <span className={cn(
+                                    "font-medium text-sm transition-colors",
+                                    isSelected ? "text-primary" : "text-foreground group-hover:text-primary"
+                                  )}>
+                                    {style.label}
+                                  </span>
+                                  {isSelected && (
+                                    <div className="size-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+                                  )}
+                                </div>
+                                <p className="relative text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">
+                                  {style.description}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </SettingsSection>
 
                     {/* Dedicated Option B Custom Studio Drawer */}
                     <CustomStudioDrawer

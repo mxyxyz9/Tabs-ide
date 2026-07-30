@@ -50,6 +50,21 @@ export const DesktopIconTheme = Schema.Literals(["dark", "light"]);
 export type DesktopIconTheme = typeof DesktopIconTheme.Type;
 export const DEFAULT_DESKTOP_ICON_THEME: DesktopIconTheme = "dark";
 
+export const ToolbarStyle = Schema.Literals([
+  "solid",
+  "linear-edge",
+  "traveling-border",
+  "ghost-mesh",
+  "spotlight",
+  "dot",
+  "refraction",
+  "material",
+  "titanium",
+  "groove"
+]);
+export type ToolbarStyle = typeof ToolbarStyle.Type;
+export const DEFAULT_TOOLBAR_STYLE: ToolbarStyle = "solid";
+
 export const SplashLoaderStyle = Schema.Literals(["glass", "solari"]);
 export type SplashLoaderStyle = typeof SplashLoaderStyle.Type;
 export const DEFAULT_SPLASH_LOADER_STYLE: SplashLoaderStyle = "glass";
@@ -74,6 +89,9 @@ export const PinnedModelEntry = Schema.Struct({
 export type PinnedModelEntry = typeof PinnedModelEntry.Type;
 
 export const ClientSettingsSchema = Schema.Struct({
+  toolbarStyle: ToolbarStyle.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_TOOLBAR_STYLE)),
+  ),
   desktopIconTheme: DesktopIconTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DESKTOP_ICON_THEME)),
   ),
@@ -608,6 +626,7 @@ export const ServerSettingsPatch = Schema.Struct({
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 export const ClientSettingsPatch = Schema.Struct({
+  toolbarStyle: Schema.optionalKey(ToolbarStyle),
   desktopIconTheme: Schema.optionalKey(DesktopIconTheme),
   autoOpenPlanSidebar: Schema.optionalKey(Schema.Boolean),
   confirmThreadArchive: Schema.optionalKey(Schema.Boolean),

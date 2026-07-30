@@ -18,6 +18,7 @@ import { makeAppModelSelection } from "../modelSelection";
 import { type ProjectToolKind, type ProjectWorkspaceSettings } from "@tabs/contracts/settings";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
+
 import {
   ArrowDownIcon,
   ArrowLeftIcon,
@@ -911,9 +912,43 @@ function ProjectToolBar(props: {
   onSelectTool: (toolId: string) => void;
   onOpenSettings: () => void;
 }) {
+  const { toolbarStyle } = useSettings();
+  const activeIndex = props.availableTools.findIndex((t) => t.id === props.activeToolId);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!trackRef.current || !pillRef.current || activeIndex === -1) return;
+    
+    // Delay slightly to ensure layout is calculated properly
+    const timeoutId = setTimeout(() => {
+      const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>('.nav-tab');
+      if (!tabs) return;
+      const targetTab = tabs[activeIndex];
+      if (!targetTab) return;
+
+      const targetLeft = targetTab.offsetLeft;
+      const targetWidth = targetTab.offsetWidth;
+
+      if (pillRef.current) {
+        pillRef.current.style.transform = `translateX(${targetLeft}px)`;
+        pillRef.current.style.width = `${targetWidth}px`;
+      }
+    }, 10);
+    return () => clearTimeout(timeoutId);
+  }, [activeIndex, props.availableTools, toolbarStyle]);
+
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-card/85 px-3 py-2">
-      <div className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div 
+        ref={trackRef} 
+        className={cn(
+          "nav-track", 
+          `design-${toolbarStyle ?? "solid"}`,
+          "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        )}
+      >
+        <div ref={pillRef} className="active-pill" />
         {props.availableTools.map((tool) => {
           const active = tool.id === props.activeToolId;
           return (
@@ -921,12 +956,7 @@ function ProjectToolBar(props: {
               key={tool.id}
               type="button"
               onClick={() => props.onSelectTool(tool.id)}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                active
-                  ? "bg-primary text-primary-foreground shadow-sm font-semibold"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground border border-transparent",
-              )}
+              className={cn("nav-tab", active && "active")}
             >
               {toolIcon(tool.kind)}
               <span>{tool.label}</span>
