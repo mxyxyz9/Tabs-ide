@@ -454,12 +454,16 @@ body[data-theme="custom"] .monaco-workbench {
 /* Each tab item container */
 .monaco-workbench .tabs-container > .tab {
   position: relative !important;
-  margin: 3px 6px 0 0 !important;
-  padding: 0 10px !important;
-  height: calc(100% - 3px) !important;
+  margin: 0 2px 0 0 !important;
+  padding: 0 14px !important;
+  height: calc(100% - 2px) !important;
   min-height: 27px !important;
-  border-radius: 8px 8px 0 0 !important;
+  border-radius: 6px 6px 0 0 !important;
   border: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
   border-color: transparent !important;
   box-shadow: none !important;
   display: flex !important;
@@ -470,11 +474,13 @@ body[data-theme="custom"] .monaco-workbench {
   --vscode-tab-activeBorder: transparent !important;
   transition:
     background 120ms ease,
-    opacity 120ms ease;
+    opacity 120ms ease,
+    box-shadow 120ms ease;
 }
 /* Inactive tabs: flat background, quiet muted text, no outline or shadow */
 .monaco-workbench .tabs-container > .tab:not(.active) {
   background: transparent !important;
+  border-radius: 6px 6px 0 0 !important;
   border: none !important;
   border-color: transparent !important;
   box-shadow: none !important;
@@ -488,25 +494,28 @@ body[data-theme="custom"] .monaco-workbench {
 }
 .monaco-workbench .tabs-container > .tab:not(.active):hover {
   background: var(--tabs-ov-04) !important;
-  border-radius: 8px 8px 0 0 !important;
+  border-radius: 6px 6px 0 0 !important;
 }
 .monaco-workbench .tabs-container > .tab:not(.active):hover .tab-label {
   opacity: 0.85 !important;
 }
-/* Active tab: clean, flat, 2D elevated card pill with 8px rounded top corners */
+/* Active tab: raised card pill with 8px rounded top corners and upward shadow */
 .monaco-workbench .tabs-container > .tab.active {
-  margin: 2px 6px 0 0 !important;
-  height: calc(100% - 2px) !important;
+  margin: 0 2px 0 0 !important;
+  height: 100% !important;
   border-radius: 8px 8px 0 0 !important;
   background: var(--tabs-bg-elevated) !important;
   border: none !important;
   border-color: transparent !important;
-  box-shadow: none !important;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
   z-index: 2 !important;
+}
+.monaco-workbench.vs .tabs-container > .tab.active {
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08) !important;
 }
 .monaco-workbench .tabs-container > .tab.active .tab-label {
   opacity: 1 !important;
-  font-weight: 600 !important;
+  font-weight: 500 !important;
   color: var(--tabs-text) !important;
 }
 .monaco-workbench .tabs-container > .tab.active .monaco-icon-label::before {
@@ -522,7 +531,8 @@ body[data-theme="custom"] .monaco-workbench {
 .monaco-workbench .tabs-container > .tab:hover::before,
 .monaco-workbench .tabs-container > .tab:hover::after,
 .monaco-workbench .tabs-container > .tab.active::before,
-.monaco-workbench .tabs-container > .tab.active::after {
+.monaco-workbench .tabs-container > .tab.active::after,
+.monaco-workbench .tabs-container > .tab .monaco-icon-label-container::after {
   display: none !important;
   height: 0 !important;
   opacity: 0 !important;
