@@ -128,7 +128,7 @@ export const CODE_OSS_THEME_CSS =
   --vscode-activityBarBadge-background: var(--tabs-accent-strong);
   --vscode-activityBarBadge-foreground: #ffffff;
   --vscode-button-background: var(--tabs-accent-strong);
-  --vscode-button-hoverBackground: var(--tabs-accent-strong);
+  --vscode-button-hoverBackground: color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000);
   --vscode-button-foreground: #ffffff;
   --vscode-progressBar-background: var(--tabs-accent);
   --vscode-textLink-foreground: var(--tabs-accent);
@@ -976,13 +976,19 @@ body[data-theme="true-black"] .monaco-workbench {
   outline-offset: -1px;
   border-color: var(--tabs-accent) !important;
 }
-/* Buttons — soft radius; secondary buttons read as hairline ghosts. */
+/* Buttons — solid accent fill, always white text for legibility across all themes. */
 .monaco-workbench .monaco-button {
   border-radius: 8px !important;
   font-weight: 600;
+  color: #ffffff !important;
+  transition: background 120ms ease;
+}
+.monaco-workbench .monaco-button:hover {
+  filter: brightness(0.88);
 }
 .monaco-workbench .monaco-button.secondary {
   background: var(--tabs-ov-06) !important;
+  border-color: var(--tabs-hairline-strong) !important;
   color: var(--tabs-text) !important;
 }
 /* Keybinding chips (settings / keybindings editor) read as small key caps. */

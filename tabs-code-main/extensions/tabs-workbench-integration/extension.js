@@ -898,7 +898,7 @@ function generateVsCodeColorCustomizations(customConfig) {
     "dropdown.foreground": fgHex,
     "dropdown.border": borderHex,
     "button.background": primaryHex,
-    "button.foreground": primaryFg,
+    "button.foreground": "#ffffff",
     "button.hoverBackground": alpha(primaryHex, 0.85),
     "checkbox.background": bgHex,
     "checkbox.foreground": fgHex,
