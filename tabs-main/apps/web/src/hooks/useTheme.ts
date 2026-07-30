@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { evaluateThemeTokens } from "@tabs/shared/themeDerivation";
 import {
   DEFAULT_CUSTOM_THEME,
   DEFAULT_FONT_PREFERENCES,
@@ -129,149 +130,121 @@ function applyTheme(
 
   const activeThemeId = resolveActiveThemeId(preference);
 
+  let config: CustomThemeConfig;
   if (activeThemeId === "custom") {
-    const config = customConfigOverride ?? getStoredCustomThemeConfig();
-    const isDark = config.baseVariant === "dark";
-    const primaryFg = getOptimalPrimaryForeground(config.colors.primary);
+    config = customConfigOverride ?? getStoredCustomThemeConfig();
+  } else {
+    const def = THEME_DEFINITIONS[activeThemeId] ?? THEME_DEFINITIONS[DEFAULT_THEME_ID];
+    config = {
+      baseVariant: def.baseVariant,
+      colors: {
+        background: def.colors.background,
+        foreground: def.colors.foreground,
+        card: def.colors.card,
+        border: def.colors.border,
+        primary: def.colors.primary,
+      },
+      fonts: getStoredFontPreferences(),
+    };
+  }
 
-    document.documentElement.classList.toggle("dark", isDark);
-    document.documentElement.setAttribute("data-theme", "custom");
+  const isDark = config.baseVariant === "dark";
+  const evaluatedTokens = evaluateThemeTokens(config);
 
-    // Live CSS variable injection for custom theme
-    const style = document.documentElement.style;
-    const mutedFg = `color-mix(in srgb, ${config.colors.foreground} 65%, transparent)`;
-    const mutedBg = `color-mix(in srgb, ${config.colors.foreground} 6%, ${config.colors.card})`;
-    const accentBg = `color-mix(in srgb, ${config.colors.primary} 12%, transparent)`;
-    const accentBorder = `color-mix(in srgb, ${config.colors.primary} 32%, transparent)`;
+  const background = evaluatedTokens["editor.background"] || config.colors.background;
+  const cardBg = evaluatedTokens["app.cardBackground"] || config.colors.card;
+  const cardFg = evaluatedTokens["app.cardForeground"] || config.colors.foreground;
+  const foreground = evaluatedTokens["foreground"] || config.colors.foreground;
+  const border = evaluatedTokens["sideBar.border"] || config.colors.border;
+  const primary = evaluatedTokens["app.primaryBackground"] || config.colors.primary;
+  const primaryFg = evaluatedTokens["app.primaryForeground"] || getOptimalPrimaryForeground(primary);
+
+  const secondaryBg = evaluatedTokens["app.secondaryBackground"] || cardBg;
+  const secondaryFg = evaluatedTokens["app.secondaryForeground"] || foreground;
+  const accentBg = evaluatedTokens["app.accentBackground"] || cardBg;
+  const accentFg = evaluatedTokens["app.accentForeground"] || foreground;
+  const popoverBg = evaluatedTokens["app.popoverBackground"] || cardBg;
+  const popoverFg = evaluatedTokens["app.popoverForeground"] || foreground;
+  const mutedBg = evaluatedTokens["app.mutedBackground"] || cardBg;
+  const mutedFg = evaluatedTokens["app.mutedForeground"] || foreground;
+  const destructiveBg = evaluatedTokens["app.destructiveBackground"] || "#dc2626";
+  const destructiveFg = evaluatedTokens["app.destructiveForeground"] || "#ffffff";
+
+  document.documentElement?.classList?.toggle("dark", isDark);
+  document.documentElement?.setAttribute?.("data-theme", activeThemeId);
+
+  const style = document.documentElement?.style;
+  if (style) {
+    const accentWashBg = `color-mix(in srgb, ${primary} 12%, transparent)`;
+    const accentWashBorder = `color-mix(in srgb, ${primary} 32%, transparent)`;
 
     // App shell core tokens
-    style.setProperty("--background", config.colors.background);
-    style.setProperty("--app-chrome-background", config.colors.background);
-    style.setProperty("--foreground", config.colors.foreground);
-    style.setProperty("--card", config.colors.card);
-    style.setProperty("--card-foreground", config.colors.foreground);
-    style.setProperty("--popover", config.colors.card);
-    style.setProperty("--popover-foreground", config.colors.foreground);
+    style.setProperty("--background", background);
+    style.setProperty("--app-chrome-background", background);
+    style.setProperty("--foreground", foreground);
+    style.setProperty("--card", cardBg);
+    style.setProperty("--card-foreground", cardFg);
+    style.setProperty("--popover", popoverBg);
+    style.setProperty("--popover-foreground", popoverFg);
     style.setProperty("--muted", mutedBg);
     style.setProperty("--muted-foreground", mutedFg);
-    style.setProperty("--secondary", mutedBg);
-    style.setProperty("--secondary-foreground", config.colors.foreground);
-    style.setProperty("--accent", mutedBg);
-    style.setProperty("--accent-foreground", config.colors.foreground);
-    style.setProperty("--border", config.colors.border);
-    style.setProperty("--input", config.colors.border);
-    style.setProperty("--ring", config.colors.primary);
-    style.setProperty("--primary", config.colors.primary);
+    style.setProperty("--secondary", secondaryBg);
+    style.setProperty("--secondary-foreground", secondaryFg);
+    style.setProperty("--accent", accentBg);
+    style.setProperty("--accent-foreground", accentFg);
+    style.setProperty("--border", border);
+    style.setProperty("--input", border);
+    style.setProperty("--ring", primary);
+    style.setProperty("--primary", primary);
     style.setProperty("--primary-foreground", primaryFg);
-    style.setProperty("--accent-wash-bg", accentBg);
-    style.setProperty("--accent-wash-border", accentBorder);
+    style.setProperty("--destructive", destructiveBg);
+    style.setProperty("--destructive-foreground", destructiveFg);
+    style.setProperty("--accent-wash-bg", accentWashBg);
+    style.setProperty("--accent-wash-border", accentWashBorder);
+
+    // Inject all evaluated token variables onto root style so components can read them
+    Object.entries(evaluatedTokens).forEach(([key, val]) => {
+      const cssVarName = `--vscode-${key.replace(/\./g, "-")}`;
+      style.setProperty(cssVarName, val);
+    });
 
     // Text opacity scale
     [90, 80, 60, 50, 40, 30, 20, 10].forEach((pct) => {
-      style.setProperty(`--fg-${pct}`, `color-mix(in srgb, ${config.colors.foreground} ${pct}%, transparent)`);
+      style.setProperty(`--fg-${pct}`, `color-mix(in srgb, ${foreground} ${pct}%, transparent)`);
     });
 
     // Sidebar tokens
-    style.setProperty("--sidebar-background", config.colors.card);
-    style.setProperty("--sidebar-foreground", config.colors.foreground);
-    style.setProperty("--sidebar-border", config.colors.border);
-    style.setProperty("--sidebar-accent", mutedBg);
-    style.setProperty("--sidebar-accent-foreground", config.colors.foreground);
-    style.setProperty("--sidebar-primary", config.colors.primary);
+    style.setProperty("--sidebar-background", cardBg);
+    style.setProperty("--sidebar-foreground", foreground);
+    style.setProperty("--sidebar-border", border);
+    style.setProperty("--sidebar-accent", accentBg);
+    style.setProperty("--sidebar-accent-foreground", accentFg);
+    style.setProperty("--sidebar-primary", primary);
     style.setProperty("--sidebar-primary-foreground", primaryFg);
 
     // Code-OSS tokens
-    style.setProperty("--tabs-bg", config.colors.background);
-    style.setProperty("--tabs-bg-sidebar", config.colors.card);
-    style.setProperty("--tabs-bg-elevated", config.colors.card);
-    style.setProperty("--tabs-bg-popover", config.colors.card);
-    style.setProperty("--tabs-input-bg", config.colors.card);
-    style.setProperty("--tabs-text", config.colors.foreground);
+    style.setProperty("--tabs-bg", background);
+    style.setProperty("--tabs-bg-sidebar", cardBg);
+    style.setProperty("--tabs-bg-elevated", cardBg);
+    style.setProperty("--tabs-bg-popover", popoverBg);
+    style.setProperty("--tabs-input-bg", cardBg);
+    style.setProperty("--tabs-text", foreground);
     style.setProperty("--tabs-text-muted", mutedFg);
-    style.setProperty("--tabs-accent", config.colors.primary);
-    style.setProperty("--tabs-accent-strong", config.colors.primary);
-    style.setProperty("--tabs-accent-soft", `color-mix(in srgb, ${config.colors.primary} 15%, transparent)`);
+    style.setProperty("--tabs-accent", primary);
+    style.setProperty("--tabs-accent-strong", primary);
+    style.setProperty("--tabs-accent-soft", `color-mix(in srgb, ${primary} 15%, transparent)`);
 
-    style.setProperty("--code-oss-bg", config.colors.background);
-    style.setProperty("--code-oss-bg-sidebar", config.colors.card);
-    style.setProperty("--code-oss-bg-elevated", config.colors.card);
-    style.setProperty("--code-oss-bg-popover", config.colors.card);
-    style.setProperty("--code-oss-input-bg", config.colors.card);
-    style.setProperty("--code-oss-text", config.colors.foreground);
+    style.setProperty("--code-oss-bg", background);
+    style.setProperty("--code-oss-bg-sidebar", cardBg);
+    style.setProperty("--code-oss-bg-elevated", cardBg);
+    style.setProperty("--code-oss-bg-popover", popoverBg);
+    style.setProperty("--code-oss-input-bg", cardBg);
+    style.setProperty("--code-oss-text", foreground);
     style.setProperty("--code-oss-text-muted", mutedFg);
-    style.setProperty("--code-oss-accent", config.colors.primary);
-
-    syncDesktopTheme("custom", config, fonts);
-  } else {
-    // Clean up custom inline color CSS properties when switching back to curated themes
-    const style = document.documentElement?.style;
-    if (style && typeof style.removeProperty === "function") {
-      [
-        "--background",
-        "--app-chrome-background",
-        "--foreground",
-        "--card",
-        "--card-foreground",
-        "--popover",
-        "--popover-foreground",
-        "--muted",
-        "--muted-foreground",
-        "--secondary",
-        "--secondary-foreground",
-        "--accent",
-        "--accent-foreground",
-        "--border",
-        "--input",
-        "--ring",
-        "--primary",
-        "--primary-foreground",
-        "--accent-wash-bg",
-        "--accent-wash-border",
-        "--fg-90",
-        "--fg-80",
-        "--fg-60",
-        "--fg-50",
-        "--fg-40",
-        "--fg-30",
-        "--fg-20",
-        "--fg-10",
-        "--sidebar-background",
-        "--sidebar-foreground",
-        "--sidebar-border",
-        "--sidebar-accent",
-        "--sidebar-accent-foreground",
-        "--sidebar-primary",
-        "--sidebar-primary-foreground",
-        "--tabs-bg",
-        "--tabs-bg-sidebar",
-        "--tabs-bg-elevated",
-        "--tabs-bg-popover",
-        "--tabs-input-bg",
-        "--tabs-text",
-        "--tabs-text-muted",
-        "--tabs-accent",
-        "--tabs-accent-strong",
-        "--tabs-accent-soft",
-        "--code-oss-bg",
-        "--code-oss-bg-sidebar",
-        "--code-oss-bg-elevated",
-        "--code-oss-bg-popover",
-        "--code-oss-input-bg",
-        "--code-oss-text",
-        "--code-oss-text-muted",
-        "--code-oss-accent",
-      ].forEach((prop) => style.removeProperty(prop));
-    }
-
-    const definition: ThemeDefinition =
-      THEME_DEFINITIONS[activeThemeId] ?? THEME_DEFINITIONS[DEFAULT_THEME_ID];
-    const isDark = definition.baseVariant === "dark";
-
-    document.documentElement?.classList?.toggle("dark", isDark);
-    document.documentElement?.setAttribute?.("data-theme", activeThemeId);
-
-    syncDesktopTheme(activeThemeId, undefined, fonts);
+    style.setProperty("--code-oss-accent", primary);
   }
+
+  syncDesktopTheme(activeThemeId, activeThemeId === "custom" ? config : undefined, fonts);
 
   if (typeof document !== "undefined" && document.documentElement) {
     // Synchronous layout reflow to flush DOM style recalculation
@@ -279,8 +252,9 @@ function applyTheme(
     if (document.body) {
       void document.body.offsetHeight;
     }
-    // Invalidate Chromium GPU compositor backdrop-filter texture layers
-    window.dispatchEvent(new Event("resize"));
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new Event("resize"));
+    }
   }
 
   if (suppressTransitions && typeof document !== "undefined" && document.documentElement) {

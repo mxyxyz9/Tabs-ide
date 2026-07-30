@@ -399,20 +399,28 @@ export const THEME_DEFINITIONS: Record<ThemeId, ThemeDefinition> = {
   },
 };
 
-export interface CustomThemeConfig {
-  baseVariant: BaseVariant;
-  colors: {
-    background: string;
-    foreground: string;
-    card: string;
-    border: string;
-    primary: string;
-  };
-  fonts: {
-    uiFont: string;
-    editorFont: string;
-  };
-}
+import {
+  type CustomThemeConfig,
+  type TokenCategory,
+  type TokenMetadata,
+  type WcagCheckResult,
+  calculateLuminance,
+  calculateContrastRatio,
+  getOptimalPrimaryForeground,
+  evaluateThemeTokens,
+  runThemeWcagCheck,
+  VSCODE_TOKEN_REGISTRY,
+} from "@tabs/shared/themeDerivation";
+
+export type { CustomThemeConfig, TokenCategory, TokenMetadata, WcagCheckResult };
+export {
+  calculateLuminance,
+  calculateContrastRatio,
+  getOptimalPrimaryForeground,
+  evaluateThemeTokens,
+  runThemeWcagCheck,
+  VSCODE_TOKEN_REGISTRY,
+};
 
 export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   baseVariant: "dark",
@@ -443,6 +451,127 @@ export const DEFAULT_CUSTOM_THEME_LIGHT: CustomThemeConfig = {
     editorFont: "Menlo",
   },
 };
+
+export type RandomStyleMode = "balanced" | "pastel" | "vivid" | "minimal" | "cyberpunk" | "warm";
+
+export const RANDOM_STYLE_OPTIONS: { id: RandomStyleMode; label: string }[] = [
+  { id: "pastel", label: "Pastel Soft" },
+  { id: "vivid", label: "Vivid Electric" },
+  { id: "minimal", label: "Minimal Mono" },
+  { id: "cyberpunk", label: "Cyberpunk Neon" },
+  { id: "warm", label: "Warm Earthy" },
+  { id: "balanced", label: "Harmonized (Default)" },
+];
+
+const AESTHETIC_PREFIXES = [
+  "Tokyo", "Cyber", "Aesthetic", "Midnight", "Matcha", "Sakura", "Velvet",
+  "Obsidian", "Pixel", "Lunar", "Vibe", "Neon", "Ghost", "Solar", "Chai",
+  "Cosmic", "Electric", "Retro", "Emerald", "Twilight", "Solstice", "Oasis",
+  "Zenith", "Nebula", "Monaco", "Kyoto", "Mochi", "Indigo", "Lumina"
+];
+
+const AESTHETIC_SUFFIXES = [
+  "Drift", "Haze", "Glow", "Pulse", "Check", "Bloom", "Latte", "Signal",
+  "Wave", "Dust", "Aura", "Flare", "Syntax", "Shift", "Echo", "Mirage",
+  "Vibes", "Mist", "Realm", "Matrix", "Chroma", "Radiance", "Spark"
+];
+
+export function generateAestheticThemeName(): string {
+  const p = AESTHETIC_PREFIXES[Math.floor(Math.random() * AESTHETIC_PREFIXES.length)];
+  const s = AESTHETIC_SUFFIXES[Math.floor(Math.random() * AESTHETIC_SUFFIXES.length)];
+  return `${p} ${s}`;
+}
+
+const CURATED_PASTEL_HARMONIES = [
+  { bg: "#faf4f6", card: "#ffffff", border: "#f3dbe3", fg: "#2d1b22", primary: "#d9658b" },
+  { bg: "#f5f7f3", card: "#ffffff", border: "#dbe4d5", fg: "#182615", primary: "#4f8045" },
+  { bg: "#f6f5fa", card: "#ffffff", border: "#e0dcf2", fg: "#1d162d", primary: "#6c56ce" },
+  { bg: "#faf5f3", card: "#ffffff", border: "#f5dfd6", fg: "#2e1c15", primary: "#d46b50" },
+  { bg: "#f4f7fb", card: "#ffffff", border: "#d9e4f5", fg: "#122033", primary: "#3174ed" },
+  { bg: "#1a1721", card: "#231f2d", border: "#352e45", fg: "#ebdff7", primary: "#b388ff" },
+  { bg: "#151a17", card: "#1d2420", border: "#2c3831", fg: "#dcf2e6", primary: "#70c497" },
+];
+
+const CURATED_VIVID_HARMONIES = [
+  { bg: "#090d16", card: "#111827", border: "#1f2937", fg: "#f9fafb", primary: "#6366f1" },
+  { bg: "#06111e", card: "#0b1d32", border: "#143254", fg: "#f0f9ff", primary: "#06b6d4" },
+  { bg: "#130a10", card: "#20101b", border: "#381a2f", fg: "#fdf2f8", primary: "#f43f5e" },
+  { bg: "#041410", card: "#08241d", border: "#104236", fg: "#ecfdf5", primary: "#10b981" },
+  { bg: "#161108", card: "#241c0e", border: "#3f3018", fg: "#fffbeb", primary: "#f59e0b" },
+];
+
+const CURATED_MINIMAL_HARMONIES = [
+  { bg: "#0f172a", card: "#1e293b", border: "#334155", fg: "#f8fafc", primary: "#38bdf8" },
+  { bg: "#121212", card: "#1e1e1e", border: "#2d2d2d", fg: "#ededed", primary: "#f5f5f5" },
+  { bg: "#fafafa", card: "#ffffff", border: "#e5e5e5", fg: "#171717", primary: "#2563eb" },
+];
+
+const CURATED_CYBERPUNK_HARMONIES = [
+  { bg: "#080711", card: "#100e20", border: "#221c3d", fg: "#f3f0ff", primary: "#d946ef" },
+  { bg: "#0d021a", card: "#190533", border: "#340a66", fg: "#fae8ff", primary: "#00f0ff" },
+  { bg: "#020d07", card: "#051a0e", border: "#0b381d", fg: "#dcffe4", primary: "#00ff66" },
+  { bg: "#0a0e1a", card: "#12192e", border: "#1e294d", fg: "#e0e8ff", primary: "#7aa2f7" },
+];
+
+const CURATED_WARM_HARMONIES = [
+  { bg: "#18120e", card: "#251c16", border: "#3c2d24", fg: "#f7ede8", primary: "#e07a5f" },
+  { bg: "#120e0b", card: "#1c1612", border: "#30261f", fg: "#f4eae1", primary: "#d4a373" },
+  { bg: "#fcf8f5", card: "#ffffff", border: "#f0dfd5", fg: "#2c1a11", primary: "#c85a32" },
+  { bg: "#fdfbf7", card: "#ffffff", border: "#f2e9d8", fg: "#241c10", primary: "#b58900" },
+];
+
+export function generateHarmonizedPalette(
+  baseVariant: "dark" | "light",
+  styleMode: RandomStyleMode = "pastel",
+): CustomThemeConfig["colors"] {
+  let pool: typeof CURATED_PASTEL_HARMONIES;
+
+  switch (styleMode) {
+    case "pastel":
+      pool = CURATED_PASTEL_HARMONIES;
+      break;
+    case "vivid":
+      pool = CURATED_VIVID_HARMONIES;
+      break;
+    case "minimal":
+      pool = CURATED_MINIMAL_HARMONIES;
+      break;
+    case "cyberpunk":
+      pool = CURATED_CYBERPUNK_HARMONIES;
+      break;
+    case "warm":
+      pool = CURATED_WARM_HARMONIES;
+      break;
+    default:
+      pool = [...CURATED_PASTEL_HARMONIES, ...CURATED_VIVID_HARMONIES, ...CURATED_WARM_HARMONIES];
+      break;
+  }
+
+  const matched = pool.filter((p) => {
+    const isDarkBg = calculateLuminance(p.bg) < 0.2;
+    return baseVariant === "dark" ? isDarkBg : !isDarkBg;
+  });
+
+  const selected = matched.length > 0
+    ? matched[Math.floor(Math.random() * matched.length)]!
+    : pool[Math.floor(Math.random() * pool.length)]!;
+
+  let fg = selected.fg;
+  let bg = selected.bg;
+
+  let ratio = calculateContrastRatio(fg, bg).ratio;
+  if (ratio < 4.5) {
+    fg = baseVariant === "dark" ? "#f8fafc" : "#0f172a";
+  }
+
+  return {
+    background: bg,
+    foreground: fg,
+    card: selected.card,
+    border: selected.border,
+    primary: selected.primary,
+  };
+}
 
 export interface FontPreferences {
   uiFont: string;
@@ -706,54 +835,7 @@ export function getActiveFontCombo(fonts: FontPreferences): FontCombo {
 }
 
 
-/**
- * Calculates sRGB relative luminance for contrast ratio checking.
- */
-export function calculateLuminance(hex: string): number {
-  let clean = hex.replace("#", "").trim();
-  if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
-  }
-  if (clean.length !== 6) return 0.5;
-
-  const r = parseInt(clean.substring(0, 2), 16) / 255;
-  const g = parseInt(clean.substring(2, 4), 16) / 255;
-  const b = parseInt(clean.substring(4, 6), 16) / 255;
-
-  const cal = (val: number) =>
-    val <= 0.03928 ? val / 12.92 : Math.pow((val + 0.055) / 1.055, 2.4);
-
-  return 0.2126 * cal(r) + 0.7152 * cal(g) + 0.0722 * cal(b);
-}
-
-/**
- * Calculates WCAG contrast ratio between two hex colors.
- */
-export function calculateContrastRatio(fgHex: string, bgHex: string): {
-  ratio: number;
-  isLowContrast: boolean;
-} {
-  const l1 = calculateLuminance(fgHex);
-  const l2 = calculateLuminance(bgHex);
-  const lighter = Math.max(l1, l2);
-  const darker = Math.min(l1, l2);
-  const ratio = (lighter + 0.05) / (darker + 0.05);
-
-  return {
-    ratio: Math.round(ratio * 10) / 10,
-    isLowContrast: ratio < 4.5,
-  };
-}
-
-/**
- * Determines whether text on top of a primary accent color should be dark or white
- * based on WCAG luminance ratio.
- */
-export function getOptimalPrimaryForeground(primaryHex: string): string {
-  const whiteRatio = calculateContrastRatio("#ffffff", primaryHex).ratio;
-  const darkRatio = calculateContrastRatio("#090d16", primaryHex).ratio;
-  return whiteRatio >= darkRatio ? "#ffffff" : "#090d16";
-}
+// Color utilities re-exported from @tabs/shared/themeDerivation above.
 
 /**
  * Converts a hex color to HSV (Hue 0-360, Saturation 0-1, Value 0-1).

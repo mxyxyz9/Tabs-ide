@@ -775,160 +775,11 @@ function toHexColor(colorStr) {
   return str;
 }
 
+const { evaluateThemeTokens, VSCODE_TOKEN_REGISTRY } = require("./themeDerivation.js");
+
 function generateVsCodeColorCustomizations(customConfig) {
   if (!customConfig || !customConfig.colors) return {};
-  const c = customConfig.colors;
-  const isDark = customConfig.baseVariant === "dark";
-
-  const alpha = (color, op) => {
-    const hex = toHexColor(color);
-    if (!hex || typeof hex !== "string") return undefined;
-    const norm = hex.replace("#", "").trim();
-    const baseRgb = norm.length >= 6 ? norm.slice(0, 6) : norm;
-    const intOp = Math.round(op * 255).toString(16).padStart(2, "0");
-    return `#${baseRgb}${intOp}`;
-  };
-
-  const primaryFg = getOptimalPrimaryForeground(c.primary);
-  const mutedFg = isDark ? "#ffffffa6" : "#0f172aa6";
-  const borderHex = toHexColor(c.border);
-  const cardHex = toHexColor(c.card);
-  const bgHex = toHexColor(c.background);
-  const fgHex = toHexColor(c.foreground);
-  const primaryHex = toHexColor(c.primary);
-
-  return {
-    "focusBorder": primaryHex,
-    "foreground": fgHex,
-    "disabledForeground": alpha(fgHex, 0.38),
-    "widget.shadow": "#00000000",
-    "widget.border": borderHex,
-    "selection.background": alpha(primaryHex, 0.25),
-    "descriptionForeground": mutedFg,
-    "errorForeground": "#f87171",
-    "icon.foreground": fgHex,
-    "titleBar.activeBackground": bgHex,
-    "titleBar.activeForeground": fgHex,
-    "titleBar.inactiveBackground": bgHex,
-    "titleBar.inactiveForeground": alpha(fgHex, 0.5),
-    "titleBar.border": borderHex,
-    "activityBar.background": cardHex,
-    "activityBar.foreground": primaryHex,
-    "activityBar.inactiveForeground": alpha(fgHex, 0.5),
-    "activityBar.border": borderHex,
-    "activityBarBadge.background": primaryHex,
-    "activityBarBadge.foreground": primaryFg,
-    "activityBar.activeBorder": primaryHex,
-    "activityBar.activeBackground": alpha(primaryHex, 0.1),
-    "sideBar.background": cardHex,
-    "sideBar.foreground": fgHex,
-    "sideBar.border": borderHex,
-    "sideBarTitle.foreground": fgHex,
-    "sideBarSectionHeader.background": cardHex,
-    "sideBarSectionHeader.foreground": fgHex,
-    "sideBarSectionHeader.border": borderHex,
-    "editorGroupHeader.tabsBackground": cardHex,
-    "editorGroupHeader.tabsBorder": borderHex,
-    "editorGroupHeader.noTabsBackground": cardHex,
-    "editorGroup.border": borderHex,
-    "tab.activeBackground": cardHex,
-    "tab.activeForeground": fgHex,
-    "tab.inactiveBackground": cardHex,
-    "tab.inactiveForeground": alpha(fgHex, 0.55),
-    "tab.hoverBackground": alpha(fgHex, 0.05),
-    "tab.hoverForeground": fgHex,
-    "tab.activeBorderTop": "#00000000",
-    "tab.activeBorder": "#00000000",
-    "tab.unfocusedActiveBorderTop": "#00000000",
-    "tab.unfocusedActiveBorder": "#00000000",
-    "tab.border": "#00000000",
-    "editor.background": bgHex,
-    "editor.foreground": fgHex,
-    "editorLineNumber.foreground": alpha(fgHex, 0.4),
-    "editorLineNumber.activeForeground": primaryHex,
-    "editorCursor.foreground": primaryHex,
-    "editor.selectionBackground": alpha(primaryHex, 0.2),
-    "editor.selectionHighlightBackground": alpha(primaryHex, 0.12),
-    "editor.inactiveSelectionBackground": alpha(primaryHex, 0.1),
-    "editor.lineHighlightBackground": alpha(fgHex, 0.04),
-    "editor.lineHighlightBorder": "#00000000",
-    "editorIndentGuide.background": alpha(fgHex, 0.08),
-    "editorIndentGuide.activeBackground": alpha(fgHex, 0.16),
-    "editorWhitespace.foreground": alpha(fgHex, 0.1),
-    "editorWidget.background": cardHex,
-    "editorWidget.foreground": fgHex,
-    "editorWidget.border": borderHex,
-    "editorSuggestWidget.background": cardHex,
-    "editorSuggestWidget.border": borderHex,
-    "editorSuggestWidget.foreground": fgHex,
-    "editorSuggestWidget.selectedBackground": alpha(primaryHex, 0.15),
-    "editorHoverWidget.background": cardHex,
-    "editorHoverWidget.border": borderHex,
-    "panel.background": cardHex,
-    "panel.border": borderHex,
-    "panelTitle.activeForeground": fgHex,
-    "panelTitle.activeBorder": primaryHex,
-    "panelTitle.inactiveForeground": alpha(fgHex, 0.5),
-    "terminal.background": cardHex,
-    "terminal.foreground": fgHex,
-    "statusBar.background": cardHex,
-    "statusBar.foreground": fgHex,
-    "statusBar.border": borderHex,
-    "statusBar.noFolderBackground": cardHex,
-    "statusBar.noFolderForeground": fgHex,
-    "statusBar.debuggingBackground": cardHex,
-    "statusBar.debuggingForeground": fgHex,
-    "statusBarItem.hoverBackground": alpha(fgHex, 0.08),
-    "statusBarItem.activeBackground": alpha(fgHex, 0.15),
-    "list.hoverBackground": alpha(primaryHex, 0.1),
-    "list.hoverForeground": fgHex,
-    "list.activeSelectionBackground": alpha(primaryHex, 0.2),
-    "list.activeSelectionForeground": fgHex,
-    "list.inactiveSelectionBackground": alpha(primaryHex, 0.12),
-    "list.inactiveSelectionForeground": fgHex,
-    "list.focusBackground": alpha(primaryHex, 0.15),
-    "list.focusForeground": fgHex,
-    "list.highlightForeground": primaryHex,
-    "tree.indentGuidesStroke": alpha(fgHex, 0.1),
-    "input.background": bgHex,
-    "input.foreground": fgHex,
-    "input.border": borderHex,
-    "input.placeholderForeground": alpha(fgHex, 0.4),
-    "dropdown.background": cardHex,
-    "dropdown.foreground": fgHex,
-    "dropdown.border": borderHex,
-    "button.background": primaryHex,
-    "button.foreground": "#ffffff",
-    "button.hoverBackground": alpha(primaryHex, 0.85),
-    "checkbox.background": bgHex,
-    "checkbox.foreground": fgHex,
-    "checkbox.border": borderHex,
-    "scrollbar.shadow": "#00000000",
-    "scrollbarSlider.background": alpha(fgHex, 0.12),
-    "scrollbarSlider.hoverBackground": alpha(fgHex, 0.2),
-    "scrollbarSlider.activeBackground": alpha(fgHex, 0.3),
-    "badge.background": primaryHex,
-    "badge.foreground": primaryFg,
-    "menu.background": cardHex,
-    "menu.foreground": fgHex,
-    "menu.selectionBackground": alpha(primaryHex, 0.15),
-    "menu.selectionForeground": fgHex,
-    "menu.border": borderHex,
-    "quickInput.background": cardHex,
-    "quickInput.foreground": fgHex,
-    "quickInputList.focusBackground": alpha(primaryHex, 0.15),
-    "notifications.background": cardHex,
-    "notifications.foreground": fgHex,
-    "notifications.border": borderHex,
-    "notificationToast.border": borderHex,
-    "peekViewEditor.background": bgHex,
-    "peekViewResult.background": cardHex,
-    "peekViewResult.selectionBackground": alpha(primaryHex, 0.15),
-    "peekViewTitle.background": cardHex,
-    "breadcrumb.background": "#00000000",
-    "breadcrumb.foreground": alpha(fgHex, 0.5),
-    "breadcrumb.activeSelectionForeground": fgHex,
-  };
+  return evaluateThemeTokens(customConfig);
 }
 
 const BUILTIN_THEMES = {
@@ -956,13 +807,17 @@ const BUILTIN_THEMES = {
     baseVariant: "dark",
     colors: { background: "#0f172a", card: "#1e293b", foreground: "#f1f5f9", border: "rgba(51, 65, 85, 0.65)", primary: "#38bdf8" },
   },
+  "solarized-dark": {
+    baseVariant: "dark",
+    colors: { background: "#002b36", card: "#073642", foreground: "#839496", border: "rgba(38, 139, 210, 0.25)", primary: "#268bd2" },
+  },
   "solarized-light": {
     baseVariant: "light",
     colors: { background: "#fdf6e3", card: "#eee8d5", foreground: "#657b83", border: "rgba(147, 161, 161, 0.28)", primary: "#268bd2" },
   },
 };
 
-const CUSTOM_THEME_COLOR_KEYS = Object.keys(generateVsCodeColorCustomizations({ baseVariant: 'dark', colors: { background: '#000000', card: '#000000', foreground: '#ffffff', border: '#000000', primary: '#000000' } }));
+const CUSTOM_THEME_COLOR_KEYS = VSCODE_TOKEN_REGISTRY.map((t) => t.id);
 
 const activeConfig =
   themeId === "custom" && parsed.customConfig && parsed.customConfig.colors

@@ -1,3 +1,4 @@
+import { CustomThemeStudioModal } from "../components/CustomThemeStudioModal";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1244,394 +1245,7 @@ function ThemePickerGrid({
   );
 }
 
-function CustomStudioDrawer({
-  isOpen,
-  onClose,
-  config,
-  onChange,
-  onSavePreset,
-  initialPresetName = "",
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  config: CustomThemeConfig;
-  onChange: (next: CustomThemeConfig) => void;
-  onSavePreset: (name: string, config: CustomThemeConfig) => void;
-  initialPresetName?: string;
-}) {
-  const [presetNameInput, setPresetNameInput] = useState(initialPresetName);
-  const [randomStyle, setRandomStyle] = useState<RandomStyleMode>("pastel");
-
-  useEffect(() => {
-    setPresetNameInput(initialPresetName);
-  }, [initialPresetName, isOpen]);
-
-  const contrastInfo = useMemo(() => {
-    return calculateContrastRatio(config.colors.foreground, config.colors.background);
-  }, [config.colors.foreground, config.colors.background]);
-
-  if (!isOpen) return null;
-
-  const updateColor = (key: keyof CustomThemeConfig["colors"], value: string) => {
-    onChange({
-      ...config,
-      colors: {
-        ...config.colors,
-        [key]: value,
-      },
-    });
-  };
-
-  const updateFont = (key: keyof CustomThemeConfig["fonts"], value: string) => {
-    onChange({
-      ...config,
-      fonts: {
-        ...config.fonts,
-        [key]: value,
-      },
-    });
-  };
-
-  const handleRandomize = () => {
-    const randomizedColors = generateHarmonizedPalette(config.baseVariant, randomStyle);
-    onChange({
-      ...config,
-      colors: randomizedColors,
-    });
-    setPresetNameInput(generateAestheticThemeName());
-  };
-
-  const handleSave = () => {
-    const name = presetNameInput.trim() || generateAestheticThemeName();
-    onSavePreset(name, config);
-    setPresetNameInput("");
-  };
-
-  const handleReset = () => {
-    const isLightMode = config.baseVariant === "light" || document.documentElement.classList.contains("light");
-    onChange(isLightMode ? DEFAULT_CUSTOM_THEME_LIGHT : DEFAULT_CUSTOM_THEME);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="relative flex h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border/80 bg-card shadow-2xl animate-in zoom-in-95 duration-200">
-        {/* Drawer Header */}
-        <div className="flex items-center justify-between border-b border-border/70 px-6 py-4 bg-background/50 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <PaletteIcon className="size-5 text-muted-foreground shrink-0" />
-            <div>
-              <h3 className="text-base font-bold text-foreground tracking-tight">Custom Theme Studio</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Design, randomize, and save personalized color palettes and typography suites.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
-          >
-            <XIcon className="size-5" />
-          </button>
-        </div>
-
-        {/* Drawer Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column: Color Controls */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-1">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  Color Palette Tokens
-                </h4>
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div
-                        tabIndex={0}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium font-mono cursor-help transition-colors",
-                          contrastInfo.isLowContrast
-                            ? "text-amber-500 bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/15"
-                            : "text-muted-foreground bg-muted/60 border border-border/80 hover:bg-muted",
-                        )}
-                      >
-                        {contrastInfo.isLowContrast ? (
-                          <>
-                            <AlertTriangleIcon className="size-3.5 shrink-0 text-amber-500" />
-                            <span>Low Contrast ({contrastInfo.ratio}:1)</span>
-                          </>
-                        ) : (
-                          <span>Contrast {contrastInfo.ratio}:1</span>
-                        )}
-                      </div>
-                    }
-                  />
-                  <TooltipPopup side="top" className="max-w-64 text-center p-2">
-                    {contrastInfo.isLowContrast ? (
-                      <p className="text-xs leading-relaxed">
-                        <strong className="text-amber-400 block mb-0.5 font-semibold">Low Text Contrast ({contrastInfo.ratio}:1)</strong>
-                        Text color has low contrast against the background color, which may make text hard to read. Try brightening your text color or darkening the background.
-                      </p>
-                    ) : (
-                      <p className="text-xs leading-relaxed">
-                        <strong className="text-foreground block mb-0.5 font-semibold">Sufficient Contrast ({contrastInfo.ratio}:1)</strong>
-                        Text and background colors have strong contrast, ensuring all UI typography is clear and comfortable to read.
-                      </p>
-                    )}
-                  </TooltipPopup>
-                </Tooltip>
-              </div>
-
-              {/* Base Variant Switcher */}
-              <div className="flex items-center justify-between rounded-2xl border border-border/80 bg-background/50 p-3">
-                <div>
-                  <span className="text-xs font-semibold text-foreground block">Base Window Variant</span>
-                  <span className="text-[11px] text-muted-foreground">Native titlebar theme source</span>
-                </div>
-                <div className="flex rounded-xl bg-muted p-1 border border-border/40">
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...config, baseVariant: "dark" })}
-                    className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-lg transition-all",
-                      config.baseVariant === "dark"
-                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Dark
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...config, baseVariant: "light" })}
-                    className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-lg transition-all",
-                      config.baseVariant === "light"
-                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    Light
-                  </button>
-                </div>
-              </div>
-
-              <ColorPickerRow
-                label="Canvas Background"
-                description="App container & workbench background"
-                value={config.colors.background}
-                onChange={(val) => updateColor("background", val)}
-              />
-
-              <ColorPickerRow
-                label="Text / Foreground"
-                description="Headings, body typography, labels"
-                value={config.colors.foreground}
-                onChange={(val) => updateColor("foreground", val)}
-              />
-
-              <ColorPickerRow
-                label="Card / Surface"
-                description="Sidebars, modals, popovers"
-                value={config.colors.card}
-                onChange={(val) => updateColor("card", val)}
-              />
-
-              <ColorPickerRow
-                label="Border Outlines"
-                description="Dividers, card outlines, tab borders"
-                value={config.colors.border}
-                onChange={(val) => updateColor("border", val)}
-              />
-
-              <ColorPickerRow
-                label="Primary Accent"
-                description="Active highlights, buttons, indicators"
-                value={config.colors.primary}
-                onChange={(val) => updateColor("primary", val)}
-              />
-            </div>
-
-            {/* Right Column: Live Workbench Preview & Typography */}
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  Live Workbench Preview
-                </span>
-                <div
-                  className="relative overflow-hidden rounded-2xl border p-4 shadow-lg transition-all duration-300 space-y-3"
-                  style={{
-                    backgroundColor: config.colors.background,
-                    borderColor: config.colors.border,
-                    fontFamily: config.fonts.uiFont,
-                  }}
-                >
-                  <div className="flex items-center justify-between border-b pb-2.5" style={{ borderColor: config.colors.border }}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold" style={{ color: config.colors.foreground }}>
-                        Tabs Custom Shell
-                      </span>
-                      <span
-                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors"
-                        style={{
-                          backgroundColor: config.colors.primary,
-                          color: getOptimalPrimaryForeground(config.colors.primary),
-                        }}
-                      >
-                        LIVE PREVIEW
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg px-2.5 py-1 text-xs font-bold shadow-xs transition-colors"
-                        style={{
-                          backgroundColor: config.colors.primary,
-                          color: getOptimalPrimaryForeground(config.colors.primary),
-                        }}
-                      >
-                        Try again
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    className="rounded-xl p-3 text-xs font-mono border"
-                    style={{
-                      backgroundColor: config.colors.card,
-                      borderColor: config.colors.border,
-                      fontFamily: config.fonts.editorFont,
-                    }}
-                  >
-                    <span style={{ color: config.colors.primary }}>function </span>
-                    <span style={{ color: config.colors.foreground }}>renderCustomTheme</span>
-                    <span style={{ color: config.colors.foreground }}>() &#123;</span>
-                    <br />
-                    <span className="pl-4" style={{ color: config.colors.primary }}>return </span>
-                    <span style={{ color: config.colors.foreground }}>&quot;Ultra Premium UI&quot;;</span>
-                    <br />
-                    <span style={{ color: config.colors.foreground }}>&#125;</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Typography Settings */}
-              <div className="space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  Typography Suite
-                </h4>
-
-                <div className="space-y-2 rounded-2xl border border-border/80 bg-background/50 p-4">
-                  <label className="text-xs font-semibold text-foreground block">UI Sans-Serif Font</label>
-                  <Select
-                    value={config.fonts.uiFont}
-                    onValueChange={(val) => val && updateFont("uiFont", val)}
-                  >
-                    <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
-                      <SelectValue placeholder="Select UI Font" />
-                    </SelectTrigger>
-                    <SelectPopup align="start">
-                      {UI_FONT_OPTIONS.map((f) => (
-                        <SelectItem key={f.value} value={f.value} className="text-xs">
-                          {f.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-
-                <div className="space-y-2 rounded-2xl border border-border/80 bg-background/50 p-4">
-                  <label className="text-xs font-semibold text-foreground block">Editor Monospace Font</label>
-                  <Select
-                    value={config.fonts.editorFont}
-                    onValueChange={(val) => val && updateFont("editorFont", val)}
-                  >
-                    <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
-                      <SelectValue placeholder="Select Editor Font" />
-                    </SelectTrigger>
-                    <SelectPopup align="start">
-                      {EDITOR_FONT_OPTIONS.map((f) => (
-                        <SelectItem key={f.value} value={f.value} className="text-xs">
-                          {f.label}
-                        </SelectItem>
-                      ))}
-                    </SelectPopup>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Drawer Footer Action Bar */}
-        <div className="flex items-center justify-between border-t border-border/70 px-6 py-3.5 bg-muted/20 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center rounded-xl border border-border/80 bg-background/80 p-0.5 shadow-xs">
-              <Select
-                value={randomStyle}
-                onValueChange={(val) => val && setRandomStyle(val as RandomStyleMode)}
-              >
-                <SelectTrigger className="h-7 border-0 bg-transparent text-xs font-medium px-2.5 rounded-lg focus:ring-0 shadow-none">
-                  <SelectValue placeholder="Style" />
-                </SelectTrigger>
-                <SelectPopup align="start">
-                  {RANDOM_STYLE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.id} value={opt.id} className="text-xs">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectPopup>
-              </Select>
-              <div className="h-4 w-px bg-border/80 mx-0.5" />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleRandomize}
-                className="gap-1.5 rounded-lg text-xs font-medium h-7 px-3 cursor-pointer hover:bg-muted"
-              >
-                <ShuffleIcon className="size-3.5 text-muted-foreground" />
-                Randomize
-              </Button>
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleReset}
-              className="gap-2 rounded-xl text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <RotateCcwIcon className="size-3.5" />
-              Reset
-            </Button>
-          </div>
-
-          {/* Keybindings-inspired Palette Name Container */}
-          <div className="flex items-center gap-2 rounded-xl border border-border/80 bg-background/80 px-3 py-1 shadow-xs transition-all focus-within:border-foreground/50 focus-within:ring-1 focus-within:ring-foreground/20 w-72 sm:w-88">
-            <PaletteIcon className="size-3.5 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              value={presetNameInput}
-              onChange={(e) => setPresetNameInput(e.target.value)}
-              placeholder="Palette name..."
-              className="h-7 w-full border-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground font-sans outline-none focus:outline-none px-0 min-w-0 flex-1"
-            />
-            <Button
-              size="xs"
-              variant="default"
-              onClick={handleSave}
-              className="gap-1.5 rounded-lg text-xs font-medium px-3 h-7 shrink-0 cursor-pointer shadow-xs"
-            >
-              <SaveIcon className="size-3.5" />
-              Save Theme
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// CustomThemeStudioModal imported from components/CustomThemeStudioModal.tsx
 
 const CURATED_STUDIO_SWATCHES = [
   "#6366F1", "#06B6D4", "#10B981", "#F43F5E",
@@ -3865,7 +3479,7 @@ function SettingsRouteView() {
                                     <h4 className="font-medium text-[15px] tracking-tight text-foreground">
                                       {activeStyle?.label}
                                     </h4>
-                                    <span className="bg-primary/10 text-primary ring-1 ring-primary/20 px-2 py-0.5 rounded-full text-[9px] uppercase font-bold tracking-wider">
+                                    <span className="bg-muted text-foreground border border-border px-2 py-0.5 rounded-full text-[9px] uppercase font-bold tracking-wider">
                                       Active
                                     </span>
                                   </div>
@@ -3890,22 +3504,16 @@ function SettingsRouteView() {
                                 className={cn(
                                   "group relative flex flex-col items-start p-4 rounded-xl border transition-all duration-300 text-left overflow-hidden",
                                   isSelected
-                                    ? "bg-card border-primary/40 shadow-sm"
-                                    : "bg-transparent border-transparent hover:bg-card/50 hover:border-border/50"
+                                    ? "bg-card border-foreground/30 shadow-xs"
+                                    : "bg-transparent border-border/40 hover:bg-card/50 hover:border-border/80"
                                 )}
                               >
-                                {isSelected && (
-                                  <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.03] to-transparent pointer-events-none" />
-                                )}
                                 <div className="relative flex items-center justify-between w-full mb-1.5">
-                                  <span className={cn(
-                                    "font-medium text-sm transition-colors",
-                                    isSelected ? "text-primary" : "text-foreground group-hover:text-primary"
-                                  )}>
+                                  <span className="font-semibold text-sm transition-colors text-foreground">
                                     {style.label}
                                   </span>
                                   {isSelected && (
-                                    <div className="size-1.5 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
+                                    <div className="size-2 rounded-full bg-foreground/90 shadow-[0_0_6px_rgba(255,255,255,0.4)]" />
                                   )}
                                 </div>
                                 <p className="relative text-[12px] text-muted-foreground line-clamp-2 leading-relaxed">
@@ -3918,8 +3526,8 @@ function SettingsRouteView() {
                       </div>
                     </SettingsSection>
 
-                    {/* Dedicated Option B Custom Studio Drawer */}
-                    <CustomStudioDrawer
+                    {/* Redesigned Custom Theme Studio Modal */}
+                    <CustomThemeStudioModal
                       isOpen={isStudioOpen}
                       onClose={() => setIsStudioOpen(false)}
                       config={customThemeConfig}

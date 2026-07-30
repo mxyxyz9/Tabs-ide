@@ -1,0 +1,92 @@
+import { describe, expect, it } from "vitest";
+import {
+  alpha,
+  calculateContrastRatio,
+  ensureMinContrast,
+  evaluateThemeTokens,
+  runThemeWcagCheck,
+  toHexColor,
+  VSCODE_TOKEN_REGISTRY,
+  type CustomThemeConfig,
+} from "./themeDerivation";
+
+describe("themeDerivation shared module", () => {
+  const baseConfig: CustomThemeConfig = {
+    baseVariant: "dark",
+    colors: {
+      background: "#0f172a",
+      foreground: "#f8fafc",
+      card: "#1e293b",
+      border: "#334155",
+      primary: "#38bdf8",
+    },
+    fonts: {
+      uiFont: "Inter",
+      editorFont: "Fira Code",
+    },
+  };
+
+  it("registers ~95 tokens in VSCODE_TOKEN_REGISTRY including App Shell UI tokens", () => {
+    expect(VSCODE_TOKEN_REGISTRY.length).toBeGreaterThanOrEqual(90);
+    const savePresetToken = VSCODE_TOKEN_REGISTRY.find((t) => t.id === "app.primaryForeground");
+    expect(savePresetToken).toBeDefined();
+    expect(savePresetToken?.contrastPairId).toBe("app.primaryBackground");
+  });
+
+  it("evaluates default derived tokens cleanly when no overrides exist", () => {
+    const tokens = evaluateThemeTokens(baseConfig);
+    expect(tokens["editor.background"]).toBe("#0f172a");
+    expect(tokens["sideBar.background"]).toBe("#1e293b");
+    expect(tokens["app.primaryBackground"]).toBe("#38bdf8");
+    expect(tokens["app.primaryForeground"]).toBe("#0f172a");
+  });
+
+  it("applies tokenOverrides over default derived values", () => {
+    const overrideConfig: CustomThemeConfig = {
+      ...baseConfig,
+      tokenOverrides: {
+        "editor.background": "#000000",
+        "editorLineNumber.foreground": "#ff0000",
+        "app.primaryBackground": "#ec4899",
+      },
+    };
+
+    const tokens = evaluateThemeTokens(overrideConfig);
+    expect(tokens["editor.background"]).toBe("#000000");
+    expect(tokens["editorLineNumber.foreground"]).toBe("#ff0000");
+    expect(tokens["app.primaryBackground"]).toBe("#ec4899");
+    const contrast = calculateContrastRatio(tokens["app.primaryForeground"]!, tokens["app.primaryBackground"]!);
+    expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("automatically enforces min contrast during evaluateThemeTokens", () => {
+    const lowContrastConfig: CustomThemeConfig = {
+      ...baseConfig,
+      colors: {
+        ...baseConfig.colors,
+        background: "#ffffff",
+        foreground: "#f0f0f0", // Low contrast against white
+      },
+    };
+
+    const tokens = evaluateThemeTokens(lowContrastConfig);
+    const contrast = calculateContrastRatio(tokens["foreground"]!, tokens["editor.background"]!);
+    expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
+    expect(contrast.isLowContrast).toBe(false);
+
+    const auditResults = runThemeWcagCheck(tokens);
+    const failures = auditResults.filter((r) => r.isLowContrast);
+    expect(failures).toHaveLength(0);
+  });
+
+  it("ensures min contrast via ensureMinContrast helper", () => {
+    const clampedFg = ensureMinContrast("#f0f0f0", "#ffffff", 4.5);
+    const contrast = calculateContrastRatio(clampedFg, "#ffffff");
+    expect(contrast.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("converts hex and alpha values predictably", () => {
+    expect(toHexColor("#abc")).toBe("#aabbcc");
+    expect(alpha("#ffffff", 0.5)).toBe("#ffffff80");
+  });
+});

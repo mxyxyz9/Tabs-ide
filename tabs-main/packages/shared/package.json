@@ -59,6 +59,10 @@
     "./codeChrome": {
       "types": "./src/codeChrome.ts",
       "import": "./src/codeChrome.ts"
+    },
+    "./themeDerivation": {
+      "types": "./src/themeDerivation.ts",
+      "import": "./src/themeDerivation.ts"
     }
   },
   "scripts": {
