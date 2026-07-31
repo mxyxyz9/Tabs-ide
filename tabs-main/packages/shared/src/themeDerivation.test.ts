@@ -75,6 +75,7 @@ describe("themeDerivation shared module", () => {
 
     const auditResults = runThemeWcagCheck(tokens);
     const failures = auditResults.filter((r) => r.isLowContrast);
+    if (failures.length > 0) console.log("Failures:", failures);
     expect(failures).toHaveLength(0);
   });
 

@@ -736,10 +736,10 @@ function startCodeControlChannel(context) {
 function getLuminance(hex) {
   let clean = (hex || "").replace("#", "").trim();
   if (clean.length === 3) clean = clean.split("").map((c) => c + c).join("");
-  if (clean.length !== 6) return 0.5;
-  const r = parseInt(clean.slice(0, 2), 16) / 255;
-  const g = parseInt(clean.slice(2, 4), 16) / 255;
-  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  if (clean.length !== 6 && clean.length !== 8) return 0.5;
+  const r = parseInt(clean.substring(0, 2), 16) / 255;
+  const g = parseInt(clean.substring(2, 4), 16) / 255;
+  const b = parseInt(clean.substring(4, 6), 16) / 255;
   const a = [r, g, b].map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
   return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.722;
 }

@@ -59,105 +59,97 @@ export const CODE_OSS_THEME_CSS =
   --tabs-accent-fg: #ffffff;     /* primary button text color */
   --tabs-accent-soft: rgba(54,111,251,0.15);
 
-  --vscode-font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --vscode-font-family: var(--vscode-font-family, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
 
   /* --- Editor / foreground --------------------------------------------- */
-  --vscode-foreground: var(--tabs-text);
-  --vscode-editor-background: var(--tabs-bg);
-  --vscode-editor-foreground: var(--tabs-text);
-  --vscode-editorLineNumber-foreground: var(--tabs-text-muted);
-  --vscode-editorLineNumber-activeForeground: var(--tabs-text);
-  --vscode-editorIndentGuide-background1: var(--tabs-hairline);
-  --vscode-editorIndentGuide-activeBackground1: var(--tabs-hairline-strong);
-  --vscode-editorCursor-foreground: var(--tabs-accent);
-  --vscode-editor-lineHighlightBackground: var(--tabs-ov-03);
-  --vscode-editor-lineHighlightBorder: transparent;
-  --vscode-editor-selectionBackground: rgba(54,111,251,0.20);
-  --vscode-editor-inactiveSelectionBackground: rgba(54,111,251,0.10);
+  --vscode-foreground: var(--vscode-foreground, var(--tabs-text));
+  --vscode-editor-background: var(--vscode-editor-background, var(--tabs-bg));
+  --vscode-editor-foreground: var(--vscode-editor-foreground, var(--tabs-text));
+  --vscode-editorLineNumber-foreground: var(--vscode-editorLineNumber-foreground, var(--tabs-text-muted));
+  --vscode-editorLineNumber-activeForeground: var(--vscode-editorLineNumber-activeForeground, var(--tabs-text));
+  --vscode-editorIndentGuide-background1: var(--vscode-editorIndentGuide-background1, var(--tabs-hairline));
+  --vscode-editorIndentGuide-activeBackground1: var(--vscode-editorIndentGuide-activeBackground1, var(--tabs-hairline-strong));
+  --vscode-editorCursor-foreground: var(--vscode-editorCursor-foreground, var(--tabs-accent));
+  --vscode-editor-lineHighlightBackground: var(--vscode-editor-lineHighlightBackground, var(--tabs-ov-03));
+  --vscode-editor-lineHighlightBorder: var(--vscode-editor-lineHighlightBorder, transparent);
+  --vscode-editor-selectionBackground: var(--vscode-editor-selectionBackground, rgba(54,111,251,0.20));
+  --vscode-editor-inactiveSelectionBackground: var(--vscode-editor-inactiveSelectionBackground, rgba(54,111,251,0.10));
 
   /* --- Surfaces --------------------------------------------------------- */
-  --vscode-sideBar-background: var(--tabs-bg-sidebar);
-  --vscode-sideBarSectionHeader-background: transparent;
-  --vscode-sideBarTitle-foreground: var(--tabs-text-muted);
-  --vscode-activityBar-background: var(--tabs-bg);
-  --vscode-activityBar-foreground: var(--tabs-text);
-  --vscode-activityBar-inactiveForeground: #5f5f5f;
-  --vscode-panel-background: var(--tabs-bg-sidebar);
-  --vscode-panelSectionHeader-background: transparent;
-  --vscode-terminal-background: transparent;
-  --vscode-statusBar-background: var(--tabs-bg);
-  --vscode-statusBar-foreground: var(--tabs-text-muted);
-  --vscode-statusBar-noFolderBackground: var(--tabs-bg);
-  --vscode-titleBar-activeBackground: var(--tabs-bg);
-  --vscode-titleBar-inactiveBackground: var(--tabs-bg);
-  --vscode-titleBar-activeForeground: var(--tabs-text);
-  --vscode-editorGroupHeader-tabsBackground: transparent;
-  --vscode-editorGroupHeader-noTabsBackground: transparent;
-  --vscode-tab-inactiveBackground: transparent;
-  --vscode-tab-activeBackground: var(--tabs-bg-elevated);
-  --vscode-tab-hoverBackground: var(--tabs-ov-04);
-  --vscode-tab-activeForeground: var(--tabs-text);
-  --vscode-tab-inactiveForeground: var(--tabs-text-muted);
-  --vscode-breadcrumb-background: transparent;
-  --vscode-menu-background: var(--tabs-bg-popover);
-  --vscode-menu-foreground: var(--tabs-text);
-  --vscode-quickInput-background: var(--tabs-bg-popover);
-  --vscode-dropdown-background: var(--tabs-bg-popover);
-  --vscode-input-background: var(--tabs-input-bg);
-  --vscode-editorWidget-background: var(--tabs-bg-popover);
-  --vscode-notifications-background: var(--tabs-bg-popover);
-  --vscode-peekViewEditor-background: var(--tabs-bg);
+  --vscode-sideBar-background: var(--vscode-sideBar-background, var(--tabs-bg-sidebar));
+  --vscode-sideBarSectionHeader-background: var(--vscode-sideBarSectionHeader-background, transparent);
+  --vscode-sideBarTitle-foreground: var(--vscode-sideBarTitle-foreground, var(--tabs-text-muted));
+  --vscode-activityBar-background: var(--vscode-activityBar-background, var(--tabs-bg));
+  --vscode-activityBar-foreground: var(--vscode-activityBar-foreground, var(--tabs-text));
+  --vscode-activityBar-inactiveForeground: var(--vscode-activityBar-inactiveForeground, #5f5f5f);
+  --vscode-panel-background: var(--vscode-panel-background, var(--tabs-bg-sidebar));
+  --vscode-panelSectionHeader-background: var(--vscode-panelSectionHeader-background, transparent);
+  --vscode-terminal-background: var(--vscode-terminal-background, transparent);
+  --vscode-titleBar-activeBackground: var(--vscode-titleBar-activeBackground, var(--tabs-bg));
+  --vscode-titleBar-inactiveBackground: var(--vscode-titleBar-inactiveBackground, var(--tabs-bg));
+  --vscode-titleBar-activeForeground: var(--vscode-titleBar-activeForeground, var(--tabs-text));
+  --vscode-editorGroupHeader-tabsBackground: var(--vscode-editorGroupHeader-tabsBackground, transparent);
+  --vscode-editorGroupHeader-noTabsBackground: var(--vscode-editorGroupHeader-noTabsBackground, transparent);
+  --vscode-statusBar-background: var(--vscode-statusBar-background, var(--tabs-bg));
+  --vscode-statusBar-foreground: var(--vscode-statusBar-foreground, var(--tabs-text));
+  --vscode-tab-inactiveBackground: var(--vscode-tab-inactiveBackground, transparent);
+  --vscode-tab-activeBackground: var(--vscode-tab-activeBackground, var(--tabs-bg-elevated));
+  --vscode-tab-hoverBackground: var(--vscode-tab-hoverBackground, var(--tabs-ov-04));
+  --vscode-tab-activeForeground: var(--vscode-tab-activeForeground, var(--tabs-text));
+  --vscode-tab-inactiveForeground: var(--vscode-tab-inactiveForeground, var(--tabs-text-muted));
+  --vscode-breadcrumb-background: var(--vscode-breadcrumb-background, transparent);
+  --vscode-menu-background: var(--vscode-menu-background, var(--tabs-bg-popover));
+  --vscode-menu-foreground: var(--vscode-menu-foreground, var(--tabs-text));
+  --vscode-quickInput-background: var(--vscode-quickInput-background, var(--tabs-bg-popover));
+  --vscode-dropdown-background: var(--vscode-dropdown-background, var(--tabs-bg-popover));
+  --vscode-input-background: var(--vscode-input-background, var(--tabs-input-bg));
+  --vscode-editorWidget-background: var(--vscode-editorWidget-background, var(--tabs-bg-popover));
+  --vscode-notifications-background: var(--vscode-notifications-background, var(--tabs-bg-popover));
+  --vscode-peekViewEditor-background: var(--vscode-peekViewEditor-background, var(--tabs-bg));
 
   /* --- Borders ---------------------------------------------------------- */
-  --vscode-sideBar-border: var(--tabs-hairline);
-  --vscode-panel-border: var(--tabs-hairline);
-  --vscode-activityBar-border: var(--tabs-hairline);
-  --vscode-statusBar-border: var(--tabs-hairline);
-  --vscode-titleBar-border: var(--tabs-hairline);
-  --vscode-editorGroupHeader-tabsBorder: var(--tabs-hairline);
-  --vscode-tab-border: transparent;
-  --vscode-contrastBorder: transparent;
-  --vscode-widget-border: var(--tabs-hairline-strong);
-  --vscode-input-border: var(--tabs-hairline-strong);
-  --vscode-menu-border: var(--tabs-hairline-strong);
-  --vscode-editorWidget-border: var(--tabs-hairline-strong);
-  --vscode-notifications-border: var(--tabs-hairline-strong);
+  --vscode-sideBar-border: var(--vscode-sideBar-border, var(--tabs-hairline));
+  --vscode-panel-border: var(--vscode-panel-border, var(--tabs-hairline));
+  --vscode-activityBar-border: var(--vscode-activityBar-border, var(--tabs-hairline));
+  --vscode-statusBar-border: var(--vscode-statusBar-border, var(--tabs-hairline));
+  --vscode-titleBar-border: var(--vscode-titleBar-border, var(--tabs-hairline));
+  --vscode-editorGroupHeader-tabsBorder: var(--vscode-editorGroupHeader-tabsBorder, var(--tabs-hairline));
+  --vscode-tab-border: var(--vscode-tab-border, transparent);
+  --vscode-contrastBorder: var(--vscode-contrastBorder, transparent);
+  --vscode-widget-border: var(--vscode-widget-border, var(--tabs-hairline-strong));
+  --vscode-input-border: var(--vscode-input-border, var(--tabs-hairline-strong));
+  --vscode-menu-border: var(--vscode-menu-border, var(--tabs-hairline-strong));
+  --vscode-editorWidget-border: var(--vscode-editorWidget-border, var(--tabs-hairline-strong));
+  --vscode-notifications-border: var(--vscode-notifications-border, var(--tabs-hairline-strong));
 
   /* --- Accent / interaction -------------------------------------------- */
-  --vscode-focusBorder: var(--tabs-accent);
-  --vscode-inputOption-activeBorder: var(--tabs-accent);
-  --vscode-activityBarBadge-background: var(--tabs-accent-strong);
-  --vscode-activityBarBadge-foreground: var(--tabs-accent-fg);
-  --vscode-button-background: var(--tabs-accent-strong);
-  --vscode-button-hoverBackground: color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000);
-  --vscode-button-foreground: var(--tabs-accent-fg);
-  --vscode-button-separator: var(--tabs-accent-fg);
-  --vscode-button-secondaryBackground: var(--tabs-ov-06);
-  --vscode-button-secondaryForeground: var(--tabs-text);
-  --vscode-button-secondaryHoverBackground: var(--tabs-ov-10);
-  --vscode-progressBar-background: var(--tabs-accent);
-  --vscode-textLink-foreground: var(--tabs-accent);
-  --vscode-textLink-activeForeground: var(--tabs-accent);
-  --vscode-list-activeSelectionBackground: var(--tabs-accent-soft);
-  --vscode-list-activeSelectionForeground: var(--tabs-text);
-  --vscode-list-inactiveSelectionBackground: var(--tabs-ov-05);
-  --vscode-list-hoverBackground: var(--tabs-ov-04);
-  --vscode-list-focusOutline: transparent;
-  --vscode-pickerGroup-foreground: var(--tabs-accent);
-  --vscode-statusBarItem-remoteBackground: transparent;
-  --vscode-statusBarItem-remoteForeground: var(--tabs-accent);
-  --vscode-statusBarItem-hoverBackground: var(--tabs-ov-06);
-  --vscode-statusBarItem-activeBackground: var(--tabs-ov-10);
-  --vscode-statusBarItem-prominentForeground: var(--tabs-text);
-  --vscode-statusBarItem-prominentBackground: var(--tabs-ov-08);
-  --vscode-statusBarItem-prominentHoverBackground: var(--tabs-ov-14);
-  --vscode-selection-background: var(--tabs-accent-soft);
+  --vscode-focusBorder: var(--vscode-focusBorder, var(--tabs-accent));
+  --vscode-inputOption-activeBorder: var(--vscode-inputOption-activeBorder, var(--tabs-accent));
+  --vscode-activityBarBadge-background: var(--vscode-activityBarBadge-background, var(--tabs-accent-strong));
+  --vscode-activityBarBadge-foreground: var(--vscode-activityBarBadge-foreground, var(--tabs-accent-fg));
+  --vscode-button-background: var(--vscode-button-background, var(--tabs-accent-strong));
+  --vscode-button-hoverBackground: var(--vscode-button-hoverBackground, color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000));
+  --vscode-button-foreground: var(--vscode-button-foreground, var(--tabs-accent-fg));
+  --vscode-button-separator: var(--vscode-button-separator, var(--tabs-accent-fg));
+  --vscode-button-secondaryBackground: var(--vscode-button-secondaryBackground, var(--tabs-ov-06));
+  --vscode-button-secondaryForeground: var(--vscode-button-secondaryForeground, var(--tabs-text));
+  --vscode-button-secondaryHoverBackground: var(--vscode-button-secondaryHoverBackground, var(--tabs-ov-10));
+  --vscode-progressBar-background: var(--vscode-progressBar-background, var(--tabs-accent));
+  --vscode-textLink-foreground: var(--vscode-textLink-foreground, var(--tabs-accent));
+  --vscode-textLink-activeForeground: var(--vscode-textLink-activeForeground, var(--tabs-accent));
+  --vscode-list-activeSelectionBackground: var(--vscode-list-activeSelectionBackground, var(--tabs-accent-soft));
+  --vscode-list-activeSelectionForeground: var(--vscode-list-activeSelectionForeground, var(--tabs-text));
+  --vscode-list-inactiveSelectionBackground: var(--vscode-list-inactiveSelectionBackground, var(--tabs-ov-05));
+  --vscode-list-hoverBackground: var(--vscode-list-hoverBackground, var(--tabs-ov-04));
+  --vscode-list-focusOutline: var(--vscode-list-focusOutline, transparent);
+  --vscode-pickerGroup-foreground: var(--vscode-pickerGroup-foreground, var(--tabs-accent));
+  --vscode-selection-background: var(--vscode-selection-background, var(--tabs-accent-soft));
 
   /* --- Scrollbars ------------------------------------------------------- */
-  --vscode-scrollbar-shadow: transparent;
-  --vscode-scrollbarSlider-background: var(--tabs-ov-12);
-  --vscode-scrollbarSlider-hoverBackground: var(--tabs-ov-20);
-  --vscode-scrollbarSlider-activeBackground: var(--tabs-ov-30);
+  --vscode-scrollbar-shadow: var(--vscode-scrollbar-shadow, transparent);
+  --vscode-scrollbarSlider-background: var(--vscode-scrollbarSlider-background, var(--tabs-ov-12));
+  --vscode-scrollbarSlider-hoverBackground: var(--vscode-scrollbarSlider-hoverBackground, var(--tabs-ov-20));
+  --vscode-scrollbarSlider-activeBackground: var(--vscode-scrollbarSlider-activeBackground, var(--tabs-ov-30));
 }
 
 /* --- Per-Theme Token Overrides ------------------------------------ */
@@ -232,7 +224,7 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 .monaco-workbench.vs {
   --tabs-bg: #ffffff;
   --tabs-bg-sidebar: #f6f6f6;
-  --tabs-bg-elevated: #ffffff;
+  --tabs-bg-elevated: var(--vscode-tab-activeBackground, #ffffff);
   --tabs-bg-popover: #ffffff;
   --tabs-input-bg: #ffffff;
   --tabs-ov-015: rgba(0,0,0,0.03);
@@ -250,10 +242,10 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   --tabs-ov-30: rgba(0,0,0,0.32);
   --tabs-text: #262626;
   --tabs-text-muted: #5f5f5f;
-  --vscode-textLink-foreground: #2563eb;
-  --vscode-textLink-activeForeground: #1d4ed8;
-  --vscode-pickerGroup-foreground: #2563eb;
-  --vscode-activityBar-inactiveForeground: #8a8a8a;
+  --vscode-textLink-foreground: var(--vscode-textLink-foreground, #2563eb);
+  --vscode-textLink-activeForeground: var(--vscode-textLink-activeForeground, #1d4ed8);
+  --vscode-pickerGroup-foreground: var(--vscode-pickerGroup-foreground, #2563eb);
+  --vscode-activityBar-inactiveForeground: var(--vscode-activityBar-inactiveForeground, #8a8a8a);
 }
 /* Editor glows/selections that hardcode blue alpha read fine on white, but the
    cursor glow + line-highlight want the light overlay; those already use tokens.
@@ -318,7 +310,7 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
    strip with rounded, hover-revealed items in the app's muted palette. */
 .monaco-workbench .part.statusbar {
   border-top: 1px solid var(--tabs-hairline) !important;
-  background: var(--tabs-bg) !important;
+  background: var(--vscode-statusBar-background, var(--tabs-bg)) !important;
   font-size: 12px;
 }
 .monaco-workbench .statusbar .statusbar-item > a,
@@ -338,7 +330,7 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
    measures glyphs correctly; this keeps line-height in sync defensively). */
 .monaco-workbench .part.editor .monaco-editor,
 .monaco-workbench .part.editor .monaco-editor .view-lines {
-  --vscode-editorCodeLens-lineHeight: 1.6;
+  --vscode-editorCodeLens-lineHeight: var(--vscode-editorCodeLens-lineHeight, 1.6);
 }
 /* Thin 1.5px accent line cursor. */
 .monaco-workbench .monaco-editor .cursor {
@@ -422,8 +414,8 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   align-items: center !important;
   box-sizing: border-box !important;
   overflow: hidden !important;
-  --vscode-tab-activeBorderTop: transparent !important;
-  --vscode-tab-activeBorder: transparent !important;
+  --vscode-tab-activeBorderTop: var(--vscode-tab-activeBorderTop, transparent !important);
+  --vscode-tab-activeBorder: var(--vscode-tab-activeBorder, transparent !important);
   transition:
     background 120ms ease,
     opacity 120ms ease,
@@ -456,7 +448,7 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   margin: 0 2px 0 0 !important;
   height: 100% !important;
   border-radius: 8px 8px 0 0 !important;
-  background: var(--tabs-bg-elevated) !important;
+  background: var(--vscode-tab-activeBackground, var(--tabs-bg-elevated)) !important;
   border: none !important;
   border-color: transparent !important;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3) !important;
@@ -777,7 +769,7 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 /* Barely-visible 1px panel resize handle. */
 .monaco-workbench .monaco-sash.horizontal,
 .monaco-workbench .monaco-sash.vertical {
-  --vscode-sash-hoverBorder: var(--tabs-accent);
+  --vscode-sash-hoverBorder: var(--vscode-sash-hoverBorder, var(--tabs-accent));
 }
 .monaco-workbench .part.panel > .composite.title + .monaco-sash,
 .monaco-workbench .monaco-sash:not(:hover):not(.active)::before {
@@ -904,71 +896,83 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   color: inherit !important;
 }
 
+/* ==================================================== STATUS BAR === */
+.monaco-workbench .part.statusbar {
+  background-color: var(--vscode-statusBar-background, var(--tabs-bg)) !important;
+  color: var(--vscode-statusBar-foreground, var(--tabs-text)) !important;
+}
+.monaco-workbench .part.statusbar .statusbar-item,
+.monaco-workbench .part.statusbar .statusbar-item a,
+.monaco-workbench .part.statusbar .statusbar-item span,
+.monaco-workbench .part.statusbar .statusbar-item label {
+  color: var(--vscode-statusBar-foreground, var(--tabs-text)) !important;
+}
+
 /* ============================================ EXTRA TOKENS === */
 /* Second token pass for the deeper surfaces (settings editor, extensions,
    dropdowns, checkboxes, badges) so they cascade in-palette before the
    structural rules below refine them. */
 .monaco-workbench {
-  --vscode-dropdown-foreground: var(--tabs-text);
-  --vscode-dropdown-border: var(--tabs-hairline-strong);
-  --vscode-dropdown-listBackground: var(--tabs-bg-popover);
-  --vscode-checkbox-background: var(--tabs-input-bg);
-  --vscode-checkbox-foreground: var(--tabs-accent);
-  --vscode-checkbox-border: var(--tabs-hairline-strong);
-  --vscode-checkbox-selectBackground: var(--tabs-accent-soft);
-  --vscode-checkbox-selectBorder: var(--tabs-accent);
-  --vscode-settings-headerForeground: var(--tabs-text);
-  --vscode-settings-headerBorder: var(--tabs-hairline);
-  --vscode-settings-rowHoverBackground: var(--tabs-ov-02);
-  --vscode-settings-focusedRowBackground: var(--tabs-ov-03);
-  --vscode-settings-focusedRowBorder: var(--tabs-accent);
-  --vscode-settings-modifiedItemIndicator: var(--tabs-accent);
-  --vscode-settings-dropdownBackground: var(--tabs-bg-popover);
-  --vscode-settings-dropdownBorder: var(--tabs-hairline-strong);
-  --vscode-settings-checkboxBackground: var(--tabs-input-bg);
-  --vscode-settings-checkboxBorder: var(--tabs-hairline-strong);
-  --vscode-settings-textInputBackground: var(--tabs-input-bg);
-  --vscode-settings-textInputBorder: var(--tabs-hairline-strong);
-  --vscode-settings-numberInputBackground: var(--tabs-input-bg);
-  --vscode-settings-numberInputBorder: var(--tabs-hairline-strong);
-  --vscode-keybindingLabel-background: var(--tabs-ov-06);
-  --vscode-keybindingLabel-foreground: var(--tabs-text);
-  --vscode-keybindingLabel-border: var(--tabs-hairline);
-  --vscode-keybindingLabel-bottomBorder: var(--tabs-hairline);
-  --vscode-badge-background: var(--tabs-ov-08);
-  --vscode-badge-foreground: var(--tabs-text);
-  --vscode-extensionButton-prominentBackground: var(--tabs-accent-strong);
-  --vscode-extensionButton-prominentForeground: var(--tabs-accent-fg);
-  --vscode-extensionButton-prominentHoverBackground: color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000);
-  --vscode-extensionButton-background: var(--tabs-ov-06);
-  --vscode-extensionButton-foreground: var(--tabs-text);
-  --vscode-extensionBadge-remoteBackground: var(--tabs-accent-strong);
-  --vscode-extensionBadge-remoteForeground: var(--tabs-accent-fg);
-  --vscode-toolbar-hoverBackground: var(--tabs-ov-06);
-  --vscode-toolbar-activeBackground: var(--tabs-ov-10);
-  --vscode-welcomePage-tileBackground: var(--tabs-bg-elevated);
-  --vscode-welcomePage-tileHoverBackground: #242424;
-  --vscode-welcomePage-tileBorder: var(--tabs-hairline);
-  --vscode-walkThrough-embeddedEditorBackground: var(--tabs-bg);
-  --vscode-textBlockQuote-background: var(--tabs-ov-03);
-  --vscode-textBlockQuote-border: var(--tabs-accent);
-  --vscode-textCodeBlock-background: var(--tabs-ov-05);
-  --vscode-editorHoverWidget-background: var(--tabs-bg-popover);
-  --vscode-editorHoverWidget-border: var(--tabs-hairline-strong);
-  --vscode-editorSuggestWidget-background: var(--tabs-bg-popover);
-  --vscode-editorSuggestWidget-border: var(--tabs-hairline-strong);
-  --vscode-editorSuggestWidget-selectedBackground: var(--tabs-accent-soft);
-  --vscode-editorSuggestWidget-selectedForeground: var(--tabs-accent);
-  --vscode-editorSuggestWidget-highlightForeground: var(--tabs-accent);
-  --vscode-peekViewTitle-background: var(--tabs-bg-elevated);
-  --vscode-peekViewResult-background: var(--tabs-bg-sidebar);
-  --vscode-peekViewResult-selectionBackground: var(--tabs-accent-soft);
-  --vscode-peekView-border: var(--tabs-accent);
-  --vscode-editorStickyScroll-background: var(--tabs-bg);
-  --vscode-editorGutter-background: var(--tabs-bg);
-  --vscode-editorWidget-foreground: var(--tabs-text);
-  --vscode-debugToolBar-background: var(--tabs-bg-popover);
-  --vscode-debugToolBar-border: var(--tabs-hairline-strong);
+  --vscode-dropdown-foreground: var(--vscode-dropdown-foreground, var(--tabs-text));
+  --vscode-dropdown-border: var(--vscode-dropdown-border, var(--tabs-hairline-strong));
+  --vscode-dropdown-listBackground: var(--vscode-dropdown-listBackground, var(--tabs-bg-popover));
+  --vscode-checkbox-background: var(--vscode-checkbox-background, var(--tabs-input-bg));
+  --vscode-checkbox-foreground: var(--vscode-checkbox-foreground, var(--tabs-accent));
+  --vscode-checkbox-border: var(--vscode-checkbox-border, var(--tabs-hairline-strong));
+  --vscode-checkbox-selectBackground: var(--vscode-checkbox-selectBackground, var(--tabs-accent-soft));
+  --vscode-checkbox-selectBorder: var(--vscode-checkbox-selectBorder, var(--tabs-accent));
+  --vscode-settings-headerForeground: var(--vscode-settings-headerForeground, var(--tabs-text));
+  --vscode-settings-headerBorder: var(--vscode-settings-headerBorder, var(--tabs-hairline));
+  --vscode-settings-rowHoverBackground: var(--vscode-settings-rowHoverBackground, var(--tabs-ov-02));
+  --vscode-settings-focusedRowBackground: var(--vscode-settings-focusedRowBackground, var(--tabs-ov-03));
+  --vscode-settings-focusedRowBorder: var(--vscode-settings-focusedRowBorder, var(--tabs-accent));
+  --vscode-settings-modifiedItemIndicator: var(--vscode-settings-modifiedItemIndicator, var(--tabs-accent));
+  --vscode-settings-dropdownBackground: var(--vscode-settings-dropdownBackground, var(--tabs-bg-popover));
+  --vscode-settings-dropdownBorder: var(--vscode-settings-dropdownBorder, var(--tabs-hairline-strong));
+  --vscode-settings-checkboxBackground: var(--vscode-settings-checkboxBackground, var(--tabs-input-bg));
+  --vscode-settings-checkboxBorder: var(--vscode-settings-checkboxBorder, var(--tabs-hairline-strong));
+  --vscode-settings-textInputBackground: var(--vscode-settings-textInputBackground, var(--tabs-input-bg));
+  --vscode-settings-textInputBorder: var(--vscode-settings-textInputBorder, var(--tabs-hairline-strong));
+  --vscode-settings-numberInputBackground: var(--vscode-settings-numberInputBackground, var(--tabs-input-bg));
+  --vscode-settings-numberInputBorder: var(--vscode-settings-numberInputBorder, var(--tabs-hairline-strong));
+  --vscode-keybindingLabel-background: var(--vscode-keybindingLabel-background, var(--tabs-ov-06));
+  --vscode-keybindingLabel-foreground: var(--vscode-keybindingLabel-foreground, var(--tabs-text));
+  --vscode-keybindingLabel-border: var(--vscode-keybindingLabel-border, var(--tabs-hairline));
+  --vscode-keybindingLabel-bottomBorder: var(--vscode-keybindingLabel-bottomBorder, var(--tabs-hairline));
+  --vscode-badge-background: var(--vscode-badge-background, var(--tabs-ov-08));
+  --vscode-badge-foreground: var(--vscode-badge-foreground, var(--tabs-text));
+  --vscode-extensionButton-prominentBackground: var(--vscode-extensionButton-prominentBackground, var(--tabs-accent-strong));
+  --vscode-extensionButton-prominentForeground: var(--vscode-extensionButton-prominentForeground, var(--tabs-accent-fg));
+  --vscode-extensionButton-prominentHoverBackground: var(--vscode-extensionButton-prominentHoverBackground, color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000));
+  --vscode-extensionButton-background: var(--vscode-extensionButton-background, var(--tabs-ov-06));
+  --vscode-extensionButton-foreground: var(--vscode-extensionButton-foreground, var(--tabs-text));
+  --vscode-extensionBadge-remoteBackground: var(--vscode-extensionBadge-remoteBackground, var(--tabs-accent-strong));
+  --vscode-extensionBadge-remoteForeground: var(--vscode-extensionBadge-remoteForeground, var(--tabs-accent-fg));
+  --vscode-toolbar-hoverBackground: var(--vscode-toolbar-hoverBackground, var(--tabs-ov-06));
+  --vscode-toolbar-activeBackground: var(--vscode-toolbar-activeBackground, var(--tabs-ov-10));
+  --vscode-welcomePage-tileBackground: var(--vscode-welcomePage-tileBackground, var(--tabs-bg-elevated));
+  --vscode-welcomePage-tileHoverBackground: var(--vscode-welcomePage-tileHoverBackground, #242424);
+  --vscode-welcomePage-tileBorder: var(--vscode-welcomePage-tileBorder, var(--tabs-hairline));
+  --vscode-walkThrough-embeddedEditorBackground: var(--vscode-walkThrough-embeddedEditorBackground, var(--tabs-bg));
+  --vscode-textBlockQuote-background: var(--vscode-textBlockQuote-background, var(--tabs-ov-03));
+  --vscode-textBlockQuote-border: var(--vscode-textBlockQuote-border, var(--tabs-accent));
+  --vscode-textCodeBlock-background: var(--vscode-textCodeBlock-background, var(--tabs-ov-05));
+  --vscode-editorHoverWidget-background: var(--vscode-editorHoverWidget-background, var(--tabs-bg-popover));
+  --vscode-editorHoverWidget-border: var(--vscode-editorHoverWidget-border, var(--tabs-hairline-strong));
+  --vscode-editorSuggestWidget-background: var(--vscode-editorSuggestWidget-background, var(--tabs-bg-popover));
+  --vscode-editorSuggestWidget-border: var(--vscode-editorSuggestWidget-border, var(--tabs-hairline-strong));
+  --vscode-editorSuggestWidget-selectedBackground: var(--vscode-editorSuggestWidget-selectedBackground, var(--tabs-accent-soft));
+  --vscode-editorSuggestWidget-selectedForeground: var(--vscode-editorSuggestWidget-selectedForeground, var(--tabs-accent));
+  --vscode-editorSuggestWidget-highlightForeground: var(--vscode-editorSuggestWidget-highlightForeground, var(--tabs-accent));
+  --vscode-peekViewTitle-background: var(--vscode-peekViewTitle-background, var(--tabs-bg-elevated));
+  --vscode-peekViewResult-background: var(--vscode-peekViewResult-background, var(--tabs-bg-sidebar));
+  --vscode-peekViewResult-selectionBackground: var(--vscode-peekViewResult-selectionBackground, var(--tabs-accent-soft));
+  --vscode-peekView-border: var(--vscode-peekView-border, var(--tabs-accent));
+  --vscode-editorStickyScroll-background: var(--vscode-editorStickyScroll-background, var(--tabs-bg));
+  --vscode-editorGutter-background: var(--vscode-editorGutter-background, var(--tabs-bg));
+  --vscode-editorWidget-foreground: var(--vscode-editorWidget-foreground, var(--tabs-text));
+  --vscode-debugToolBar-background: var(--vscode-debugToolBar-background, var(--tabs-bg-popover));
+  --vscode-debugToolBar-border: var(--vscode-debugToolBar-border, var(--tabs-hairline-strong));
 }
 
 /* ============================================ FORM CONTROLS === */

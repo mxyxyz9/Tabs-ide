@@ -845,7 +845,7 @@ export function hexToHsv(hex: string): { h: number; s: number; v: number } {
   if (clean.length === 3) {
     clean = clean.split("").map((c) => c + c).join("");
   }
-  if (clean.length !== 6) return { h: 220, s: 0.8, v: 0.8 };
+  if (clean.length !== 6 && clean.length !== 8) return { h: 220, s: 0.8, v: 0.8 };
 
   const r = parseInt(clean.substring(0, 2), 16) / 255;
   const g = parseInt(clean.substring(2, 4), 16) / 255;
@@ -897,7 +897,7 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   if (clean.length === 3) {
     clean = clean.split("").map((c) => c + c).join("");
   }
-  if (clean.length !== 6) return { r: 99, g: 102, b: 241 };
+  if (clean.length !== 6 && clean.length !== 8) return { r: 99, g: 102, b: 241 };
 
   return {
     r: parseInt(clean.substring(0, 2), 16),
