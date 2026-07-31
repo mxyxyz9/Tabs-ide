@@ -28,6 +28,7 @@ import type {
 import { CODE_OSS_THEME_CSS } from "./codeOssThemeCss";
 import { GEIST_MONO_FONT_CSS } from "./geistMonoFontCss";
 import type { CodeControlChannel } from "./codeControlChannel";
+import { getOptimalPrimaryForeground } from "@tabs/shared/themeDerivation";
 
 const CODE_OSS_SERVER_HOST = "127.0.0.1";
 const CODE_OSS_SERVER_START_TIMEOUT_MS = 20_000;
@@ -1180,6 +1181,7 @@ export class CodeHostManager {
             "--tabs-text-muted": `color-mix(in srgb, ${customConfig.colors.foreground} 65%, transparent)`,
             "--tabs-accent": customConfig.colors.primary,
             "--tabs-accent-strong": customConfig.colors.primary,
+            "--tabs-accent-fg": getOptimalPrimaryForeground(customConfig.colors.primary),
             "--tabs-accent-soft": `color-mix(in srgb, ${customConfig.colors.primary} 15%, transparent)`,
             "--tabs-hairline": `color-mix(in srgb, ${customConfig.colors.foreground} 6%, transparent)`,
             "--tabs-hairline-strong": `color-mix(in srgb, ${customConfig.colors.foreground} 12%, transparent)`,
@@ -1199,6 +1201,7 @@ export class CodeHostManager {
         '--tabs-text-muted',
         '--tabs-accent',
         '--tabs-accent-strong',
+        '--tabs-accent-fg',
         '--tabs-accent-soft',
         '--tabs-hairline',
         '--tabs-hairline-strong',

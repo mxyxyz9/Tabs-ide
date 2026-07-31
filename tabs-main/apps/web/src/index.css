@@ -896,6 +896,7 @@ label:has(> select#reasoning-effort) select {
   border-radius: 0.75rem;
   background: var(--muted);
   padding: 0.8rem 0.9rem;
+  color: var(--foreground);
 }
 
 .chat-markdown pre code {
@@ -903,6 +904,7 @@ label:has(> select#reasoning-effort) select {
   background: transparent;
   padding: 0;
   font-size: 0.75rem;
+  color: inherit;
 }
 
 .chat-markdown pre {
@@ -947,6 +949,7 @@ label:has(> select#reasoning-effort) select {
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   background: color-mix(in srgb, var(--muted) 78%, var(--background));
+  color: var(--foreground);
 }
 
 .chat-markdown .chat-markdown-codeblock-header {
@@ -1029,6 +1032,7 @@ label:has(> select#reasoning-effort) select {
 
 .chat-markdown .chat-markdown-shiki .shiki {
   background: transparent !important;
+  color: var(--foreground) !important;
 }
 
 /* Diagnostics-style tables: row separators only, uppercase headers, and a

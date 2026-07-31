@@ -64,8 +64,7 @@ describe("themeDerivation shared module", () => {
       ...baseConfig,
       colors: {
         ...baseConfig.colors,
-        background: "#ffffff",
-        foreground: "#f0f0f0", // Low contrast against white
+        foreground: "#1e293b", // Low contrast against dark background
       },
     };
 
@@ -88,5 +87,21 @@ describe("themeDerivation shared module", () => {
   it("converts hex and alpha values predictably", () => {
     expect(toHexColor("#abc")).toBe("#aabbcc");
     expect(alpha("#ffffff", 0.5)).toBe("#ffffff80");
+  });
+
+  it("evaluates diff editor tokens cleanly in both dark and light variants", () => {
+    const darkTokens = evaluateThemeTokens(baseConfig);
+    expect(darkTokens["diffEditor.insertedTextBackground"]).toBe("#34d39933");
+    expect(darkTokens["diffEditor.removedTextBackground"]).toBe("#f8717140");
+    expect(darkTokens["diffEditor.insertedLineBackground"]).toBe("#34d3991f");
+    expect(darkTokens["diffEditor.removedLineBackground"]).toBe("#f871711f");
+    expect(darkTokens["diffEditorGutter.insertedLineBackground"]).toBe("#34d3994d");
+    expect(darkTokens["diffEditorOverview.insertedForeground"]).toBe("#34d399b3");
+
+    const lightTokens = evaluateThemeTokens({ ...baseConfig, baseVariant: "light" });
+    expect(lightTokens["diffEditor.insertedTextBackground"]).toBe("#16a34a33");
+    expect(lightTokens["diffEditor.removedTextBackground"]).toBe("#dc262633");
+    expect(lightTokens["diffEditor.insertedLineBackground"]).toBe("#16a34a1a");
+    expect(lightTokens["diffEditor.removedLineBackground"]).toBe("#dc26261a");
   });
 });

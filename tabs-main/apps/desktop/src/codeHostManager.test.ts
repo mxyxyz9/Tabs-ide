@@ -594,6 +594,7 @@ describe("CodeHostManager", () => {
       "--tabs-text-muted",
       "--tabs-accent",
       "--tabs-accent-strong",
+      "--tabs-accent-fg",
       "--tabs-accent-soft",
       "--tabs-hairline",
       "--tabs-hairline-strong",

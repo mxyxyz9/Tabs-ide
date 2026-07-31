@@ -341,8 +341,12 @@ export function useTheme() {
   const theme = snapshot.theme;
 
   const activeThemeId = resolveActiveThemeId(theme);
-  const themeDef = THEME_DEFINITIONS[activeThemeId] ?? THEME_DEFINITIONS[DEFAULT_THEME_ID];
-  const resolvedTheme: "light" | "dark" = themeDef.baseVariant;
+  const customConfig = getStoredCustomThemeConfig();
+  const themeDef = THEME_DEFINITIONS[activeThemeId];
+  const resolvedTheme: "light" | "dark" =
+    activeThemeId === "custom"
+      ? customConfig.baseVariant
+      : (themeDef?.baseVariant ?? (getSystemDark() ? "dark" : "light"));
 
   const setTheme = useCallback((next: ThemePreference | "light" | "dark") => {
     const normalized: ThemePreference =

@@ -795,6 +795,10 @@ const BUILTIN_THEMES = {
     baseVariant: "light",
     colors: { background: "#ffffff", card: "#f6f6f6", foreground: "#262626", border: "rgba(0, 0, 0, 0.08)", primary: "#2563eb" },
   },
+  "tabs-monotone": {
+    baseVariant: "dark",
+    colors: { background: "#09090b", card: "#18181b", foreground: "#fafafa", border: "rgba(255, 255, 255, 0.12)", primary: "#e5e5e5" },
+  },
   "abyss": {
     baseVariant: "dark",
     colors: { background: "#000c18", card: "#041426", foreground: "#c0cbe0", border: "rgba(0, 153, 255, 0.14)", primary: "#0099ff" },

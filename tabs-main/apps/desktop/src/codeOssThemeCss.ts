@@ -56,6 +56,7 @@ export const CODE_OSS_THEME_CSS =
   --tabs-text-muted: #8a8a8a;
   --tabs-accent: #366ffb;        /* app --primary (oklch 0.588 0.217 264) */
   --tabs-accent-strong: #366ffb; /* primary button fill */
+  --tabs-accent-fg: #ffffff;     /* primary button text color */
   --tabs-accent-soft: rgba(54,111,251,0.15);
 
   --vscode-font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -126,10 +127,14 @@ export const CODE_OSS_THEME_CSS =
   --vscode-focusBorder: var(--tabs-accent);
   --vscode-inputOption-activeBorder: var(--tabs-accent);
   --vscode-activityBarBadge-background: var(--tabs-accent-strong);
-  --vscode-activityBarBadge-foreground: #ffffff;
+  --vscode-activityBarBadge-foreground: var(--tabs-accent-fg);
   --vscode-button-background: var(--tabs-accent-strong);
   --vscode-button-hoverBackground: color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000);
-  --vscode-button-foreground: #ffffff;
+  --vscode-button-foreground: var(--tabs-accent-fg);
+  --vscode-button-separator: var(--tabs-accent-fg);
+  --vscode-button-secondaryBackground: var(--tabs-ov-06);
+  --vscode-button-secondaryForeground: var(--tabs-text);
+  --vscode-button-secondaryHoverBackground: var(--tabs-ov-10);
   --vscode-progressBar-background: var(--tabs-accent);
   --vscode-textLink-foreground: var(--tabs-accent);
   --vscode-textLink-activeForeground: var(--tabs-accent);
@@ -169,6 +174,7 @@ body[data-theme="tabs-dark"] .monaco-workbench {
   --tabs-text-muted: #a3a3a3;
   --tabs-accent: #366ffb;
   --tabs-accent-strong: #366ffb;
+  --tabs-accent-fg: #ffffff;
 }
 
 [data-theme="true-black"] .monaco-workbench,
@@ -184,6 +190,23 @@ body[data-theme="true-black"] .monaco-workbench {
   --tabs-text-muted: #888888;
   --tabs-accent: #366ffb;
   --tabs-accent-strong: #366ffb;
+  --tabs-accent-fg: #ffffff;
+}
+
+[data-theme="tabs-monotone"] .monaco-workbench,
+.monaco-workbench[data-theme="tabs-monotone"],
+html[data-theme="tabs-monotone"] .monaco-workbench,
+body[data-theme="tabs-monotone"] .monaco-workbench {
+  --tabs-bg: #09090b;
+  --tabs-bg-sidebar: #121215;
+  --tabs-bg-elevated: #18181b;
+  --tabs-bg-popover: #18181b;
+  --tabs-input-bg: #1c1c20;
+  --tabs-text: #fafafa;
+  --tabs-text-muted: #a1a1aa;
+  --tabs-accent: #e5e5e5;
+  --tabs-accent-strong: #e5e5e5;
+  --tabs-accent-fg: #09090b;
 }
 
 /* Unified surface token fallback rule across built-in and custom themes */
@@ -194,6 +217,7 @@ body[data-theme="true-black"] .monaco-workbench {
   --tabs-input-bg: var(--tabs-input-bg, var(--tabs-bg-sidebar, #1c1c1c));
   --tabs-text-muted: color-mix(in srgb, var(--tabs-text, #ffffff) 65%, transparent);
   --tabs-accent-strong: var(--tabs-accent, #366ffb);
+  --tabs-accent-fg: var(--tabs-accent-fg, #ffffff);
   --tabs-accent-soft: color-mix(in srgb, var(--tabs-accent, #366ffb) 15%, transparent);
   --tabs-hairline: color-mix(in srgb, var(--tabs-text, #ffffff) 6%, transparent);
   --tabs-hairline-strong: color-mix(in srgb, var(--tabs-text, #ffffff) 12%, transparent);
@@ -861,9 +885,23 @@ body[data-theme="true-black"] .monaco-workbench {
   box-shadow: inset 2px 0 0 0 var(--tabs-accent) !important;
 }
 /* The primary Commit button reads as a Tabs accent button. */
+.monaco-workbench .scm-view .monaco-button,
+.monaco-workbench .scm-view .monaco-button-dropdown,
 .monaco-workbench .scm-view .monaco-button.monaco-text-button {
   border-radius: 8px !important;
   font-weight: 600;
+  background: var(--vscode-button-background) !important;
+  color: var(--vscode-button-foreground) !important;
+}
+.monaco-workbench .scm-view .monaco-button .codicon,
+.monaco-workbench .scm-view .monaco-button span,
+.monaco-workbench .scm-view .monaco-button a,
+.monaco-workbench .scm-view .monaco-button div,
+.monaco-workbench .scm-view .monaco-button-dropdown .codicon,
+.monaco-workbench .scm-view .monaco-button-dropdown span,
+.monaco-workbench .scm-view .monaco-button-dropdown a,
+.monaco-workbench .scm-view .monaco-button-dropdown div {
+  color: inherit !important;
 }
 
 /* ============================================ EXTRA TOKENS === */
@@ -900,10 +938,12 @@ body[data-theme="true-black"] .monaco-workbench {
   --vscode-badge-background: var(--tabs-ov-08);
   --vscode-badge-foreground: var(--tabs-text);
   --vscode-extensionButton-prominentBackground: var(--tabs-accent-strong);
-  --vscode-extensionButton-prominentForeground: #ffffff;
+  --vscode-extensionButton-prominentForeground: var(--tabs-accent-fg);
+  --vscode-extensionButton-prominentHoverBackground: color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000);
   --vscode-extensionButton-background: var(--tabs-ov-06);
   --vscode-extensionButton-foreground: var(--tabs-text);
   --vscode-extensionBadge-remoteBackground: var(--tabs-accent-strong);
+  --vscode-extensionBadge-remoteForeground: var(--tabs-accent-fg);
   --vscode-toolbar-hoverBackground: var(--tabs-ov-06);
   --vscode-toolbar-activeBackground: var(--tabs-ov-10);
   --vscode-welcomePage-tileBackground: var(--tabs-bg-elevated);
@@ -976,20 +1016,39 @@ body[data-theme="true-black"] .monaco-workbench {
   outline-offset: -1px;
   border-color: var(--tabs-accent) !important;
 }
-/* Buttons — solid accent fill, always white text for legibility across all themes. */
-.monaco-workbench .monaco-button {
+/* Buttons — solid accent fill, dynamic foreground text matching the app shell selector. */
+.monaco-workbench .monaco-button,
+.monaco-workbench .monaco-button-dropdown {
   border-radius: 8px !important;
   font-weight: 600;
-  color: #ffffff !important;
-  transition: background 120ms ease;
+  background: var(--vscode-button-background) !important;
+  color: var(--vscode-button-foreground) !important;
+  transition: background 120ms ease, color 120ms ease;
 }
-.monaco-workbench .monaco-button:hover {
+.monaco-workbench .monaco-button .codicon,
+.monaco-workbench .monaco-button span,
+.monaco-workbench .monaco-button a,
+.monaco-workbench .monaco-button div,
+.monaco-workbench .monaco-button-dropdown .codicon,
+.monaco-workbench .monaco-button-dropdown span,
+.monaco-workbench .monaco-button-dropdown a,
+.monaco-workbench .monaco-button-dropdown div {
+  color: inherit !important;
+}
+.monaco-workbench .monaco-button:hover,
+.monaco-workbench .monaco-button-dropdown:hover {
   filter: brightness(0.88);
 }
 .monaco-workbench .monaco-button.secondary {
-  background: var(--tabs-ov-06) !important;
-  border-color: var(--tabs-hairline-strong) !important;
-  color: var(--tabs-text) !important;
+  background: var(--vscode-button-secondaryBackground) !important;
+  border-color: var(--vscode-button-secondaryBackground) !important;
+  color: var(--vscode-button-secondaryForeground) !important;
+}
+.monaco-workbench .monaco-button.secondary .codicon,
+.monaco-workbench .monaco-button.secondary span,
+.monaco-workbench .monaco-button.secondary a,
+.monaco-workbench .monaco-button.secondary div {
+  color: inherit !important;
 }
 /* Keybinding chips (settings / keybindings editor) read as small key caps. */
 .monaco-workbench .monaco-keybinding-key {

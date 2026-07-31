@@ -7,13 +7,30 @@
 
 function toHexColor(color) {
   if (!color || typeof color !== "string") return "#000000";
-  let clean = color.trim().replace(/^#/, "");
-  if (clean.length === 3) {
+  const trimmed = color.trim();
+  if (trimmed === "transparent") return "#00000000";
+
+  const rgbMatch = trimmed.match(/^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/i);
+  if (rgbMatch) {
+    const r = parseInt(rgbMatch[1] || "0", 10).toString(16).padStart(2, "0");
+    const g = parseInt(rgbMatch[2] || "0", 10).toString(16).padStart(2, "0");
+    const b = parseInt(rgbMatch[3] || "0", 10).toString(16).padStart(2, "0");
+    let a = "";
+    if (rgbMatch[4] !== undefined) {
+      a = Math.round(parseFloat(rgbMatch[4]) * 255).toString(16).padStart(2, "0");
+    }
+    return `#${r}${g}${b}${a}`;
+  }
+
+  let clean = trimmed.replace(/^#/, "");
+  if (clean.length === 3 || clean.length === 4) {
     clean = clean.split("").map((c) => c + c).join("");
   }
-  if (clean.length >= 6) {
-    return `#${clean.substring(0, 6)}`;
+  if (clean.length === 6 || clean.length === 8) {
+    return `#${clean}`;
   }
+  if (clean.length > 8) return `#${clean.substring(0, 8)}`;
+  if (clean.length > 6) return `#${clean.substring(0, 6)}`;
   return "#000000";
 }
 
@@ -136,18 +153,25 @@ function ensureMinContrast(fgColor, bgColor, minRatio = 4.5, parentBgHex = "#121
 }
 
 function getOptimalPrimaryForeground(primaryHex) {
+  if (!primaryHex) return "#ffffff";
+  const hex = primaryHex.trim().toLowerCase().replace("#", "");
+  if (hex.length === 6) {
+    const r = parseInt(hex.substring(0, 2), 16) / 255;
+    const g = parseInt(hex.substring(2, 4), 16) / 255;
+    const b = parseInt(hex.substring(4, 6), 16) / 255;
+    const toLinear = (v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+    const lum = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+    // Dark brand accents (blue, purple, teal, navy): always white text
+    if (lum < 0.22) return "#ffffff";
+    // Light/neutral accents: always dark text
+    if (lum > 0.60) return "#09090b";
+  }
+  // Mid-range: use WCAG contrast to decide
   const whiteRatio = calculateContrastRatio("#ffffff", primaryHex).ratio;
   const darkRatio = calculateContrastRatio("#0f172a", primaryHex).ratio;
-
-  if (whiteRatio >= 4.5 && whiteRatio >= darkRatio) {
-    return "#ffffff";
-  }
-  if (darkRatio >= 4.5) {
-    return "#0f172a";
-  }
-
-  const choice = whiteRatio >= darkRatio ? "#ffffff" : "#0f172a";
-  return ensureMinContrast(choice, primaryHex, 4.5);
+  if (whiteRatio >= 4.5 && whiteRatio >= darkRatio) return "#ffffff";
+  if (darkRatio >= 4.5) return "#0f172a";
+  return whiteRatio >= darkRatio ? "#ffffff" : "#0f172a";
 }
 
 function suggestAccessibleFg(fgHex, bgHex) {
@@ -223,18 +247,18 @@ const VSCODE_TOKEN_REGISTRY = [
   // ── 3. Borders & Dividers ─────────────────────────────────────────────────
   { id: "focusBorder", label: "Focus Ring Border", description: "Border outline for focused interactive elements", category: "borders", deriveDefault: (c) => c.primary },
   { id: "widget.border", label: "Widget Outline Border", description: "Border outline around floating widgets", category: "borders", deriveDefault: (c) => c.border },
-  { id: "widget.shadow", label: "Widget Shadow Color", description: "Shadow color for popups and widgets", category: "borders", deriveDefault: () => "#00000000" },
+  { id: "widget.shadow", label: "Widget Shadow Color", description: "Shadow color for popups and widgets", category: "borders", deriveDefault: () => "transparent" },
   { id: "titleBar.border", label: "Title Bar Divider", description: "Border under the window titlebar", category: "borders", deriveDefault: (c) => c.border },
   { id: "activityBar.border", label: "Activity Bar Border", description: "Border separating activity bar from sidebar", category: "borders", deriveDefault: (c) => c.border },
   { id: "sideBar.border", label: "Side Bar Border", description: "Border separating sidebar from editor", category: "borders", deriveDefault: (c) => c.border },
   { id: "sideBarSectionHeader.border", label: "Side Bar Header Border", description: "Border under sidebar section headers", category: "borders", deriveDefault: (c) => c.border },
   { id: "editorGroupHeader.tabsBorder", label: "Tab Bar Bottom Border", description: "Border under the tab bar row", category: "borders", deriveDefault: (c) => c.border },
   { id: "editorGroup.border", label: "Editor Split Group Border", description: "Border separating split editor panes", category: "borders", deriveDefault: (c) => c.border },
-  { id: "tab.border", label: "Tab Border", description: "Border separating individual tabs", category: "borders", deriveDefault: () => "#00000000" },
-  { id: "tab.activeBorder", label: "Active Tab Bottom Line", description: "Line indicator at bottom of active tab", category: "borders", deriveDefault: () => "#00000000" },
-  { id: "tab.activeBorderTop", label: "Active Tab Top Line", description: "Line indicator at top of active tab", category: "borders", deriveDefault: () => "#00000000" },
-  { id: "tab.unfocusedActiveBorder", label: "Unfocused Tab Line", description: "Active tab bottom line when window unfocused", category: "borders", deriveDefault: () => "#00000000" },
-  { id: "tab.unfocusedActiveBorderTop", label: "Unfocused Tab Top Line", description: "Active tab top line when window unfocused", category: "borders", deriveDefault: () => "#00000000" },
+  { id: "tab.border", label: "Tab Border", description: "Border separating individual tabs", category: "borders", deriveDefault: () => "transparent" },
+  { id: "tab.activeBorder", label: "Active Tab Bottom Line", description: "Line indicator at bottom of active tab", category: "borders", deriveDefault: () => "transparent" },
+  { id: "tab.activeBorderTop", label: "Active Tab Top Line", description: "Line indicator at top of active tab", category: "borders", deriveDefault: () => "transparent" },
+  { id: "tab.unfocusedActiveBorder", label: "Unfocused Tab Line", description: "Active tab bottom line when window unfocused", category: "borders", deriveDefault: () => "transparent" },
+  { id: "tab.unfocusedActiveBorderTop", label: "Unfocused Tab Top Line", description: "Active tab top line when window unfocused", category: "borders", deriveDefault: () => "transparent" },
   { id: "editorWidget.border", label: "Editor Widget Border", description: "Border around find/replace popups", category: "borders", deriveDefault: (c) => c.border },
   { id: "editorHoverWidget.border", label: "Hover Tooltip Border", description: "Border around hover tooltips", category: "borders", deriveDefault: (c) => c.border },
   { id: "panel.border", label: "Panel Top Border", description: "Border separating terminal panel from editor", category: "borders", deriveDefault: (c) => c.border },
@@ -256,7 +280,7 @@ const VSCODE_TOKEN_REGISTRY = [
   { id: "editor.selectionHighlightBackground", label: "Selection Matches Highlight", description: "Highlight color for matching selections", category: "accents", deriveDefault: (c) => alpha(c.primary, 0.12) },
   { id: "editor.inactiveSelectionBackground", label: "Inactive Selection Bg", description: "Editor selection when focus is lost", category: "accents", deriveDefault: (c) => alpha(c.primary, 0.1) },
   { id: "editor.lineHighlightBackground", label: "Active Line Background", description: "Background highlight behind active cursor line", category: "accents", deriveDefault: (c) => alpha(c.foreground, 0.04) },
-  { id: "editor.lineHighlightBorder", label: "Active Line Border", description: "Border around active cursor line", category: "accents", deriveDefault: () => "#00000000" },
+  { id: "editor.lineHighlightBorder", label: "Active Line Border", description: "Border around active cursor line", category: "accents", deriveDefault: () => "transparent" },
   { id: "panelTitle.activeBorder", label: "Panel Active Tab Line", description: "Active indicator line under panel tab", category: "accents", deriveDefault: (c) => c.primary },
   { id: "statusBarItem.hoverBackground", label: "Status Item Hover", description: "Background of status bar item on hover", category: "accents", deriveDefault: (c) => alpha(c.foreground, 0.08) },
   { id: "statusBarItem.activeBackground", label: "Status Item Click", description: "Background of status bar item when pressed", category: "accents", deriveDefault: (c) => alpha(c.foreground, 0.15) },
@@ -268,6 +292,10 @@ const VSCODE_TOKEN_REGISTRY = [
   { id: "button.background", label: "Primary Button Bg", description: "Background color of primary action buttons", category: "accents", isBg: true, deriveDefault: (c) => c.primary },
   { id: "button.foreground", label: "Primary Button Text", description: "Text color inside primary action buttons", category: "accents", contrastPairId: "button.background", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
   { id: "button.hoverBackground", label: "Primary Button Hover", description: "Background color of primary button on hover", category: "accents", deriveDefault: (c) => alpha(c.primary, 0.85) },
+  { id: "button.secondaryBackground", label: "Secondary Button Bg", description: "Background color of secondary action buttons", category: "accents", isBg: true, deriveDefault: (c) => alpha(c.foreground, 0.08) },
+  { id: "button.secondaryForeground", label: "Secondary Button Text", description: "Text color inside secondary action buttons", category: "accents", contrastPairId: "button.secondaryBackground", deriveDefault: (c) => c.foreground },
+  { id: "button.secondaryHoverBackground", label: "Secondary Button Hover", description: "Background color of secondary button on hover", category: "accents", deriveDefault: (c) => alpha(c.foreground, 0.14) },
+  { id: "button.separator", label: "Button Dropdown Separator", description: "Separator line in split dropdown buttons", category: "accents", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
   { id: "badge.background", label: "Badge Background", description: "Notification badge background color", category: "accents", isBg: true, deriveDefault: (c) => c.primary },
   { id: "badge.foreground", label: "Badge Text Color", description: "Text color inside notification badges", category: "accents", contrastPairId: "badge.background", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
 
@@ -277,7 +305,7 @@ const VSCODE_TOKEN_REGISTRY = [
   { id: "editorIndentGuide.activeBackground", label: "Active Indent Guide", description: "Indent guide color for active code block", category: "editor", deriveDefault: (c) => alpha(c.foreground, 0.16) },
   { id: "editorWhitespace.foreground", label: "Whitespace Characters", description: "Color for visible whitespace characters", category: "editor", deriveDefault: (c) => alpha(c.foreground, 0.1) },
   { id: "tree.indentGuidesStroke", label: "Tree View Indent Lines", description: "Indent lines in explorer tree views", category: "editor", deriveDefault: (c) => alpha(c.foreground, 0.1) },
-  { id: "scrollbar.shadow", label: "Scrollbar Shadow", description: "Shadow cast by scrollbar containers", category: "editor", deriveDefault: () => "#00000000" },
+  { id: "scrollbar.shadow", label: "Scrollbar Shadow", description: "Shadow cast by scrollbar containers", category: "editor", deriveDefault: () => "transparent" },
   { id: "scrollbarSlider.background", label: "Scrollbar Thumb", description: "Scrollbar slider thumb background", category: "editor", deriveDefault: (c) => alpha(c.foreground, 0.12) },
   { id: "scrollbarSlider.hoverBackground", label: "Scrollbar Thumb Hover", description: "Scrollbar thumb color on hover", category: "editor", deriveDefault: (c) => alpha(c.foreground, 0.2) },
   { id: "scrollbarSlider.activeBackground", label: "Scrollbar Thumb Active", description: "Scrollbar thumb color when dragged", category: "editor", deriveDefault: (c) => alpha(c.foreground, 0.3) },
@@ -319,6 +347,23 @@ const VSCODE_TOKEN_REGISTRY = [
   { id: "gitDecoration.conflictingResourceForeground", label: "Git Conflict Color", description: "Tree view label color for merge conflicts", category: "git", contrastPairId: "sideBar.background", deriveDefault: (_, isDark) => (isDark ? "#f97316" : "#ea580c") },
   { id: "gitDecoration.submoduleResourceForeground", label: "Git Submodule Color", description: "Tree view label color for git submodules", category: "git", contrastPairId: "sideBar.background", deriveDefault: (_, isDark) => (isDark ? "#a855f7" : "#9333ea") },
   { id: "gitDecoration.ignoredResourceForeground", label: "Git Ignored Color", description: "Tree view label color for .gitignore files", category: "git", contrastPairId: "sideBar.background", deriveDefault: (c) => alpha(c.foreground, 0.4) },
+
+  // ── 8. Diff Editor & Gutter / Overview Tokens ────────────────────────────
+  { id: "diffEditor.insertedTextBackground", label: "Diff Inserted Text Bg", description: "Background color for text that got inserted", category: "git", isBg: true, deriveDefault: (_, isDark) => (isDark ? "#34d39933" : "#16a34a33") },
+  { id: "diffEditor.removedTextBackground", label: "Diff Removed Text Bg", description: "Background color for text that got removed", category: "git", isBg: true, deriveDefault: (_, isDark) => (isDark ? "#f8717140" : "#dc262633") },
+  { id: "diffEditor.insertedLineBackground", label: "Diff Inserted Line Bg", description: "Background color for lines that got inserted", category: "git", isBg: true, deriveDefault: (_, isDark) => (isDark ? "#34d3991f" : "#16a34a1a") },
+  { id: "diffEditor.removedLineBackground", label: "Diff Removed Line Bg", description: "Background color for lines that got removed", category: "git", isBg: true, deriveDefault: (_, isDark) => (isDark ? "#f871711f" : "#dc26261a") },
+  { id: "diffEditorGutter.insertedLineBackground", label: "Diff Gutter Inserted Bg", description: "Background color for margin/gutter where lines got inserted", category: "git", isBg: true, deriveDefault: (_, isDark) => (isDark ? "#34d3994d" : "#16a34a4d") },
+  { id: "diffEditorGutter.removedLineBackground", label: "Diff Gutter Removed Bg", description: "Background color for margin/gutter where lines got removed", category: "git", isBg: true, deriveDefault: (_, isDark) => (isDark ? "#f871714d" : "#dc26264d") },
+  { id: "diffEditorOverview.insertedForeground", label: "Diff Overview Inserted", description: "Diff overview ruler foreground for inserted content", category: "git", deriveDefault: (_, isDark) => (isDark ? "#34d399b3" : "#16a34ab3") },
+  { id: "diffEditorOverview.removedForeground", label: "Diff Overview Removed", description: "Diff overview ruler foreground for removed content", category: "git", deriveDefault: (_, isDark) => (isDark ? "#f87171b3" : "#dc2626b3") },
+  { id: "diffEditor.insertedTextBorder", label: "Diff Inserted Text Border", description: "Outline color for text that got inserted", category: "git", deriveDefault: () => "#00000000" },
+  { id: "diffEditor.removedTextBorder", label: "Diff Removed Text Border", description: "Outline color for text that got removed", category: "git", deriveDefault: () => "#00000000" },
+  { id: "diffEditor.border", label: "Diff Split Border", description: "Border color between side-by-side diff panes", category: "borders", deriveDefault: (c) => c.border },
+  { id: "diffEditor.diagonalFill", label: "Diff Diagonal Fill", description: "Color of diff editor diagonal fill pattern", category: "git", deriveDefault: (c) => alpha(c.foreground, 0.12) },
+  { id: "diffEditor.unchangedRegionBackground", label: "Diff Unchanged Region Bg", description: "Background color of unchanged folded code blocks in diff editor", category: "surfaces", isBg: true, deriveDefault: (c) => c.card },
+  { id: "diffEditor.unchangedRegionForeground", label: "Diff Unchanged Region Text", description: "Foreground text color of unchanged folded code blocks in diff editor", category: "text", contrastPairId: "diffEditor.unchangedRegionBackground", deriveDefault: (c) => c.foreground },
+  { id: "diffEditor.unchangedCodeBackground", label: "Diff Unchanged Code Bg", description: "Background color of unchanged code in diff editor", category: "surfaces", isBg: true, deriveDefault: (c) => alpha(c.foreground, 0.04) },
 ];
 
 function getDerivedTokenValue(tokenId, colors, baseVariant = "dark") {
@@ -368,6 +413,10 @@ function evaluateThemeTokens(config) {
         result[token.id] = ensureMinContrast(fgVal, bgVal, minRatio, colors.background);
       }
     }
+  }
+
+  for (const key of Object.keys(result)) {
+    result[key] = toHexColor(result[key]);
   }
 
   return result;
