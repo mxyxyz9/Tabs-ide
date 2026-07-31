@@ -28,7 +28,12 @@ import type {
 import { CODE_OSS_THEME_CSS } from "./codeOssThemeCss";
 import { GEIST_MONO_FONT_CSS } from "./geistMonoFontCss";
 import type { CodeControlChannel } from "./codeControlChannel";
-import { getOptimalPrimaryForeground } from "@tabs/shared/themeDerivation";
+import {
+  BUILTIN_THEME_CONFIGS,
+  evaluateThemeTokens,
+  getOptimalPrimaryForeground,
+  type CustomThemeConfig,
+} from "@tabs/shared/themeDerivation";
 
 const CODE_OSS_SERVER_HOST = "127.0.0.1";
 const CODE_OSS_SERVER_START_TIMEOUT_MS = 20_000;
@@ -1169,24 +1174,42 @@ export class CodeHostManager {
     if (!webContents || webContents.isDestroyed?.()) return;
     const themeId = this.currentThemeId;
     const customConfig = this.currentCustomConfig;
-    const customPropsJson =
+    const config: CustomThemeConfig | undefined =
       themeId === "custom" && customConfig?.colors
-        ? JSON.stringify({
-            "--tabs-bg": customConfig.colors.background,
-            "--tabs-bg-sidebar": customConfig.colors.card,
-            "--tabs-bg-elevated": customConfig.colors.card,
-            "--tabs-bg-popover": customConfig.colors.card,
-            "--tabs-input-bg": customConfig.colors.card,
-            "--tabs-text": customConfig.colors.foreground,
-            "--tabs-text-muted": `color-mix(in srgb, ${customConfig.colors.foreground} 65%, transparent)`,
-            "--tabs-accent": customConfig.colors.primary,
-            "--tabs-accent-strong": customConfig.colors.primary,
-            "--tabs-accent-fg": getOptimalPrimaryForeground(customConfig.colors.primary),
-            "--tabs-accent-soft": `color-mix(in srgb, ${customConfig.colors.primary} 15%, transparent)`,
-            "--tabs-hairline": `color-mix(in srgb, ${customConfig.colors.foreground} 6%, transparent)`,
-            "--tabs-hairline-strong": `color-mix(in srgb, ${customConfig.colors.foreground} 12%, transparent)`,
-          })
-        : "null";
+        ? customConfig
+        : BUILTIN_THEME_CONFIGS[themeId] || BUILTIN_THEME_CONFIGS["tabs-dark"];
+
+    let customPropsJson = "null";
+    if (config) {
+      const evaluated = evaluateThemeTokens(config);
+      const primary = evaluated["app.primaryBackground"] || config.colors.primary;
+      const primaryFg = evaluated["app.primaryForeground"] || getOptimalPrimaryForeground(primary);
+      const buttonBg = evaluated["button.background"] || primary;
+      const buttonFg = evaluated["button.foreground"] || primaryFg;
+      const bg = evaluated["editor.background"] || config.colors.background;
+      const cardBg = evaluated["sideBar.background"] || config.colors.card;
+      const popoverBg = evaluated["editorWidget.background"] || config.colors.card;
+      const fg = evaluated["foreground"] || config.colors.foreground;
+      const mutedFg = evaluated["app.mutedForeground"] || `color-mix(in srgb, ${fg} 65%, transparent)`;
+
+      customPropsJson = JSON.stringify({
+        "--tabs-bg": bg,
+        "--tabs-bg-sidebar": cardBg,
+        "--tabs-bg-elevated": cardBg,
+        "--tabs-bg-popover": popoverBg,
+        "--tabs-input-bg": cardBg,
+        "--tabs-text": fg,
+        "--tabs-text-muted": mutedFg,
+        "--tabs-accent": primary,
+        "--tabs-accent-strong": buttonBg,
+        "--tabs-accent-fg": buttonFg,
+        "--tabs-accent-soft": `color-mix(in srgb, ${primary} 15%, transparent)`,
+        "--tabs-hairline": `color-mix(in srgb, ${fg} 6%, transparent)`,
+        "--tabs-hairline-strong": `color-mix(in srgb, ${fg} 12%, transparent)`,
+        "--vscode-button-background": buttonBg,
+        "--vscode-button-foreground": buttonFg,
+      });
+    }
 
     const script = `(() => {
       const themeId = ${JSON.stringify(themeId)};
@@ -1205,6 +1228,8 @@ export class CodeHostManager {
         '--tabs-accent-soft',
         '--tabs-hairline',
         '--tabs-hairline-strong',
+        '--vscode-button-background',
+        '--vscode-button-foreground',
       ];
 
       const targets = [

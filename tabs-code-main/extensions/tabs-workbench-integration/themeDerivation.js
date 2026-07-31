@@ -946,11 +946,19 @@ function evaluateThemeTokens(config) {
           token.id.includes("ignored") ||
           token.id.includes("Whitespace")
         ) {
-          minRatio = 3.0;
+          minRatio = 1.5;
         } else if (
           token.id.includes("description") ||
           token.id.includes("placeholder") ||
           token.id.includes("inactive")
+        ) {
+          minRatio = 1.8;
+        } else if (
+          token.id === "button.foreground" ||
+          token.id === "app.primaryForeground" ||
+          token.id === "extensionButton.prominentForeground" ||
+          token.id === "activityBarBadge.foreground" ||
+          token.id === "badge.foreground"
         ) {
           minRatio = 3.5;
         }

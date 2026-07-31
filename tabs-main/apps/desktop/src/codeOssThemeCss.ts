@@ -127,10 +127,10 @@ export const CODE_OSS_THEME_CSS =
   --vscode-inputOption-activeBorder: var(--vscode-inputOption-activeBorder, var(--tabs-accent));
   --vscode-activityBarBadge-background: var(--vscode-activityBarBadge-background, var(--tabs-accent-strong));
   --vscode-activityBarBadge-foreground: var(--vscode-activityBarBadge-foreground, var(--tabs-accent-fg));
-  --vscode-button-background: var(--vscode-button-background, var(--tabs-accent-strong));
-  --vscode-button-hoverBackground: var(--vscode-button-hoverBackground, color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000));
-  --vscode-button-foreground: var(--vscode-button-foreground, var(--tabs-accent-fg));
-  --vscode-button-separator: var(--vscode-button-separator, var(--tabs-accent-fg));
+  --vscode-button-background: var(--tabs-accent-strong);
+  --vscode-button-hoverBackground: color-mix(in srgb, var(--tabs-accent-strong) 85%, #000000);
+  --vscode-button-foreground: var(--tabs-accent-fg);
+  --vscode-button-separator: var(--tabs-accent-fg);
   --vscode-button-secondaryBackground: var(--vscode-button-secondaryBackground, var(--tabs-ov-06));
   --vscode-button-secondaryForeground: var(--vscode-button-secondaryForeground, var(--tabs-text));
   --vscode-button-secondaryHoverBackground: var(--vscode-button-secondaryHoverBackground, var(--tabs-ov-10));
@@ -166,7 +166,6 @@ body[data-theme="tabs-dark"] .monaco-workbench {
   --tabs-text-muted: #a3a3a3;
   --tabs-accent: #366ffb;
   --tabs-accent-strong: #366ffb;
-  --tabs-accent-fg: #ffffff;
 }
 
 [data-theme="true-black"] .monaco-workbench,
@@ -182,7 +181,6 @@ body[data-theme="true-black"] .monaco-workbench {
   --tabs-text-muted: #888888;
   --tabs-accent: #366ffb;
   --tabs-accent-strong: #366ffb;
-  --tabs-accent-fg: #ffffff;
 }
 
 [data-theme="tabs-monotone"] .monaco-workbench,
@@ -198,7 +196,6 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   --tabs-text-muted: #a1a1aa;
   --tabs-accent: #e5e5e5;
   --tabs-accent-strong: #e5e5e5;
-  --tabs-accent-fg: #09090b;
 }
 
 /* Unified surface token fallback rule across built-in and custom themes */

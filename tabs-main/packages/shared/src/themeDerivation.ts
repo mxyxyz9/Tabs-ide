@@ -16,6 +16,49 @@ export interface CustomThemeConfig {
   };
 }
 
+export const BUILTIN_THEME_CONFIGS: Record<string, CustomThemeConfig> = {
+  "tabs-dark": {
+    baseVariant: "dark",
+    colors: { background: "#141414", card: "#181818", foreground: "#f5f5f5", border: "rgba(255, 255, 255, 0.06)", primary: "#366ffb" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "true-black": {
+    baseVariant: "dark",
+    colors: { background: "#000000", card: "#0a0a0a", foreground: "#ffffff", border: "rgba(255, 255, 255, 0.12)", primary: "#366ffb" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "tabs-monotone": {
+    baseVariant: "dark",
+    colors: { background: "#09090b", card: "#18181b", foreground: "#fafafa", border: "rgba(255, 255, 255, 0.12)", primary: "#e5e5e5" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "tabs-light": {
+    baseVariant: "light",
+    colors: { background: "#ffffff", card: "#f6f6f6", foreground: "#262626", border: "rgba(0, 0, 0, 0.08)", primary: "#2563eb" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "abyss": {
+    baseVariant: "dark",
+    colors: { background: "#000c18", card: "#041426", foreground: "#c0cbe0", border: "rgba(0, 153, 255, 0.14)", primary: "#0099ff" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "dracula": {
+    baseVariant: "dark",
+    colors: { background: "#282a36", card: "#21222c", foreground: "#f8f8f2", border: "rgba(98, 114, 164, 0.35)", primary: "#bd93f9" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "deep-blue": {
+    baseVariant: "dark",
+    colors: { background: "#0f172a", card: "#1e293b", foreground: "#f1f5f9", border: "rgba(51, 65, 85, 0.65)", primary: "#38bdf8" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+  "solarized-light": {
+    baseVariant: "light",
+    colors: { background: "#fdf6e3", card: "#eee8d5", foreground: "#657b83", border: "rgba(147, 161, 161, 0.28)", primary: "#268bd2" },
+    fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
+  },
+};
+
 export type TokenCategory =
   | "surfaces"
   | "text"
@@ -1056,6 +1099,14 @@ export function evaluateThemeTokens(config: CustomThemeConfig): Record<string, s
           token.id.includes("inactive")
         ) {
           minRatio = 1.8;
+        } else if (
+          token.id === "button.foreground" ||
+          token.id === "app.primaryForeground" ||
+          token.id === "extensionButton.prominentForeground" ||
+          token.id === "activityBarBadge.foreground" ||
+          token.id === "badge.foreground"
+        ) {
+          minRatio = 3.5;
         }
         result[token.id] = ensureMinContrast(fgVal, bgVal, minRatio, colors.background);
       }

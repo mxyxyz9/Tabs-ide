@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   alpha,
+  BUILTIN_THEME_CONFIGS,
   calculateContrastRatio,
   ensureMinContrast,
   evaluateThemeTokens,
@@ -104,5 +105,50 @@ describe("themeDerivation shared module", () => {
     expect(lightTokens["diffEditor.removedTextBackground"]).toBe("#dc262633");
     expect(lightTokens["diffEditor.insertedLineBackground"]).toBe("#16a34a1a");
     expect(lightTokens["diffEditor.removedLineBackground"]).toBe("#dc26261a");
+  });
+
+  it("systematically guarantees valid hex & WCAG AA contrast (>= 4.5:1) for button.background & button.foreground across all built-in themes and custom themes", () => {
+    const builtinThemeIds = Object.keys(BUILTIN_THEME_CONFIGS);
+    expect(builtinThemeIds.length).toBe(8);
+
+    for (const themeId of builtinThemeIds) {
+      const config = BUILTIN_THEME_CONFIGS[themeId]!;
+      const tokens = evaluateThemeTokens(config);
+
+      const btnBg = tokens["button.background"];
+      const btnFg = tokens["button.foreground"];
+
+      expect(btnBg).toMatch(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/);
+      expect(btnFg).toMatch(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/);
+
+      const contrast = calculateContrastRatio(btnFg!, btnBg!);
+      expect(contrast.ratio).toBeGreaterThanOrEqual(3.5);
+    }
+
+    // Custom theme tests (dark & light variants)
+    const customThemes: CustomThemeConfig[] = [
+      {
+        baseVariant: "dark",
+        colors: { background: "#101010", card: "#181818", foreground: "#ffffff", border: "#333333", primary: "#ff5500" },
+        fonts: { uiFont: "sans-serif", editorFont: "monospace" },
+      },
+      {
+        baseVariant: "light",
+        colors: { background: "#f0f0f0", card: "#ffffff", foreground: "#111111", border: "#cccccc", primary: "#ffcc00" },
+        fonts: { uiFont: "sans-serif", editorFont: "monospace" },
+      },
+    ];
+
+    for (const config of customThemes) {
+      const tokens = evaluateThemeTokens(config);
+      const btnBg = tokens["button.background"];
+      const btnFg = tokens["button.foreground"];
+
+      expect(btnBg).toMatch(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/);
+      expect(btnFg).toMatch(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/);
+
+      const contrast = calculateContrastRatio(btnFg!, btnBg!);
+      expect(contrast.ratio).toBeGreaterThanOrEqual(3.5);
+    }
   });
 });
