@@ -1207,8 +1207,8 @@ export function writeWorkspaceTabs(
 }
 
 export function migrateAndCleanSessionIndexedDBStorage(
-  indexedDbDir: string,
-  newPort: number,
+  idbRootDir: string,
+  targetPort: number,
   fs: Pick<
     typeof FS,
     | "existsSync"
@@ -1219,86 +1219,164 @@ export function migrateAndCleanSessionIndexedDBStorage(
     | "rmSync"
   > = FS,
 ): { migratedFrom: number | null; cleanedPorts: number[] } {
-  const result: { migratedFrom: number | null; cleanedPorts: number[] } = {
-    migratedFrom: null,
-    cleanedPorts: [],
-  };
-
-  if (!fs.existsSync(indexedDbDir)) {
-    return result;
+  if (!fs.existsSync(idbRootDir)) {
+    return { migratedFrom: null, cleanedPorts: [] };
   }
 
-  const targetLevelDbDir = Path.join(indexedDbDir, `http_127.0.0.1_${newPort}.indexeddb.leveldb`);
-  const targetBlobDir = Path.join(indexedDbDir, `http_127.0.0.1_${newPort}.indexeddb.blob`);
+  const levelRe = /^http_127\.0\.0\.1_(\d+)\.indexeddb\.leveldb$/;
+  const blobRe = /^http_127\.0\.0\.1_(\d+)\.indexeddb\.blob$/;
 
   let entries: string[] = [];
   try {
-    entries = fs.readdirSync(indexedDbDir);
+    entries = fs.readdirSync(idbRootDir);
   } catch {
-    return result;
+    return { migratedFrom: null, cleanedPorts: [] };
   }
 
-  const candidatePorts: { port: number; levelDbDir: string; mtimeMs: number }[] = [];
-
-  for (const entry of entries) {
-    const match = /^http_127\.0\.0\.1_(\d+)\.indexeddb\.leveldb$/.exec(entry);
-    if (match) {
-      const port = Number(match[1]);
-      if (port !== newPort) {
-        const fullPath = Path.join(indexedDbDir, entry);
-        try {
-          const stat = fs.statSync(fullPath);
-          candidatePorts.push({ port, levelDbDir: fullPath, mtimeMs: stat.mtimeMs });
-        } catch {
-          /* ignore unreadable entries */
-        }
-      }
+  const ports = new Set<number>();
+  for (const e of entries) {
+    let m = levelRe.exec(e);
+    if (m) {
+      ports.add(Number(m[1]));
+      continue;
+    }
+    m = blobRe.exec(e);
+    if (m) {
+      ports.add(Number(m[1]));
     }
   }
 
-  if (!fs.existsSync(targetLevelDbDir) && candidatePorts.length > 0) {
-    candidatePorts.sort((a, b) => b.mtimeMs - a.mtimeMs);
-    const mostRecent = candidatePorts[0];
-    if (mostRecent) {
-      const sourceBlobDir = Path.join(indexedDbDir, `http_127.0.0.1_${mostRecent.port}.indexeddb.blob`);
+  if (ports.size === 0) {
+    return { migratedFrom: null, cleanedPorts: [] };
+  }
 
+  const targetLevel = Path.join(idbRootDir, `http_127.0.0.1_${targetPort}.indexeddb.leveldb`);
+  const targetBlob = Path.join(idbRootDir, `http_127.0.0.1_${targetPort}.indexeddb.blob`);
+
+  // If target exists, skip migration but clean up other ports.
+  if (fs.existsSync(targetLevel) || fs.existsSync(targetBlob)) {
+    const cleaned: number[] = [];
+    for (const p of Array.from(ports)) {
+      if (p === targetPort) continue;
+      const lvl = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.leveldb`);
+      const blob = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.blob`);
+      if (fs.existsSync(lvl) || fs.existsSync(blob)) {
+        if (fs.existsSync(lvl)) fs.rmSync(lvl, { recursive: true, force: true });
+        if (fs.existsSync(blob)) fs.rmSync(blob, { recursive: true, force: true });
+        cleaned.push(p);
+      }
+    }
+    return { migratedFrom: null, cleanedPorts: cleaned.sort((a, b) => a - b) };
+  }
+
+  // Compute mtime for each candidate port (considering level and blob dirs)
+  type PortInfo = { port: number; mtime: number };
+  const infos: PortInfo[] = [];
+  for (const p of Array.from(ports)) {
+    if (p === targetPort) continue;
+    const lvl = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.leveldb`);
+    const blob = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.blob`);
+    if (!fs.existsSync(lvl) && !fs.existsSync(blob)) continue;
+
+    let mtime = 0;
+    const updateMtime = (targetPath: string) => {
+      if (!fs.existsSync(targetPath)) return;
       try {
-        fs.cpSync(mostRecent.levelDbDir, targetLevelDbDir, { recursive: true });
-        result.migratedFrom = mostRecent.port;
-
-        if (fs.existsSync(sourceBlobDir)) {
-          fs.cpSync(sourceBlobDir, targetBlobDir, { recursive: true });
+        const stat = fs.statSync(targetPath);
+        mtime = Math.max(mtime, stat.mtimeMs);
+        if (stat.isDirectory()) {
+          for (const child of fs.readdirSync(targetPath)) {
+            try {
+              const childStat = fs.statSync(Path.join(targetPath, child));
+              mtime = Math.max(mtime, childStat.mtimeMs);
+            } catch {
+              /* ignore */
+            }
+          }
         }
-      } catch (err) {
-        console.error(
-          `[code-oss] failed to migrate IndexedDB storage from port ${mostRecent.port} to ${newPort}:`,
-          err,
-        );
+      } catch {
+        /* ignore */
       }
-    }
+    };
+
+    updateMtime(lvl);
+    updateMtime(blob);
+
+    infos.push({ port: p, mtime });
   }
 
-  for (const candidate of candidatePorts) {
-    const oldLevelDb = candidate.levelDbDir;
-    const oldBlob = Path.join(indexedDbDir, `http_127.0.0.1_${candidate.port}.indexeddb.blob`);
+  if (infos.length === 0) {
+    return { migratedFrom: null, cleanedPorts: [] };
+  }
 
+  // Sort: most recent mtime first; tie-break by higher port number
+  infos.sort((a, b) => {
+    if (b.mtime !== a.mtime) return b.mtime - a.mtime;
+    return b.port - a.port;
+  });
+
+  const firstInfo = infos[0];
+  if (!firstInfo) {
+    return { migratedFrom: null, cleanedPorts: [] };
+  }
+
+  const sourcePort = firstInfo.port;
+  const sourceLevel = Path.join(idbRootDir, `http_127.0.0.1_${sourcePort}.indexeddb.leveldb`);
+  const sourceBlob = Path.join(idbRootDir, `http_127.0.0.1_${sourcePort}.indexeddb.blob`);
+
+  // Ensure target parent exists
+  try {
+    fs.mkdirSync(idbRootDir, { recursive: true });
+  } catch {
+    /* ignore */
+  }
+
+  // Copy with fs.cpSync if available, fallback to manual recursive copy
+  const copyRecursive = (src: string, dest: string) => {
+    if (!fs.existsSync(src)) return;
     try {
-      if (fs.existsSync(oldLevelDb)) {
-        fs.rmSync(oldLevelDb, { recursive: true, force: true });
+      if (typeof fs.cpSync === "function") {
+        fs.cpSync(src, dest, { recursive: true });
+        return;
       }
-      if (fs.existsSync(oldBlob)) {
-        fs.rmSync(oldBlob, { recursive: true, force: true });
+    } catch {
+      // fall through
+    }
+    const stat = fs.statSync(src);
+    if (stat.isDirectory()) {
+      fs.mkdirSync(dest, { recursive: true });
+      for (const entry of fs.readdirSync(src)) {
+        copyRecursive(Path.join(src, entry), Path.join(dest, entry));
       }
-      result.cleanedPorts.push(candidate.port);
-    } catch (err) {
-      console.error(
-        `[code-oss] failed to clean up old IndexedDB storage for port ${candidate.port}:`,
-        err,
-      );
+    } else {
+      fs.mkdirSync(Path.dirname(dest), { recursive: true });
+      fs.cpSync(src, dest, { recursive: true });
+    }
+  };
+
+  try {
+    copyRecursive(sourceLevel, targetLevel);
+    if (fs.existsSync(sourceBlob)) {
+      copyRecursive(sourceBlob, targetBlob);
+    }
+  } catch (err) {
+    return { migratedFrom: null, cleanedPorts: [] };
+  }
+
+  // Delete all original port directories that matched (including the source)
+  const cleaned: number[] = [];
+  for (const p of Array.from(ports)) {
+    if (p === targetPort) continue;
+    const lvl = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.leveldb`);
+    const blob = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.blob`);
+    if (fs.existsSync(lvl) || fs.existsSync(blob)) {
+      cleaned.push(p);
+      if (fs.existsSync(lvl)) fs.rmSync(lvl, { recursive: true, force: true });
+      if (fs.existsSync(blob)) fs.rmSync(blob, { recursive: true, force: true });
     }
   }
 
-  return result;
+  return { migratedFrom: sourcePort, cleanedPorts: cleaned.sort((a, b) => a - b) };
 }
 
 export class CodeHostManager {
