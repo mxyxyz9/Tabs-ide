@@ -95,22 +95,53 @@ export function GitToolV2({
   const api = readNativeApi();
   const queryClient = useQueryClient();
 
-  const lastPanelPerCwd = useRef<Record<string, NavPanel>>({});
-  const [panel, setPanelState] = useState<NavPanel>(() => lastPanelPerCwd.current[cwd] || "overview");
+  const [panel, setPanelState] = useState<NavPanel>(() => {
+    try {
+      const saved = window.localStorage?.getItem(`tabs_git_active_panel_${cwd}`);
+      if (saved) return saved as NavPanel;
+    } catch {}
+    return "overview";
+  });
 
   useEffect(() => {
-    setPanelState(lastPanelPerCwd.current[cwd] || "overview");
+    try {
+      const saved = window.localStorage?.getItem(`tabs_git_active_panel_${cwd}`);
+      setPanelState((saved as NavPanel) || "overview");
+    } catch {
+      setPanelState("overview");
+    }
   }, [cwd]);
 
   const setPanel = useCallback(
     (p: NavPanel) => {
-      lastPanelPerCwd.current[cwd] = p;
+      try {
+        window.localStorage?.setItem(`tabs_git_active_panel_${cwd}`, p);
+      } catch {}
       setPanelState(p);
     },
     [cwd],
   );
 
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsedState] = useState<boolean>(() => {
+    try {
+      if (window.localStorage?.getItem("tabs.alwaysMinimizeGitSidebar") === "true") {
+        return true;
+      }
+      return window.localStorage?.getItem(`tabs_git_sidebar_collapsed_${cwd}`) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const setCollapsed = useCallback(
+    (c: boolean) => {
+      setCollapsedState(c);
+      try {
+        window.localStorage?.setItem(`tabs_git_sidebar_collapsed_${cwd}`, String(c));
+      } catch {}
+    },
+    [cwd],
+  );
 
   const [historyLimit, setHistoryLimit] = useState(50);
 

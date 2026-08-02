@@ -1,17 +1,20 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
 import { projectsAtom, threadsAtom } from "../state/threads";
-import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
+import { useWorkspaceActiveProjectId, useRememberedThreadId } from "../state/workspaceShell";
 import { useAtomValue } from "@effect/atom-react";
 
 function ChatIndexRouteView() {
   const activeProjectId = useWorkspaceActiveProjectId();
+  const rememberedThreadId = useRememberedThreadId(activeProjectId);
   const projects = useAtomValue(projectsAtom);
   const threads = useAtomValue(threadsAtom);
   const settings = useSettings();
   const { handleNewThread } = useHandleNewThread();
+  const navigate = useNavigate();
 
   const activeProject = activeProjectId
     ? (projects.find((project) => project.id === activeProjectId) ?? null)
@@ -19,6 +22,21 @@ function ChatIndexRouteView() {
   const projectThreads = activeProject
     ? threads.filter((thread) => thread.projectId === activeProject.id)
     : [];
+
+  const targetThreadId =
+    rememberedThreadId && projectThreads.some((t) => t.id === rememberedThreadId)
+      ? rememberedThreadId
+      : projectThreads[0]?.id ?? null;
+
+  useEffect(() => {
+    if (activeProject && targetThreadId) {
+      void navigate({
+        to: "/$threadId",
+        params: { threadId: targetThreadId },
+        replace: true,
+      });
+    }
+  }, [activeProject, targetThreadId, navigate]);
 
   if (activeProject && projectThreads.length === 0) {
     return (

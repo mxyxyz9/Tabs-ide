@@ -332,6 +332,36 @@ export function ProjectWorkspaceSettingsSection() {
 
   const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
   const [resumeLastVisitedPageDraft, setResumeLastVisitedPageDraft] = useState<boolean>(true);
+
+  const [alwaysMinAgents, setAlwaysMinAgents] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysMinimizeAgentsSidebar") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const [alwaysMinGit, setAlwaysMinGit] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysMinimizeGitSidebar") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleAlwaysMinAgents = (checked: boolean) => {
+    setAlwaysMinAgents(checked);
+    try {
+      window.localStorage?.setItem("tabs.alwaysMinimizeAgentsSidebar", String(checked));
+    } catch {}
+  };
+
+  const handleToggleAlwaysMinGit = (checked: boolean) => {
+    setAlwaysMinGit(checked);
+    try {
+      window.localStorage?.setItem("tabs.alwaysMinimizeGitSidebar", String(checked));
+    } catch {}
+  };
   const isBrowserDefaultUrlDirty = projectSettings
     ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl
     : false;
@@ -897,6 +927,44 @@ export function ProjectWorkspaceSettingsSection() {
                   onCheckedChange={(checked) => setResumeLastVisitedPageDraft(checked)}
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sidebar Defaults</CardTitle>
+            <CardDescription>
+              Set initial collapse state when opening a workspace.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5">
+                <div className="text-sm font-medium">Minimize Agents sidebar</div>
+                <div className="text-xs text-muted-foreground/70">
+                  Start thread sidebar collapsed by default.
+                </div>
+              </div>
+              <Switch
+                checked={alwaysMinAgents}
+                onCheckedChange={handleToggleAlwaysMinAgents}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5">
+                <div className="text-sm font-medium">Minimize Git panel</div>
+                <div className="text-xs text-muted-foreground/70">
+                  Start Git panel collapsed by default.
+                </div>
+              </div>
+              <Switch
+                checked={alwaysMinGit}
+                onCheckedChange={handleToggleAlwaysMinGit}
+              />
             </div>
           </CardContent>
         </Card>

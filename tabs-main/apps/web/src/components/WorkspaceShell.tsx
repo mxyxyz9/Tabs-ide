@@ -1063,9 +1063,28 @@ function AgentsThreadList(props: {
   // 'current' | 'archived'
   const [view, setView] = useState<"current" | "archived">("current");
 
+  const [alwaysMinAgents, setAlwaysMinAgents] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysMinimizeAgentsSidebar") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const [alwaysMinGit, setAlwaysMinGit] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysMinimizeGitSidebar") === "true";
+    } catch {
+      return false;
+    }
+  });
+
   // Persistent collapse state
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
+      if (window.localStorage?.getItem("tabs.alwaysMinimizeAgentsSidebar") === "true") {
+        return true;
+      }
       return window.localStorage?.getItem(AGENTS_SIDEBAR_COLLAPSED_KEY) === "true";
     } catch {
       return false;
