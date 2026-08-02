@@ -39,11 +39,10 @@ function resolveAnimationFonts(fontComboId?: string | undefined, customFontProp?
   }
   const combo = FONT_COMBOS.find((c) => c.id === fontComboId);
   if (!combo) return {};
-  const headingFont = combo.uiFont !== "custom" ? combo.uiFont : undefined;
-  const uiFont = combo.headingFont !== "custom" ? combo.headingFont : headingFont;
+  const displayFont = combo.uiFont !== "custom" ? combo.uiFont : undefined;
   return {
-    headingFont,
-    uiFont,
+    headingFont: displayFont,
+    uiFont: displayFont,
   };
 }
 
