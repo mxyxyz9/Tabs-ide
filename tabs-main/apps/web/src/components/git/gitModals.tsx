@@ -34,6 +34,7 @@ import {
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
+import { Switch } from "~/components/ui/switch";
 import {
   AutoTextarea,
   Banner,
@@ -288,10 +289,13 @@ export function CreatePRModal({
               className="w-full border border-border rounded-lg text-foreground bg-background text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
             />
           </Field>
-          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-            <Checkbox checked={draft} onCheckedChange={(c) => setDraft(!!c)} />
-            <span className="text-xs text-foreground/80 font-medium">Open as draft</span>
-          </label>
+          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20">
+            <div className="space-y-0.5">
+              <div className="text-xs font-medium text-foreground">Open as draft</div>
+              <div className="text-[11px] text-muted-foreground/70">Draft PRs cannot be merged until marked ready for review</div>
+            </div>
+            <Switch checked={draft} onCheckedChange={(c) => setDraft(!!c)} />
+          </div>
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
@@ -623,13 +627,13 @@ export function DraftReleaseModal({
                 <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/70 block">
                   Release Type
                 </label>
-                <div className="grid grid-cols-2 p-1 rounded-xl bg-background border border-border text-xs">
+                <div className="grid grid-cols-2 p-1 rounded-xl bg-muted/40 border border-border/80 text-xs">
                   <button
                     type="button"
                     onClick={() => setPrerelease(false)}
-                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-colors ${
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-all ${
                       !prerelease
-                        ? "bg-muted/80 text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -639,9 +643,9 @@ export function DraftReleaseModal({
                   <button
                     type="button"
                     onClick={() => setPrerelease(true)}
-                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-colors ${
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-all ${
                       prerelease
-                        ? "bg-muted/80 text-foreground shadow-xs font-semibold"
+                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >

@@ -25,6 +25,7 @@ import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
+import { Switch } from "~/components/ui/switch";
 import {
   AutoTextarea,
   Card,
@@ -620,7 +621,7 @@ export function ChangesPanel({
       </Card>
 
       <SectionLabel>Commit</SectionLabel>
-      <Card className="p-3">
+      <Card className="p-4 space-y-3.5 border-border/80">
         <AutoTextarea
           value={msg}
           onChange={(e) => setMsg(e.target.value)}
@@ -631,14 +632,20 @@ export function ChangesPanel({
             }
           }}
           placeholder={amend ? "Leave blank to keep the previous message…" : "Summarize your change…"}
-          minRows={2}
-          className="w-full border border-border rounded-lg bg-background text-foreground text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
+          minRows={3}
+          className="w-full border border-border/80 rounded-lg bg-background text-foreground text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors leading-relaxed"
         />
-        <label className="flex items-center gap-2 mt-2 mb-1 cursor-pointer select-none">
-          <Checkbox checked={amend} onCheckedChange={(c) => setAmend(!!c)} />
-          <span className="text-[11px] text-muted-foreground">Amend the previous commit instead of creating a new one</span>
-        </label>
-        <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
+
+        {/* Amend Option Bar with Switch */}
+        <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20">
+          <div className="space-y-0.5">
+            <div className="text-xs font-medium text-foreground">Amend previous commit</div>
+            <div className="text-[11px] text-muted-foreground/70">Replace the tip of current branch instead of creating a new commit</div>
+          </div>
+          <Switch checked={amend} onCheckedChange={(c) => setAmend(!!c)} />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"

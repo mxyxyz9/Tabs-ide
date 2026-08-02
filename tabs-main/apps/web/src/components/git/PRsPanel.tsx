@@ -6,6 +6,7 @@ import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
+import { Switch } from "~/components/ui/switch";
 import {
   Dialog,
   DialogFooter,
@@ -217,13 +218,13 @@ export function PRsPanel({
                 </Select>
               </div>
 
-              <label className="flex items-center gap-2 text-xs text-foreground/90 cursor-pointer select-none py-1">
-                <Checkbox
+              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20 mt-2">
+                <span className="text-xs text-foreground/90 font-medium">Delete head branch after merging</span>
+                <Switch
                   checked={deleteBranch}
                   onCheckedChange={(c) => setDeleteBranch(!!c)}
                 />
-                <span>Delete head branch after merging</span>
-              </label>
+              </div>
             </DialogPanel>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setMergePr(null)}>
