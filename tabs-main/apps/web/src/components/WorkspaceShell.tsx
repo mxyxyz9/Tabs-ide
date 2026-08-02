@@ -769,6 +769,25 @@ function resolveProjectAgentThread(
   return rememberedThread ?? resolveMostRecentThreadForProject(projectId, activeThreads);
 }
 
+function resolveProjectAgentThreadId(
+  projectId: ProjectId,
+  threads: ReadonlyArray<Thread>,
+  rememberedThreadId: ThreadId | null,
+): ThreadId | null {
+  if (rememberedThreadId) {
+    const draft = composerDraftActions.getDraftThread(rememberedThreadId);
+    if (draft && draft.projectId === projectId) {
+      return rememberedThreadId;
+    }
+  }
+  const projectDraft = composerDraftActions.getDraftThreadByProjectId(projectId);
+  if (projectDraft) {
+    return projectDraft.threadId;
+  }
+  const resolved = resolveProjectAgentThread(projectId, threads, rememberedThreadId);
+  return resolved?.id ?? null;
+}
+
 function ProjectTabs(props: {
   projects: ReadonlyArray<Project>;
   openProjects: ReadonlyArray<Project>;
@@ -8889,15 +8908,15 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           (tool) => tool.id === targetToolId,
         )?.kind ?? (targetToolId === "agents" ? "agents" : null);
       if (targetToolKind === "agents") {
-        const rememberedThread = resolveProjectAgentThread(
+        const rememberedThreadId = resolveProjectAgentThreadId(
           projectId,
           threads,
           workspaceState.session.rememberedThreadIdByProjectId[projectId] ?? null,
         );
-        if (rememberedThread) {
+        if (rememberedThreadId) {
           await navigate({
             to: "/$threadId",
-            params: { threadId: rememberedThread.id },
+            params: { threadId: rememberedThreadId },
           });
           return;
         }
@@ -9144,17 +9163,17 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
 
   const openAgentsForProject = useCallback(
     async (projectId: ProjectId) => {
-      const targetThread = resolveProjectAgentThread(
+      const targetThreadId = resolveProjectAgentThreadId(
         projectId,
         threads,
         workspaceState.session.rememberedThreadIdByProjectId[projectId] ?? null,
       );
       setActiveProject(projectId);
       setActiveTool(projectId, "agents");
-      if (targetThread) {
+      if (targetThreadId) {
         await navigate({
           to: "/$threadId",
-          params: { threadId: targetThread.id },
+          params: { threadId: targetThreadId },
         });
         return;
       }
@@ -9234,15 +9253,15 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         return;
       }
       if (nextTool.kind === "agents") {
-        const nextThread = resolveProjectAgentThread(
+        const nextThreadId = resolveProjectAgentThreadId(
           activeProject.id,
           threads,
           workspaceState.session.rememberedThreadIdByProjectId[activeProject.id] ?? null,
         );
-        if (nextThread) {
+        if (nextThreadId) {
           await navigate({
             to: "/$threadId",
-            params: { threadId: nextThread.id },
+            params: { threadId: nextThreadId },
           });
           return;
         }
