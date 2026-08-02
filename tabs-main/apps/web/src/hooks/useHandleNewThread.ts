@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { type DraftThreadEnvMode, type DraftThreadState } from "../composerDraftStore";
 import { composerDraftActions, useDraftThread } from "../state/composerDrafts";
 import { projectsAtom, threadsAtom } from "../state/threads";
+import { useWorkspaceActiveProjectId, workspaceShellActions } from "../state/workspaceShell";
 import { useAtomValue } from "@effect/atom-react";
 import { newThreadId } from "../lib/utils";
 
@@ -51,6 +52,7 @@ export function useHandleNewThread() {
         ? getDraftThread(routeThreadId)
         : null;
       if (storedDraftThread) {
+        workspaceShellActions.rememberThread(projectId, storedDraftThread.threadId);
         return (async () => {
           if (hasBranchOption || hasWorktreePathOption || hasEnvModeOption) {
             setDraftThreadContext(storedDraftThread.threadId, {
@@ -77,6 +79,7 @@ export function useHandleNewThread() {
         routeThreadId &&
         latestActiveDraftThread.projectId === projectId
       ) {
+        workspaceShellActions.rememberThread(projectId, routeThreadId);
         if (hasBranchOption || hasWorktreePathOption || hasEnvModeOption) {
           setDraftThreadContext(routeThreadId, {
             ...(hasBranchOption ? { branch: options?.branch ?? null } : {}),
@@ -89,6 +92,7 @@ export function useHandleNewThread() {
       }
 
       const threadId = newThreadId();
+      workspaceShellActions.rememberThread(projectId, threadId);
       const createdAt = new Date().toISOString();
       return (async () => {
         setProjectDraftThreadId(projectId, threadId, {

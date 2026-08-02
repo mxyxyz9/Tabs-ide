@@ -820,7 +820,7 @@ function ProjectTabs(props: {
                 <button
                   type="button"
                   className={cn(
-                    "min-w-0 flex-1 truncate text-left leading-none tracking-tight",
+                    "min-w-0 flex-1 truncate text-left leading-normal pb-0.5 tracking-tight",
                     active
                       ? "font-semibold text-card-foreground"
                       : "font-medium text-muted-foreground group-hover:text-foreground",
@@ -865,7 +865,7 @@ function ProjectTabs(props: {
               <button
                 type="button"
                 className={cn(
-                  "min-w-0 flex-1 truncate text-left leading-none tracking-tight",
+                  "min-w-0 flex-1 truncate text-left leading-normal pb-0.5 tracking-tight",
                   active
                     ? "font-semibold text-card-foreground"
                     : "font-medium text-muted-foreground group-hover:text-foreground",
@@ -8732,7 +8732,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const activeThread = routeThreadId
     ? (threads.find((thread) => thread.id === routeThreadId) ?? null)
     : null;
-  const routeProjectId = activeThread?.projectId ?? null;
+  const routeProjectId = activeThread?.projectId ?? workspaceState.session.activeProjectId ?? null;
 
   useEffect(() => {
     if (!routeThreadId || !routeProjectId || activePendingTabId) {

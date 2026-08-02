@@ -100,8 +100,8 @@ export function FilePathLabel({ path, size = "text-[11px]" }: { path: string; si
   const dir = parts.join("/");
   const content = (
     <div className="min-w-0 flex-1">
-      {dir && <div className="text-[10px] font-mono text-muted-foreground/70 truncate leading-tight">{dir}/</div>}
-      <div className={`${size} font-mono text-foreground/90 truncate leading-tight`}>{file}</div>
+      {dir && <div className="text-[10px] font-mono text-muted-foreground/70 truncate leading-normal pb-0.5">{dir}/</div>}
+      <div className={`${size} font-mono text-foreground/90 truncate leading-normal pb-0.5`}>{file}</div>
     </div>
   );
   return (

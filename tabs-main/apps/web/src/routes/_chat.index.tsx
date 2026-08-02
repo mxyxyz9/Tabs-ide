@@ -1,10 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Button } from "../components/ui/button";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
 import { projectsAtom, threadsAtom } from "../state/threads";
 import { useWorkspaceActiveProjectId, useRememberedThreadId } from "../state/workspaceShell";
+import { composerDraftActions } from "../state/composerDrafts";
 import { useAtomValue } from "@effect/atom-react";
 
 function ChatIndexRouteView() {
@@ -15,6 +16,7 @@ function ChatIndexRouteView() {
   const settings = useSettings();
   const { handleNewThread } = useHandleNewThread();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const activeProject = activeProjectId
     ? (projects.find((project) => project.id === activeProjectId) ?? null)
@@ -23,20 +25,32 @@ function ChatIndexRouteView() {
     ? threads.filter((thread) => thread.projectId === activeProject.id)
     : [];
 
+  const rememberedDraft = rememberedThreadId
+    ? composerDraftActions.getDraftThread(rememberedThreadId)
+    : null;
+  const isRememberedDraft = Boolean(rememberedDraft);
+  const isRememberedSaved = Boolean(
+    rememberedThreadId && projectThreads.some((t) => t.id === rememberedThreadId),
+  );
+
+  const projectDraft = activeProjectId
+    ? composerDraftActions.getDraftThreadByProjectId(activeProjectId)
+    : null;
+
   const targetThreadId =
-    rememberedThreadId && projectThreads.some((t) => t.id === rememberedThreadId)
+    isRememberedDraft || isRememberedSaved
       ? rememberedThreadId
-      : projectThreads[0]?.id ?? null;
+      : projectDraft?.threadId ?? projectThreads[0]?.id ?? null;
 
   useEffect(() => {
-    if (activeProject && targetThreadId) {
+    if (location.pathname === "/" && activeProject && targetThreadId) {
       void navigate({
         to: "/$threadId",
         params: { threadId: targetThreadId },
         replace: true,
       });
     }
-  }, [activeProject, targetThreadId, navigate]);
+  }, [location.pathname, activeProject, targetThreadId, navigate]);
 
   if (activeProject && projectThreads.length === 0) {
     return (

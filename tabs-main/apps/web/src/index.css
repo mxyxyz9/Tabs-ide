@@ -572,6 +572,18 @@ body {
   padding: 0;
 }
 
+/* Prevent font descender (g, p, y, j, q) clipping in containers with overflow: hidden or truncate */
+.truncate,
+button,
+[role="button"] {
+  line-height: 1.35;
+}
+
+.truncate {
+  padding-bottom: 2px;
+  margin-bottom: -2px;
+}
+
 h1,
 h2,
 h3,

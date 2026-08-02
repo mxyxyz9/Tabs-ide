@@ -2454,7 +2454,7 @@ function SettingsRouteView() {
                     type="button"
                     onClick={() => setActiveSettingsSection(item.id)}
                     className={cn(
-                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm leading-normal pb-0.5 transition-colors",
                       active
                         ? "bg-accent font-medium text-foreground"
                         : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",

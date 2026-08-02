@@ -238,7 +238,7 @@ export function ConflictResolver({
                 activeFile === fi ? "bg-accent" : "hover:bg-muted/50"
               }`}
             >
-              <div className="text-[11px] font-mono text-foreground/90 truncate leading-tight">{f.path.split("/").pop()}</div>
+              <div className="text-[11px] font-mono text-foreground/90 truncate leading-normal pb-0.5">{f.path.split("/").pop()}</div>
               <div className="text-[10px] font-mono mt-1" style={{ color: fileDone(fi) ? "var(--sem-emerald)" : "var(--fg-30)" }}>
                 {fileResolvedCount(fi)}/{f.hunks.length} resolved
               </div>
