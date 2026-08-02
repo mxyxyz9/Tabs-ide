@@ -252,7 +252,7 @@ function backendChildEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-function writeDesktopLogHeader(message: string): void {
+export function writeDesktopLogHeader(message: string): void {
   if (isDevelopment) {
     const line = `[${logTimestamp()}] [desktop-dev] ${message}\n`;
     try {
@@ -2952,11 +2952,17 @@ app.on("before-quit", (event) => {
   mainWindow?.webContents.send(APP_CLOSING_CHANNEL);
 
   clearUpdatePollTimer();
-  codeHostManager.dispose();
   browserHostManager.dispose();
   codeControlChannel.dispose();
 
   void (async () => {
+    try {
+      writeDesktopLogHeader("flushing Code-OSS session storage to disk...");
+      await codeHostManager.flushAndShutdownSessions();
+    } catch (err: any) {
+      writeDesktopLogHeader(`Code-OSS session flush failed: ${err?.message}`);
+    }
+
     try {
       await Effect.runPromise(resolvedShutdown.request);
       await Promise.race([

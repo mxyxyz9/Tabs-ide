@@ -458,7 +458,14 @@ export const DEFAULT_CODE_CHROME_STATE: CodeChromeState = {
 /** Messages sent from the broker (Electron main) → extension. */
 export type CodeControlServerMessage =
   | { type: "runCommand"; commandId: string }
-  | { type: "openFile"; filePath: string }
+  | {
+      type: "openFile";
+      filePath: string;
+      preview?: boolean;
+      pinned?: boolean;
+      preserveFocus?: boolean;
+      viewColumn?: number;
+    }
   | { type: "setTheme"; theme: string };
 
 /**
@@ -512,7 +519,15 @@ export function parseCodeControlServerMessage(raw: string): CodeControlServerMes
     return { type: "runCommand", commandId: record.commandId };
   }
   if (record.type === "openFile" && typeof record.filePath === "string") {
-    return { type: "openFile", filePath: record.filePath };
+    const msg: CodeControlServerMessage & { type: "openFile" } = {
+      type: "openFile",
+      filePath: record.filePath,
+    };
+    if (typeof record.preview === "boolean") msg.preview = record.preview;
+    if (typeof record.pinned === "boolean") msg.pinned = record.pinned;
+    if (typeof record.preserveFocus === "boolean") msg.preserveFocus = record.preserveFocus;
+    if (typeof record.viewColumn === "number") msg.viewColumn = record.viewColumn;
+    return msg;
   }
   if (record.type === "setTheme" && typeof record.theme === "string") {
     return { type: "setTheme", theme: record.theme };
@@ -608,6 +623,23 @@ export function coerceChromeState(value: unknown): CodeChromeState {
       ? record.languageId
       : null;
   state.cursor = coerceCursorPosition(record.cursor);
+
+  // Coerce openTabs: only preserve if it's an actual array of objects with a filePath string
+  if (Array.isArray(record.openTabs)) {
+    state.openTabs = record.openTabs
+      .filter(
+        (t): t is Record<string, unknown> =>
+          t !== null && typeof t === "object" && typeof (t as Record<string, unknown>).filePath === "string",
+      )
+      .map((t) => ({
+        filePath: t.filePath as string,
+        ...(typeof t.viewColumn === "number" ? { viewColumn: t.viewColumn as number } : {}),
+        ...(typeof t.active === "boolean" ? { active: t.active as boolean } : {}),
+        ...(typeof t.pinned === "boolean" ? { pinned: t.pinned as boolean } : {}),
+        ...(typeof t.preview === "boolean" ? { preview: t.preview as boolean } : {}),
+      }));
+  }
+
   return state;
 }
 

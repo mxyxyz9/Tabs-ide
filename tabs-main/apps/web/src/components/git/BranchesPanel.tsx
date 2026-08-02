@@ -8,7 +8,17 @@ import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
-import { Badge, Banner, Btn, Card, InlineForm, Modal, PanelToolbar } from "./gitPrimitives";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
+import { Banner, Card, InlineForm, PanelToolbar } from "./gitPrimitives";
 
 export function BranchesPanel({
   cwd,
@@ -144,12 +154,12 @@ export function BranchesPanel({
     <div>
       {form === null && (
         <PanelToolbar>
-          <Btn primary onClick={() => setForm("new")}>
+          <Button size="sm" onClick={() => setForm("new")}>
             New branch
-          </Btn>
-          <Btn ghost onClick={onOpenNewWorktree}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onOpenNewWorktree}>
             New worktree
-          </Btn>
+          </Button>
         </PanelToolbar>
       )}
 
@@ -160,9 +170,9 @@ export function BranchesPanel({
           body={conflictState.message}
           actions={
             onGoToChanges && (
-              <Btn sm primary onClick={onGoToChanges}>
+              <Button size="sm" onClick={onGoToChanges}>
                 Resolve in Changes
-              </Btn>
+              </Button>
             )
           }
         />
@@ -174,14 +184,14 @@ export function BranchesPanel({
 
       <Card className="p-2">
         <div className="flex items-center gap-2.5 px-2 py-2 border-b bd-1">
-          <Badge tone="amber" icon={GitBranchIcon}>
-            {isDetached ? `${activeBranch?.name ?? "HEAD"} (detached)` : activeBranch?.name}
+          <Badge variant="warning">
+            <GitBranchIcon /> {isDetached ? `${activeBranch?.name ?? "HEAD"} (detached)` : activeBranch?.name}
           </Badge>
           <span className="fs-11 font-mono tx-30 flex-1">{aheadCount || behindCount ? `↑${aheadCount} ↓${behindCount}` : "up to date"}</span>
           {!isDetached && (
-            <Btn sm ghost onClick={() => setForm("rename")}>
+            <Button variant="ghost" size="sm" onClick={() => setForm("rename")}>
               Rename
-            </Btn>
+            </Button>
           )}
         </div>
         {otherBranches.length === 0 ? (
@@ -192,20 +202,20 @@ export function BranchesPanel({
           otherBranches.map((b) => (
             <div key={b.name} className="flex items-center gap-2.5 px-2 py-2 border-b bd-1 last:border-0">
               <span className="text-xs font-mono tx-70 flex-1 truncate">{b.name}</span>
-              <Badge tone="muted">{b.isRemote ? "remote" : "local"}</Badge>
-              <Btn sm ghost onClick={() => setConfirmModal({ type: "merge", targetBranch: b.name })}>
+              <Badge variant="outline">{b.isRemote ? "remote" : "local"}</Badge>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmModal({ type: "merge", targetBranch: b.name })}>
                 Merge into current
-              </Btn>
-              <Btn sm ghost onClick={() => setConfirmModal({ type: "rebase", targetBranch: b.name })}>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmModal({ type: "rebase", targetBranch: b.name })}>
                 Rebase onto…
-              </Btn>
-              <Btn sm ghost onClick={() => void checkoutBranch(b.name)}>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => void checkoutBranch(b.name)}>
                 Switch
-              </Btn>
+              </Button>
               {!b.isRemote && (
-                <Btn sm ghost onClick={() => void deleteBranch(b.name, false)}>
+                <Button variant="ghost" size="sm" onClick={() => void deleteBranch(b.name, false)}>
                   Delete
-                </Btn>
+                </Button>
               )}
             </div>
           ))
@@ -241,26 +251,29 @@ export function BranchesPanel({
       )}
 
       {confirmModal && (
-        <Modal
-          title={confirmModal.type === "merge" ? `Merge ${confirmModal.targetBranch}` : `Rebase onto ${confirmModal.targetBranch}`}
-          onClose={() => setConfirmModal(null)}
-        >
-          <div className="space-y-4">
-            <p className="fs-12 tx-70">
-              {confirmModal.type === "merge"
-                ? `Are you sure you want to merge '${confirmModal.targetBranch}' into '${activeBranch?.name}'?`
-                : `Are you sure you want to rebase '${activeBranch?.name}' onto '${confirmModal.targetBranch}'?`}
-            </p>
-            <p className="fs-11 tx-40">
-              This operation modifies the current working tree and commit history. If conflicts occur, you can resolve them in the Changes panel.
-            </p>
-
-            <div className="flex justify-end gap-2 pt-2 border-t bd-1">
-              <Btn ghost onClick={() => setConfirmModal(null)}>
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmModal(null); }}>
+          <DialogPopup className="git-tool-v2 max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {confirmModal.type === "merge" ? `Merge ${confirmModal.targetBranch}` : `Rebase onto ${confirmModal.targetBranch}`}
+              </DialogTitle>
+            </DialogHeader>
+            <DialogPanel className="space-y-4">
+              <p className="fs-12 tx-70">
+                {confirmModal.type === "merge"
+                  ? `Are you sure you want to merge '${confirmModal.targetBranch}' into '${activeBranch?.name}'?`
+                  : `Are you sure you want to rebase '${activeBranch?.name}' onto '${confirmModal.targetBranch}'?`}
+              </p>
+              <p className="fs-11 tx-40">
+                This operation modifies the current working tree and commit history. If conflicts occur, you can resolve them in the Changes panel.
+              </p>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmModal(null)}>
                 Cancel
-              </Btn>
-              <Btn
-                primary
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => {
                   const { type, targetBranch } = confirmModal;
                   setConfirmModal(null);
@@ -272,10 +285,10 @@ export function BranchesPanel({
                 }}
               >
                 Confirm {confirmModal.type === "merge" ? "Merge" : "Rebase"}
-              </Btn>
-            </div>
-          </div>
-        </Modal>
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       )}
     </div>
   );

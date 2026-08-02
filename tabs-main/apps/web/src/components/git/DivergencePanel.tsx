@@ -20,7 +20,17 @@ import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
-import { Badge, Btn, Card, Modal } from "./gitPrimitives";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
+import { Card } from "./gitPrimitives";
 
 type ViewMode = "active" | "spotlight" | "archived";
 
@@ -300,19 +310,19 @@ export function DivergencePanel({
             </span>
           </div>
 
-          <Btn
-            sm
-            primary={!isFullScan}
+          <Button
+            size="sm"
+            variant={!isFullScan ? "default" : "outline"}
             disabled={isScanning}
             onClick={onScanAllBranches}
-            icon={RefreshCw}
           >
+            <RefreshCw />
             {isScanning
               ? "Scanning all branches…"
               : isFullScan
                 ? "Rescan all branches"
                 : "Scan all branches"}
-          </Btn>
+          </Button>
         </div>
       </div>
 
@@ -428,24 +438,24 @@ export function DivergencePanel({
 
           <div className="flex items-center gap-2">
             {activeView !== "spotlight" && (
-              <Btn sm primary icon={Telescope} onClick={() => handleBulkSpotlightToggle(true)}>
-                Add to Spotlight
-              </Btn>
+              <Button size="sm" onClick={() => handleBulkSpotlightToggle(true)}>
+                <Telescope /> Add to Spotlight
+              </Button>
             )}
             {activeView === "spotlight" && (
-              <Btn sm ghost icon={Telescope} onClick={() => handleBulkSpotlightToggle(false)}>
-                Remove from Spotlight
-              </Btn>
+              <Button variant="ghost" size="sm" onClick={() => handleBulkSpotlightToggle(false)}>
+                <Telescope /> Remove from Spotlight
+              </Button>
             )}
             {activeView !== "archived" && (
-              <Btn sm ghost icon={Archive} onClick={() => handleBulkArchiveToggle(true)}>
-                Archive
-              </Btn>
+              <Button variant="ghost" size="sm" onClick={() => handleBulkArchiveToggle(true)}>
+                <Archive /> Archive
+              </Button>
             )}
             {activeView === "archived" && (
-              <Btn sm ghost icon={ArchiveRestore} onClick={() => handleBulkArchiveToggle(false)}>
-                Un-archive
-              </Btn>
+              <Button variant="ghost" size="sm" onClick={() => handleBulkArchiveToggle(false)}>
+                <ArchiveRestore /> Un-archive
+              </Button>
             )}
           </div>
         </div>
@@ -548,8 +558,8 @@ export function DivergencePanel({
                     )}
 
                     <span className="fs-13 font-mono font-semibold tx-85 truncate">{b.name}</span>
-                    {b.isRemote && <Badge tone="default">remote</Badge>}
-                    {b.isDefault && <Badge tone="emerald">default</Badge>}
+                    {b.isRemote && <Badge variant="outline">remote</Badge>}
+                    {b.isDefault && <Badge variant="success">default</Badge>}
 
                     {b.behindCount > 0 && (
                       <span
@@ -573,12 +583,12 @@ export function DivergencePanel({
 
                   {/* Row actions */}
                   <div className="flex items-center gap-2 shrink-0 ml-auto">
-                    <Btn sm ghost icon={Download} onClick={() => setConfirmMergeBranch(b.name)}>
-                      Merge
-                    </Btn>
-                    <Btn sm ghost onClick={() => setConfirmRebaseBranch(b.name)}>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmMergeBranch(b.name)}>
+                      <Download /> Merge
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmRebaseBranch(b.name)}>
                       Rebase
-                    </Btn>
+                    </Button>
 
                     {/* Spotlight toggle */}
                     <button
@@ -617,40 +627,51 @@ export function DivergencePanel({
 
       {/* Confirmation Modals */}
       {confirmMergeBranch && (
-        <Modal title={`Merge ${confirmMergeBranch}`} onClose={() => setConfirmMergeBranch(null)}>
-          <p className="fs-12 tx-60 mb-4">
-            This will merge commits from <strong>{confirmMergeBranch}</strong> into your current
-            working branch.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Btn sm ghost onClick={() => setConfirmMergeBranch(null)}>
-              Cancel
-            </Btn>
-            <Btn sm primary icon={Download} onClick={() => void handleExecuteMerge(confirmMergeBranch)}>
-              Merge {confirmMergeBranch}
-            </Btn>
-          </div>
-        </Modal>
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmMergeBranch(null); }}>
+          <DialogPopup className="git-tool-v2 max-w-md">
+            <DialogHeader>
+              <DialogTitle>Merge {confirmMergeBranch}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              <p className="fs-12 tx-60">
+                This will merge commits from <strong>{confirmMergeBranch}</strong> into your current
+                working branch.
+              </p>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmMergeBranch(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={() => void handleExecuteMerge(confirmMergeBranch)}>
+                <Download /> Merge {confirmMergeBranch}
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       )}
 
       {confirmRebaseBranch && (
-        <Modal
-          title={`Rebase onto ${confirmRebaseBranch}`}
-          onClose={() => setConfirmRebaseBranch(null)}
-        >
-          <p className="fs-12 tx-60 mb-4">
-            This will rebase your current working branch commits onto{" "}
-            <strong>{confirmRebaseBranch}</strong>.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Btn sm ghost onClick={() => setConfirmRebaseBranch(null)}>
-              Cancel
-            </Btn>
-            <Btn sm primary onClick={() => void handleExecuteRebase(confirmRebaseBranch)}>
-              Rebase onto {confirmRebaseBranch}
-            </Btn>
-          </div>
-        </Modal>
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmRebaseBranch(null); }}>
+          <DialogPopup className="git-tool-v2 max-w-md">
+            <DialogHeader>
+              <DialogTitle>Rebase onto {confirmRebaseBranch}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              <p className="fs-12 tx-60">
+                This will rebase your current working branch commits onto{" "}
+                <strong>{confirmRebaseBranch}</strong>.
+              </p>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmRebaseBranch(null)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={() => void handleExecuteRebase(confirmRebaseBranch)}>
+                Rebase onto {confirmRebaseBranch}
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       )}
     </div>
   );

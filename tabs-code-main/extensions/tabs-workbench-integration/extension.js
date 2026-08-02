@@ -341,7 +341,7 @@ function startCodeControlChannel(context) {
   // commands/state to the right editor when multiple projects are open.
   const projectId = process.env.TABS_PROJECT_ID || "";
 
-  /** @type {{ activeViewId: string | null, panelOpen: boolean, panelMaximized: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean }} */
+  /** @type {{ activeViewId: string | null, panelOpen: boolean, panelMaximized: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean, openTabs: any[] }} */
   const state = {
     activeViewId: null,
     panelOpen: false,
@@ -350,6 +350,7 @@ function startCodeControlChannel(context) {
     branch: null,
     activityBarItems: [],
     autoSaveEnabled: false,
+    openTabs: [],
   };
   let socket = null;
   let disposed = false;
@@ -384,6 +385,48 @@ function startCodeControlChannel(context) {
       return vscode.workspace.getConfiguration("files").get("autoSave") !== "off";
     } catch {
       return false;
+    }
+  };
+
+  const computeOpenTabs = () => {
+    try {
+      if (!vscode.window.tabGroups || !Array.isArray(vscode.window.tabGroups.all)) {
+        return [];
+      }
+      const result = [];
+      for (const group of vscode.window.tabGroups.all) {
+        const viewColumn = group.viewColumn;
+        if (!Array.isArray(group.tabs)) continue;
+        for (const tab of group.tabs) {
+          const input = tab.input;
+          if (input && input.uri && (input.uri.scheme === "file" || input.uri.scheme === "vscode-remote")) {
+            const filePath = input.uri.fsPath;
+            if (filePath) {
+              result.push({
+                filePath,
+                viewColumn,
+                active: !!tab.isActive,
+                pinned: !!tab.isPinned,
+                preview: !!tab.isPreview,
+              });
+            }
+          }
+        }
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  };
+
+  let lastTabsJson = "";
+  const recomputeOpenTabs = () => {
+    const nextTabs = computeOpenTabs();
+    const nextJson = JSON.stringify(nextTabs);
+    if (nextJson !== lastTabsJson) {
+      lastTabsJson = nextJson;
+      state.openTabs = nextTabs;
+      pushState();
     }
   };
 
@@ -684,6 +727,8 @@ function startCodeControlChannel(context) {
       refreshBranch();
       state.dirtyCount = computeDirtyCount();
       state.autoSaveEnabled = computeAutoSaveEnabled();
+      state.openTabs = computeOpenTabs();
+      lastTabsJson = JSON.stringify(state.openTabs);
       void refreshContainers().then(() => {
         send({ type: "hello", projectId, token: target.token });
         authenticated = true;
@@ -722,7 +767,12 @@ function startCodeControlChannel(context) {
               } else {
                 fileUri = vscode.Uri.file(parsed.filePath);
               }
-              await vscode.commands.executeCommand("vscode.open", fileUri);
+              const options = {};
+              if (typeof parsed.preview === "boolean") options.preview = parsed.preview;
+              if (typeof parsed.pinned === "boolean") options.pinned = parsed.pinned;
+              if (typeof parsed.preserveFocus === "boolean") options.preserveFocus = parsed.preserveFocus;
+              if (typeof parsed.viewColumn === "number") options.viewColumn = parsed.viewColumn;
+              await vscode.commands.executeCommand("vscode.open", fileUri, options);
             } catch (err) {
               log(`openFile error: ${err && err.message ? err.message : err}`);
             }
@@ -928,6 +978,8 @@ await workspaceConfig.update(
     }
   };
 
+  recomputeOpenTabs();
+
   const containerInterval = setInterval(() => {
     void refreshContainers();
   }, 5000);
@@ -949,8 +1001,21 @@ await workspaceConfig.update(
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument(recomputeDirty),
     vscode.workspace.onDidSaveTextDocument(recomputeDirty),
-    vscode.workspace.onDidOpenTextDocument(recomputeDirty),
-    vscode.workspace.onDidCloseTextDocument(recomputeDirty),
+    vscode.workspace.onDidOpenTextDocument(() => {
+      recomputeDirty();
+      recomputeOpenTabs();
+    }),
+    vscode.workspace.onDidCloseTextDocument(() => {
+      recomputeDirty();
+      recomputeOpenTabs();
+    }),
+    vscode.window.onDidChangeActiveTextEditor(recomputeOpenTabs),
+    ...(vscode.window.tabGroups && typeof vscode.window.tabGroups.onDidChangeTabs === "function"
+      ? [vscode.window.tabGroups.onDidChangeTabs(recomputeOpenTabs)]
+      : []),
+    ...(vscode.window.tabGroups && typeof vscode.window.tabGroups.onDidChangeTabGroups === "function"
+      ? [vscode.window.tabGroups.onDidChangeTabGroups(recomputeOpenTabs)]
+      : []),
     extensionChangeSub,
     configChangeSub,
     {
@@ -967,6 +1032,13 @@ await workspaceConfig.update(
       },
     },
   );
+
+  if (vscode.window.tabGroups && typeof vscode.window.tabGroups.onDidChangeTabs === "function") {
+    context.subscriptions.push(
+      vscode.window.tabGroups.onDidChangeTabs(recomputeOpenTabs),
+      vscode.window.tabGroups.onDidChangeTabGroups(recomputeOpenTabs),
+    );
+  }
 
   connect();
 }

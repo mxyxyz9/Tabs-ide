@@ -23,9 +23,9 @@ import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
+import { Button } from "../ui/button";
 import {
   AutoTextarea,
-  Btn,
   Card,
   FilePathLabel,
   SectionLabel,
@@ -217,12 +217,12 @@ export function ConflictResolver({
   return (
     <div>
       <div className="flex items-center justify-end gap-2 mb-3">
-        <Btn sm ghost onClick={() => bulkAll("ours")}>
+        <Button variant="ghost" size="sm" onClick={() => bulkAll("ours")}>
           Accept all current
-        </Btn>
-        <Btn sm ghost onClick={() => bulkAll("theirs")}>
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => bulkAll("theirs")}>
           Accept all incoming
-        </Btn>
+        </Button>
       </div>
 
       <div className="flex gap-4">
@@ -289,25 +289,25 @@ export function ConflictResolver({
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t bd-1">
-                      <Btn sm primary={res?.strategy === "ours"} onClick={() => setStrategy(activeFile, hi, "ours")}>
+                      <Button size="sm" variant={res?.strategy === "ours" ? "default" : "outline"} onClick={() => setStrategy(activeFile, hi, "ours")}>
                         Use current
-                      </Btn>
-                      <Btn sm primary={res?.strategy === "theirs"} onClick={() => setStrategy(activeFile, hi, "theirs")}>
+                      </Button>
+                      <Button size="sm" variant={res?.strategy === "theirs" ? "default" : "outline"} onClick={() => setStrategy(activeFile, hi, "theirs")}>
                         Use incoming
-                      </Btn>
-                      <Btn sm ghost onClick={() => setStrategy(activeFile, hi, "both")}>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setStrategy(activeFile, hi, "both")}>
                         Use both
-                      </Btn>
-                      <Btn
-                        sm
-                        ghost
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           setEditingKey(key(activeFile, hi));
                           setManualText([...h.ours, ...h.theirs].join("\n"));
                         }}
                       >
                         Edit manually
-                      </Btn>
+                      </Button>
                     </div>
                   </>
                 ) : (
@@ -319,12 +319,12 @@ export function ConflictResolver({
                       className="w-full border bd-2 rounded-lg tx-80 font-mono fs-11 p-3 outline-none foc-bd-3 transition-colors"
                     />
                     <div className="flex items-center gap-2 mt-2">
-                      <Btn sm primary onClick={() => setStrategy(activeFile, hi, "manual", manualText)}>
+                      <Button size="sm" onClick={() => setStrategy(activeFile, hi, "manual", manualText)}>
                         Save resolution
-                      </Btn>
-                      <Btn sm ghost onClick={() => setEditingKey(null)}>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingKey(null)}>
                         Cancel
-                      </Btn>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -333,13 +333,14 @@ export function ConflictResolver({
           })}
 
           {activeFile < files.length - 1 && (
-            <Btn
+            <Button
+              size="sm"
               disabled={!fileDone(activeFile)}
               title={!fileDone(activeFile) ? "Resolve every hunk in this file first" : undefined}
               onClick={() => setActiveFile((i) => Math.min(files.length - 1, i + 1))}
             >
               Next file
-            </Btn>
+            </Button>
           )}
         </div>
       </div>
@@ -528,9 +529,9 @@ export function ChangesPanel({
               </span>
               <p className="fs-11 tx-50 mt-0.5">Resolve every conflict hunk below, then stage all files and complete the merge.</p>
             </div>
-            <Btn sm ghost icon={RotateCcw} onClick={() => onRunInTerminal("git merge --abort")}>
-              Abort merge
-            </Btn>
+            <Button variant="ghost" size="sm" onClick={() => onRunInTerminal("git merge --abort")}>
+              <RotateCcw /> Abort merge
+            </Button>
           </div>
 
           <ConflictResolver
@@ -554,9 +555,9 @@ export function ChangesPanel({
       <SectionLabel
         action={
           stagedFiles.length > 0 ? (
-            <Btn sm ghost onClick={() => void unstageAll()}>
+            <Button variant="ghost" size="sm" onClick={() => void unstageAll()}>
               Unstage all
-            </Btn>
+            </Button>
           ) : undefined
         }
       >
@@ -585,14 +586,14 @@ export function ChangesPanel({
         action={
           <div className="flex items-center gap-2">
             {unstagedFiles.length > 0 && (
-              <Btn sm ghost onClick={() => void stageAll()}>
+              <Button variant="ghost" size="sm" onClick={() => void stageAll()}>
                 Stage all
-              </Btn>
+              </Button>
             )}
             {totalChanged > 0 && (
-              <Btn sm ghost onClick={onOpenDiscardAll}>
+              <Button variant="ghost" size="sm" onClick={onOpenDiscardAll}>
                 Discard all
-              </Btn>
+              </Button>
             )}
           </div>
         }
@@ -638,33 +639,33 @@ export function ChangesPanel({
         </label>
         <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <Btn
-              primary
-              icon={GitCommit}
+            <Button
+              size="sm"
               disabled={!stagedFiles.length || !repoState.canCommitLocally}
               title={!stagedFiles.length ? "Nothing staged yet" : undefined}
               onClick={() => void handleCommit(false)}
             >
-              {amend ? "Amend commit" : repoState.commitButtonLabel}
-            </Btn>
-            <Btn
-              ghost
-              icon={Sparkles}
+              <GitCommit /> {amend ? "Amend commit" : repoState.commitButtonLabel}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={!stagedFiles.length || generating}
               title="Generates a message from the staged diff"
               onClick={handleGenerate}
             >
-              {generating ? "Generating…" : "Generate message"}
-            </Btn>
+              <Sparkles /> {generating ? "Generating…" : "Generate message"}
+            </Button>
           </div>
-          <Btn
-            icon={Upload}
+          <Button
+            variant="outline"
+            size="sm"
             disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush}
             title={repoState.pushDisabledReason ?? (!stagedFiles.length ? "Nothing staged yet" : undefined)}
             onClick={() => void handleCommit(true)}
           >
-            Commit &amp; push
-          </Btn>
+            <Upload /> Commit &amp; push
+          </Button>
         </div>
       </Card>
     </div>

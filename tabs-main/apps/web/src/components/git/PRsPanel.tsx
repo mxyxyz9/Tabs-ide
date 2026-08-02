@@ -3,7 +3,17 @@ import { useEffect, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
 import { GitCheckingState } from "./GitCheckingState";
-import { Badge, Btn, Card, Modal, PanelToolbar, Select } from "./gitPrimitives";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
+import { Card, PanelToolbar, Select } from "./gitPrimitives";
 
 interface MockPR {
   n: number;
@@ -113,9 +123,9 @@ export function PRsPanel({
     <div>
       {prs.length > 0 && (
         <PanelToolbar>
-          <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
-            Create pull request
-          </Btn>
+          <Button size="sm" onClick={onOpenCreatePR}>
+            <GitPullRequest /> Create pull request
+          </Button>
         </PanelToolbar>
       )}
 
@@ -126,16 +136,16 @@ export function PRsPanel({
           <GitPullRequest className="mx-auto mb-2 tx-30" size={24} />
           <p className="fs-12 font-medium tx-80 mb-1">No open pull requests for {branchName}</p>
           <p className="fs-11 tx-40 mb-4">Push your branch and open a pull request on GitHub to request feedback and merge changes.</p>
-          <Btn primary icon={GitPullRequest} onClick={onOpenCreatePR}>
-            Create pull request
-          </Btn>
+          <Button size="sm" onClick={onOpenCreatePR}>
+            <GitPullRequest /> Create pull request
+          </Button>
         </Card>
       ) : (
         <div className="space-y-3">
           {prs.map((pr) => (
             <Card key={pr.n} className="p-3">
               <div className="flex items-center gap-3">
-                <Badge tone={pr.state}>
+                <Badge variant={pr.state === "open" ? "success" : pr.state === "merged" ? "secondary" : pr.state === "closed" ? "destructive" : "outline"}>
                   #{pr.n} {pr.state}
                 </Badge>
                 <div className="min-w-0 flex-1">
@@ -143,17 +153,18 @@ export function PRsPanel({
                   <div className="fs-10 font-mono tx-30 truncate">{pr.branch}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Btn sm ghost icon={MessageSquare} onClick={() => toggleComments(pr.n)}>
-                    {expandedPrComments === pr.n ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Comments
-                  </Btn>
+                  <Button variant="ghost" size="sm" onClick={() => toggleComments(pr.n)}>
+                    <MessageSquare />
+                    {expandedPrComments === pr.n ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />} Comments
+                  </Button>
                   {pr.state === "open" && (
-                    <Btn sm primary icon={GitMerge} onClick={() => setMergePr(pr)}>
-                      Merge…
-                    </Btn>
+                    <Button size="sm" onClick={() => setMergePr(pr)}>
+                      <GitMerge /> Merge…
+                    </Button>
                   )}
-                  <Btn sm ghost onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}>
+                  <Button variant="ghost" size="sm" onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}>
                     View on GitHub
-                  </Btn>
+                  </Button>
                 </div>
               </div>
 
@@ -183,44 +194,48 @@ export function PRsPanel({
       )}
 
       {mergePr && (
-        <Modal title={`Merge Pull Request #${mergePr.n}`} onClose={() => setMergePr(null)}>
-          <div className="space-y-4">
-            <p className="fs-12 tx-70">
-              Are you sure you want to merge <strong>{mergePr.title}</strong> into base branch?
-            </p>
+        <Dialog open onOpenChange={(open) => { if (!open) setMergePr(null); }}>
+          <DialogPopup className="git-tool-v2 max-w-md">
+            <DialogHeader>
+              <DialogTitle>Merge Pull Request #{mergePr.n}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel className="space-y-4">
+              <p className="fs-12 tx-70">
+                Are you sure you want to merge <strong>{mergePr.title}</strong> into base branch?
+              </p>
 
-            <div>
-              <label className="block fs-11 font-medium tx-60 mb-1">Merge Strategy</label>
-              <Select
-                value={mergeMethod}
-                onChange={(e) => setMergeMethod(e.target.value as "squash" | "merge" | "rebase")}
-              >
-                <option value="squash">Squash and merge (recommended)</option>
-                <option value="merge">Create a merge commit</option>
-                <option value="rebase">Rebase and merge</option>
-              </Select>
-            </div>
+              <div>
+                <label className="block fs-11 font-medium tx-60 mb-1">Merge Strategy</label>
+                <Select
+                  value={mergeMethod}
+                  onChange={(e) => setMergeMethod(e.target.value as "squash" | "merge" | "rebase")}
+                >
+                  <option value="squash">Squash and merge (recommended)</option>
+                  <option value="merge">Create a merge commit</option>
+                  <option value="rebase">Rebase and merge</option>
+                </Select>
+              </div>
 
-            <label className="flex items-center gap-2 text-xs tx-80 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={deleteBranch}
-                onChange={(e) => setDeleteBranch(e.target.checked)}
-                className="rounded accent-[var(--accent)]"
-              />
-              Delete head branch after merging
-            </label>
-
-            <div className="flex justify-end gap-2 pt-2 border-t bd-1">
-              <Btn ghost onClick={() => setMergePr(null)}>
+              <label className="flex items-center gap-2 text-xs tx-80 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteBranch}
+                  onChange={(e) => setDeleteBranch(e.target.checked)}
+                  className="rounded accent-[var(--gt-accent)]"
+                />
+                Delete head branch after merging
+              </label>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setMergePr(null)}>
                 Cancel
-              </Btn>
-              <Btn primary icon={CheckCircle2} onClick={handleConfirmMerge}>
-                Confirm Merge
-              </Btn>
-            </div>
-          </div>
-        </Modal>
+              </Button>
+              <Button size="sm" onClick={handleConfirmMerge}>
+                <CheckCircle2 /> Confirm Merge
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       )}
     </div>
   );

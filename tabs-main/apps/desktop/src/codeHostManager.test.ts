@@ -39,6 +39,7 @@ const { browserViews, MockBrowserView } = vi.hoisted(() => {
 });
 
 vi.mock("electron", () => ({
+  app: { getPath: vi.fn(() => "/tmp/mock-user-data") },
   BrowserView: MockBrowserView,
 }));
 
@@ -55,8 +56,11 @@ import {
   buildManagedServerArgs,
   buildSessionUrl,
   mergeProductConfigurationDefaults,
+  migrateAndCleanSessionIndexedDBStorage,
+  readWorkspaceTabs,
   removeExtensionFromManifest,
   resolveCodeHostConfig,
+  writeWorkspaceTabs,
 } from "./codeHostManager";
 
 function makeTempDir(prefix: string): string {
@@ -487,6 +491,7 @@ describe("CodeHostManager", () => {
       onExtensionHostConnected: vi.fn((handler) => {
         extensionHostConnectedHandler = handler;
       }),
+      onChromeState: vi.fn(),
       setTheme: vi.fn(),
       openFile: vi.fn(),
     };
@@ -628,5 +633,104 @@ describe("CodeHostManager", () => {
     for (const themeId of themesToTest) {
       expect(() => manager.setTheme(themeId)).not.toThrow();
     }
+  });
+
+  describe("migrateAndCleanSessionIndexedDBStorage", () => {
+    it("handles non-existent directory gracefully", () => {
+      const nonExistentDir = Path.join(OS.tmpdir(), `non-existent-idb-${Date.now()}`);
+      const res = migrateAndCleanSessionIndexedDBStorage(nonExistentDir, 5000);
+      expect(res).toEqual({ migratedFrom: null, cleanedPorts: [] });
+    });
+
+    it("migrates the most recent port storage and cleans up obsolete ports", () => {
+      const testDir = makeTempDir("idb-test-");
+      try {
+        const port1000Dir = Path.join(testDir, "http_127.0.0.1_1000.indexeddb.leveldb");
+        const port2000Dir = Path.join(testDir, "http_127.0.0.1_2000.indexeddb.leveldb");
+        const port2000Blob = Path.join(testDir, "http_127.0.0.1_2000.indexeddb.blob");
+
+        FS.mkdirSync(port1000Dir, { recursive: true });
+        FS.writeFileSync(Path.join(port1000Dir, "000001.log"), "old-data");
+
+        // Make port2000 newer
+        FS.mkdirSync(port2000Dir, { recursive: true });
+        FS.writeFileSync(Path.join(port2000Dir, "000001.log"), "new-data");
+        FS.mkdirSync(port2000Blob, { recursive: true });
+        FS.writeFileSync(Path.join(port2000Blob, "blob1.dat"), "blob-data");
+
+        const res = migrateAndCleanSessionIndexedDBStorage(testDir, 3000);
+
+        expect(res.migratedFrom).toBe(2000);
+        expect(res.cleanedPorts.sort()).toEqual([1000, 2000]);
+
+        const newTarget = Path.join(testDir, "http_127.0.0.1_3000.indexeddb.leveldb");
+        const newBlob = Path.join(testDir, "http_127.0.0.1_3000.indexeddb.blob");
+
+        expect(FS.existsSync(newTarget)).toBe(true);
+        expect(FS.readFileSync(Path.join(newTarget, "000001.log"), "utf8")).toBe("new-data");
+        expect(FS.existsSync(newBlob)).toBe(true);
+        expect(FS.readFileSync(Path.join(newBlob, "blob1.dat"), "utf8")).toBe("blob-data");
+
+        // Old folders should be deleted
+        expect(FS.existsSync(port1000Dir)).toBe(false);
+        expect(FS.existsSync(port2000Dir)).toBe(false);
+        expect(FS.existsSync(port2000Blob)).toBe(false);
+      } finally {
+        FS.rmSync(testDir, { recursive: true, force: true });
+      }
+    });
+
+    it("skips migration if target port directory already exists, but cleans up old ports", () => {
+      const testDir = makeTempDir("idb-test-skip-");
+      try {
+        const port1000Dir = Path.join(testDir, "http_127.0.0.1_1000.indexeddb.leveldb");
+        const target3000Dir = Path.join(testDir, "http_127.0.0.1_3000.indexeddb.leveldb");
+
+        FS.mkdirSync(port1000Dir, { recursive: true });
+        FS.writeFileSync(Path.join(port1000Dir, "000001.log"), "old-data");
+
+        FS.mkdirSync(target3000Dir, { recursive: true });
+        FS.writeFileSync(Path.join(target3000Dir, "000001.log"), "existing-data");
+
+        const res = migrateAndCleanSessionIndexedDBStorage(testDir, 3000);
+
+        expect(res.migratedFrom).toBeNull();
+        expect(res.cleanedPorts).toEqual([1000]);
+        expect(FS.readFileSync(Path.join(target3000Dir, "000001.log"), "utf8")).toBe("existing-data");
+        expect(FS.existsSync(port1000Dir)).toBe(false);
+      } finally {
+        FS.rmSync(testDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("readWorkspaceTabs & writeWorkspaceTabs", () => {
+    it("writes and reads workspace tab persistence correctly", () => {
+      const testDir = makeTempDir("tab-test-");
+      try {
+        const projectId = "test-proj-123";
+        const sampleTabs = [
+          { filePath: "/path/to/fileA.ts", viewColumn: 1, active: false, pinned: true },
+          { filePath: "/path/to/fileB.ts", viewColumn: 1, active: true, pinned: false },
+        ];
+
+        writeWorkspaceTabs(projectId, sampleTabs, testDir);
+        const readBack = readWorkspaceTabs(projectId, testDir);
+
+        expect(readBack).toEqual(sampleTabs);
+      } finally {
+        FS.rmSync(testDir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns null for non-existent workspace tab file", () => {
+      const testDir = makeTempDir("tab-test-none-");
+      try {
+        const readBack = readWorkspaceTabs("non-existent-project-xyz", testDir);
+        expect(readBack).toBeNull();
+      } finally {
+        FS.rmSync(testDir, { recursive: true, force: true });
+      }
+    });
   });
 });

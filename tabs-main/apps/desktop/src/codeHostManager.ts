@@ -8,6 +8,7 @@ import * as Path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
+  app,
   BrowserView,
   ipcMain,
   nativeTheme,
@@ -18,6 +19,8 @@ import {
   type Session as ElectronSession,
 } from "electron";
 import type {
+  CodeChromeState,
+  CodeTabInfo,
   DesktopCodeHostActivateSessionInput,
   DesktopCodeHostEnsureSessionInput,
   DesktopCodeHostOpenFileInput,
@@ -1162,6 +1165,142 @@ async function waitForHttpReady(entry: string, timeoutMs: number): Promise<void>
   throw new Error(`Timed out waiting for the VS Code web runtime at ${entry}.`);
 }
 
+export function getWorkspaceTabsFilePath(
+  projectId: string,
+  stateDir: string = DEFAULT_CODE_HOST_STATE_DIR,
+): string {
+  const safeId = projectId.trim() || "default";
+  return Path.join(stateDir, `workspace-tabs-${safeId}.json`);
+}
+
+export function readWorkspaceTabs(
+  projectId: string,
+  stateDir: string = DEFAULT_CODE_HOST_STATE_DIR,
+  fs: Pick<typeof FS, "readFileSync" | "existsSync"> = FS,
+): CodeTabInfo[] | null {
+  try {
+    const filePath = getWorkspaceTabsFilePath(projectId, stateDir);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CodeTabInfo[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeWorkspaceTabs(
+  projectId: string,
+  tabs: CodeTabInfo[],
+  stateDir: string = DEFAULT_CODE_HOST_STATE_DIR,
+  fs: Pick<typeof FS, "mkdirSync" | "writeFileSync"> = FS,
+): void {
+  try {
+    fs.mkdirSync(stateDir, { recursive: true });
+    const filePath = getWorkspaceTabsFilePath(projectId, stateDir);
+    fs.writeFileSync(filePath, `${JSON.stringify(tabs, null, 2)}\n`, "utf8");
+  } catch (err) {
+    console.error(`[code-oss] failed to write workspace tabs for ${projectId}:`, err);
+  }
+}
+
+export function migrateAndCleanSessionIndexedDBStorage(
+  indexedDbDir: string,
+  newPort: number,
+  fs: Pick<
+    typeof FS,
+    | "existsSync"
+    | "mkdirSync"
+    | "readdirSync"
+    | "statSync"
+    | "cpSync"
+    | "rmSync"
+  > = FS,
+): { migratedFrom: number | null; cleanedPorts: number[] } {
+  const result: { migratedFrom: number | null; cleanedPorts: number[] } = {
+    migratedFrom: null,
+    cleanedPorts: [],
+  };
+
+  if (!fs.existsSync(indexedDbDir)) {
+    return result;
+  }
+
+  const targetLevelDbDir = Path.join(indexedDbDir, `http_127.0.0.1_${newPort}.indexeddb.leveldb`);
+  const targetBlobDir = Path.join(indexedDbDir, `http_127.0.0.1_${newPort}.indexeddb.blob`);
+
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(indexedDbDir);
+  } catch {
+    return result;
+  }
+
+  const candidatePorts: { port: number; levelDbDir: string; mtimeMs: number }[] = [];
+
+  for (const entry of entries) {
+    const match = /^http_127\.0\.0\.1_(\d+)\.indexeddb\.leveldb$/.exec(entry);
+    if (match) {
+      const port = Number(match[1]);
+      if (port !== newPort) {
+        const fullPath = Path.join(indexedDbDir, entry);
+        try {
+          const stat = fs.statSync(fullPath);
+          candidatePorts.push({ port, levelDbDir: fullPath, mtimeMs: stat.mtimeMs });
+        } catch {
+          /* ignore unreadable entries */
+        }
+      }
+    }
+  }
+
+  if (!fs.existsSync(targetLevelDbDir) && candidatePorts.length > 0) {
+    candidatePorts.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    const mostRecent = candidatePorts[0];
+    if (mostRecent) {
+      const sourceBlobDir = Path.join(indexedDbDir, `http_127.0.0.1_${mostRecent.port}.indexeddb.blob`);
+
+      try {
+        fs.cpSync(mostRecent.levelDbDir, targetLevelDbDir, { recursive: true });
+        result.migratedFrom = mostRecent.port;
+
+        if (fs.existsSync(sourceBlobDir)) {
+          fs.cpSync(sourceBlobDir, targetBlobDir, { recursive: true });
+        }
+      } catch (err) {
+        console.error(
+          `[code-oss] failed to migrate IndexedDB storage from port ${mostRecent.port} to ${newPort}:`,
+          err,
+        );
+      }
+    }
+  }
+
+  for (const candidate of candidatePorts) {
+    const oldLevelDb = candidate.levelDbDir;
+    const oldBlob = Path.join(indexedDbDir, `http_127.0.0.1_${candidate.port}.indexeddb.blob`);
+
+    try {
+      if (fs.existsSync(oldLevelDb)) {
+        fs.rmSync(oldLevelDb, { recursive: true, force: true });
+      }
+      if (fs.existsSync(oldBlob)) {
+        fs.rmSync(oldBlob, { recursive: true, force: true });
+      }
+      result.cleanedPorts.push(candidate.port);
+    } catch (err) {
+      console.error(
+        `[code-oss] failed to clean up old IndexedDB storage for port ${candidate.port}:`,
+        err,
+      );
+    }
+  }
+
+  return result;
+}
+
 export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
@@ -1262,22 +1401,141 @@ export class CodeHostManager {
     }
   }
 
+  private prepareSessionIndexedDBStorage(session: CodeSession, newPort: number): void {
+    try {
+      let partitionStoragePath: string | null = null;
+      if (session.view?.webContents?.session) {
+        try {
+          partitionStoragePath = session.view.webContents.session.getStoragePath();
+        } catch {
+          partitionStoragePath = null;
+        }
+      }
+      if (!partitionStoragePath) {
+        let userData: string | null = null;
+        try {
+          if (app && typeof app.getPath === "function") {
+            userData = app.getPath("userData");
+          }
+        } catch {
+          userData = null;
+        }
+        if (!userData) return;
+        const partitionName = session.partition || `persist:tabs-code-host:${session.projectId}`;
+        const cleanPartition = partitionName.replace(/^persist:/, "");
+        partitionStoragePath = Path.join(userData, "Partitions", encodeURIComponent(cleanPartition));
+      }
+      const indexedDbDir = Path.join(partitionStoragePath, "IndexedDB");
+      const res = migrateAndCleanSessionIndexedDBStorage(indexedDbDir, newPort, FS);
+      if (res.migratedFrom !== null) {
+        console.log(
+          `[code-oss] migrated IndexedDB storage for project ${session.projectId}: port ${res.migratedFrom} -> ${newPort}`,
+        );
+      }
+      if (res.cleanedPorts.length > 0) {
+        console.log(
+          `[code-oss] cleaned up ${res.cleanedPorts.length} old IndexedDB port folder(s) for project ${session.projectId}`,
+        );
+      }
+    } catch (err) {
+      console.error(`[code-oss] prepareSessionIndexedDBStorage failed:`, err);
+    }
+  }
+
+  private workspaceTabsDebounceTimers = new Map<string, NodeJS.Timeout>();
+
+  handleChromeStateForTabs(projectId: string, state: CodeChromeState): void {
+    if (!state.openTabs) return;
+
+    const tabs = state.openTabs;
+    const existingTimer = this.workspaceTabsDebounceTimers.get(projectId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.workspaceTabsDebounceTimers.delete(projectId);
+    }
+
+    if (tabs.length > 0) {
+      const timer = setTimeout(() => {
+        this.workspaceTabsDebounceTimers.delete(projectId);
+        writeWorkspaceTabs(projectId, [...tabs]);
+      }, 500);
+      this.workspaceTabsDebounceTimers.set(projectId, timer);
+    } else {
+      // Empty tabs: stabilization delay (1000ms) to ensure intentional zero-tabs state
+      const timer = setTimeout(() => {
+        this.workspaceTabsDebounceTimers.delete(projectId);
+        writeWorkspaceTabs(projectId, []);
+      }, 1000);
+      this.workspaceTabsDebounceTimers.set(projectId, timer);
+    }
+  }
+
   constructor(
     private readonly getWindow: () => BrowserWindow | null,
     private readonly config: CodeHostConfig,
     private readonly controlChannel?: CodeControlChannel,
   ) {
-    // Fix for the race condition between loadURL (T=A) and extension host ready
-    // (T=C): proven gap of ~14.7 s in live traces. Instead of relying on the
-    // startup URL's `payload=openFile` (which always fires before the remote
-    // filesystem WebSocket channel is established), we send the openFile command
-    // the moment the extension host connects over the control channel.
-    this.controlChannel?.onExtensionHostConnected((projectId) => {
-      // 1. Sync the current active app theme (including custom themes) to the newly connected extension host
+    this.controlChannel?.onChromeState((projectId, state) => {
+      this.handleChromeStateForTabs(projectId, state);
+    });
+
+    this.controlChannel?.onExtensionHostConnected(async (projectId) => {
+      // 1. Sync active theme
       this.controlChannel?.setTheme(this.currentThemeId, this.currentCustomConfig);
 
-      // 2. Open any pending file
+      // 2. Restore persisted workspace tabs sequentially
       const session = this.sessions.get(projectId);
+      const savedTabs = readWorkspaceTabs(projectId);
+
+      if (Array.isArray(savedTabs)) {
+        if (savedTabs.length === 0) {
+          // Explicit zero-tabs state persisted by user closing all tabs. Do not open fallback file.
+          return;
+        }
+
+        const tabsToRestore = [...savedTabs];
+        const inactiveTabs = tabsToRestore.filter((t) => !t.active);
+        const activeTabs = tabsToRestore.filter((t) => t.active);
+
+        // Open inactive tabs first with preserveFocus: true
+        for (const tab of inactiveTabs) {
+          const fullPath = Path.isAbsolute(tab.filePath)
+            ? tab.filePath
+            : Path.resolve(Path.join(session?.workspaceRoot ?? "", tab.filePath));
+          const openOpts: {
+            preview?: boolean;
+            pinned?: boolean;
+            preserveFocus?: boolean;
+            viewColumn?: number;
+          } = { preserveFocus: true };
+          if (typeof tab.preview === "boolean") openOpts.preview = tab.preview;
+          if (typeof tab.pinned === "boolean") openOpts.pinned = tab.pinned;
+          if (typeof tab.viewColumn === "number") openOpts.viewColumn = tab.viewColumn;
+          this.controlChannel?.openFile(projectId, fullPath, openOpts);
+          await new Promise((resolve) => setTimeout(resolve, 60));
+        }
+
+        // Open active tab last with preserveFocus: false
+        for (const tab of activeTabs) {
+          const fullPath = Path.isAbsolute(tab.filePath)
+            ? tab.filePath
+            : Path.resolve(Path.join(session?.workspaceRoot ?? "", tab.filePath));
+          const openOpts: {
+            preview?: boolean;
+            pinned?: boolean;
+            preserveFocus?: boolean;
+            viewColumn?: number;
+          } = { preserveFocus: false };
+          if (typeof tab.preview === "boolean") openOpts.preview = tab.preview;
+          if (typeof tab.pinned === "boolean") openOpts.pinned = tab.pinned;
+          if (typeof tab.viewColumn === "number") openOpts.viewColumn = tab.viewColumn;
+          this.controlChannel?.openFile(projectId, fullPath, openOpts);
+          await new Promise((resolve) => setTimeout(resolve, 60));
+        }
+        return;
+      }
+
+      // Fallback: if no persisted tab-list file exists, open lastFocusedPath if set
       if (!session?.lastFocusedPath) return;
       const fullFilePath = Path.resolve(Path.join(session.workspaceRoot, session.lastFocusedPath));
       this.controlChannel?.openFile(projectId, fullFilePath);
@@ -1717,15 +1975,84 @@ export class CodeHostManager {
     }
   }
 
-  dispose(): void {
+  async flushAndShutdownSessions(): Promise<void> {
+    const { writeDesktopLogHeader } = require("./main");
+    writeDesktopLogHeader("flushAndShutdownSessions: entering function");
     this.disposed = true;
     this.hideActiveSession();
-    for (const session of this.sessions.values()) {
-      this.stopSessionServer(session);
-      this.disposeSessionConfigChannel(session);
-      session.view?.webContents.close({ waitForBeforeUnload: false });
-    }
+
+    const sessions = Array.from(this.sessions.values());
     this.sessions.clear();
+
+    writeDesktopLogHeader(`flushAndShutdownSessions: preparing to flush ${sessions.length} sessions`);
+    await Promise.all(
+      sessions.map(async (session) => {
+        if (session.view && !session.view.webContents.isDestroyed()) {
+          try {
+            // Invoke Code-OSS's official IWorkbench.shutdown() path.
+            //
+            // The workbench entry point (workbench.ts) exposes a global
+            // `window.__tabs_codehost_shutdown()` that calls the IDisposable
+            // returned by `create()`. Disposing it triggers:
+            //   IWorkbench.shutdown()
+            //   → BrowserLifecycleService.shutdown()
+            //   → storageService.flush(WillSaveStateReason.SHUTDOWN)
+            //   → IndexedDB transactions are committed to LevelDB on disk.
+            //
+            // This is the correct flush path; a synthetic `beforeunload` event
+            // would only hit onBeforeUnload() → doShutdown() which fires
+            // storageService.flush() optimistically (fire-and-forget) and
+            // cannot be awaited from the main process.
+            writeDesktopLogHeader("flushAndShutdownSessions: invoking __tabs_codehost_shutdown via executeJavaScript");
+            await session.view.webContents.executeJavaScript(
+              `(async () => {
+                const fn = window.__tabs_codehost_shutdown;
+                if (typeof fn === 'function') {
+                  const res = fn();
+                  if (res instanceof Promise) {
+                    await res;
+                  }
+                }
+                return true;
+              })()`,
+            );
+            writeDesktopLogHeader("flushAndShutdownSessions: __tabs_codehost_shutdown executed successfully");
+          } catch (e: any) {
+            writeDesktopLogHeader(`flushAndShutdownSessions: __tabs_codehost_shutdown failed: ${e?.message}`);
+            /* best effort — if the webcontents crashes or the page hasn't loaded yet, continue */
+          }
+
+          try {
+            // After Code-OSS has flushed its own storage, tell Chromium to
+            // flush the partition's DOMStorage (localStorage) to disk too.
+            // Note: flushStorageData() covers DOMStorage/localStorage only;
+            // IndexedDB flushing is handled by the shutdown() call above.
+            if (session.view.webContents.session) {
+              writeDesktopLogHeader("flushAndShutdownSessions: flushing DOMStorage data");
+              await session.view.webContents.session.flushStorageData();
+              writeDesktopLogHeader("flushAndShutdownSessions: DOMStorage data flushed successfully");
+            }
+          } catch (e: any) {
+            writeDesktopLogHeader(`flushAndShutdownSessions: DOMStorage data flush failed: ${e?.message}`);
+            /* best effort */
+          }
+
+          try {
+            session.view.webContents.close({ waitForBeforeUnload: false });
+          } catch {
+            /* best effort */
+          }
+        }
+
+        this.stopSessionServer(session);
+        this.disposeSessionConfigChannel(session);
+      }),
+    );
+    writeDesktopLogHeader("flushAndShutdownSessions: successfully exited function");
+  }
+
+  dispose(): void {
+    void this.flushAndShutdownSessions().catch(() => undefined);
   }
 
   downgradeToManagedServer(reason: string): boolean {
@@ -1803,6 +2130,17 @@ export class CodeHostManager {
     const promise = (async () => {
       try {
         const runtime = await this.ensureSessionRuntime(session);
+        if (runtime.kind === "managed-server") {
+          try {
+            const url = new URL(runtime.entry);
+            const port = Number(url.port);
+            if (port > 0) {
+              this.prepareSessionIndexedDBStorage(session, port);
+            }
+          } catch {
+            /* best effort */
+          }
+        }
         if (!session.lastFocusedPath) {
           session.lastFocusedPath = findDefaultWorkspaceFile(session.workspaceRoot);
         }

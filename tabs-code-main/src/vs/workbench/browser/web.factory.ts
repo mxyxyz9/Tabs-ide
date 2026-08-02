@@ -25,7 +25,7 @@ const workbenchPromise = new DeferredPromise<IWorkbench>();
  * @param domElement the container to create the workbench in
  * @param options for setting up the workbench
  */
-export function create(domElement: HTMLElement, options: IWorkbenchConstructionOptions): IDisposable {
+export function create(domElement: HTMLElement, options: IWorkbenchConstructionOptions): IDisposable & { shutdown: () => Promise<void> } {
 
 	// Mark start of workbench
 	mark('code/didLoadWorkbenchMain');
@@ -64,11 +64,21 @@ export function create(domElement: HTMLElement, options: IWorkbenchConstructionO
 		workbenchPromise.complete(workbench);
 	});
 
-	return toDisposable(() => {
+	const disposable = toDisposable(() => {
 		if (instantiatedWorkbench) {
 			instantiatedWorkbench.shutdown();
 		} else {
 			workbenchPromise.p.then(instantiatedWorkbench => instantiatedWorkbench.shutdown());
+		}
+	});
+
+	return Object.assign(disposable, {
+		shutdown: (): Promise<void> => {
+			if (instantiatedWorkbench) {
+				return instantiatedWorkbench.shutdown();
+			} else {
+				return workbenchPromise.p.then(instantiatedWorkbench => instantiatedWorkbench.shutdown());
+			}
 		}
 	});
 }

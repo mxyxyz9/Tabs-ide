@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
+import { Button } from "../ui/button";
 import {
   AutoTextarea,
-  Btn,
   Card,
   Field,
   SectionLabel,
@@ -246,9 +246,9 @@ export function SettingsPanel({
         <Field label="Email">
           <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
         </Field>
-        <Btn primary disabled={!name.trim() || !email.trim()} onClick={handleSaveIdentity}>
+        <Button size="sm" disabled={!name.trim() || !email.trim()} onClick={handleSaveIdentity}>
           Save identity
-        </Btn>
+        </Button>
       </Card>
 
       <SectionLabel>Excluded watched branches</SectionLabel>
@@ -263,8 +263,8 @@ export function SettingsPanel({
             placeholder="e.g. feature/old-experiment"
             className="flex-1"
           />
-          <Btn
-            primary
+          <Button
+            size="sm"
             disabled={!newExclude.trim()}
             onClick={() => {
               if (newExclude.trim()) {
@@ -274,7 +274,7 @@ export function SettingsPanel({
             }}
           >
             Exclude branch
-          </Btn>
+          </Button>
         </div>
         {excludedBranches.length === 0 ? (
           <div className="fs-11 tx-30 px-2 py-2">No branches excluded (watching all branches).</div>
@@ -282,15 +282,15 @@ export function SettingsPanel({
           excludedBranches.map((b) => (
             <div key={b} className="flex items-center justify-between gap-3 px-2 py-2 border-b bd-1 last:border-0">
               <span className="fs-12 font-mono tx-80 truncate">{b}</span>
-              <Btn sm ghost onClick={() => onRemoveExcludedBranch?.(b)}>
+              <Button variant="ghost" size="sm" onClick={() => onRemoveExcludedBranch?.(b)}>
                 Remove
-              </Btn>
+              </Button>
             </div>
           ))
         )}
       </Card>
 
-      <SectionLabel action={<Btn sm ghost onClick={onOpenAddRemote}>Add remote</Btn>}>
+      <SectionLabel action={<Button variant="ghost" size="sm" onClick={onOpenAddRemote}>Add remote</Button>}>
         Remotes
       </SectionLabel>
       <Card className="p-3 mb-1">
@@ -306,9 +306,9 @@ export function SettingsPanel({
                 <div className="fs-12 font-mono tx-80">{r.name}</div>
                 <div className="fs-10 font-mono tx-30 truncate">{r.url}</div>
               </div>
-              <Btn sm ghost onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}>
+              <Button variant="ghost" size="sm" onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}>
                 Remove
-              </Btn>
+              </Button>
             </div>
           ))
         )}
@@ -329,9 +329,9 @@ export function SettingsPanel({
           className="w-full border bd-2 rounded-lg tx font-mono fs-11 ph-25 p-3 outline-none foc-bd-3 transition-colors"
         />
         <div className="mt-2.5">
-          <Btn primary disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
+          <Button size="sm" disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
             Save .gitignore
-          </Btn>
+          </Button>
         </div>
       </Card>
     </div>

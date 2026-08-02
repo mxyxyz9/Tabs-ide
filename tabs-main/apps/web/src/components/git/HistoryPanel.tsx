@@ -14,11 +14,18 @@ import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { readNativeApi } from "../../nativeApi";
 import { DiffCard, parseGitPatchToFiles, type ParsedFileDiff } from "./DiffPage";
 import { GitCheckingState } from "./GitCheckingState";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   Banner,
-  Btn,
   Card,
-  Modal,
   StatPill,
   TextInput,
 } from "./gitPrimitives";
@@ -68,24 +75,24 @@ export function CommitRow({
             onClick?.();
           }
         }}
-        className="relative w-full text-left flex flex-col gap-1.5 pl-4 pr-9 py-3 border-b bd-1 last:border-0 hov-bg-o1 rounded-md transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-primary"
+        className="relative w-full text-left flex flex-col gap-1.5 pl-4 pr-9 py-3 border-b border-border/50 last:border-0 hover:bg-muted/50 rounded-md transition-colors cursor-pointer outline-none focus-visible:ring-1 focus-visible:ring-primary"
       >
         <span
           className="absolute top-4 w-2 h-2 rounded-full border-2"
           style={{
             left: "-13px",
-            borderColor: c.isHead ? "var(--fg)" : "var(--fg-30)",
-            backgroundColor: c.isHead ? "var(--fg)" : "var(--bg-base)",
+            borderColor: c.isHead ? "var(--foreground)" : "var(--muted-foreground)",
+            backgroundColor: c.isHead ? "var(--foreground)" : "var(--background)",
           }}
         />
-        <div className="fs-12 tx-85 leading-snug">{c.subject}</div>
-        <div className="flex items-center gap-2 flex-wrap fs-11 font-mono tx-30">
-          <span className="border bd-2 rounded px-1.5 py-0.5 tx-50">{c.shortSha}</span>
+        <div className="text-xs font-medium text-foreground/90 leading-snug">{c.subject}</div>
+        <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground/70">
+          <span className="border border-border rounded px-1.5 py-0.5 text-muted-foreground">{c.shortSha}</span>
           <span>{c.authorName}</span>
           <span>&middot;</span>
           <span>{c.authoredAt.slice(0, 10)}</span>
           {(c.refs || []).map((r) => (
-            <span key={r} className="rounded-full px-2 py-0.5" style={{ backgroundColor: "var(--overlay-10)", color: "var(--fg-80)" }}>
+            <span key={r} className="rounded-full px-2 py-0.5 bg-muted text-foreground/80">
               {r}
             </span>
           ))}
@@ -98,14 +105,14 @@ export function CommitRow({
             e.stopPropagation();
             setMenuOpen((o) => !o);
           }}
-          className={`w-6 h-6 rounded-md flex items-center justify-center tx-30 hov-tx transition-opacity cursor-pointer ${
-            menuOpen ? "opacity-100 bg-o1" : "opacity-0 group-hover:opacity-100 hov-bg-o1"
+          className={`w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-foreground transition-opacity cursor-pointer ${
+            menuOpen ? "opacity-100 bg-muted" : "opacity-0 group-hover:opacity-100 hover:bg-muted/50"
           }`}
         >
           <MoreHorizontal size={13} />
         </button>
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border bd-2 shadow-2xl overflow-hidden z-40 py-1" style={{ backgroundColor: "var(--bg-surface)" }}>
+          <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-border shadow-2xl overflow-hidden z-40 py-1 bg-card">
             <button
               type="button"
               onClick={(e) => {
@@ -113,7 +120,7 @@ export function CommitRow({
                 onCherryPick(c);
                 setMenuOpen(false);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left fs-11 tx-60 hov-tx hov-bg-o1 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
               <Copy size={11} /> Cherry-pick
             </button>
@@ -124,7 +131,7 @@ export function CommitRow({
                 onRevert(c);
                 setMenuOpen(false);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left fs-11 tx-60 hov-tx hov-bg-o1 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
               <Undo2 size={11} /> Revert
             </button>
@@ -135,16 +142,16 @@ export function CommitRow({
                 onReset(c);
                 setMenuOpen(false);
               }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left fs-11 hov-bg-o1 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] hover:bg-muted transition-colors cursor-pointer"
               style={{ color: "var(--sem-red)" }}
             >
               <RotateCcw size={11} /> Reset to here
             </button>
-            <div className="h-px bg-o1 my-1" />
+            <div className="h-px bg-border/50 my-1" />
             <button
               type="button"
               onClick={copySha}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left fs-11 tx-60 hov-tx hov-bg-o1 transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
             >
               {copied ? <Check size={11} /> : <Copy size={11} />}
               {copied ? "Copied" : "Copy SHA"}
@@ -209,69 +216,74 @@ export function CommitDetailModal({
   const currentFile = fileDiffs[selectedFileIndex] ?? null;
 
   return (
-    <Modal title={`Commit ${commit.shortSha}`} onClose={onClose} width="w-[92vw] max-w-[1300px]">
-      <div className="flex flex-col h-[75vh] min-h-[400px] overflow-hidden">
-        <div className="space-y-1.5 border-b bd-1 pb-3 shrink-0">
-          <div className="text-sm font-semibold tx leading-snug">{commit.subject}</div>
-          <div className="flex flex-wrap items-center gap-3 text-xs tx-40 font-mono">
-            <span>Author: <strong className="tx-70">{commit.authorName}</strong></span>
-            <span>Date: <strong className="tx-70">{commit.authoredAt.slice(0, 10)}</strong></span>
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPopup className="git-tool-v2 max-w-5xl">
+        <DialogHeader>
+          <DialogTitle>Commit {commit.shortSha}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col h-[75vh] min-h-[400px] overflow-hidden">
+          <div className="space-y-1.5 border-b bd-1 pb-3 shrink-0">
+            <div className="text-sm font-semibold tx leading-snug">{commit.subject}</div>
+            <div className="flex flex-wrap items-center gap-3 text-xs tx-40 font-mono">
+              <span>Author: <strong className="tx-70">{commit.authorName}</strong></span>
+              <span>Date: <strong className="tx-70">{commit.authoredAt.slice(0, 10)}</strong></span>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono tx-30 pt-1">
+              <span className="truncate flex-1">SHA: {commit.sha}</span>
+              <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(commit.sha)}>
+                Copy SHA
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-xs font-mono tx-30 pt-1">
-            <span className="truncate flex-1">SHA: {commit.sha}</span>
-            <Btn sm ghost onClick={() => void navigator.clipboard?.writeText(commit.sha)}>
-              Copy SHA
-            </Btn>
-          </div>
-        </div>
 
-        {loading ? (
-          <GitCheckingState message="Loading commit diff…" size={36} />
-        ) : error ? (
-          <Banner tone="bad" title="Failed to load commit diff" body={error} />
-        ) : fileDiffs.length === 0 ? (
-          <div className="text-center text-xs tx-30 py-8">No file changes found in this commit.</div>
-        ) : (
-          <div className="flex flex-1 min-h-0 gap-3 overflow-hidden mt-3">
-            <div className="w-64 shrink-0 border-r bd-1 pr-2 overflow-y-auto custom-scrollbar space-y-1">
-              <div className="fs-10 uppercase tracking-widest tx-30 px-2 py-1">
-                Files ({fileDiffs.length})
+          {loading ? (
+            <GitCheckingState message="Loading commit diff…" size={36} />
+          ) : error ? (
+            <Banner tone="bad" title="Failed to load commit diff" body={error} />
+          ) : fileDiffs.length === 0 ? (
+            <div className="text-center text-xs tx-30 py-8">No file changes found in this commit.</div>
+          ) : (
+            <div className="flex flex-1 min-h-0 gap-3 overflow-hidden mt-3">
+              <div className="w-64 shrink-0 border-r bd-1 pr-2 overflow-y-auto custom-scrollbar space-y-1">
+                <div className="fs-10 uppercase tracking-widest tx-30 px-2 py-1">
+                  Files ({fileDiffs.length})
+                </div>
+                {fileDiffs.map((fd, idx) => (
+                  <button
+                    key={fd.path}
+                    type="button"
+                    onClick={() => setSelectedFileIndex(idx)}
+                    className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                      selectedFileIndex === idx ? "bg-o2 tx font-medium" : "tx-60 hov-bg-o1"
+                    }`}
+                  >
+                    <span className="truncate flex-1 font-mono fs-11">{fd.path}</span>
+                    {fd.isBinary ? (
+                      <span className="fs-10 font-mono border bd-2 rounded px-1.5 py-0.5 tx-40 uppercase">BIN</span>
+                    ) : (
+                      <StatPill ins={fd.ins} del={fd.del} />
+                    )}
+                  </button>
+                ))}
               </div>
-              {fileDiffs.map((fd, idx) => (
-                <button
-                  key={fd.path}
-                  type="button"
-                  onClick={() => setSelectedFileIndex(idx)}
-                  className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                    selectedFileIndex === idx ? "bg-o2 tx font-medium" : "tx-60 hov-bg-o1"
-                  }`}
-                >
-                  <span className="truncate flex-1 font-mono fs-11">{fd.path}</span>
-                  {fd.isBinary ? (
-                    <span className="fs-10 font-mono border bd-2 rounded px-1.5 py-0.5 tx-40 uppercase">BIN</span>
-                  ) : (
-                    <StatPill ins={fd.ins} del={fd.del} />
-                  )}
-                </button>
-              ))}
-            </div>
 
-            <div className="flex-1 min-w-0 h-full overflow-hidden">
-              {currentFile ? (
-                <DiffCard
-                  path={currentFile.path}
-                  ins={currentFile.ins}
-                  del={currentFile.del}
-                  lines={currentFile.lines}
-                />
-              ) : (
-                <div className="text-center text-xs tx-30 py-8">Select a file to view changes.</div>
-              )}
+              <div className="flex-1 min-w-0 h-full overflow-hidden">
+                {currentFile ? (
+                  <DiffCard
+                    path={currentFile.path}
+                    ins={currentFile.ins}
+                    del={currentFile.del}
+                    lines={currentFile.lines}
+                  />
+                ) : (
+                  <div className="text-center text-xs tx-30 py-8">Select a file to view changes.</div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </Modal>
+          )}
+        </DialogPanel>
+      </DialogPopup>
+    </Dialog>
   );
 }
 
@@ -327,9 +339,9 @@ export function HistoryPanel({
           ))}
           {onLoadMoreHistory && filtered.length >= 50 && (
             <div className="pt-4 text-center">
-              <Btn ghost onClick={onLoadMoreHistory}>
+              <Button variant="ghost" size="sm" onClick={onLoadMoreHistory}>
                 Load more commits
-              </Btn>
+              </Button>
             </div>
           )}
         </div>

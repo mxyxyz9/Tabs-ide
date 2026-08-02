@@ -6,8 +6,8 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-const ACCENT = "var(--accent)";
-const ACCENT_CONTRAST = "var(--accent-contrast)";
+const ACCENT = "var(--gt-accent, var(--primary, #ffffff))";
+const ACCENT_CONTRAST = "var(--gt-accent-contrast, var(--primary-foreground, #000000))";
 
 export const TONE = {
   ok: { color: "var(--sem-emerald)", dot: "var(--sem-emerald)", soft: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
@@ -41,7 +41,7 @@ export function Banner({
           <span className="text-xs font-semibold" style={{ color: c.color }}>
             {title}
           </span>
-          {body && <span className="text-xs tx-50 leading-relaxed">{body}</span>}
+          {body && <span className="text-xs tx-70 leading-relaxed">{body}</span>}
         </div>
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0 ml-auto">{actions}</div>}
@@ -59,67 +59,6 @@ export function PanelToolbar({ children, className = "" }: { children: ReactNode
 
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
-
-export function Btn({
-  children,
-  icon: Icon,
-  primary,
-  ghost,
-  sm,
-  disabled,
-  title,
-  onClick,
-  as: As = "button",
-  href,
-  className: extraClass = "",
-}: {
-  children?: ReactNode;
-  icon?: React.ComponentType<{ size?: number; className?: string }> | undefined;
-  primary?: boolean;
-  ghost?: boolean;
-  sm?: boolean;
-  disabled?: boolean;
-  title?: string | undefined;
-  onClick?: () => void;
-  as?: "button" | "a";
-  href?: string;
-  className?: string;
-}) {
-  const cls = `inline-flex items-center gap-1.5 rounded-lg font-medium transition-all shrink-0 cursor-pointer ${
-    sm ? "h-6 px-2 fs-11" : "h-7 px-2.5 text-xs"
-  } ${
-    primary
-      ? "hover:opacity-90"
-      : ghost
-        ? "bg-transparent hov-bg-o1 border bd-1 hov-bd-2 tx-60 hov-tx-90"
-        : "bg-o1 hov-bg-o2 bd-1 hov-bd-2 tx-70 hov-tx"
-  } ${disabled ? "opacity-30 cursor-not-allowed pointer-events-none" : ""} ${extraClass}`;
-  const style = primary && !disabled ? { backgroundColor: ACCENT, color: ACCENT_CONTRAST } : undefined;
-  const content = (
-    <>
-      {Icon && <Icon size={sm ? 11 : 12} className={Icon === Loader2 ? "animate-spin" : ""} />}
-      {children}
-    </>
-  );
-  const element = As === "a" ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={style}>
-      {content}
-    </a>
-  ) : (
-    <button type="button" onClick={onClick} disabled={disabled} className={cls} style={style}>
-      {content}
-    </button>
-  );
-
-  if (!title) return element;
-
-  return (
-    <Tooltip>
-      <TooltipTrigger render={element} />
-      <TooltipPopup side="top">{title}</TooltipPopup>
-    </Tooltip>
-  );
-}
 
 export function SectionLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
@@ -186,61 +125,6 @@ export function StatPill({ ins, del }: { ins: number; del: number }) {
   );
 }
 
-export interface BadgeProps {
-  children: ReactNode;
-  icon?: React.ComponentType<{ size?: number; className?: string }>;
-  tone?: "default" | "emerald" | "amber" | "red" | "purple" | "sky" | "muted" | "open" | "draft" | "merged" | "closed";
-  mono?: boolean;
-  className?: string;
-}
-
-export function Badge({ children, icon: Icon, tone = "default", mono = true, className = "" }: BadgeProps) {
-  const DEFAULT_TONE = {
-    color: "color-mix(in srgb, var(--foreground) 80%, transparent)",
-    bg: "color-mix(in srgb, var(--foreground) 6%, transparent)",
-    border: "color-mix(in srgb, var(--foreground) 15%, transparent)",
-  };
-  const TONES: Record<string, { color: string; bg: string; border?: string }> = {
-    default: DEFAULT_TONE,
-    emerald: { color: "var(--sem-emerald)", bg: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
-    open: { color: "var(--sem-emerald)", bg: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
-    amber: { color: "var(--sem-amber)", bg: "var(--sem-amber-soft)", border: "var(--sem-amber-border)" },
-    red: { color: "var(--sem-red)", bg: "var(--sem-red-soft)", border: "var(--sem-red-border)" },
-    closed: { color: "var(--sem-red)", bg: "var(--sem-red-soft)", border: "var(--sem-red-border)" },
-    purple: { color: "var(--sem-purple)", bg: "var(--sem-purple-soft)", border: "rgba(192, 132, 252, 0.25)" },
-    merged: { color: "var(--sem-purple)", bg: "var(--sem-purple-soft)", border: "rgba(192, 132, 252, 0.25)" },
-    sky: { color: "var(--sem-sky)", bg: "var(--sem-sky-soft)", border: "var(--sem-sky-border)" },
-    muted: {
-      color: "color-mix(in srgb, var(--foreground) 50%, transparent)",
-      bg: "color-mix(in srgb, var(--foreground) 5%, transparent)",
-      border: "color-mix(in srgb, var(--foreground) 10%, transparent)",
-    },
-    draft: {
-      color: "color-mix(in srgb, var(--foreground) 50%, transparent)",
-      bg: "color-mix(in srgb, var(--foreground) 5%, transparent)",
-      border: "color-mix(in srgb, var(--foreground) 10%, transparent)",
-    },
-  };
-
-  const currentTone = TONES[tone] ?? DEFAULT_TONE;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border bd-2 fs-10 ${
-        mono ? "font-mono" : "font-medium"
-      } shrink-0 ${className}`}
-      style={{
-        color: currentTone.color,
-        backgroundColor: currentTone.bg,
-        borderColor: currentTone.border || "color-mix(in srgb, var(--foreground) 12%, transparent)",
-      }}
-    >
-      {Icon && <Icon size={11} className="shrink-0" />}
-      {children}
-    </span>
-  );
-}
-
 export function Dropdown({
   trigger,
   children,
@@ -279,6 +163,8 @@ export function Dropdown({
   );
 }
 
+import { Button } from "../ui/button";
+
 export function InlineForm({
   placeholder,
   initial = "",
@@ -296,7 +182,7 @@ export function InlineForm({
 }) {
   const [value, setValue] = useState(initial);
   return (
-    <div className={`flex items-center gap-2 bg-o1 border bd-2 rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
+    <div className={`flex items-center gap-2 bg-o1 bd-2 rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
       <input
         autoFocus
         value={value}
@@ -308,12 +194,12 @@ export function InlineForm({
         placeholder={placeholder}
         className="flex-1 bg-transparent text-xs font-mono tx outline-none min-w-0"
       />
-      <Btn sm primary disabled={!value.trim()} onClick={() => value.trim() && onSubmit(value.trim())}>
+      <Button size="sm" disabled={!value.trim()} onClick={() => value.trim() && onSubmit(value.trim())}>
         {submitLabel}
-      </Btn>
-      <Btn sm ghost onClick={onCancel}>
+      </Button>
+      <Button variant="ghost" size="sm" onClick={onCancel}>
         Cancel
-      </Btn>
+      </Button>
     </div>
   );
 }

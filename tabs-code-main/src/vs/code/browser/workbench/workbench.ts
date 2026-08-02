@@ -609,8 +609,11 @@ function readCookie(name: string): string | undefined {
 	const secretStorageCrypto = secretStorageKeyPath && ServerKeyedAESCrypto.supported()
 		? new ServerKeyedAESCrypto(secretStorageKeyPath) : new TransparentCrypto();
 
-	// Create workbench
-	create(mainWindow.document.body, {
+	// Create workbench and expose shutdown hook for the Tabs Electron host.
+	// The Electron main process calls window.__tabs_codehost_shutdown() via
+	// executeJavaScript during before-quit to trigger a graceful storage flush
+	// (lifecycleService.shutdown()) before the BrowserView is destroyed.
+	const workbenchDisposable = create(mainWindow.document.body, {
 		...config,
 		windowIndicator: config.windowIndicator ?? { label: '$(remote)', tooltip: `${product.nameShort} Web` },
 		settingsSyncOptions: config.settingsSyncOptions ? { enabled: config.settingsSyncOptions.enabled, } : undefined,
@@ -620,4 +623,12 @@ function readCookie(name: string): string | undefined {
 			? undefined /* with a remote without embedder-preferred storage, store on the remote */
 			: new LocalStorageSecretStorageProvider(secretStorageCrypto),
 	});
+
+	// Expose a stable shutdown hook that the Tabs Electron host can invoke
+	// via executeJavaScript during before-quit. Calling shutdown() triggers
+	// IWorkbench.shutdown() → BrowserLifecycleService.shutdown() → storageService.flush()
+	// which awaits all pending IndexedDB writes before returning.
+	(mainWindow as unknown as Record<string, unknown>)['__tabs_codehost_shutdown'] = async () => {
+		await workbenchDisposable.shutdown();
+	};
 })();

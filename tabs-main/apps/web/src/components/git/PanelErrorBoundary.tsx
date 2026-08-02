@@ -1,7 +1,8 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-import { Banner, Btn } from "./gitPrimitives";
+import { Banner } from "./gitPrimitives";
+import { Button } from "../ui/button";
 
 interface Props {
   panelName: string;
@@ -40,9 +41,9 @@ export class PanelErrorBoundary extends Component<Props, State> {
             title={`Something went wrong in the ${this.props.panelName} panel`}
             body={this.state.error?.message || "An unexpected error occurred while rendering this panel."}
             actions={
-              <Btn sm ghost icon={RefreshCw} onClick={this.handleRetry}>
-                Try again
-              </Btn>
+              <Button variant="ghost" size="sm" onClick={this.handleRetry}>
+                <RefreshCw /> Try again
+              </Button>
             }
           />
         </div>

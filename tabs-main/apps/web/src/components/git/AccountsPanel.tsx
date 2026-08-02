@@ -1,7 +1,8 @@
 import type { GitHubAccount } from "@tabs/contracts";
 import { KeyRound } from "lucide-react";
 
-import { Banner, Btn, Card, PanelToolbar, SectionLabel } from "./gitPrimitives";
+import { Button } from "../ui/button";
+import { Banner, Card, PanelToolbar, SectionLabel } from "./gitPrimitives";
 
 function AccountRow({
   account: a,
@@ -37,10 +38,10 @@ function AccountRow({
           ))}
         </div>
       </div>
-      {!isActive && <Btn sm ghost onClick={() => onSwitch(a.login)}>Switch to this account</Btn>}
-      <Btn sm ghost onClick={() => onRemove(a.login)}>
+      {!isActive && <Button variant="ghost" size="sm" onClick={() => onSwitch(a.login)}>Switch to this account</Button>}
+      <Button variant="ghost" size="sm" onClick={() => onRemove(a.login)}>
         Remove
-      </Btn>
+      </Button>
     </div>
   );
 }
@@ -65,9 +66,9 @@ export function AccountsPanel({
   return (
     <div>
       <PanelToolbar>
-        <Btn primary onClick={onOpenConnectAccount}>
+        <Button size="sm" onClick={onOpenConnectAccount}>
           Connect an account
-        </Btn>
+        </Button>
       </PanelToolbar>
 
       {credentialMismatch && (

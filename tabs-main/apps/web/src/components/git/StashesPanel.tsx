@@ -1,7 +1,8 @@
 import type { GitStashEntry } from "@tabs/contracts";
 import { RefreshCw } from "lucide-react";
 
-import { Btn, Card, SectionLabel } from "./gitPrimitives";
+import { Button } from "../ui/button";
+import { Card, SectionLabel } from "./gitPrimitives";
 
 export function StashesPanel({
   stashes,
@@ -36,13 +37,13 @@ export function StashesPanel({
           {hasConflict && <div className="fs-10 font-medium" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
         </div>
         <div className="shrink-0 sm:ml-auto">
-          <Btn primary icon={RefreshCw} disabled={hasConflict || nothingToDo} onClick={onOpenStashPullReapply}>
-            Stash, pull &amp; reapply
-          </Btn>
+          <Button size="sm" disabled={hasConflict || nothingToDo} onClick={onOpenStashPullReapply}>
+            <RefreshCw /> Stash, pull &amp; reapply
+          </Button>
         </div>
       </Card>
 
-      <SectionLabel action={<Btn sm ghost disabled={!hasChanges} onClick={onOpenStash}>Stash current changes</Btn>}>
+      <SectionLabel action={<Button variant="ghost" size="sm" disabled={!hasChanges} onClick={onOpenStash}>Stash current changes</Button>}>
         Stashes
       </SectionLabel>
       {stashes.length === 0 ? (
@@ -59,12 +60,12 @@ export function StashesPanel({
                   {s.stashRef} &middot; {s.createdAt}
                 </div>
               </div>
-              <Btn sm ghost onClick={() => onApplyStash(s.stashRef)}>
+              <Button variant="ghost" size="sm" onClick={() => onApplyStash(s.stashRef)}>
                 Apply
-              </Btn>
-              <Btn sm ghost onClick={() => onDropStash(s.stashRef)}>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onDropStash(s.stashRef)}>
                 Drop
-              </Btn>
+              </Button>
             </div>
           ))}
         </Card>

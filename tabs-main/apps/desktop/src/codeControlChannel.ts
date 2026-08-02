@@ -56,7 +56,7 @@ export class CodeControlChannel {
   private readonly dynamicAllowedCommandsByProject = new Map<string, Set<string>>();
   private token = "";
   private port = 0;
-  private chromeStateListener: ((projectId: string, state: CodeChromeState) => void) | null = null;
+  private readonly chromeStateListeners: ((projectId: string, state: CodeChromeState) => void)[] = [];
   private extensionHostConnectedListener: ((projectId: string) => void) | null = null;
   private urlFilePath: string | null = null;
 
@@ -134,7 +134,9 @@ export class CodeControlChannel {
             }
           }
           this.dynamicAllowedCommandsByProject.set(message.projectId, allowed);
-          this.chromeStateListener?.(message.projectId, message.state);
+          for (const listener of this.chromeStateListeners) {
+            listener(message.projectId, message.state);
+          }
         }
       }
     });
@@ -185,7 +187,7 @@ export class CodeControlChannel {
 
   /** Register the callback invoked whenever an extension pushes chrome state. */
   onChromeState(listener: (projectId: string, state: CodeChromeState) => void): void {
-    this.chromeStateListener = listener;
+    this.chromeStateListeners.push(listener);
   }
 
   /** Register a callback fired the moment an extension host connects (hello handshake). */
@@ -215,12 +217,21 @@ export class CodeControlChannel {
     return true;
   }
 
-  openFile(projectId: string, filePath: string): boolean {
+  openFile(
+    projectId: string,
+    filePath: string,
+    options?: {
+      preview?: boolean;
+      pinned?: boolean;
+      preserveFocus?: boolean;
+      viewColumn?: number;
+    },
+  ): boolean {
     const socket = this.socketsByProject.get(projectId);
     if (!socket || socket.destroyed || !socket.writable) {
       return false;
     }
-    const message: CodeControlServerMessage = { type: "openFile", filePath };
+    const message: CodeControlServerMessage = { type: "openFile", filePath, ...options };
     socket.write(`${JSON.stringify(message)}\n`);
     return true;
   }
@@ -252,7 +263,7 @@ export class CodeControlChannel {
     this.dynamicAllowedCommandsByProject.clear();
     this.server?.close();
     this.server = null;
-    this.chromeStateListener = null;
+    this.chromeStateListeners.length = 0;
     if (this.urlFilePath) {
       try {
         FS.rmSync(this.urlFilePath, { force: true });

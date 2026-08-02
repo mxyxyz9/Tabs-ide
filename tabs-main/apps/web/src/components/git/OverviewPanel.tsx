@@ -25,13 +25,20 @@ import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   AutoTextarea,
-  Badge,
   Banner,
-  Btn,
   Card,
-  Modal,
   SectionLabel,
 } from "./gitPrimitives";
 
@@ -241,12 +248,12 @@ export function OverviewPanel({
           Tabs uses system Git to track files, stage changes, and manage history. Install Git to enable full source control in this workspace.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Btn primary as="a" href="https://git-scm.com/downloads">
+          <Button size="sm" render={<a href="https://git-scm.com/downloads" target="_blank" rel="noopener noreferrer" />}>
             Download Git
-          </Btn>
-          <Btn ghost onClick={() => onRunInTerminal("git --version")}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onRunInTerminal("git --version")}>
             Check in terminal
-          </Btn>
+          </Button>
         </div>
       </Card>
     );
@@ -261,9 +268,9 @@ export function OverviewPanel({
           This workspace directory is not a Git repository. Initialize Git to start tracking file changes, saving commits, and syncing with remotes.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Btn primary icon={GitCommit} onClick={onInitRepo}>
-            Initialize repository
-          </Btn>
+          <Button size="sm" onClick={onInitRepo}>
+            <GitCommit /> Initialize repository
+          </Button>
         </div>
       </Card>
     );
@@ -278,12 +285,12 @@ export function OverviewPanel({
           You don't have write access to {remoteName}. You can create local commits, but pushing to this remote is disabled. Fork this repository or switch accounts to push your work.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Btn primary icon={GitPullRequest} disabled={forking} onClick={() => void handleCreateFork()}>
-            {forking ? "Forking…" : "Fork repository"}
-          </Btn>
-          <Btn ghost onClick={onGoToAccounts}>
+          <Button size="sm" disabled={forking} onClick={() => void handleCreateFork()}>
+            <GitPullRequest /> {forking ? "Forking…" : "Fork repository"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onGoToAccounts}>
             Check accounts
-          </Btn>
+          </Button>
         </div>
       </Card>
     );
@@ -299,9 +306,8 @@ export function OverviewPanel({
           body={forking ? "Creating a fork on GitHub and adding local remote..." : repoState.description}
           actions={
             repoState.primaryAction ? (
-              <Btn
-                primary
-                sm
+              <Button
+                size="sm"
                 disabled={forking}
                 onClick={() => {
                   switch (repoState.primaryAction?.actionType) {
@@ -333,7 +339,7 @@ export function OverviewPanel({
                 }}
               >
                 {repoState.primaryAction.label}
-              </Btn>
+              </Button>
             ) : undefined
           }
         />
@@ -347,13 +353,13 @@ export function OverviewPanel({
           title={notice.message}
           actions={
             notice.actionLabel && notice.actionType === "add_remote" ? (
-              <Btn sm primary onClick={onOpenAddRemote}>
+              <Button size="sm" onClick={onOpenAddRemote}>
                 {notice.actionLabel}
-              </Btn>
+              </Button>
             ) : notice.actionLabel && notice.actionType === "pull_merge" ? (
-              <Btn sm primary icon={Download} onClick={() => onRunInTerminal("git pull")}>
-                {notice.actionLabel}
-              </Btn>
+              <Button size="sm" onClick={() => onRunInTerminal("git pull")}>
+                <Download /> {notice.actionLabel}
+              </Button>
             ) : undefined
           }
         />
@@ -366,12 +372,12 @@ export function OverviewPanel({
           title={`${urgentWatchedBranch.name} has ${urgentWatchedBranch.behindCount} new commit${urgentWatchedBranch.behindCount === 1 ? "" : "s"} you don't have`}
           actions={
             <div className="flex items-center gap-2">
-              <Btn sm primary icon={Download} onClick={() => setConfirmMergeBranch(urgentWatchedBranch.name)}>
-                Merge {urgentWatchedBranch.name}
-              </Btn>
-              <Btn sm ghost onClick={() => setConfirmRebaseBranch(urgentWatchedBranch.name)}>
+              <Button size="sm" onClick={() => setConfirmMergeBranch(urgentWatchedBranch.name)}>
+                <Download /> Merge {urgentWatchedBranch.name}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmRebaseBranch(urgentWatchedBranch.name)}>
                 Rebase onto {urgentWatchedBranch.name}
-              </Btn>
+              </Button>
             </div>
           }
         />
@@ -382,7 +388,7 @@ export function OverviewPanel({
         <Card className="p-3">
           <div className="fs-10 uppercase tracking-widest tx-30 mb-1">Branch</div>
           <div className="fs-12 font-mono tx-85 font-semibold truncate flex items-center gap-1.5">
-            <Badge tone="default">{branchName}</Badge>
+            <Badge variant="outline" className="font-mono">{branchName}</Badge>
           </div>
         </Card>
 
@@ -446,7 +452,7 @@ export function OverviewPanel({
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span className="fs-12 font-mono font-semibold tx-80 truncate">{b.name}</span>
-                      {b.isRemote && <Badge tone="default">remote</Badge>}
+                      {b.isRemote && <Badge variant="secondary">remote</Badge>}
                       {b.behindCount > 0 && (
                         <span className="flex items-center gap-0.5 fs-11 font-mono shrink-0" style={{ color: "var(--sem-amber)" }}>
                           <ArrowDown size={11} />
@@ -461,12 +467,12 @@ export function OverviewPanel({
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-auto">
-                      <Btn sm ghost onClick={() => setConfirmMergeBranch(b.name)}>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmMergeBranch(b.name)}>
                         Merge
-                      </Btn>
-                      <Btn sm ghost onClick={() => setConfirmRebaseBranch(b.name)}>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmRebaseBranch(b.name)}>
                         Rebase
-                      </Btn>
+                      </Button>
                     </div>
                   </div>
                 );
@@ -512,33 +518,33 @@ export function OverviewPanel({
         />
         <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <Btn
-              primary
-              icon={GitCommit}
+            <Button
+              size="sm"
               disabled={!stagedFiles.length || !repoState.canCommitLocally}
               title={!stagedFiles.length ? "Stage some changes first" : undefined}
               onClick={() => void handleCommit(false)}
             >
-              {repoState.commitButtonLabel}
-            </Btn>
-            <Btn
-              ghost
-              icon={Sparkles}
+              <GitCommit /> {repoState.commitButtonLabel}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={(!stagedFiles.length && !unstagedFiles.length) || generating}
               title="Fills the box from your changed file names"
               onClick={handleGenerate}
             >
-              {generating ? "Generating…" : "Generate message"}
-            </Btn>
+              <Sparkles /> {generating ? "Generating…" : "Generate message"}
+            </Button>
           </div>
-          <Btn
-            icon={Upload}
+          <Button
+            variant="outline"
+            size="sm"
             disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush}
             title={repoState.pushDisabledReason ?? (!stagedFiles.length ? "Stage some changes first" : undefined)}
             onClick={() => void handleCommit(true)}
           >
-            Commit &amp; push
-          </Btn>
+            <Upload /> Commit &amp; push
+          </Button>
         </div>
 
         <div className="h-px bg-o2 my-3 -mx-4" />
@@ -548,37 +554,42 @@ export function OverviewPanel({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Btn
-              icon={ArrowUp}
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!repoState.canPush}
               title={repoState.pushDisabledReason}
               onClick={() => onRunInTerminal(`git push origin ${branchName}`)}
             >
-              Push
-            </Btn>
-            <Btn
+              <ArrowUp /> Push
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!repoState.canForcePush}
               title={repoState.pushDisabledReason}
               onClick={() => onRunInTerminal(`git push --force-with-lease origin ${branchName}`)}
             >
               Force push…
-            </Btn>
-            <Btn
-              icon={ArrowDown}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!repoState.canPull}
               onClick={() => onRunInTerminal(`git pull origin ${branchName}`)}
             >
-              Pull
-            </Btn>
+              <ArrowDown /> Pull
+            </Button>
           </div>
-          <Btn
-            icon={GitPullRequest}
+          <Button
+            variant="outline"
+            size="sm"
             disabled={!repoState.canCreatePR}
             title={repoState.prDisabledReason}
             onClick={() => onRunInTerminal(`gh pr create --head ${branchName}`)}
           >
-            Create pull request
-          </Btn>
+            <GitPullRequest /> Create pull request
+          </Button>
         </div>
         {lastPushedAt && (
           <div className="fs-10 tx-30 mt-2 font-mono flex items-center gap-1">
@@ -635,27 +646,41 @@ export function OverviewPanel({
       )}
 
       {confirmMergeBranch && (
-        <Modal title={`Merge ${confirmMergeBranch} into ${branchName}`} onClose={() => setConfirmMergeBranch(null)}>
-          <p className="fs-12 tx-60 mb-4">
-            This will merge commits from <strong>{confirmMergeBranch}</strong> into <strong>{branchName}</strong>.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Btn ghost onClick={() => setConfirmMergeBranch(null)}>Cancel</Btn>
-            <Btn primary onClick={() => void handleExecuteMergeWatched(confirmMergeBranch)}>Confirm merge</Btn>
-          </div>
-        </Modal>
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmMergeBranch(null); }}>
+          <DialogPopup className="git-tool-v2 max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Merge {confirmMergeBranch} into {branchName}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              <p className="fs-12 tx-60">
+                This will merge commits from <strong>{confirmMergeBranch}</strong> into <strong>{branchName}</strong>.
+              </p>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmMergeBranch(null)}>Cancel</Button>
+              <Button size="sm" onClick={() => void handleExecuteMergeWatched(confirmMergeBranch)}>Confirm merge</Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       )}
 
       {confirmRebaseBranch && (
-        <Modal title={`Rebase ${branchName} onto ${confirmRebaseBranch}`} onClose={() => setConfirmRebaseBranch(null)}>
-          <p className="fs-12 tx-60 mb-4">
-            This will reapply your local commits on top of <strong>{confirmRebaseBranch}</strong>.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Btn ghost onClick={() => setConfirmRebaseBranch(null)}>Cancel</Btn>
-            <Btn primary onClick={() => void handleExecuteRebaseWatched(confirmRebaseBranch)}>Confirm rebase</Btn>
-          </div>
-        </Modal>
+        <Dialog open onOpenChange={(open) => { if (!open) setConfirmRebaseBranch(null); }}>
+          <DialogPopup className="git-tool-v2 max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Rebase {branchName} onto {confirmRebaseBranch}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel>
+              <p className="fs-12 tx-60">
+                This will reapply your local commits on top of <strong>{confirmRebaseBranch}</strong>.
+              </p>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setConfirmRebaseBranch(null)}>Cancel</Button>
+              <Button size="sm" onClick={() => void handleExecuteRebaseWatched(confirmRebaseBranch)}>Confirm rebase</Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
       )}
     </div>
   );

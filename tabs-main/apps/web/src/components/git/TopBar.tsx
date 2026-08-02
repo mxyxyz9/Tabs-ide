@@ -2,7 +2,8 @@ import type { GitHubAccount } from "@tabs/contracts";
 import { Check, FolderGit2, GitBranch as GitBranchIcon, Terminal, Users } from "lucide-react";
 import { useState } from "react";
 
-import { Btn, Dropdown, TONE } from "./gitPrimitives";
+import { Dropdown, TONE } from "./gitPrimitives";
+import { Button } from "../ui/button";
 
 export function TopBar({
   repoName,
@@ -100,8 +101,8 @@ export function TopBar({
         ) : (
           <div className="p-3">
             <div className="fs-11 tx-50 leading-relaxed mb-3">No GitHub account is signed in. Sign in to push, pull, or open pull requests.</div>
-            <Btn
-              primary
+            <Button
+              size="sm"
               className="w-full justify-center"
               onClick={() => {
                 onOpenSignIn();
@@ -109,7 +110,7 @@ export function TopBar({
               }}
             >
               Sign in to GitHub
-            </Btn>
+            </Button>
           </div>
         )}
       </Dropdown>

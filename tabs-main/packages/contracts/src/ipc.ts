@@ -1434,6 +1434,14 @@ export interface CodeCursorPosition {
   col: number;
 }
 
+export interface CodeTabInfo {
+  filePath: string;
+  viewColumn?: number;
+  active?: boolean;
+  pinned?: boolean;
+  preview?: boolean;
+}
+
 export interface CodeChromeState {
   activeViewId: string | null;
   panelOpen: boolean;
@@ -1444,6 +1452,7 @@ export interface CodeChromeState {
   autoSaveEnabled?: boolean;
   languageId?: string | null;
   cursor?: CodeCursorPosition | null;
+  openTabs?: readonly CodeTabInfo[];
 }
 
 export interface DesktopCodeHostState {

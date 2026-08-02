@@ -8,7 +8,8 @@ import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
-import { Btn, Card, InlineForm, PanelToolbar } from "./gitPrimitives";
+import { Button } from "../ui/button";
+import { Card, InlineForm, PanelToolbar } from "./gitPrimitives";
 
 export function TagsPanel({
   cwd,
@@ -103,12 +104,12 @@ export function TagsPanel({
     <div>
       {!form && (
         <PanelToolbar>
-          <Btn primary onClick={() => setForm(true)}>
+          <Button size="sm" onClick={() => setForm(true)}>
             Create tag
-          </Btn>
-          <Btn ghost onClick={onOpenDraftRelease}>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onOpenDraftRelease}>
             Draft a release
-          </Btn>
+          </Button>
         </PanelToolbar>
       )}
 
@@ -143,15 +144,15 @@ export function TagsPanel({
                 <Tag size={11} /> {tagName}
               </span>
               <span className="fs-11 tx-30 flex-1">Tag release ref</span>
-              <Btn
-                sm
-                ghost
+              <Button
+                variant="ghost"
+                size="sm"
                 disabled={pushAccess === "read_only"}
                 title={pushAccess === "read_only" ? "Pushing tags is disabled for read-only remotes." : undefined}
                 onClick={() => onRunInTerminal(`git push origin ${tagName}`)}
               >
                 Push tag
-              </Btn>
+              </Button>
             </div>
           ))}
         </Card>
