@@ -277,23 +277,11 @@ export function ensureMinContrast(
  */
 export function getOptimalPrimaryForeground(primaryHex: string): string {
   if (!primaryHex) return "#ffffff";
-  const hex = primaryHex.trim().toLowerCase().replace("#", "");
-  if (hex.length === 6) {
-    const r = parseInt(hex.substring(0, 2), 16) / 255;
-    const g = parseInt(hex.substring(2, 4), 16) / 255;
-    const b = parseInt(hex.substring(4, 6), 16) / 255;
-    const toLinear = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
-    const lum = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-    // Dark/medium brand accents (blue, purple, teal, navy, red): always white text
-    if (lum < 0.55) return "#ffffff";
-    // Very light/pastel accents (yellow, light cyan): dark text
-    if (lum > 0.75) return "#09090b";
-  }
-  // Mid-range: prefer white text for colored buttons
   const whiteRatio = calculateContrastRatio("#ffffff", primaryHex).ratio;
   const darkRatio = calculateContrastRatio("#0f172a", primaryHex).ratio;
-  if (whiteRatio >= 3.0) return "#ffffff";
-  return whiteRatio >= darkRatio ? "#ffffff" : "#0f172a";
+  if (darkRatio > whiteRatio && darkRatio >= 4.5) return "#0f172a";
+  if (whiteRatio >= 4.5) return "#ffffff";
+  return darkRatio >= whiteRatio ? "#0f172a" : "#ffffff";
 }
 
 /**
