@@ -2194,11 +2194,14 @@ function DesktopCodeTool(props: { project: Project }) {
     );
   }
 
+  const activeChromeTabPath = chromeState.openTabs?.find((t) => t.active)?.filePath ?? null;
+  const headerActiveFilePath = activeChromeTabPath || codeState.lastFocusedPath;
+
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
       <CodeHeaderBar
         workspaceName={props.project.name}
-        activeFilePath={codeState.lastFocusedPath}
+        activeFilePath={headerActiveFilePath}
         branch={chromeState.branch}
         panelMaximized={chromeState.panelMaximized}
         sideChatOpen={sideChatOpen}
