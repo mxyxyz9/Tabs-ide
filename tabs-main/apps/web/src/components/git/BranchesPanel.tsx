@@ -183,11 +183,11 @@ export function BranchesPanel({
       {isDetached && <Banner tone="warn" title="Detached HEAD" body="You're viewing a specific commit, not a branch." />}
 
       <Card className="p-2">
-        <div className="flex items-center gap-2.5 px-2 py-2 border-b bd-1">
+        <div className="flex items-center gap-2.5 px-2 py-2 border-b border-border/50">
           <Badge variant="warning">
             <GitBranchIcon /> {isDetached ? `${activeBranch?.name ?? "HEAD"} (detached)` : activeBranch?.name}
           </Badge>
-          <span className="fs-11 font-mono tx-30 flex-1">{aheadCount || behindCount ? `↑${aheadCount} ↓${behindCount}` : "up to date"}</span>
+          <span className="text-[11px] font-mono text-muted-foreground/70 flex-1">{aheadCount || behindCount ? `↑${aheadCount} ↓${behindCount}` : "up to date"}</span>
           {!isDetached && (
             <Button variant="ghost" size="sm" onClick={() => setForm("rename")}>
               Rename
@@ -195,13 +195,13 @@ export function BranchesPanel({
           )}
         </div>
         {otherBranches.length === 0 ? (
-          <div className="fs-11 tx-30 px-3 py-4 text-center">
+          <div className="text-[11px] text-muted-foreground/70 px-3 py-4 text-center">
             No other branches in this repository.
           </div>
         ) : (
           otherBranches.map((b) => (
-            <div key={b.name} className="flex items-center gap-2.5 px-2 py-2 border-b bd-1 last:border-0">
-              <span className="text-xs font-mono tx-70 flex-1 truncate">{b.name}</span>
+            <div key={b.name} className="flex items-center gap-2.5 px-2 py-2 border-b border-border/50 last:border-0">
+              <span className="text-xs font-mono text-foreground/90 flex-1 truncate">{b.name}</span>
               <Badge variant="outline">{b.isRemote ? "remote" : "local"}</Badge>
               <Button variant="ghost" size="sm" onClick={() => setConfirmModal({ type: "merge", targetBranch: b.name })}>
                 Merge into current
@@ -259,12 +259,12 @@ export function BranchesPanel({
               </DialogTitle>
             </DialogHeader>
             <DialogPanel className="space-y-4">
-              <p className="fs-12 tx-70">
+              <p className="text-xs text-foreground/90">
                 {confirmModal.type === "merge"
                   ? `Are you sure you want to merge '${confirmModal.targetBranch}' into '${activeBranch?.name}'?`
                   : `Are you sure you want to rebase '${activeBranch?.name}' onto '${confirmModal.targetBranch}'?`}
               </p>
-              <p className="fs-11 tx-40">
+              <p className="text-[11px] text-muted-foreground/70">
                 This operation modifies the current working tree and commit history. If conflicts occur, you can resolve them in the Changes panel.
               </p>
             </DialogPanel>

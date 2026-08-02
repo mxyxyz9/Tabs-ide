@@ -292,20 +292,20 @@ export function DivergencePanel({
       <div className="flex items-center justify-between gap-4 mb-4">
         <div>
           <div className="flex items-center gap-2">
-            <GitCompare size={18} className="tx-70" />
-            <h2 className="text-base font-semibold tx tracking-tight">Watched branch divergence</h2>
+            <GitCompare size={18} className="text-muted-foreground" />
+            <h2 className="text-base font-semibold text-foreground tracking-tight">Watched branch divergence</h2>
           </div>
-          <p className="fs-12 tx-50 leading-relaxed mt-0.5">
+          <p className="text-xs text-muted-foreground/80 leading-relaxed mt-0.5">
             Compare all branches against your current HEAD. Spotlight key branches, archive noise.
           </p>
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <span className="fs-10 font-mono uppercase tracking-wider tx-40 block">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70 block">
               {isFullScan ? "Full scan view" : "Bounded scan view"}
             </span>
-            <span className="fs-11 tx-60">
+            <span className="text-[11px] text-muted-foreground">
               {isFullScan ? "All branches checked" : "Top 30 active branches checked"}
             </span>
           </div>
@@ -330,19 +330,19 @@ export function DivergencePanel({
       <div className="flex items-center justify-between gap-3 mb-4">
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 tx-40" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search branches by name..."
-            className="w-full pl-8 pr-8 py-1.5 fs-12 font-mono bg-o1 border bd-2 rounded-lg tx outline-none focus:border-sky-500 transition-colors"
+            className="w-full pl-8 pr-8 py-1.5 text-xs font-mono bg-muted/50 border border-border rounded-lg text-foreground outline-none focus:border-sky-500 transition-colors"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 tx-40 hov-tx"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground"
             >
               <X size={13} />
             </button>
@@ -351,12 +351,12 @@ export function DivergencePanel({
 
         <div className="flex items-center gap-2 shrink-0">
           {/* View Switcher — three tabs: Spotlight | Active | Archived */}
-          <div className="flex items-center bg-o1 border bd-2 rounded-lg p-0.5">
+          <div className="flex items-center bg-muted/50 border border-border rounded-lg p-0.5">
             <button
               type="button"
               onClick={() => switchView("spotlight")}
-              className={`flex items-center gap-1.5 px-3 py-1 fs-11 font-medium rounded-md transition-colors ${
-                activeView === "spotlight" ? "font-semibold shadow-xs" : "tx-50 hov-tx"
+              className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                activeView === "spotlight" ? "font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
               style={
                 activeView === "spotlight"
@@ -373,8 +373,8 @@ export function DivergencePanel({
             <button
               type="button"
               onClick={() => switchView("active")}
-              className={`px-3 py-1 fs-11 font-medium rounded-md transition-colors ${
-                activeView === "active" ? "bg-o2 tx font-semibold shadow-xs" : "tx-50 hov-tx"
+              className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                activeView === "active" ? "bg-accent text-foreground font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Active ({activeBranchList.length})
@@ -382,8 +382,8 @@ export function DivergencePanel({
             <button
               type="button"
               onClick={() => switchView("archived")}
-              className={`px-3 py-1 fs-11 font-medium rounded-md transition-colors ${
-                activeView === "archived" ? "bg-o2 tx font-semibold shadow-xs" : "tx-50 hov-tx"
+              className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
+                activeView === "archived" ? "bg-accent text-foreground font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Archived ({archivedBranchList.length})
@@ -395,7 +395,7 @@ export function DivergencePanel({
             <button
               type="button"
               onClick={() => setIsSelectMode(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 fs-11 font-medium rounded-md border bd-2 bg-o1 tx-50 hov-tx transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-border bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
               title="Enter selection mode"
             >
               <MousePointerClick size={13} />
@@ -405,7 +405,7 @@ export function DivergencePanel({
             <button
               type="button"
               onClick={exitSelectMode}
-              className="flex items-center gap-1.5 px-2.5 py-1 fs-11 font-medium rounded-md border border-sky-700 bg-sky-900/30 text-sky-300 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border border-sky-700 bg-sky-900/30 text-sky-300 transition-colors"
             >
               <X size={13} />
               Done
@@ -421,7 +421,7 @@ export function DivergencePanel({
             <button
               type="button"
               onClick={handleToggleSelectAll}
-              className="flex items-center gap-2 fs-12 font-mono text-sky-200 cursor-pointer"
+              className="flex items-center gap-2 text-xs font-mono text-sky-200 cursor-pointer"
             >
               {selectedBranchNames.size === displayedBranches.length ? (
                 <CheckSquare size={15} className="text-sky-400" />
@@ -430,8 +430,8 @@ export function DivergencePanel({
               )}
               <span>Select all ({displayedBranches.length})</span>
             </button>
-            <span className="tx-40">|</span>
-            <span className="fs-12 font-mono text-sky-300 font-medium">
+            <span className="text-muted-foreground/70">|</span>
+            <span className="text-xs font-mono text-sky-300 font-medium">
               {selectedBranchNames.size} selected
             </span>
           </div>
@@ -464,9 +464,9 @@ export function DivergencePanel({
       {/* Main list */}
       {isScanning && watchedBranchStatuses.length === 0 ? (
         <Card className="p-8 text-center">
-          <RefreshCw className="animate-spin mx-auto mb-3 tx-40" size={24} />
-          <div className="fs-13 font-medium tx">Scanning all branches for divergence…</div>
-          <p className="fs-11 tx-40 mt-1">Comparing all local and remote branches against HEAD</p>
+          <RefreshCw className="animate-spin mx-auto mb-3 text-muted-foreground/70" size={24} />
+          <div className="text-xs font-medium text-foreground">Scanning all branches for divergence…</div>
+          <p className="text-[11px] text-muted-foreground/70 mt-1">Comparing all local and remote branches against HEAD</p>
         </Card>
       ) : displayedBranches.length === 0 ? (
         <Card className="p-8 text-center">
@@ -477,7 +477,7 @@ export function DivergencePanel({
               style={{ color: "var(--primary)", opacity: 0.5 }}
             />
           )}
-          <div className="fs-13 font-medium tx-60 mb-1">
+          <div className="text-xs font-medium text-muted-foreground mb-1">
             {searchQuery
               ? `No ${activeView} branches matching "${searchQuery}"`
               : activeView === "archived"
@@ -486,7 +486,7 @@ export function DivergencePanel({
                   ? "No branches in Spotlight"
                   : "No active divergent branches found"}
           </div>
-          <p className="fs-11 tx-40">
+          <p className="text-[11px] text-muted-foreground/70">
             {searchQuery
               ? "Try clearing your search query"
               : activeView === "archived"
@@ -499,23 +499,23 @@ export function DivergencePanel({
       ) : (
         <Card className="p-4">
           {/* List header */}
-          <div className="flex items-center justify-between pb-2 border-b bd-1 mb-1">
+          <div className="flex items-center justify-between pb-2 border-b border-border/50 mb-1">
             {isSelectMode ? (
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
-                className="flex items-center gap-2 fs-11 font-mono tx-50 hov-tx cursor-pointer"
+                className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 {selectedBranchNames.size > 0 &&
                 selectedBranchNames.size === displayedBranches.length ? (
                   <CheckSquare size={14} className="text-sky-400" />
                 ) : (
-                  <Square size={14} className="tx-40" />
+                  <Square size={14} className="text-muted-foreground/70" />
                 )}
                 <span>Select all ({displayedBranches.length})</span>
               </button>
             ) : (
-              <span className="fs-10 font-mono uppercase tracking-wider tx-40">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/70">
                 {activeView === "active"
                   ? "Active divergent branches"
                   : activeView === "spotlight"
@@ -523,7 +523,7 @@ export function DivergencePanel({
                     : "Archived branches"}
               </span>
             )}
-            <span className="fs-11 font-mono tx-40">
+            <span className="text-[11px] font-mono text-muted-foreground/70">
               Showing {displayedBranches.length} branch{displayedBranches.length === 1 ? "" : "es"}
             </span>
           </div>
@@ -537,8 +537,8 @@ export function DivergencePanel({
                 <div
                   key={b.name}
                   className={`flex items-center justify-between gap-3 py-2.5 px-2 -mx-2 rounded-md transition-colors ${
-                    isSelected ? "bg-o2" : "hov-bg-o1"
-                  } ${idx === arr.length - 1 ? "" : "border-b bd-1"}`}
+                    isSelected ? "bg-accent" : "hover:bg-muted/50"
+                  } ${idx === arr.length - 1 ? "" : "border-b border-border/50"}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     {/* Checkbox — only visible in select mode */}
@@ -552,18 +552,18 @@ export function DivergencePanel({
                         {isSelected ? (
                           <CheckSquare size={14} className="text-sky-400" />
                         ) : (
-                          <Square size={14} className="tx-40" />
+                          <Square size={14} className="text-muted-foreground/70" />
                         )}
                       </button>
                     )}
 
-                    <span className="fs-13 font-mono font-semibold tx-85 truncate">{b.name}</span>
+                    <span className="text-xs font-mono font-semibold text-foreground/90 truncate">{b.name}</span>
                     {b.isRemote && <Badge variant="outline">remote</Badge>}
                     {b.isDefault && <Badge variant="success">default</Badge>}
 
                     {b.behindCount > 0 && (
                       <span
-                        className="flex items-center gap-0.5 fs-11 font-mono shrink-0"
+                        className="flex items-center gap-0.5 text-[11px] font-mono shrink-0"
                         style={{ color: "var(--sem-amber)" }}
                       >
                         <ArrowDown size={12} />
@@ -572,7 +572,7 @@ export function DivergencePanel({
                     )}
                     {b.aheadCount > 0 && (
                       <span
-                        className="flex items-center gap-0.5 fs-11 font-mono shrink-0"
+                        className="flex items-center gap-0.5 text-[11px] font-mono shrink-0"
                         style={{ color: "var(--sem-emerald)" }}
                       >
                         <ArrowDown size={12} className="rotate-180" />
@@ -596,7 +596,7 @@ export function DivergencePanel({
                       title={isSpotlit ? "Remove from Spotlight" : "Add to Spotlight"}
                       onClick={() => handleToggleSpotlight(b.name)}
                       className={`p-1 rounded transition-colors cursor-pointer ${
-                        isSpotlit ? "text-amber-400 hov-bg-o1" : "tx-40 hov-tx hov-bg-o1"
+                        isSpotlit ? "text-amber-400 hover:bg-muted/50" : "text-muted-foreground/70 hover:text-foreground hover:bg-muted/50"
                       }`}
                     >
                       <Telescope size={14} />
@@ -609,7 +609,7 @@ export function DivergencePanel({
                         activeView === "archived" ? "Remove from archive" : "Archive branch"
                       }
                       onClick={() => handleToggleArchive(b.name)}
-                      className="p-1 rounded tx-40 hov-tx hov-bg-o1 transition-colors cursor-pointer"
+                      className="p-1 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
                     >
                       {activeView === "archived" ? (
                         <ArchiveRestore size={14} />
@@ -633,7 +633,7 @@ export function DivergencePanel({
               <DialogTitle>Merge {confirmMergeBranch}</DialogTitle>
             </DialogHeader>
             <DialogPanel>
-              <p className="fs-12 tx-60">
+              <p className="text-xs text-muted-foreground">
                 This will merge commits from <strong>{confirmMergeBranch}</strong> into your current
                 working branch.
               </p>
@@ -657,7 +657,7 @@ export function DivergencePanel({
               <DialogTitle>Rebase onto {confirmRebaseBranch}</DialogTitle>
             </DialogHeader>
             <DialogPanel>
-              <p className="fs-12 tx-60">
+              <p className="text-xs text-muted-foreground">
                 This will rebase your current working branch commits onto{" "}
                 <strong>{confirmRebaseBranch}</strong>.
               </p>

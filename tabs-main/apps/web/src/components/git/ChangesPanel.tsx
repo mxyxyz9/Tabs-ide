@@ -12,9 +12,9 @@ import {
   Minus,
   Plus,
   RotateCcw,
-  Sparkles,
   Trash2,
   Upload,
+  Wand2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -91,13 +91,13 @@ export function FileRow({
   };
 
   return (
-    <div className="w-full border-b bd-1 last:border-0">
-      <div className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hov-bg-o1 transition-colors">
+    <div className="w-full border-b border-border/50 last:border-0">
+      <div className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
         <button
           type="button"
           onClick={toggleInlineDiff}
           title={expanded ? "Collapse inline diff" : "Preview inline diff"}
-          className="shrink-0 tx-40 hov-tx cursor-pointer"
+          className="shrink-0 text-muted-foreground/70 hover:text-foreground cursor-pointer"
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
@@ -111,17 +111,17 @@ export function FileRow({
           />
           <FilePathLabel path={f.path} size="text-xs" />
         </button>
-        <span className="fs-11 font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
+        <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
           +{f.insertions}
         </span>
-        <span className="fs-11 font-mono shrink-0" style={{ color: "var(--sem-red)", opacity: 0.85 }}>
+        <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--sem-red)", opacity: 0.85 }}>
           -{f.deletions}
         </span>
         <button
           type="button"
           onClick={toggleInlineDiff}
           title="Toggle inline diff preview"
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
+          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer"
         >
           <Eye size={10} />
         </button>
@@ -132,7 +132,7 @@ export function FileRow({
             onDiscard(f);
           }}
           title="Discard changes to this file"
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
+          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer"
         >
           <Trash2 size={10} />
         </button>
@@ -143,18 +143,18 @@ export function FileRow({
             onToggleStage(f);
           }}
           title={staged ? "Unstage file" : "Stage file"}
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-o1 border bd-2 tx-50 hov-tx cursor-pointer"
+          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer"
         >
           {staged ? <Minus size={10} /> : <Plus size={10} />}
         </button>
       </div>
 
       {expanded && (
-        <div className="my-2 ml-6 p-2 rounded border bd-1 bg-o05 max-h-72 overflow-auto custom-scrollbar">
+        <div className="my-2 ml-6 p-2 rounded border border-border/50 bg-muted/40 max-h-72 overflow-auto custom-scrollbar">
           {loadingDiff ? (
-            <div className="fs-11 tx-40 py-2">Loading diff preview…</div>
+            <div className="text-[11px] text-muted-foreground/70 py-2">Loading diff preview…</div>
           ) : !diffLines || diffLines.length === 0 ? (
-            <div className="fs-11 tx-40 py-2">No diff available</div>
+            <div className="text-[11px] text-muted-foreground/70 py-2">No diff available</div>
           ) : (
             <DiffLines lines={diffLines} />
           )}
@@ -233,11 +233,11 @@ export function ConflictResolver({
               type="button"
               onClick={() => setActiveFile(fi)}
               className={`w-full text-left px-2.5 py-2 rounded-lg mb-1 transition-colors cursor-pointer ${
-                activeFile === fi ? "bg-o2" : "hov-bg-o1"
+                activeFile === fi ? "bg-accent" : "hover:bg-muted/50"
               }`}
             >
-              <div className="fs-11 font-mono tx-80 truncate leading-tight">{f.path.split("/").pop()}</div>
-              <div className="fs-10 font-mono mt-1" style={{ color: fileDone(fi) ? "var(--sem-emerald)" : "var(--fg-30)" }}>
+              <div className="text-[11px] font-mono text-foreground/90 truncate leading-tight">{f.path.split("/").pop()}</div>
+              <div className="text-[10px] font-mono mt-1" style={{ color: fileDone(fi) ? "var(--sem-emerald)" : "var(--fg-30)" }}>
                 {fileResolvedCount(fi)}/{f.hunks.length} resolved
               </div>
             </button>
@@ -250,10 +250,10 @@ export function ConflictResolver({
             const editing = editingKey === key(activeFile, hi);
             return (
               <Card key={hi} className="mb-3 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b bd-2 bg-o05">
-                  <span className="fs-11 font-mono tx-40 truncate">{h.header}</span>
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
+                  <span className="text-[11px] font-mono text-muted-foreground/70 truncate">{h.header}</span>
                   <span
-                    className="fs-10 font-mono px-1.5 py-0.5 rounded-full shrink-0"
+                    className="text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0"
                     style={
                       res
                         ? { color: "var(--sem-emerald)", backgroundColor: "var(--sem-emerald-soft)" }
@@ -267,28 +267,28 @@ export function ConflictResolver({
                 {!editing ? (
                   <>
                     <div className="grid grid-cols-2">
-                      <div className="border-r bd-1 min-w-0">
-                        <div className="px-3 py-1.5 fs-10 uppercase tracking-widest tx-30 border-b bd-1 font-mono">Current (ours)</div>
-                        <div className="font-mono fs-11 py-1 overflow-x-auto custom-scrollbar">
+                      <div className="border-r border-border/50 min-w-0">
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/70 border-b border-border/50 font-mono">Current (ours)</div>
+                        <div className="font-mono text-[11px] py-1 overflow-x-auto custom-scrollbar">
                           {h.ours.map((l, li) => (
-                            <div key={li} className="px-3 py-0.5 whitespace-pre tx-70">
+                            <div key={li} className="px-3 py-0.5 whitespace-pre text-muted-foreground">
                               {l}
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <div className="px-3 py-1.5 fs-10 uppercase tracking-widest tx-30 border-b bd-1 font-mono">Incoming (theirs)</div>
-                        <div className="font-mono fs-11 py-1 overflow-x-auto custom-scrollbar">
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/70 border-b border-border/50 font-mono">Incoming (theirs)</div>
+                        <div className="font-mono text-[11px] py-1 overflow-x-auto custom-scrollbar">
                           {h.theirs.map((l, li) => (
-                            <div key={li} className="px-3 py-0.5 whitespace-pre tx-70">
+                            <div key={li} className="px-3 py-0.5 whitespace-pre text-muted-foreground">
                               {l}
                             </div>
                           ))}
                         </div>
                       </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t bd-1">
+                    <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-border/50">
                       <Button size="sm" variant={res?.strategy === "ours" ? "default" : "outline"} onClick={() => setStrategy(activeFile, hi, "ours")}>
                         Use current
                       </Button>
@@ -316,7 +316,7 @@ export function ConflictResolver({
                       value={manualText}
                       onChange={(e) => setManualText(e.target.value)}
                       minRows={4}
-                      className="w-full border bd-2 rounded-lg tx-80 font-mono fs-11 p-3 outline-none foc-bd-3 transition-colors"
+                      className="w-full border border-border rounded-lg text-foreground/90 bg-background font-mono text-[11px] p-3 outline-none focus:border-border transition-colors"
                     />
                     <div className="flex items-center gap-2 mt-2">
                       <Button size="sm" onClick={() => setStrategy(activeFile, hi, "manual", manualText)}>
@@ -527,7 +527,7 @@ export function ChangesPanel({
               <span className="text-xs font-semibold" style={{ color: "var(--sem-red)" }}>
                 Merge conflict ({conflictedFiles.length} files)
               </span>
-              <p className="fs-11 tx-50 mt-0.5">Resolve every conflict hunk below, then stage all files and complete the merge.</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Resolve every conflict hunk below, then stage all files and complete the merge.</p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => onRunInTerminal("git merge --abort")}>
               <RotateCcw /> Abort merge
@@ -565,7 +565,7 @@ export function ChangesPanel({
       </SectionLabel>
       <Card className="p-2 mb-4">
         {stagedFiles.length === 0 ? (
-          <div className="text-center fs-11 tx-25 py-6">No staged changes</div>
+          <div className="text-center text-[11px] text-muted-foreground/50 py-6">No staged changes</div>
         ) : (
           stagedFiles.map((f) => (
             <FileRow
@@ -602,7 +602,7 @@ export function ChangesPanel({
       </SectionLabel>
       <Card className="p-2 mb-4">
         {unstagedFiles.length === 0 ? (
-          <div className="text-center fs-11 tx-25 py-6">Working tree clean</div>
+          <div className="text-center text-[11px] text-muted-foreground/50 py-6">Working tree clean</div>
         ) : (
           unstagedFiles.map((f) => (
             <FileRow
@@ -631,11 +631,11 @@ export function ChangesPanel({
           }}
           placeholder={amend ? "Leave blank to keep the previous message…" : "Summarize your change…"}
           minRows={2}
-          className="w-full border bd-2 rounded-lg tx text-xs ph-25 p-3 outline-none foc-bd-3 transition-colors"
+          className="w-full border border-border rounded-lg bg-background text-foreground text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
         />
         <label className="flex items-center gap-2 mt-2 mb-1 cursor-pointer select-none">
           <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} className="w-3.5 h-3.5" />
-          <span className="fs-11 tx-50">Amend the previous commit instead of creating a new one</span>
+          <span className="text-[11px] text-muted-foreground">Amend the previous commit instead of creating a new one</span>
         </label>
         <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -654,7 +654,7 @@ export function ChangesPanel({
               title="Generates a message from the staged diff"
               onClick={handleGenerate}
             >
-              <Sparkles /> {generating ? "Generating…" : "Generate message"}
+              <Wand2 className="size-3.5 text-primary" /> {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button

@@ -133,9 +133,9 @@ export function PRsPanel({
         <GitCheckingState message="Loading pull requests…" size={36} />
       ) : prs.length === 0 ? (
         <Card className="p-6 text-center">
-          <GitPullRequest className="mx-auto mb-2 tx-30" size={24} />
-          <p className="fs-12 font-medium tx-80 mb-1">No open pull requests for {branchName}</p>
-          <p className="fs-11 tx-40 mb-4">Push your branch and open a pull request on GitHub to request feedback and merge changes.</p>
+          <GitPullRequest className="mx-auto mb-2 text-muted-foreground/70" size={24} />
+          <p className="text-xs font-medium text-foreground/90 mb-1">No open pull requests for {branchName}</p>
+          <p className="text-[11px] text-muted-foreground/70 mb-4">Push your branch and open a pull request on GitHub to request feedback and merge changes.</p>
           <Button size="sm" onClick={onOpenCreatePR}>
             <GitPullRequest /> Create pull request
           </Button>
@@ -149,8 +149,8 @@ export function PRsPanel({
                   #{pr.n} {pr.state}
                 </Badge>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold tx-80 truncate">{pr.title}</div>
-                  <div className="fs-10 font-mono tx-30 truncate">{pr.branch}</div>
+                  <div className="text-xs font-semibold text-foreground/90 truncate">{pr.title}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground/70 truncate">{pr.branch}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" size="sm" onClick={() => toggleComments(pr.n)}>
@@ -169,20 +169,20 @@ export function PRsPanel({
               </div>
 
               {expandedPrComments === pr.n && (
-                <div className="mt-3 pt-3 border-t bd-1 space-y-2">
-                  <div className="fs-11 font-medium tx-60">Review Feedback & Comments</div>
+                <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+                  <div className="text-[11px] font-medium text-muted-foreground">Review Feedback & Comments</div>
                   {loadingComments[pr.n] ? (
-                    <div className="fs-11 tx-40 py-2">Fetching PR activity…</div>
+                    <div className="text-[11px] text-muted-foreground/70 py-2">Fetching PR activity…</div>
                   ) : (prComments[pr.n] ?? []).length === 0 ? (
-                    <div className="fs-11 tx-40 py-2">No review comments yet.</div>
+                    <div className="text-[11px] text-muted-foreground/70 py-2">No review comments yet.</div>
                   ) : (
                     (prComments[pr.n] ?? []).map((c, i) => (
-                      <div key={i} className="p-2.5 rounded border bd-1 bg-o1 text-xs">
+                      <div key={i} className="p-2.5 rounded border border-border/50 bg-muted/50 text-xs">
                         <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold tx">{c.author}</span>
-                          <span className="fs-10 tx-40">{c.createdAt}</span>
+                          <span className="font-semibold text-foreground">{c.author}</span>
+                          <span className="text-[10px] text-muted-foreground/70">{c.createdAt}</span>
                         </div>
-                        <p className="tx-70">{c.body}</p>
+                        <p className="text-foreground/90">{c.body}</p>
                       </div>
                     ))
                   )}
@@ -200,12 +200,12 @@ export function PRsPanel({
               <DialogTitle>Merge Pull Request #{mergePr.n}</DialogTitle>
             </DialogHeader>
             <DialogPanel className="space-y-4">
-              <p className="fs-12 tx-70">
+              <p className="text-xs text-foreground/90">
                 Are you sure you want to merge <strong>{mergePr.title}</strong> into base branch?
               </p>
 
               <div>
-                <label className="block fs-11 font-medium tx-60 mb-1">Merge Strategy</label>
+                <label className="block text-[11px] font-medium text-muted-foreground mb-1">Merge Strategy</label>
                 <Select
                   value={mergeMethod}
                   onChange={(e) => setMergeMethod(e.target.value as "squash" | "merge" | "rebase")}
@@ -216,7 +216,7 @@ export function PRsPanel({
                 </Select>
               </div>
 
-              <label className="flex items-center gap-2 text-xs tx-80 cursor-pointer">
+              <label className="flex items-center gap-2 text-xs text-foreground/90 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={deleteBranch}

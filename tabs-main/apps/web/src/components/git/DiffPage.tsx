@@ -41,14 +41,14 @@ export function withLineNumbers(lines: Array<{ type: string; text: string }>) {
 export function DiffLines({ lines }: { lines: Array<{ type: string; text: string }> }) {
   const numbered = withLineNumbers(lines);
   return (
-    <div className="font-mono fs-12" style={{ lineHeight: 1.75 }}>
+    <div className="font-mono text-xs" style={{ lineHeight: 1.75 }}>
       {numbered.map((l, i) => {
         if (l.type === "hunk") {
           return (
             <div key={i} className="flex items-center gap-3 px-3 py-2">
-              <div className="flex-1 h-px bg-o2" />
-              <span className="fs-10 tx-30 whitespace-pre shrink-0">{l.text}</span>
-              <div className="flex-1 h-px bg-o2" />
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-[10px] text-muted-foreground/70 whitespace-pre shrink-0">{l.text}</span>
+              <div className="flex-1 h-px bg-border" />
             </div>
           );
         }
@@ -61,9 +61,9 @@ export function DiffLines({ lines }: { lines: Array<{ type: string; text: string
         };
         return (
           <div key={i} className="flex" style={rowStyle}>
-            <span className="w-7 shrink-0 text-right pr-1.5 select-none fs-10 tx-20">{l.oldNo || ""}</span>
-            <span className="w-7 shrink-0 text-right pr-1.5 select-none fs-10 tx-20 border-r bd-1 mr-2">{l.newNo || ""}</span>
-            <span className="w-3 shrink-0 select-none fs-11" style={{ color: isAdd ? "var(--sem-emerald)" : isDel ? "var(--sem-red)" : "var(--fg-20)" }}>
+            <span className="w-7 shrink-0 text-right pr-1.5 select-none text-[10px] text-muted-foreground/50">{l.oldNo || ""}</span>
+            <span className="w-7 shrink-0 text-right pr-1.5 select-none text-[10px] text-muted-foreground/50 border-r border-border/50 mr-2">{l.newNo || ""}</span>
+            <span className="w-3 shrink-0 select-none text-[11px]" style={{ color: isAdd ? "var(--sem-emerald)" : isDel ? "var(--sem-red)" : "var(--fg-20)" }}>
               {isAdd ? "+" : isDel ? "-" : ""}
             </span>
             <span className="whitespace-pre pr-3" style={{ color: isAdd ? "var(--sem-emerald-text)" : isDel ? "var(--sem-red-text)" : "var(--fg-60)" }}>
@@ -163,7 +163,7 @@ export function parseGitPatchToFiles(patch: string): ParsedFileDiff[] {
 export function DiffCard({ path, ins, del, lines }: { path: string; ins: number; del: number; lines: Array<{ type: string; text: string }> }) {
   return (
     <Card className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b bd-2 bg-o05 shrink-0">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border bg-muted/40 shrink-0">
         <PathBreadcrumb path={path} />
         <StatPill ins={ins} del={del} />
       </div>
@@ -262,12 +262,12 @@ export function DiffPage({
 
   return (
     <div>
-      <div className="flex items-center gap-1 mb-4 bg-o1 border bd-2 rounded-lg p-1 w-fit">
+      <div className="flex items-center gap-1 mb-4 bg-muted/50 border border-border rounded-lg p-1 w-fit">
         <button
           type="button"
           onClick={() => setDiffMode("working")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-            diffMode === "working" ? "bg-o2 tx" : "tx-40 hov-tx-70"
+            diffMode === "working" ? "bg-accent text-foreground" : "text-muted-foreground/70 hover:text-foreground"
           }`}
         >
           Working tree
@@ -276,7 +276,7 @@ export function DiffPage({
           type="button"
           onClick={() => setDiffMode("history")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-            diffMode === "history" ? "bg-o2 tx" : "tx-40 hov-tx-70"
+            diffMode === "history" ? "bg-accent text-foreground" : "text-muted-foreground/70 hover:text-foreground"
           }`}
         >
           Commit history
@@ -284,7 +284,7 @@ export function DiffPage({
       </div>
 
       {list.length === 0 ? (
-        <div className="text-center text-xs tx-30 py-10">
+        <div className="text-center text-xs text-muted-foreground/70 py-10">
           {diffMode === "working" ? "Working tree is clean — nothing to diff." : "No commits yet."}
         </div>
       ) : (
@@ -297,7 +297,7 @@ export function DiffPage({
                     type="button"
                     onClick={() => setSelectedFile(f)}
                     className={`relative w-full text-left px-2.5 py-2 rounded-lg mb-0.5 transition-colors cursor-pointer ${
-                      selectedFile === f ? "bg-o1" : "hov-bg-o1"
+                      selectedFile === f ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                   >
                     {selectedFile === f && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
@@ -316,12 +316,12 @@ export function DiffPage({
                     type="button"
                     onClick={() => setSelectedCommit(c)}
                     className={`relative w-full text-left px-2.5 py-2 rounded-lg mb-0.5 transition-colors cursor-pointer ${
-                      selectedCommit === c ? "bg-o1" : "hov-bg-o1"
+                      selectedCommit === c ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                   >
                     {selectedCommit === c && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
-                    <div className="fs-12 tx-70 truncate leading-snug">{c.subject}</div>
-                    <div className="fs-10 font-mono tx-30 mt-0.5">{c.shortSha}</div>
+                    <div className="text-xs text-foreground/90 truncate leading-snug">{c.subject}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground/70 mt-0.5">{c.shortSha}</div>
                   </button>
                 ))}
           </div>
@@ -330,12 +330,12 @@ export function DiffPage({
               selectedFile ? (
                 <DiffCard path={selectedFile.path} ins={selectedFile.insertions} del={selectedFile.deletions} lines={diffContent} />
               ) : (
-                <div className="text-center text-xs tx-25 py-10">Pick a file on the left.</div>
+                <div className="text-center text-xs text-muted-foreground/50 py-10">Pick a file on the left.</div>
               )
             ) : selectedCommit ? (
               <DiffCard path={selectedCommit.subject} ins={commitStats.ins} del={commitStats.del} lines={diffContent} />
             ) : (
-              <div className="text-center text-xs tx-25 py-10">Pick a commit on the left.</div>
+              <div className="text-center text-xs text-muted-foreground/50 py-10">Pick a commit on the left.</div>
             )}
           </div>
         </div>

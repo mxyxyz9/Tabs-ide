@@ -239,7 +239,7 @@ export function SettingsPanel({
     <div>
       <SectionLabel>Git identity</SectionLabel>
       <Card className="p-3 mb-1">
-        <p className="fs-11 tx-40 leading-relaxed mb-3">Used as the author on every commit you make in this project.</p>
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">Used as the author on every commit you make in this project.</p>
         <Field label="Name">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name" />
         </Field>
@@ -253,7 +253,7 @@ export function SettingsPanel({
 
       <SectionLabel>Excluded watched branches</SectionLabel>
       <Card className="p-3 mb-1">
-        <p className="fs-11 tx-40 leading-relaxed mb-3">
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">
           By default, all local and remote-tracking branches with unmerged commits are watched on Overview. Add branch names here to exclude them from divergence checks.
         </p>
         <div className="flex items-center gap-2 mb-3">
@@ -277,11 +277,11 @@ export function SettingsPanel({
           </Button>
         </div>
         {excludedBranches.length === 0 ? (
-          <div className="fs-11 tx-30 px-2 py-2">No branches excluded (watching all branches).</div>
+          <div className="text-[11px] text-muted-foreground/70 px-2 py-2">No branches excluded (watching all branches).</div>
         ) : (
           excludedBranches.map((b) => (
-            <div key={b} className="flex items-center justify-between gap-3 px-2 py-2 border-b bd-1 last:border-0">
-              <span className="fs-12 font-mono tx-80 truncate">{b}</span>
+            <div key={b} className="flex items-center justify-between gap-3 px-2 py-2 border-b border-border/50 last:border-0">
+              <span className="text-xs font-mono text-foreground/90 truncate">{b}</span>
               <Button variant="ghost" size="sm" onClick={() => onRemoveExcludedBranch?.(b)}>
                 Remove
               </Button>
@@ -294,17 +294,17 @@ export function SettingsPanel({
         Remotes
       </SectionLabel>
       <Card className="p-3 mb-1">
-        <p className="fs-11 tx-40 leading-relaxed mb-3">
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">
           The URLs this project pushes to and pulls from. Most projects only need "origin".
         </p>
         {remotes.length === 0 ? (
-          <div className="fs-11 tx-30 px-2 py-2">No remotes configured.</div>
+          <div className="text-[11px] text-muted-foreground/70 px-2 py-2">No remotes configured.</div>
         ) : (
           remotes.map((r) => (
-            <div key={r.name} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
+            <div key={r.name} className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0">
               <div className="min-w-0 flex-1">
-                <div className="fs-12 font-mono tx-80">{r.name}</div>
-                <div className="fs-10 font-mono tx-30 truncate">{r.url}</div>
+                <div className="text-xs font-mono text-foreground/90">{r.name}</div>
+                <div className="text-[10px] font-mono text-muted-foreground/70 truncate">{r.url}</div>
               </div>
               <Button variant="ghost" size="sm" onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}>
                 Remove
@@ -316,7 +316,7 @@ export function SettingsPanel({
 
       <SectionLabel>.gitignore</SectionLabel>
       <Card className="p-3">
-        <p className="fs-11 tx-40 leading-relaxed mb-3">
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">
           Files and folders Git should never track for this project. One pattern per line.
         </p>
         <AutoTextarea
@@ -326,7 +326,7 @@ export function SettingsPanel({
             setGitignoreChanged(true);
           }}
           minRows={4}
-          className="w-full border bd-2 rounded-lg tx font-mono fs-11 ph-25 p-3 outline-none foc-bd-3 transition-colors"
+          className="w-full border border-border rounded-lg text-foreground bg-background font-mono text-[11px] placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
         />
         <div className="mt-2.5">
           <Button size="sm" disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>

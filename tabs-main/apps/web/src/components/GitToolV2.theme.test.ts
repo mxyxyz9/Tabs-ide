@@ -16,11 +16,8 @@ describe("GitToolV2 Theme Reactivity", () => {
     expect(hardcodedRgbaMatches).toBeNull();
   });
 
-  it("uses color-mix(in srgb, var(--foreground) ...) for text, border, and background opacity utilities", () => {
+  it("uses color-mix(in srgb, var(--foreground) ...) for theme variables", () => {
     expect(cssContent).toContain("color-mix(in srgb, var(--foreground)");
-    expect(cssContent).toContain(".git-tool-v2 .tx-80 { color: color-mix(in srgb, var(--foreground) 80%, transparent); }");
-    expect(cssContent).toContain(".git-tool-v2 .bd-1 { border-color: color-mix(in srgb, var(--foreground) 8%, transparent); }");
-    expect(cssContent).toContain(".git-tool-v2 .bg-o1 { background-color: color-mix(in srgb, var(--foreground) 6%, transparent); }");
   });
 });
 

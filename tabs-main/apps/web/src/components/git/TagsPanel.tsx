@@ -115,7 +115,7 @@ export function TagsPanel({
 
       {form && (
         <Card className="p-3 mb-4">
-          <div className="fs-11 font-medium tx-80 mb-2">Create new tag</div>
+          <div className="text-[11px] font-medium text-foreground/90 mb-2">Create new tag</div>
           <InlineForm
             placeholder="v1.5.0"
             submitLabel="Create tag"
@@ -132,18 +132,18 @@ export function TagsPanel({
         <GitCheckingState message="Loading tags…" size={36} />
       ) : realTags.length === 0 ? (
         <Card className="p-6 text-center">
-          <Tag className="mx-auto mb-2 tx-30" size={24} />
-          <p className="fs-12 font-medium tx-80 mb-1">No tags created yet</p>
-          <p className="fs-11 tx-40 mb-4">Tags mark specific points in your repository history (e.g. v1.0.0).</p>
+          <Tag className="mx-auto mb-2 text-muted-foreground/70" size={24} />
+          <p className="text-xs font-medium text-foreground/90 mb-1">No tags created yet</p>
+          <p className="text-[11px] text-muted-foreground/70 mb-4">Tags mark specific points in your repository history (e.g. v1.0.0).</p>
         </Card>
       ) : (
         <Card className="p-2 mb-3">
           {realTags.map((tagName) => (
-            <div key={tagName} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
-              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border bd-2 bg-o1 text-xs font-mono tx-80">
+            <div key={tagName} className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border bg-muted/50 text-xs font-mono text-foreground/90">
                 <Tag size={11} /> {tagName}
               </span>
-              <span className="fs-11 tx-30 flex-1">Tag release ref</span>
+              <span className="text-[11px] text-muted-foreground/70 flex-1">Tag release ref</span>
               <Button
                 variant="ghost"
                 size="sm"

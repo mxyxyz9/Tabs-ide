@@ -15,8 +15,8 @@ import {
   GitCommit,
   GitPullRequest,
   RefreshCw,
-  Sparkles,
   Upload,
+  Wand2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -242,9 +242,9 @@ export function OverviewPanel({
   if (repoState.kind === "git_not_installed") {
     return (
       <Card className="p-8 text-center max-w-xl mx-auto">
-        <CircleAlert className="mx-auto mb-3 tx-30" size={32} />
-        <h3 className="text-base font-semibold tx mb-1">Git command line required</h3>
-        <p className="fs-12 tx-50 leading-relaxed mb-6">
+        <CircleAlert className="mx-auto mb-3 text-muted-foreground/70" size={32} />
+        <h3 className="text-base font-semibold text-foreground mb-1">Git command line required</h3>
+        <p className="text-xs text-muted-foreground/80 leading-relaxed mb-6">
           Tabs uses system Git to track files, stage changes, and manage history. Install Git to enable full source control in this workspace.
         </p>
         <div className="flex items-center justify-center gap-3">
@@ -262,9 +262,9 @@ export function OverviewPanel({
   if (repoState.kind === "not_a_repo") {
     return (
       <Card className="p-8 text-center max-w-xl mx-auto">
-        <GitCommit className="mx-auto mb-3 tx-30" size={32} />
-        <h3 className="text-base font-semibold tx mb-1">Initialize Git in {repoName}</h3>
-        <p className="fs-12 tx-50 leading-relaxed mb-6">
+        <GitCommit className="mx-auto mb-3 text-muted-foreground/70" size={32} />
+        <h3 className="text-base font-semibold text-foreground mb-1">Initialize Git in {repoName}</h3>
+        <p className="text-xs text-muted-foreground/80 leading-relaxed mb-6">
           This workspace directory is not a Git repository. Initialize Git to start tracking file changes, saving commits, and syncing with remotes.
         </p>
         <div className="flex items-center justify-center gap-3">
@@ -280,8 +280,8 @@ export function OverviewPanel({
     return (
       <Card className="p-8 text-center max-w-xl mx-auto">
         <CircleAlert className="mx-auto mb-3" size={32} style={{ color: "var(--sem-amber)" }} />
-        <h3 className="text-base font-semibold tx mb-1">Read-only remote repository</h3>
-        <p className="fs-12 tx-50 leading-relaxed mb-6">
+        <h3 className="text-base font-semibold text-foreground mb-1">Read-only remote repository</h3>
+        <p className="text-xs text-muted-foreground/80 leading-relaxed mb-6">
           You don't have write access to {remoteName}. You can create local commits, but pushing to this remote is disabled. Fork this repository or switch accounts to push your work.
         </p>
         <div className="flex items-center justify-center gap-3">
@@ -386,15 +386,15 @@ export function OverviewPanel({
       {/* Stat grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <Card className="p-3">
-          <div className="fs-10 uppercase tracking-widest tx-30 mb-1">Branch</div>
-          <div className="fs-12 font-mono tx-85 font-semibold truncate flex items-center gap-1.5">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1">Branch</div>
+          <div className="text-xs font-mono text-foreground/90 font-semibold truncate flex items-center gap-1.5">
             <Badge variant="outline" className="font-mono">{branchName}</Badge>
           </div>
         </Card>
 
         <Card className="p-3">
-          <div className="fs-10 uppercase tracking-widest tx-30 mb-1">Sync status</div>
-          <div className="fs-12 font-mono tx-85 flex items-center gap-2">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1">Sync status</div>
+          <div className="text-xs font-mono text-foreground/90 flex items-center gap-2">
             {ahead > 0 && (
               <span className="flex items-center gap-0.5" style={{ color: "var(--sem-emerald)" }}>
                 <ArrowUp size={11} />
@@ -407,15 +407,15 @@ export function OverviewPanel({
                 {behind}
               </span>
             )}
-            {ahead === 0 && behind === 0 && <span className="fs-11 tx-40">In sync</span>}
+            {ahead === 0 && behind === 0 && <span className="text-[11px] text-muted-foreground/70">In sync</span>}
           </div>
         </Card>
 
-        <Card className="p-3 cursor-pointer hov-bd-3 transition-colors" onClick={onGoToChanges}>
-          <div className="fs-10 uppercase tracking-widest tx-30 mb-1">Working tree</div>
-          <div className="fs-12 font-mono tx-85">
+        <Card className="p-3 cursor-pointer hover:border-border transition-colors" onClick={onGoToChanges}>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1">Working tree</div>
+          <div className="text-xs font-mono text-foreground/90">
             {changed === 0 ? (
-              <span className="fs-11 tx-40">Clean</span>
+              <span className="text-[11px] text-muted-foreground/70">Clean</span>
             ) : (
               <span>
                 {stagedFiles.length} staged, {unstagedFiles.length} modified
@@ -425,8 +425,8 @@ export function OverviewPanel({
         </Card>
 
         <Card className="p-3">
-          <div className="fs-10 uppercase tracking-widest tx-30 mb-1">Remote</div>
-          <div className="fs-12 font-mono tx-85 truncate">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-1">Remote</div>
+          <div className="text-xs font-mono text-foreground/90 truncate">
             {hasRemote ? (pushAccess === "read_only" ? "origin (read-only)" : "origin") : "none"}
           </div>
         </Card>
@@ -437,7 +437,7 @@ export function OverviewPanel({
         <div className="mb-6">
           <SectionLabel>Watched branch divergence</SectionLabel>
           <Card className="p-3">
-            <p className="fs-11 tx-40 leading-relaxed mb-3">
+            <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">
               Branches in this repository with unmerged commits ahead of or behind your current branch.
             </p>
             <div className="flex flex-col">
@@ -447,20 +447,20 @@ export function OverviewPanel({
                   <div
                     key={b.name}
                     className={`flex items-center justify-between gap-3 py-2 ${
-                      isLast ? "" : "border-b bd-1"
+                      isLast ? "" : "border-b border-border/50"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="fs-12 font-mono font-semibold tx-80 truncate">{b.name}</span>
+                      <span className="text-xs font-mono font-semibold text-foreground/90 truncate">{b.name}</span>
                       {b.isRemote && <Badge variant="secondary">remote</Badge>}
                       {b.behindCount > 0 && (
-                        <span className="flex items-center gap-0.5 fs-11 font-mono shrink-0" style={{ color: "var(--sem-amber)" }}>
+                        <span className="flex items-center gap-0.5 text-[11px] font-mono shrink-0" style={{ color: "var(--sem-amber)" }}>
                           <ArrowDown size={11} />
                           {b.behindCount} behind
                         </span>
                       )}
                       {b.aheadCount > 0 && (
-                        <span className="flex items-center gap-0.5 fs-11 font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
+                        <span className="flex items-center gap-0.5 text-[11px] font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
                           <ArrowUp size={11} />
                           {b.aheadCount} ahead
                         </span>
@@ -480,12 +480,12 @@ export function OverviewPanel({
             </div>
 
             {watchedBranchStatuses.length > 5 && (
-              <div className="pt-2 mt-2 border-t bd-1 flex items-center justify-between">
-                <span className="fs-11 tx-40">Showing top 5 of {watchedBranchStatuses.length} diverged branches</span>
+              <div className="pt-2 mt-2 border-t border-border/50 flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground/70">Showing top 5 of {watchedBranchStatuses.length} diverged branches</span>
                 <button
                   type="button"
                   onClick={onGoToDivergence}
-                  className="fs-11 font-medium tx-60 hov-tx hover:underline cursor-pointer py-1 flex items-center gap-1"
+                  className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline cursor-pointer py-1 flex items-center gap-1"
                 >
                   View all →
                 </button>
@@ -500,8 +500,8 @@ export function OverviewPanel({
       <SectionLabel>Quick actions</SectionLabel>
       <Card className="p-4 mb-1">
         <div className="flex items-center justify-between mb-2">
-          <span className="fs-10 uppercase tracking-widest tx-30">Commit</span>
-          <span className="fs-11 font-mono tx-30">{stagedFiles.length} staged</span>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Commit</span>
+          <span className="text-[11px] font-mono text-muted-foreground/70">{stagedFiles.length} staged</span>
         </div>
         <AutoTextarea
           value={msg}
@@ -514,7 +514,7 @@ export function OverviewPanel({
           }}
           placeholder="Summarize your change…"
           minRows={2}
-          className="w-full border bd-2 rounded-lg tx text-xs ph-25 p-3 outline-none foc-bd-3 transition-colors"
+          className="w-full border border-border rounded-lg bg-background text-foreground text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
         />
         <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -533,7 +533,7 @@ export function OverviewPanel({
               title="Fills the box from your changed file names"
               onClick={handleGenerate}
             >
-              <Sparkles /> {generating ? "Generating…" : "Generate message"}
+              <Wand2 className="size-3.5 text-primary" /> {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button
@@ -547,10 +547,10 @@ export function OverviewPanel({
           </Button>
         </div>
 
-        <div className="h-px bg-o2 my-3 -mx-4" />
+        <div className="h-px bg-border my-3 -mx-4" />
 
         <div className="flex items-center justify-between mb-2">
-          <span className="fs-10 uppercase tracking-widest tx-30">Sync</span>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Sync</span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -592,7 +592,7 @@ export function OverviewPanel({
           </Button>
         </div>
         {lastPushedAt && (
-          <div className="fs-10 tx-30 mt-2 font-mono flex items-center gap-1">
+          <div className="text-[10px] text-muted-foreground/70 mt-2 font-mono flex items-center gap-1">
             <RefreshCw size={10} />
             Pushed to origin/{branchName} {Math.round((Date.now() - lastPushedAt) / 1000)}s ago
           </div>
@@ -602,7 +602,7 @@ export function OverviewPanel({
           if (!hasRemote) return null;
           if (pushAccess === "read_only") {
             return (
-              <div className="fs-10 mt-2 font-mono flex items-center gap-1" style={{ color: "var(--sem-amber)" }}>
+              <div className="text-[10px] mt-2 font-mono flex items-center gap-1" style={{ color: "var(--sem-amber)" }}>
                 <CircleAlert size={10} />
                 Remote is read-only (404 / no write access). Pushing disabled.
               </div>
@@ -621,10 +621,10 @@ export function OverviewPanel({
           ["Remote", hasRemote ? (pushAccess === "read_only" ? "origin (read-only)" : "origin") : "none", hasRemote ? (pushAccess === "read_only" ? "warn" : "ok") : "warn"],
           ["Push credential", activeAccountLogin || "not signed in", "ok"],
         ].map(([label, val, tone]) => (
-          <div key={label} className="flex items-center gap-2.5 px-2 py-2 border-b bd-1 last:border-0">
+          <div key={label} className="flex items-center gap-2.5 px-2 py-2 border-b border-border/50 last:border-0">
             <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: TONE[tone as keyof typeof TONE].dot }} />
-            <span className="text-xs tx-50 flex-1">{label}</span>
-            <span className="fs-11 font-mono tx-70">{val}</span>
+            <span className="text-xs text-muted-foreground flex-1">{label}</span>
+            <span className="text-[11px] font-mono text-muted-foreground">{val}</span>
           </div>
         ))}
       </Card>
@@ -635,10 +635,10 @@ export function OverviewPanel({
           <SectionLabel>Recent activity</SectionLabel>
           <Card className="p-2">
             {commits.slice(0, 3).map((c) => (
-              <div key={c.sha} className="flex items-center gap-3 px-2 py-2 border-b bd-1 last:border-0">
-                <span className="fs-10 font-mono tx-30 border bd-2 rounded px-1.5 py-0.5">{c.shortSha}</span>
-                <span className="fs-12 tx-70 flex-1 truncate leading-snug">{c.subject}</span>
-                <span className="fs-10 font-mono tx-25 shrink-0">{c.authoredAt.slice(0, 10)}</span>
+              <div key={c.sha} className="flex items-center gap-3 px-2 py-2 border-b border-border/50 last:border-0">
+                <span className="text-[10px] font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5 bg-muted/50">{c.shortSha}</span>
+                <span className="text-xs text-foreground/90 flex-1 truncate leading-snug">{c.subject}</span>
+                <span className="text-[10px] font-mono text-muted-foreground/70 shrink-0">{c.authoredAt.slice(0, 10)}</span>
               </div>
             ))}
           </Card>
@@ -652,7 +652,7 @@ export function OverviewPanel({
               <DialogTitle>Merge {confirmMergeBranch} into {branchName}</DialogTitle>
             </DialogHeader>
             <DialogPanel>
-              <p className="fs-12 tx-60">
+              <p className="text-xs text-muted-foreground">
                 This will merge commits from <strong>{confirmMergeBranch}</strong> into <strong>{branchName}</strong>.
               </p>
             </DialogPanel>
@@ -671,7 +671,7 @@ export function OverviewPanel({
               <DialogTitle>Rebase {branchName} onto {confirmRebaseBranch}</DialogTitle>
             </DialogHeader>
             <DialogPanel>
-              <p className="fs-12 tx-60">
+              <p className="text-xs text-muted-foreground">
                 This will reapply your local commits on top of <strong>{confirmRebaseBranch}</strong>.
               </p>
             </DialogPanel>

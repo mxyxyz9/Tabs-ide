@@ -41,7 +41,7 @@ export function Banner({
           <span className="text-xs font-semibold" style={{ color: c.color }}>
             {title}
           </span>
-          {body && <span className="text-xs tx-70 leading-relaxed">{body}</span>}
+          {body && <span className="text-xs text-foreground/90 leading-relaxed">{body}</span>}
         </div>
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0 ml-auto">{actions}</div>}
@@ -63,7 +63,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 export function SectionLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between mt-5 mb-2 first:mt-0">
-      <span className="text-xs font-mono uppercase tracking-widest tx-30">{children}</span>
+      <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground/70">{children}</span>
       {action}
     </div>
   );
@@ -71,7 +71,7 @@ export function SectionLabel({ children, action }: { children: ReactNode; action
 
 export function Card({ children, className = "", style, onClick }: { children: ReactNode; className?: string; style?: React.CSSProperties; onClick?: () => void }) {
   return (
-    <div className={`border bd-2 rounded-lg ${className}`} style={{ backgroundColor: "var(--bg-surface)", ...style }} onClick={onClick}>
+    <div className={`border border-border rounded-lg ${className}`} style={{ backgroundColor: "var(--bg-surface)", ...style }} onClick={onClick}>
       {children}
     </div>
   );
@@ -82,8 +82,8 @@ export function PathBreadcrumb({ path }: { path: string }) {
   const file = parts.pop();
   const content = (
     <span className="text-xs font-mono truncate flex items-center gap-1 min-w-0">
-      {parts.length > 0 && <span className="tx-30 truncate">{parts.join("/")}/</span>}
-      <span className="tx-85 font-medium shrink-0">{file}</span>
+      {parts.length > 0 && <span className="text-muted-foreground/70 truncate">{parts.join("/")}/</span>}
+      <span className="text-foreground/90 font-medium shrink-0">{file}</span>
     </span>
   );
   return (
@@ -94,14 +94,14 @@ export function PathBreadcrumb({ path }: { path: string }) {
   );
 }
 
-export function FilePathLabel({ path, size = "fs-11" }: { path: string; size?: string }) {
+export function FilePathLabel({ path, size = "text-[11px]" }: { path: string; size?: string }) {
   const parts = path.split("/");
   const file = parts.pop();
   const dir = parts.join("/");
   const content = (
     <div className="min-w-0 flex-1">
-      {dir && <div className="fs-10 font-mono tx-30 truncate leading-tight">{dir}/</div>}
-      <div className={`${size} font-mono tx-80 truncate leading-tight`}>{file}</div>
+      {dir && <div className="text-[10px] font-mono text-muted-foreground/70 truncate leading-tight">{dir}/</div>}
+      <div className={`${size} font-mono text-foreground/90 truncate leading-tight`}>{file}</div>
     </div>
   );
   return (
@@ -114,7 +114,7 @@ export function FilePathLabel({ path, size = "fs-11" }: { path: string; size?: s
 
 export function StatPill({ ins, del }: { ins: number; del: number }) {
   return (
-    <span className="flex items-center gap-1.5 fs-11 font-mono shrink-0">
+    <span className="flex items-center gap-1.5 text-[11px] font-mono shrink-0">
       <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--sem-emerald-soft)", color: "var(--sem-emerald)" }}>
         +{ins}
       </span>
@@ -153,7 +153,7 @@ export function Dropdown({
       {trigger(() => setOpen((o) => !o))}
       {open && (
         <div
-          className={`absolute top-full mt-2 ${align === "right" ? "right-0" : "left-0"} ${width} rounded-xl shadow-2xl overflow-hidden z-50 border bd-2`}
+          className={`absolute top-full mt-2 ${align === "right" ? "right-0" : "left-0"} ${width} rounded-xl shadow-2xl overflow-hidden z-50 border border-border`}
           style={{ backgroundColor: "var(--bg-surface)" }}
         >
           {children}
@@ -182,7 +182,7 @@ export function InlineForm({
 }) {
   const [value, setValue] = useState(initial);
   return (
-    <div className={`flex items-center gap-2 bg-o1 bd-2 rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
+    <div className={`flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
       <input
         autoFocus
         value={value}
@@ -192,7 +192,7 @@ export function InlineForm({
           if (e.key === "Escape") onCancel();
         }}
         placeholder={placeholder}
-        className="flex-1 bg-transparent text-xs font-mono tx outline-none min-w-0"
+        className="flex-1 bg-transparent text-xs font-mono text-foreground outline-none min-w-0"
       />
       <Button size="sm" disabled={!value.trim()} onClick={() => value.trim() && onSubmit(value.trim())}>
         {submitLabel}
@@ -242,7 +242,7 @@ export function AutoTextarea({
 
 export const Field = ({ label, children }: { label: ReactNode; children: ReactNode }) => (
   <div className="mb-3">
-    <label className="fs-10 uppercase tracking-widest tx-30 block mb-1.5">{label}</label>
+    <label className="text-[10px] uppercase tracking-widest text-muted-foreground/70 block mb-1.5">{label}</label>
     {children}
   </div>
 );
@@ -250,7 +250,7 @@ export const Field = ({ label, children }: { label: ReactNode; children: ReactNo
 export const TextInput = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input
     {...props}
-    className={`w-full border bd-2 rounded-lg tx text-xs ph-25 px-3 py-2 outline-none foc-bd-3 transition-colors ${props.className || ""}`}
+    className={`w-full border border-border rounded-lg text-foreground text-xs placeholder:text-muted-foreground/50 px-3 py-2 outline-none focus:border-border transition-colors ${props.className || ""}`}
     style={{ backgroundColor: "var(--bg-base)" }}
   />
 );
@@ -258,53 +258,7 @@ export const TextInput = (props: React.InputHTMLAttributes<HTMLInputElement>) =>
 export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
   <select
     {...props}
-    className={`w-full border bd-2 rounded-lg tx text-xs px-3 py-2 outline-none foc-bd-3 transition-colors ${props.className || ""}`}
+    className={`w-full border border-border rounded-lg text-foreground text-xs px-3 py-2 outline-none focus:border-border transition-colors ${props.className || ""}`}
     style={{ backgroundColor: "var(--bg-base)" }}
   />
 );
-
-export function Modal({
-  title,
-  onClose,
-  children,
-  width = "max-w-lg",
-}: {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  width?: string;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const widthClass = width.startsWith("w-") || width.includes(" w-") ? width : `w-full ${width}`;
-  return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm"
-      style={{ backgroundColor: "color-mix(in srgb, var(--background) 65%, transparent)" }}
-      onClick={onClose}
-    >
-      <div
-        className={`${widthClass} max-h-[88vh] flex flex-col rounded-xl border bd-2 shadow-2xl overflow-hidden`}
-        style={{ backgroundColor: "var(--bg-surface)" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-3.5 border-b bd-1 shrink-0">
-          <span className="text-sm font-semibold tx">{title}</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-6 h-6 rounded-md hov-bg-o1 flex items-center justify-center tx-40 hov-tx transition-colors cursor-pointer"
-          >
-            <X size={14} />
-          </button>
-        </div>
-        <div className="p-5 overflow-y-auto flex-1 min-h-0">{children}</div>
-      </div>
-    </div>
-  );
-}

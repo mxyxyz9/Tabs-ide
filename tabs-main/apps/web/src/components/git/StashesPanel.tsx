@@ -30,11 +30,11 @@ export function StashesPanel({
       <SectionLabel>Update safely</SectionLabel>
       <Card className="p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="fs-11 tx-50 leading-relaxed max-w-2xl">
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed max-w-2xl">
             Set your current changes aside, pull the latest commits — from your own branch or a teammate's — then bring your changes back. Each step is reported as it happens. If your changes conflict with what came in, you'll resolve it right here.
           </p>
-          {nothingToDo && <div className="fs-10 tx-30">Nothing to stash, and already up to date.</div>}
-          {hasConflict && <div className="fs-10 font-medium" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
+          {nothingToDo && <div className="text-[10px] text-muted-foreground/70">Nothing to stash, and already up to date.</div>}
+          {hasConflict && <div className="text-[10px] font-medium" style={{ color: "var(--sem-amber)" }}>Resolve the merge in progress before running this again.</div>}
         </div>
         <div className="shrink-0 sm:ml-auto">
           <Button size="sm" disabled={hasConflict || nothingToDo} onClick={onOpenStashPullReapply}>
@@ -47,16 +47,16 @@ export function StashesPanel({
         Stashes
       </SectionLabel>
       {stashes.length === 0 ? (
-        <div className="text-center fs-11 tx-25 py-6 border bd-1 rounded-lg">
+        <div className="text-center text-[11px] text-muted-foreground/50 py-6 border border-border/50 rounded-lg">
           {hasChanges ? 'No manual stashes yet. Set aside what you have right now with "Stash current changes" above.' : "No manual stashes, and nothing to stash right now."}
         </div>
       ) : (
         <Card className="p-2">
           {stashes.map((s) => (
-            <div key={s.stashRef} className="flex items-center gap-3 px-2 py-2.5 border-b bd-1 last:border-0">
+            <div key={s.stashRef} className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0">
               <div className="min-w-0 flex-1">
-                <div className="text-xs tx-80">{s.message}</div>
-                <div className="fs-10 font-mono tx-30">
+                <div className="text-xs text-foreground/90">{s.message}</div>
+                <div className="text-[10px] font-mono text-muted-foreground/70">
                   {s.stashRef} &middot; {s.createdAt}
                 </div>
               </div>

@@ -57,7 +57,7 @@ export function ResetModal({
           <DialogTitle>Reset to this commit</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4">
-          <div className="fs-12 font-mono tx-70 px-3 py-2 rounded-lg bg-o1 border bd-2">
+          <div className="text-xs font-mono text-foreground/90 px-3 py-2 rounded-lg bg-muted/50 border border-border">
             {commit.shortSha} — {commit.subject}
           </div>
           <div className="flex flex-col gap-2">
@@ -73,12 +73,12 @@ export function ResetModal({
                 }}
               >
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="fs-12 font-semibold" style={{ color: mode === m.id && m.id === "hard" ? "var(--sem-red)" : "var(--fg)" }}>
+                  <span className="text-xs font-semibold" style={{ color: mode === m.id && m.id === "hard" ? "var(--sem-red)" : "var(--fg)" }}>
                     {m.label}
                   </span>
-                  {mode === m.id && <Check size={12} className="tx-40" />}
+                  {mode === m.id && <Check size={12} className="text-muted-foreground/70" />}
                 </div>
-                <div className="fs-11 tx-40 leading-relaxed">{m.desc}</div>
+                <div className="text-[11px] text-muted-foreground/70 leading-relaxed">{m.desc}</div>
               </button>
             ))}
           </div>
@@ -138,7 +138,7 @@ export function StashModal({ onStash, onClose }: { onStash: (msg: string) => voi
           <Field label="Message (optional)">
             <TextInput value={message} onChange={(e) => setMessage(e.target.value)} placeholder="WIP: pagination edge case" />
           </Field>
-          <p className="fs-11 tx-40 leading-relaxed">Sets aside everything currently staged and unstaged, and clears your working tree.</p>
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">Sets aside everything currently staged and unstaged, and clears your working tree.</p>
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
@@ -184,7 +184,7 @@ export function PullSourceModal({
               ))}
             </Select>
           </Field>
-          <p className="fs-11 tx-40 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
             Defaults to your own branch's upstream. Pick a different branch to pull in someone else's work instead. Your current changes are stashed first either way, and reapplied after.
           </p>
         </DialogPanel>
@@ -253,10 +253,10 @@ export function CreatePRModal({
           <DialogTitle>Create pull request</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4">
-          <div className="flex items-center gap-2 fs-12 font-mono">
-            <span className="px-2 py-1 rounded bg-o1 border bd-2 tx-70">{base}</span>
-            <span className="tx-30">&larr;</span>
-            <span className="px-2 py-1 rounded bg-o1 border bd-2 tx">{currentBranch}</span>
+          <div className="flex items-center gap-2 text-xs font-mono">
+            <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground/90">{base}</span>
+            <span className="text-muted-foreground/70">&larr;</span>
+            <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground">{currentBranch}</span>
           </div>
           <Field label="Base branch">
             <Select value={base} onChange={(e) => setBase(e.target.value)}>
@@ -278,12 +278,12 @@ export function CreatePRModal({
               onChange={(e) => setBody(e.target.value)}
               placeholder="Add more detail for reviewers (optional)…"
               minRows={3}
-              className="w-full border bd-2 rounded-lg tx text-xs ph-25 p-3 outline-none foc-bd-3 transition-colors"
+              className="w-full border border-border rounded-lg text-foreground bg-background text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
             />
           </Field>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} className="w-3.5 h-3.5" />
-            <span className="text-xs tx-60">Open as draft</span>
+            <span className="text-xs text-muted-foreground">Open as draft</span>
           </label>
         </DialogPanel>
         <DialogFooter>
@@ -382,14 +382,14 @@ export function DeviceAuthModal({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4">
-          <p className="text-xs tx-50 leading-relaxed">{subtitle}</p>
-          <div className="border bd-2 rounded-lg p-3 flex flex-col gap-2" style={{ backgroundColor: "var(--bg-base)" }}>
-            <p className="fs-11 tx-60">Click below to launch interactive sign in in your terminal:</p>
+          <p className="text-xs text-muted-foreground/80 leading-relaxed">{subtitle}</p>
+          <div className="border border-border rounded-lg p-3 flex flex-col gap-2" style={{ backgroundColor: "var(--bg-base)" }}>
+            <p className="text-[11px] text-muted-foreground">Click below to launch interactive sign in in your terminal:</p>
             <Button type="button" size="sm" onClick={handleStartAuth}>
               <ExternalLink /> Start `gh auth login` in terminal
             </Button>
           </div>
-          {authStatusText && <p className="fs-11 text-center font-mono tx-40">{authStatusText}</p>}
+          {authStatusText && <p className="text-[11px] text-center font-mono text-muted-foreground/70">{authStatusText}</p>}
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
@@ -508,7 +508,7 @@ export function DraftReleaseModal({
             label={
               <span className="flex items-center justify-between">
                 <span>Release notes</span>
-                <button type="button" onClick={generateNotes} className="normal-case tracking-normal fs-10 tx-40 hov-tx-70 flex items-center gap-1 cursor-pointer">
+                <button type="button" onClick={generateNotes} className="normal-case tracking-normal text-[10px] text-muted-foreground/70 hover:text-foreground flex items-center gap-1 cursor-pointer">
                   <Sparkles size={10} /> Generate from recent commits
                 </button>
               </span>
@@ -519,12 +519,12 @@ export function DraftReleaseModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="What changed in this release…"
               minRows={4}
-              className="w-full border bd-2 rounded-lg tx text-xs ph-25 p-3 outline-none foc-bd-3 transition-colors"
+              className="w-full border border-border rounded-lg text-foreground bg-background text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
             />
           </Field>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={prerelease} onChange={(e) => setPrerelease(e.target.checked)} className="w-3.5 h-3.5" />
-            <span className="text-xs tx-60">Mark as pre-release</span>
+            <span className="text-xs text-muted-foreground">Mark as pre-release</span>
           </label>
         </DialogPanel>
         <DialogFooter>
