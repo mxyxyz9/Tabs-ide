@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  applyCustomModelOrdering,
-  resetModelOrder,
-  updateModelOrder,
-} from "./modelOrdering";
+import { applyCustomModelOrdering, resetModelOrder, updateModelOrder } from "./modelOrdering";
 
 describe("modelOrdering", () => {
   it("sorts models according to custom modelOrder while preserving Auto at top", () => {

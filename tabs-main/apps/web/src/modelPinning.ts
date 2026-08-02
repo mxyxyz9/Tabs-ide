@@ -40,7 +40,8 @@ export function isPinnedModel(
   const targetModel = modelSlug.trim();
   return pinnedModels.some(
     (entry) =>
-      (entry.provider === targetInstance || (entry.provider === "" && targetInstance === "codex")) &&
+      (entry.provider === targetInstance ||
+        (entry.provider === "" && targetInstance === "codex")) &&
       entry.model === targetModel,
   );
 }
@@ -62,7 +63,10 @@ export function togglePinnedModel(
   if (isAlreadyPinned) {
     return current.filter(
       (entry) =>
-        !((entry.provider === targetInstance || entry.provider === "") && entry.model === targetModel),
+        !(
+          (entry.provider === targetInstance || entry.provider === "") &&
+          entry.model === targetModel
+        ),
     );
   }
 

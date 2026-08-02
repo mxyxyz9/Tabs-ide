@@ -390,4 +390,3 @@ export function useTheme() {
     setFontPreferences,
   } as const;
 }
-

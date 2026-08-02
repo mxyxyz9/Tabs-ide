@@ -22,7 +22,11 @@ import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../../modelPinning";
-import { applyCustomModelOrdering, getModelScore, sortModelsByDefaultSequence } from "../../modelOrdering";
+import {
+  applyCustomModelOrdering,
+  getModelScore,
+  sortModelsByDefaultSequence,
+} from "../../modelOrdering";
 import { collectReasoningChoices } from "../../reasoningOrdering";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -88,7 +92,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   const [isOpen, setIsOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<ProviderPickerKind | "pinned" | null>(null);
 
-  const activeTab = selectedTab ?? (props.lockedProvider ?? props.provider);
+  const activeTab = selectedTab ?? props.lockedProvider ?? props.provider;
   const activeProvider = props.lockedProvider ?? props.provider;
   const providerOptions = props.lockedProvider
     ? AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.lockedProvider)
@@ -165,9 +169,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   }, [providerOptions, props.providers]);
 
   const pinnedModels = useMemo(() => {
-    return allProviderModels.filter((m) =>
-      isPinnedModel(pinnedList, m.providerId, m.slug),
-    );
+    return allProviderModels.filter((m) => isPinnedModel(pinnedList, m.providerId, m.slug));
   }, [allProviderModels, pinnedList]);
 
   const models = useMemo(() => {
@@ -182,9 +184,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   const activeModel = useMemo(() => {
     if (activeTab === "pinned") {
       return (
-        pinnedModels.find(
-          (m) => m.providerId === props.provider && m.slug === props.model,
-        ) ??
+        pinnedModels.find((m) => m.providerId === props.provider && m.slug === props.model) ??
         pinnedModels[0] ??
         getProviderModels(props.providers, props.provider).find((m) => m.slug === props.model)
       );
@@ -304,7 +304,10 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   // Group models hierarchically by subProvider or provider name
   const groupedModels = useMemo(() => {
-    const groups: Array<{ name: string | null; items: Array<ServerProviderModel & { providerId?: string }> }> = [];
+    const groups: Array<{
+      name: string | null;
+      items: Array<ServerProviderModel & { providerId?: string }>;
+    }> = [];
 
     if (activeTab === "pinned") {
       for (const model of pinnedModels) {
@@ -420,17 +423,14 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                 onClick={() => setSelectedTab("pinned")}
                 className={cn(
                   "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative",
-                  activeTab === "pinned" &&
-                    "bg-accent border-border text-foreground shadow-xs",
+                  activeTab === "pinned" && "bg-accent border-border text-foreground shadow-xs",
                 )}
               >
                 <PinIcon
                   aria-hidden="true"
                   className={cn(
                     "size-5 transition-colors",
-                    activeTab === "pinned"
-                      ? "text-foreground"
-                      : "text-muted-foreground",
+                    activeTab === "pinned" ? "text-foreground" : "text-muted-foreground",
                   )}
                 />
                 {pinnedModels.length > 0 && (
@@ -461,8 +461,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                     }}
                     className={cn(
                       "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all",
-                      isActive &&
-                        "bg-accent border-border text-foreground shadow-xs",
+                      isActive && "bg-accent border-border text-foreground shadow-xs",
                       disabled && "cursor-not-allowed opacity-30",
                     )}
                   >
@@ -474,7 +473,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           )}
 
           {/* Matrix Core containing model rows with horizontal aligned tracks */}
-          <div className={cn("flex flex-col justify-center overflow-x-hidden", matrixMinWidthClass)}>
+          <div
+            className={cn("flex flex-col justify-center overflow-x-hidden", matrixMinWidthClass)}
+          >
             <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
               {/* Header labels aligned absolutely to the global columns */}
               {globalStops.length > 0 && (
@@ -519,7 +520,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                         </div>
                       )}
                       {group.items.map((model) => {
-                        const modelProvider = (model as { providerId?: string }).providerId ?? activeProvider;
+                        const modelProvider =
+                          (model as { providerId?: string }).providerId ?? activeProvider;
                         const isFav = checkIsPinned(modelProvider, model.slug);
                         const isCurrentActive =
                           modelProvider === props.provider && model.slug === activeModel?.slug;
@@ -542,7 +544,11 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                             prompt={props.prompt}
                             onPromptChange={props.onPromptChange}
                             onSelect={(nextOptions) =>
-                              setModelAndOptions(modelProvider as ProviderPickerKind, model.slug, nextOptions)
+                              setModelAndOptions(
+                                modelProvider as ProviderPickerKind,
+                                model.slug,
+                                nextOptions,
+                              )
                             }
                             onSelectChange={handleSelectChange}
                             onBooleanChange={handleBooleanChange}
@@ -584,10 +590,7 @@ function isModelSourceBadgeEnabled(): boolean {
   }
 }
 
-function getCleanModelName(
-  name: string,
-  activeTab: ProviderPickerKind | "pinned" | null,
-): string {
+function getCleanModelName(name: string, activeTab: ProviderPickerKind | "pinned" | null): string {
   if (activeTab === "pinned" || activeTab === null) {
     return name;
   }
@@ -941,7 +944,9 @@ const ModelRow = memo(function ModelRow(props: {
                   <span
                     className={cn(
                       "size-1.5 rounded-full",
-                      isTrue ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#34d399]" : "bg-muted-foreground/40 dark:bg-zinc-600",
+                      isTrue
+                        ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#34d399]"
+                        : "bg-muted-foreground/40 dark:bg-zinc-600",
                     )}
                   />
                   {descriptor.id === "thinking" ? "THINK" : descriptor.label.toUpperCase()}
@@ -997,9 +1002,7 @@ const ModelRow = memo(function ModelRow(props: {
                   key={stop.id}
                   className={cn(
                     "size-1.5 rounded-full transition-colors",
-                    isSupported
-                      ? "bg-foreground/30 dark:bg-zinc-600"
-                      : "opacity-0",
+                    isSupported ? "bg-foreground/30 dark:bg-zinc-600" : "opacity-0",
                     isDotActive && isSupported && "bg-foreground/60 dark:bg-white/30",
                   )}
                 />

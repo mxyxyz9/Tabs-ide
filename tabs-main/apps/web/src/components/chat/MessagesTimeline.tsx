@@ -215,11 +215,13 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           const groupLabel = onlyToolEntries ? "Tool call" : "Work log";
 
           // Collect all log entry texts for copying (uses same label as rendered rows)
-          const allLogsText = regularEntries.map((e) => {
-            const heading = toolWorkEntryHeading(e);
-            const detail = e.command ?? e.detail ?? null;
-            return detail ? `${heading} — ${detail}` : heading;
-          }).join("\n");
+          const allLogsText = regularEntries
+            .map((e) => {
+              const heading = toolWorkEntryHeading(e);
+              const detail = e.command ?? e.detail ?? null;
+              return detail ? `${heading} — ${detail}` : heading;
+            })
+            .join("\n");
 
           return (
             <div className="space-y-2">
@@ -272,9 +274,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     {visibleEntries.map((workEntry, idx) => {
                       const heading = toolWorkEntryHeading(workEntry);
                       const detail = workEntry.command ?? workEntry.detail ?? null;
-                      const entryNum = hasOverflow && !isExpanded
-                        ? regularEntries.length - visibleEntries.length + idx + 1
-                        : idx + 1;
+                      const entryNum =
+                        hasOverflow && !isExpanded
+                          ? regularEntries.length - visibleEntries.length + idx + 1
+                          : idx + 1;
                       return (
                         <div
                           key={`work-row:${workEntry.id}`}
@@ -398,9 +401,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 {/* Main message text — large, right-aligned, right-border accent */}
                 {(displayedUserMessage.visibleText.trim().length > 0 ||
                   terminalContexts.length > 0) && (
-                  <div
-                    className="border-r-2 border-foreground/80 pr-4 text-right text-lg font-sans leading-tight tracking-tight text-foreground"
-                  >
+                  <div className="border-r-2 border-foreground/80 pr-4 text-right text-lg font-sans leading-tight tracking-tight text-foreground">
                     <UserMessageBody
                       text={displayedUserMessage.visibleText}
                       terminalContexts={terminalContexts}
@@ -437,9 +438,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                 {/* Tiny provider header: icon + label (brightens on hover) */}
                 <div className="mb-1.5 flex items-center gap-1.5 text-muted-foreground/30 transition-colors duration-200 group-hover:text-foreground/75">
                   <ProviderIconComp className="size-3" />
-                  <span className="font-mono text-[10px]">
-                    {providerLabel}
-                  </span>
+                  <span className="font-mono text-[10px]">{providerLabel}</span>
                 </div>
                 {/* Body text */}
                 <div className="text-base font-sans leading-relaxed text-foreground/85">
@@ -1009,11 +1008,7 @@ const AssistantMessageBorder = memo(function AssistantMessageBorder({
   }, [scrollContainer]);
 
   return (
-    <div
-      ref={containerRef}
-      onMouseEnter={handleMouseEnter}
-      className="group relative min-w-0 pl-4"
-    >
+    <div ref={containerRef} onMouseEnter={handleMouseEnter} className="group relative min-w-0 pl-4">
       {/* Static base line — single 1px left track */}
       <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-px bg-border/40 transition-colors duration-200 group-hover:bg-border/60" />
 

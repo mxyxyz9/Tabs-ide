@@ -110,7 +110,10 @@ export function AddKeybindingDialog({
                 <SelectTrigger className="h-9 w-full rounded-lg border-border/70 text-xs">
                   <SelectValue placeholder="Select a command..." />
                 </SelectTrigger>
-                <SelectContent alignItemWithTrigger={false} className="max-h-60 w-[var(--radix-select-trigger-width)]">
+                <SelectContent
+                  alignItemWithTrigger={false}
+                  className="max-h-60 w-[var(--radix-select-trigger-width)]"
+                >
                   {commandOptions.map((cmd) => (
                     <SelectItem key={cmd} value={cmd} className="py-1.5">
                       <div className="flex flex-col min-w-0">
@@ -167,7 +170,9 @@ export function AddKeybindingDialog({
                 ) : null}
               </div>
               <p className="text-[10px] text-muted-foreground/70">
-                {isRecording ? "Press Esc to clear recording." : "Click box and press key combination on keyboard."}
+                {isRecording
+                  ? "Press Esc to clear recording."
+                  : "Click box and press key combination on keyboard."}
               </p>
             </div>
           </div>
@@ -178,7 +183,12 @@ export function AddKeybindingDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2.5 border-t border-border/50 px-5 py-3 shrink-0 bg-muted/20">
-          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-8 text-xs">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="h-8 text-xs"
+          >
             Cancel
           </Button>
           <Button

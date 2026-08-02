@@ -10,9 +10,11 @@ import type { ProviderInstanceId } from "@tabs/contracts";
 describe("modelPinning", () => {
   it("reads pinnedModels with fallback to legacy favorites", () => {
     expect(getPinnedModels(null)).toEqual([]);
-    expect(getPinnedModels({ pinnedModels: [{ provider: "codex" as ProviderInstanceId, model: "gpt-5.4" }] })).toEqual([
-      { provider: "codex", model: "gpt-5.4" },
-    ]);
+    expect(
+      getPinnedModels({
+        pinnedModels: [{ provider: "codex" as ProviderInstanceId, model: "gpt-5.4" }],
+      }),
+    ).toEqual([{ provider: "codex", model: "gpt-5.4" }]);
     // Fallback to legacy favorites only when pinnedModels is undefined
     expect(
       getPinnedModels({

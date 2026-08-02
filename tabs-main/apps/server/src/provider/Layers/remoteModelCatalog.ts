@@ -36,7 +36,9 @@ export function fetchRemoteModelCatalog(): Effect.Effect<RemoteCatalogResult> {
     const decode = Schema.decodeUnknownOption(RemoteModelCatalogSchema);
     const decodedOption = decode(raw);
     if (decodedOption._tag === "None") {
-      console.warn("[RemoteModelCatalog] Invalid schema received from remote catalog registry, failing closed.");
+      console.warn(
+        "[RemoteModelCatalog] Invalid schema received from remote catalog registry, failing closed.",
+      );
       return { modelsByProvider: {} };
     }
 
@@ -53,7 +55,8 @@ export function fetchRemoteModelCatalog(): Effect.Effect<RemoteCatalogResult> {
             name,
             isCustom: false,
             source: "remote-fallback" as const,
-            capabilities: item?.capabilities || inferModelCapabilitiesFromSlug(slug, "remote-fallback"),
+            capabilities:
+              item?.capabilities || inferModelCapabilitiesFromSlug(slug, "remote-fallback"),
           };
         });
         modelsByProvider[providerKey] = validateServerProviderModelList(modelsWithCaps);
@@ -61,7 +64,5 @@ export function fetchRemoteModelCatalog(): Effect.Effect<RemoteCatalogResult> {
     }
 
     return { modelsByProvider };
-  }).pipe(
-    Effect.orElseSucceed(() => ({ modelsByProvider: {} as const })),
-  );
+  }).pipe(Effect.orElseSucceed(() => ({ modelsByProvider: {} as const })));
 }

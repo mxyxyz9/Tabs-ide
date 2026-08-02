@@ -85,7 +85,9 @@ function MenuPopup({
               "max-h-(--available-height) w-full overflow-y-auto p-1",
               isUnstyled && "p-0 !bg-transparent",
             )}
-            style={isUnstyled ? { backgroundColor: "transparent", background: "transparent" } : undefined}
+            style={
+              isUnstyled ? { backgroundColor: "transparent", background: "transparent" } : undefined
+            }
           >
             {children}
           </div>

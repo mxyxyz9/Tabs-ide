@@ -26,7 +26,10 @@ const TaskElapsed = memo(function TaskElapsed({ startedAt }: { startedAt: string
     return () => clearInterval(id);
   }, [startedAt]);
   return (
-    <span ref={ref} className="tabular-nums text-[10px] font-sans text-muted-foreground/40 shrink-0">
+    <span
+      ref={ref}
+      className="tabular-nums text-[10px] font-sans text-muted-foreground/40 shrink-0"
+    >
       {formatElapsed(startedAt)}
     </span>
   );
@@ -57,7 +60,15 @@ const TaskRow = memo(function TaskRow({ task }: { task: TaskNode }) {
         ) : (
           /* pending — empty circle */
           <svg viewBox="0 0 14 14" fill="none" className="size-3">
-            <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1.25" strokeDasharray="2 2" />
+            <circle
+              cx="7"
+              cy="7"
+              r="5.5"
+              stroke="currentColor"
+              strokeOpacity="0.25"
+              strokeWidth="1.25"
+              strokeDasharray="2 2"
+            />
           </svg>
         )}
       </span>

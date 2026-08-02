@@ -60,7 +60,10 @@ export const ChatHeader = memo(function ChatHeader({
           {activeThreadTitle}
         </h2>
         {formattedProjectName && (
-          <span className="hidden shrink-0 text-xs font-sans text-muted-foreground/50 sm:inline" title={activeProjectName}>
+          <span
+            className="hidden shrink-0 text-xs font-sans text-muted-foreground/50 sm:inline"
+            title={activeProjectName}
+          >
             · {formattedProjectName}
           </span>
         )}
