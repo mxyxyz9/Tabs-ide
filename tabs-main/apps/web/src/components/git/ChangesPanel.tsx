@@ -24,6 +24,7 @@ import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
 import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
   AutoTextarea,
   Card,
@@ -634,7 +635,7 @@ export function ChangesPanel({
           className="w-full border border-border rounded-lg bg-background text-foreground text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
         />
         <label className="flex items-center gap-2 mt-2 mb-1 cursor-pointer select-none">
-          <input type="checkbox" checked={amend} onChange={(e) => setAmend(e.target.checked)} className="w-3.5 h-3.5" />
+          <Checkbox checked={amend} onCheckedChange={(c) => setAmend(!!c)} />
           <span className="text-[11px] text-muted-foreground">Amend the previous commit instead of creating a new one</span>
         </label>
         <div className="flex flex-wrap items-center justify-between gap-2 mt-2.5">
@@ -654,7 +655,7 @@ export function ChangesPanel({
               title="Generates a message from the staged diff"
               onClick={handleGenerate}
             >
-              <Wand2 className="size-3.5 text-primary" /> {generating ? "Generating…" : "Generate message"}
+              <Wand2 className="size-3.5" /> {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button

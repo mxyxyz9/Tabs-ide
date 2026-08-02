@@ -5,6 +5,7 @@ import { readNativeApi } from "../../nativeApi";
 import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
   Dialog,
   DialogFooter,
@@ -216,14 +217,12 @@ export function PRsPanel({
                 </Select>
               </div>
 
-              <label className="flex items-center gap-2 text-xs text-foreground/90 cursor-pointer">
-                <input
-                  type="checkbox"
+              <label className="flex items-center gap-2 text-xs text-foreground/90 cursor-pointer select-none py-1">
+                <Checkbox
                   checked={deleteBranch}
-                  onChange={(e) => setDeleteBranch(e.target.checked)}
-                  className="rounded accent-[var(--gt-accent)]"
+                  onCheckedChange={(c) => setDeleteBranch(!!c)}
                 />
-                Delete head branch after merging
+                <span>Delete head branch after merging</span>
               </label>
             </DialogPanel>
             <DialogFooter>

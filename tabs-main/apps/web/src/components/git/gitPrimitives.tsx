@@ -7,7 +7,7 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 const ACCENT = "var(--gt-accent, var(--primary, #ffffff))";
-const ACCENT_CONTRAST = "var(--gt-accent-contrast, var(--primary-foreground, #000000))";
+const ACCENT_CONTRAST = "var(--gt-accent-contrast, var(--primary-foreground, #ffffff))";
 
 export const TONE = {
   ok: { color: "var(--sem-emerald)", dot: "var(--sem-emerald)", soft: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
@@ -255,10 +255,62 @@ export const TextInput = (props: React.InputHTMLAttributes<HTMLInputElement>) =>
   />
 );
 
-export const Select = (props: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <select
-    {...props}
-    className={`w-full border border-border rounded-lg text-foreground text-xs px-3 py-2 outline-none focus:border-border transition-colors ${props.className || ""}`}
-    style={{ backgroundColor: "var(--bg-base)" }}
-  />
-);
+import React from "react";
+import {
+  Select as SelectRoot,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+
+export const Select = ({
+  value,
+  onChange,
+  children,
+  className,
+  disabled,
+}: {
+  value?: string | number;
+  onChange?: (e: { target: { value: string } }) => void;
+  children?: React.ReactNode;
+  className?: string;
+  disabled?: boolean;
+}) => {
+  const options: Array<{ value: string; label: React.ReactNode }> = [];
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement(child)) {
+      const props = child.props as { value?: string | number; children?: React.ReactNode };
+      const val = props.value !== undefined ? String(props.value) : "";
+      const label = props.children !== undefined ? props.children : val;
+      options.push({ value: val, label });
+    }
+  });
+
+  const strVal = value !== undefined ? String(value) : options[0]?.value ?? "";
+  const selectedLabel = options.find((o) => o.value === strVal)?.label ?? strVal;
+
+  return (
+    <SelectRoot
+      value={strVal}
+      disabled={disabled}
+      onValueChange={(val) => {
+        if (val !== null && val !== undefined) {
+          onChange?.({ target: { value: val } });
+        }
+      }}
+    >
+      <SelectTrigger className={`w-full text-xs rounded-lg bg-background border-border/80 focus:ring-1 focus:ring-primary ${className || ""}`}>
+        <SelectValue placeholder="Select…">{selectedLabel}</SelectValue>
+      </SelectTrigger>
+      <SelectContent align="start" className="z-[350] min-w-[200px]">
+        {options.map((opt) => (
+          <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 cursor-pointer">
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </SelectRoot>
+  );
+};
+

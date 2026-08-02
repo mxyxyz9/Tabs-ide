@@ -533,7 +533,7 @@ export function OverviewPanel({
               title="Fills the box from your changed file names"
               onClick={handleGenerate}
             >
-              <Wand2 className="size-3.5 text-primary" /> {generating ? "Generating…" : "Generate message"}
+              <Wand2 className="size-3.5" /> {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button

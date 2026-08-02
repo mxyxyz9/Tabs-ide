@@ -1,6 +1,6 @@
 .git-tool-v2 {
   --gt-accent: var(--primary, #ffffff);
-  --gt-accent-contrast: var(--primary-foreground, #000000);
+  --gt-accent-contrast: var(--primary-foreground, #ffffff);
   --accent: color-mix(in srgb, var(--foreground) 8%, transparent);
   --accent-foreground: var(--foreground);
   --bg-base: var(--background, #09090b);

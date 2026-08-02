@@ -5,15 +5,21 @@ import type {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Beaker,
   Check,
+  ChevronDown,
   CircleAlert,
   ExternalLink,
   Loader2,
+  Package,
   RefreshCw,
+  Rocket,
+  Search,
   Sparkles,
+  Wand2,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { readNativeApi } from "../../nativeApi";
@@ -27,6 +33,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import {
   AutoTextarea,
   Banner,
@@ -281,9 +288,9 @@ export function CreatePRModal({
               className="w-full border border-border rounded-lg text-foreground bg-background text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
             />
           </Field>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} className="w-3.5 h-3.5" />
-            <span className="text-xs text-muted-foreground">Open as draft</span>
+          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+            <Checkbox checked={draft} onCheckedChange={(c) => setDraft(!!c)} />
+            <span className="text-xs text-foreground/80 font-medium">Open as draft</span>
           </label>
         </DialogPanel>
         <DialogFooter>
@@ -455,6 +462,105 @@ export function NewWorktreeModal({
   );
 }
 
+function SearchableTagSelect({
+  tags,
+  value,
+  onChange,
+}: {
+  tags: ReadonlyArray<{ name: string }>;
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return tags;
+    const q = search.toLowerCase().trim();
+    return tags.filter((t) => t.name.toLowerCase().includes(q));
+  }, [tags, search]);
+
+  const displayLabel = value === "__new__" ? "+ Create new tag…" : value || "Select a tag…";
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs bg-background border border-border/80 rounded-lg text-foreground outline-none focus:ring-1 focus:ring-primary transition-all"
+      >
+        <span className="font-mono text-xs truncate">{displayLabel}</span>
+        <ChevronDown size={13} className={`text-muted-foreground shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 w-full mt-1.5 bg-popover border border-border rounded-xl shadow-2xl z-[350] overflow-hidden">
+          {/* Internal Search Input */}
+          <div className="p-2 border-b border-border bg-muted/20">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0" />
+              <input
+                type="text"
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search tags…"
+                className="w-full bg-background border border-border/60 rounded-md pl-8 pr-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-border"
+              />
+            </div>
+          </div>
+
+          {/* List Options */}
+          <div className="py-1 max-h-52 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("__new__");
+                setOpen(false);
+                setSearch("");
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground/90 font-mono hover:bg-accent hover:text-accent-foreground font-semibold border-b border-border/40 transition-colors text-left"
+            >
+              + Create new tag…
+            </button>
+
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-muted-foreground text-center">No tags found</div>
+            ) : (
+              filtered.map((t) => (
+                <button
+                  key={t.name}
+                  type="button"
+                  onClick={() => {
+                    onChange(t.name);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground font-mono transition-colors text-left"
+                >
+                  <span className="truncate">{t.name}</span>
+                  {value === t.name && <Check size={13} className="text-foreground shrink-0 ml-1" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DraftReleaseModal({
   tags,
   commits,
@@ -474,79 +580,140 @@ export function DraftReleaseModal({
   const effectiveTag = tag === "__new__" ? customTag.trim() : tag;
 
   const generateNotes = () => {
-    const bullets = commits.slice(0, 5).map((c) => `- ${c.subject}`).join("\n");
-    setNotes(bullets);
-    if (!title.trim()) setTitle(effectiveTag || "Release");
+    const bullets = commits.slice(0, 8).map((c) => `* ${c.subject} (${c.shortSha})`).join("\n");
+    const formatted = `## What's Changed\n\n${bullets}\n\n**Full Commit History**: \`${commits[0]?.shortSha ?? "head"}\``;
+    setNotes(formatted);
+    if (!title.trim()) setTitle(effectiveTag ? `Release ${effectiveTag}` : "New Release");
   };
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogPopup className="git-tool-v2">
-        <DialogHeader>
-          <DialogTitle>Draft a release</DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="space-y-4">
-          <Field label="Tag">
-            <Select value={tag} onChange={(e) => setTag(e.target.value)}>
-              {tags.map((t) => (
-                <option key={t.name} value={t.name}>
-                  {t.name}
-                </option>
-              ))}
-              <option value="__new__">Create a new tag…</option>
-            </Select>
-          </Field>
-          {tag === "__new__" && (
-            <Field label="New tag name">
-              <TextInput value={customTag} onChange={(e) => setCustomTag(e.target.value)} placeholder="v1.5.0" />
-            </Field>
-          )}
-          <Field label="Release title">
-            <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder={effectiveTag || "Release title"} />
-          </Field>
-          <Field
-            label={
-              <span className="flex items-center justify-between">
-                <span>Release notes</span>
-                <button type="button" onClick={generateNotes} className="normal-case tracking-normal text-[10px] text-muted-foreground/70 hover:text-foreground flex items-center gap-1 cursor-pointer">
-                  <Sparkles size={10} /> Generate from recent commits
-                </button>
-              </span>
-            }
-          >
+      <DialogPopup className="git-tool-v2 max-w-4xl p-0 overflow-hidden border-border bg-card shadow-2xl">
+        <div className="flex flex-col md:flex-row min-h-[520px]">
+          {/* Left Control Panel */}
+          <div className="w-full md:w-[320px] shrink-0 bg-muted/20 border-r border-border p-6 flex flex-col justify-between space-y-6">
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">Draft a release</h3>
+                <p className="text-xs text-muted-foreground/70 mt-1">Configure target and visibility.</p>
+              </div>
+
+              {/* Target Tag Field with Internal Search */}
+              <Field label="Target Tag">
+                <SearchableTagSelect
+                  tags={tags}
+                  value={tag}
+                  onChange={(val) => setTag(val)}
+                />
+              </Field>
+
+              {tag === "__new__" && (
+                <Field label="New Tag Identifier">
+                  <TextInput
+                    value={customTag}
+                    onChange={(e) => setCustomTag(e.target.value)}
+                    placeholder="e.g. v1.5.0"
+                    className="font-mono text-xs"
+                  />
+                </Field>
+              )}
+
+              {/* Release Type Segmented Control */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/70 block">
+                  Release Type
+                </label>
+                <div className="grid grid-cols-2 p-1 rounded-xl bg-background border border-border text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setPrerelease(false)}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-colors ${
+                      !prerelease
+                        ? "bg-muted/80 text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Package size={13} className={!prerelease ? "text-foreground" : "text-muted-foreground"} />
+                    <span>Production</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrerelease(true)}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-colors ${
+                      prerelease
+                        ? "bg-muted/80 text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Beaker size={13} className={prerelease ? "text-foreground" : "text-muted-foreground"} />
+                    <span>Pre-release</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex items-center gap-2 pt-4 border-t border-border/50">
+              <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="flex-1 gap-1.5"
+                disabled={!effectiveTag}
+                onClick={() =>
+                  onPublish({
+                    tag: effectiveTag,
+                    title: title.trim() || effectiveTag,
+                    notes: notes.trim(),
+                    prerelease,
+                  })
+                }
+              >
+                <Rocket size={13} />
+                <span>Publish release</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Right Main Editor Panel */}
+          <div className="flex-1 flex flex-col p-6 bg-background relative">
+            {/* Top Auto-generate Action */}
+            <div className="flex justify-end mb-4 pr-10">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={generateNotes}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Wand2 size={13} />
+                <span>Auto-generate notes</span>
+              </Button>
+            </div>
+
+            {/* Release Title Input */}
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Release Title…"
+              className="w-full bg-transparent border-none text-2xl font-semibold text-foreground placeholder:text-muted-foreground/40 outline-none mb-3"
+            />
+
+            <div className="w-10 h-0.5 bg-border rounded-full mb-4 opacity-80" />
+
+            {/* Release Notes Textarea */}
             <AutoTextarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="What changed in this release…"
-              minRows={4}
-              className="w-full border border-border rounded-lg text-foreground bg-background text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
+              placeholder="Describe the changes, features, and fixes in this release…"
+              minRows={10}
+              className="w-full flex-1 bg-transparent border-none text-xs font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/40 outline-none resize-none p-0 focus:border-none focus:ring-0"
             />
-          </Field>
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input type="checkbox" checked={prerelease} onChange={(e) => setPrerelease(e.target.checked)} className="w-3.5 h-3.5" />
-            <span className="text-xs text-muted-foreground">Mark as pre-release</span>
-          </label>
-        </DialogPanel>
-        <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!effectiveTag}
-            onClick={() =>
-              onPublish({
-                tag: effectiveTag,
-                title: title.trim() || effectiveTag,
-                notes: notes.trim(),
-                prerelease,
-              })
-            }
-          >
-            Publish release
-          </Button>
-        </DialogFooter>
+          </div>
+        </div>
       </DialogPopup>
     </Dialog>
   );
