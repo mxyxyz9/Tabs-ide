@@ -42,6 +42,8 @@ function GateShell(props: {
   );
 }
 
+let hasGitInitialLoadCompleted = false;
+
 /**
  * Gates the Git workspace behind friendly setup states: a calm loading state, a
  * "Git isn't installed" guide, and a "not a repository yet" call-to-action.
@@ -58,8 +60,26 @@ export function GitEnvironmentGate(props: {
 }) {
   const { environment, isRepo, isLoading, minDurationMs = 4000, initPending, onInitRepo, children } = props;
 
+  const alwaysAnimate = (() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
+    } catch {
+      return false;
+    }
+  })();
+
+  const effectiveMinDuration = alwaysAnimate
+    ? minDurationMs
+    : hasGitInitialLoadCompleted
+      ? 0
+      : minDurationMs;
+
   const isDataReady = !isLoading && environment !== undefined && isRepo !== undefined;
-  const isGateReady = useMinimumDuration(isDataReady, minDurationMs);
+  const isGateReady = useMinimumDuration(isDataReady, effectiveMinDuration);
+
+  if (isGateReady) {
+    hasGitInitialLoadCompleted = true;
+  }
 
   // Git missing is a definitive, blocking state.
   if (environment && !environment.git.installed) {

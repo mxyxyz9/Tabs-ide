@@ -1822,6 +1822,13 @@ function SettingsRouteView() {
   const [closeReplayKey, setCloseReplayKey] = useState(0);
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
+  const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isCustomFontMode, setIsCustomFontMode] = useState(false);
@@ -3870,6 +3877,24 @@ function SettingsRouteView() {
                                 updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
                               }
                               aria-label="Animated slider fill"
+                            />
+                          }
+                        />
+
+                        <SettingsRow
+                          title="Always show Git loading animation"
+                          description="Play Mercury Chrome loading animation every time Git tab is selected. When disabled, animation plays once on initial load and subsequent tab switches load instantly."
+                          control={
+                            <Switch
+                              checked={alwaysAnimateGitLoader}
+                              onCheckedChange={(checked) => {
+                                const val = Boolean(checked);
+                                setAlwaysAnimateGitLoader(val);
+                                try {
+                                  window.localStorage?.setItem("tabs.alwaysAnimateGitLoader", String(val));
+                                } catch {}
+                              }}
+                              aria-label="Always show Git loading animation"
                             />
                           }
                         />

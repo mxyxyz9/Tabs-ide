@@ -362,6 +362,21 @@ export function ProjectWorkspaceSettingsSection() {
       window.localStorage?.setItem("tabs.alwaysMinimizeGitSidebar", String(checked));
     } catch {}
   };
+
+  const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleAlwaysAnimateGitLoader = (checked: boolean) => {
+    setAlwaysAnimateGitLoader(checked);
+    try {
+      window.localStorage?.setItem("tabs.alwaysAnimateGitLoader", String(checked));
+    } catch {}
+  };
   const isBrowserDefaultUrlDirty = projectSettings
     ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl
     : false;
