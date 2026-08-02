@@ -1656,7 +1656,7 @@ function uninstallInstructions(os: DesktopOsKind): string[] {
   }
 }
 
-function StartupPreviewOverlay({ loader, palette, theme, onClose }: any) {
+function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont, onClose }: any) {
   const [isExiting, setIsExiting] = useState(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -1673,7 +1673,7 @@ function StartupPreviewOverlay({ loader, palette, theme, onClose }: any) {
     if (isExiting) {
       const closeTimer = setTimeout(() => {
         onCloseRef.current();
-      }, 450);
+      }, 700);
       return () => clearTimeout(closeTimer);
     }
   }, [isExiting]);
@@ -1681,8 +1681,8 @@ function StartupPreviewOverlay({ loader, palette, theme, onClose }: any) {
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[99999] cursor-pointer transition-transform duration-500 ease-in-out",
-        isExiting ? "-translate-y-full opacity-90" : "translate-y-0 opacity-100",
+        "fixed inset-0 z-[99999] cursor-pointer will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        isExiting ? "-translate-y-full" : "translate-y-0",
       )}
       onClick={() => setIsExiting(true)}
     >
@@ -1690,30 +1690,49 @@ function StartupPreviewOverlay({ loader, palette, theme, onClose }: any) {
         loader={loader}
         palette={palette}
         theme={theme}
+        fontComboId={fontComboId}
+        customFont={customFont}
       />
     </div>
   );
 }
 
-function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
+function ClosePreviewOverlay({ loader, palette, theme, fontComboId, customFont, onClose }: any) {
   const [phase, setPhase] = useState<any>("idle");
+  const [isExiting, setIsExiting] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
-    // Hold idle for a short bit to show the "idle" text
     const t = setTimeout(() => {
       setPhase("closing");
     }, 1000);
     return () => clearTimeout(t);
   }, []);
 
+  const handleIntroEnd = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      onCloseRef.current();
+    }, 700);
+  };
+
   return (
-    <div className="fixed inset-0 z-[99999]">
+    <div
+      className={cn(
+        "fixed inset-0 z-[99999] cursor-pointer will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        isExiting ? "-translate-y-full" : "translate-y-0",
+      )}
+      onClick={() => setIsExiting(true)}
+    >
       <CloseScreen
         loader={loader}
         palette={palette}
         theme={theme}
         phase={phase}
-        onIntroEnd={onClose}
+        fontComboId={fontComboId}
+        customFont={customFont}
+        onIntroEnd={handleIntroEnd}
       />
     </div>
   );
@@ -1862,6 +1881,20 @@ function SettingsRouteView() {
   const [startupReplayKey, setStartupReplayKey] = useState(0);
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
+  const [animationFontComboId, setAnimationFontComboId] = useState<string>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.animationFontComboId") ?? "app-default";
+    } catch {
+      return "app-default";
+    }
+  });
+  const [customAnimationFont, setCustomAnimationFont] = useState<string>(() => {
+    try {
+      return window.localStorage?.getItem("tabs.customAnimationFont") ?? "'Inter', sans-serif";
+    } catch {
+      return "'Inter', sans-serif";
+    }
+  });
   const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
     try {
       return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
@@ -2454,6 +2487,8 @@ function SettingsRouteView() {
           loader={previewStyle}
           palette={previewPalette}
           theme={effectivePreviewTheme}
+          fontComboId={animationFontComboId}
+          customFont={customAnimationFont}
           onClose={() => setFullscreenStartupPreview(false)}
         />
       )}
@@ -2463,6 +2498,8 @@ function SettingsRouteView() {
           loader={closePreviewStyle}
           palette={closePreviewPalette}
           theme={effectiveClosePreviewTheme}
+          fontComboId={animationFontComboId}
+          customFont={customAnimationFont}
           onClose={() => setFullscreenClosePreview(false)}
         />
       )}
@@ -3825,6 +3862,245 @@ function SettingsRouteView() {
                             </div>
                           }
                         />
+
+                        {/* ── Animation Font Combos ── */}
+                        <div className="pt-2">
+                          <div className="px-4 py-2 border-t border-border/40">
+                            <h4 className="text-sm font-semibold text-foreground">Animation Typography & Font</h4>
+                            <p className="text-xs text-muted-foreground">
+                              Select a dedicated font combo for startup and close loader animations.
+                            </p>
+                          </div>
+
+                          {/* Default Pills */}
+                          <div className="px-4 py-2 flex items-center gap-2 flex-wrap bg-muted/20">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mr-1">Defaults</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAnimationFontComboId("app-default");
+                                try {
+                                  window.localStorage?.setItem("tabs.animationFontComboId", "app-default");
+                                } catch {}
+                              }}
+                              className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
+                                animationFontComboId === "app-default"
+                                  ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
+                                  : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                              )}
+                            >
+                              {animationFontComboId === "app-default" && (
+                                <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M2 6l3 3 5-5" />
+                                </svg>
+                              )}
+                              App Theme Font
+                              <span className="text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border border-primary/30 text-primary/70 bg-primary/5">
+                                DEFAULT
+                              </span>
+                            </button>
+
+                            {FONT_COMBOS.filter((c) => c.isNeutral).map((combo) => {
+                              const isActive = animationFontComboId === combo.id;
+                              return (
+                                <button
+                                  key={combo.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAnimationFontComboId(combo.id);
+                                    try {
+                                      window.localStorage?.setItem("tabs.animationFontComboId", combo.id);
+                                    } catch {}
+                                  }}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
+                                    isActive
+                                      ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
+                                      : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                                  )}
+                                  style={{ fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined }}
+                                >
+                                  {isActive && (
+                                    <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M2 6l3 3 5-5" />
+                                    </svg>
+                                  )}
+                                  {combo.name}
+                                  <span className={cn(
+                                    "text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border",
+                                    isActive ? "border-primary/30 text-primary/70 bg-primary/5" : "border-border/50 text-muted-foreground/50",
+                                  )}>
+                                    {combo.tag}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Custom Pick Config UI Panel */}
+                          {animationFontComboId === "custom" && (
+                            <div className="px-4 py-3.5 bg-muted/30 border-y border-border/60 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h5 className="text-xs font-semibold text-foreground">Custom Animation Display Font</h5>
+                                  <p className="text-[10px] text-muted-foreground">Select a custom typography font for startup and close loader animations.</p>
+                                </div>
+                                <span className="text-[9px] font-bold tracking-widest px-2 py-0.5 rounded border border-primary/30 text-primary bg-primary/5 uppercase">
+                                  CUSTOM
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-3">
+                                  <label className="text-xs font-semibold text-foreground block">
+                                    Animation Display Font
+                                  </label>
+                                  <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                    Main title, Solari cards & status messages
+                                  </p>
+                                  <Select
+                                    value={customAnimationFont}
+                                    onValueChange={(val) => {
+                                      if (!val) return;
+                                      setCustomAnimationFont(val);
+                                      try {
+                                        window.localStorage?.setItem("tabs.customAnimationFont", val);
+                                      } catch {}
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
+                                      <SelectValue placeholder="Select Display Font" />
+                                    </SelectTrigger>
+                                    <SelectPopup align="start">
+                                      {UI_FONT_OPTIONS.map((f) => (
+                                        <SelectItem key={f.value} value={f.value} className="text-xs">
+                                          {f.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectPopup>
+                                  </Select>
+                                </div>
+
+                                <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-3">
+                                  <label className="text-xs font-semibold text-foreground block">
+                                    Quick Display Picks
+                                  </label>
+                                  <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                    One-click font presets for splash loader
+                                  </p>
+                                  <div className="flex flex-wrap gap-1 pt-0.5">
+                                    {[
+                                      { name: "Syne", font: "'Syne', sans-serif" },
+                                      { name: "Unbounded", font: "'Unbounded', sans-serif" },
+                                      { name: "Outfit", font: "'Outfit', sans-serif" },
+                                      { name: "Space Grotesk", font: "'Space Grotesk', sans-serif" },
+                                      { name: "JetBrains Mono", font: "'JetBrains Mono', monospace" },
+                                    ].map((preset) => (
+                                      <button
+                                        key={preset.name}
+                                        type="button"
+                                        onClick={() => {
+                                          setCustomAnimationFont(preset.font);
+                                          try {
+                                            window.localStorage?.setItem("tabs.customAnimationFont", preset.font);
+                                          } catch {}
+                                        }}
+                                        className={cn(
+                                          "px-2 py-1 text-[10px] font-semibold rounded border transition-all cursor-pointer",
+                                          customAnimationFont === preset.font
+                                            ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                                            : "border-border/60 bg-background text-muted-foreground hover:text-foreground hover:border-border",
+                                        )}
+                                        style={{ fontFamily: preset.font }}
+                                      >
+                                        {preset.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 10 Personality Specimen Cards */}
+                          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 border-t border-border/40">
+                            {FONT_COMBOS.filter((c) => !c.isNeutral).map((combo) => {
+                              const isActive = animationFontComboId === combo.id;
+                              return (
+                                <button
+                                  key={combo.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAnimationFontComboId(combo.id);
+                                    try {
+                                      window.localStorage?.setItem("tabs.animationFontComboId", combo.id);
+                                    } catch {}
+                                  }}
+                                  className={cn(
+                                    "group relative flex flex-col items-start rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer overflow-hidden",
+                                    isActive
+                                      ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3),0_4px_20px_hsl(var(--primary)/0.15)]"
+                                      : "border-border/70 bg-card hover:border-border hover:shadow-md hover:scale-[1.02]",
+                                  )}
+                                >
+                                  {isActive && (
+                                    <div className="absolute top-2.5 right-2.5 size-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_hsl(var(--primary)/0.6)]">
+                                      <svg className="size-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M2 6l3 3 5-5" />
+                                      </svg>
+                                    </div>
+                                  )}
+
+                                  <div className="mb-3 leading-none">
+                                    <span
+                                      className={cn("text-[26px] leading-none", combo.sansClass)}
+                                      style={{
+                                        fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined,
+                                      }}
+                                    >
+                                      {combo.sansText}
+                                    </span>
+                                    <span
+                                      className={cn("text-[26px] leading-none", combo.serifClass)}
+                                      style={{
+                                        fontFamily: combo.headingFont !== "custom" ? combo.headingFont : undefined,
+                                      }}
+                                    >
+                                      {combo.serifText}
+                                    </span>
+                                    {"sansText2" in combo && combo.sansText2 ? (
+                                      <span
+                                        className={cn("text-[26px] leading-none block", combo.sansClass)}
+                                        style={{
+                                          fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined,
+                                        }}
+                                      >
+                                        {combo.sansText2}
+                                      </span>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="mt-auto w-full pt-1 border-t border-border/30 flex items-center justify-between">
+                                    <div>
+                                      <div className={cn("text-xs font-bold leading-tight", isActive ? "text-primary" : "text-foreground")}>
+                                        {combo.name}
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground/70 leading-tight">
+                                        {combo.desc}
+                                      </div>
+                                    </div>
+                                    <span className={cn(
+                                      "text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ml-1",
+                                      isActive ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 bg-muted/40 text-muted-foreground",
+                                    )}>
+                                      {combo.tag}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
 
                       {(previewStyle !== settings.splashLoaderStyle ||

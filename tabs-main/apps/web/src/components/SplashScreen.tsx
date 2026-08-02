@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useId } from "react";
 import { useTheme } from "../hooks/useTheme";
 import { cn } from "~/lib/utils";
+import { FONT_COMBOS, type FontCombo } from "../lib/themes";
 import "./loaders.css";
 
 const GLASS_MESSAGES = [
@@ -25,14 +26,34 @@ const SOLARI_WORD = "TABS IDE";
 
 const SOLARI_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ ".split("");
 
+function resolveAnimationFonts(fontComboId?: string | undefined, customFontProp?: string | undefined): { headingFont?: string | undefined; uiFont?: string | undefined } {
+  if (!fontComboId || fontComboId === "app-default") return {};
+  if (fontComboId === "custom") {
+    const customFont = customFontProp || (typeof window !== "undefined" ? window.localStorage?.getItem("tabs.customAnimationFont") ?? "'Inter', sans-serif" : "'Inter', sans-serif");
+    return {
+      headingFont: customFont,
+      uiFont: customFont,
+    };
+  }
+  const combo = FONT_COMBOS.find((c) => c.id === fontComboId);
+  if (!combo) return {};
+  // Use primary display heading font (combo.uiFont) for both main title and UI elements
+  const displayFont = combo.uiFont !== "custom" ? combo.uiFont : undefined;
+  return {
+    ...(displayFont ? { headingFont: displayFont, uiFont: displayFont } : {}),
+  };
+}
+
 function RotatingLabel({
   messages,
   intervalMs = 2200,
   className,
+  uiFont,
 }: {
   messages: string[];
   intervalMs?: number;
   className?: string;
+  uiFont?: string | undefined;
 }) {
   const [idx, setIdx] = useState(0);
   const [outgoing, setOutgoing] = useState<string | null>(null);
@@ -55,9 +76,12 @@ function RotatingLabel({
     };
   }, [messages, intervalMs]);
 
+  const fontStyle = uiFont ? { fontFamily: uiFont } : undefined;
+
   return (
     <div
       className={cn("relative z-10 h-[14px] w-full text-center loader-respect-motion", className)}
+      style={fontStyle}
     >
       {outgoing && (
         <span
@@ -77,7 +101,7 @@ function RotatingLabel({
   );
 }
 
-function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: boolean }) {
+function MoltenGlass({ palette, isDark, fonts }: { palette: "block" | "mono"; isDark: boolean; fonts?: { headingFont?: string | undefined; uiFont?: string | undefined } | undefined }) {
   const filterId = useId().replace(/:/g, "");
   const isBlock = palette === "block";
   const animateRef = useRef<SVGAnimationElement>(null);
@@ -92,9 +116,6 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
     };
 
     const frame = requestAnimationFrame(triggerAnimation);
-
-    // Chromium sometimes drops SMIL feTurbulence animations after one cycle
-    // even with repeatCount="indefinite". Restart it explicitly right before it ends.
     const intervalId = setInterval(triggerAnimation, 6700);
 
     return () => {
@@ -102,6 +123,8 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
       clearInterval(intervalId);
     };
   }, []);
+
+  const headingStyle = fonts?.headingFont ? { fontFamily: fonts.headingFont, filter: `url(#${filterId})` } : { filter: `url(#${filterId})` };
 
   return (
     <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
@@ -148,13 +171,14 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
               ? (isDark ? "text-[#1c0f0e]" : "text-white")
               : (isDark ? "text-white" : "text-black"),
           )}
-          style={{ filter: `url(#${filterId})` }}
+          style={headingStyle}
         >
           TABS
         </div>
 
         <RotatingLabel
           messages={GLASS_MESSAGES}
+          uiFont={fonts?.uiFont}
           className={
             isBlock
               ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
@@ -171,11 +195,13 @@ function SolariTile({
   index,
   isBlock,
   isDark,
+  tileFont,
 }: {
   target: string;
   index: number;
   isBlock: boolean;
   isDark: boolean;
+  tileFont?: string | undefined;
 }) {
   const [ch, setCh] = useState(target);
   const [justSettled, setJustSettled] = useState(false);
@@ -213,6 +239,7 @@ function SolariTile({
             ? cn("border-primary shadow-[0_0_0_1px_var(--primary)]", isDark ? "bg-white/4" : "bg-black/3")
             : cn("border-border shadow-none", isDark ? "bg-white/4" : "bg-black/3")
       )}
+      style={tileFont ? { fontFamily: tileFont } : undefined}
     >
       <div className="absolute inset-x-0 top-1/2 h-px bg-black/35" />
       {ch === " " ? "\u00A0" : ch}
@@ -220,7 +247,7 @@ function SolariTile({
   );
 }
 
-function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: boolean }) {
+function SolariGrid({ palette, isDark, fonts }: { palette: "block" | "mono"; isDark: boolean; fonts?: { headingFont?: string | undefined; uiFont?: string | undefined } | undefined }) {
   const word = "TABS IDE".padEnd(8, " ").split("");
   const isBlock = palette === "block";
 
@@ -234,11 +261,12 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: bo
           )}
         >
           {word.map((ch, i) => (
-            <SolariTile key={i} target={ch!} index={i} isBlock={isBlock} isDark={isDark} />
+            <SolariTile key={i} target={ch!} index={i} isBlock={isBlock} isDark={isDark} tileFont={fonts?.headingFont || fonts?.uiFont} />
           ))}
         </div>
         <RotatingLabel
           messages={SOLARI_MESSAGES}
+          uiFont={fonts?.uiFont}
           className={
             isBlock
               ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
@@ -253,14 +281,19 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: bo
 export interface SplashScreenProps {
   loader: "glass" | "solari" | string;
   palette: "block" | "mono" | string;
-  theme?: "light" | "dark" | "system";
+  theme?: "light" | "dark" | "system" | undefined;
+  fontComboId?: string | undefined;
+  customFont?: string | undefined;
 }
 
-export function SplashScreen({ loader, palette, theme: overrideTheme }: SplashScreenProps) {
+export function SplashScreen({ loader, palette, theme: overrideTheme, fontComboId, customFont }: SplashScreenProps) {
   const { resolvedTheme } = useTheme();
   const effectiveTheme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
   const isDark = effectiveTheme === "dark";
   const isBlock = palette === "block";
+  const storedComboId = fontComboId || (typeof window !== "undefined" ? window.localStorage?.getItem("tabs.animationFontComboId") ?? "app-default" : "app-default");
+  const fonts = resolveAnimationFonts(storedComboId, customFont);
+
   return (
     <div
       className={cn(
@@ -269,9 +302,9 @@ export function SplashScreen({ loader, palette, theme: overrideTheme }: SplashSc
       )}
     >
       {loader === "solari" ? (
-        <SolariGrid palette={palette as any} isDark={isDark} />
+        <SolariGrid palette={palette as any} isDark={isDark} fonts={fonts} />
       ) : (
-        <MoltenGlass palette={palette as any} isDark={isDark} />
+        <MoltenGlass palette={palette as any} isDark={isDark} fonts={fonts} />
       )}
     </div>
   );

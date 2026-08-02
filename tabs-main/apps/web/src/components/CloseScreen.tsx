@@ -377,8 +377,10 @@ export interface CloseScreenProps {
   loader: "glass" | "solari" | string;
   palette: "block" | "mono" | string;
   theme?: "light" | "dark" | "system";
-  phase?: ClosePhase;
-  onIntroEnd?: () => void;
+  phase?: ClosePhase | undefined;
+  onIntroEnd?: (() => void) | undefined;
+  fontComboId?: string | undefined;
+  customFont?: string | undefined;
 }
 
 export function CloseScreen({
