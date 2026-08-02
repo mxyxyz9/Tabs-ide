@@ -41,13 +41,13 @@
 .cq-tile-dim {
   background: rgba(255, 255, 255, 0.02) !important;
   border-color: rgba(255, 255, 255, 0.03) !important;
-  color: transparent !important;
+  color: rgba(255, 255, 255, 0.15) !important;
 }
 /* Light-mode tile dim */
 .cq-tile-dim-light {
-  background: rgba(0, 0, 0, 0.01) !important;
-  border-color: rgba(0, 0, 0, 0.04) !important;
-  color: transparent !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.15) !important;
 }
 
 /* Solari — card collapse */

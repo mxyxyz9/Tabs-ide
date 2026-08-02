@@ -37,10 +37,11 @@ function resolveAnimationFonts(fontComboId?: string | undefined, customFontProp?
   }
   const combo = FONT_COMBOS.find((c) => c.id === fontComboId);
   if (!combo) return {};
-  // Use primary display heading font (combo.uiFont) for both main title and UI elements
-  const displayFont = combo.uiFont !== "custom" ? combo.uiFont : undefined;
+  const headingFont = combo.uiFont !== "custom" ? combo.uiFont : undefined;
+  const uiFont = combo.headingFont !== "custom" ? combo.headingFont : headingFont;
   return {
-    ...(displayFont ? { headingFont: displayFont, uiFont: displayFont } : {}),
+    headingFont,
+    uiFont,
   };
 }
 
@@ -291,8 +292,22 @@ export function SplashScreen({ loader, palette, theme: overrideTheme, fontComboI
   const effectiveTheme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
   const isDark = effectiveTheme === "dark";
   const isBlock = palette === "block";
-  const storedComboId = fontComboId || (typeof window !== "undefined" ? window.localStorage?.getItem("tabs.animationFontComboId") ?? "app-default" : "app-default");
-  const fonts = resolveAnimationFonts(storedComboId, customFont);
+  const storedComboId =
+    fontComboId ||
+    (typeof window !== "undefined"
+      ? window.localStorage?.getItem("tabs.startupAnimationFontComboId") ??
+        window.localStorage?.getItem("tabs.animationFontComboId") ??
+        "app-default"
+      : "app-default");
+  const storedCustomFont =
+    customFont ||
+    (typeof window !== "undefined"
+      ? (window.localStorage?.getItem("tabs.startupCustomAnimationFont") ||
+         window.localStorage?.getItem("tabs.customAnimationFont")) ??
+        undefined
+      : undefined);
+
+  const fonts = resolveAnimationFonts(storedComboId, storedCustomFont);
 
   return (
     <div

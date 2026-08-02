@@ -1881,20 +1881,74 @@ function SettingsRouteView() {
   const [startupReplayKey, setStartupReplayKey] = useState(0);
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
-  const [animationFontComboId, setAnimationFontComboId] = useState<string>(() => {
+  /* Startup Animation Font State */
+  const [savedStartupAnimationFontComboId, setSavedStartupAnimationFontComboId] = useState<string>(() => {
     try {
-      return window.localStorage?.getItem("tabs.animationFontComboId") ?? "app-default";
+      return (
+        window.localStorage?.getItem("tabs.startupAnimationFontComboId") ??
+        window.localStorage?.getItem("tabs.animationFontComboId") ??
+        "app-default"
+      );
     } catch {
       return "app-default";
     }
   });
-  const [customAnimationFont, setCustomAnimationFont] = useState<string>(() => {
+  const [savedStartupCustomAnimationFont, setSavedStartupCustomAnimationFont] = useState<string>(() => {
     try {
-      return window.localStorage?.getItem("tabs.customAnimationFont") ?? "'Inter', sans-serif";
+      return (
+        window.localStorage?.getItem("tabs.startupCustomAnimationFont") ??
+        window.localStorage?.getItem("tabs.customAnimationFont") ??
+        "'Inter', sans-serif"
+      );
     } catch {
       return "'Inter', sans-serif";
     }
   });
+
+  const [previewStartupAnimationFontComboId, setPreviewStartupAnimationFontComboId] =
+    useState<string>(savedStartupAnimationFontComboId);
+  const [previewStartupCustomAnimationFont, setPreviewStartupCustomAnimationFont] =
+    useState<string>(savedStartupCustomAnimationFont);
+
+  /* Close Animation Font State */
+  const [savedCloseAnimationFontComboId, setSavedCloseAnimationFontComboId] = useState<string>(() => {
+    try {
+      return (
+        window.localStorage?.getItem("tabs.closeAnimationFontComboId") ??
+        window.localStorage?.getItem("tabs.animationFontComboId") ??
+        "app-default"
+      );
+    } catch {
+      return "app-default";
+    }
+  });
+  const [savedCloseCustomAnimationFont, setSavedCloseCustomAnimationFont] = useState<string>(() => {
+    try {
+      return (
+        window.localStorage?.getItem("tabs.closeCustomAnimationFont") ??
+        window.localStorage?.getItem("tabs.customAnimationFont") ??
+        "'Inter', sans-serif"
+      );
+    } catch {
+      return "'Inter', sans-serif";
+    }
+  });
+
+  const [previewCloseAnimationFontComboId, setPreviewCloseAnimationFontComboId] =
+    useState<string>(savedCloseAnimationFontComboId);
+  const [previewCloseCustomAnimationFont, setPreviewCloseCustomAnimationFont] =
+    useState<string>(savedCloseCustomAnimationFont);
+
+  const activeFontComboId =
+    animationTab === "startup" ? previewStartupAnimationFontComboId : previewCloseAnimationFontComboId;
+  const setActiveFontComboId =
+    animationTab === "startup" ? setPreviewStartupAnimationFontComboId : setPreviewCloseAnimationFontComboId;
+
+  const activeCustomFont =
+    animationTab === "startup" ? previewStartupCustomAnimationFont : previewCloseCustomAnimationFont;
+  const setActiveCustomFont =
+    animationTab === "startup" ? setPreviewStartupCustomAnimationFont : setPreviewCloseCustomAnimationFont;
+
   const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
     try {
       return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
@@ -1927,16 +1981,12 @@ function SettingsRouteView() {
     toastManager.add({
       type: "success",
       title: "Preset Saved",
-      description: `"${name}" saved to your theme presets.`,
+      description: `Preset "${name}" saved cleanly.`,
     });
   }, [setCustomThemeConfig, setTheme]);
 
-  const handleDeletePreset = useCallback(async (presetId: string) => {
-    const preset = savedPresets.find((p) => p.id === presetId);
-    const presetName = preset ? `"${preset.name}"` : "this custom preset";
-    const confirmed = await confirm(
-      `Delete Theme Preset?\n\nAre you sure you want to delete ${presetName}? This action cannot be undone.`,
-    );
+  const handleDeletePreset = useCallback((presetId: string) => {
+    const confirmed = confirm("Are you sure you want to delete this custom preset?");
     if (!confirmed) return;
 
     setSavedPresets((prev) => {
@@ -1949,7 +1999,7 @@ function SettingsRouteView() {
       title: "Preset Deleted",
       description: "Custom theme preset removed.",
     });
-  }, [confirm, savedPresets]);
+  }, [confirm]);
 
   const handleRenamePreset = useCallback((presetId: string, newName: string) => {
     if (!newName.trim()) return;
@@ -1988,6 +2038,11 @@ function SettingsRouteView() {
     setClosePreviewStyle(settings.closeLoaderStyle);
     setClosePreviewPalette(settings.closeLoaderPalette);
     setClosePreviewTheme(settings.closeLoaderTheme);
+
+    setPreviewStartupAnimationFontComboId(savedStartupAnimationFontComboId);
+    setPreviewStartupCustomAnimationFont(savedStartupCustomAnimationFont);
+    setPreviewCloseAnimationFontComboId(savedCloseAnimationFontComboId);
+    setPreviewCloseCustomAnimationFont(savedCloseCustomAnimationFont);
   }, [
     settings.splashLoaderStyle,
     settings.splashLoaderPalette,
@@ -1995,6 +2050,10 @@ function SettingsRouteView() {
     settings.closeLoaderStyle,
     settings.closeLoaderPalette,
     settings.closeLoaderTheme,
+    savedStartupAnimationFontComboId,
+    savedStartupCustomAnimationFont,
+    savedCloseAnimationFontComboId,
+    savedCloseCustomAnimationFont,
   ]);
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderSettingsKey, string | null>>
@@ -2487,8 +2546,8 @@ function SettingsRouteView() {
           loader={previewStyle}
           palette={previewPalette}
           theme={effectivePreviewTheme}
-          fontComboId={animationFontComboId}
-          customFont={customAnimationFont}
+          fontComboId={previewStartupAnimationFontComboId}
+          customFont={previewStartupCustomAnimationFont}
           onClose={() => setFullscreenStartupPreview(false)}
         />
       )}
@@ -2498,8 +2557,8 @@ function SettingsRouteView() {
           loader={closePreviewStyle}
           palette={closePreviewPalette}
           theme={effectiveClosePreviewTheme}
-          fontComboId={animationFontComboId}
-          customFont={customAnimationFont}
+          fontComboId={previewCloseAnimationFontComboId}
+          customFont={previewCloseCustomAnimationFont}
           onClose={() => setFullscreenClosePreview(false)}
         />
       )}
@@ -3878,19 +3937,16 @@ function SettingsRouteView() {
                             <button
                               type="button"
                               onClick={() => {
-                                setAnimationFontComboId("app-default");
-                                try {
-                                  window.localStorage?.setItem("tabs.animationFontComboId", "app-default");
-                                } catch {}
+                                setActiveFontComboId("app-default");
                               }}
                               className={cn(
                                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
-                                animationFontComboId === "app-default"
+                                activeFontComboId === "app-default"
                                   ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
                                   : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
                               )}
                             >
-                              {animationFontComboId === "app-default" && (
+                              {activeFontComboId === "app-default" && (
                                 <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                                   <path d="M2 6l3 3 5-5" />
                                 </svg>
@@ -3902,16 +3958,13 @@ function SettingsRouteView() {
                             </button>
 
                             {FONT_COMBOS.filter((c) => c.isNeutral).map((combo) => {
-                              const isActive = animationFontComboId === combo.id;
+                              const isActive = activeFontComboId === combo.id;
                               return (
                                 <button
                                   key={combo.id}
                                   type="button"
                                   onClick={() => {
-                                    setAnimationFontComboId(combo.id);
-                                    try {
-                                      window.localStorage?.setItem("tabs.animationFontComboId", combo.id);
-                                    } catch {}
+                                    setActiveFontComboId(combo.id);
                                   }}
                                   className={cn(
                                     "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
@@ -3939,7 +3992,7 @@ function SettingsRouteView() {
                           </div>
 
                           {/* Custom Pick Config UI Panel */}
-                          {animationFontComboId === "custom" && (
+                          {activeFontComboId === "custom" && (
                             <div className="px-4 py-3.5 bg-muted/30 border-y border-border/60 space-y-3">
                               <div className="flex items-center justify-between">
                                 <div>
@@ -3959,13 +4012,10 @@ function SettingsRouteView() {
                                     Main title, Solari cards & status messages
                                   </p>
                                   <Select
-                                    value={customAnimationFont}
+                                    value={activeCustomFont}
                                     onValueChange={(val) => {
                                       if (!val) return;
-                                      setCustomAnimationFont(val);
-                                      try {
-                                        window.localStorage?.setItem("tabs.customAnimationFont", val);
-                                      } catch {}
+                                      setActiveCustomFont(val);
                                     }}
                                   >
                                     <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
@@ -4000,14 +4050,11 @@ function SettingsRouteView() {
                                         key={preset.name}
                                         type="button"
                                         onClick={() => {
-                                          setCustomAnimationFont(preset.font);
-                                          try {
-                                            window.localStorage?.setItem("tabs.customAnimationFont", preset.font);
-                                          } catch {}
+                                          setActiveCustomFont(preset.font);
                                         }}
                                         className={cn(
                                           "px-2 py-1 text-[10px] font-semibold rounded border transition-all cursor-pointer",
-                                          customAnimationFont === preset.font
+                                          activeCustomFont === preset.font
                                             ? "border-primary bg-primary text-primary-foreground shadow-xs"
                                             : "border-border/60 bg-background text-muted-foreground hover:text-foreground hover:border-border",
                                         )}
@@ -4025,16 +4072,13 @@ function SettingsRouteView() {
                           {/* 10 Personality Specimen Cards */}
                           <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 border-t border-border/40">
                             {FONT_COMBOS.filter((c) => !c.isNeutral).map((combo) => {
-                              const isActive = animationFontComboId === combo.id;
+                              const isActive = activeFontComboId === combo.id;
                               return (
                                 <button
                                   key={combo.id}
                                   type="button"
                                   onClick={() => {
-                                    setAnimationFontComboId(combo.id);
-                                    try {
-                                      window.localStorage?.setItem("tabs.animationFontComboId", combo.id);
-                                    } catch {}
+                                    setActiveFontComboId(combo.id);
                                   }}
                                   className={cn(
                                     "group relative flex flex-col items-start rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer overflow-hidden",
@@ -4108,10 +4152,16 @@ function SettingsRouteView() {
                         previewTheme !== settings.splashLoaderTheme ||
                         closePreviewStyle !== settings.closeLoaderStyle ||
                         closePreviewPalette !== settings.closeLoaderPalette ||
-                        closePreviewTheme !== settings.closeLoaderTheme) && (
+                        closePreviewTheme !== settings.closeLoaderTheme ||
+                        previewStartupAnimationFontComboId !== savedStartupAnimationFontComboId ||
+                        (previewStartupAnimationFontComboId === "custom" &&
+                          previewStartupCustomAnimationFont !== savedStartupCustomAnimationFont) ||
+                        previewCloseAnimationFontComboId !== savedCloseAnimationFontComboId ||
+                        (previewCloseAnimationFontComboId === "custom" &&
+                          previewCloseCustomAnimationFont !== savedCloseCustomAnimationFont)) && (
                         <div className="flex justify-end p-4 sm:p-5 border-t border-border">
                           <Button
-                            onClick={() =>
+                            onClick={() => {
                               updateSettings({
                                 splashLoaderStyle: previewStyle,
                                 splashLoaderPalette: previewPalette,
@@ -4119,8 +4169,25 @@ function SettingsRouteView() {
                                 closeLoaderStyle: closePreviewStyle,
                                 closeLoaderPalette: closePreviewPalette,
                                 closeLoaderTheme: closePreviewTheme,
-                              })
-                            }
+                              });
+                              try {
+                                window.localStorage?.setItem("tabs.startupAnimationFontComboId", previewStartupAnimationFontComboId);
+                                window.localStorage?.setItem("tabs.startupCustomAnimationFont", previewStartupCustomAnimationFont);
+                                window.localStorage?.setItem("tabs.closeAnimationFontComboId", previewCloseAnimationFontComboId);
+                                window.localStorage?.setItem("tabs.closeCustomAnimationFont", previewCloseCustomAnimationFont);
+                                window.localStorage?.setItem("tabs.animationFontComboId", previewStartupAnimationFontComboId);
+                                window.localStorage?.setItem("tabs.customAnimationFont", previewStartupCustomAnimationFont);
+                              } catch {}
+                              setSavedStartupAnimationFontComboId(previewStartupAnimationFontComboId);
+                              setSavedStartupCustomAnimationFont(previewStartupCustomAnimationFont);
+                              setSavedCloseAnimationFontComboId(previewCloseAnimationFontComboId);
+                              setSavedCloseCustomAnimationFont(previewCloseCustomAnimationFont);
+                              toastManager.add({
+                                type: "success",
+                                title: "Settings Saved",
+                                description: "Animation settings and font preferences updated.",
+                              });
+                            }}
                             className="gap-2"
                           >
                             <SaveIcon className="size-4" />
