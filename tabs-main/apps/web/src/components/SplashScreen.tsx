@@ -145,8 +145,8 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
           className={cn(
             "relative z-10 text-[80px] font-[800] tracking-[-0.02em]",
             isBlock
-              ? "text-primary-foreground"
-              : "text-foreground",
+              ? (isDark ? "text-[#1c0f0e]" : "text-white")
+              : (isDark ? "text-white" : "text-black"),
           )}
           style={{ filter: `url(#${filterId})` }}
         >
@@ -157,8 +157,8 @@ function MoltenGlass({ palette, isDark }: { palette: "block" | "mono"; isDark: b
           messages={GLASS_MESSAGES}
           className={
             isBlock
-              ? "text-primary-foreground/80"
-              : "text-muted-foreground"
+              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
+              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
           }
         />
       </div>
@@ -187,10 +187,11 @@ function SolariTile({
       if (!cancelled) setCh(SOLARI_CHARS[Math.floor(Math.random() * SOLARI_CHARS.length)]!);
     }, 70);
     const to = setTimeout(() => {
-      cancelled = true;
       clearInterval(iv);
+      if (cancelled) return;
       setCh(target);
       setJustSettled(true);
+      setTimeout(() => !cancelled && setJustSettled(false), 420);
     }, settleAt);
 
     return () => {
@@ -201,30 +202,35 @@ function SolariTile({
   }, [target, index]);
 
   return (
-    <span
+    <div
       className={cn(
-        "inline-block w-[0.72em] text-center font-mono font-bold tracking-tight transition-transform duration-200",
-        justSettled && "scale-105",
+        "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-bold transition-all duration-300",
+        isBlock
+          ? justSettled
+            ? "border-white/90 bg-white/22 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
+            : "border-white/24 bg-white/12 shadow-none"
+          : justSettled
+            ? cn("border-primary shadow-[0_0_0_1px_var(--primary)]", isDark ? "bg-white/4" : "bg-black/3")
+            : cn("border-border shadow-none", isDark ? "bg-white/4" : "bg-black/3")
       )}
     >
-      {ch}
-    </span>
+      <div className="absolute inset-x-0 top-1/2 h-px bg-black/35" />
+      {ch === " " ? "\u00A0" : ch}
+    </div>
   );
 }
 
 function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: boolean }) {
+  const word = "TABS IDE".padEnd(8, " ").split("");
   const isBlock = palette === "block";
-  const word = SOLARI_WORD.split("");
 
   return (
     <div className="relative z-10 flex min-h-[300px] w-full max-w-[560px] items-center justify-center p-6 loader-respect-motion">
-      <div className="relative flex w-full flex-col items-center justify-center gap-[22px]">
+      <div className="relative flex w-full flex-col items-center justify-center gap-[20px]">
         <div
           className={cn(
-            "flex items-center justify-center text-[54px] sm:text-[68px] font-bold tracking-wider",
-            isBlock
-              ? "text-primary-foreground"
-              : "text-foreground",
+            "relative z-10 grid grid-cols-4 gap-[6px]",
+            isBlock ? (isDark ? "text-[#1c0f0e]" : "text-white") : (isDark ? "text-white" : "text-black")
           )}
         >
           {word.map((ch, i) => (
@@ -235,8 +241,8 @@ function SolariGrid({ palette, isDark }: { palette: "block" | "mono"; isDark: bo
           messages={SOLARI_MESSAGES}
           className={
             isBlock
-              ? "text-primary-foreground/80"
-              : "text-muted-foreground"
+              ? (isDark ? "text-[#1c0f0e]/85" : "text-white/75")
+              : (isDark ? "text-[#a1a1aa]" : "text-[#71717a]")
           }
         />
       </div>
@@ -252,17 +258,14 @@ export interface SplashScreenProps {
 
 export function SplashScreen({ loader, palette, theme: overrideTheme }: SplashScreenProps) {
   const { resolvedTheme } = useTheme();
-  const theme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
-  const isDark =
-    typeof document !== "undefined"
-      ? document.documentElement.classList.contains("dark")
-      : theme?.includes("dark");
+  const effectiveTheme = overrideTheme && overrideTheme !== "system" ? overrideTheme : resolvedTheme;
+  const isDark = effectiveTheme === "dark";
   const isBlock = palette === "block";
   return (
     <div
       className={cn(
         "flex h-full w-full flex-col items-center justify-center",
-        isBlock ? "bg-primary text-primary-foreground" : "bg-background text-foreground",
+        isBlock ? "bg-[#2563eb]" : (isDark ? "bg-[#09090b]" : "bg-white")
       )}
     >
       {loader === "solari" ? (

@@ -1656,6 +1656,45 @@ function uninstallInstructions(os: DesktopOsKind): string[] {
   }
 }
 
+function StartupPreviewOverlay({ loader, palette, theme, onClose }: any) {
+  const [isExiting, setIsExiting] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const exitTimer = setTimeout(() => {
+      setIsExiting(true);
+    }, 4000);
+
+    return () => clearTimeout(exitTimer);
+  }, []);
+
+  useEffect(() => {
+    if (isExiting) {
+      const closeTimer = setTimeout(() => {
+        onCloseRef.current();
+      }, 450);
+      return () => clearTimeout(closeTimer);
+    }
+  }, [isExiting]);
+
+  return (
+    <div
+      className={cn(
+        "fixed inset-0 z-[99999] cursor-pointer transition-transform duration-500 ease-in-out",
+        isExiting ? "-translate-y-full opacity-90" : "translate-y-0 opacity-100",
+      )}
+      onClick={() => setIsExiting(true)}
+    >
+      <SplashScreen
+        loader={loader}
+        palette={palette}
+        theme={theme}
+      />
+    </div>
+  );
+}
+
 function ClosePreviewOverlay({ loader, palette, theme, onClose }: any) {
   const [phase, setPhase] = useState<any>("idle");
 
@@ -1820,6 +1859,7 @@ function SettingsRouteView() {
     settings.closeLoaderTheme,
   );
   const [closeReplayKey, setCloseReplayKey] = useState(0);
+  const [startupReplayKey, setStartupReplayKey] = useState(0);
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
   const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
@@ -1830,6 +1870,7 @@ function SettingsRouteView() {
     }
   });
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
+  const [fullscreenStartupPreview, setFullscreenStartupPreview] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isCustomFontMode, setIsCustomFontMode] = useState(false);
   const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
@@ -2407,6 +2448,15 @@ function SettingsRouteView() {
 
   return (
     <div className="isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden overscroll-y-none bg-background text-foreground">
+      {fullscreenStartupPreview && (
+        <StartupPreviewOverlay
+          key={startupReplayKey}
+          loader={previewStyle}
+          palette={previewPalette}
+          theme={effectivePreviewTheme}
+          onClose={() => setFullscreenStartupPreview(false)}
+        />
+      )}
       {fullscreenClosePreview && (
         <ClosePreviewOverlay
           key={closeReplayKey}
@@ -3655,6 +3705,7 @@ function SettingsRouteView() {
                               >
                                 {animationTab === "startup" ? (
                                   <SplashScreen
+                                    key={startupReplayKey}
                                     loader={activeStyle}
                                     palette={activePalette}
                                     theme={activeTheme}
@@ -3707,22 +3758,15 @@ function SettingsRouteView() {
                                     closeLoaderTheme: closePreviewTheme,
                                   });
                                   if (animationTab === "startup") {
-                                    setTimeout(() => window.location.reload(), 150);
+                                    setStartupReplayKey((k) => k + 1);
+                                    setFullscreenStartupPreview(true);
                                   } else {
                                     setCloseReplayKey((k) => k + 1);
                                     setFullscreenClosePreview(true);
                                   }
                                 }}
                               >
-                                {animationTab === "startup" ? (
-                                  <>
-                                    <RefreshCwIcon className="mr-1.5 size-3" /> Reload App
-                                  </>
-                                ) : (
-                                  <>
-                                    <MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen
-                                  </>
-                                )}
+                                <MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen
                               </Button>
                             </div>
                           </div>
