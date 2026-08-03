@@ -154,24 +154,10 @@ function ensureMinContrast(fgColor, bgColor, minRatio = 4.5, parentBgHex = "#121
 
 function getOptimalPrimaryForeground(primaryHex) {
   if (!primaryHex) return "#ffffff";
-  const hex = primaryHex.trim().toLowerCase().replace("#", "");
-  if (hex.length === 6) {
-    const r = parseInt(hex.substring(0, 2), 16) / 255;
-    const g = parseInt(hex.substring(2, 4), 16) / 255;
-    const b = parseInt(hex.substring(4, 6), 16) / 255;
-    const toLinear = (v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
-    const lum = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-    // Dark brand accents (blue, purple, teal, navy): always white text
-    if (lum < 0.22) return "#ffffff";
-    // Light/neutral accents: always dark text
-    if (lum > 0.60) return "#09090b";
-  }
-  // Mid-range: use WCAG contrast to decide
   const whiteRatio = calculateContrastRatio("#ffffff", primaryHex).ratio;
   const darkRatio = calculateContrastRatio("#0f172a", primaryHex).ratio;
-  if (whiteRatio >= 4.5 && whiteRatio >= darkRatio) return "#ffffff";
-  if (darkRatio >= 4.5) return "#0f172a";
-  return whiteRatio >= darkRatio ? "#ffffff" : "#0f172a";
+  if (whiteRatio >= 3.0) return "#ffffff";
+  return darkRatio >= whiteRatio ? "#0f172a" : "#ffffff";
 }
 
 function suggestAccessibleFg(fgHex, bgHex) {

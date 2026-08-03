@@ -5,6 +5,7 @@ import {
   calculateContrastRatio,
   ensureMinContrast,
   evaluateThemeTokens,
+  getOptimalPrimaryForeground,
   runThemeWcagCheck,
   toHexColor,
   VSCODE_TOKEN_REGISTRY,
@@ -150,5 +151,12 @@ describe("themeDerivation shared module", () => {
       const contrast = calculateContrastRatio(btnFg!, btnBg!);
       expect(contrast.ratio).toBeGreaterThanOrEqual(3.5);
     }
+  });
+
+  it("ensures white text foreground for medium & dark brand primary colors (e.g. Solarized Light blue #268bd2)", () => {
+    expect(getOptimalPrimaryForeground("#268bd2")).toBe("#ffffff");
+    expect(getOptimalPrimaryForeground("#366ffb")).toBe("#ffffff");
+    expect(getOptimalPrimaryForeground("#2563eb")).toBe("#ffffff");
+    expect(getOptimalPrimaryForeground("#ffcc00")).toBe("#0f172a");
   });
 });

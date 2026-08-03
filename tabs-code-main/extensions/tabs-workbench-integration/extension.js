@@ -796,6 +796,8 @@ function getLuminance(hex) {
 
 function getOptimalPrimaryForeground(primaryHex) {
   const L1 = getLuminance(primaryHex);
+  if (L1 < 0.55) return "#ffffff";
+  if (L1 > 0.75) return "#090d16";
   const L_white = 1.0;
   const L_dark = getLuminance("#090d16");
   const contrastWhite = (Math.max(L1, L_white) + 0.05) / (Math.min(L1, L_white) + 0.05);
