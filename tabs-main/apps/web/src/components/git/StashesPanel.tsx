@@ -1,5 +1,6 @@
 import type { GitStashEntry } from "@tabs/contracts";
-import { RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "../ui/button";
 import { Card, SectionLabel } from "./gitPrimitives";
@@ -20,10 +21,37 @@ export function StashesPanel({
   hasConflict: boolean;
   onOpenStash: () => void;
   onOpenStashPullReapply: () => void;
-  onApplyStash: (ref: string) => void;
-  onDropStash: (ref: string) => void;
+  onApplyStash: (ref: string) => void | Promise<void>;
+  onDropStash: (ref: string) => void | Promise<void>;
 }) {
+  const [actionStashMap, setActionStashMap] = useState<Record<string, "apply" | "drop">>({});
   const nothingToDo = !hasChanges && behindCount === 0;
+
+  const handleApply = async (ref: string) => {
+    setActionStashMap((prev) => ({ ...prev, [ref]: "apply" }));
+    try {
+      await onApplyStash(ref);
+    } finally {
+      setActionStashMap((prev) => {
+        const next = { ...prev };
+        delete next[ref];
+        return next;
+      });
+    }
+  };
+
+  const handleDrop = async (ref: string) => {
+    setActionStashMap((prev) => ({ ...prev, [ref]: "drop" }));
+    try {
+      await onDropStash(ref);
+    } finally {
+      setActionStashMap((prev) => {
+        const next = { ...prev };
+        delete next[ref];
+        return next;
+      });
+    }
+  };
 
   return (
     <div>
@@ -52,22 +80,27 @@ export function StashesPanel({
         </div>
       ) : (
         <Card className="p-2">
-          {stashes.map((s) => (
-            <div key={s.stashRef} className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0">
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-foreground/90">{s.message}</div>
-                <div className="text-[10px] font-mono text-muted-foreground/70">
-                  {s.stashRef} &middot; {s.createdAt}
+          {stashes.map((s) => {
+            const action = actionStashMap[s.stashRef];
+            return (
+              <div key={s.stashRef} className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0">
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs text-foreground/90">{s.message}</div>
+                  <div className="text-[10px] font-mono text-muted-foreground/70">
+                    {s.stashRef} &middot; {s.createdAt}
+                  </div>
                 </div>
+                <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => void handleApply(s.stashRef)}>
+                  {action === "apply" ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {action === "apply" ? "Applying…" : "Apply"}
+                </Button>
+                <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => void handleDrop(s.stashRef)}>
+                  {action === "drop" ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {action === "drop" ? "Dropping…" : "Drop"}
+                </Button>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => onApplyStash(s.stashRef)}>
-                Apply
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => onDropStash(s.stashRef)}>
-                Drop
-              </Button>
-            </div>
-          ))}
+            );
+          })}
         </Card>
       )}
     </div>

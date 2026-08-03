@@ -14,6 +14,7 @@ import {
   Download,
   GitCommit,
   GitPullRequest,
+  Loader2,
   RefreshCw,
   Upload,
   Wand2,
@@ -86,6 +87,10 @@ export function OverviewPanel({
   const [msg, setMsg] = useState("");
   const [generating, setGenerating] = useState(false);
   const [forking, setForking] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isCommittingAndPushing, setIsCommittingAndPushing] = useState(false);
+  const [isMergingWatched, setIsMergingWatched] = useState(false);
+  const [isRebasingWatched, setIsRebasingWatched] = useState(false);
   const [lastPushedAt, setLastPushedAt] = useState<number | null>(null);
   const [confirmMergeBranch, setConfirmMergeBranch] = useState<string | null>(null);
   const [confirmRebaseBranch, setConfirmRebaseBranch] = useState<string | null>(null);
@@ -113,6 +118,7 @@ export function OverviewPanel({
 
   const handleExecuteMergeWatched = async (targetBranch: string) => {
     if (!api) return;
+    setIsMergingWatched(true);
     try {
       await api.git.merge({ cwd, branch: targetBranch });
       await invalidateGitQueries(queryClient);
@@ -120,11 +126,14 @@ export function OverviewPanel({
       toastManager.add({ type: "success", title: `Merged ${targetBranch} into current branch` });
     } catch (error) {
       toastManager.add({ type: "error", title: "Merge failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setIsMergingWatched(false);
     }
   };
 
   const handleExecuteRebaseWatched = async (targetBranch: string) => {
     if (!api) return;
+    setIsRebasingWatched(true);
     try {
       await api.git.rebase({ cwd, branch: targetBranch });
       await invalidateGitQueries(queryClient);
@@ -132,6 +141,8 @@ export function OverviewPanel({
       toastManager.add({ type: "success", title: `Rebased current branch onto ${targetBranch}` });
     } catch (error) {
       toastManager.add({ type: "error", title: "Rebase failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setIsRebasingWatched(false);
     }
   };
 
@@ -208,6 +219,11 @@ export function OverviewPanel({
 
   const handleCommit = async (andPush = false) => {
     if (!api || !msg.trim()) return;
+    if (andPush) {
+      setIsCommittingAndPushing(true);
+    } else {
+      setIsCommitting(true);
+    }
     try {
       await api.git.runStackedAction({
         actionId: crypto.randomUUID(),
@@ -236,6 +252,9 @@ export function OverviewPanel({
           ? `${shortSha ? `Committed as ${shortSha}. ` : ""}Push failed: ${errorMsg}. You have ${countLabel} — click Push to retry.`
           : errorMsg,
       });
+    } finally {
+      setIsCommitting(false);
+      setIsCommittingAndPushing(false);
     }
   };
 
@@ -286,7 +305,7 @@ export function OverviewPanel({
         </p>
         <div className="flex items-center justify-center gap-3">
           <Button size="sm" disabled={forking} onClick={() => void handleCreateFork()}>
-            <GitPullRequest /> {forking ? "Forking…" : "Fork repository"}
+            {forking ? <Loader2 size={13} className="animate-spin" /> : <GitPullRequest />} {forking ? "Forking…" : "Fork repository"}
           </Button>
           <Button variant="ghost" size="sm" onClick={onGoToAccounts}>
             Check accounts
@@ -520,30 +539,33 @@ export function OverviewPanel({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={!stagedFiles.length || !repoState.canCommitLocally}
+              disabled={!stagedFiles.length || !repoState.canCommitLocally || isCommitting || isCommittingAndPushing}
               title={!stagedFiles.length ? "Stage some changes first" : undefined}
               onClick={() => void handleCommit(false)}
             >
-              <GitCommit /> {repoState.commitButtonLabel}
+              {isCommitting ? <Loader2 size={13} className="animate-spin" /> : <GitCommit />}
+              {isCommitting ? "Committing…" : repoState.commitButtonLabel}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              disabled={(!stagedFiles.length && !unstagedFiles.length) || generating}
+              disabled={(!stagedFiles.length && !unstagedFiles.length) || generating || isCommitting || isCommittingAndPushing}
               title="Fills the box from your changed file names"
               onClick={handleGenerate}
             >
-              <Wand2 className="size-3.5" /> {generating ? "Generating…" : "Generate message"}
+              {generating ? <Loader2 size={13} className="animate-spin" /> : <Wand2 className="size-3.5" />}
+              {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button
             variant="outline"
             size="sm"
-            disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush}
+            disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush || isCommitting || isCommittingAndPushing}
             title={repoState.pushDisabledReason ?? (!stagedFiles.length ? "Stage some changes first" : undefined)}
             onClick={() => void handleCommit(true)}
           >
-            <Upload /> Commit &amp; push
+            {isCommittingAndPushing ? <Loader2 size={13} className="animate-spin" /> : <Upload />}
+            {isCommittingAndPushing ? "Committing & pushing…" : "Commit & push"}
           </Button>
         </div>
 
@@ -657,8 +679,11 @@ export function OverviewPanel({
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setConfirmMergeBranch(null)}>Cancel</Button>
-              <Button size="sm" onClick={() => void handleExecuteMergeWatched(confirmMergeBranch)}>Confirm merge</Button>
+              <Button variant="outline" size="sm" disabled={isMergingWatched} onClick={() => setConfirmMergeBranch(null)}>Cancel</Button>
+              <Button size="sm" disabled={isMergingWatched} onClick={() => void handleExecuteMergeWatched(confirmMergeBranch)}>
+                {isMergingWatched ? <Loader2 size={13} className="animate-spin" /> : null}
+                {isMergingWatched ? "Merging…" : "Confirm merge"}
+              </Button>
             </DialogFooter>
           </DialogPopup>
         </Dialog>
@@ -676,8 +701,11 @@ export function OverviewPanel({
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setConfirmRebaseBranch(null)}>Cancel</Button>
-              <Button size="sm" onClick={() => void handleExecuteRebaseWatched(confirmRebaseBranch)}>Confirm rebase</Button>
+              <Button variant="outline" size="sm" disabled={isRebasingWatched} onClick={() => setConfirmRebaseBranch(null)}>Cancel</Button>
+              <Button size="sm" disabled={isRebasingWatched} onClick={() => void handleExecuteRebaseWatched(confirmRebaseBranch)}>
+                {isRebasingWatched ? <Loader2 size={13} className="animate-spin" /> : null}
+                {isRebasingWatched ? "Rebasing…" : "Confirm rebase"}
+              </Button>
             </DialogFooter>
           </DialogPopup>
         </Dialog>

@@ -1,4 +1,5 @@
 import type { GitEnvironmentResult } from "@tabs/contracts";
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
@@ -124,6 +125,8 @@ export function SettingsPanel({
   const [gitignoreChanged, setGitignoreChanged] = useState(false);
   const [newExclude, setNewExclude] = useState("");
   const [remotes, setRemotes] = useState<Array<{ name: string; url: string }>>([]);
+  const [isSavingIdentity, setIsSavingIdentity] = useState(false);
+  const [isSavingGitignore, setIsSavingGitignore] = useState(false);
   const api = readNativeApi();
 
 
@@ -190,6 +193,7 @@ export function SettingsPanel({
 
   const handleSaveIdentity = async () => {
     if (!api || !cwd) return;
+    setIsSavingIdentity(true);
     let currentConfig = "";
     try {
       try {
@@ -221,17 +225,22 @@ export function SettingsPanel({
         title: "Could not save Git identity",
         description: error instanceof Error ? error.message : "Write error",
       });
+    } finally {
+      setIsSavingIdentity(false);
     }
   };
 
   const handleSaveGitignore = async () => {
     if (!api) return;
+    setIsSavingGitignore(true);
     try {
       await api.projects.writeFile({ cwd, relativePath: ".gitignore", contents: gitignore });
       setGitignoreChanged(false);
       toastManager.add({ type: "success", title: "Saved .gitignore" });
     } catch (error) {
       toastManager.add({ type: "error", title: "Could not save .gitignore", description: error instanceof Error ? error.message : "Write error" });
+    } finally {
+      setIsSavingGitignore(false);
     }
   };
 
@@ -246,8 +255,9 @@ export function SettingsPanel({
         <Field label="Email">
           <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
         </Field>
-        <Button size="sm" disabled={!name.trim() || !email.trim()} onClick={handleSaveIdentity}>
-          Save identity
+        <Button size="sm" disabled={!name.trim() || !email.trim() || isSavingIdentity} onClick={() => void handleSaveIdentity()}>
+          {isSavingIdentity ? <Loader2 size={12} className="animate-spin" /> : null}
+          {isSavingIdentity ? "Saving identity…" : "Save identity"}
         </Button>
       </Card>
 
@@ -329,8 +339,9 @@ export function SettingsPanel({
           className="w-full border border-border rounded-lg text-foreground bg-background font-mono text-[11px] placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
         />
         <div className="mt-2.5">
-          <Button size="sm" disabled={!gitignoreChanged} onClick={() => void handleSaveGitignore()}>
-            Save .gitignore
+          <Button size="sm" disabled={!gitignoreChanged || isSavingGitignore} onClick={() => void handleSaveGitignore()}>
+            {isSavingGitignore ? <Loader2 size={12} className="animate-spin" /> : null}
+            {isSavingGitignore ? "Saving .gitignore…" : "Save .gitignore"}
           </Button>
         </div>
       </Card>

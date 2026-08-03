@@ -1,5 +1,6 @@
 import type { GitHubAccount } from "@tabs/contracts";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Loader2 } from "lucide-react";
+import { useState } from "react";
 
 import { Button } from "../ui/button";
 import { Banner, Card, PanelToolbar, SectionLabel } from "./gitPrimitives";
@@ -7,11 +8,13 @@ import { Banner, Card, PanelToolbar, SectionLabel } from "./gitPrimitives";
 function AccountRow({
   account: a,
   isActive,
+  action,
   onSwitch,
   onRemove,
 }: {
   account: GitHubAccount;
   isActive: boolean;
+  action?: "switch" | "remove" | undefined;
   onSwitch: (login: string) => void;
   onRemove: (login: string) => void;
 }) {
@@ -38,9 +41,15 @@ function AccountRow({
           ))}
         </div>
       </div>
-      {!isActive && <Button variant="ghost" size="sm" onClick={() => onSwitch(a.login)}>Switch to this account</Button>}
-      <Button variant="ghost" size="sm" onClick={() => onRemove(a.login)}>
-        Remove
+      {!isActive && (
+        <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => onSwitch(a.login)}>
+          {action === "switch" ? <Loader2 size={12} className="animate-spin" /> : null}
+          {action === "switch" ? "Switching…" : "Switch to this account"}
+        </Button>
+      )}
+      <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => onRemove(a.login)}>
+        {action === "remove" ? <Loader2 size={12} className="animate-spin" /> : null}
+        {action === "remove" ? "Removing…" : "Remove"}
       </Button>
     </div>
   );
@@ -60,9 +69,37 @@ export function AccountsPanel({
   repoName: string;
   credentialMismatch?: boolean;
   onOpenConnectAccount: () => void;
-  onSwitchAccount: (login: string) => void;
-  onRemoveAccount: (login: string) => void;
+  onSwitchAccount: (login: string) => void | Promise<void>;
+  onRemoveAccount: (login: string) => void | Promise<void>;
 }) {
+  const [actionAccountMap, setActionAccountMap] = useState<Record<string, "switch" | "remove">>({});
+
+  const handleSwitch = async (login: string) => {
+    setActionAccountMap((prev) => ({ ...prev, [login]: "switch" }));
+    try {
+      await onSwitchAccount(login);
+    } finally {
+      setActionAccountMap((prev) => {
+        const next = { ...prev };
+        delete next[login];
+        return next;
+      });
+    }
+  };
+
+  const handleRemove = async (login: string) => {
+    setActionAccountMap((prev) => ({ ...prev, [login]: "remove" }));
+    try {
+      await onRemoveAccount(login);
+    } finally {
+      setActionAccountMap((prev) => {
+        const next = { ...prev };
+        delete next[login];
+        return next;
+      });
+    }
+  };
+
   return (
     <div>
       <PanelToolbar>
@@ -80,7 +117,14 @@ export function AccountsPanel({
       )}
       <Card className="p-2 mb-4">
         {accounts.map((a) => (
-          <AccountRow key={a.login} account={a} isActive={a.login === activeAccountLogin} onSwitch={onSwitchAccount} onRemove={onRemoveAccount} />
+          <AccountRow
+            key={a.login}
+            account={a}
+            isActive={a.login === activeAccountLogin}
+            action={actionAccountMap[a.login]}
+            onSwitch={(login) => void handleSwitch(login)}
+            onRemove={(login) => void handleRemove(login)}
+          />
         ))}
         {accounts.length === 0 && <div className="text-center text-[11px] text-muted-foreground/50 py-4">No accounts connected</div>}
       </Card>
@@ -94,7 +138,7 @@ export function AccountsPanel({
         <span className="text-xs text-muted-foreground/80">Push and open PRs as</span>
         <select
           value={activeAccountLogin || ""}
-          onChange={(e) => onSwitchAccount(e.target.value)}
+          onChange={(e) => void handleSwitch(e.target.value)}
           className="border border-border rounded-md text-xs font-mono text-foreground/90 bg-background px-2 py-1 outline-none"
         >
           {accounts.map((a) => (

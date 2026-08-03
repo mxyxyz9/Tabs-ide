@@ -175,29 +175,51 @@ export function InlineForm({
 }: {
   placeholder: string;
   initial?: string;
-  onSubmit: (val: string) => void;
+  onSubmit: (val: string) => void | Promise<void>;
   onCancel: () => void;
   submitLabel?: string;
   className?: string;
 }) {
   const [value, setValue] = useState(initial);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!value.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(value.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const loadingLabel = (() => {
+    if (submitLabel.toLowerCase() === "create") return "Creating…";
+    if (submitLabel.toLowerCase() === "create tag") return "Creating tag…";
+    if (submitLabel.toLowerCase() === "rename") return "Renaming…";
+    if (submitLabel.toLowerCase() === "save") return "Saving…";
+    return submitLabel.replace(/e$/i, "") + "ing…";
+  })();
+
   return (
     <div className={`flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
       <input
         autoFocus
+        disabled={submitting}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && value.trim()) onSubmit(value.trim());
-          if (e.key === "Escape") onCancel();
+          if (e.key === "Enter") void handleSubmit();
+          if (e.key === "Escape" && !submitting) onCancel();
         }}
         placeholder={placeholder}
-        className="flex-1 bg-transparent text-xs font-mono text-foreground outline-none min-w-0"
+        className="flex-1 bg-transparent text-xs font-mono text-foreground outline-none min-w-0 disabled:opacity-50"
       />
-      <Button size="sm" disabled={!value.trim()} onClick={() => value.trim() && onSubmit(value.trim())}>
-        {submitLabel}
+      <Button size="sm" disabled={!value.trim() || submitting} onClick={() => void handleSubmit()}>
+        {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+        {submitting ? loadingLabel : submitLabel}
       </Button>
-      <Button variant="ghost" size="sm" onClick={onCancel}>
+      <Button variant="ghost" size="sm" disabled={submitting} onClick={onCancel}>
         Cancel
       </Button>
     </div>

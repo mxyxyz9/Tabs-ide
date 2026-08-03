@@ -6,6 +6,7 @@ import {
   CheckSquare,
   Download,
   GitCompare,
+  Loader2,
   MousePointerClick,
   RefreshCw,
   Search,
@@ -72,6 +73,7 @@ export function DivergencePanel({
 }) {
   const [confirmMergeBranch, setConfirmMergeBranch] = useState<string | null>(null);
   const [confirmRebaseBranch, setConfirmRebaseBranch] = useState<string | null>(null);
+  const [isSubmittingModal, setIsSubmittingModal] = useState(false);
 
   // Search & Tab State
   const [searchQuery, setSearchQuery] = useState("");
@@ -256,6 +258,7 @@ export function DivergencePanel({
 
   const handleExecuteMerge = async (targetBranch: string) => {
     if (!api) return;
+    setIsSubmittingModal(true);
     try {
       await api.git.merge({ cwd, branch: targetBranch });
       await invalidateGitQueries(queryClient);
@@ -267,11 +270,14 @@ export function DivergencePanel({
         title: "Merge failed",
         description: toGitUserFacingErrorMessage(error),
       });
+    } finally {
+      setIsSubmittingModal(false);
     }
   };
 
   const handleExecuteRebase = async (targetBranch: string) => {
     if (!api) return;
+    setIsSubmittingModal(true);
     try {
       await api.git.rebase({ cwd, branch: targetBranch });
       await invalidateGitQueries(queryClient);
@@ -283,6 +289,8 @@ export function DivergencePanel({
         title: "Rebase failed",
         description: toGitUserFacingErrorMessage(error),
       });
+    } finally {
+      setIsSubmittingModal(false);
     }
   };
 
@@ -316,7 +324,7 @@ export function DivergencePanel({
             disabled={isScanning}
             onClick={onScanAllBranches}
           >
-            <RefreshCw />
+            {isScanning ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw />}
             {isScanning
               ? "Scanning all branches…"
               : isFullScan
@@ -627,7 +635,7 @@ export function DivergencePanel({
 
       {/* Confirmation Modals */}
       {confirmMergeBranch && (
-        <Dialog open onOpenChange={(open) => { if (!open) setConfirmMergeBranch(null); }}>
+        <Dialog open onOpenChange={(open) => { if (!open && !isSubmittingModal) setConfirmMergeBranch(null); }}>
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
               <DialogTitle>Merge {confirmMergeBranch}</DialogTitle>
@@ -639,11 +647,12 @@ export function DivergencePanel({
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setConfirmMergeBranch(null)}>
+              <Button variant="outline" size="sm" disabled={isSubmittingModal} onClick={() => setConfirmMergeBranch(null)}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={() => void handleExecuteMerge(confirmMergeBranch)}>
-                <Download /> Merge {confirmMergeBranch}
+              <Button size="sm" disabled={isSubmittingModal} onClick={() => void handleExecuteMerge(confirmMergeBranch)}>
+                {isSubmittingModal ? <Loader2 size={13} className="animate-spin" /> : <Download />}
+                {isSubmittingModal ? "Merging…" : `Merge ${confirmMergeBranch}`}
               </Button>
             </DialogFooter>
           </DialogPopup>
@@ -651,7 +660,7 @@ export function DivergencePanel({
       )}
 
       {confirmRebaseBranch && (
-        <Dialog open onOpenChange={(open) => { if (!open) setConfirmRebaseBranch(null); }}>
+        <Dialog open onOpenChange={(open) => { if (!open && !isSubmittingModal) setConfirmRebaseBranch(null); }}>
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
               <DialogTitle>Rebase onto {confirmRebaseBranch}</DialogTitle>
@@ -663,11 +672,12 @@ export function DivergencePanel({
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" onClick={() => setConfirmRebaseBranch(null)}>
+              <Button variant="outline" size="sm" disabled={isSubmittingModal} onClick={() => setConfirmRebaseBranch(null)}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={() => void handleExecuteRebase(confirmRebaseBranch)}>
-                Rebase onto {confirmRebaseBranch}
+              <Button size="sm" disabled={isSubmittingModal} onClick={() => void handleExecuteRebase(confirmRebaseBranch)}>
+                {isSubmittingModal ? <Loader2 size={13} className="animate-spin" /> : null}
+                {isSubmittingModal ? "Rebasing…" : `Rebase onto ${confirmRebaseBranch}`}
               </Button>
             </DialogFooter>
           </DialogPopup>

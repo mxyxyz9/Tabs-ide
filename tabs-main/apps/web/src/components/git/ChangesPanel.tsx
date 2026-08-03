@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   GitCommit,
+  Loader2,
   Minus,
   Plus,
   RotateCcw,
@@ -47,6 +48,7 @@ export function FileRow({
   cwd,
   f,
   staged,
+  rowLoadingAction,
   onOpenDiff,
   onToggleStage,
   onDiscard,
@@ -54,6 +56,7 @@ export function FileRow({
   cwd?: string;
   f: GitStatusFile;
   staged: boolean;
+  rowLoadingAction?: "stage" | "unstage" | "discard" | null | undefined;
   onOpenDiff: (f: GitStatusFile) => void;
   onToggleStage: (f: GitStatusFile) => void;
   onDiscard: (f: GitStatusFile) => void;
@@ -92,6 +95,8 @@ export function FileRow({
       .finally(() => setLoadingDiff(false));
   };
 
+  const isRowLoading = Boolean(rowLoadingAction);
+
   return (
     <div className="w-full border-b border-border/50 last:border-0">
       <div className="group w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
@@ -129,25 +134,33 @@ export function FileRow({
         </button>
         <button
           type="button"
+          disabled={isRowLoading}
           onClick={(e) => {
             e.stopPropagation();
-            onDiscard(f);
+            if (!isRowLoading) onDiscard(f);
           }}
           title="Discard changes to this file"
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer"
+          className={`${rowLoadingAction === "discard" ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer disabled:pointer-events-none`}
         >
-          <Trash2 size={10} />
+          {rowLoadingAction === "discard" ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
         </button>
         <button
           type="button"
+          disabled={isRowLoading}
           onClick={(e) => {
             e.stopPropagation();
-            onToggleStage(f);
+            if (!isRowLoading) onToggleStage(f);
           }}
           title={staged ? "Unstage file" : "Stage file"}
-          className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer"
+          className={`${rowLoadingAction === "stage" || rowLoadingAction === "unstage" ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer disabled:pointer-events-none`}
         >
-          {staged ? <Minus size={10} /> : <Plus size={10} />}
+          {rowLoadingAction === "stage" || rowLoadingAction === "unstage" ? (
+            <Loader2 size={10} className="animate-spin" />
+          ) : staged ? (
+            <Minus size={10} />
+          ) : (
+            <Plus size={10} />
+          )}
         </button>
       </div>
 
@@ -375,6 +388,11 @@ export function ChangesPanel({
   const [generating, setGenerating] = useState(false);
   const [amend, setAmend] = useState(false);
   const [conflictResolutions, setConflictResolutions] = useState<Record<string, { strategy: string; text?: string }>>({});
+  const [isStagingAll, setIsStagingAll] = useState(false);
+  const [isUnstagingAll, setIsUnstagingAll] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isCommittingAndPushing, setIsCommittingAndPushing] = useState(false);
+  const [fileRowLoadingMap, setFileRowLoadingMap] = useState<Record<string, "stage" | "unstage" | "discard">>({});
 
   const api = readNativeApi();
   const queryClient = useQueryClient();
@@ -431,6 +449,7 @@ export function ChangesPanel({
 
   const toggleStage = async (f: GitStatusFile, staged: boolean) => {
     if (!api) return;
+    setFileRowLoadingMap((prev) => ({ ...prev, [f.path]: staged ? "unstage" : "stage" }));
     try {
       if (staged) {
         await api.git.unstageFiles({ cwd, paths: [f.path] });
@@ -440,37 +459,56 @@ export function ChangesPanel({
       await invalidateGitQueries(queryClient);
     } catch (error) {
       toastManager.add({ type: "error", title: staged ? "Unstage failed" : "Stage failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setFileRowLoadingMap((prev) => {
+        const next = { ...prev };
+        delete next[f.path];
+        return next;
+      });
     }
   };
 
   const stageAll = async () => {
     if (!api || !unstagedFiles.length) return;
+    setIsStagingAll(true);
     try {
       await api.git.stageFiles({ cwd, paths: unstagedFiles.map((f) => f.path) });
       await invalidateGitQueries(queryClient);
     } catch (error) {
       toastManager.add({ type: "error", title: "Stage all failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setIsStagingAll(false);
     }
   };
 
   const unstageAll = async () => {
     if (!api || !stagedFiles.length) return;
+    setIsUnstagingAll(true);
     try {
       await api.git.unstageFiles({ cwd, paths: stagedFiles.map((f) => f.path) });
       await invalidateGitQueries(queryClient);
     } catch (error) {
       toastManager.add({ type: "error", title: "Unstage all failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setIsUnstagingAll(false);
     }
   };
 
   const discardFile = async (f: GitStatusFile) => {
     if (!api) return;
+    setFileRowLoadingMap((prev) => ({ ...prev, [f.path]: "discard" }));
     try {
       await api.git.discardChanges({ cwd, paths: [f.path] });
       await invalidateGitQueries(queryClient);
       toastManager.add({ type: "success", title: `Discarded ${f.path}` });
     } catch (error) {
       toastManager.add({ type: "error", title: "Discard failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setFileRowLoadingMap((prev) => {
+        const next = { ...prev };
+        delete next[f.path];
+        return next;
+      });
     }
   };
 
@@ -485,6 +523,11 @@ export function ChangesPanel({
 
   const handleCommit = async (andPush = false) => {
     if (!api) return;
+    if (andPush) {
+      setIsCommittingAndPushing(true);
+    } else {
+      setIsCommitting(true);
+    }
     try {
       if (amend) {
         await api.git.amendCommit({ cwd, message: msg.trim() || undefined });
@@ -516,6 +559,9 @@ export function ChangesPanel({
           ? `${shortSha ? `Committed as ${shortSha}. ` : ""}Push failed: ${errorMsg}. You have ${countLabel} — click Push to retry.`
           : errorMsg,
       });
+    } finally {
+      setIsCommitting(false);
+      setIsCommittingAndPushing(false);
     }
   };
 
@@ -557,8 +603,9 @@ export function ChangesPanel({
       <SectionLabel
         action={
           stagedFiles.length > 0 ? (
-            <Button variant="ghost" size="sm" onClick={() => void unstageAll()}>
-              Unstage all
+            <Button variant="ghost" size="sm" disabled={isUnstagingAll || isStagingAll} onClick={() => void unstageAll()}>
+              {isUnstagingAll ? <Loader2 size={12} className="animate-spin" /> : null}
+              {isUnstagingAll ? "Unstaging all…" : "Unstage all"}
             </Button>
           ) : undefined
         }
@@ -575,6 +622,7 @@ export function ChangesPanel({
               cwd={cwd}
               f={f}
               staged
+              rowLoadingAction={fileRowLoadingMap[f.path]}
               onOpenDiff={onOpenDiff}
               onToggleStage={(file) => void toggleStage(file, true)}
               onDiscard={(file) => void discardFile(file)}
@@ -588,8 +636,9 @@ export function ChangesPanel({
         action={
           <div className="flex items-center gap-2">
             {unstagedFiles.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => void stageAll()}>
-                Stage all
+              <Button variant="ghost" size="sm" disabled={isStagingAll || isUnstagingAll} onClick={() => void stageAll()}>
+                {isStagingAll ? <Loader2 size={12} className="animate-spin" /> : null}
+                {isStagingAll ? "Staging all…" : "Stage all"}
               </Button>
             )}
             {totalChanged > 0 && (
@@ -612,6 +661,7 @@ export function ChangesPanel({
               cwd={cwd}
               f={f}
               staged={false}
+              rowLoadingAction={fileRowLoadingMap[f.path]}
               onOpenDiff={onOpenDiff}
               onToggleStage={(file) => void toggleStage(file, false)}
               onDiscard={(file) => void discardFile(file)}
@@ -649,30 +699,33 @@ export function ChangesPanel({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={!stagedFiles.length || !repoState.canCommitLocally}
+              disabled={!stagedFiles.length || !repoState.canCommitLocally || isCommitting || isCommittingAndPushing}
               title={!stagedFiles.length ? "Nothing staged yet" : undefined}
               onClick={() => void handleCommit(false)}
             >
-              <GitCommit /> {amend ? "Amend commit" : repoState.commitButtonLabel}
+              {isCommitting ? <Loader2 size={13} className="animate-spin" /> : <GitCommit />}
+              {isCommitting ? (amend ? "Amending…" : "Committing…") : amend ? "Amend commit" : repoState.commitButtonLabel}
             </Button>
             <Button
               variant="ghost"
               size="sm"
-              disabled={!stagedFiles.length || generating}
+              disabled={!stagedFiles.length || generating || isCommitting || isCommittingAndPushing}
               title="Generates a message from the staged diff"
               onClick={handleGenerate}
             >
-              <Wand2 className="size-3.5" /> {generating ? "Generating…" : "Generate message"}
+              {generating ? <Loader2 size={13} className="animate-spin" /> : <Wand2 className="size-3.5" />}
+              {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button
             variant="outline"
             size="sm"
-            disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush}
+            disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush || isCommitting || isCommittingAndPushing}
             title={repoState.pushDisabledReason ?? (!stagedFiles.length ? "Nothing staged yet" : undefined)}
             onClick={() => void handleCommit(true)}
           >
-            <Upload /> Commit &amp; push
+            {isCommittingAndPushing ? <Loader2 size={13} className="animate-spin" /> : <Upload />}
+            {isCommittingAndPushing ? "Committing & pushing…" : "Commit & push"}
           </Button>
         </div>
       </Card>

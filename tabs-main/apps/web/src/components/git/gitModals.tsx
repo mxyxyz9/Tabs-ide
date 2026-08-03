@@ -49,17 +49,28 @@ export function ResetModal({
   onClose,
 }: {
   commit: GitHistoryCommit;
-  onReset: (mode: "soft" | "mixed" | "hard") => void;
+  onReset: (mode: "soft" | "mixed" | "hard") => void | Promise<void>;
   onClose: () => void;
 }) {
   const [mode, setMode] = useState<"soft" | "mixed" | "hard">("mixed");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleReset = async () => {
+    setSubmitting(true);
+    try {
+      await onReset(mode);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const MODES = [
     { id: "soft" as const, label: "Soft", desc: "Move HEAD only. All changes since stay staged, ready to re-commit." },
     { id: "mixed" as const, label: "Mixed", desc: "Move HEAD and unstage. Changes since stay in your working tree." },
     { id: "hard" as const, label: "Hard", desc: "Move HEAD and discard everything — commits and working tree changes both. Cannot be undone." },
   ];
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2 max-w-md">
         <DialogHeader>
           <DialogTitle>Reset to this commit</DialogTitle>
@@ -95,11 +106,12 @@ export function ResetModal({
           )}
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" variant={mode === "hard" ? "destructive" : "default"} onClick={() => onReset(mode)}>
-            Reset ({mode})
+          <Button type="button" size="sm" variant={mode === "hard" ? "destructive" : "default"} disabled={submitting} onClick={() => void handleReset()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+            {submitting ? "Resetting…" : `Reset (${mode})`}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -134,10 +146,21 @@ export function ForcePushModal({ branch, onConfirm, onClose }: { branch: string;
   );
 }
 
-export function StashModal({ onStash, onClose }: { onStash: (msg: string) => void; onClose: () => void }) {
+export function StashModal({ onStash, onClose }: { onStash: (msg: string) => void | Promise<void>; onClose: () => void }) {
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleStash = async () => {
+    setSubmitting(true);
+    try {
+      await onStash(message.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Stash changes</DialogTitle>
@@ -149,11 +172,12 @@ export function StashModal({ onStash, onClose }: { onStash: (msg: string) => voi
           <p className="text-[11px] text-muted-foreground/70 leading-relaxed">Sets aside everything currently staged and unstaged, and clears your working tree.</p>
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" onClick={() => onStash(message.trim())}>
-            Stash changes
+          <Button type="button" size="sm" disabled={submitting} onClick={() => void handleStash()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+            {submitting ? "Stashing…" : "Stash changes"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -172,11 +196,22 @@ export function PullSourceModal({
   currentBranch: string;
   remoteName?: string;
   onClose: () => void;
-  onConfirm: (sourceBranch: string) => void;
+  onConfirm: (sourceBranch: string) => void | Promise<void>;
 }) {
   const [source, setSource] = useState(currentBranch);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await onConfirm(source);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Stash, pull & reapply</DialogTitle>
@@ -197,11 +232,12 @@ export function PullSourceModal({
           </p>
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" onClick={() => onConfirm(source)}>
-            <RefreshCw /> Stash, pull &amp; reapply
+          <Button type="button" size="sm" disabled={submitting} onClick={() => void handleConfirm()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw />}
+            {submitting ? "Stashing, pulling & reapplying…" : "Stash, pull & reapply"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -209,9 +245,20 @@ export function PullSourceModal({
   );
 }
 
-export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; onConfirm: () => void; onClose: () => void }) {
+export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; onConfirm: () => void | Promise<void>; onClose: () => void }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleConfirm = async () => {
+    setSubmitting(true);
+    try {
+      await onConfirm();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Discard all changes</DialogTitle>
@@ -224,11 +271,12 @@ export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; 
           />
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={onConfirm}>
-            Discard everything
+          <Button type="button" size="sm" variant="destructive" disabled={submitting} onClick={() => void handleConfirm()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+            {submitting ? "Discarding…" : "Discard everything"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -253,9 +301,19 @@ export function CreatePRModal({
   const [base, setBase] = useState(branches.find((b) => b.name !== currentBranch)?.name || "main");
   const [body, setBody] = useState("");
   const [draft, setDraft] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreate = async () => {
+    setSubmitting(true);
+    try {
+      await onCreate({ title: title.trim(), base, body: body.trim(), draft });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2">
         <DialogHeader>
           <DialogTitle>Create pull request</DialogTitle>
@@ -298,11 +356,12 @@ export function CreatePRModal({
           </div>
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={!title.trim()} onClick={() => void onCreate({ title: title.trim(), base, body: body.trim(), draft })}>
-            {draft ? "Create draft" : "Create pull request"}
+          <Button type="button" size="sm" disabled={!title.trim() || submitting} onClick={() => void handleCreate()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+            {submitting ? (draft ? "Creating draft…" : "Creating pull request…") : draft ? "Create draft" : "Create pull request"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -310,11 +369,22 @@ export function CreatePRModal({
   );
 }
 
-export function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; url: string }) => void; onClose: () => void }) {
+export function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; url: string }) => void | Promise<void>; onClose: () => void }) {
   const [name, setName] = useState("origin");
   const [url, setUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAdd = async () => {
+    setSubmitting(true);
+    try {
+      await onAdd({ name: name.trim() || "origin", url: url.trim() });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2 max-w-md">
         <DialogHeader>
           <DialogTitle>Add remote</DialogTitle>
@@ -328,11 +398,12 @@ export function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; 
           </Field>
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={!url.trim()} onClick={() => onAdd({ name: name.trim() || "origin", url: url.trim() })}>
-            Add remote
+          <Button type="button" size="sm" disabled={!url.trim() || submitting} onClick={() => void handleAdd()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+            {submitting ? "Adding remote…" : "Add remote"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -424,14 +495,25 @@ export function NewWorktreeModal({
 }: {
   branches: ReadonlyArray<GitBranchType>;
   currentBranch: string;
-  onCreate: (input: { base: string; branch: string; path: string }) => void;
+  onCreate: (input: { base: string; branch: string; path: string }) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [base, setBase] = useState(currentBranch);
   const [branch, setBranch] = useState("");
   const [path, setPath] = useState("../worktree-folder");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreate = async () => {
+    setSubmitting(true);
+    try {
+      await onCreate({ base, branch: branch.trim() || base, path: path.trim() });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
       <DialogPopup className="git-tool-v2 max-w-md">
         <DialogHeader>
           <DialogTitle>New worktree</DialogTitle>
@@ -454,11 +536,12 @@ export function NewWorktreeModal({
           </Field>
         </DialogPanel>
         <DialogFooter>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={!path.trim()} onClick={() => onCreate({ base, branch: branch.trim() || base, path: path.trim() })}>
-            Create worktree
+          <Button type="button" size="sm" disabled={!path.trim() || submitting} onClick={() => void handleCreate()}>
+            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
+            {submitting ? "Creating worktree…" : "Create worktree"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -573,7 +656,7 @@ export function DraftReleaseModal({
 }: {
   tags: ReadonlyArray<{ name: string }>;
   commits: ReadonlyArray<GitHistoryCommit>;
-  onPublish: (rel: { tag: string; title: string; notes: string; prerelease: boolean }) => void;
+  onPublish: (rel: { tag: string; title: string; notes: string; prerelease: boolean }) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [tag, setTag] = useState(tags[0]?.name || "__new__");
@@ -581,7 +664,23 @@ export function DraftReleaseModal({
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [prerelease, setPrerelease] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const effectiveTag = tag === "__new__" ? customTag.trim() : tag;
+
+  const handlePublish = async () => {
+    if (!effectiveTag) return;
+    setSubmitting(true);
+    try {
+      await onPublish({
+        tag: effectiveTag,
+        title: title.trim() || effectiveTag,
+        notes: notes.trim(),
+        prerelease,
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const generateNotes = () => {
     const bullets = commits.slice(0, 8).map((c) => `* ${c.subject} (${c.shortSha})`).join("\n");
@@ -591,11 +690,11 @@ export function DraftReleaseModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogPopup className="git-tool-v2 max-w-4xl p-0 overflow-hidden border-border bg-card shadow-2xl">
-        <div className="flex flex-col md:flex-row min-h-[520px]">
-          {/* Left Control Panel */}
-          <div className="w-full md:w-[320px] shrink-0 bg-muted/20 border-r border-border p-6 flex flex-col justify-between space-y-6">
+    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+      <DialogPopup className="git-tool-v2 max-w-4xl w-[90vw] h-[85vh] p-0 overflow-hidden border-border/80 shadow-2xl">
+        <div className="flex h-full w-full">
+          {/* Left Configuration Sidebar */}
+          <div className="w-80 shrink-0 border-r border-border/60 bg-muted/20 p-6 flex flex-col justify-between">
             <div className="space-y-5">
               <div>
                 <h3 className="text-lg font-semibold text-foreground tracking-tight">Draft a release</h3>
@@ -658,25 +757,18 @@ export function DraftReleaseModal({
 
             {/* Footer Buttons */}
             <div className="flex items-center gap-2 pt-4 border-t border-border/50">
-              <Button type="button" variant="outline" size="sm" className="flex-1" onClick={onClose}>
+              <Button type="button" variant="outline" size="sm" className="flex-1" disabled={submitting} onClick={onClose}>
                 Cancel
               </Button>
               <Button
                 type="button"
                 size="sm"
                 className="flex-1 gap-1.5"
-                disabled={!effectiveTag}
-                onClick={() =>
-                  onPublish({
-                    tag: effectiveTag,
-                    title: title.trim() || effectiveTag,
-                    notes: notes.trim(),
-                    prerelease,
-                  })
-                }
+                disabled={!effectiveTag || submitting}
+                onClick={() => void handlePublish()}
               >
-                <Rocket size={13} />
-                <span>Publish release</span>
+                {submitting ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
+                <span>{submitting ? "Publishing release…" : "Publish release"}</span>
               </Button>
             </div>
           </div>
