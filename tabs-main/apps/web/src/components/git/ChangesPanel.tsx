@@ -4,6 +4,7 @@ import type {
   GitListBranchesResult,
   GitStatusFile,
   GitStatusResult,
+  ModelSelection,
 } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,8 +14,8 @@ import {
   Minus,
   Plus,
   RotateCcw,
-  Sparkles,
   Trash2,
+  Undo2,
   Upload,
   Wand2,
 } from "lucide-react";
@@ -34,6 +35,7 @@ import {
   Card,
   DiffSummaryCard,
   FilePathLabel,
+  GitModelPicker,
   SectionLabel,
 } from "./gitPrimitives";
 
@@ -396,9 +398,33 @@ export function ChangesPanel({
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCommittingAndPushing, setIsCommittingAndPushing] = useState(false);
   const [fileRowLoadingMap, setFileRowLoadingMap] = useState<Record<string, "stage" | "unstage" | "discard">>({});
-  const [diffSummaryResult, setDiffSummaryResult] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(null);
+  const [diffSummaryResult, setDiffSummaryResultState] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(() => {
+    if (!cwd) return null;
+    try {
+      const cached = sessionStorage.getItem(`tabs_git_summary_${cwd}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const setDiffSummaryResult = (val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null) => {
+    setDiffSummaryResultState(val);
+    if (cwd) {
+      try {
+        if (val) {
+          sessionStorage.setItem(`tabs_git_summary_${cwd}`, JSON.stringify(val));
+        } else {
+          sessionStorage.removeItem(`tabs_git_summary_${cwd}`);
+        }
+      } catch {
+        // Ignore session storage errors
+      }
+    }
+  };
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ModelSelection | undefined>(undefined);
 
   const api = readNativeApi();
   const queryClient = useQueryClient();
@@ -579,6 +605,7 @@ export function ChangesPanel({
       const res = await api.git.generateDiffSummary({
         cwd,
         target: { kind: "working_tree" },
+        ...(selectedModel ? { modelSelection: selectedModel } : {}),
       });
       setDiffSummaryResult(res);
     } catch (err) {
@@ -754,16 +781,19 @@ export function ChangesPanel({
               {isCommitting ? <Loader2 size={13} className="animate-spin" /> : <GitCommit />}
               {isCommitting ? (amend ? "Amending…" : "Committing…") : amend ? "Amend commit" : repoState.commitButtonLabel}
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={totalChanged === 0 || isSummarizing || isCommitting || isCommittingAndPushing}
-              title={totalChanged === 0 ? "No changes in working tree" : "Summarize changes with AI"}
-              onClick={() => void handleSummarizeChanges()}
-            >
-              {isSummarizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles className="size-3.5 text-primary" />}
-              {isSummarizing ? "Summarizing…" : "Summarize changes"}
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={totalChanged === 0 || isSummarizing || isCommitting || isCommittingAndPushing}
+                title={totalChanged === 0 ? "No changes in working tree" : "Summarize changes with AI"}
+                onClick={() => void handleSummarizeChanges()}
+              >
+                {isSummarizing ? <Loader2 size={13} className="animate-spin" /> : <Wand2 className="size-3.5 text-primary" />}
+                {isSummarizing ? "Summarizing…" : "Summarize changes"}
+              </Button>
+              <GitModelPicker selection={selectedModel} onSelect={setSelectedModel} />
+            </div>
             <Button
               variant="ghost"
               size="sm"

@@ -24,7 +24,6 @@ import {
   RefreshCwIcon,
   RotateCcwIcon,
   SlidersHorizontalIcon,
-  SparklesIcon,
   Undo2Icon,
   XIcon,
   GitBranchIcon,
@@ -79,6 +78,7 @@ import { TraitsPicker } from "../components/chat/TraitsPicker";
 import {
   ClaudeAI,
   CursorIcon,
+  GoogleGemini,
   GrokIcon,
   type Icon,
   OpenAI,
@@ -91,6 +91,7 @@ const PROVIDER_ICONS_BY_KIND: Record<string, Icon> = {
   cursor: CursorIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
+  gemini: GoogleGemini,
 };
 import { Badge } from "../components/ui/badge";
 import {

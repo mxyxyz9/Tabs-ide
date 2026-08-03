@@ -16,7 +16,7 @@ import {
   Search,
   Send,
   Settings,
-  Sparkles,
+  Wand2,
   Wrench,
   X,
 } from "lucide-react";
@@ -451,7 +451,7 @@ export const WorkbenchMiniPreview: React.FC<WorkbenchMiniPreviewProps> = ({ conf
 
             <div className="rounded-2xl border p-3.5 space-y-2 shadow-xs" style={{ backgroundColor: cardBg, color: cardFg, borderColor: sideBorder }}>
               <div className="flex items-center gap-2">
-                <Sparkles className="size-4" style={{ color: config.colors.primary }} />
+                <Wand2 className="size-4" style={{ color: config.colors.primary }} />
                 <span className="font-bold text-xs" style={{ color: cardFg }}>Antigravity Agent</span>
               </div>
               <p className="text-xs leading-relaxed" style={{ color: cardFg, opacity: 0.9 }}>

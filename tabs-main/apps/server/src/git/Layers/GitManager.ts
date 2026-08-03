@@ -27,6 +27,11 @@ import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli } from "../Services/GitHubCli.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { runStaticAnalysis } from "../../staticAnalysis/StaticAnalysisService.ts";
+import {
+  buildStaticAnalysisContext,
+  extractChangedFilesFromPatch,
+} from "../../staticAnalysis/ContextBuilder.ts";
 
 const COMMIT_TIMEOUT_MS = 10 * 60_000;
 const MAX_PROGRESS_TEXT_LENGTH = 500;
@@ -1394,7 +1399,10 @@ export const makeGitManager = Effect.gen(function* () {
   )((input) =>
     Effect.gen(function* () {
       const settings = yield* serverSettingsService.getSettings;
-      const modelSelection = settings.textGenerationModelSelection;
+      const modelSelection =
+        input.modelSelection ??
+        settings.gitAi?.gitTextGenerationModelSelection ??
+        settings.textGenerationModelSelection;
       if (!modelSelection || !modelSelection.instanceId || !modelSelection.model) {
         return yield* gitManagerError(
           "generateDiffSummary",
@@ -1431,7 +1439,7 @@ export const makeGitManager = Effect.gen(function* () {
         }
       }
 
-      if (!rawPatch.trim()) {
+      if (!rawPatch.trim() && !input.userHint) {
         return {
           summary: "No changes detected.",
           keyChanges: "- No modifications found in diff.",
@@ -1488,16 +1496,44 @@ export const makeGitManager = Effect.gen(function* () {
       }
 
       let patchContent = filteredLines.join("\n");
-      if (patchContent.length > 50_000) {
-        patchContent = patchContent.slice(0, 50_000) + "\n[... diff patch capped at 50,000 characters ...]";
+      if (patchContent.length > 300_000) {
+        patchContent = patchContent.slice(0, 300_000) + "\n[... diff patch capped at 300,000 characters ...]";
         wasTruncated = true;
       }
+
+      const customInstructions = settings.gitAi?.customPromptInstructions?.trim();
+
+      // Phase 1 — Static Analysis Enrichment
+      // Run configured tools and inject findings for changed files into the
+      // prompt context before the LLM call. Skipped when disabled or no tools
+      // are configured.
+      let staticAnalysisContextSection = "";
+      const saSettings = settings.gitAi?.staticAnalysis;
+      if (saSettings?.enabled && saSettings.tools.length > 0) {
+        const saResult = yield* runStaticAnalysis({
+          cwd: input.cwd,
+          tools: saSettings.tools,
+        });
+        const changedFiles = extractChangedFilesFromPatch(patchContent);
+        const contextResult = buildStaticAnalysisContext({
+          changedFiles,
+          allFindings: saResult.allFindings,
+        });
+        staticAnalysisContextSection = contextResult.contextSection;
+      }
+
+      // Compose the userHint from custom instructions and/or static analysis context.
+      const hintParts: string[] = [];
+      if (customInstructions) hintParts.push(customInstructions);
+      if (staticAnalysisContextSection) hintParts.push(staticAnalysisContextSection);
+      const composedHint = hintParts.join("\n\n") || undefined;
 
       const generated = yield* textGeneration.generateDiffSummary({
         cwd: input.cwd,
         diffSummary: limitContext(diffSummary, 12_000),
         diffPatch: patchContent,
         ...(commitMessage ? { commitMessage } : {}),
+        ...(composedHint ? { userHint: composedHint } : {}),
         modelSelection,
       });
 

@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Rocket,
   Search,
-  Sparkles,
   Trash2,
   Wand2,
   X,

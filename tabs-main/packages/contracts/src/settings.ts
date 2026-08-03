@@ -427,6 +427,63 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
 
+export const GeminiSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    apiKey: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API key",
+        description: "Google Gemini API key from Google AI Studio.",
+        providerSettingsForm: {
+          control: "password",
+          placeholder: "AIzaSy...",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    baseUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("https://generativelanguage.googleapis.com")),
+      Schema.annotateKey({
+        title: "API Base URL",
+        description: "Custom base URL for Gemini API (optional).",
+        providerSettingsForm: {
+          placeholder: "https://generativelanguage.googleapis.com",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  {
+    order: ["apiKey", "baseUrl"],
+  },
+);
+export type GeminiSettings = typeof GeminiSettings.Type;
+
+export const GitAiStaticAnalysisSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  tools: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+});
+export type GitAiStaticAnalysisSettings = typeof GitAiStaticAnalysisSettings.Type;
+
+export const GitAiSettings = Schema.Struct({
+  modelSourceMode: Schema.optional(Schema.Literals(["connected", "direct_gemini"])),
+  gitTextGenerationModelSelection: Schema.optional(ModelSelection),
+  customPromptInstructions: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  includeSummarySection: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  includeKeyChangesSection: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  includeNotesAndRiskSection: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  staticAnalysis: GitAiStaticAnalysisSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+});
+export type GitAiSettings = typeof GitAiSettings.Type;
+
 export const ObservabilitySettings = Schema.Struct({
   otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   otlpMetricsUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -459,6 +516,7 @@ export const ServerSettings = Schema.Struct({
       }),
     ),
   ),
+  gitAi: GitAiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 
   // Legacy single-instance-per-driver settings. Continues to be the source
   // of truth until `providerInstances` (below) lands per-driver migration
@@ -472,6 +530,7 @@ export const ServerSettings = Schema.Struct({
     cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    gemini: GeminiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
   // are `ProviderInstanceConfig` envelopes. The driver-specific config blob
@@ -580,6 +639,28 @@ const OpenCodeSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const GeminiSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  apiKey: Schema.optionalKey(TrimmedString),
+  baseUrl: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+const GitAiStaticAnalysisSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  tools: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+const GitAiSettingsPatch = Schema.Struct({
+  modelSourceMode: Schema.optionalKey(Schema.Literals(["connected", "direct_gemini"])),
+  gitTextGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  customPromptInstructions: Schema.optionalKey(TrimmedString),
+  includeSummarySection: Schema.optionalKey(Schema.Boolean),
+  includeKeyChangesSection: Schema.optionalKey(Schema.Boolean),
+  includeNotesAndRiskSection: Schema.optionalKey(Schema.Boolean),
+  staticAnalysis: Schema.optionalKey(GitAiStaticAnalysisSettingsPatch),
+});
+
 export const ServerSettingsPatch = Schema.Struct({
   // Server settings
   enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
@@ -590,6 +671,7 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  gitAi: Schema.optionalKey(GitAiSettingsPatch),
   observability: Schema.optionalKey(
     Schema.Struct({
       otlpTracesUrl: Schema.optionalKey(TrimmedString),
@@ -603,6 +685,7 @@ export const ServerSettingsPatch = Schema.Struct({
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
+      gemini: Schema.optionalKey(GeminiSettingsPatch),
     }),
   ),
   // Whole-map replacement for the new instance config. Patching individual

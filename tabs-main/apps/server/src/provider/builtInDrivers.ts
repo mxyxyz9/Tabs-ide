@@ -23,6 +23,7 @@
 import { ClaudeDriver, type ClaudeDriverEnv } from "./Drivers/ClaudeDriver";
 import { CodexDriver, type CodexDriverEnv } from "./Drivers/CodexDriver";
 import { CursorDriver, type CursorDriverEnv } from "./Drivers/CursorDriver";
+import { GeminiDriver } from "./Drivers/GeminiDriver";
 import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./Drivers/OpenCodeDriver";
 import type { AnyProviderDriver } from "./ProviderDriver";
@@ -50,4 +51,5 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   CursorDriver,
   GrokDriver,
   OpenCodeDriver,
+  GeminiDriver,
 ];

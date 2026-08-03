@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString, ThreadId } from "./baseSchemas";
 import { VcsDriverKind } from "./vcs.ts";
 import { SourceControlProviderError, SourceControlProviderInfo } from "./sourceControl.ts";
+import { ModelSelection } from "./orchestration.ts";
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 
 const GIT_LIST_BRANCHES_MAX_LIMIT = 200;
@@ -314,6 +315,8 @@ export type GitGenerateDiffSummaryTarget = typeof GitGenerateDiffSummaryTarget.T
 export const GitGenerateDiffSummaryInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   target: GitGenerateDiffSummaryTarget,
+  modelSelection: Schema.optional(ModelSelection),
+  userHint: Schema.optional(Schema.String),
 });
 export type GitGenerateDiffSummaryInput = typeof GitGenerateDiffSummaryInput.Type;
 

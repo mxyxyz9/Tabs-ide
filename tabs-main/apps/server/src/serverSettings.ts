@@ -121,6 +121,7 @@ const PROVIDER_ORDER: readonly ProviderSettingsKey[] = [
   "cursor",
   "grok",
   "opencode",
+  "gemini",
 ];
 
 function mergeServerSettingsPatch(

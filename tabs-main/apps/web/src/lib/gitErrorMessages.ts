@@ -27,11 +27,21 @@ function stripKnownGitErrorPrefix(message: string): string {
 }
 
 export function toGitUserFacingErrorMessage(error: unknown): string {
+  if (typeof error === "object" && error !== null) {
+    const obj = error as Record<string, unknown>;
+    const raw = String(obj.detail || obj.message || obj.reason || "");
+    if (raw && raw !== "Internal server error") {
+      return stripKnownGitErrorPrefix(raw.trim());
+    }
+  }
   if (!(error instanceof Error)) {
-    return "An unexpected Git error occurred.";
+    return "An unexpected error occurred.";
   }
 
   const detail = stripKnownGitErrorPrefix(error.message.trim());
+  if (detail === "Internal server error") {
+    return "AI generation failed on server. Please check your Google Gemini API key in Settings → Providers.";
+  }
   if (!detail.toLowerCase().includes("would be overwritten by checkout")) {
     return detail;
   }

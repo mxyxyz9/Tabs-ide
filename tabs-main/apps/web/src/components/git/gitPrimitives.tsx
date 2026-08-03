@@ -1,13 +1,29 @@
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   CircleAlert,
   Copy,
   Loader2,
-  Sparkles,
+  Search,
+  Wand2,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import type { ModelSelection, ProviderInstanceId } from "@tabs/contracts";
+import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import { useServerConfig } from "../../state/settings";
+import {
+  applyProviderInstanceSettings,
+  deriveProviderInstanceEntries,
+  sortProviderInstanceEntries,
+} from "../../providerInstances";
+import {
+  getCustomModelOptionsByInstance,
+  resolveAppModelSelectionState,
+} from "../../modelSelection";
+import { SettingsProviderModelPicker } from "../chat/SettingsProviderModelPicker";
+import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 
 const ACCENT = "var(--gt-accent, var(--primary, #ffffff))";
@@ -64,9 +80,9 @@ export function PanelToolbar({ children, className = "" }: { children: ReactNode
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-export function SectionLabel({ children, action }: { children: ReactNode; action?: ReactNode }) {
+export function SectionLabel({ children, action, className }: { children: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <div className="flex items-center justify-between mt-5 mb-2 first:mt-0">
+    <div className={cn("flex items-center justify-between mt-5 mb-2 first:mt-0", className)}>
       <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground/70">{children}</span>
       {action}
     </div>
@@ -177,7 +193,7 @@ export function InlineForm({
 }: {
   placeholder: string;
   initial?: string;
-  onSubmit: (val: string) => void | Promise<void>;
+  onSubmit: (val: string) => Promise<void> | void;
   onCancel: () => void;
   submitLabel?: string;
   className?: string;
@@ -186,7 +202,7 @@ export function InlineForm({
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!value.trim() || submitting) return;
+    if (!value.trim()) return;
     setSubmitting(true);
     try {
       await onSubmit(value.trim());
@@ -234,7 +250,7 @@ export function AutoTextarea({
   onKeyDown,
   placeholder,
   className = "",
-  minRows = 2,
+  minRows = 3,
 }: {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -248,8 +264,8 @@ export function AutoTextarea({
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+    el.style.height = `${Math.max(el.scrollHeight, minRows * 20)}px`;
+  }, [value, minRows]);
   return (
     <textarea
       ref={ref}
@@ -264,9 +280,10 @@ export function AutoTextarea({
   );
 }
 
-export const Field = ({ label, children }: { label: ReactNode; children: ReactNode }) => (
+export const Field = ({ label, description, children }: { label: ReactNode; description?: ReactNode; children: ReactNode }) => (
   <div className="mb-3">
-    <label className="text-[10px] uppercase tracking-widest text-muted-foreground/70 block mb-1.5">{label}</label>
+    <label className="text-[10px] uppercase tracking-widest text-muted-foreground/70 block mb-1">{label}</label>
+    {description && <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-1.5">{description}</p>}
     {children}
   </div>
 );
@@ -316,21 +333,21 @@ export const Select = ({
 
   return (
     <SelectRoot
-      value={strVal}
       disabled={disabled}
+      value={strVal}
       onValueChange={(val) => {
-        if (val !== null && val !== undefined) {
+        if (val !== null) {
           onChange?.({ target: { value: val } });
         }
       }}
     >
-      <SelectTrigger className={`w-full text-xs rounded-lg bg-background border-border/80 focus:ring-1 focus:ring-primary ${className || ""}`}>
-        <SelectValue placeholder="Select…">{selectedLabel}</SelectValue>
+      <SelectTrigger className={className}>
+        <SelectValue placeholder={typeof selectedLabel === "string" ? selectedLabel : "Select…"}>{selectedLabel}</SelectValue>
       </SelectTrigger>
-      <SelectContent align="start" className="z-[350] min-w-[200px]">
-        {options.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value} className="text-xs font-mono py-1.5 cursor-pointer">
-            {opt.label}
+      <SelectContent side="bottom" align="start">
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
           </SelectItem>
         ))}
       </SelectContent>
@@ -341,11 +358,12 @@ export const Select = ({
 export interface DiffSummaryCardProps {
   summary: string;
   keyChanges: string;
-  notesAndRisk?: string | undefined;
+  notesAndRisk: string;
   targetScope?: "staged" | "working_tree" | "commit" | undefined;
   wasTruncated?: boolean | undefined;
   truncatedReason?: string | undefined;
   onClose?: (() => void) | undefined;
+  modelName?: string | undefined;
 }
 
 export function DiffSummaryCard({
@@ -356,13 +374,34 @@ export function DiffSummaryCard({
   wasTruncated,
   truncatedReason,
   onClose,
+  modelName,
 }: DiffSummaryCardProps) {
   const [copied, setCopied] = useState(false);
+  const settings = useSettings();
+  const serverConfig = useServerConfig();
+
+  const activeSelection = useMemo(() => {
+    return resolveAppModelSelectionState(
+      {
+        ...settings,
+        ...(settings?.gitAi?.gitTextGenerationModelSelection
+          ? { textGenerationModelSelection: settings.gitAi.gitTextGenerationModelSelection }
+          : {}),
+      },
+      serverConfig?.providers ?? [],
+    );
+  }, [settings, serverConfig?.providers]);
+
+  const activeModelDisplay = modelName || activeSelection.model;
+
+  const showSummary = settings?.gitAi?.includeSummarySection ?? true;
+  const showKeyChanges = settings?.gitAi?.includeKeyChangesSection ?? true;
+  const showNotesAndRisk = settings?.gitAi?.includeNotesAndRiskSection ?? true;
 
   const fullText = [
-    `### Summary\n${summary}`,
-    `### Key Changes\n${keyChanges}`,
-    notesAndRisk ? `### Notes & Risk\n${notesAndRisk}` : "",
+    showSummary ? `### Summary\n${summary}` : "",
+    showKeyChanges ? `### Key Changes\n${keyChanges}` : "",
+    showNotesAndRisk && notesAndRisk ? `### Notes & Risk\n${notesAndRisk}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -383,13 +422,16 @@ export function DiffSummaryCard({
   return (
     <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-lg space-y-3 mb-4 relative">
       <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-primary shrink-0" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Wand2 className="size-4 text-primary shrink-0" />
           <span className="text-xs font-semibold text-foreground tracking-tight">
             AI Diff Summary
           </span>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
             {scopeLabel}
+          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-muted/80 text-muted-foreground border border-border/60">
+            {activeModelDisplay}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -413,14 +455,16 @@ export function DiffSummaryCard({
       )}
 
       <div className="space-y-3 text-xs leading-relaxed">
-        <div>
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
-            Summary
-          </h4>
-          <p className="text-foreground/90 font-medium">{summary}</p>
-        </div>
+        {showSummary && summary && (
+          <div>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
+              Summary
+            </h4>
+            <p className="text-foreground/90 font-medium">{summary}</p>
+          </div>
+        )}
 
-        {keyChanges && (
+        {showKeyChanges && keyChanges && (
           <div>
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
               Key Changes
@@ -431,14 +475,14 @@ export function DiffSummaryCard({
           </div>
         )}
 
-        {notesAndRisk && (
+        {showNotesAndRisk && notesAndRisk && (
           <div>
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
               Notes & Risk
             </h4>
-            <div className="text-muted-foreground/90 font-mono text-[11px] whitespace-pre-wrap leading-relaxed">
+            <p className="text-foreground/80 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
               {notesAndRisk}
-            </div>
+            </p>
           </div>
         )}
       </div>
@@ -446,3 +490,258 @@ export function DiffSummaryCard({
   );
 }
 
+import { Popover, PopoverPopup, PopoverTrigger } from "../ui/popover";
+
+export interface GitModelPickerProps {
+  selection?: ModelSelection | undefined;
+  onSelect?: (selection: ModelSelection) => void;
+  className?: string | undefined;
+  filterSourceMode?: "connected" | "direct_gemini" | undefined;
+}
+
+export function GitModelPicker({ selection, onSelect, className, filterSourceMode }: GitModelPickerProps) {
+  const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const settings = useSettings();
+  const updateSettings = useUpdateSettings();
+  const serverConfig = useServerConfig();
+
+  const isGeminiKeyConfigured = Boolean(settings?.providers?.gemini?.apiKey?.trim());
+
+  const activeSelection =
+    selection ||
+    settings?.gitAi?.gitTextGenerationModelSelection || {
+      instanceId: "gemini" as ProviderInstanceId,
+      model: "gemini-2.5-flash",
+    };
+
+  const serverProviders = useMemo(() => serverConfig?.providers ?? [], [serverConfig?.providers]);
+
+  const dynamicConnectedGroups = useMemo(() => {
+    const entries = sortProviderInstanceEntries(
+      applyProviderInstanceSettings(deriveProviderInstanceEntries(serverProviders), settings),
+    );
+    const optionsMap = getCustomModelOptionsByInstance(
+      settings,
+      serverProviders,
+      activeSelection.instanceId,
+      activeSelection.model,
+    );
+
+    return entries.map((entry) => {
+      const opts = optionsMap.get(entry.instanceId) ?? [];
+      return {
+        id: "connected",
+        group: `${entry.displayName} (Connected Subscription)`,
+        items: opts.map((opt) => ({
+          instanceId: entry.instanceId,
+          model: opt.slug,
+          name: opt.name || opt.slug,
+          description: `${entry.displayName} subscription backend`,
+          badge: "Fusion",
+          badgeColor: "bg-primary/10 text-primary border-primary/20",
+        })),
+      };
+    }).filter((g) => g.items.length > 0);
+  }, [serverProviders, settings, activeSelection.instanceId, activeSelection.model]);
+
+  const directGeminiGroup = useMemo(() => {
+    return {
+      id: "direct_gemini",
+      group: "Google Gemini (Direct API Key)",
+      items: [
+        {
+          instanceId: "gemini" as ProviderInstanceId,
+          model: "gemini-2.5-flash",
+          name: "Gemini 2.5 Flash",
+          description: "Ultra-fast, 1M context token window (Recommended)",
+          badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
+          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+        },
+        {
+          instanceId: "gemini" as ProviderInstanceId,
+          model: "gemini-2.5-pro",
+          name: "Gemini 2.5 Pro",
+          description: "Deep reasoning 1M context model",
+          badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
+          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+        },
+        {
+          instanceId: "gemini" as ProviderInstanceId,
+          model: "gemini-2.0-flash",
+          name: "Gemini 2.0 Flash",
+          description: "Lightweight high-speed model",
+          badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
+          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+        },
+        {
+          instanceId: "gemini" as ProviderInstanceId,
+          model: "gemini-1.5-pro",
+          name: "Gemini 1.5 Pro",
+          description: "High capacity reasoning model",
+          badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
+          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+        },
+        {
+          instanceId: "gemini" as ProviderInstanceId,
+          model: "gemini-1.5-flash",
+          name: "Gemini 1.5 Flash",
+          description: "Fast multimodal model",
+          badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
+          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+        },
+      ],
+    };
+  }, [isGeminiKeyConfigured]);
+
+  const allModelGroups = useMemo(() => {
+    if (filterSourceMode === "direct_gemini") {
+      return [directGeminiGroup];
+    }
+    if (filterSourceMode === "connected") {
+      return dynamicConnectedGroups.length > 0
+        ? dynamicConnectedGroups
+        : [
+            {
+              id: "connected",
+              group: "Connected Subscriptions (Fusion Backends)",
+              items: [
+                { instanceId: "codex" as ProviderInstanceId, model: "gpt-5.4-mini", name: "Codex (GPT-5.4 Mini)", description: "Codex subscription backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+                { instanceId: "codex" as ProviderInstanceId, model: "gpt-5.4", name: "Codex (GPT-5.4)", description: "Codex subscription backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+                { instanceId: "claudeAgent" as ProviderInstanceId, model: "claude-haiku-4-5", name: "Claude (Haiku 4.5)", description: "Claude Agent backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+                { instanceId: "claudeAgent" as ProviderInstanceId, model: "claude-sonnet-5", name: "Claude (Sonnet 5)", description: "Claude Agent backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+                { instanceId: "grok" as ProviderInstanceId, model: "grok-build", name: "Grok (Build)", description: "xAI Grok backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+                { instanceId: "cursor" as ProviderInstanceId, model: "composer-2", name: "Cursor (Composer 2)", description: "Cursor subscription backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+              ],
+            },
+          ];
+    }
+    return [directGeminiGroup, ...dynamicConnectedGroups];
+  }, [filterSourceMode, directGeminiGroup, dynamicConnectedGroups]);
+
+  const filteredGroups = useMemo(() => {
+    if (!searchQuery.trim()) return allModelGroups;
+    const q = searchQuery.toLowerCase().trim();
+    return allModelGroups
+      .map((g) => ({
+        ...g,
+        items: g.items.filter(
+          (item) =>
+            item.name.toLowerCase().includes(q) ||
+            item.model.toLowerCase().includes(q) ||
+            item.description.toLowerCase().includes(q) ||
+            g.group.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.items.length > 0);
+  }, [allModelGroups, searchQuery]);
+
+  const defaultItem = allModelGroups[0]?.items[0] ?? {
+    instanceId: "gemini" as ProviderInstanceId,
+    model: "gemini-2.5-flash",
+    name: "Gemini 2.5 Flash",
+    description: "Ultra-fast, 1M context token window",
+    badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
+    badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  };
+
+  const currentItem =
+    allModelGroups.flatMap((g) => g.items).find((i) => i.instanceId === activeSelection.instanceId && i.model === activeSelection.model) ??
+    defaultItem;
+
+  const handleSelect = (inst: ProviderInstanceId, mdl: string) => {
+    const nextSelection = { instanceId: inst, model: mdl };
+    onSelect?.(nextSelection);
+    updateSettings.updateSettings({
+      gitAi: {
+        gitTextGenerationModelSelection: nextSelection,
+      },
+    });
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(val) => { setOpen(val); if (!val) setSearchQuery(""); }}>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn(
+              "h-8 gap-2 font-mono text-xs justify-between min-w-[210px] border-border/70 hover:border-border transition-colors",
+              className,
+            )}
+          >
+            <span className="truncate flex items-center gap-1.5">
+              <span className="font-semibold text-foreground">{currentItem?.name ?? "Gemini 2.5 Flash"}</span>
+            </span>
+            <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
+          </Button>
+        }
+      />
+      <PopoverPopup align="start" className="w-[340px] p-0 overflow-hidden bg-background/95 backdrop-blur-md border border-border shadow-2xl rounded-xl z-50">
+        <div className="p-2 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
+            <TextInput
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search models by name or provider…"
+              className="w-full text-xs font-mono pl-8 pr-7 h-8 bg-muted/40"
+              autoFocus
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground cursor-pointer"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="max-h-72 overflow-y-auto custom-scrollbar p-2 space-y-3">
+          {filteredGroups.length === 0 ? (
+            <div className="text-center py-6 text-xs text-muted-foreground/70">
+              No models match "{searchQuery}"
+            </div>
+          ) : (
+            filteredGroups.map((group) => (
+              <div key={group.group} className="space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 px-2.5 py-1">
+                  {group.group}
+                </div>
+                {group.items.map((item) => {
+                  const isSelected = activeSelection.instanceId === item.instanceId && activeSelection.model === item.model;
+                  return (
+                    <button
+                      key={`${item.instanceId}::${item.model}`}
+                      type="button"
+                      onClick={() => handleSelect(item.instanceId, item.model)}
+                      className={cn(
+                        "w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer",
+                        isSelected ? "bg-primary/10 border border-primary/20 text-foreground" : "hover:bg-muted/60 text-foreground/80",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-foreground flex items-center gap-1.5">
+                          <span className="truncate">{item.name}</span>
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/70 truncate">{item.description}</div>
+                      </div>
+                      <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded border shrink-0", item.badgeColor)}>
+                        {item.badge}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
+      </PopoverPopup>
+    </Popover>
+  );
+}

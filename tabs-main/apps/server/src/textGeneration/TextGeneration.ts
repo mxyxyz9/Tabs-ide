@@ -10,7 +10,7 @@ import {
 } from "../provider/Services/ProviderInstanceRegistry";
 import type { ProviderInstance } from "../provider/ProviderDriver";
 
-export type TextGenerationProvider = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode";
+export type TextGenerationProvider = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode" | "gemini";
 
 export interface CommitMessageGenerationInput {
   cwd: string;

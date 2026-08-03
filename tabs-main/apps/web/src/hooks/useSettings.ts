@@ -146,7 +146,7 @@ export function useSettings<T extends UnifiedSettings = UnifiedSettings>(
  * persisted via RPC. Client keys go straight to localStorage.
  */
 export function useUpdateSettings() {
-  const updateSettings = useCallback((patch: Partial<UnifiedSettings>) => {
+  const updateSettings = useCallback((patch: Record<string, any>) => {
     const { serverPatch, clientPatch } = splitPatch(patch);
 
     if (Object.keys(serverPatch).length > 0) {

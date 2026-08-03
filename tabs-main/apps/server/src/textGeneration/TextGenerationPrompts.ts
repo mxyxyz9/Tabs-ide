@@ -222,9 +222,11 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 // ---------------------------------------------------------------------------
 
 export interface DiffSummaryPromptInput {
+  targetScope?: "staged" | "working_tree" | "commit" | undefined;
   diffSummary: string;
   diffPatch: string;
   commitMessage?: string | undefined;
+  userHint?: string | undefined;
   policy?: TextGenerationPolicy | undefined;
 }
 
@@ -237,13 +239,14 @@ export function buildDiffSummaryPrompt(input: DiffSummaryPromptInput) {
     "- keyChanges must be markdown bullet points (using '- ') grouping logical changes by module/area.",
     "- notesAndRisk can be an empty string or short bullet points highlighting breaking changes, potential risks, or key testing considerations.",
     ...policyInstruction(input.policy?.commitInstructions),
+    ...(input.userHint ? [`Custom Review Instructions: ${input.userHint}`, ""] : []),
     "",
     ...(input.commitMessage ? [`Commit message context: ${input.commitMessage}`, ""] : []),
     "Diff stat summary:",
     limitSection(input.diffSummary, 12_000),
     "",
     "Diff patch:",
-    limitSection(input.diffPatch, 50_000),
+    limitSection(input.diffPatch, 300_000),
   ].join("\n");
 
   const outputSchema = Schema.Struct({

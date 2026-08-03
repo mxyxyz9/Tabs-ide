@@ -182,6 +182,26 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
       capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
     },
   ],
+  gemini: [
+    {
+      slug: "gemini-2.5-flash",
+      name: "Gemini 2.5 Flash",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "gemini-2.5-pro",
+      name: "Gemini 2.5 Pro",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "gemini-2.0-flash",
+      name: "Gemini 2.0 Flash",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
+  ],
 };
 
 export function getProviderModels(

@@ -7,8 +7,8 @@ import {
   MoreHorizontal,
   RotateCcw,
   Search,
-  Sparkles,
   Undo2,
+  Wand2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -179,7 +179,35 @@ export function CommitDetailModal({
   const [error, setError] = useState<string | null>(null);
   const [fileDiffs, setFileDiffs] = useState<ParsedFileDiff[]>([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
-  const [diffSummaryResult, setDiffSummaryResult] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(null);
+  const [diffSummaryResult, setDiffSummaryResultState] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(null);
+
+  useEffect(() => {
+    if (!commit?.sha) {
+      setDiffSummaryResultState(null);
+      return;
+    }
+    try {
+      const cached = sessionStorage.getItem(`tabs_git_commit_summary_${commit.sha}`);
+      setDiffSummaryResultState(cached ? JSON.parse(cached) : null);
+    } catch {
+      setDiffSummaryResultState(null);
+    }
+  }, [commit?.sha]);
+
+  const setDiffSummaryResult = (val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null) => {
+    setDiffSummaryResultState(val);
+    if (commit?.sha) {
+      try {
+        if (val) {
+          sessionStorage.setItem(`tabs_git_commit_summary_${commit.sha}`, JSON.stringify(val));
+        } else {
+          sessionStorage.removeItem(`tabs_git_commit_summary_${commit.sha}`);
+        }
+      } catch {
+        // Ignore session storage errors
+      }
+    }
+  };
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const api = readNativeApi();
@@ -260,7 +288,7 @@ export function CommitDetailModal({
                 onClick={() => void handleSummarizeCommit()}
                 className="gap-1 text-xs"
               >
-                {isSummarizing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} className="text-primary" />}
+                {isSummarizing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} className="text-primary" />}
                 {isSummarizing ? "Summarizing…" : "Summarize commit"}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(commit.sha)}>
