@@ -13,10 +13,14 @@ import {
   GitPreparePullRequestThreadResult,
   GitPullRequestRefInput,
   GitResolvePullRequestResult,
+  GitListPullRequestsInput,
+  GitListPullRequestsResult,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
   GitStatusInput,
   GitStatusResult,
+  GitGenerateDiffSummaryInput,
+  GitGenerateDiffSummaryResult,
 } from "@tabs/contracts";
 import type { Effect } from "effect";
 import type { GitManagerServiceError } from "../Errors.ts";
@@ -49,6 +53,13 @@ export interface GitManagerShape {
   ) => Effect.Effect<GitResolvePullRequestResult, GitManagerServiceError>;
 
   /**
+   * List all open pull requests for the repository.
+   */
+  readonly listPullRequests: (
+    input: GitListPullRequestsInput,
+  ) => Effect.Effect<GitListPullRequestsResult, GitManagerServiceError>;
+
+  /**
    * Prepare a new thread workspace from a pull request in local or worktree mode.
    */
   readonly preparePullRequestThread: (
@@ -63,6 +74,13 @@ export interface GitManagerShape {
     input: GitRunStackedActionInput,
     options?: GitRunStackedActionOptions,
   ) => Effect.Effect<GitRunStackedActionResult, GitManagerServiceError>;
+
+  /**
+   * Generate an AI diff summary for working tree or commit.
+   */
+  readonly generateDiffSummary: (
+    input: GitGenerateDiffSummaryInput,
+  ) => Effect.Effect<GitGenerateDiffSummaryResult, GitManagerServiceError>;
 }
 
 /**

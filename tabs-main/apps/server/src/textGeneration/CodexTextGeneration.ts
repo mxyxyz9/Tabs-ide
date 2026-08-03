@@ -22,6 +22,7 @@ import {
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
@@ -102,7 +103,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateDiffSummary",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -163,7 +165,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateDiffSummary";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -403,10 +406,35 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     } satisfies ThreadTitleGenerationResult;
   });
 
+  const generateDiffSummary: TextGenerationShape["generateDiffSummary"] = Effect.fn(
+    "CodexTextGeneration.generateDiffSummary",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildDiffSummaryPrompt({
+      diffSummary: input.diffSummary,
+      diffPatch: input.diffPatch,
+      commitMessage: input.commitMessage,
+    });
+
+    const generated = yield* runCodexJson({
+      operation: "generateDiffSummary",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      summary: generated.summary.trim(),
+      keyChanges: generated.keyChanges.trim(),
+      notesAndRisk: generated.notesAndRisk.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDiffSummary,
   } satisfies TextGenerationShape;
 });

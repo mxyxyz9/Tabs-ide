@@ -300,6 +300,34 @@ export const GitDiffInput = Schema.Struct({
 });
 export type GitDiffInput = typeof GitDiffInput.Type;
 
+export const GitGenerateDiffSummaryTarget = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("working_tree"),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("commit"),
+    sha: TrimmedNonEmptyStringSchema,
+  }),
+]);
+export type GitGenerateDiffSummaryTarget = typeof GitGenerateDiffSummaryTarget.Type;
+
+export const GitGenerateDiffSummaryInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  target: GitGenerateDiffSummaryTarget,
+});
+export type GitGenerateDiffSummaryInput = typeof GitGenerateDiffSummaryInput.Type;
+
+export const GitGenerateDiffSummaryResult = Schema.Struct({
+  summary: Schema.String,
+  keyChanges: Schema.String,
+  notesAndRisk: Schema.String,
+  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit"])),
+  wasTruncated: Schema.Boolean,
+  truncatedCount: Schema.optional(NonNegativeInt),
+  truncatedReason: Schema.optional(Schema.String),
+});
+export type GitGenerateDiffSummaryResult = typeof GitGenerateDiffSummaryResult.Type;
+
 export const GitInitInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });
@@ -509,6 +537,24 @@ export const GitResolvePullRequestResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,
 });
 export type GitResolvePullRequestResult = typeof GitResolvePullRequestResult.Type;
+
+export const GitListPullRequestsInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  state: Schema.optional(
+    Schema.Union([
+      Schema.Literal("open"),
+      Schema.Literal("closed"),
+      Schema.Literal("merged"),
+      Schema.Literal("all"),
+    ])
+  ),
+});
+export type GitListPullRequestsInput = typeof GitListPullRequestsInput.Type;
+
+export const GitListPullRequestsResult = Schema.Struct({
+  pullRequests: Schema.Array(GitResolvedPullRequest),
+});
+export type GitListPullRequestsResult = typeof GitListPullRequestsResult.Type;
 
 export const GitPreparePullRequestThreadResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,

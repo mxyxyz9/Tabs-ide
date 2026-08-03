@@ -14,6 +14,7 @@ import { type ThreadTitleGenerationResult, type TextGenerationShape } from "./Te
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
@@ -32,7 +33,8 @@ function mapGrokAcpError(
     | "generateCommitMessage"
     | "generatePrContent"
     | "generateBranchName"
-    | "generateThreadTitle",
+    | "generateThreadTitle"
+    | "generateDiffSummary",
   detail: string,
   cause: unknown,
 ): TextGenerationError {
@@ -69,7 +71,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateDiffSummary";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -259,10 +262,35 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
     } satisfies ThreadTitleGenerationResult;
   });
 
+  const generateDiffSummary: TextGenerationShape["generateDiffSummary"] = Effect.fn(
+    "GrokTextGeneration.generateDiffSummary",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildDiffSummaryPrompt({
+      diffSummary: input.diffSummary,
+      diffPatch: input.diffPatch,
+      commitMessage: input.commitMessage,
+    });
+
+    const generated = yield* runGrokJson({
+      operation: "generateDiffSummary",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      summary: generated.summary.trim(),
+      keyChanges: generated.keyChanges.trim(),
+      notesAndRisk: generated.notesAndRisk.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDiffSummary,
   } satisfies TextGenerationShape;
 });

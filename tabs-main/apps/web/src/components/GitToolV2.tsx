@@ -602,7 +602,7 @@ export function GitToolV2({
               return;
             }
             onRunInTerminal(
-              `gh pr create --title '${safeTitle}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`
+              `gh pr create --title '${safeTitle}' --head '${pr.head}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`
             );
             closeModal();
           }}

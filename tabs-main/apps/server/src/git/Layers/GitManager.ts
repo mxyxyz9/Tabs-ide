@@ -980,6 +980,20 @@ export const makeGitManager = Effect.gen(function* () {
     },
   );
 
+  const listPullRequests: GitManagerShape["listPullRequests"] = Effect.fnUntraced(
+    function* (input) {
+      const pullRequests = yield* gitHubCli
+        .listOpenPullRequests({
+          cwd: input.cwd,
+          state: input.state ?? "all",
+          limit: 50,
+        })
+        .pipe(Effect.map((list) => list.map(toResolvedPullRequest)));
+
+      return { pullRequests };
+    },
+  );
+
   const preparePullRequestThread: GitManagerShape["preparePullRequestThread"] = Effect.fnUntraced(
     function* (input) {
       const normalizedReference = normalizePullRequestReference(input.reference);
@@ -1375,11 +1389,153 @@ export const makeGitManager = Effect.gen(function* () {
     },
   );
 
+  const generateDiffSummary: GitManagerShape["generateDiffSummary"] = Effect.fn(
+    "GitManager.generateDiffSummary",
+  )((input) =>
+    Effect.gen(function* () {
+      const settings = yield* serverSettingsService.getSettings;
+      const modelSelection = settings.textGenerationModelSelection;
+      if (!modelSelection || !modelSelection.instanceId || !modelSelection.model) {
+        return yield* gitManagerError(
+          "generateDiffSummary",
+          "No text generation model configured — set one up in Settings → Providers",
+        );
+      }
+
+      let diffSummary = "";
+      let rawPatch = "";
+      let commitMessage: string | undefined = undefined;
+      let targetScope: "staged" | "working_tree" | "commit" = "working_tree";
+
+      if (input.target.kind === "commit") {
+        targetScope = "commit";
+        const commitSha = input.target.sha;
+        const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
+        rawPatch = diffRes.patch;
+        diffSummary = `Commit ${commitSha}`;
+      } else {
+        const details = yield* gitCore.statusDetails(input.cwd);
+        const stagedCount = details.staged?.files.length ?? 0;
+        if (stagedCount > 0) {
+          targetScope = "staged";
+          const prepContext = yield* gitCore.prepareCommitContext(input.cwd);
+          if (prepContext) {
+            diffSummary = prepContext.stagedSummary;
+            rawPatch = prepContext.stagedPatch;
+          }
+        } else {
+          targetScope = "working_tree";
+          const diffRes = yield* gitCore.diff({ cwd: input.cwd, path: "." });
+          rawPatch = diffRes.patch;
+          diffSummary = `Working tree changes (${details.workingTree.files.length} files)`;
+        }
+      }
+
+      if (!rawPatch.trim()) {
+        return {
+          summary: "No changes detected.",
+          keyChanges: "- No modifications found in diff.",
+          notesAndRisk: "",
+          targetScope,
+          wasTruncated: false,
+        };
+      }
+
+      // Truncation & Exclusions logic
+      const EXCLUDED_PATTERNS = [
+        "package-lock.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "bun.lockb",
+        ".min.js",
+        ".min.css",
+        ".map",
+      ];
+      const lines = rawPatch.split("\n");
+      const filteredLines: string[] = [];
+      let truncatedCount = 0;
+      let wasTruncated = false;
+      let currentFileExcluded = false;
+      let fileLineCount = 0;
+
+      for (const line of lines) {
+        if (line.startsWith("diff --git")) {
+          const isExcluded = EXCLUDED_PATTERNS.some((pat) => line.includes(pat));
+          if (isExcluded) {
+            currentFileExcluded = true;
+            truncatedCount++;
+            wasTruncated = true;
+            continue;
+          }
+          currentFileExcluded = false;
+          fileLineCount = 0;
+        }
+
+        if (currentFileExcluded) {
+          continue;
+        }
+
+        fileLineCount++;
+        if (fileLineCount > 150) {
+          if (fileLineCount === 151) {
+            filteredLines.push("[... file patch truncated at 150 lines ...]");
+            wasTruncated = true;
+          }
+          continue;
+        }
+
+        filteredLines.push(line);
+      }
+
+      let patchContent = filteredLines.join("\n");
+      if (patchContent.length > 50_000) {
+        patchContent = patchContent.slice(0, 50_000) + "\n[... diff patch capped at 50,000 characters ...]";
+        wasTruncated = true;
+      }
+
+      const generated = yield* textGeneration.generateDiffSummary({
+        cwd: input.cwd,
+        diffSummary: limitContext(diffSummary, 12_000),
+        diffPatch: patchContent,
+        ...(commitMessage ? { commitMessage } : {}),
+        modelSelection,
+      });
+
+      const truncatedReason = wasTruncated
+        ? truncatedCount > 0
+          ? `Summary based on partial diff — ${truncatedCount} file(s) excluded or truncated.`
+          : "Summary based on partial diff — patch truncated to fit context limits."
+        : undefined;
+
+      return {
+        summary: generated.summary,
+        keyChanges: generated.keyChanges,
+        notesAndRisk: generated.notesAndRisk,
+        targetScope,
+        wasTruncated,
+        ...(truncatedCount > 0 ? { truncatedCount } : {}),
+        ...(truncatedReason ? { truncatedReason } : {}),
+      };
+    }).pipe(
+      Effect.mapError((err) =>
+        gitManagerError(
+          "generateDiffSummary",
+          (err as { detail?: string; message?: string })?.detail ||
+            (err as { detail?: string; message?: string })?.message ||
+            "Failed to generate AI diff summary.",
+          err,
+        ),
+      ),
+    ),
+  );
+
   return {
     status,
     resolvePullRequest,
+    listPullRequests,
     preparePullRequestThread,
     runStackedAction,
+    generateDiffSummary,
   } satisfies GitManagerShape;
 });
 

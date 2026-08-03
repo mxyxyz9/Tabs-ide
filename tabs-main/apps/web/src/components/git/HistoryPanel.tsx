@@ -3,9 +3,11 @@ import {
   Check,
   Copy,
   History as HistoryIcon,
+  Loader2,
   MoreHorizontal,
   RotateCcw,
   Search,
+  Sparkles,
   Undo2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -26,6 +28,7 @@ import {
 import {
   Banner,
   Card,
+  DiffSummaryCard,
   StatPill,
   TextInput,
 } from "./gitPrimitives";
@@ -176,6 +179,9 @@ export function CommitDetailModal({
   const [error, setError] = useState<string | null>(null);
   const [fileDiffs, setFileDiffs] = useState<ParsedFileDiff[]>([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
+  const [diffSummaryResult, setDiffSummaryResult] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const api = readNativeApi();
 
   useEffect(() => {
@@ -211,6 +217,23 @@ export function CommitDetailModal({
     };
   }, [api, cwd, commit]);
 
+  const handleSummarizeCommit = async () => {
+    if (!api || !commit) return;
+    setIsSummarizing(true);
+    setSummaryError(null);
+    try {
+      const res = await api.git.generateDiffSummary({
+        cwd,
+        target: { kind: "commit", sha: commit.sha },
+      });
+      setDiffSummaryResult(res);
+    } catch (err) {
+      setSummaryError(toGitUserFacingErrorMessage(err));
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   if (!commit) return null;
 
   const currentFile = fileDiffs[selectedFileIndex] ?? null;
@@ -230,11 +253,46 @@ export function CommitDetailModal({
             </div>
             <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground/70 pt-1">
               <span className="truncate flex-1">SHA: {commit.sha}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSummarizing}
+                onClick={() => void handleSummarizeCommit()}
+                className="gap-1 text-xs"
+              >
+                {isSummarizing ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} className="text-primary" />}
+                {isSummarizing ? "Summarizing…" : "Summarize commit"}
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(commit.sha)}>
                 Copy SHA
               </Button>
             </div>
           </div>
+
+          {summaryError && (
+            <Banner
+              tone="bad"
+              title="AI Diff Summary Error"
+              body={summaryError}
+              actions={
+                <Button variant="ghost" size="sm" onClick={() => setSummaryError(null)}>
+                  Dismiss
+                </Button>
+              }
+            />
+          )}
+
+          {diffSummaryResult && (
+            <DiffSummaryCard
+              summary={diffSummaryResult.summary}
+              keyChanges={diffSummaryResult.keyChanges}
+              notesAndRisk={diffSummaryResult.notesAndRisk}
+              targetScope="commit"
+              wasTruncated={diffSummaryResult.wasTruncated}
+              truncatedReason={diffSummaryResult.truncatedReason}
+              onClose={() => setDiffSummaryResult(null)}
+            />
+          )}
 
           {loading ? (
             <GitCheckingState message="Loading commit diff…" size={36} />

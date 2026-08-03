@@ -32,6 +32,7 @@ import {
   GitDropStashInput,
   GitInitInput,
   GitListBranchesInput,
+  GitListPullRequestsInput,
   GitListWorkflowRunsInput,
   GitPullInput,
   GitPushInput,
@@ -58,6 +59,7 @@ import {
   GitCreateTagInput,
   GitListTagsInput,
   GitWatchedBranchStatusesInput,
+  GitGenerateDiffSummaryInput,
 } from "./git";
 import {
   TerminalClearInput,
@@ -109,6 +111,7 @@ export const WS_METHODS = {
   gitCreateTag: "git.createTag",
   gitListTags: "git.listTags",
   gitWatchedBranchStatuses: "git.watchedBranchStatuses",
+  gitGenerateDiffSummary: "git.generateDiffSummary",
 
 
   gitCreateWorktree: "git.createWorktree",
@@ -123,6 +126,7 @@ export const WS_METHODS = {
   gitHubSwitchAccount: "git.gitHubSwitchAccount",
   gitInit: "git.init",
   gitListBranches: "git.listBranches",
+  gitListPullRequests: "git.listPullRequests",
   gitListStashes: "git.listStashes",
   gitListWorkflowRuns: "git.listWorkflowRuns",
   gitMerge: "git.merge",
@@ -276,6 +280,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitAbortOperation, GitAbortOperationInput),
   tagRequestBody(WS_METHODS.gitSkipRebase, GitSkipRebaseInput),
   tagRequestBody(WS_METHODS.gitResolvePullRequest, GitPullRequestRefInput),
+  tagRequestBody(WS_METHODS.gitListPullRequests, GitListPullRequestsInput),
   tagRequestBody(WS_METHODS.gitPreparePullRequestThread, GitPreparePullRequestThreadInput),
   tagRequestBody(WS_METHODS.gitPush, GitPushInput),
   tagRequestBody(WS_METHODS.gitEnvironment, GitEnvironmentInput),
@@ -288,6 +293,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitCreateTag, GitCreateTagInput),
   tagRequestBody(WS_METHODS.gitListTags, GitListTagsInput),
   tagRequestBody(WS_METHODS.gitWatchedBranchStatuses, GitWatchedBranchStatusesInput),
+  tagRequestBody(WS_METHODS.gitGenerateDiffSummary, GitGenerateDiffSummaryInput),
 
 
 

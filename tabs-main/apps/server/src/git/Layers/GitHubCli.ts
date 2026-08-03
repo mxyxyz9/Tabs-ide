@@ -174,21 +174,23 @@ const makeGitHubCli = Effect.sync(() => {
 
   const service = {
     execute,
-    listOpenPullRequests: (input) =>
-      execute({
+    listOpenPullRequests: (input) => {
+      const args = [
+        "pr",
+        "list",
+        "--state",
+        input.state ?? "all",
+        "--limit",
+        String(input.limit ?? 50),
+        "--json",
+        "number,title,url,baseRefName,headRefName,state,mergedAt",
+      ];
+      if (input.headSelector) {
+        args.push("--head", input.headSelector);
+      }
+      return execute({
         cwd: input.cwd,
-        args: [
-          "pr",
-          "list",
-          "--head",
-          input.headSelector,
-          "--state",
-          "open",
-          "--limit",
-          String(input.limit ?? 1),
-          "--json",
-          "number,title,url,baseRefName,headRefName",
-        ],
+        args,
       }).pipe(
         Effect.map((result) => result.stdout.trim()),
         Effect.flatMap((raw) =>
@@ -202,7 +204,8 @@ const makeGitHubCli = Effect.sync(() => {
               ),
         ),
         Effect.map((pullRequests) => pullRequests.map(normalizePullRequestSummary)),
-      ),
+      );
+    },
     getPullRequest: (input) =>
       execute({
         cwd: input.cwd,

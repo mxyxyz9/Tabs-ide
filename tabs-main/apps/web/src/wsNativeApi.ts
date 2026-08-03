@@ -231,6 +231,7 @@ export function createWsNativeApi(): NativeApi {
       abortOperation: (input) => transport.request(WS_METHODS.gitAbortOperation, input),
       skipRebase: (input) => transport.request(WS_METHODS.gitSkipRebase, input),
       resolvePullRequest: (input) => transport.request(WS_METHODS.gitResolvePullRequest, input),
+      listPullRequests: (input) => transport.request(WS_METHODS.gitListPullRequests, input),
       preparePullRequestThread: (input) =>
         transport.request(WS_METHODS.gitPreparePullRequestThread, input),
       push: (input) => transport.request(WS_METHODS.gitPush, input),
@@ -245,6 +246,7 @@ export function createWsNativeApi(): NativeApi {
       createTag: (input) => transport.request(WS_METHODS.gitCreateTag, input),
       listTags: (input) => transport.request(WS_METHODS.gitListTags, input),
       watchedBranchStatuses: (input) => transport.request(WS_METHODS.gitWatchedBranchStatuses, input),
+      generateDiffSummary: (input) => transport.request(WS_METHODS.gitGenerateDiffSummary, input),
 
 
       onActionProgress: (callback) => {

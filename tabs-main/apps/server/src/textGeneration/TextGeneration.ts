@@ -70,6 +70,20 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface DiffSummaryGenerationInput {
+  cwd: string;
+  diffSummary: string;
+  diffPatch: string;
+  commitMessage?: string | undefined;
+  modelSelection: ModelSelection;
+}
+
+export interface DiffSummaryGenerationResult {
+  summary: string;
+  keyChanges: string;
+  notesAndRisk: string;
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -77,6 +91,7 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  generateDiffSummary(input: DiffSummaryGenerationInput): Promise<DiffSummaryGenerationResult>;
 }
 
 /**
@@ -110,6 +125,13 @@ export interface TextGenerationShape {
   readonly generateThreadTitle: (
     input: ThreadTitleGenerationInput,
   ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+  /**
+   * Generate an AI diff summary (CodeRabbit-style).
+   */
+  readonly generateDiffSummary: (
+    input: DiffSummaryGenerationInput,
+  ) => Effect.Effect<DiffSummaryGenerationResult, TextGenerationError>;
 }
 
 /**
@@ -123,7 +145,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateDiffSummary";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistryShape,
@@ -161,6 +184,10 @@ export const makeTextGenerationFromRegistry = (
   generateThreadTitle: (input) =>
     resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
       Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+    ),
+  generateDiffSummary: (input) =>
+    resolveInstance(registry, "generateDiffSummary", input.modelSelection.instanceId).pipe(
+      Effect.flatMap((textGeneration) => textGeneration.generateDiffSummary(input)),
     ),
 });
 

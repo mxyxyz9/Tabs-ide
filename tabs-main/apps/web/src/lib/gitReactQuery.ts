@@ -225,6 +225,26 @@ export function gitResolvePullRequestQueryOptions(input: {
   });
 }
 
+export function gitAllPullRequestsQueryOptions(
+  cwd: string | null,
+  state: "open" | "closed" | "merged" | "all" = "all",
+) {
+  return queryOptions({
+    queryKey: ["git", "all-pull-requests", cwd, state] as const,
+    queryFn: async () => {
+      const api = ensureNativeApi();
+      if (!cwd) {
+        throw new Error("Pull requests lookup is unavailable.");
+      }
+      return api.git.listPullRequests({ cwd, state });
+    },
+    enabled: cwd !== null,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+}
+
 export function gitInitMutationOptions(input: { cwd: string | null; queryClient: QueryClient }) {
   return mutationOptions({
     mutationKey: gitMutationKeys.init(input.cwd),

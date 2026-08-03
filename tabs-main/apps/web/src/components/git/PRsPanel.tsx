@@ -1,11 +1,11 @@
-import { CheckCircle2, ChevronDown, ChevronRight, GitMerge, GitPullRequest, MessageSquare } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CheckCircle2, ChevronDown, ChevronRight, GitMerge, GitPullRequest, MessageSquare, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 
-import { readNativeApi } from "../../nativeApi";
+import { gitAllPullRequestsQueryOptions, gitResolvePullRequestQueryOptions } from "../../lib/gitReactQuery";
 import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Checkbox } from "../ui/checkbox";
 import { Switch } from "~/components/ui/switch";
 import {
   Dialog,
@@ -15,7 +15,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
-import { Card, PanelToolbar, Select } from "./gitPrimitives";
+import { Card, Select } from "./gitPrimitives";
 
 interface MockPR {
   n: number;
@@ -42,8 +42,8 @@ export function PRsPanel({
   onOpenCreatePR: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [prs, setPrs] = useState<MockPR[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<"branch" | "all">("branch");
+  const [filterState, setFilterState] = useState<"all" | "open" | "merged" | "closed">("all");
   const [mergePr, setMergePr] = useState<MockPR | null>(null);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
@@ -51,46 +51,44 @@ export function PRsPanel({
   const [prComments, setPrComments] = useState<Record<number, PRComment[]>>({});
   const [loadingComments, setLoadingComments] = useState<Record<number, boolean>>({});
 
-  const api = readNativeApi();
+  // Query 1: Branch PR query
+  const branchPrQuery = useQuery(
+    gitResolvePullRequestQueryOptions({
+      cwd: cwd || null,
+      reference: branchName || null,
+    }),
+  );
 
-  useEffect(() => {
-    if (!api || !cwd || !branchName) {
-      setLoading(false);
-      return;
+  // Query 2: Repository PRs query (supports state filter for past merged/closed PRs)
+  const allPrsQuery = useQuery(gitAllPullRequestsQueryOptions(cwd || null, filterState));
+
+  const activeQuery = viewMode === "branch" ? branchPrQuery : allPrsQuery;
+  const loading = activeQuery.isLoading;
+
+  const prs = useMemo<MockPR[]>(() => {
+    if (viewMode === "branch") {
+      const pr = branchPrQuery.data?.pullRequest;
+      if (!pr) return [];
+      return [
+        {
+          n: pr.number,
+          title: pr.title,
+          state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
+          branch: `${pr.headBranch ?? branchName} → ${pr.baseBranch ?? "main"}`,
+          body: pr.url,
+        },
+      ];
+    } else {
+      const list = allPrsQuery.data?.pullRequests || [];
+      return list.map((pr) => ({
+        n: pr.number,
+        title: pr.title,
+        state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
+        branch: `${pr.headBranch} → ${pr.baseBranch}`,
+        body: pr.url,
+      }));
     }
-    let cancelled = false;
-    setLoading(true);
-
-    api.git
-      .resolvePullRequest({ cwd, reference: branchName })
-      .then((res: { pullRequest?: { number: number; title: string; state?: string; headBranch?: string; baseBranch?: string; url: string } | null }) => {
-        if (cancelled) return;
-        if (res.pullRequest) {
-          const pr = res.pullRequest;
-          setPrs([
-            {
-              n: pr.number,
-              title: pr.title,
-              state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
-              branch: `${pr.headBranch ?? branchName} → ${pr.baseBranch ?? "main"}`,
-              body: pr.url,
-            },
-          ]);
-        } else {
-          setPrs([]);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setPrs([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [api, cwd, branchName]);
+  }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName]);
 
   const toggleComments = (prNumber: number) => {
     if (expandedPrComments === prNumber) {
@@ -101,7 +99,6 @@ export function PRsPanel({
     if (prComments[prNumber]) return;
 
     setLoadingComments((prev) => ({ ...prev, [prNumber]: true }));
-    // Fetch comments via web view or mock placeholder fallback if gh CLI output isn't parsed
     setTimeout(() => {
       setPrComments((prev) => ({
         ...prev,
@@ -122,30 +119,85 @@ export function PRsPanel({
   };
 
   return (
-    <div>
-      {prs.length > 0 && (
-        <PanelToolbar>
-          <Button size="sm" onClick={onOpenCreatePR}>
-            <GitPullRequest /> Create pull request
-          </Button>
-        </PanelToolbar>
-      )}
+    <div className="space-y-3">
+      {/* Top Controls Toolbar: Segmented View Selector, State Filters & Create PR Button */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card/60 p-3 rounded-xl border border-border/60">
+        {/* Segmented Scope Control */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="grid grid-cols-2 p-1 rounded-xl bg-muted/40 border border-border/80 text-xs shrink-0 sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setViewMode("branch")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                viewMode === "branch"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              This branch ({branchName})
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("all")}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+                viewMode === "all"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              All repository PRs
+            </button>
+          </div>
+
+          {/* State Filter Buttons (Active when viewing Repository PRs) */}
+          {viewMode === "all" && (
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/20 border border-border/60 text-[11px]">
+              {(["all", "open", "merged", "closed"] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setFilterState(st)}
+                  className={`px-2.5 py-1 rounded-md capitalize font-medium transition-colors ${
+                    filterState === st
+                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {st === "all" ? "All history" : st}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Action Button */}
+        <Button size="sm" onClick={onOpenCreatePR} className="gap-1.5 shrink-0 ml-auto">
+          <Plus size={13} />
+          <span>Create pull request</span>
+        </Button>
+      </div>
 
       {loading ? (
-        <GitCheckingState message="Loading pull requests…" size={36} />
+        <GitCheckingState message={viewMode === "branch" ? `Loading pull request for ${branchName}…` : `Loading repository pull requests (${filterState})…`} size={36} />
       ) : prs.length === 0 ? (
-        <Card className="p-6 text-center">
-          <GitPullRequest className="mx-auto mb-2 text-muted-foreground/70" size={24} />
-          <p className="text-xs font-medium text-foreground/90 mb-1">No open pull requests for {branchName}</p>
-          <p className="text-[11px] text-muted-foreground/70 mb-4">Push your branch and open a pull request on GitHub to request feedback and merge changes.</p>
+        <Card className="p-8 text-center bg-card/40 border-dashed">
+          <GitPullRequest className="mx-auto mb-2 text-muted-foreground/70" size={28} />
+          <p className="text-sm font-medium text-foreground mb-1">
+            {viewMode === "branch" ? `No pull requests for ${branchName}` : `No ${filterState === "all" ? "" : filterState + " "}pull requests in this repository`}
+          </p>
+          <p className="text-xs text-muted-foreground/70 mb-4 max-w-sm mx-auto">
+            {viewMode === "branch"
+              ? "Push your branch and open a pull request on GitHub to request feedback and merge changes."
+              : `There are currently no matching ${filterState === "all" ? "" : filterState + " "}pull requests in this repository.`}
+          </p>
           <Button size="sm" onClick={onOpenCreatePR}>
-            <GitPullRequest /> Create pull request
+            Create pull request
           </Button>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {prs.map((pr) => (
-            <Card key={pr.n} className="p-3">
+            <Card key={pr.n} className="p-3.5 hover:bg-muted/20 transition-colors">
               <div className="flex items-center gap-3">
                 <Badge variant={pr.state === "open" ? "success" : pr.state === "merged" ? "secondary" : pr.state === "closed" ? "destructive" : "outline"}>
                   #{pr.n} {pr.state}

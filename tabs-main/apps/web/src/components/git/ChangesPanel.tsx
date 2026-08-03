@@ -13,6 +13,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
   Upload,
   Wand2,
@@ -29,7 +30,9 @@ import { Checkbox } from "../ui/checkbox";
 import { Switch } from "~/components/ui/switch";
 import {
   AutoTextarea,
+  Banner,
   Card,
+  DiffSummaryCard,
   FilePathLabel,
   SectionLabel,
 } from "./gitPrimitives";
@@ -393,6 +396,9 @@ export function ChangesPanel({
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCommittingAndPushing, setIsCommittingAndPushing] = useState(false);
   const [fileRowLoadingMap, setFileRowLoadingMap] = useState<Record<string, "stage" | "unstage" | "discard">>({});
+  const [diffSummaryResult, setDiffSummaryResult] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const api = readNativeApi();
   const queryClient = useQueryClient();
@@ -565,8 +571,50 @@ export function ChangesPanel({
     }
   };
 
+  const handleSummarizeChanges = async () => {
+    if (!api) return;
+    setIsSummarizing(true);
+    setSummaryError(null);
+    try {
+      const res = await api.git.generateDiffSummary({
+        cwd,
+        target: { kind: "working_tree" },
+      });
+      setDiffSummaryResult(res);
+    } catch (err) {
+      const errMsg = toGitUserFacingErrorMessage(err);
+      setSummaryError(errMsg);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
   return (
     <div>
+      {summaryError && (
+        <Banner
+          tone="bad"
+          title="AI Diff Summary Error"
+          body={summaryError}
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => setSummaryError(null)}>
+              Dismiss
+            </Button>
+          }
+        />
+      )}
+
+      {diffSummaryResult && (
+        <DiffSummaryCard
+          summary={diffSummaryResult.summary}
+          keyChanges={diffSummaryResult.keyChanges}
+          notesAndRisk={diffSummaryResult.notesAndRisk}
+          targetScope={diffSummaryResult.targetScope}
+          wasTruncated={diffSummaryResult.wasTruncated}
+          truncatedReason={diffSummaryResult.truncatedReason}
+          onClose={() => setDiffSummaryResult(null)}
+        />
+      )}
       {/* Conflicts section */}
       {hasConflict && (
         <Card className="p-4 mb-4 border" style={{ borderColor: "var(--sem-red-border)", backgroundColor: "var(--sem-red-soft)" }}>
@@ -705,6 +753,16 @@ export function ChangesPanel({
             >
               {isCommitting ? <Loader2 size={13} className="animate-spin" /> : <GitCommit />}
               {isCommitting ? (amend ? "Amending…" : "Committing…") : amend ? "Amend commit" : repoState.commitButtonLabel}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={totalChanged === 0 || isSummarizing || isCommitting || isCommittingAndPushing}
+              title={totalChanged === 0 ? "No changes in working tree" : "Summarize changes with AI"}
+              onClick={() => void handleSummarizeChanges()}
+            >
+              {isSummarizing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles className="size-3.5 text-primary" />}
+              {isSummarizing ? "Summarizing…" : "Summarize changes"}
             </Button>
             <Button
               variant="ghost"

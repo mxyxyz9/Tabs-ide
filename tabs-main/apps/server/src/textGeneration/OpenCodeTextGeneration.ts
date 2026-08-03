@@ -20,6 +20,7 @@ import { resolveAttachmentPath } from "../attachmentStore";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
@@ -156,7 +157,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateDiffSummary";
   }) =>
     sharedServerMutex.withPermit(
       Effect.gen(function* () {
@@ -266,7 +268,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateDiffSummary";
     readonly cwd: string;
     readonly prompt: string;
     readonly outputSchemaJson: S;
@@ -454,10 +457,34 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     };
   });
 
+  const generateDiffSummary: TextGenerationShape["generateDiffSummary"] = Effect.fn(
+    "OpenCodeTextGeneration.generateDiffSummary",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildDiffSummaryPrompt({
+      diffSummary: input.diffSummary,
+      diffPatch: input.diffPatch,
+      commitMessage: input.commitMessage,
+    });
+    const generated = yield* runOpenCodeJson({
+      operation: "generateDiffSummary",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      summary: generated.summary.trim(),
+      keyChanges: generated.keyChanges.trim(),
+      notesAndRisk: generated.notesAndRisk.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateDiffSummary,
   } satisfies TextGenerationShape;
 });

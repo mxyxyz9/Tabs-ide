@@ -206,6 +206,12 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
         ),
       ),
     generateThreadTitle: () => Effect.succeed({ title: "Test thread title" }),
+    generateDiffSummary: () =>
+      Effect.succeed({
+        summary: "Updated documentation and initial files.",
+        keyChanges: "- Added README file",
+        notesAndRisk: "",
+      }),
   };
 }
 
@@ -382,7 +388,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "pr",
             "list",
             "--head",
-            input.headSelector,
+            input.headSelector ?? "",
             "--state",
             "open",
             "--limit",
@@ -487,6 +493,7 @@ function preparePullRequestThread(
 function makeManager(input?: {
   ghScenario?: FakeGhScenario;
   textGeneration?: Partial<FakeGitTextGeneration>;
+  serverSettingsOverrides?: Parameters<typeof ServerSettingsService.layerTest>[0];
 }) {
   const { service: gitHubCli, ghCalls } = createGitHubCliWithFakeGh(input?.ghScenario);
   const textGeneration = createTextGeneration(input?.textGeneration);
@@ -494,7 +501,7 @@ function makeManager(input?: {
     prefix: "tabs-git-manager-test-",
   });
 
-  const serverSettingsLayer = ServerSettingsService.layerTest();
+  const serverSettingsLayer = ServerSettingsService.layerTest(input?.serverSettingsOverrides);
 
   const gitCoreLayer = GitCoreLive.pipe(
     Layer.provideMerge(NodeServices.layer),
@@ -2071,6 +2078,93 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           }),
         ]),
       );
+    }),
+  );
+
+  it.effect("generateDiffSummary returns error when no model configured", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-no-model-");
+      yield* initRepo(repoDir);
+      const { manager } = yield* makeManager({
+        serverSettingsOverrides: {
+          textGenerationModelSelection: null as any,
+        },
+      });
+      const result = yield* manager
+        .generateDiffSummary({
+          cwd: repoDir,
+          target: { kind: "working_tree" },
+        })
+        .pipe(
+          Effect.flip,
+          Effect.map((err) => err.message),
+        );
+
+      expect(result).toContain("No text generation model configured — set one up in Settings → Providers");
+    }),
+  );
+
+  it.effect("generateDiffSummary generates summary for working tree and commit", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-diff-summary-");
+      yield* initRepo(repoDir);
+      const { manager } = yield* makeManager({
+        serverSettingsOverrides: {
+          textGenerationModelSelection: {
+            instanceId: "codex" as any,
+            model: "gpt-5.4-mini",
+          },
+        },
+      });
+
+      const fileSystem = yield* FileSystem.FileSystem;
+      yield* fileSystem.writeFileString(path.join(repoDir, "README.md"), "# Updated README\n");
+
+      const wtResult = yield* manager.generateDiffSummary({
+        cwd: repoDir,
+        target: { kind: "working_tree" },
+      });
+
+      expect(wtResult.targetScope).toBe("working_tree");
+      expect(wtResult.summary).toBe("Updated documentation and initial files.");
+
+      yield* runGit(repoDir, ["commit", "-am", "Update README.md"]);
+      const headSha = (yield* runGit(repoDir, ["rev-parse", "HEAD"])).stdout.trim();
+
+      const commitResult = yield* manager.generateDiffSummary({
+        cwd: repoDir,
+        target: { kind: "commit", sha: headSha },
+      });
+
+      expect(commitResult.targetScope).toBe("commit");
+      expect(commitResult.summary).toBe("Updated documentation and initial files.");
+    }),
+  );
+
+  it.effect("generateDiffSummary surfaces truncation notice for lockfiles", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-truncation-");
+      yield* initRepo(repoDir);
+      const { manager } = yield* makeManager({
+        serverSettingsOverrides: {
+          textGenerationModelSelection: {
+            instanceId: "codex" as any,
+            model: "gpt-5.4-mini",
+          },
+        },
+      });
+
+      const fileSystem = yield* FileSystem.FileSystem;
+      yield* fileSystem.writeFileString(path.join(repoDir, "package-lock.json"), '{"lockfile": true}\n');
+      yield* runGit(repoDir, ["add", "package-lock.json"]);
+
+      const result = yield* manager.generateDiffSummary({
+        cwd: repoDir,
+        target: { kind: "working_tree" },
+      });
+
+      expect(result.wasTruncated).toBe(true);
+      expect(result.truncatedReason).toContain("excluded or truncated");
     }),
   );
 });

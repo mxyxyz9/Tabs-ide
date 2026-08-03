@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
@@ -189,5 +190,20 @@ describe("normalizeCliError", () => {
 
     expect(result).toBeInstanceOf(TextGenerationError);
     expect(result.detail).toBe("fallback");
+  });
+});
+
+describe("buildDiffSummaryPrompt", () => {
+  it("builds structured prompt and schema for AI diff summary", () => {
+    const result = buildDiffSummaryPrompt({
+      diffSummary: "2 files changed",
+      diffPatch: "diff --git a/index.ts b/index.ts\n+const x = 1;",
+      commitMessage: "feat: initial commit",
+    });
+
+    expect(result.prompt).toContain("2 files changed");
+    expect(result.prompt).toContain("diff --git a/index.ts b/index.ts");
+    expect(result.prompt).toContain("feat: initial commit");
+    expect(result.outputSchema).toBeDefined();
   });
 });

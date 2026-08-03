@@ -1815,12 +1815,15 @@ describe("WebSocket Server", () => {
     const status = vi.fn(() => Effect.succeed(statusResult));
     const runStackedAction = vi.fn(() => Effect.void as any);
     const resolvePullRequest = vi.fn(() => Effect.void as any);
+    const listPullRequests = vi.fn(() => Effect.void as any);
     const preparePullRequestThread = vi.fn(() => Effect.void as any);
     const gitManager: GitManagerShape = {
       status,
       resolvePullRequest,
+      listPullRequests,
       preparePullRequestThread,
       runStackedAction,
+      generateDiffSummary: vi.fn(() => Effect.void as any),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1858,8 +1861,10 @@ describe("WebSocket Server", () => {
     const gitManager: GitManagerShape = {
       status: vi.fn(() => Effect.void as any),
       resolvePullRequest: vi.fn(() => Effect.succeed(resolvePullRequestResult)),
+      listPullRequests: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.succeed(preparePullRequestThreadResult)),
       runStackedAction: vi.fn(() => Effect.void as any),
+      generateDiffSummary: vi.fn(() => Effect.void as any),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1906,8 +1911,10 @@ describe("WebSocket Server", () => {
     const gitManager: GitManagerShape = {
       status: vi.fn(() => Effect.void as any),
       resolvePullRequest: vi.fn(() => Effect.void as any),
+      listPullRequests: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.void as any),
       runStackedAction,
+      generateDiffSummary: vi.fn(() => Effect.void as any),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });
@@ -1972,8 +1979,10 @@ describe("WebSocket Server", () => {
     const gitManager: GitManagerShape = {
       status: vi.fn(() => Effect.void as any),
       resolvePullRequest: vi.fn(() => Effect.void as any),
+      listPullRequests: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.void as any),
       runStackedAction,
+      generateDiffSummary: vi.fn(() => Effect.void as any),
     };
 
     server = await createTestServer({ cwd: "/test", gitManager });

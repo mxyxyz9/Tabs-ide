@@ -216,3 +216,41 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+// ---------------------------------------------------------------------------
+// Diff summary (CodeRabbit-style)
+// ---------------------------------------------------------------------------
+
+export interface DiffSummaryPromptInput {
+  diffSummary: string;
+  diffPatch: string;
+  commitMessage?: string | undefined;
+  policy?: TextGenerationPolicy | undefined;
+}
+
+export function buildDiffSummaryPrompt(input: DiffSummaryPromptInput) {
+  const prompt = [
+    "You are an expert code reviewer generating an AI diff summary.",
+    "Return a JSON object with keys: summary, keyChanges, notesAndRisk.",
+    "Rules:",
+    "- summary must be 1-2 concise sentences summarizing the overall change.",
+    "- keyChanges must be markdown bullet points (using '- ') grouping logical changes by module/area.",
+    "- notesAndRisk can be an empty string or short bullet points highlighting breaking changes, potential risks, or key testing considerations.",
+    ...policyInstruction(input.policy?.commitInstructions),
+    "",
+    ...(input.commitMessage ? [`Commit message context: ${input.commitMessage}`, ""] : []),
+    "Diff stat summary:",
+    limitSection(input.diffSummary, 12_000),
+    "",
+    "Diff patch:",
+    limitSection(input.diffPatch, 50_000),
+  ].join("\n");
+
+  const outputSchema = Schema.Struct({
+    summary: Schema.String,
+    keyChanges: Schema.String,
+    notesAndRisk: Schema.String,
+  });
+
+  return { prompt, outputSchema };
+}

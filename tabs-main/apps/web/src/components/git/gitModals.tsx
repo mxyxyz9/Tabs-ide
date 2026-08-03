@@ -10,12 +10,15 @@ import {
   ChevronDown,
   CircleAlert,
   ExternalLink,
+  FileText,
+  GitPullRequest,
   Loader2,
   Package,
   RefreshCw,
   Rocket,
   Search,
   Sparkles,
+  Trash2,
   Wand2,
   X,
 } from "lucide-react";
@@ -284,6 +287,97 @@ export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; 
   );
 }
 
+export function SearchableBranchSelect({
+  branches,
+  value,
+  onChange,
+  placeholder = "Select branch…",
+}: {
+  branches: ReadonlyArray<{ name: string }>;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return branches;
+    const q = search.toLowerCase().trim();
+    return branches.filter((b) => b.name.toLowerCase().includes(q));
+  }, [branches, search]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-3 py-2 text-xs bg-background border border-border/80 rounded-lg text-foreground outline-none focus:ring-1 focus:ring-primary transition-all text-left"
+      >
+        <span className="font-mono text-xs truncate">{value || placeholder}</span>
+        <ChevronDown size={13} className={`text-muted-foreground shrink-0 ml-1.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 w-full mt-1.5 bg-popover border border-border rounded-xl shadow-2xl z-[350] overflow-hidden">
+          {/* Internal Search Input */}
+          <div className="p-2 border-b border-border bg-muted/20">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0" />
+              <input
+                type="text"
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search branches…"
+                className="w-full bg-background border border-border/60 rounded-md pl-8 pr-2 py-1 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-border"
+              />
+            </div>
+          </div>
+
+          {/* Branch List Options */}
+          <div className="py-1 max-h-52 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-xs text-muted-foreground text-center">No branches found</div>
+            ) : (
+              filtered.map((b) => (
+                <button
+                  key={b.name}
+                  type="button"
+                  onClick={() => {
+                    onChange(b.name);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 text-xs font-mono transition-colors text-left ${
+                    b.name === value
+                      ? "bg-accent text-accent-foreground font-semibold"
+                      : "text-foreground/90 hover:bg-accent/50 hover:text-foreground"
+                  }`}
+                >
+                  <span className="truncate">{b.name}</span>
+                  {b.name === value && <Check size={13} className="text-primary shrink-0 ml-2" />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CreatePRModal({
   currentBranch,
   branches,
@@ -294,11 +388,14 @@ export function CreatePRModal({
   currentBranch: string;
   branches: ReadonlyArray<GitBranchType>;
   lastSubject: string;
-  onCreate: (pr: { title: string; base: string; body: string; draft: boolean }) => void | Promise<void>;
+  onCreate: (pr: { title: string; head: string; base: string; body: string; draft: boolean }) => void | Promise<void>;
   onClose: () => void;
 }) {
-  const [title, setTitle] = useState(lastSubject);
-  const [base, setBase] = useState(branches.find((b) => b.name !== currentBranch)?.name || "main");
+  const [title, setTitle] = useState("");
+  const [head, setHead] = useState(currentBranch);
+  const [base, setBase] = useState(
+    () => branches.find((b) => b.name !== currentBranch && (b.name === "main" || b.name === "master"))?.name || branches.find((b) => b.name !== currentBranch)?.name || "main"
+  );
   const [body, setBody] = useState("");
   const [draft, setDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -306,64 +403,165 @@ export function CreatePRModal({
   const handleCreate = async () => {
     setSubmitting(true);
     try {
-      await onCreate({ title: title.trim(), base, body: body.trim(), draft });
+      await onCreate({ title: title.trim(), head, base, body: body.trim(), draft });
     } finally {
       setSubmitting(false);
     }
   };
 
+  const autoFillTitleAndDescription = () => {
+    if (lastSubject) {
+      setTitle(lastSubject);
+    }
+    const defaultTemplate = `## Summary\n\n${lastSubject || "Describe the changes introduced in this pull request."}\n\n## Changes Included\n\n- Updated implementation details for ${head}.\n- Passed unit & integration tests.\n\n## Verification\n\n- Verified manually in dev workspace.`;
+    setBody(defaultTemplate);
+  };
+
+  const clearAllFields = () => {
+    setTitle("");
+    setBody("");
+  };
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
-      <DialogPopup className="git-tool-v2">
-        <DialogHeader>
-          <DialogTitle>Create pull request</DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="space-y-4">
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground/90">{base}</span>
-            <span className="text-muted-foreground/70">&larr;</span>
-            <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground">{currentBranch}</span>
+      <DialogPopup className="git-tool-v2 max-w-4xl w-[88vw] h-[640px] max-h-[75vh] p-0 overflow-hidden border-border/80 shadow-2xl">
+        <div className="flex h-full w-full">
+          {/* Left Configuration Sidebar */}
+          <div className="w-80 shrink-0 border-r border-border/60 bg-muted/20 p-6 flex flex-col justify-between">
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">Create pull request</h3>
+                <p className="text-xs text-muted-foreground/70 mt-1">Configure branches and visibility.</p>
+              </div>
+
+              {/* Branch Direction Arrow Pill */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/70 bg-card/50 text-xs font-mono">
+                <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground/90 font-medium truncate max-w-[100px]">{base}</span>
+                <span className="text-muted-foreground/70 text-sm font-sans">&larr;</span>
+                <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground font-medium truncate max-w-[100px]">{head}</span>
+              </div>
+
+              {/* Head Branch Selector with Search */}
+              <Field label="Head Branch (from)">
+                <SearchableBranchSelect
+                  branches={branches}
+                  value={head}
+                  onChange={(val) => setHead(val)}
+                  placeholder="Select head branch…"
+                />
+              </Field>
+
+              {/* Base Branch Selector with Search */}
+              <Field label="Base Branch (into)">
+                <SearchableBranchSelect
+                  branches={branches.filter((b) => b.name !== head)}
+                  value={base}
+                  onChange={(val) => setBase(val)}
+                  placeholder="Select base branch…"
+                />
+              </Field>
+
+              {/* PR Mode Segmented Control */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/70 block">
+                  PR Visibility
+                </label>
+                <div className="grid grid-cols-2 p-1 rounded-xl bg-muted/40 border border-border/80 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDraft(false)}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-all ${
+                      !draft
+                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <GitPullRequest size={13} className={!draft ? "text-foreground" : "text-muted-foreground"} />
+                    <span>Ready</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraft(true)}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg font-medium transition-all ${
+                      draft
+                        ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <FileText size={13} className={draft ? "text-foreground" : "text-muted-foreground"} />
+                    <span>Draft</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Action Buttons */}
+            <div className="flex items-center gap-2 pt-4 border-t border-border/50">
+              <Button type="button" variant="outline" size="sm" className="flex-1" disabled={submitting} onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="flex-1 gap-1.5"
+                disabled={!title.trim() || submitting}
+                onClick={() => void handleCreate()}
+              >
+                {submitting ? <Loader2 size={13} className="animate-spin" /> : <GitPullRequest size={13} />}
+                <span>{submitting ? (draft ? "Drafting…" : "Creating…") : draft ? "Create draft" : "Create PR"}</span>
+              </Button>
+            </div>
           </div>
-          <Field label="Base branch">
-            <Select value={base} onChange={(e) => setBase(e.target.value)}>
-              {branches
-                .filter((b) => b.name !== currentBranch)
-                .map((b) => (
-                  <option key={b.name} value={b.name}>
-                    {b.name}
-                  </option>
-                ))}
-            </Select>
-          </Field>
-          <Field label="Title">
-            <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Describe the change" />
-          </Field>
-          <Field label="Description">
+
+          {/* Right Main Editor Panel */}
+          <div className="flex-1 flex flex-col p-6 bg-background relative">
+            {/* Top Auto-fill & Clear Actions */}
+            <div className="flex justify-end items-center gap-2 mb-4 pr-10">
+              {(title.trim() || body.trim()) && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllFields}
+                  className="gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <Trash2 size={13} />
+                  <span>Clear</span>
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={autoFillTitleAndDescription}
+                className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Wand2 size={13} />
+                <span>Auto-fill title & description</span>
+              </Button>
+            </div>
+
+            {/* PR Title Input */}
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Pull request title…"
+              className="w-full bg-transparent border-none text-2xl font-semibold text-foreground placeholder:text-muted-foreground/40 outline-none mb-3 pr-10 truncate"
+            />
+
+            <div className="w-10 h-0.5 bg-border rounded-full mb-4 opacity-80" />
+
+            {/* PR Description Textarea */}
             <AutoTextarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Add more detail for reviewers (optional)…"
-              minRows={3}
-              className="w-full border border-border rounded-lg text-foreground bg-background text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
+              placeholder="Add detailed description, context, motivation, or review notes (optional)…"
+              minRows={10}
+              className="w-full flex-1 bg-transparent border-none text-xs font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/40 outline-none resize-none p-0 focus:border-none focus:ring-0"
             />
-          </Field>
-          <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20">
-            <div className="space-y-0.5">
-              <div className="text-xs font-medium text-foreground">Open as draft</div>
-              <div className="text-[11px] text-muted-foreground/70">Draft PRs cannot be merged until marked ready for review</div>
-            </div>
-            <Switch checked={draft} onCheckedChange={(c) => setDraft(!!c)} />
           </div>
-        </DialogPanel>
-        <DialogFooter>
-          <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" size="sm" disabled={!title.trim() || submitting} onClick={() => void handleCreate()}>
-            {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
-            {submitting ? (draft ? "Creating draft…" : "Creating pull request…") : draft ? "Create draft" : "Create pull request"}
-          </Button>
-        </DialogFooter>
+        </div>
       </DialogPopup>
     </Dialog>
   );

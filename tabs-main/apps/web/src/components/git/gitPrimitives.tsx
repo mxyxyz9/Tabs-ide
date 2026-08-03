@@ -1,10 +1,14 @@
 import {
   AlertTriangle,
+  Check,
   CircleAlert,
+  Copy,
   Loader2,
+  Sparkles,
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Button } from "../ui/button";
 
 const ACCENT = "var(--gt-accent, var(--primary, #ffffff))";
 const ACCENT_CONTRAST = "var(--gt-accent-contrast, var(--primary-foreground, #ffffff))";
@@ -162,8 +166,6 @@ export function Dropdown({
     </div>
   );
 }
-
-import { Button } from "../ui/button";
 
 export function InlineForm({
   placeholder,
@@ -335,4 +337,112 @@ export const Select = ({
     </SelectRoot>
   );
 };
+
+export interface DiffSummaryCardProps {
+  summary: string;
+  keyChanges: string;
+  notesAndRisk?: string | undefined;
+  targetScope?: "staged" | "working_tree" | "commit" | undefined;
+  wasTruncated?: boolean | undefined;
+  truncatedReason?: string | undefined;
+  onClose?: (() => void) | undefined;
+}
+
+export function DiffSummaryCard({
+  summary,
+  keyChanges,
+  notesAndRisk,
+  targetScope,
+  wasTruncated,
+  truncatedReason,
+  onClose,
+}: DiffSummaryCardProps) {
+  const [copied, setCopied] = useState(false);
+
+  const fullText = [
+    `### Summary\n${summary}`,
+    `### Key Changes\n${keyChanges}`,
+    notesAndRisk ? `### Notes & Risk\n${notesAndRisk}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(fullText).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const scopeLabel =
+    targetScope === "staged"
+      ? "Staged changes"
+      : targetScope === "commit"
+      ? "Commit summary"
+      : "Working tree changes";
+
+  return (
+    <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-lg space-y-3 mb-4 relative">
+      <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-primary shrink-0" />
+          <span className="text-xs font-semibold text-foreground tracking-tight">
+            AI Diff Summary
+          </span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+            {scopeLabel}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 text-[11px] gap-1">
+            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+            {copied ? "Copied" : "Copy"}
+          </Button>
+          {onClose && (
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-7 w-7 p-0">
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {wasTruncated && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          <span>{truncatedReason || "Summary based on partial diff — large files/patches were truncated."}</span>
+        </div>
+      )}
+
+      <div className="space-y-3 text-xs leading-relaxed">
+        <div>
+          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
+            Summary
+          </h4>
+          <p className="text-foreground/90 font-medium">{summary}</p>
+        </div>
+
+        {keyChanges && (
+          <div>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
+              Key Changes
+            </h4>
+            <div className="text-muted-foreground/90 font-mono text-[11px] whitespace-pre-wrap leading-relaxed">
+              {keyChanges}
+            </div>
+          </div>
+        )}
+
+        {notesAndRisk && (
+          <div>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-1">
+              Notes & Risk
+            </h4>
+            <div className="text-muted-foreground/90 font-mono text-[11px] whitespace-pre-wrap leading-relaxed">
+              {notesAndRisk}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 

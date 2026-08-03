@@ -15,6 +15,8 @@ import type {
   GitPreparePullRequestThreadResult,
   GitPullRequestRefInput,
   GitResolvePullRequestResult,
+  GitListPullRequestsInput,
+  GitListPullRequestsResult,
   GitListWorkflowRunsInput,
   GitListWorkflowRunsResult,
   VcsStatusInput,
@@ -77,9 +79,9 @@ import type {
   GitListTagsResult,
   GitWatchedBranchStatusesInput,
   GitWatchedBranchStatusesResult,
+  GitGenerateDiffSummaryInput,
+  GitGenerateDiffSummaryResult,
   GitActionProgressEvent,
-
-
 } from "./git.ts";
 import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult } from "./review.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
@@ -1285,10 +1287,12 @@ export interface EnvironmentApi {
   };
   git: {
     resolvePullRequest: (input: GitPullRequestRefInput) => Promise<GitResolvePullRequestResult>;
+    listPullRequests: (input: GitListPullRequestsInput) => Promise<GitListPullRequestsResult>;
     preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
     ) => Promise<GitPreparePullRequestThreadResult>;
     listWorkflowRuns: (input: GitListWorkflowRunsInput) => Promise<GitListWorkflowRunsResult>;
+    generateDiffSummary: (input: GitGenerateDiffSummaryInput) => Promise<GitGenerateDiffSummaryResult>;
   };
   review: {
     getDiffPreview: (input: ReviewDiffPreviewInput) => Promise<ReviewDiffPreviewResult>;
@@ -1405,6 +1409,7 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     createTag: (input: GitCreateTagInput) => Promise<void>;
     listTags: (input: GitListTagsInput) => Promise<GitListTagsResult>;
     watchedBranchStatuses: (input: GitWatchedBranchStatusesInput) => Promise<GitWatchedBranchStatusesResult>;
+    generateDiffSummary: (input: GitGenerateDiffSummaryInput) => Promise<GitGenerateDiffSummaryResult>;
   };
   server: LocalApi["server"] & {
     cloneRepository: (

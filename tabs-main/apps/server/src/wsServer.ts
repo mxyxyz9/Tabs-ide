@@ -952,6 +952,16 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* gitManager.resolvePullRequest(body);
       }
 
+      case WS_METHODS.gitGenerateDiffSummary: {
+        const body = stripRequestTag(request.body);
+        return yield* gitManager.generateDiffSummary(body);
+      }
+
+      case WS_METHODS.gitListPullRequests: {
+        const body = stripRequestTag(request.body);
+        return yield* gitManager.listPullRequests(body);
+      }
+
       case WS_METHODS.gitPreparePullRequestThread: {
         const body = stripRequestTag(request.body);
         return yield* gitManager.preparePullRequestThread(body);
