@@ -691,7 +691,7 @@ export function DraftReleaseModal({
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
-      <DialogPopup className="git-tool-v2 max-w-4xl w-[90vw] h-[85vh] p-0 overflow-hidden border-border/80 shadow-2xl">
+      <DialogPopup className="git-tool-v2 max-w-4xl w-[88vw] h-[640px] max-h-[75vh] p-0 overflow-hidden border-border/80 shadow-2xl">
         <div className="flex h-full w-full">
           {/* Left Configuration Sidebar */}
           <div className="w-80 shrink-0 border-r border-border/60 bg-muted/20 p-6 flex flex-col justify-between">
