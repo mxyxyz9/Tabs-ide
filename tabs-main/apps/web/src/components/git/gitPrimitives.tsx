@@ -359,7 +359,7 @@ export interface DiffSummaryCardProps {
   summary: string;
   keyChanges: string;
   notesAndRisk: string;
-  targetScope?: "staged" | "working_tree" | "commit" | undefined;
+  targetScope?: "staged" | "working_tree" | "commit" | "full_codebase" | undefined;
   wasTruncated?: boolean | undefined;
   truncatedReason?: string | undefined;
   onClose?: (() => void) | undefined;

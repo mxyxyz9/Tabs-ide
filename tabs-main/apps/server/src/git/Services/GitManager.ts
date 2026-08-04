@@ -27,6 +27,7 @@ import {
   GitSubmitFindingFeedbackResult,
   GitGetReviewHistoryInput,
   GitGetReviewHistoryResult,
+  ReviewProgressEvent,
 } from "@tabs/contracts";
 import type { Effect } from "effect";
 import type { GitManagerServiceError } from "../Errors.ts";
@@ -93,7 +94,10 @@ export interface GitManagerShape {
    */
   readonly generateReview: (
     input: GitGenerateReviewInput,
-    options?: { onCostPreview?: (preview: any) => Effect.Effect<void> },
+    options?: {
+      onCostPreview?: (preview: any) => Effect.Effect<void>;
+      onProgress?: (event: ReviewProgressEvent) => Effect.Effect<void>;
+    },
   ) => Effect.Effect<GitGenerateReviewResult, GitManagerServiceError>;
 
   /**

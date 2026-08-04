@@ -88,6 +88,7 @@ import {
   SourceControlCloneRepositoryInput,
   SourceControlRepositoryLookupInput,
 } from "./sourceControl";
+import { ReviewProgressEvent } from "./review";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -216,6 +217,7 @@ export const WS_METHODS = {
 export const WS_CHANNELS = {
   gitActionProgress: "git.actionProgress",
   reviewCostPreview: "review.costPreview",
+  reviewProgress: "review.progress",
   terminalEvent: "terminal.event",
   serverWelcome: "server.welcome",
   serverConfigUpdated: "server.configUpdated",
@@ -366,6 +368,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.serverProvidersUpdated]: typeof ServerProviderUpdatedPayload.Type;
   readonly [WS_CHANNELS.gitActionProgress]: typeof GitActionProgressEvent.Type;
   readonly [WS_CHANNELS.reviewCostPreview]: ReviewCostPreviewEvent;
+  readonly [WS_CHANNELS.reviewProgress]: ReviewProgressEvent;
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
@@ -401,6 +404,10 @@ export const WsPushReviewCostPreview = makeWsPushSchema(
   WS_CHANNELS.reviewCostPreview,
   ReviewCostPreviewEvent,
 );
+export const WsPushReviewProgress = makeWsPushSchema(
+  WS_CHANNELS.reviewProgress,
+  ReviewProgressEvent,
+);
 export const WsPushTerminalEvent = makeWsPushSchema(WS_CHANNELS.terminalEvent, TerminalEvent);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
@@ -410,6 +417,7 @@ export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
 export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.gitActionProgress,
   WS_CHANNELS.reviewCostPreview,
+  WS_CHANNELS.reviewProgress,
   WS_CHANNELS.serverWelcome,
   WS_CHANNELS.serverConfigUpdated,
   WS_CHANNELS.serverProvidersUpdated,
@@ -424,6 +432,7 @@ export const WsPush = Schema.Union([
   WsPushServerProvidersUpdated,
   WsPushGitActionProgress,
   WsPushReviewCostPreview,
+  WsPushReviewProgress,
   WsPushTerminalEvent,
   WsPushOrchestrationDomainEvent,
 ]);

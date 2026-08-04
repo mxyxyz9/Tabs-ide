@@ -309,6 +309,9 @@ export const GitGenerateDiffSummaryTarget = Schema.Union([
     kind: Schema.Literal("commit"),
     sha: TrimmedNonEmptyStringSchema,
   }),
+  Schema.Struct({
+    kind: Schema.Literal("full_codebase"),
+  }),
 ]);
 export type GitGenerateDiffSummaryTarget = typeof GitGenerateDiffSummaryTarget.Type;
 
@@ -324,7 +327,7 @@ export const GitGenerateDiffSummaryResult = Schema.Struct({
   summary: Schema.String,
   keyChanges: Schema.String,
   notesAndRisk: Schema.String,
-  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit"])),
+  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit", "full_codebase"])),
   wasTruncated: Schema.Boolean,
   truncatedCount: Schema.optional(NonNegativeInt),
   truncatedReason: Schema.optional(Schema.String),
@@ -372,7 +375,7 @@ export const GitGenerateReviewResult = Schema.Struct({
   notesAndRisk: Schema.String,
   findings: Schema.Array(ReviewFinding),
   passesRun: Schema.Array(Schema.String),
-  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit"])),
+  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit", "full_codebase"])),
   wasTruncated: Schema.Boolean,
   truncatedCount: Schema.optional(NonNegativeInt),
   truncatedReason: Schema.optional(Schema.String),

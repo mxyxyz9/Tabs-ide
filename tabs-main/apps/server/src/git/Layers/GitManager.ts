@@ -1429,7 +1429,7 @@ export const makeGitManager = Effect.gen(function* () {
       let diffSummary = "";
       let rawPatch = "";
       let commitMessage: string | undefined = undefined;
-      let targetScope: "staged" | "working_tree" | "commit" = "working_tree";
+      let targetScope: "staged" | "working_tree" | "commit" | "full_codebase" = "working_tree";
 
       if (input.target.kind === "commit") {
         targetScope = "commit";
@@ -1437,6 +1437,14 @@ export const makeGitManager = Effect.gen(function* () {
         const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
         rawPatch = diffRes.patch;
         diffSummary = `Commit ${commitSha}`;
+      } else if (input.target.kind === "full_codebase") {
+        targetScope = "full_codebase";
+        const diffRes = yield* gitCore.diff({
+          cwd: input.cwd,
+          commit: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        });
+        rawPatch = diffRes.patch;
+        diffSummary = "Full codebase audit across repository source files";
       } else {
         const details = yield* gitCore.statusDetails(input.cwd);
         const stagedCount = details.staged?.files.length ?? 0;
@@ -1632,7 +1640,19 @@ export const makeGitManager = Effect.gen(function* () {
 
       let diffSummary = "";
       let rawPatch = "";
-      let targetScope: "staged" | "working_tree" | "commit" = "working_tree";
+      let targetScope: "staged" | "working_tree" | "commit" | "full_codebase" = "working_tree";
+
+      if (options?.onProgress) {
+        yield* options.onProgress({
+          cwd: input.cwd,
+          stage: "assembling_context",
+          message:
+            input.target.kind === "full_codebase"
+              ? "Collecting full codebase source files & diff patch buffers..."
+              : "Collecting working tree diff patch & git status...",
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       if (input.target.kind === "commit") {
         targetScope = "commit";
@@ -1640,6 +1660,14 @@ export const makeGitManager = Effect.gen(function* () {
         const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
         rawPatch = diffRes.patch;
         diffSummary = `Commit ${commitSha}`;
+      } else if (input.target.kind === "full_codebase") {
+        targetScope = "full_codebase";
+        const diffRes = yield* gitCore.diff({
+          cwd: input.cwd,
+          commit: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+        });
+        rawPatch = diffRes.patch;
+        diffSummary = "Full codebase audit across repository source files";
       } else {
         const details = yield* gitCore.statusDetails(input.cwd);
         const stagedCount = details.staged?.files.length ?? 0;
@@ -1728,6 +1756,14 @@ export const makeGitManager = Effect.gen(function* () {
       let staticAnalysisContextSection = "";
       const saSettings = settings.gitAi?.staticAnalysis;
       if (saSettings?.enabled && saSettings.tools.length > 0) {
+        if (options?.onProgress) {
+          yield* options.onProgress({
+            cwd: input.cwd,
+            stage: "static_analysis",
+            message: "Evaluating static analysis context & AST symbol diagnostics...",
+            timestamp: new Date().toISOString(),
+          });
+        }
         const saResult = yield* runStaticAnalysis({
           cwd: input.cwd,
           tools: saSettings.tools,
@@ -1786,6 +1822,7 @@ export const makeGitManager = Effect.gen(function* () {
           modelSelection,
           configuredPasses,
           ...(options?.onCostPreview ? { onCostPreview: options.onCostPreview } : {}),
+          ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
         },
         textGeneration,
       );

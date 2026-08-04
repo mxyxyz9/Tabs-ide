@@ -34,3 +34,23 @@ export type ReviewDiffPreviewResult = typeof ReviewDiffPreviewResult.Type;
 
 export const ReviewDiffPreviewError = Schema.Union([VcsError, GitCommandError]);
 export type ReviewDiffPreviewError = typeof ReviewDiffPreviewError.Type;
+
+export const ReviewProgressStage = Schema.Literals([
+  "assembling_context",
+  "static_analysis",
+  "pass_executing",
+  "synthesis",
+  "complete",
+]);
+export type ReviewProgressStage = typeof ReviewProgressStage.Type;
+
+export const ReviewProgressEvent = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  stage: ReviewProgressStage,
+  message: Schema.String,
+  passIndex: Schema.optionalKey(Schema.Number),
+  totalPasses: Schema.optionalKey(Schema.Number),
+  fileCount: Schema.optionalKey(Schema.Number),
+  timestamp: Schema.String,
+});
+export type ReviewProgressEvent = typeof ReviewProgressEvent.Type;

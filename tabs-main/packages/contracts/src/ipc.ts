@@ -89,7 +89,7 @@ import type {
   GitGetReviewHistoryResult,
   GitActionProgressEvent,
 } from "./git.ts";
-import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult } from "./review.ts";
+import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult, ReviewProgressEvent } from "./review.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
 import type { AssetCreateUrlInput, AssetCreateUrlResult } from "./assets.ts";
 import type {
@@ -1304,6 +1304,7 @@ export interface EnvironmentApi {
       input: GitSubmitFindingFeedbackInput,
     ) => Promise<GitSubmitFindingFeedbackResult>;
     getReviewHistory: (input: GitGetReviewHistoryInput) => Promise<GitGetReviewHistoryResult>;
+    onReviewProgress: (callback: (event: ReviewProgressEvent) => void) => () => void;
   };
   review: {
     getDiffPreview: (input: ReviewDiffPreviewInput) => Promise<ReviewDiffPreviewResult>;
@@ -1410,6 +1411,7 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
     onActionProgress: (callback: (event: GitActionProgressEvent) => void) => () => void;
+    onReviewProgress: (callback: (event: ReviewProgressEvent) => void) => () => void;
     environment: (input: GitEnvironmentInput) => Promise<GitEnvironmentResult>;
     gitHubSwitchAccount: (input: GitHubSwitchAccountInput) => Promise<GitEnvironmentResult>;
     gitHubLogout: (input: GitHubLogoutInput) => Promise<GitEnvironmentResult>;

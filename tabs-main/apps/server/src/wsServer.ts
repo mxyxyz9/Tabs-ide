@@ -962,6 +962,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* gitManager.generateReview(body, {
           onCostPreview: (event) =>
             pushBus.publishClient(ws, WS_CHANNELS.reviewCostPreview, event).pipe(Effect.asVoid),
+          onProgress: (event) =>
+            pushBus.publishClient(ws, WS_CHANNELS.reviewProgress, event).pipe(Effect.asVoid),
         });
       }
 

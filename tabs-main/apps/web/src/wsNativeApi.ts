@@ -1,5 +1,6 @@
 import {
   type GitActionProgressEvent,
+  type ReviewProgressEvent,
   ORCHESTRATION_WS_CHANNELS,
   ORCHESTRATION_WS_METHODS,
   type ContextMenuItem,
@@ -21,6 +22,7 @@ const welcomeListeners = new Set<(payload: WsWelcomePayload) => void>();
 const serverConfigUpdatedListeners = new Set<(payload: ServerConfigUpdatedPayload) => void>();
 const providersUpdatedListeners = new Set<(payload: ServerProviderUpdatedPayload) => void>();
 const gitActionProgressListeners = new Set<(payload: GitActionProgressEvent) => void>();
+const reviewProgressListeners = new Set<(payload: ReviewProgressEvent) => void>();
 
 /**
  * Subscribe to the server welcome message. If a welcome was already received
@@ -126,6 +128,16 @@ export function createWsNativeApi(): NativeApi {
   transport.subscribe(WS_CHANNELS.gitActionProgress, (message) => {
     const payload = message.data;
     for (const listener of gitActionProgressListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.reviewProgress, (message) => {
+    const payload = message.data;
+    for (const listener of reviewProgressListeners) {
       try {
         listener(payload);
       } catch {
@@ -260,6 +272,12 @@ export function createWsNativeApi(): NativeApi {
         gitActionProgressListeners.add(callback);
         return () => {
           gitActionProgressListeners.delete(callback);
+        };
+      },
+      onReviewProgress: (callback) => {
+        reviewProgressListeners.add(callback);
+        return () => {
+          reviewProgressListeners.delete(callback);
         };
       },
     },

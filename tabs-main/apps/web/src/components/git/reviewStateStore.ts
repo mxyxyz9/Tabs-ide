@@ -1,4 +1,4 @@
-import type { GitGenerateReviewInput, GitGenerateReviewResult } from "@tabs/contracts";
+import type { GitGenerateReviewInput, GitGenerateReviewResult, ReviewProgressEvent } from "@tabs/contracts";
 import { useEffect, useState } from "react";
 import { toastManager } from "../ui/toast";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
@@ -8,6 +8,9 @@ export interface ActiveReviewState {
   result: GitGenerateReviewResult | null;
   error: string | null;
   isIncremental: boolean;
+  latestProgress?: ReviewProgressEvent | null;
+  progressLogs?: ReviewProgressEvent[];
+  startedAt?: number;
 }
 
 const store: Record<string, ActiveReviewState> = {};
@@ -19,7 +22,7 @@ function notify() {
 }
 
 export function getActiveReviewState(cwd: string): ActiveReviewState {
-  return store[cwd] ?? { status: "idle", result: null, error: null, isIncremental: false };
+  return store[cwd] ?? { status: "idle", result: null, error: null, isIncremental: false, latestProgress: null, progressLogs: [] };
 }
 
 export function getUnreadReviewCount(cwd: string): number | null {
@@ -44,6 +47,8 @@ export function clearReviewError(cwd: string): void {
     result: null,
     error: null,
     isIncremental: false,
+    latestProgress: null,
+    progressLogs: [],
   });
 }
 
@@ -53,21 +58,46 @@ export function runBackgroundReview(
   input: GitGenerateReviewInput,
   activePanel?: string,
 ): void {
+  const startedAt = Date.now();
+  const initialLog: ReviewProgressEvent = {
+    cwd,
+    stage: "assembling_context",
+    message: `Starting ${input.target.kind === "full_codebase" ? "Full Codebase Audit" : "AI Review"} pipeline...`,
+    timestamp: new Date().toISOString(),
+  };
+
   updateActiveReviewState(cwd, {
     status: "running",
     result: null,
     error: null,
     isIncremental: false,
+    latestProgress: initialLog,
+    progressLogs: [initialLog],
+    startedAt,
+  });
+
+  const unsubscribeProgress = api.git?.onReviewProgress?.((event: ReviewProgressEvent) => {
+    if (event.cwd !== cwd) return;
+    const currentState = getActiveReviewState(cwd);
+    const updatedLogs = [...(currentState.progressLogs ?? []), event];
+    updateActiveReviewState(cwd, {
+      ...currentState,
+      latestProgress: event,
+      progressLogs: updatedLogs,
+    });
   });
 
   api.git
     .generateReview(input)
     .then((result: GitGenerateReviewResult) => {
+      unsubscribeProgress?.();
       updateActiveReviewState(cwd, {
         status: "done",
         result,
         error: null,
         isIncremental: result.isIncremental ?? false,
+        latestProgress: null,
+        progressLogs: store[cwd]?.progressLogs ?? [],
       });
 
       const total = result.findings.length;
@@ -94,12 +124,15 @@ export function runBackgroundReview(
       }
     })
     .catch((err: unknown) => {
+      unsubscribeProgress?.();
       const errorMsg = toGitUserFacingErrorMessage(err);
       updateActiveReviewState(cwd, {
         status: "error",
         result: null,
         error: errorMsg,
         isIncremental: false,
+        latestProgress: null,
+        progressLogs: store[cwd]?.progressLogs ?? [],
       });
 
       toastManager.add({

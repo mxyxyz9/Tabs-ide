@@ -4,6 +4,7 @@ import type {
   ModelSelection,
   ReviewFinding,
   ReviewHistoryRecordSchema,
+  ReviewProgressEvent,
 } from "@tabs/contracts";
 import {
   Activity,
@@ -39,7 +40,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
@@ -224,6 +225,130 @@ function FormattedMarkdown({ text }: { text: string }) {
         return <p key={idx}>{renderedLine}</p>;
       })}
     </div>
+  );
+}
+
+/* ──────────────────────────────────────────
+   Review Progress Log
+────────────────────────────────────────── */
+
+const STAGE_LABELS: Record<string, string> = {
+  assembling_context: "Assembling Context",
+  static_analysis: "Static Analysis",
+  pass_executing: "Executing AI Pass",
+  synthesis: "Synthesising Findings",
+  complete: "Complete",
+};
+
+const STAGE_ICONS: Record<string, React.ReactNode> = {
+  assembling_context: <Layers size={12} />,
+  static_analysis: <ScanLine size={12} />,
+  pass_executing: <Wand2 size={12} />,
+  synthesis: <Braces size={12} />,
+  complete: <CheckCircle2 size={12} />,
+};
+
+function ReviewProgressLog({
+  logs,
+  latestStage,
+  startedAt,
+}: {
+  logs: ReviewProgressEvent[];
+  latestStage: string | null;
+  startedAt: number | undefined;
+}) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!startedAt) return;
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const elapsedStr = elapsed >= 60
+    ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`
+    : `${elapsed}s`;
+
+  return (
+    <Card className="shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/60 bg-muted/30">
+        <Loader2 size={14} className="animate-spin text-primary shrink-0" />
+        <div className="flex-1 min-w-0">
+          <h3 className="text-xs font-bold text-foreground truncate">
+            {latestStage === "assembling_context" && "Collecting codebase context…"}
+            {latestStage === "static_analysis" && "Running static analysis passes…"}
+            {latestStage === "pass_executing" && "AI review model is analysing your code…"}
+            {latestStage === "synthesis" && "Synthesising findings…"}
+            {!latestStage && "Starting review pipeline…"}
+          </h3>
+        </div>
+        {startedAt && (
+          <span className="text-[10px] font-mono text-muted-foreground shrink-0 flex items-center gap-1">
+            <Clock size={10} />
+            {elapsedStr}
+          </span>
+        )}
+      </div>
+
+      {/* Log lines */}
+      <div className="px-4 py-2 space-y-1 max-h-44 overflow-y-auto custom-scrollbar">
+        {logs.map((log, i) => {
+          const isLatest = i === logs.length - 1;
+          return (
+            <div
+              key={i}
+              className={`flex items-start gap-2 py-0.5 transition-opacity ${
+                isLatest ? "opacity-100" : "opacity-55"
+              }`}
+            >
+              <span
+                className={`shrink-0 mt-0.5 ${
+                  isLatest ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                {STAGE_ICONS[log.stage] ?? <Activity size={12} />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <span
+                  className={`text-[11px] font-semibold block ${
+                    isLatest ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  {STAGE_LABELS[log.stage] ?? log.stage}
+                  {log.passIndex !== undefined && log.totalPasses !== undefined && (
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      (pass {log.passIndex + 1}/{log.totalPasses})
+                    </span>
+                  )}
+                  {log.fileCount !== undefined && (
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      · {log.fileCount} files
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10.5px] text-muted-foreground leading-tight">
+                  {log.message}
+                </span>
+              </div>
+              {isLatest && (
+                <span className="shrink-0 mt-1">
+                  <Loader2 size={10} className="animate-spin text-primary" />
+                </span>
+              )}
+              {!isLatest && (
+                <Check size={10} className="shrink-0 mt-1 text-emerald-500" />
+              )}
+            </div>
+          );
+        })}
+        {logs.length === 0 && (
+          <p className="text-[11px] text-muted-foreground italic py-1">Initialising…</p>
+        )}
+      </div>
+    </Card>
   );
 }
 
@@ -590,6 +715,7 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
     [settings?.gitAi?.gitTextGenerationModelSelection],
   );
 
+  const [reviewTargetKind, setReviewTargetKind] = useState<"working_tree" | "full_codebase">("working_tree");
   const [modelSelection, setModelSelection] = useState<ModelSelection>(defaultModelSelection);
   const [userHint, setUserHint] = useState("");
   const [showHint, setShowHint] = useState(false);
@@ -667,7 +793,7 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
 
       const res = await api.git.generateDiffSummary({
         cwd,
-        target: { kind: "working_tree" },
+        target: reviewTargetKind === "full_codebase" ? { kind: "full_codebase" } : { kind: "working_tree" },
         modelSelection,
         userHint: promptText,
       });
@@ -693,29 +819,30 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
     } finally {
       setIsGeneratingRules(false);
     }
-  }, [api, cwd, modelSelection, updateSettings]);
+  }, [api, cwd, modelSelection, reviewTargetKind, updateSettings]);
 
   const handleRunReview = useCallback(
-    (overrideHint?: string) => {
+    (overrideHint?: string, overrideTargetKind?: "working_tree" | "full_codebase") => {
       if (!api) {
         toastManager.add({ type: "error", title: "API unavailable" });
         return;
       }
       const activeHint = overrideHint !== undefined ? overrideHint : userHint;
+      const targetKind = overrideTargetKind ?? reviewTargetKind;
       setFeedbackState({});
       runBackgroundReview(
         cwd,
         api,
         {
           cwd,
-          target: { kind: "working_tree" },
+          target: targetKind === "full_codebase" ? { kind: "full_codebase" } : { kind: "working_tree" },
           modelSelection,
           ...(activeHint.trim() ? { userHint: activeHint.trim() } : {}),
         },
         activePanel,
       );
     },
-    [api, cwd, modelSelection, userHint, activePanel],
+    [api, cwd, modelSelection, userHint, reviewTargetKind, activePanel],
   );
 
   const handleFeedback = useCallback(
@@ -823,10 +950,10 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
       {activeTab === "current" && (
         <>
           {/* Config Card */}
-          <Card className="p-4 space-y-4 shadow-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+          <Card className="p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
               {/* Model picker */}
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 min-w-[220px]">
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <Layers size={13} className="text-muted-foreground" />
                   AI Model Engine
@@ -834,22 +961,51 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
                 <GitModelPicker selection={modelSelection} onSelect={setModelSelection} />
               </div>
 
-              {/* Primary Action Button */}
-              <div>
+              {/* Action Cluster: Scope Toggle & Primary Action */}
+              <div className="flex items-center gap-3 self-end flex-wrap">
+                {/* Inline Audit Scope Toggle */}
+                <div className="flex items-center bg-muted/60 p-1 rounded-lg border border-border/80">
+                  <button
+                    type="button"
+                    onClick={() => setReviewTargetKind("working_tree")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                      reviewTargetKind === "working_tree"
+                        ? "bg-background text-foreground shadow-sm border border-border/60 font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <FileDiff size={12} className={reviewTargetKind === "working_tree" ? "text-primary" : "text-muted-foreground"} />
+                    Working Tree
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviewTargetKind("full_codebase")}
+                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
+                      reviewTargetKind === "full_codebase"
+                        ? "bg-purple-500/15 text-purple-400 border border-purple-500/30 shadow-sm font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <ScanLine size={12} className={reviewTargetKind === "full_codebase" ? "text-purple-400" : "text-muted-foreground"} />
+                    Full Codebase
+                  </button>
+                </div>
+
+                {/* Primary Action Button */}
                 <Button
                   onClick={() => void handleRunReview()}
                   disabled={review.status === "running"}
-                  className="w-full h-9 gap-2 text-xs font-semibold cursor-pointer"
+                  className="h-9 px-4 gap-2 text-xs font-semibold cursor-pointer shrink-0"
                 >
                   {review.status === "running" ? (
                     <>
                       <Loader2 size={14} className="animate-spin" />
-                      Running Multi-Pass Review…
+                      {reviewTargetKind === "full_codebase" ? "Auditing Codebase…" : "Running Review…"}
                     </>
                   ) : (
                     <>
                       <ScanLine size={14} />
-                      Start AI Code Review
+                      {reviewTargetKind === "full_codebase" ? "Start Codebase Audit" : "Start AI Code Review"}
                     </>
                   )}
                 </Button>
@@ -965,15 +1121,11 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
 
           {/* Running Status Banner */}
           {review.status === "running" && (
-            <Card className="p-4 flex items-center gap-3 shadow-sm">
-              <Loader2 size={18} className="animate-spin text-muted-foreground shrink-0" />
-              <div className="min-w-0">
-                <h3 className="text-xs font-bold text-foreground">Analyzing repository diff &amp; context…</h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Evaluating static analysis context, symbols, Correctness &amp; Security passes
-                </p>
-              </div>
-            </Card>
+            <ReviewProgressLog
+              logs={review.progressLogs ?? []}
+              latestStage={review.latestProgress?.stage ?? null}
+              startedAt={review.startedAt}
+            />
           )}
 
           {/* Error Banner */}
@@ -1064,6 +1216,12 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
 
               {/* Meta Badges */}
               <div className="flex flex-wrap items-center gap-2">
+                {review.result.targetScope === "full_codebase" && (
+                  <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded text-xs font-bold border border-purple-500/40 bg-purple-500/10 text-purple-400">
+                    <ScanLine size={11} />
+                    Full Codebase Audit Mode
+                  </span>
+                )}
                 {review.isIncremental && (
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold border border-border bg-muted text-foreground">
                     <Zap size={11} />
@@ -1209,7 +1367,16 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
 
                   <div className="mt-4 pt-2.5 border-t border-border/40 flex items-center justify-between text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                     <span>Run Security Scan</span>
-                    <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                        reviewTargetKind === "full_codebase"
+                          ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-semibold"
+                          : "bg-muted text-muted-foreground border-border/40"
+                      }`}>
+                        {reviewTargetKind === "full_codebase" ? "Full Codebase" : "Working Tree"}
+                      </span>
+                      <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    </div>
                   </div>
                 </Card>
 
@@ -1244,7 +1411,16 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
 
                   <div className="mt-4 pt-2.5 border-t border-border/40 flex items-center justify-between text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                     <span>Run Refactor Scan</span>
-                    <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                        reviewTargetKind === "full_codebase"
+                          ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-semibold"
+                          : "bg-muted text-muted-foreground border-border/40"
+                      }`}>
+                        {reviewTargetKind === "full_codebase" ? "Full Codebase" : "Working Tree"}
+                      </span>
+                      <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    </div>
                   </div>
                 </Card>
 
@@ -1276,10 +1452,18 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
                       </div>
                     </div>
                   </div>
-
                   <div className="mt-4 pt-2.5 border-t border-border/40 flex items-center justify-between text-[10px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                     <span>Run Type &amp; Contract Scan</span>
-                    <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded border ${
+                        reviewTargetKind === "full_codebase"
+                          ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-semibold"
+                          : "bg-muted text-muted-foreground border-border/40"
+                      }`}>
+                        {reviewTargetKind === "full_codebase" ? "Full Codebase" : "Working Tree"}
+                      </span>
+                      <ArrowRight size={12} className="group-hover:translate-x-0.5 transition-transform" />
+                    </div>
                   </div>
                 </Card>
               </div>

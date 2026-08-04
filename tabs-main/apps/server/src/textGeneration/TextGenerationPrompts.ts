@@ -223,7 +223,7 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 // ---------------------------------------------------------------------------
 
 export interface DiffSummaryPromptInput {
-  targetScope?: "staged" | "working_tree" | "commit" | undefined;
+  targetScope?: "staged" | "working_tree" | "commit" | "full_codebase" | undefined;
   diffSummary: string;
   diffPatch: string;
   commitMessage?: string | undefined;
@@ -240,19 +240,28 @@ export interface DiffSummaryPromptInput {
 export function buildDiffSummaryPrompt(input: DiffSummaryPromptInput) {
   const includeFindings = input.includeFindings ?? true;
   const prompt = [
-    "You are an expert code reviewer generating an AI diff summary and line-level code review findings.",
+    input.targetScope === "full_codebase"
+      ? "You are an expert code reviewer performing a FULL CODEBASE AUDIT to detect legacy bugs, technical debt, security vulnerabilities, and architectural smells across repository files."
+      : "You are an expert code reviewer generating an AI diff summary and line-level code review findings.",
     includeFindings
       ? "Return a JSON object with keys: summary, keyChanges, notesAndRisk, findings."
       : "Return a JSON object with keys: summary, keyChanges, notesAndRisk.",
     "Rules:",
-    "- summary must be 1-2 concise sentences summarizing the overall change.",
-    "- keyChanges must be markdown bullet points (using '- ') grouping logical changes by module/area.",
+    "- summary must be 1-2 concise sentences summarizing the overall code evaluation.",
+    "- keyChanges must be markdown bullet points (using '- ') grouping logical findings or repository patterns by module/area.",
     "- notesAndRisk can be an empty string or short bullet points highlighting breaking changes, potential risks, or key testing considerations.",
     ...(includeFindings
       ? [
-          "- findings must be an array of objects for specific issues found in changed code.",
-          "  Each finding object must have: id (unique string), file (relative file path), line (1-based line number), col (optional column number), category ('correctness'|'security'|'api_compatibility'), severity ('error'|'warning'|'info'), title (short summary), body (detailed explanation and recommendation), confidence (0.0 to 1.0), isInDiff (boolean, true if the issue is in a modified line).",
+          "- findings must be an array of objects for specific issues found in code.",
+          "  Each finding object must have: id (unique string), file (relative file path), line (1-based line number), col (optional column number), category ('correctness'|'security'|'api_compatibility'), severity ('error'|'warning'|'info'), title (short summary), body (detailed explanation and recommendation), confidence (0.0 to 1.0), isInDiff (boolean, set to false for pre-existing codebase issues unless in active diff).",
           "  Only report real, actionable issues with confidence >= 0.6.",
+        ]
+      : []),
+    ...(input.targetScope === "full_codebase"
+      ? [
+          "## FULL CODEBASE AUDIT INSTRUCTIONS:",
+          "- Thoroughly evaluate pre-existing source files for security vulnerabilities, architectural debt, unhandled errors, memory leaks, missing type safety, and legacy bugs.",
+          "- Pay special attention to unhandled promise rejections, missing input sanitization, and outdated patterns in older modules.",
         ]
       : []),
     ...policyInstruction(input.policy?.commitInstructions),

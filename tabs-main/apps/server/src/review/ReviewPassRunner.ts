@@ -14,6 +14,7 @@ import {
   type ReviewCostPreviewEvent,
   type ReviewFinding,
   type ReviewFindingSeverity,
+  type ReviewProgressEvent,
   type TextGenerationError,
 } from "@tabs/contracts";
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
@@ -37,6 +38,8 @@ export interface ReviewPassInput {
   readonly configuredPasses?: ReadonlyArray<string> | undefined;
   /** Callback emitted before any pass fires to surface estimated cost. */
   readonly onCostPreview?: ((preview: ReviewCostPreviewEvent) => Effect.Effect<void, never, never>) | undefined;
+  /** Callback emitted during multi-pass execution to report live backend progress. */
+  readonly onProgress?: ((event: ReviewProgressEvent) => Effect.Effect<void, never, never>) | undefined;
 }
 
 export interface ReviewPassRunnerResult {
@@ -125,6 +128,17 @@ export function runReviewPasses(
     for (let passIndex = 0; passIndex < passesToRun.length; passIndex++) {
       const passName = passesToRun[passIndex]!;
 
+      if (input.onProgress) {
+        yield* input.onProgress({
+          cwd: input.cwd,
+          stage: "pass_executing",
+          message: `Running Pass ${passIndex + 1}/${passesToRun.length}: ${passName.toUpperCase().replace("_", " ")} analysis (${input.modelSelection.model})...`,
+          passIndex: passIndex + 1,
+          totalPasses: passesToRun.length,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       let passInstructions = "";
       if (passName === "correctness") {
         passInstructions =
@@ -167,6 +181,15 @@ export function runReviewPasses(
             .join("\n\n");
         }
       }
+    }
+
+    if (input.onProgress) {
+      yield* input.onProgress({
+        cwd: input.cwd,
+        stage: "synthesis",
+        message: `Synthesizing ${allRawFindings.length} finding(s) & running verification filters...`,
+        timestamp: new Date().toISOString(),
+      });
     }
 
     // 3. Verification filter: dedup, confidence threshold, scope check, feedback discount
