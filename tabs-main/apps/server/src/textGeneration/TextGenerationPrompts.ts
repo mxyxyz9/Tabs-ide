@@ -8,6 +8,7 @@
  */
 import * as Schema from "effect/Schema";
 import type { ChatAttachment } from "@tabs/contracts";
+import { ReviewFinding } from "@tabs/contracts";
 
 import { limitSection } from "./TextGenerationUtils";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy";
@@ -227,19 +228,44 @@ export interface DiffSummaryPromptInput {
   diffPatch: string;
   commitMessage?: string | undefined;
   userHint?: string | undefined;
+  staticAnalysisContext?: string | undefined;
+  /** Compressed repo context section (git history + caller analysis). */
+  repoContext?: string | undefined;
+  /** Project-level review rules from .tabs-review.json instructions field. */
+  projectRules?: string | undefined;
+  includeFindings?: boolean | undefined;
   policy?: TextGenerationPolicy | undefined;
 }
 
 export function buildDiffSummaryPrompt(input: DiffSummaryPromptInput) {
+  const includeFindings = input.includeFindings ?? true;
   const prompt = [
-    "You are an expert code reviewer generating an AI diff summary.",
-    "Return a JSON object with keys: summary, keyChanges, notesAndRisk.",
+    "You are an expert code reviewer generating an AI diff summary and line-level code review findings.",
+    includeFindings
+      ? "Return a JSON object with keys: summary, keyChanges, notesAndRisk, findings."
+      : "Return a JSON object with keys: summary, keyChanges, notesAndRisk.",
     "Rules:",
     "- summary must be 1-2 concise sentences summarizing the overall change.",
     "- keyChanges must be markdown bullet points (using '- ') grouping logical changes by module/area.",
     "- notesAndRisk can be an empty string or short bullet points highlighting breaking changes, potential risks, or key testing considerations.",
+    ...(includeFindings
+      ? [
+          "- findings must be an array of objects for specific issues found in changed code.",
+          "  Each finding object must have: id (unique string), file (relative file path), line (1-based line number), col (optional column number), category ('correctness'|'security'|'api_compatibility'), severity ('error'|'warning'|'info'), title (short summary), body (detailed explanation and recommendation), confidence (0.0 to 1.0), isInDiff (boolean, true if the issue is in a modified line).",
+          "  Only report real, actionable issues with confidence >= 0.6.",
+        ]
+      : []),
     ...policyInstruction(input.policy?.commitInstructions),
     ...(input.userHint ? [`Custom Review Instructions: ${input.userHint}`, ""] : []),
+    ...(input.staticAnalysisContext ? [input.staticAnalysisContext, ""] : []),
+    ...(input.repoContext ? [input.repoContext, ""] : []),
+    ...(input.projectRules
+      ? [
+          `## Project Review Rules (.tabs-review.json)`,
+          input.projectRules,
+          "",
+        ]
+      : []),
     "",
     ...(input.commitMessage ? [`Commit message context: ${input.commitMessage}`, ""] : []),
     "Diff stat summary:",
@@ -253,6 +279,7 @@ export function buildDiffSummaryPrompt(input: DiffSummaryPromptInput) {
     summary: Schema.String,
     keyChanges: Schema.String,
     notesAndRisk: Schema.String,
+    findings: Schema.optional(Schema.Array(ReviewFinding)),
   });
 
   return { prompt, outputSchema };

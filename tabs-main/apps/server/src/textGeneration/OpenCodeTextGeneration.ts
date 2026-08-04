@@ -464,6 +464,10 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       diffSummary: input.diffSummary,
       diffPatch: input.diffPatch,
       commitMessage: input.commitMessage,
+      userHint: input.userHint,
+      staticAnalysisContext: input.staticAnalysisContext,
+      repoContext: input.repoContext,
+      projectRules: input.projectRules,
     });
     const generated = yield* runOpenCodeJson({
       operation: "generateDiffSummary",

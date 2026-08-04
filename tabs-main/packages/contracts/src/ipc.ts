@@ -81,6 +81,12 @@ import type {
   GitWatchedBranchStatusesResult,
   GitGenerateDiffSummaryInput,
   GitGenerateDiffSummaryResult,
+  GitGenerateReviewInput,
+  GitGenerateReviewResult,
+  GitSubmitFindingFeedbackInput,
+  GitSubmitFindingFeedbackResult,
+  GitGetReviewHistoryInput,
+  GitGetReviewHistoryResult,
   GitActionProgressEvent,
 } from "./git.ts";
 import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult } from "./review.ts";
@@ -1293,6 +1299,11 @@ export interface EnvironmentApi {
     ) => Promise<GitPreparePullRequestThreadResult>;
     listWorkflowRuns: (input: GitListWorkflowRunsInput) => Promise<GitListWorkflowRunsResult>;
     generateDiffSummary: (input: GitGenerateDiffSummaryInput) => Promise<GitGenerateDiffSummaryResult>;
+    generateReview: (input: GitGenerateReviewInput) => Promise<GitGenerateReviewResult>;
+    submitFindingFeedback: (
+      input: GitSubmitFindingFeedbackInput,
+    ) => Promise<GitSubmitFindingFeedbackResult>;
+    getReviewHistory: (input: GitGetReviewHistoryInput) => Promise<GitGetReviewHistoryResult>;
   };
   review: {
     getDiffPreview: (input: ReviewDiffPreviewInput) => Promise<ReviewDiffPreviewResult>;

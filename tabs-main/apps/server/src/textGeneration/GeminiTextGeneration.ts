@@ -65,7 +65,7 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
     const baseUrl = (
       geminiSettings.baseUrl?.trim() || "https://generativelanguage.googleapis.com"
     ).replace(/\/+$/, "");
-    const model = modelSelection.model || "gemini-2.5-flash";
+    const model = modelSelection.model || "gemini-3.6-flash";
     const endpoint = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const requestPayload = {
@@ -237,6 +237,10 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
           diffSummary: input.diffSummary,
           diffPatch: input.diffPatch,
           commitMessage: input.commitMessage,
+          userHint: input.userHint,
+          staticAnalysisContext: input.staticAnalysisContext,
+          repoContext: input.repoContext,
+          projectRules: input.projectRules,
         });
 
         const result = yield* runGeminiJson({
@@ -250,6 +254,7 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
           summary: result.summary.trim(),
           keyChanges: result.keyChanges.trim(),
           notesAndRisk: result.notesAndRisk.trim(),
+          ...(result.findings ? { findings: result.findings } : {}),
         };
       }),
   };

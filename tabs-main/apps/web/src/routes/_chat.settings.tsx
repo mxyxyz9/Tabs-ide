@@ -2780,7 +2780,7 @@ function SettingsRouteView() {
                             ) : null
                           }
                           control={
-                            <div className="flex gap-0.5 rounded-lg bg-muted p-1">
+                            <div className="flex gap-0.5 rounded-lg bg-muted p-1 border border-border/40">
                               {DESKTOP_ICON_OPTIONS.map((option) => (
                                 <button
                                   key={option.value}
@@ -2791,10 +2791,10 @@ function SettingsRouteView() {
                                   }}
                                   aria-label={`Desktop icon: ${option.label}`}
                                   className={cn(
-                                    "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                    "px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
                                     settings.desktopIconTheme === option.value
-                                      ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
-                                      : "text-muted-foreground hover:text-foreground",
+                                      ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
                                   )}
                                 >
                                   {option.label}
@@ -2821,7 +2821,7 @@ function SettingsRouteView() {
                           ) : null
                         }
                         control={
-                          <div className="flex gap-0.5 rounded-lg bg-muted p-1">
+                          <div className="flex gap-0.5 rounded-lg bg-muted p-1 border border-border/40">
                             {(["locale", "12-hour", "24-hour"] as const).map((fmt) => (
                               <button
                                 key={fmt}
@@ -2829,10 +2829,10 @@ function SettingsRouteView() {
                                 onClick={() => updateSettings({ timestampFormat: fmt })}
                                 aria-label={`Time format: ${TIMESTAMP_FORMAT_LABELS[fmt]}`}
                                 className={cn(
-                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  "px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
                                   settings.timestampFormat === fmt
-                                    ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
-                                    : "text-muted-foreground hover:text-foreground",
+                                    ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
                                 )}
                               >
                                 {TIMESTAMP_FORMAT_LABELS[fmt]}

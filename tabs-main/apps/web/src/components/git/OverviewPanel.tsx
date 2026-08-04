@@ -15,11 +15,12 @@ import {
   GitCommit,
   GitPullRequest,
   Loader2,
+  Plus,
   RefreshCw,
   Upload,
   Wand2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { deriveRepoState } from "../../lib/deriveRepoState";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
@@ -89,6 +90,7 @@ export function OverviewPanel({
   const [forking, setForking] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCommittingAndPushing, setIsCommittingAndPushing] = useState(false);
+  const [isStagingAll, setIsStagingAll] = useState(false);
   const [isMergingWatched, setIsMergingWatched] = useState(false);
   const [isRebasingWatched, setIsRebasingWatched] = useState(false);
   const [lastPushedAt, setLastPushedAt] = useState<number | null>(null);
@@ -217,6 +219,20 @@ export function OverviewPanel({
     }, 400);
   };
 
+  const handleStageAll = useCallback(async () => {
+    if (!api || !cwd || !unstagedFiles.length) return;
+    setIsStagingAll(true);
+    try {
+      await api.git.stageFiles({ cwd, paths: unstagedFiles.map((f) => f.path) });
+      await invalidateGitQueries(queryClient);
+      toastManager.add({ type: "success", title: `Staged ${unstagedFiles.length} file(s)` });
+    } catch (error) {
+      toastManager.add({ type: "error", title: "Stage all failed", description: toGitUserFacingErrorMessage(error) });
+    } finally {
+      setIsStagingAll(false);
+    }
+  }, [api, cwd, unstagedFiles, queryClient]);
+
   const handleCommit = async (andPush = false) => {
     if (!api || !msg.trim()) return;
     if (andPush) {
@@ -225,6 +241,9 @@ export function OverviewPanel({
       setIsCommitting(true);
     }
     try {
+      if (!stagedFiles.length && unstagedFiles.length) {
+        await api.git.stageFiles({ cwd, paths: unstagedFiles.map((f) => f.path) });
+      }
       await api.git.runStackedAction({
         actionId: crypto.randomUUID(),
         cwd,
@@ -518,9 +537,25 @@ export function OverviewPanel({
       {/* Quick actions card */}
       <SectionLabel>Quick actions</SectionLabel>
       <Card className="p-4 mb-1">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70">Commit</span>
-          <span className="text-[11px] font-mono text-muted-foreground/70">{stagedFiles.length} staged</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono text-muted-foreground/70">
+              {stagedFiles.length} staged{unstagedFiles.length > 0 ? `, ${unstagedFiles.length} modified` : ""}
+            </span>
+            {unstagedFiles.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={isStagingAll}
+                onClick={() => void handleStageAll()}
+                className="h-6 px-2 text-[10px] font-semibold text-primary hover:text-primary gap-1 cursor-pointer"
+              >
+                {isStagingAll ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+                Stage All ({unstagedFiles.length})
+              </Button>
+            )}
+          </div>
         </div>
         <AutoTextarea
           value={msg}
@@ -528,7 +563,7 @@ export function OverviewPanel({
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
               e.preventDefault();
-              if (stagedFiles.length && repoState.canCommitLocally) void handleCommit(false);
+              if ((stagedFiles.length || unstagedFiles.length) && repoState.canCommitLocally) void handleCommit(false);
             }
           }}
           placeholder="Summarize your change…"
@@ -539,13 +574,28 @@ export function OverviewPanel({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={!stagedFiles.length || !repoState.canCommitLocally || isCommitting || isCommittingAndPushing}
-              title={!stagedFiles.length ? "Stage some changes first" : undefined}
+              disabled={(!stagedFiles.length && !unstagedFiles.length) || !repoState.canCommitLocally || isCommitting || isCommittingAndPushing || isStagingAll}
+              title={(!stagedFiles.length && !unstagedFiles.length) ? "No changes to commit" : undefined}
               onClick={() => void handleCommit(false)}
             >
               {isCommitting ? <Loader2 size={13} className="animate-spin" /> : <GitCommit />}
-              {isCommitting ? "Committing…" : repoState.commitButtonLabel}
+              {isCommitting
+                ? "Committing…"
+                : !stagedFiles.length && unstagedFiles.length
+                ? "Stage All & Commit"
+                : repoState.commitButtonLabel}
             </Button>
+            {unstagedFiles.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isStagingAll || isCommitting || isCommittingAndPushing}
+                onClick={() => void handleStageAll()}
+              >
+                {isStagingAll ? <Loader2 size={13} className="animate-spin" /> : <Plus className="size-3.5" />}
+                {isStagingAll ? "Staging…" : `Stage all (${unstagedFiles.length})`}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -560,12 +610,16 @@ export function OverviewPanel({
           <Button
             variant="outline"
             size="sm"
-            disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush || isCommitting || isCommittingAndPushing}
-            title={repoState.pushDisabledReason ?? (!stagedFiles.length ? "Stage some changes first" : undefined)}
+            disabled={(!stagedFiles.length && !unstagedFiles.length) || !repoState.canCommitLocally || !repoState.canPush || isCommitting || isCommittingAndPushing || isStagingAll}
+            title={repoState.pushDisabledReason ?? ((!stagedFiles.length && !unstagedFiles.length) ? "No changes to commit" : undefined)}
             onClick={() => void handleCommit(true)}
           >
             {isCommittingAndPushing ? <Loader2 size={13} className="animate-spin" /> : <Upload />}
-            {isCommittingAndPushing ? "Committing & pushing…" : "Commit & push"}
+            {isCommittingAndPushing
+              ? "Committing & pushing…"
+              : !stagedFiles.length && unstagedFiles.length
+              ? "Stage All, Commit & Push"
+              : "Commit & push"}
           </Button>
         </div>
 

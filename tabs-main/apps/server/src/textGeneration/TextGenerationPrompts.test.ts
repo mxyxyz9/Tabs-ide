@@ -206,4 +206,37 @@ describe("buildDiffSummaryPrompt", () => {
     expect(result.prompt).toContain("feat: initial commit");
     expect(result.outputSchema).toBeDefined();
   });
+
+  it("keeps all four enrichment sections separate and in order (userHint < staticAnalysis < repoContext < projectRules)", () => {
+    const result = buildDiffSummaryPrompt({
+      diffSummary: "1 file changed",
+      diffPatch: "diff --git a/src/app.ts b/src/app.ts\n+console.log('test');",
+      userHint: "Custom instructions: Focus on security.",
+      staticAnalysisContext: "Static Analysis Tool Findings:\n- ESLint: [warning] no-console",
+      repoContext:
+        "## Repo Context & Impact Analysis\n### File Commit History\n**src/app.ts**\n- 2024-01-01 [abc00001] Alice: Add app entry point",
+      projectRules: "All console statements must be removed before merging.",
+    });
+
+    expect(result.prompt).toContain("Custom Review Instructions: Custom instructions: Focus on security.");
+    expect(result.prompt).toContain("Static Analysis Tool Findings:\n- ESLint: [warning] no-console");
+    expect(result.prompt).toContain("## Repo Context & Impact Analysis");
+    expect(result.prompt).toContain("## Project Review Rules (.tabs-review.json)");
+    expect(result.prompt).toContain("All console statements must be removed before merging.");
+
+    const customIndex = result.prompt.indexOf("Custom Review Instructions:");
+    const staticIndex = result.prompt.indexOf("Static Analysis Tool Findings:");
+    const repoIndex = result.prompt.indexOf("## Repo Context & Impact Analysis");
+    const projectIndex = result.prompt.indexOf("## Project Review Rules (.tabs-review.json)");
+
+    expect(customIndex).toBeGreaterThan(-1);
+    expect(staticIndex).toBeGreaterThan(-1);
+    expect(repoIndex).toBeGreaterThan(-1);
+    expect(projectIndex).toBeGreaterThan(-1);
+
+    // Strict ordering: userHint < staticAnalysis < repoContext < projectRules
+    expect(staticIndex).toBeGreaterThan(customIndex);
+    expect(repoIndex).toBeGreaterThan(staticIndex);
+    expect(projectIndex).toBeGreaterThan(repoIndex);
+  });
 });

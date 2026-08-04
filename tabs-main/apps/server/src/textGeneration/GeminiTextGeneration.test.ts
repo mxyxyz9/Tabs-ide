@@ -20,7 +20,7 @@ describe("GeminiTextGeneration", () => {
       diffPatch: "+ hello",
       modelSelection: {
         instanceId: ProviderInstanceId.make("gemini"),
-        model: "gemini-2.5-flash",
+        model: "gemini-3.6-flash",
       },
     });
 
@@ -71,7 +71,7 @@ describe("GeminiTextGeneration", () => {
           diffPatch: "+ gemini support",
           modelSelection: {
             instanceId: ProviderInstanceId.make("gemini"),
-            model: "gemini-2.5-flash",
+            model: "gemini-3.6-flash",
           },
         }),
       );

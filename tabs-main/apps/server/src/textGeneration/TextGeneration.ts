@@ -1,7 +1,7 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ChatAttachment, ModelSelection, ProviderInstanceId } from "@tabs/contracts";
+import type { ChatAttachment, ModelSelection, ProviderInstanceId, ReviewFinding } from "@tabs/contracts";
 import { TextGenerationError } from "@tabs/contracts";
 
 import {
@@ -75,6 +75,12 @@ export interface DiffSummaryGenerationInput {
   diffSummary: string;
   diffPatch: string;
   commitMessage?: string | undefined;
+  userHint?: string | undefined;
+  staticAnalysisContext?: string | undefined;
+  /** Compressed repo context section (git history + caller analysis). */
+  repoContext?: string | undefined;
+  /** Project-level review rules from .tabs-review.json instructions field. */
+  projectRules?: string | undefined;
   modelSelection: ModelSelection;
 }
 
@@ -82,6 +88,7 @@ export interface DiffSummaryGenerationResult {
   summary: string;
   keyChanges: string;
   notesAndRisk: string;
+  findings?: ReadonlyArray<ReviewFinding> | undefined;
 }
 
 export interface TextGenerationService {

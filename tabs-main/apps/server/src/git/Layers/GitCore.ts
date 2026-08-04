@@ -40,7 +40,7 @@ import { runProcess } from "../../processRunner.ts";
 import { decodeJsonResult } from "@tabs/shared/schemaJson";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_OUTPUT_BYTES = 1_000_000;
+const DEFAULT_MAX_OUTPUT_BYTES = 20_000_000;
 const STATUS_UPSTREAM_REFRESH_INTERVAL = Duration.seconds(15);
 const STATUS_UPSTREAM_REFRESH_TIMEOUT = Duration.seconds(5);
 const STATUS_UPSTREAM_REFRESH_CACHE_CAPACITY = 2_048;

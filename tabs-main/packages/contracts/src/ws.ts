@@ -60,6 +60,10 @@ import {
   GitListTagsInput,
   GitWatchedBranchStatusesInput,
   GitGenerateDiffSummaryInput,
+  GitGenerateReviewInput,
+  GitSubmitFindingFeedbackInput,
+  GitGetReviewHistoryInput,
+  ReviewCostPreviewEvent,
 } from "./git";
 import {
   TerminalClearInput,
@@ -112,6 +116,9 @@ export const WS_METHODS = {
   gitListTags: "git.listTags",
   gitWatchedBranchStatuses: "git.watchedBranchStatuses",
   gitGenerateDiffSummary: "git.generateDiffSummary",
+  gitGenerateReview: "git.generateReview",
+  gitSubmitFindingFeedback: "git.submitFindingFeedback",
+  gitGetReviewHistory: "git.getReviewHistory",
 
 
   gitCreateWorktree: "git.createWorktree",
@@ -208,6 +215,7 @@ export const WS_METHODS = {
 
 export const WS_CHANNELS = {
   gitActionProgress: "git.actionProgress",
+  reviewCostPreview: "review.costPreview",
   terminalEvent: "terminal.event",
   serverWelcome: "server.welcome",
   serverConfigUpdated: "server.configUpdated",
@@ -294,6 +302,9 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitListTags, GitListTagsInput),
   tagRequestBody(WS_METHODS.gitWatchedBranchStatuses, GitWatchedBranchStatusesInput),
   tagRequestBody(WS_METHODS.gitGenerateDiffSummary, GitGenerateDiffSummaryInput),
+  tagRequestBody(WS_METHODS.gitGenerateReview, GitGenerateReviewInput),
+  tagRequestBody(WS_METHODS.gitSubmitFindingFeedback, GitSubmitFindingFeedbackInput),
+  tagRequestBody(WS_METHODS.gitGetReviewHistory, GitGetReviewHistoryInput),
 
 
 
@@ -354,6 +365,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.serverConfigUpdated]: typeof ServerConfigUpdatedPayload.Type;
   readonly [WS_CHANNELS.serverProvidersUpdated]: typeof ServerProviderUpdatedPayload.Type;
   readonly [WS_CHANNELS.gitActionProgress]: typeof GitActionProgressEvent.Type;
+  readonly [WS_CHANNELS.reviewCostPreview]: ReviewCostPreviewEvent;
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
@@ -385,6 +397,10 @@ export const WsPushGitActionProgress = makeWsPushSchema(
   WS_CHANNELS.gitActionProgress,
   GitActionProgressEvent,
 );
+export const WsPushReviewCostPreview = makeWsPushSchema(
+  WS_CHANNELS.reviewCostPreview,
+  ReviewCostPreviewEvent,
+);
 export const WsPushTerminalEvent = makeWsPushSchema(WS_CHANNELS.terminalEvent, TerminalEvent);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
@@ -393,6 +409,7 @@ export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
 
 export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.gitActionProgress,
+  WS_CHANNELS.reviewCostPreview,
   WS_CHANNELS.serverWelcome,
   WS_CHANNELS.serverConfigUpdated,
   WS_CHANNELS.serverProvidersUpdated,
@@ -406,6 +423,7 @@ export const WsPush = Schema.Union([
   WsPushServerConfigUpdated,
   WsPushServerProvidersUpdated,
   WsPushGitActionProgress,
+  WsPushReviewCostPreview,
   WsPushTerminalEvent,
   WsPushOrchestrationDomainEvent,
 ]);

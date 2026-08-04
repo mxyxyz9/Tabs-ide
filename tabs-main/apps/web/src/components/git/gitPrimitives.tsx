@@ -512,7 +512,7 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
     selection ||
     settings?.gitAi?.gitTextGenerationModelSelection || {
       instanceId: "gemini" as ProviderInstanceId,
-      model: "gemini-2.5-flash",
+      model: "gemini-3.6-flash",
     };
 
   const serverProviders = useMemo(() => serverConfig?.providers ?? [], [serverConfig?.providers]);
@@ -552,8 +552,8 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
       items: [
         {
           instanceId: "gemini" as ProviderInstanceId,
-          model: "gemini-2.5-flash",
-          name: "Gemini 2.5 Flash",
+          model: "gemini-3.6-flash",
+          name: "Gemini 3.6 Flash",
           description: "Ultra-fast, 1M context token window (Recommended)",
           badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
           badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
@@ -638,7 +638,7 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
 
   const defaultItem = allModelGroups[0]?.items[0] ?? {
     instanceId: "gemini" as ProviderInstanceId,
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
     name: "Gemini 2.5 Flash",
     description: "Ultra-fast, 1M context token window",
     badge: isGeminiKeyConfigured ? "Ready" : "Key Required",

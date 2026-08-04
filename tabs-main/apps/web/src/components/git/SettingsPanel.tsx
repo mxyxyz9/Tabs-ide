@@ -218,7 +218,7 @@ export function SettingsPanel({
       const activeModelSelection =
         settings?.gitAi?.gitTextGenerationModelSelection || {
           instanceId: "gemini",
-          model: "gemini-2.5-flash",
+          model: "gemini-3.6-flash",
         };
 
       const userPrompt = [
@@ -241,7 +241,7 @@ export function SettingsPanel({
         });
       } catch (firstErr) {
         // Fallback retry with Gemini 2.5 Flash if primary selected provider failed or request was cancelled
-        const fallbackSelection = { instanceId: "gemini" as ProviderInstanceId, model: "gemini-2.5-flash" };
+        const fallbackSelection = { instanceId: "gemini" as ProviderInstanceId, model: "gemini-3.6-flash" };
         if (activeModelSelection.instanceId !== "gemini") {
           usedModelName = "Gemini 2.5 Flash (Fallback)";
           res = await api.git.generateDiffSummary({

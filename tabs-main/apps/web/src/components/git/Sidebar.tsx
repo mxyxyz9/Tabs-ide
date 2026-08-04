@@ -10,6 +10,7 @@ import {
   Github,
   History as HistoryIcon,
   Package,
+  ScanLine,
   Settings,
   Tag,
   Users,
@@ -27,7 +28,8 @@ export type NavPanel =
   | "tags"
   | "stashes"
   | "accounts"
-  | "settings";
+  | "settings"
+  | "review";
 
 export interface NavItem {
   id: NavPanel;
@@ -40,6 +42,7 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { id: "overview", label: "Overview", icon: FolderGit2, desc: "Repo health, quick actions, and sync status" },
   { id: "changes", label: "Changes", icon: GitCommit, badge: "changes", desc: "Stage, commit, and review working tree changes" },
+  { id: "review", label: "Code Review", icon: ScanLine, desc: "AI-powered multi-pass code review & betterment" },
   { id: "diff", label: "Diff", icon: FileDiff, desc: "Browse diffs for working tree files or past commits" },
   { id: "divergence", label: "Divergence", icon: GitCompare, desc: "Full watched branch divergence list and branch comparison" },
   { id: "branches", label: "Branches", icon: GitBranchIcon, desc: "Switch, create, or rename branches" },
@@ -77,6 +80,7 @@ export function Sidebar({
   setCollapsed,
   changeCount,
   prCount = 0,
+  reviewBadgeCount,
   hasConflict,
 }: {
   repoName: string;
@@ -86,7 +90,8 @@ export function Sidebar({
   setCollapsed: (c: boolean) => void;
   changeCount: number;
   prCount?: number;
-  hasConflict: boolean;
+  reviewBadgeCount?: number | null;
+  hasConflict?: boolean;
 }) {
   const wrapStyle = { backgroundColor: "var(--bg-base)" };
   if (collapsed) {
@@ -107,7 +112,7 @@ export function Sidebar({
           {NAV.map((n) => {
             const Icon = n.icon;
             const isActive = panel === n.id;
-            const count = n.badge === "changes" ? changeCount : n.badge === "prs" ? prCount : null;
+            const count = n.badge === "changes" ? changeCount : n.badge === "prs" ? prCount : n.id === "review" ? reviewBadgeCount : null;
             return (
               <RailTooltip key={n.id} title={n.label} desc={n.desc}>
                 <button
@@ -162,7 +167,7 @@ export function Sidebar({
         {NAV.map((n) => {
           const Icon = n.icon;
           const isActive = panel === n.id;
-          const count = n.badge === "changes" ? changeCount : n.badge === "prs" ? prCount : null;
+          const count = n.badge === "changes" ? changeCount : n.badge === "prs" ? prCount : n.id === "review" ? reviewBadgeCount : null;
           return (
             <button
               key={n.id}

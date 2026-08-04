@@ -22,8 +22,8 @@ const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
 const GEMINI_BUILT_IN_MODELS = validateServerProviderModelList([
   {
-    slug: "gemini-2.5-flash",
-    name: "Gemini 2.5 Flash",
+    slug: "gemini-3.6-flash",
+    name: "Gemini 3.6 Flash",
     isCustom: false,
   },
   {

@@ -413,6 +413,10 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       diffSummary: input.diffSummary,
       diffPatch: input.diffPatch,
       commitMessage: input.commitMessage,
+      userHint: input.userHint,
+      staticAnalysisContext: input.staticAnalysisContext,
+      repoContext: input.repoContext,
+      projectRules: input.projectRules,
     });
 
     const generated = yield* runCodexJson({

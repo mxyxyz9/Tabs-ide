@@ -184,8 +184,8 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
   ],
   gemini: [
     {
-      slug: "gemini-2.5-flash",
-      name: "Gemini 2.5 Flash",
+      slug: "gemini-3.6-flash",
+      name: "Gemini 3.6 Flash",
       isCustom: false,
       capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
     },

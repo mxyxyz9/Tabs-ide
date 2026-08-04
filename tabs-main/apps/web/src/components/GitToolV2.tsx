@@ -35,6 +35,8 @@ import { Sidebar, type NavPanel } from "./git/Sidebar";
 import { StashesPanel } from "./git/StashesPanel";
 import { TagsPanel } from "./git/TagsPanel";
 import { TopBar } from "./git/TopBar";
+import { ReviewPanel } from "./git/ReviewPanel";
+import { useReviewStore } from "./git/reviewStateStore";
 import {
   AddRemoteModal,
   CreatePRModal,
@@ -94,6 +96,7 @@ export function GitToolV2({
 }: GitToolV2Props) {
   const api = readNativeApi();
   const queryClient = useQueryClient();
+  const { unreadCount, clearUnread } = useReviewStore(cwd);
 
   const [panel, setPanelState] = useState<NavPanel>(() => {
     try {
@@ -103,6 +106,19 @@ export function GitToolV2({
     return "overview";
   });
 
+  const setPanel = useCallback(
+    (p: NavPanel) => {
+      if (p === "review") {
+        clearUnread();
+      }
+      try {
+        window.localStorage?.setItem(`tabs_git_active_panel_${cwd}`, p);
+      } catch {}
+      setPanelState(p);
+    },
+    [cwd, clearUnread],
+  );
+
   useEffect(() => {
     try {
       const saved = window.localStorage?.getItem(`tabs_git_active_panel_${cwd}`);
@@ -111,16 +127,6 @@ export function GitToolV2({
       setPanelState("overview");
     }
   }, [cwd]);
-
-  const setPanel = useCallback(
-    (p: NavPanel) => {
-      try {
-        window.localStorage?.setItem(`tabs_git_active_panel_${cwd}`, p);
-      } catch {}
-      setPanelState(p);
-    },
-    [cwd],
-  );
 
   const [collapsed, setCollapsedState] = useState<boolean>(() => {
     try {
@@ -404,6 +410,9 @@ export function GitToolV2({
           />
         );
         break;
+      case "review":
+        content = <ReviewPanel cwd={cwd} activePanel={panel} />;
+        break;
       case "diff":
         content = <DiffPage cwd={cwd} statusData={statusData} commits={commits} />;
         break;
@@ -540,6 +549,7 @@ export function GitToolV2({
           collapsed={collapsed}
           setCollapsed={setCollapsed}
           changeCount={changeCount}
+          reviewBadgeCount={unreadCount}
           hasConflict={hasConflict}
         />
 

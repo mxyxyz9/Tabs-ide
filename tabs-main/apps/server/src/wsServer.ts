@@ -957,6 +957,24 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* gitManager.generateDiffSummary(body);
       }
 
+      case WS_METHODS.gitGenerateReview: {
+        const body = stripRequestTag(request.body);
+        return yield* gitManager.generateReview(body, {
+          onCostPreview: (event) =>
+            pushBus.publishClient(ws, WS_CHANNELS.reviewCostPreview, event).pipe(Effect.asVoid),
+        });
+      }
+
+      case WS_METHODS.gitSubmitFindingFeedback: {
+        const body = stripRequestTag(request.body);
+        return yield* gitManager.submitFindingFeedback(body);
+      }
+
+      case WS_METHODS.gitGetReviewHistory: {
+        const body = stripRequestTag(request.body);
+        return yield* gitManager.getReviewHistory(body);
+      }
+
       case WS_METHODS.gitListPullRequests: {
         const body = stripRequestTag(request.body);
         return yield* gitManager.listPullRequests(body);

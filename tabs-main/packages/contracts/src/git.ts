@@ -331,6 +331,100 @@ export const GitGenerateDiffSummaryResult = Schema.Struct({
 });
 export type GitGenerateDiffSummaryResult = typeof GitGenerateDiffSummaryResult.Type;
 
+export const ReviewFindingCategory = Schema.Literals(["correctness", "security", "api_compatibility"]);
+export type ReviewFindingCategory = typeof ReviewFindingCategory.Type;
+
+export const ReviewFindingSeverity = Schema.Literals(["error", "warning", "info"]);
+export type ReviewFindingSeverity = typeof ReviewFindingSeverity.Type;
+
+export const ReviewFinding = Schema.Struct({
+  id: Schema.String,
+  file: Schema.String,
+  line: Schema.Number,
+  col: Schema.optional(Schema.Number),
+  category: Schema.String,
+  severity: ReviewFindingSeverity,
+  title: Schema.String,
+  body: Schema.String,
+  confidence: Schema.Number,
+  isInDiff: Schema.Boolean,
+  isNew: Schema.optional(Schema.Boolean),
+});
+export type ReviewFinding = typeof ReviewFinding.Type;
+
+export const ReviewCostPreviewEvent = Schema.Struct({
+  estimatedPassCount: Schema.Number,
+  estimatedInputTokens: Schema.Number,
+});
+export type ReviewCostPreviewEvent = typeof ReviewCostPreviewEvent.Type;
+
+export const GitGenerateReviewInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  target: GitGenerateDiffSummaryTarget,
+  modelSelection: Schema.optional(ModelSelection),
+  userHint: Schema.optional(Schema.String),
+});
+export type GitGenerateReviewInput = typeof GitGenerateReviewInput.Type;
+
+export const GitGenerateReviewResult = Schema.Struct({
+  summary: Schema.String,
+  keyChanges: Schema.String,
+  notesAndRisk: Schema.String,
+  findings: Schema.Array(ReviewFinding),
+  passesRun: Schema.Array(Schema.String),
+  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit"])),
+  wasTruncated: Schema.Boolean,
+  truncatedCount: Schema.optional(NonNegativeInt),
+  truncatedReason: Schema.optional(Schema.String),
+  isIncremental: Schema.optional(Schema.Boolean),
+});
+export type GitGenerateReviewResult = typeof GitGenerateReviewResult.Type;
+
+export const FindingFeedbackVerdict = Schema.Literals(["accepted", "dismissed", "false_positive"]);
+export type FindingFeedbackVerdict = typeof FindingFeedbackVerdict.Type;
+
+export const GitSubmitFindingFeedbackInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  findingFingerprint: TrimmedNonEmptyStringSchema,
+  category: Schema.String,
+  verdict: FindingFeedbackVerdict,
+});
+export type GitSubmitFindingFeedbackInput = typeof GitSubmitFindingFeedbackInput.Type;
+
+export const GitSubmitFindingFeedbackResult = Schema.Struct({
+  success: Schema.Boolean,
+  falsePositiveCount: Schema.Number,
+  isSuppressed: Schema.Boolean,
+});
+export type GitSubmitFindingFeedbackResult = typeof GitSubmitFindingFeedbackResult.Type;
+
+export const ReviewHistoryRecordSchema = Schema.Struct({
+  id: Schema.String,
+  repoPath: Schema.String,
+  branchName: Schema.String,
+  timestamp: Schema.String,
+  modelUsed: Schema.String,
+  targetScope: Schema.String,
+  summary: Schema.String,
+  keyChanges: Schema.String,
+  notesAndRisk: Schema.String,
+  findings: Schema.Array(ReviewFinding),
+  passesRun: Schema.Array(Schema.String),
+  isIncremental: Schema.Boolean,
+});
+export type ReviewHistoryRecordSchema = typeof ReviewHistoryRecordSchema.Type;
+
+export const GitGetReviewHistoryInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+});
+export type GitGetReviewHistoryInput = typeof GitGetReviewHistoryInput.Type;
+
+export const GitGetReviewHistoryResult = Schema.Struct({
+  records: Schema.Array(ReviewHistoryRecordSchema),
+});
+export type GitGetReviewHistoryResult = typeof GitGetReviewHistoryResult.Type;
+
+
 export const GitInitInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });

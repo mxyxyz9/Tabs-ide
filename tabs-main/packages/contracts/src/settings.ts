@@ -473,6 +473,20 @@ export const GitAiStaticAnalysisSettings = Schema.Struct({
 });
 export type GitAiStaticAnalysisSettings = typeof GitAiStaticAnalysisSettings.Type;
 
+export const GitAiRepoContextSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  maxCallersPerSymbol: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(5))),
+  maxCommitHistoryPerFile: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(3))),
+});
+export type GitAiRepoContextSettings = typeof GitAiRepoContextSettings.Type;
+
+export const GitAiReviewSettings = Schema.Struct({
+  passes: Schema.Array(Schema.String).pipe(
+    Schema.withDecodingDefault(Effect.succeed(["correctness", "security"])),
+  ),
+});
+export type GitAiReviewSettings = typeof GitAiReviewSettings.Type;
+
 export const GitAiSettings = Schema.Struct({
   modelSourceMode: Schema.optional(Schema.Literals(["connected", "direct_gemini"])),
   gitTextGenerationModelSelection: Schema.optional(ModelSelection),
@@ -481,6 +495,8 @@ export const GitAiSettings = Schema.Struct({
   includeKeyChangesSection: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   includeNotesAndRiskSection: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   staticAnalysis: GitAiStaticAnalysisSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  repoContext: GitAiRepoContextSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  review: GitAiReviewSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
 });
 export type GitAiSettings = typeof GitAiSettings.Type;
 
@@ -651,6 +667,16 @@ const GitAiStaticAnalysisSettingsPatch = Schema.Struct({
   tools: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const GitAiRepoContextSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  maxCallersPerSymbol: Schema.optionalKey(Schema.Number),
+  maxCommitHistoryPerFile: Schema.optionalKey(Schema.Number),
+});
+
+const GitAiReviewSettingsPatch = Schema.Struct({
+  passes: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const GitAiSettingsPatch = Schema.Struct({
   modelSourceMode: Schema.optionalKey(Schema.Literals(["connected", "direct_gemini"])),
   gitTextGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
@@ -659,6 +685,8 @@ const GitAiSettingsPatch = Schema.Struct({
   includeKeyChangesSection: Schema.optionalKey(Schema.Boolean),
   includeNotesAndRiskSection: Schema.optionalKey(Schema.Boolean),
   staticAnalysis: Schema.optionalKey(GitAiStaticAnalysisSettingsPatch),
+  repoContext: Schema.optionalKey(GitAiRepoContextSettingsPatch),
+  review: Schema.optionalKey(GitAiReviewSettingsPatch),
 });
 
 export const ServerSettingsPatch = Schema.Struct({

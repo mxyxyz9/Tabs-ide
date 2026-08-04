@@ -79,7 +79,7 @@ export function TabsTrigger({
       className={cn(
         "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
         isSelected
-          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
+          ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
           : "hover:bg-muted/80 hover:text-foreground border border-transparent",
         className,
       )}

@@ -247,6 +247,13 @@ export function createWsNativeApi(): NativeApi {
       listTags: (input) => transport.request(WS_METHODS.gitListTags, input),
       watchedBranchStatuses: (input) => transport.request(WS_METHODS.gitWatchedBranchStatuses, input),
       generateDiffSummary: (input) => transport.request(WS_METHODS.gitGenerateDiffSummary, input),
+      generateReview: (input) =>
+        transport.request(WS_METHODS.gitGenerateReview, input, { timeoutMs: null }),
+      submitFindingFeedback: (input) =>
+        transport.request(WS_METHODS.gitSubmitFindingFeedback, input),
+      getReviewHistory: (input) =>
+        transport.request(WS_METHODS.gitGetReviewHistory, input),
+
 
 
       onActionProgress: (callback) => {

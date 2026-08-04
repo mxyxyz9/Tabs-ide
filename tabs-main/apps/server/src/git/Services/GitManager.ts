@@ -21,6 +21,12 @@ import {
   GitStatusResult,
   GitGenerateDiffSummaryInput,
   GitGenerateDiffSummaryResult,
+  GitGenerateReviewInput,
+  GitGenerateReviewResult,
+  GitSubmitFindingFeedbackInput,
+  GitSubmitFindingFeedbackResult,
+  GitGetReviewHistoryInput,
+  GitGetReviewHistoryResult,
 } from "@tabs/contracts";
 import type { Effect } from "effect";
 import type { GitManagerServiceError } from "../Errors.ts";
@@ -81,6 +87,28 @@ export interface GitManagerShape {
   readonly generateDiffSummary: (
     input: GitGenerateDiffSummaryInput,
   ) => Effect.Effect<GitGenerateDiffSummaryResult, GitManagerServiceError>;
+
+  /**
+   * Generate a multi-pass AI review with verified line-level findings.
+   */
+  readonly generateReview: (
+    input: GitGenerateReviewInput,
+    options?: { onCostPreview?: (preview: any) => Effect.Effect<void> },
+  ) => Effect.Effect<GitGenerateReviewResult, GitManagerServiceError>;
+
+  /**
+   * Submit finding feedback (accepted, dismissed, false_positive).
+   */
+  readonly submitFindingFeedback: (
+    input: GitSubmitFindingFeedbackInput,
+  ) => Effect.Effect<GitSubmitFindingFeedbackResult, GitManagerServiceError>;
+
+  /**
+   * Get review history records for a workspace.
+   */
+  readonly getReviewHistory: (
+    input: GitGetReviewHistoryInput,
+  ) => Effect.Effect<GitGetReviewHistoryResult, GitManagerServiceError>;
 }
 
 /**
