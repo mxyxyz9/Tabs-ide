@@ -20,6 +20,7 @@ import {
   Code2,
   Copy,
   FileCode2,
+  FileDiff,
   Filter,
   Flame,
   History,
@@ -100,20 +101,216 @@ function parseCodeSnippet(body: string) {
   return { explanation: body, snippet: null };
 }
 
+interface DiffLine {
+  type: "add" | "del" | "hunk" | "ctx";
+  text: string;
+}
+
+function CodeDiffViewer({ snippet }: { snippet: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const lines: DiffLine[] = useMemo(() => {
+    const rawLines = snippet.split("\n");
+    const hasDiffPrefix = rawLines.some(
+      (l) => l.startsWith("+") || l.startsWith("-") || l.startsWith("@@"),
+    );
+    return rawLines.map((line) => {
+      if (line.startsWith("@@")) return { type: "hunk", text: line };
+      if (line.startsWith("+") && !line.startsWith("+++"))
+        return { type: "add", text: hasDiffPrefix ? line.slice(1) : line };
+      if (line.startsWith("-") && !line.startsWith("---"))
+        return { type: "del", text: hasDiffPrefix ? line.slice(1) : line };
+      return { type: "ctx", text: line };
+    });
+  }, [snippet]);
+
+  const handleCopy = useCallback(() => {
+    const textToCopy = lines.map((l) => l.text).join("\n");
+    void navigator.clipboard.writeText(textToCopy).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
+  }, [lines]);
+
+  return (
+    <div className="rounded-lg border border-border bg-[var(--bg-base,var(--background))] overflow-hidden my-2.5 shadow-sm">
+      <div className="flex items-center justify-between px-3 py-1.5 border-b border-border bg-muted/40 text-[11px] font-semibold text-foreground font-mono">
+        <span className="flex items-center gap-1.5">
+          <FileDiff size={12} className="text-primary" />
+          Suggested Betterment Diff
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        >
+          <Copy size={11} />
+          {copied ? "Copied!" : "Copy Code"}
+        </button>
+      </div>
+
+      <div className="p-0 font-mono text-[11px] leading-relaxed overflow-x-auto custom-scrollbar">
+        {lines.map((line, idx) => (
+          <div
+            key={idx}
+            className={`flex items-start px-3 py-0.5 border-l-2 select-text whitespace-pre font-mono ${
+              line.type === "add"
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500"
+                : line.type === "del"
+                ? "bg-red-500/10 text-red-400 border-red-500"
+                : line.type === "hunk"
+                ? "bg-muted/60 text-purple-400 border-purple-500 font-bold"
+                : "border-transparent text-foreground/90"
+            }`}
+          >
+            <span className="w-6 shrink-0 text-right pr-2 opacity-40 select-none text-[10px]">
+              {idx + 1}
+            </span>
+            <span className="w-4 shrink-0 font-bold select-none text-[11px]">
+              {line.type === "add" ? "+" : line.type === "del" ? "-" : line.type === "hunk" ? "@@" : " "}
+            </span>
+            <span className="flex-1">{line.text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FormattedMarkdown({ text }: { text: string }) {
+  if (!text) return null;
+  const lines = text.split("\n");
+
+  return (
+    <div className="space-y-2 text-xs text-foreground/90 leading-relaxed font-sans">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (!trimmed) return null;
+
+        const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
+        const lineText = isBullet ? trimmed.slice(2) : trimmed;
+        const parts = lineText.split(/(\*\*.*?\*\*|`.*?`)/g);
+
+        const renderedLine = parts.map((part, pIdx) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={pIdx} className="font-semibold text-foreground">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          if (part.startsWith("`") && part.endsWith("`")) {
+            return (
+              <code
+                key={pIdx}
+                className="px-1.5 py-0.5 rounded bg-muted text-primary font-mono text-[11px] border border-border/40"
+              >
+                {part.slice(1, -1)}
+              </code>
+            );
+          }
+          return part;
+        });
+
+        if (isBullet) {
+          return (
+            <div key={idx} className="flex items-start gap-2 pl-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/70 shrink-0 mt-1.5" />
+              <div className="flex-1">{renderedLine}</div>
+            </div>
+          );
+        }
+
+        return <p key={idx}>{renderedLine}</p>;
+      })}
+    </div>
+  );
+}
+
+function FileContextDiffViewer({
+  cwd,
+  filePath,
+  targetLine,
+}: {
+  cwd: string;
+  filePath: string;
+  targetLine: number;
+}) {
+  const api = readNativeApi();
+  const [diffText, setDiffText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!api || !cwd || !filePath) return;
+    setLoading(true);
+    setError(null);
+
+    api.projects
+      .readFile({ cwd, relativePath: filePath })
+      .then((fileRes) => {
+        if (fileRes?.contents) {
+          const fileLines = fileRes.contents.split("\n");
+          const start = Math.max(0, targetLine - 8);
+          const end = Math.min(fileLines.length, targetLine + 8);
+          const contextLines = fileLines
+            .slice(start, end)
+            .map((l, idx) => {
+              const lineNum = start + idx + 1;
+              const isTarget = lineNum === targetLine;
+              return `${isTarget ? "+" : " "} ${l}`;
+            })
+            .join("\n");
+          setDiffText(`@@ L${start + 1}-L${end} (Target: Line ${targetLine}) @@\n` + contextLines);
+        } else {
+          setDiffText("No file content available.");
+        }
+      })
+      .catch((err: unknown) => {
+        setError(toGitUserFacingErrorMessage(err));
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [api, cwd, filePath, targetLine]);
+
+  if (loading) {
+    return (
+      <div className="p-3 bg-muted/20 border border-border rounded-lg flex items-center gap-2 text-xs text-muted-foreground my-2">
+        <Loader2 size={13} className="animate-spin text-primary" />
+        <span>Loading file diff &amp; context around line {targetLine}…</span>
+      </div>
+    );
+  }
+
+  if (error || !diffText) {
+    return (
+      <div className="p-3 bg-muted/20 border border-border rounded-lg text-xs text-muted-foreground my-2">
+        <span>Target file: {filePath} (Line {targetLine}).</span>
+      </div>
+    );
+  }
+
+  return <CodeDiffViewer snippet={diffText} />;
+}
+
 /* ──────────────────────────────────────────
    Finding Card Component
 ────────────────────────────────────────── */
 
 function FindingCard({
+  cwd,
   finding,
   feedbackState,
   onFeedback,
 }: {
+  cwd: string;
   finding: ReviewFinding;
   feedbackState: FindingFeedbackVerdict | "pending" | undefined;
   onFeedback: (id: string, verdict: FindingFeedbackVerdict) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
+  const [showFileDiff, setShowFileDiff] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const meta = categoryMeta(finding.category);
@@ -188,7 +385,7 @@ function FindingCard({
                 unchanged
               </span>
             )}
-            <span className="ml-auto text-[10px] font-mono text-muted-foreground">
+            <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
               Confidence: {Math.round(finding.confidence * 100)}%
             </span>
           </div>
@@ -197,13 +394,23 @@ function FindingCard({
             {finding.title}
           </h3>
 
-          <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-muted-foreground font-mono">
-            <FileCode2 size={12} className="shrink-0 opacity-60" />
-            {pathDir && <span className="opacity-60">{pathDir}/</span>}
-            <span className="text-foreground font-medium">{filename}</span>
-            <span className="px-1.5 py-0.5 rounded bg-muted text-foreground font-mono font-semibold">
-              :L{finding.line}
-            </span>
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowFileDiff((prev) => !prev);
+              }}
+              className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground font-mono bg-muted/50 hover:bg-muted px-2 py-0.5 rounded border border-border/50 transition-colors cursor-pointer"
+              title="Click to view file diff & context around target line"
+            >
+              <FileDiff size={12} className="text-primary shrink-0" />
+              {pathDir && <span className="opacity-60">{pathDir}/</span>}
+              <span className="text-foreground font-medium">{filename}</span>
+              <span className="px-1 py-0.2 rounded bg-background text-foreground font-mono font-semibold">
+                :L{finding.line}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -215,29 +422,27 @@ function FindingCard({
       {/* Expanded Details Body */}
       {expanded && (
         <div className="px-4 pb-4 border-t border-border/40 pt-3.5 space-y-3">
-          <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap font-sans">
-            {explanation}
-          </p>
+          <FormattedMarkdown text={explanation} />
 
-          {snippet && (
-            <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-border/50 bg-muted/50 text-[11px] font-semibold text-foreground">
+          {snippet && <CodeDiffViewer snippet={snippet} />}
+
+          {/* Interactive Target File Diff Drawer */}
+          {showFileDiff && (
+            <div className="pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between text-xs font-bold text-foreground mb-1">
                 <span className="flex items-center gap-1.5 font-mono">
-                  <Wrench size={12} />
-                  Suggested Code Betterment
+                  <FileDiff size={13} className="text-primary" />
+                  Target File Diff Context: {filename}:L{finding.line}
                 </span>
                 <button
                   type="button"
-                  onClick={handleCopySnippet}
-                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  onClick={() => setShowFileDiff(false)}
+                  className="text-muted-foreground hover:text-foreground text-[11px]"
                 >
-                  <Copy size={11} />
-                  {copied ? "Copied!" : "Copy Code"}
+                  Close
                 </button>
               </div>
-              <pre className="p-3 text-[11px] font-mono text-foreground leading-relaxed overflow-x-auto custom-scrollbar">
-                <code>{snippet}</code>
-              </pre>
+              <FileContextDiffViewer cwd={cwd} filePath={finding.file} targetLine={finding.line} />
             </div>
           )}
 
@@ -276,6 +481,15 @@ function FindingCard({
               >
                 <ThumbsDown size={11} />
                 Mark False Positive
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowFileDiff((prev) => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium border border-border bg-muted/40 hover:bg-muted text-foreground transition-colors cursor-pointer"
+              >
+                <FileDiff size={11} className="text-primary" />
+                {showFileDiff ? "Hide File Diff" : "View File Diff"}
               </button>
 
               {!snippet && (
@@ -345,9 +559,7 @@ function SummarySection({ result }: { result: GitGenerateReviewResult }) {
         )}
       </div>
       <div className="p-4">
-        <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap font-sans">
-          {content}
-        </p>
+        <FormattedMarkdown text={content} />
       </div>
     </Card>
   );
@@ -414,10 +626,8 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
   }, [api, cwd]);
 
   useEffect(() => {
-    if (activeTab === "history") {
-      void loadHistory();
-    }
-  }, [activeTab, loadHistory]);
+    void loadHistory();
+  }, [loadHistory, review.status]);
 
   // Explicit Save Focus Rules Handler
   const handleSaveFocusRules = useCallback(() => {
@@ -942,6 +1152,7 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
                     {filteredFindings.map((f) => (
                       <FindingCard
                         key={f.id}
+                        cwd={cwd}
                         finding={f}
                         feedbackState={feedbackState[f.id]}
                         onFeedback={handleFeedback}
@@ -1122,6 +1333,7 @@ export function ReviewPanel({ cwd, activePanel }: { cwd: string; activePanel?: s
                   {selectedHistoryRecord.findings.map((f) => (
                     <FindingCard
                       key={f.id}
+                      cwd={cwd}
                       finding={f}
                       feedbackState={undefined}
                       onFeedback={() => {}}
