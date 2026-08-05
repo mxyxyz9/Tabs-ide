@@ -7,7 +7,7 @@ import type * as EffectAcpErrors from "effect-acp/errors";
 
 import { type GrokSettings, type ModelSelection } from "@tabs/contracts";
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@tabs/shared/git";
-import { extractJsonObject } from "@tabs/shared/schemaJson";
+import { extractJsonObject, fromLenientJson } from "@tabs/shared/schemaJson";
 
 import { TextGenerationError } from "@tabs/contracts";
 import { type ThreadTitleGenerationResult, type TextGenerationShape } from "./TextGeneration";
@@ -147,7 +147,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
         });
       }
 
-      const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(outputSchemaJson));
+      const decodeOutput = Schema.decodeEffect(fromLenientJson(outputSchemaJson));
       return yield* decodeOutput(extractJsonObject(trimmed)).pipe(
         Effect.catchTag("SchemaError", (cause) =>
           Effect.fail(

@@ -239,12 +239,32 @@ const make = Effect.gen(function* () {
     }
     const desiredModelSelection = requestedModelSelection ?? thread.modelSelection;
     const desiredInstanceId = desiredModelSelection.instanceId;
+
+    // Guard: reject chat turns against text-generation-only providers (e.g.
+    // Google Gemini) before any session is started. This prevents a TypeError
+    // from `yield* adapter.sendTurn` (which would be undefined on an
+    // incomplete stub) and surfaces a clear, user-visible error instead.
+    const desiredCapabilities = yield* providerService
+      .getCapabilities(desiredInstanceId)
+      .pipe(Effect.option);
+    if (
+      Option.isSome(desiredCapabilities) &&
+      desiredCapabilities.value.agentChat === "unsupported"
+    ) {
+      return yield* new ProviderAdapterRequestError({
+        provider: desiredInstanceId as unknown as ProviderDriverKind,
+        method: "thread.turn.start",
+        detail: `Provider instance '${desiredInstanceId}' does not support interactive Agent Chat. It is a text-generation-only provider. Select a different provider in the Agents tab.`,
+      });
+    }
+
     const effectiveCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
     });
 
     const resolveActiveSession = (threadId: ThreadId) =>
+
       providerService
         .listSessions()
         .pipe(Effect.map((sessions) => sessions.find((session) => session.threadId === threadId)));

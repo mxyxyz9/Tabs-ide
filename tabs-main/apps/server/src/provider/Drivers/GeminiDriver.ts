@@ -5,7 +5,8 @@ import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import { makeGeminiTextGeneration } from "../../textGeneration/GeminiTextGeneration";
-import { ProviderDriverError } from "../Errors";
+import { ProviderAdapterRequestError, ProviderDriverError } from "../Errors";
+import type { ProviderAdapterShape } from "../Services/ProviderAdapter";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
   defaultProviderContinuationIdentity,
@@ -125,6 +126,41 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
         ),
       );
 
+      // Gemini is a text-generation-only provider (Code Review). It does NOT
+      // support interactive Agent Chat sessions. Every agent-protocol method
+      // returns a typed ProviderAdapterRequestError so the error bubbles
+      // through ProviderService cleanly instead of producing a
+      // `yield* undefined` TypeError that crashes the turn handler.
+      const geminiUnsupportedError = (method: string) =>
+        new ProviderAdapterRequestError({
+          provider: DRIVER_KIND,
+          method,
+          detail:
+            "Google Gemini does not support interactive Agent Chat. " +
+            "Select a different provider in the Agents tab. " +
+            "Gemini is available for Git Code Review text generation only.",
+        });
+
+      const geminiAdapter = {
+        provider: DRIVER_KIND,
+        capabilities: {
+          sessionModelSwitch: "unsupported" as const,
+          agentChat: "unsupported" as const,
+        },
+        streamEvents: Stream.empty,
+        startSession: () => Effect.fail(geminiUnsupportedError("startSession")),
+        sendTurn: () => Effect.fail(geminiUnsupportedError("sendTurn")),
+        interruptTurn: () => Effect.fail(geminiUnsupportedError("interruptTurn")),
+        respondToRequest: () => Effect.fail(geminiUnsupportedError("respondToRequest")),
+        respondToUserInput: () => Effect.fail(geminiUnsupportedError("respondToUserInput")),
+        stopSession: () => Effect.void,
+        listSessions: () => Effect.succeed([] as const),
+        hasSession: () => Effect.succeed(false),
+        readThread: () => Effect.fail(geminiUnsupportedError("readThread")),
+        rollbackThread: () => Effect.fail(geminiUnsupportedError("rollbackThread")),
+        stopAll: () => Effect.void,
+      } satisfies ProviderAdapterShape<ProviderAdapterRequestError>;
+
       return {
         instanceId,
         driverKind: DRIVER_KIND,
@@ -133,11 +169,7 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
         accentColor,
         enabled,
         snapshot,
-        adapter: {
-          streamEvents: Stream.empty,
-          startSession: () => Effect.fail(new Error("Gemini driver currently supports text generation.")),
-          listSessions: () => Effect.succeed([]),
-        } as any,
+        adapter: geminiAdapter,
         textGeneration,
       } satisfies ProviderInstance;
     }),

@@ -6,7 +6,7 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { type CursorSettings, type ModelSelection } from "@tabs/contracts";
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@tabs/shared/git";
-import { extractJsonObject } from "@tabs/shared/schemaJson";
+import { extractJsonObject, fromLenientJson } from "@tabs/shared/schemaJson";
 
 import { TextGenerationError } from "@tabs/contracts";
 import { type ThreadTitleGenerationResult, type TextGenerationShape } from "./TextGeneration";
@@ -153,7 +153,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
         });
       }
 
-      const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(outputSchemaJson));
+      const decodeOutput = Schema.decodeEffect(fromLenientJson(outputSchemaJson));
       return yield* decodeOutput(extractJsonObject(rawResult)).pipe(
         Effect.catchTag("SchemaError", (cause) =>
           Effect.fail(

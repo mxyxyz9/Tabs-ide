@@ -1439,11 +1439,13 @@ export const makeGitManager = Effect.gen(function* () {
         diffSummary = `Commit ${commitSha}`;
       } else if (input.target.kind === "full_codebase") {
         targetScope = "full_codebase";
-        const diffRes = yield* gitCore.diff({
+        const diffRes = yield* gitCore.execute({
+          operation: "GitManager.generateDiffSummary.fullCodebase",
           cwd: input.cwd,
-          commit: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+          args: ["diff", "--no-color", "--no-ext-diff", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD"],
+          allowNonZeroExit: true,
         });
-        rawPatch = diffRes.patch;
+        rawPatch = diffRes.stdout;
         diffSummary = "Full codebase audit across repository source files";
       } else {
         const details = yield* gitCore.statusDetails(input.cwd);
@@ -1662,11 +1664,13 @@ export const makeGitManager = Effect.gen(function* () {
         diffSummary = `Commit ${commitSha}`;
       } else if (input.target.kind === "full_codebase") {
         targetScope = "full_codebase";
-        const diffRes = yield* gitCore.diff({
+        const diffRes = yield* gitCore.execute({
+          operation: "GitManager.generateReview.fullCodebase",
           cwd: input.cwd,
-          commit: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+          args: ["diff", "--no-color", "--no-ext-diff", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD"],
+          allowNonZeroExit: true,
         });
-        rawPatch = diffRes.patch;
+        rawPatch = diffRes.stdout;
         diffSummary = "Full codebase audit across repository source files";
       } else {
         const details = yield* gitCore.statusDetails(input.cwd);
@@ -1748,6 +1752,20 @@ export const makeGitManager = Effect.gen(function* () {
       if (patchContent.length > 300_000) {
         patchContent = patchContent.slice(0, 300_000) + "\n[... diff patch capped at 300,000 characters ...]";
         wasTruncated = true;
+      }
+
+      const initialChangedFiles = extractChangedFilesFromPatch(patchContent);
+      if (options?.onProgress) {
+        yield* options.onProgress({
+          cwd: input.cwd,
+          stage: "assembling_context",
+          message:
+            input.target.kind === "full_codebase"
+              ? `Assembled patch context for ${initialChangedFiles.length} codebase files.`
+              : `Assembled patch context for ${initialChangedFiles.length} modified files.`,
+          fileCount: initialChangedFiles.length,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       const customInstructions = settings.gitAi?.customPromptInstructions?.trim();

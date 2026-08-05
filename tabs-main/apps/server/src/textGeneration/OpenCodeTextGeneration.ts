@@ -13,7 +13,7 @@ import {
 } from "@tabs/contracts";
 import { sanitizeBranchFragment, sanitizeFeatureBranchName } from "@tabs/shared/git";
 import { getModelSelectionStringOptionValue } from "@tabs/shared/model";
-import { extractJsonObject } from "@tabs/shared/schemaJson";
+import { extractJsonObject, fromLenientJson } from "@tabs/shared/schemaJson";
 
 import { ServerConfig } from "../config";
 import { resolveAttachmentPath } from "../attachmentStore";
@@ -351,7 +351,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             releaseSharedServer,
           );
 
-    const decodeOutput = Schema.decodeEffect(Schema.fromJsonString(input.outputSchemaJson));
+    const decodeOutput = Schema.decodeEffect(fromLenientJson(input.outputSchemaJson));
     return yield* decodeOutput(extractJsonObject(rawOutput)).pipe(
       Effect.catchTag("SchemaError", (cause) =>
         Effect.fail(

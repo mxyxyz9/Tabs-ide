@@ -30,7 +30,15 @@ export interface ProviderAdapterCapabilities {
    * Declares whether changing the model on an existing session is supported.
    */
   readonly sessionModelSwitch: ProviderSessionModelSwitchMode;
+  /**
+   * When set to `"unsupported"`, this provider instance does not support
+   * interactive Agent Chat (sendTurn / startSession). It is a text-generation-
+   * only driver (e.g. Google Gemini for Code Review). The Agents tab uses this
+   * flag to filter the provider out of its selectable-provider list.
+   */
+  readonly agentChat?: "unsupported";
 }
+
 
 export interface ProviderThreadTurnSnapshot {
   readonly id: TurnId;

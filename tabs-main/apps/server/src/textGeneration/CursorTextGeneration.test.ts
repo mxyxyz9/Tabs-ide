@@ -211,6 +211,30 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
     ),
   );
 
+  it.effect("parses lenient JSON containing trailing commas and comments", () =>
+    withFakeAcpAgent(
+      {
+        T3_ACP_PROMPT_RESPONSE_TEXT:
+          '{\n  "summary": "Full review summary",\n  "keyChanges": "- Added feature X",\n  "notesAndRisk": "Low risk",\n  "findings": [],\n} // trailing comma and comment',
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          const generated = yield* textGeneration.generateDiffSummary({
+            cwd: process.cwd(),
+            diffSummary: "M apps/web/src/App.tsx",
+            diffPatch: "diff --git a/apps/web/src/App.tsx b/apps/web/src/App.tsx",
+            modelSelection: {
+              instanceId: "cursor" as ProviderInstanceId,
+              model: "composer-2",
+            },
+          });
+
+          expect(generated.summary).toBe("Full review summary");
+          expect(generated.keyChanges).toBe("- Added feature X");
+        }),
+    ),
+  );
+
   it.effect("generates thread titles through Cursor ACP text generation", () =>
     withFakeAcpAgent(
       {

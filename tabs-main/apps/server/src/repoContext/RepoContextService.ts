@@ -373,8 +373,9 @@ export interface RepoContextResult {
 export function buildRepoContext(input: RepoContextInput): RepoContextResult {
   const budgetChars = input.budgetChars ?? REPO_CONTEXT_BUDGET_CHARS;
 
-  // Per-file commit history
-  const fileHistories = input.changedFiles.map((f) =>
+  // Per-file commit history — cap at top 30 files to avoid blocking on large diffs
+  const targetFiles = input.changedFiles.slice(0, 30);
+  const fileHistories = targetFiles.map((f) =>
     buildFileHistory(input.cwd, f, input.maxCommitHistoryPerFile),
   );
 
