@@ -1038,6 +1038,8 @@ describe("ClaudeAdapterLive", () => {
       assert.equal(toolInputUpdated?.type, "item.updated");
       if (toolInputUpdated?.type === "item.updated") {
         assert.deepEqual(toolInputUpdated.payload.data, {
+          toolCallId: "tool-grep-1",
+          callId: "tool-grep-1",
           toolName: "Grep",
           input: {
             pattern: "foo",
@@ -1143,6 +1145,8 @@ describe("ClaudeAdapterLive", () => {
         session_id: "sdk-session-todo-plan",
         uuid: "result-todo-plan",
       } as unknown as SDKMessage);
+
+      yield* Effect.yieldNow;
 
       const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
       const planUpdated = runtimeEvents.find((event) => event.type === "turn.plan.updated");
@@ -1326,9 +1330,7 @@ describe("ClaudeAdapterLive", () => {
 
       harness.query.fail(new Error("All fibers interrupted without error"));
 
-      yield* Effect.yieldNow;
-      yield* Effect.yieldNow;
-      yield* Effect.yieldNow;
+      yield* TestClock.adjust("50 millis");
       runtimeEventsFiber.interruptUnsafe();
       assert.deepEqual(
         runtimeEvents.map((event) => event.type),
@@ -1517,7 +1519,9 @@ describe("ClaudeAdapterLive", () => {
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
-      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 6).pipe(
+      const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.tap((e) => Effect.logInfo("OBSERVED EVENT IN STREAM", { type: e.type })),
+        Stream.takeUntil((e) => e.type === "task.progress"),
         Stream.runCollect,
         Effect.forkChild,
       );
@@ -1564,7 +1568,8 @@ describe("ClaudeAdapterLive", () => {
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
 
-      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 6).pipe(
+      const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.takeUntil((e) => e.type === "task.progress"),
         Stream.runCollect,
         Effect.forkChild,
       );
@@ -3196,11 +3201,6 @@ describe("ClaudeAdapterLive", () => {
       });
       yield* Stream.take(adapter.streamEvents, 1).pipe(Stream.runDrain);
 
-      const proposedEventFiber = yield* Stream.filter(
-        adapter.streamEvents,
-        (event) => event.type === "turn.proposed.completed",
-      ).pipe(Stream.runHead, Effect.forkChild);
-
       harness.query.emit({
         type: "assistant",
         session_id: "sdk-session-exit-plan",
@@ -3227,7 +3227,10 @@ describe("ClaudeAdapterLive", () => {
         },
       } as unknown as SDKMessage);
 
-      const proposedEvent = yield* Fiber.join(proposedEventFiber);
+      const proposedEvent = yield* Stream.filter(
+        adapter.streamEvents,
+        (event) => event.type === "turn.proposed.completed",
+      ).pipe(Stream.runHead);
       assert.equal(proposedEvent._tag, "Some");
       if (proposedEvent._tag !== "Some") {
         return;
@@ -3606,6 +3609,8 @@ describe("ClaudeAdapterLive", () => {
         session_id: "sdk-session-native-log",
         uuid: "result-native-log",
       } as unknown as SDKMessage);
+
+      yield* Effect.yieldNow;
 
       const turnCompleted = yield* Fiber.join(turnCompletedFiber);
       assert.equal(turnCompleted._tag, "Some");

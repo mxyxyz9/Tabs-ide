@@ -34,7 +34,7 @@ export function createModelCapabilities(input: {
     optionDescriptors: descriptors.map(cloneDescriptor),
     reasoningEffortLevels:
       effortDescriptor?.options.map((option) => ({
-        value: option.id,
+        value: option.id ?? (option as any).value,
         label: option.label,
         ...(option.isDefault !== undefined ? { isDefault: option.isDefault } : {}),
       })) ?? [],
@@ -191,7 +191,8 @@ export function getProviderOptionCurrentValue(
   if (descriptor.currentValue) {
     return descriptor.currentValue;
   }
-  return descriptor.options.find((option) => option.isDefault)?.id;
+  const defaultOption = descriptor.options.find((option) => option.isDefault);
+  return defaultOption ? (defaultOption.id ?? (defaultOption as any).value) : undefined;
 }
 
 export function getProviderOptionCurrentLabel(
@@ -211,7 +212,7 @@ export function getProviderOptionCurrentLabel(
   if (typeof currentValue !== "string") {
     return undefined;
   }
-  return descriptor.options.find((option) => option.id === currentValue)?.label;
+  return descriptor.options.find((option) => option.id === currentValue || (option as any).value === currentValue)?.label;
 }
 
 export function buildProviderOptionSelectionsFromDescriptors(
