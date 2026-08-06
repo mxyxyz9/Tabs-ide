@@ -845,6 +845,7 @@ export function makeCursorAdapter(
             Effect.catch((cause) =>
               Effect.logError("Failed to process Cursor runtime notification.", { cause }),
             ),
+            Effect.ensuring(Effect.suspend(() => Effect.ignore(stopSessionInternal(ctx)))),
             Effect.forkChild,
           );
 
