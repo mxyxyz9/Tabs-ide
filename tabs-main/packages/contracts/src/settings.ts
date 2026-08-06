@@ -713,6 +713,14 @@ const GeminiSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const KiloSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  serverUrl: Schema.optionalKey(TrimmedString),
+  serverPassword: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const GitAiStaticAnalysisSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   tools: Schema.optionalKey(Schema.Array(Schema.String)),
@@ -764,6 +772,7 @@ export const ServerSettingsPatch = Schema.Struct({
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
+      kilo: Schema.optionalKey(KiloSettingsPatch),
       gemini: Schema.optionalKey(GeminiSettingsPatch),
     }),
   ),
