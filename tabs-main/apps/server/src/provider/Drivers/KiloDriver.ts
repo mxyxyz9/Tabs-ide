@@ -125,6 +125,8 @@ export const KiloDriver: ProviderDriver<KiloSettings, KiloDriverEnv> = {
         instanceId,
         environment: processEnv,
         provider: DRIVER_KIND,
+        runtimeEventSource: "kilo.sdk.event",
+        turnIdPrefix: "kilo-turn",
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
       const textGeneration = yield* makeOpenCodeTextGeneration(effectiveConfig, processEnv);

@@ -1,0 +1,154 @@
+diff --git a/tabs-main/apps/server/src/provider/Layers/ClaudeAdapter.ts b/tabs-main/apps/server/src/provider/Layers/ClaudeAdapter.ts
+index 96cc2389..aa6a7a0b 100644
+--- a/tabs-main/apps/server/src/provider/Layers/ClaudeAdapter.ts
++++ b/tabs-main/apps/server/src/provider/Layers/ClaudeAdapter.ts
+@@ -142,11 +142,13 @@ interface PendingApproval {
+   readonly detail?: string;
+   readonly suggestions?: ReadonlyArray<PermissionUpdate>;
+   readonly decision: Deferred.Deferred<ProviderApprovalDecision>;
++  readonly agentId?: string;
+ }
+ 
+ interface PendingUserInput {
+   readonly questions: ReadonlyArray<UserInputQuestion>;
+   readonly answers: Deferred.Deferred<ProviderUserInputAnswers>;
++  readonly agentId?: string;
+ }
+ 
+ interface ToolInFlight {
+@@ -171,6 +173,7 @@ interface ClaudeSessionContext {
+   resumeSessionId: string | undefined;
+   readonly pendingApprovals: Map<ApprovalRequestId, PendingApproval>;
+   readonly pendingUserInputs: Map<ApprovalRequestId, PendingUserInput>;
++  readonly settledTasks: Set<string>;
+   readonly turns: Array<{
+     id: TurnId;
+     items: Array<unknown>;
+@@ -2031,6 +2034,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
+       return;
+     }
+ 
++    if (
++      ("agent_id" in message && typeof message.agent_id === "string" && context.settledTasks.has(message.agent_id)) ||
++      ("task_id" in message && typeof message.task_id === "string" && context.settledTasks.has(message.task_id))
++    ) {
++      return;
++    }
++
+     // Auto-start a synthetic turn for assistant messages that arrive without
+     // an active turn (e.g., background agent/subagent responses between user prompts).
+     if (!context.turnState) {
+@@ -2283,6 +2293,53 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
+             });
+           }
+         }
++        if (message.status === "completed" || message.status === "failed" || message.status === "stopped") {
++          context.settledTasks.add(message.task_id as string);
++
++          for (const [requestId, pending] of context.pendingApprovals) {
++            if (pending.agentId === message.task_id) {
++              context.pendingApprovals.delete(requestId);
++              yield* Deferred.succeed(pending.decision, "cancel");
++              
++              const resolvedStamp = yield* makeEventStamp();
++              yield* offerRuntimeEvent({
++                type: "request.resolved",
++                eventId: resolvedStamp.eventId,
++                provider: PROVIDER,
++                createdAt: resolvedStamp.createdAt,
++                threadId: context.session.threadId,
++                ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
++                requestId: asRuntimeRequestId(requestId),
++                payload: {
++                  requestType: pending.requestType,
++                  decision: "cancel",
++                },
++                providerRefs: nativeProviderRefs(context),
++              });
++            }
++          }
++
++          for (const [requestId, pending] of context.pendingUserInputs) {
++            if (pending.agentId === message.task_id) {
++              context.pendingUserInputs.delete(requestId);
++              yield* Deferred.succeed(pending.answers, {} as ProviderUserInputAnswers);
++              
++              const resolvedStamp = yield* makeEventStamp();
++              yield* offerRuntimeEvent({
++                type: "user-input.resolved",
++                eventId: resolvedStamp.eventId,
++                provider: PROVIDER,
++                createdAt: resolvedStamp.createdAt,
++                threadId: context.session.threadId,
++                ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
++                requestId: asRuntimeRequestId(requestId),
++                payload: { answers: {} },
++                providerRefs: nativeProviderRefs(context),
++              });
++            }
++          }
++        }
++
+         yield* offerRuntimeEvent({
+           ...base,
+           type: "task.completed",
+@@ -2671,6 +2728,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
+ 
+       const pendingApprovals = new Map<ApprovalRequestId, PendingApproval>();
+       const pendingUserInputs = new Map<ApprovalRequestId, PendingUserInput>();
++      const settledTasks = new Set<string>();
+       const inFlightTools = new Map<number, ToolInFlight>();
+ 
+       const contextRef = yield* Ref.make<ClaudeSessionContext | undefined>(undefined);
+@@ -2715,6 +2773,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
+         const pendingInput: PendingUserInput = {
+           questions,
+           answers: answersDeferred,
++          ...("agentID" in callbackOptions && typeof callbackOptions.agentID === "string"
++            ? { agentId: callbackOptions.agentID }
++            : {}),
+         };
+ 
+         // Emit user-input.requested so the UI can present the questions.
+@@ -2866,6 +2927,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
+           detail,
+           decision: decisionDeferred,
+           ...(callbackOptions.suggestions ? { suggestions: callbackOptions.suggestions } : {}),
++          ...("agentID" in callbackOptions && typeof callbackOptions.agentID === "string"
++            ? { agentId: callbackOptions.agentID }
++            : {}),
+         };
+ 
+         const requestedStamp = yield* makeEventStamp();
+@@ -3095,6 +3159,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
+         resumeSessionId: sessionId,
+         pendingApprovals,
+         pendingUserInputs,
++        settledTasks,
+         turns: [],
+         inFlightTools,
+         turnState: undefined,
+diff --git a/tabs-main/apps/server/src/provider/Layers/CursorAdapter.ts b/tabs-main/apps/server/src/provider/Layers/CursorAdapter.ts
+index c449a8cd..7cb459be 100644
+--- a/tabs-main/apps/server/src/provider/Layers/CursorAdapter.ts
++++ b/tabs-main/apps/server/src/provider/Layers/CursorAdapter.ts
+@@ -845,6 +845,7 @@ export function makeCursorAdapter(
+             Effect.catch((cause) =>
+               Effect.logError("Failed to process Cursor runtime notification.", { cause }),
+             ),
++            Effect.ensuring(Effect.suspend(() => Effect.ignore(stopSessionInternal(ctx)))),
+             Effect.forkChild,
+           );
+ 
+diff --git a/tabs-main/apps/server/src/provider/Layers/GrokAdapter.ts b/tabs-main/apps/server/src/provider/Layers/GrokAdapter.ts
+index cc36b54e..b672e664 100644
+--- a/tabs-main/apps/server/src/provider/Layers/GrokAdapter.ts
++++ b/tabs-main/apps/server/src/provider/Layers/GrokAdapter.ts
+@@ -624,6 +624,7 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
+             Effect.catch((cause) =>
+               Effect.logError("Failed to process Grok runtime notification.", { cause }),
+             ),
++            Effect.ensuring(Effect.suspend(() => Effect.ignore(stopSessionInternal(ctx)))),
+             Effect.forkChild,
+           );
+ 
