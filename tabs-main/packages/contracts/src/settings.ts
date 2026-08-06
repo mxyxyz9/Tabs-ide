@@ -427,6 +427,56 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
 
+export const KiloSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(true)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("kilo").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the Kilo binary.",
+        providerSettingsForm: {
+          placeholder: "kilo",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    serverUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Server URL",
+        description: "Leave blank to let Tabs spawn the server when needed.",
+        providerSettingsForm: {
+          placeholder: "http://127.0.0.1:4096",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    serverPassword: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Server password",
+        description: "Stored in plain text on disk.",
+        providerSettingsForm: {
+          control: "password",
+          placeholder: "Optional",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  {
+    order: ["binaryPath", "serverUrl", "serverPassword"],
+  },
+);
+export type KiloSettings = typeof KiloSettings.Type;
+
 export const GeminiSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(

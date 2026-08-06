@@ -1,5 +1,6 @@
 import {
   EventId,
+  type KiloSettings,
   type OpenCodeSettings,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -102,6 +103,7 @@ export interface OpenCodeAdapterLiveOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly provider?: ProviderDriverKind;
 }
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -424,10 +426,11 @@ const stopOpenCodeContext = Effect.fn("stopOpenCodeContext")(function* (
 });
 
 export function makeOpenCodeAdapter(
-  openCodeSettings: OpenCodeSettings,
+  openCodeSettings: OpenCodeSettings | KiloSettings,
   options?: OpenCodeAdapterLiveOptions,
 ) {
   return Effect.gen(function* () {
+    const boundProvider = options?.provider ?? PROVIDER;
     const boundInstanceId = options?.instanceId ?? ("opencode" as ProviderInstanceId);
     const serverConfig = yield* ServerConfig;
     const openCodeRuntime = yield* OpenCodeRuntime;
@@ -1423,7 +1426,7 @@ export function makeOpenCodeAdapter(
       });
 
     return {
-      provider: PROVIDER,
+      provider: boundProvider,
       capabilities: {
         sessionModelSwitch: "in-session",
       },

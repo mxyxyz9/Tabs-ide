@@ -149,7 +149,7 @@ export interface OpenCodeRuntimeShape {
 
 function parseServerUrlFromOutput(output: string): string | null {
   for (const line of output.split("\n")) {
-    if (!line.startsWith(OPENCODE_SERVER_READY_PREFIX)) {
+    if (!line.includes("server listening")) {
       continue;
     }
     const match = line.match(/on\s+(https?:\/\/[^\s]+)/);

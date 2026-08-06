@@ -120,7 +120,7 @@ const isWindowsDesktop =
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
-import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, CursorIcon, type Icon } from "./Icons";
+import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, KiloIcon, CursorIcon, type Icon } from "./Icons";
 import GitCommitComposer from "./GitCommitComposer";
 import { Badge } from "./ui/badge";
 import { initializeZoom, resetZoom, zoomIn, zoomOut } from "../state/zoom";
@@ -1039,6 +1039,7 @@ const PROVIDER_ICON_MAP: Record<string, Icon> = {
   openai: OpenAI,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
+  kilo: KiloIcon,
   cursor: CursorIcon,
 };
 

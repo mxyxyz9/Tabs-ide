@@ -8,6 +8,7 @@ import * as Semaphore from "effect/Semaphore";
 import {
   TextGenerationError,
   type ChatAttachment,
+  type KiloSettings,
   type ModelSelection,
   type OpenCodeSettings,
 } from "@tabs/contracts";
@@ -95,7 +96,7 @@ interface SharedOpenCodeTextGenerationServerState {
 }
 
 export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration")(function* (
-  openCodeSettings: OpenCodeSettings,
+  openCodeSettings: OpenCodeSettings | KiloSettings,
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   const serverConfig = yield* ServerConfig;
