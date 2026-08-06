@@ -2278,7 +2278,9 @@ function SettingsRouteView() {
     textGenModel,
   );
   const areProviderSettingsDirty = PROVIDER_SETTINGS.some((providerSettings) => {
-    const currentSettings = settings.providers[providerSettings.provider];
+    const currentSettings =
+      settings.providers[providerSettings.provider] ??
+      DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
     const defaultSettings = DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
     return !Equal.equals(currentSettings, defaultSettings);
   });
@@ -2370,7 +2372,10 @@ function SettingsRouteView() {
   const addCustomModel = useCallback(
     (provider: ProviderSettingsKey) => {
       const customModelInput = customModelInputByProvider[provider];
-      const customModels = settings.providers[provider].customModels;
+      const customModels =
+        settings.providers[provider]?.customModels ??
+        DEFAULT_UNIFIED_SETTINGS.providers[provider]?.customModels ??
+        [];
       const normalized = normalizeModelSlug(customModelInput, provider);
       if (!normalized) {
         setCustomModelErrorByProvider((existing) => ({
@@ -2409,7 +2414,7 @@ function SettingsRouteView() {
         providers: {
           ...settings.providers,
           [provider]: {
-            ...settings.providers[provider],
+            ...(settings.providers[provider] ?? DEFAULT_UNIFIED_SETTINGS.providers[provider]),
             customModels: [...customModels, normalized],
           },
         },
@@ -2443,12 +2448,15 @@ function SettingsRouteView() {
 
   const removeCustomModel = useCallback(
     (provider: ProviderSettingsKey, slug: string) => {
-      const customModels = settings.providers[provider].customModels;
+      const customModels =
+        settings.providers[provider]?.customModels ??
+        DEFAULT_UNIFIED_SETTINGS.providers[provider]?.customModels ??
+        [];
       updateSettings({
         providers: {
           ...settings.providers,
           [provider]: {
-            ...settings.providers[provider],
+            ...(settings.providers[provider] ?? DEFAULT_UNIFIED_SETTINGS.providers[provider]),
             customModels: customModels.filter((model) => model !== slug),
           },
         },
@@ -2465,9 +2473,10 @@ function SettingsRouteView() {
     const liveProvider = serverProviders.find(
       (candidate) => candidate.instanceId === providerSettings.provider,
     );
-    const providerConfig = settings.providers[providerSettings.provider];
     const defaultProviderConfig = DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
-    const statusKey = liveProvider?.status ?? (providerConfig.enabled ? "warning" : "disabled");
+    const providerConfig =
+      settings.providers[providerSettings.provider] ?? defaultProviderConfig;
+    const statusKey = liveProvider?.status ?? (providerConfig?.enabled ? "warning" : "disabled");
     const statusStyle = PROVIDER_STATUS_STYLES[statusKey];
     const summary = getProviderSummary(liveProvider);
     const baseModels =
@@ -4704,7 +4713,8 @@ function SettingsRouteView() {
                                         providers: {
                                           ...settings.providers,
                                           [providerCard.provider]: {
-                                            ...settings.providers[providerCard.provider],
+                                            ...(settings.providers[providerCard.provider] ??
+                                              DEFAULT_UNIFIED_SETTINGS.providers[providerCard.provider]),
                                             enabled: Boolean(checked),
                                           },
                                         },
@@ -4757,7 +4767,8 @@ function SettingsRouteView() {
                                             providers: {
                                               ...settings.providers,
                                               [providerCard.provider]: {
-                                                ...settings.providers[providerCard.provider],
+                                                ...(settings.providers[providerCard.provider] ??
+                                                  DEFAULT_UNIFIED_SETTINGS.providers[providerCard.provider]),
                                                 binaryPath: event.target.value,
                                               },
                                             },

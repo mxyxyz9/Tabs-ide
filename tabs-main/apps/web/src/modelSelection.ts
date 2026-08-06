@@ -158,7 +158,9 @@ export function getAppModelOptions(
       .map((model) => model.slug),
   );
 
-  const customModels = settings.providers[provider as keyof typeof settings.providers].customModels;
+  const customModels =
+    (settings.providers as Record<string, { customModels?: ReadonlyArray<string> }>)?.[provider]
+      ?.customModels ?? [];
   for (const slug of normalizeCustomModelSlugs(customModels, builtInModelSlugs, provider)) {
     if (seen.has(slug)) {
       continue;

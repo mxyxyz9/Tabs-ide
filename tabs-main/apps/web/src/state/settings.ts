@@ -27,7 +27,15 @@ export const serverConfigAtom = Atom.make<ServerConfig | null>(null).pipe(
 );
 
 export const serverSettingsAtom = Atom.make((get): ServerSettings => {
-  return get(serverConfigAtom)?.settings ?? DEFAULT_SERVER_SETTINGS;
+  const loaded = get(serverConfigAtom)?.settings;
+  if (!loaded) return DEFAULT_SERVER_SETTINGS;
+  return {
+    ...loaded,
+    providers: {
+      ...DEFAULT_SERVER_SETTINGS.providers,
+      ...loaded.providers,
+    },
+  };
 }).pipe(Atom.withLabel("tabs-server-settings"));
 
 export const keybindingsAtom = Atom.make((get): ResolvedKeybindingsConfig => {
