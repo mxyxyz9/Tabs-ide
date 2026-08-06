@@ -1334,6 +1334,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
                 "cursor",
                 "gemini",
                 "grok",
+                "kilo",
                 "opencode",
               ]);
               assert.strictEqual(cursorProvider?.enabled, false);

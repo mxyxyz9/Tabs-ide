@@ -217,6 +217,7 @@ const TEXT_GEN_PROVIDER_KEYS = [
   "cursor",
   "grok",
   "opencode",
+  "kilo",
 ] as const satisfies ReadonlyArray<ProviderPickerKind & keyof UnifiedSettings["providers"]>;
 
 export function getCustomModelOptionsByProvider(

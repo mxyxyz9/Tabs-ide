@@ -81,6 +81,7 @@ import {
   GoogleGemini,
   GrokIcon,
   type Icon,
+  KiloIcon,
   OpenAI,
   OpenCodeIcon,
 } from "../components/Icons";
@@ -91,6 +92,7 @@ const PROVIDER_ICONS_BY_KIND: Record<string, Icon> = {
   cursor: CursorIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
+  kilo: KiloIcon,
   gemini: GoogleGemini,
 };
 import { Badge } from "../components/ui/badge";
@@ -242,7 +244,7 @@ const TIMESTAMP_FORMAT_LABELS = {
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 
-type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode";
+type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode" | "kilo";
 
 type InstallProviderSettings = {
   provider: ProviderSettingsKey;
@@ -300,6 +302,14 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     binaryDescription: "Path to the OpenCode binary",
     installCommand: "npm install -g opencode-ai",
   },
+  {
+    provider: "kilo",
+    title: "Kilo",
+    icon: KiloIcon,
+    binaryPlaceholder: "Kilo binary path",
+    binaryDescription: "Path to the Kilo binary",
+    installCommand: "npm install -g @kilocode/cli",
+  },
 ];
 
 // Per-provider sign-in command. The server reports the auth *status* but not a
@@ -310,6 +320,7 @@ const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
   cursor: "cursor-agent login",
   grok: "grok login",
   opencode: "opencode auth login",
+  kilo: "kilo auth login",
 };
 
 type SettingsSectionId =
