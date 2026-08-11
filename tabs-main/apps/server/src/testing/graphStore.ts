@@ -809,20 +809,34 @@ export class TestingGraphStore {
   reviewCase(input: TestingCaseReviewInput): TestingCaseListResult {
     const existing = this.listCases(input.projectId).cases.find((item) => item.id === input.caseId);
     if (!existing) throw new Error("Testing case was not found in this project");
+    const externalId = input.externalId?.trim() || existing.externalId;
     const description = input.description?.trim() || existing.description;
     const steps = input.steps?.map((step) => step.trim()).filter(Boolean) ?? existing.steps;
-    if (input.decision === "edited" && (!description || steps.length === 0)) {
-      throw new Error("Edited cases require a description and at least one step");
+    if (input.decision === "edited" && (!externalId || !description || steps.length === 0)) {
+      throw new Error("Edited cases require a Case ID, description, and at least one step");
     }
-    const reviewed = { ...existing, description, steps, reviewDecision: input.decision };
+    const duplicate = this.listCases(input.projectId).cases.some(
+      (item) =>
+        item.id !== input.caseId &&
+        item.externalId.trim().toLocaleLowerCase() === externalId.toLocaleLowerCase(),
+    );
+    if (duplicate) throw new Error(`Case ID ${externalId} already exists in this project`);
+    const reviewed = {
+      ...existing,
+      externalId,
+      description,
+      steps,
+      reviewDecision: input.decision,
+    };
     const now = new Date().toISOString();
     this.#database.transaction(() => {
       this.#database
         .query(
-          `UPDATE test_cases SET description = ?, steps_json = ?, review_decision = ?, notes = ?,
+          `UPDATE test_cases SET external_id = ?, description = ?, steps_json = ?, review_decision = ?, notes = ?,
            updated_at = ? WHERE id = ? AND project_id = ?`,
         )
         .run(
+          externalId,
           description,
           JSON.stringify(steps),
           input.decision,

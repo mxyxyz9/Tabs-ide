@@ -166,16 +166,20 @@ describe("TestingGraphStore", () => {
         standaloneStatus: "not-yet-tested",
         ciStatus: null,
       });
+      expect(store.listCases("another-project").cases).toHaveLength(0);
+      expect(store.summary("another-project")).toMatchObject({ nodeCount: 0, edgeCount: 0 });
       const reviewed = store.reviewCase({
         projectId: "project",
         caseId: imported.cases[0]!.id,
         decision: "edited",
+        externalId: "QA-HOME-001",
         description: "Open the home page",
         steps: ["Navigate home"],
         notes: "Aligned with company wording",
       });
       expect(reviewed.cases[0]).toMatchObject({
         reviewDecision: "edited",
+        externalId: "QA-HOME-001",
         description: "Open the home page",
         notes: "Aligned with company wording",
       });

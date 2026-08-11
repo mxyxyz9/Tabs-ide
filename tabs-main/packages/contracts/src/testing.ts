@@ -51,6 +51,7 @@ export const TestingCaseReviewInput = Schema.Struct({
   projectId: Schema.String,
   caseId: Schema.String,
   decision: Schema.Literals(["accepted", "edited", "rejected"]),
+  externalId: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
   steps: Schema.optionalKey(Schema.Array(Schema.String)),
   notes: Schema.optionalKey(Schema.String),

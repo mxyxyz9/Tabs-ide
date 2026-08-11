@@ -88,10 +88,11 @@ describe("Testing Phase 2 inputs", () => {
         projectId: "project",
         caseId: "case",
         decision: "edited",
+        externalId: "QA-002",
         description: "Updated",
         steps: ["Open page"],
       }),
-    ).toMatchObject({ decision: "edited" });
+    ).toMatchObject({ decision: "edited", externalId: "QA-002" });
   });
 
   it("rejects unsupported review decisions", () => {

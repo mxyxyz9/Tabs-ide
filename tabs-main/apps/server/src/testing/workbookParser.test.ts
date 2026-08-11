@@ -68,6 +68,17 @@ describe("Testing workbook ingestion and reconciliation", () => {
     expect(parsed.cases[4]?.errors).toContain("Steps are blank or malformed");
   });
 
+  it("accepts the downloadable blank template without inventing cases", async () => {
+    const templatePath = resolve(
+      import.meta.dirname,
+      "../../../web/public/testing/testing-cases-template.xlsx",
+    );
+    const parsed = await parseTestingWorkbook(templatePath);
+
+    expect(parsed.workbookName).toBe("testing-cases-template.xlsx");
+    expect(parsed.cases).toEqual([]);
+  });
+
   it("finds a reachable path and surfaces a deliberate mismatch", async () => {
     const fixturePath = resolve(
       import.meta.dirname,

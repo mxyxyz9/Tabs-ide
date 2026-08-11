@@ -391,3 +391,50 @@
   this checkpoint. Ambiguous screenshot vision remains deferred until the shared provider layer
   supports sanitized image attachments. Persistent schedule definitions are present, but an
   always-on dispatcher while Tabs is closed is not claimed.
+
+## 2026-08-12 — Testing UX: Project-Scoped Guided Workspace & Workbook Template
+
+### Changed
+
+- Reworked Testing into a task-oriented workspace with a clear Start screen and persistent
+  Discover, Cases, Automate, Runs, and Reports workflow navigation. The starting choices now cover
+  importing an existing test plan, understanding an application first, and continuing existing
+  project work; the recommended next action is derived from that project's persisted state.
+- Made project scope explicit in the Testing header and retained the existing project-ID boundary
+  for every API call and SQLite query. Switching a top-level Tabs project changes the Testing
+  workspace rather than combining cases, graph states, runs, or reports across projects.
+- Replaced the expanded case-card wall with a searchable/filterable master-detail inventory.
+  Reviewers can edit a case ID as well as its description and steps. IDs must be non-empty and are
+  enforced case-insensitively as unique within the current project, while the review history keeps
+  the old and new values.
+- Replaced decorative green emphasis with the application's primary accent for navigation,
+  selection, and calls to action. Green remains reserved for semantic success states.
+- Added a downloadable, parser-compatible `.xlsx` template beside the workbook picker. It contains
+  the exact `Case ID`, `Description`, and `Steps` headers, ten ready-to-fill rows, filters, frozen
+  headers, and an Instructions sheet explaining unique IDs and multi-line numbered steps.
+
+### Verification
+
+- Exercised the redesigned UI in the running Electron app through its Chrome DevTools endpoint.
+  The `Tabs-ide-cleanup-vscode-web-…` project showed **0 graph states / 0 cases**, while switching
+  to `Intern-batch-08` showed **21 graph states / 18 cases**, confirming live project isolation.
+- Verified Start and populated Cases flows, exact case-ID search (`DISCOVERED-018`), status
+  filtering, case selection/edit controls, the project badge, template download, keyboard-reachable
+  controls, accessible names, and polite project-change announcements. Also exercised a narrower
+  900 px viewport without expanding the crawler scope.
+- Rendered and visually inspected both workbook sheets with no clipping or broken layout. Inspected
+  workbook data and formula errors, normalized the OOXML for ExcelJS compatibility, passed the
+  production workbook parser test, and confirmed the development server returns the template with
+  HTTP 200.
+- Focused contract, workbook-parser, and graph-store verification reported **3 files / 26 tests
+  passed**. Web and server typechecks passed. `git diff --check`, repository formatting, full lint,
+  and the full production build all completed successfully.
+
+### Deferred
+
+- No real company workbook, authenticated external target, or credentials were supplied, so those
+  validations remain unclaimed. Arbitrary discovery of an organization's pre-existing repository
+  tests is also not claimed; the existing company-template and repository-output paths remain the
+  integration points for those conventions.
+- Native-mobile execution remains a future transport/runtime concern. This pass keeps the workflow
+  and project model target-neutral while validating it in the actual Electron application.

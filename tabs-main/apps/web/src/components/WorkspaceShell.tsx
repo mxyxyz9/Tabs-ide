@@ -1056,6 +1056,8 @@ function ProjectToolBar(props: {
 }
 
 type TestingAuthenticationMode = "none" | "local-profile" | "connected-session";
+type TestingWorkspaceSection = "overview" | "discover" | "cases" | "automate" | "runs" | "reports";
+type TestingCaseFilter = "all" | "needs-review" | "accepted" | "blocked";
 
 function TestingTool(props: {
   projectId: ProjectId;
@@ -1066,6 +1068,11 @@ function TestingTool(props: {
   const [cdpEndpoint, setCdpEndpoint] = useState("");
   const [explorationScope, setExplorationScope] = useState<TestingExplorationScope>("path");
   const [authenticationMode, setAuthenticationMode] = useState<TestingAuthenticationMode>("none");
+  const [activeTestingSection, setActiveTestingSection] =
+    useState<TestingWorkspaceSection>("overview");
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseFilter, setCaseFilter] = useState<TestingCaseFilter>("all");
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [maxStates, setMaxStates] = useState(String(DEFAULT_TESTING_MAX_STATES));
   const [maxDurationMinutes, setMaxDurationMinutes] = useState("5");
   const [status, setStatus] = useState<TestingGraphSummary | null>(null);
@@ -1108,6 +1115,7 @@ function TestingTool(props: {
   );
   const [workbookPath, setWorkbookPath] = useState("");
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  const [editedExternalId, setEditedExternalId] = useState("");
   const [editedDescription, setEditedDescription] = useState("");
   const [editedSteps, setEditedSteps] = useState("");
   const [busyAction, setBusyAction] = useState<
@@ -1235,6 +1243,34 @@ function TestingTool(props: {
     authenticationMode === "none" ||
     (authenticationMode === "local-profile" && Boolean(status?.authCapturedAt)) ||
     (authenticationMode === "connected-session" && typeof normalizedCdpEndpoint === "string");
+
+  const acceptedCaseCount = cases.filter(
+    (testCase) => testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited",
+  ).length;
+  const reviewCaseCount = cases.filter(
+    (testCase) => testCase.status === "needs-review" && testCase.reviewDecision === "pending",
+  ).length;
+  const blockedCaseCount = cases.filter((testCase) => testCase.status === "blocked").length;
+  const completedGenerationJob = generationJobs.find((job) => job.status === "completed");
+  const latestExecutionRun = executionRuns[0] ?? null;
+  const filteredCases = useMemo(() => {
+    const query = caseSearch.trim().toLocaleLowerCase();
+    return cases.filter((testCase) => {
+      const matchesQuery =
+        !query ||
+        testCase.externalId.toLocaleLowerCase().includes(query) ||
+        testCase.description.toLocaleLowerCase().includes(query);
+      const matchesFilter =
+        caseFilter === "all" ||
+        (caseFilter === "needs-review" && testCase.status === "needs-review") ||
+        (caseFilter === "accepted" &&
+          (testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited")) ||
+        (caseFilter === "blocked" && testCase.status === "blocked");
+      return matchesQuery && matchesFilter;
+    });
+  }, [caseFilter, caseSearch, cases]);
+  const selectedCase =
+    filteredCases.find((testCase) => testCase.id === selectedCaseId) ?? filteredCases[0] ?? null;
 
   const startAuthCapture = async () => {
     if (!normalizedTarget) return;
@@ -1366,6 +1402,7 @@ function TestingTool(props: {
         decision,
         ...(decision === "edited"
           ? {
+              externalId: editedExternalId,
               description: editedDescription,
               steps: editedSteps.split("\n").map((step) => step.trim()),
             }
@@ -1383,6 +1420,7 @@ function TestingTool(props: {
 
   const beginEditCase = (testCase: TestingCaseSummary) => {
     setEditingCaseId(testCase.id);
+    setEditedExternalId(testCase.externalId);
     setEditedDescription(testCase.description);
     setEditedSteps(testCase.steps.join("\n"));
   };
@@ -1618,1294 +1656,1733 @@ function TestingTool(props: {
     }
   };
 
+  const recommendedTestingSection: TestingWorkspaceSection =
+    (status?.nodeCount ?? 0) === 0
+      ? "discover"
+      : cases.length === 0 || reviewCaseCount > 0
+        ? "cases"
+        : !completedGenerationJob
+          ? "automate"
+          : executionRuns.length === 0
+            ? "runs"
+            : "reports";
+  const testingSections: ReadonlyArray<{
+    id: TestingWorkspaceSection;
+    label: string;
+    description: string;
+    count?: number;
+  }> = [
+    { id: "overview", label: "Start", description: "Choose the right workflow" },
+    {
+      id: "discover",
+      label: "Discover",
+      description: "Connect and understand the app",
+      count: status?.nodeCount ?? 0,
+    },
+    { id: "cases", label: "Cases", description: "Import, map, and review", count: cases.length },
+    {
+      id: "automate",
+      label: "Automate",
+      description: "Generate maintainable tests",
+      count: completedGenerationJob?.artifacts.length ?? 0,
+    },
+    {
+      id: "runs",
+      label: "Runs",
+      description: "Execute and investigate",
+      count: executionRuns.length,
+    },
+    { id: "reports", label: "Reports", description: "Sign-off and traceability" },
+  ];
+
   return (
     <main className="h-full overflow-auto bg-background" aria-labelledby="testing-heading">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10 lg:px-10">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-emerald-500">
-            <ShieldCheckIcon aria-hidden="true" className="size-4" />
-            Standalone / UAT mode
-          </div>
-          <h1
-            id="testing-heading"
-            className="text-3xl font-semibold tracking-tight text-foreground"
-          >
-            Testing
-          </h1>
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-            Explore a running application through its accessibility tree and store a privacy-safe
-            state transition graph. No source-code access is required.
-          </p>
-        </div>
-
-        <div className="space-y-4" aria-label="Testing setup steps">
-          <Card>
-            <CardHeader>
-              <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-                Step 1
-              </div>
-              <CardTitle>Choose what to test</CardTitle>
-              <CardDescription>
-                Start from the page relevant to the task and keep the crawl as narrow as practical.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <label htmlFor="testing-target-url" className="text-sm font-medium text-foreground">
-                  Target URL
-                </label>
-                <Input
-                  id="testing-target-url"
-                  type="url"
-                  inputMode="url"
-                  autoComplete="url"
-                  placeholder="https://uat.example.com/settings"
-                  value={targetUrl}
-                  onChange={(event) => setTargetUrl(event.target.value)}
-                  aria-describedby="testing-target-help"
-                  aria-invalid={targetUrl.trim().length > 0 && normalizedTarget === null}
-                  disabled={busyAction !== null || authCaptureOpen}
-                />
-                <p id="testing-target-help" className="text-xs text-muted-foreground">
-                  Use the exact page where this testing task should begin.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="testing-exploration-scope"
-                  className="text-sm font-medium text-foreground"
-                >
-                  How much should be explored?
-                </label>
-                <Select
-                  value={explorationScope}
-                  onValueChange={(value) => setExplorationScope(value as TestingExplorationScope)}
-                  disabled={busyAction !== null || authCaptureOpen}
-                >
-                  <SelectTrigger
-                    id="testing-exploration-scope"
-                    className="w-full"
-                    aria-describedby="testing-exploration-scope-help"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="page">Only this exact page</SelectItem>
-                    <SelectItem value="path">This page and its subpages</SelectItem>
-                    <SelectItem value="origin">The entire application origin</SelectItem>
-                  </SelectPopup>
-                </Select>
-                <p id="testing-exploration-scope-help" className="text-xs text-muted-foreground">
-                  {explorationScope === "page"
-                    ? "Interactions may change the page state, but navigation to another URL is excluded."
-                    : explorationScope === "path"
-                      ? "Includes child paths and hash-router subpages without exploring unrelated sections."
-                      : "Allows every reachable path on the same origin. Use this only for broad coverage."}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-                Step 2
-              </div>
-              <CardTitle>Prepare access</CardTitle>
-              <CardDescription>
-                Tabs never asks for or stores the username, password, MFA code, cookie, or token as
-                test data.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="space-y-2">
-                <label
-                  htmlFor="testing-authentication-mode"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Authentication method
-                </label>
-                <Select
-                  value={authenticationMode}
-                  onValueChange={(value) =>
-                    setAuthenticationMode(value as TestingAuthenticationMode)
-                  }
-                  disabled={busyAction !== null || authCaptureOpen}
-                >
-                  <SelectTrigger id="testing-authentication-mode" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="none">No sign-in required</SelectItem>
-                    <SelectItem value="local-profile">
-                      Sign in manually in a local browser
-                    </SelectItem>
-                    <SelectItem value="connected-session">
-                      Use a signed-in Electron / Chromium session
-                    </SelectItem>
-                  </SelectPopup>
-                </Select>
-              </div>
-
-              {authenticationMode === "local-profile" ? (
-                <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    A headed browser opens at the target. Enter credentials there—not in Tabs—then
-                    save the local browser profile. Cookies remain under the local Tabs state
-                    directory and are excluded from snapshots, prompts, caches, and reports.
-                  </p>
-                  <p className="text-xs font-medium text-foreground">
-                    {status?.authCapturedAt
-                      ? "A local browser session is ready for this project."
-                      : "No local browser session has been captured yet."}
-                  </p>
-                  {!authCaptureOpen ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void startAuthCapture()}
-                      disabled={!normalizedTarget || busyAction !== null}
-                    >
-                      {busyAction === "auth" ? (
-                        <LoaderIcon aria-hidden="true" className="animate-spin" />
-                      ) : null}
-                      Open Browser to Sign In
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => void finishAuthCapture()}
-                      disabled={busyAction !== null}
-                    >
-                      {busyAction === "finish-auth" ? (
-                        <LoaderIcon aria-hidden="true" className="animate-spin" />
-                      ) : null}
-                      Finish &amp; Save Local Session
-                    </Button>
-                  )}
-                </div>
-              ) : authenticationMode === "connected-session" ? (
-                <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Sign in directly in the isolated Electron or Chromium instance. Tabs connects to
-                    that existing session and does not copy its credentials into the graph.
-                  </p>
-                  <div className="space-y-2">
-                    <label
-                      htmlFor="testing-cdp-endpoint"
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Local CDP endpoint
-                    </label>
-                    <Input
-                      id="testing-cdp-endpoint"
-                      type="url"
-                      inputMode="url"
-                      placeholder="http://127.0.0.1:9224"
-                      value={cdpEndpoint}
-                      onChange={(event) => setCdpEndpoint(event.target.value)}
-                      aria-describedby="testing-cdp-endpoint-help"
-                      aria-invalid={normalizedCdpEndpoint === null}
-                      disabled={busyAction !== null || authCaptureOpen}
-                    />
-                    <p id="testing-cdp-endpoint-help" className="text-xs text-muted-foreground">
-                      Only a loopback endpoint from an isolated local dev instance is accepted.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-border/70 bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
-                  Use this for public pages or targets where the selected browser session is already
-                  sufficient. No credential material is collected.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-                Step 3
-              </div>
-              <CardTitle>Set limits and explore</CardTitle>
-              <CardDescription>
-                The run stops at whichever boundary is reached first: scope, states, time, or a
-                natural plateau.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="testing-max-states"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Maximum states
-                  </label>
-                  <Input
-                    id="testing-max-states"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    max={MAX_TESTING_MAX_STATES}
-                    step={1}
-                    value={maxStates}
-                    onChange={(event) => setMaxStates(event.target.value)}
-                    aria-describedby="testing-max-states-help"
-                    aria-invalid={normalizedMaxStates === null}
-                    disabled={busyAction !== null || authCaptureOpen}
-                  />
-                  <p id="testing-max-states-help" className="text-xs text-muted-foreground">
-                    Enter 1 to {MAX_TESTING_MAX_STATES.toLocaleString()}.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label
-                    htmlFor="testing-max-duration"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Time budget in minutes
-                  </label>
-                  <Input
-                    id="testing-max-duration"
-                    type="number"
-                    inputMode="decimal"
-                    min={1 / 60}
-                    max={MAX_TESTING_DURATION_SECONDS / 60}
-                    step={1}
-                    value={maxDurationMinutes}
-                    onChange={(event) => setMaxDurationMinutes(event.target.value)}
-                    aria-describedby="testing-max-duration-help"
-                    aria-invalid={normalizedMaxDurationSeconds === null}
-                    disabled={busyAction !== null || authCaptureOpen}
-                  />
-                  <p id="testing-max-duration-help" className="text-xs text-muted-foreground">
-                    Clear for no time limit.
-                  </p>
-                </div>
-              </div>
-
-              {!authenticationReady ? (
-                <p className="text-sm text-amber-600" role="note">
-                  Complete the authentication setup in Step 2 before starting exploration.
-                </p>
-              ) : null}
-
-              <Button
-                type="button"
-                onClick={() => void startExploration()}
-                disabled={
-                  !normalizedTarget ||
-                  normalizedMaxStates === null ||
-                  normalizedMaxDurationSeconds === null ||
-                  !authenticationReady ||
-                  busyAction !== null ||
-                  authCaptureOpen
-                }
-              >
-                {busyAction === "explore" ? (
-                  <LoaderIcon aria-hidden="true" className="animate-spin" />
-                ) : (
-                  <PlayIcon aria-hidden="true" />
-                )}
-                Start Scoped Exploration
-              </Button>
-
-              <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                {message}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <section aria-labelledby="testing-graph-heading" className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 id="testing-graph-heading" className="text-lg font-semibold text-foreground">
-                Stored graph
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Every completed exploration updates this local graph. Run Step 3 again to refresh it
-                from the latest application state.
-              </p>
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border/70 pb-5">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-primary">
+              <ShieldCheckIcon aria-hidden="true" className="size-4" />
+              Private testing workspace
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void startExploration()}
-                disabled={
-                  !normalizedTarget ||
-                  normalizedMaxStates === null ||
-                  normalizedMaxDurationSeconds === null ||
-                  !authenticationReady ||
-                  busyAction !== null
-                }
-              >
-                <RefreshCwIcon aria-hidden="true" />
-                Update graph
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void clearGraph()}
-                disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
-              >
-                <Trash2Icon aria-hidden="true" />
-                Clear graph
-              </Button>
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              ["States", status?.nodeCount ?? 0],
-              ["Transitions", status?.edgeCount ?? 0],
-              ["Cached subtrees", status?.cacheEntryCount ?? 0],
-              ["Cache hits", status?.cacheHitCount ?? 0],
-            ].map(([label, value]) => (
-              <Card key={label}>
-                <CardContent className="py-5">
-                  <div className="text-2xl font-semibold text-foreground">{value}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{label}</div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <p className="break-all text-xs text-muted-foreground">
-            {status?.databasePath
-              ? `Local workspace database: ${status.databasePath}`
-              : "The local graph database is created when Testing initializes."}
-          </p>
-        </section>
-
-        <section aria-labelledby="testing-cases-heading" className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-              Phase 2
-            </div>
-            <h2 id="testing-cases-heading" className="text-lg font-semibold text-foreground">
-              Reconcile test cases
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Import an existing company workbook or start from reachable scenarios discovered in
-              the graph. Imported rows keep their original sheet and row references.
+            <h1
+              id="testing-heading"
+              className="text-3xl font-semibold tracking-tight text-foreground"
+            >
+              Testing
+            </h1>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              Turn a test plan or a running app into reviewed, repeatable evidence. Start small;
+              Testing will guide you to the next useful step.
             </p>
           </div>
+          <div className="flex flex-wrap gap-2" aria-label="Workspace testing summary">
+            <Badge variant="secondary">Project: {basenameOfPath(props.projectPath)}</Badge>
+            <Badge variant="outline">{status?.nodeCount ?? 0} states</Badge>
+            <Badge variant="outline">{cases.length} cases</Badge>
+            <Badge variant={latestExecutionRun?.status === "passed" ? "success" : "outline"}>
+              {latestExecutionRun ? `Latest run: ${latestExecutionRun.status}` : "No runs yet"}
+            </Badge>
+          </div>
+        </header>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Choose a starting point</CardTitle>
-              <CardDescription>
-                Excel columns may use common variations of Case ID, Description, and Steps.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void chooseWorkbook()}
-                  disabled={busyAction !== null}
-                >
-                  Choose .xlsx workbook
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => void importWorkbook()}
-                  disabled={!workbookPath || busyAction !== null || (status?.nodeCount ?? 0) === 0}
-                >
-                  {busyAction === "import" ? (
-                    <LoaderIcon aria-hidden="true" className="animate-spin" />
-                  ) : null}
-                  Import and verify
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void generateScenarios()}
-                  disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
-                >
-                  {busyAction === "generate" ? (
-                    <LoaderIcon aria-hidden="true" className="animate-spin" />
-                  ) : null}
-                  Generate from graph
-                </Button>
-              </div>
-              <p className="break-all text-xs text-muted-foreground">
-                {workbookPath || "No workbook selected."}
-              </p>
-            </CardContent>
-          </Card>
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
+          <nav aria-label="Testing workflow" className="lg:sticky lg:top-4 lg:self-start">
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:border-border/70 lg:bg-card/40 lg:p-2">
+              {testingSections.map((section) => {
+                const active = activeTestingSection === section.id;
+                const recommended = recommendedTestingSection === section.id;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setActiveTestingSection(section.id)}
+                    className={cn(
+                      "group min-w-40 rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-w-0",
+                      active
+                        ? "border-primary/40 bg-primary/10 text-foreground"
+                        : "border-border/70 bg-background/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground lg:border-transparent",
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-2 text-sm font-medium">
+                      {section.label}
+                      {typeof section.count === "number" ? (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums">
+                          {section.count}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {section.description}
+                    </span>
+                    {recommended && section.id !== "overview" ? (
+                      <span className="mt-2 block text-[11px] font-medium text-primary">
+                        Recommended next
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
 
-          <div className="space-y-3" aria-live="polite">
-            {cases.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  No reconciled cases yet. Import a workbook or generate scenarios from the graph.
-                </CardContent>
-              </Card>
-            ) : (
-              cases.map((testCase) => (
-                <Card key={testCase.id}>
-                  <CardHeader>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <CardTitle className="text-base">
-                          {testCase.externalId}: {testCase.description}
-                        </CardTitle>
-                        <CardDescription>
-                          {testCase.source === "excel"
-                            ? `${testCase.sourceSheet ?? "Workbook"}, row ${testCase.sourceRow ?? "unknown"}`
-                            : "Generated from a verified graph transition"}
-                        </CardDescription>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline">{testCase.source}</Badge>
-                        <Badge variant={testCase.status === "matches" ? "success" : "secondary"}>
-                          {testCase.status.replace("-", " ")}
-                        </Badge>
-                        <Badge variant="outline">{testCase.reviewDecision}</Badge>
+          <div className="min-w-0 space-y-6">
+            <p className="sr-only" aria-live="polite">
+              {testingSections.find((section) => section.id === activeTestingSection)?.label}{" "}
+              workspace opened.
+            </p>
+            {activeTestingSection === "overview" ? (
+              <section aria-labelledby="testing-start-heading" className="space-y-5">
+                <div className="space-y-1">
+                  <h2 id="testing-start-heading" className="text-xl font-semibold text-foreground">
+                    What are you here to do?
+                  </h2>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Pick the closest starting point. You can move between steps without losing
+                    imported cases, graph data, or previous runs.
+                  </p>
+                </div>
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTestingSection("cases")}
+                    className="rounded-xl border border-primary/30 bg-gradient-to-b from-primary/10 to-card p-5 text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="flex items-center justify-between gap-3">
+                      <FolderSearchIcon aria-hidden="true" className="size-5 text-primary" />
+                      <Badge variant="success">Best for QA batches</Badge>
+                    </span>
+                    <span className="mt-5 block text-base font-semibold text-foreground">
+                      I have a test plan
+                    </span>
+                    <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+                      Import an Excel workbook, map its case IDs to the live app, and review only
+                      differences or blocked steps.
+                    </span>
+                    <span className="mt-4 flex items-center gap-1 text-sm font-medium text-primary">
+                      Open case workspace <ArrowRightIcon aria-hidden="true" className="size-4" />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTestingSection("discover")}
+                    className="rounded-xl border border-border/70 bg-card p-5 text-left transition-colors hover:border-foreground/25 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <GlobeIcon aria-hidden="true" className="size-5 text-sky-500" />
+                    <span className="mt-5 block text-base font-semibold text-foreground">
+                      I need to understand an app
+                    </span>
+                    <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+                      Connect a web or Electron target and explore one page, one section, or the
+                      whole origin with safe limits.
+                    </span>
+                    <span className="mt-4 flex items-center gap-1 text-sm font-medium text-foreground">
+                      Set up discovery <ArrowRightIcon aria-hidden="true" className="size-4" />
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTestingSection(recommendedTestingSection)}
+                    disabled={
+                      recommendedTestingSection === "discover" && (status?.nodeCount ?? 0) === 0
+                    }
+                    className="rounded-xl border border-border/70 bg-card p-5 text-left transition-colors hover:border-foreground/25 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <HistoryIcon aria-hidden="true" className="size-5 text-violet-500" />
+                    <span className="mt-5 block text-base font-semibold text-foreground">
+                      Continue this workspace
+                    </span>
+                    <span className="mt-2 block text-sm leading-6 text-muted-foreground">
+                      Resume {status?.nodeCount ?? 0} states, {cases.length} cases, and{" "}
+                      {executionRuns.length} runs already stored locally.
+                    </span>
+                    <span className="mt-4 flex items-center gap-1 text-sm font-medium text-foreground">
+                      Continue to{" "}
+                      {
+                        testingSections.find((section) => section.id === recommendedTestingSection)
+                          ?.label
+                      }
+                      <ArrowRightIcon aria-hidden="true" className="size-4" />
+                    </span>
+                  </button>
+                </div>
+                <Card>
+                  <CardContent className="grid gap-4 py-5 sm:grid-cols-3">
+                    <div>
+                      <div className="text-2xl font-semibold">{reviewCaseCount}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Need your review</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-semibold">{acceptedCaseCount}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">Ready to automate</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-semibold">{blockedCaseCount}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Blocked or unreachable
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {editingCaseId === testCase.id ? (
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <label
-                            htmlFor={`testing-case-description-${testCase.id}`}
-                            className="text-sm font-medium text-foreground"
-                          >
-                            Reviewed description
-                          </label>
-                          <Input
-                            id={`testing-case-description-${testCase.id}`}
-                            value={editedDescription}
-                            onChange={(event) => setEditedDescription(event.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label
-                            htmlFor={`testing-case-steps-${testCase.id}`}
-                            className="text-sm font-medium text-foreground"
-                          >
-                            Reviewed steps, one per line
-                          </label>
-                          <Textarea
-                            id={`testing-case-steps-${testCase.id}`}
-                            value={editedSteps}
-                            onChange={(event) => setEditedSteps(event.target.value)}
-                          />
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => void reviewCase(testCase, "edited")}
-                            disabled={busyAction !== null}
-                          >
-                            Save reviewed case
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditingCaseId(null)}
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <ol className="list-decimal space-y-1 pl-5 text-sm text-foreground">
-                          {testCase.steps.map((step, index) => (
-                            <li key={`${testCase.id}-${index}`}>{step}</li>
-                          ))}
-                        </ol>
-                        {testCase.mismatches.length > 0 ? (
-                          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                            <div className="text-sm font-medium text-foreground">
-                              Review findings
-                            </div>
-                            {testCase.mismatches.map((mismatch, index) => (
-                              <p
-                                key={`${testCase.id}-mismatch-${index}`}
-                                className="text-xs leading-5 text-muted-foreground"
-                              >
-                                Expected: {mismatch.expected}. Observed: {mismatch.actual}.
-                              </p>
-                            ))}
-                          </div>
-                        ) : null}
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => void reviewCase(testCase, "accepted")}
-                            disabled={busyAction !== null}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => beginEditCase(testCase)}
-                            disabled={busyAction !== null}
-                          >
-                            <PencilIcon aria-hidden="true" />
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void reviewCase(testCase, "rejected")}
-                            disabled={busyAction !== null}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      </>
-                    )}
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
-        </section>
+              </section>
+            ) : null}
 
-        <section aria-labelledby="testing-generation-heading" className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-              Phase 3
-            </div>
-            <h2 id="testing-generation-heading" className="text-lg font-semibold text-foreground">
-              Generate maintainable tests
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Turn accepted cases into Playwright TypeScript with separate page objects, test data,
-              and business-flow specs. Use the built-in template or map output into your company
-              structure with a validated JSON manifest.
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Generation template and destination</CardTitle>
-              <CardDescription>
-                Managed output is kept outside the repository. Repository output is an explicit
-                choice and is always constrained to this project folder.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="testing-framework"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Framework
-                  </label>
-                  <Select value="playwright-ts" disabled>
-                    <SelectTrigger id="testing-framework" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectItem value="playwright-ts">Playwright TypeScript</SelectItem>
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="testing-generation-output"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Output destination
-                  </label>
-                  <Select
-                    value={generationOutputMode}
-                    onValueChange={(value) =>
-                      setGenerationOutputMode(value as "managed" | "repository")
-                    }
-                    disabled={busyAction !== null}
-                  >
-                    <SelectTrigger id="testing-generation-output" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectItem value="managed">Tabs-managed testing directory</SelectItem>
-                      <SelectItem value="repository">This project repository</SelectItem>
-                    </SelectPopup>
-                  </Select>
-                </div>
-              </div>
-
-              {generationOutputMode === "repository" ? (
-                <div className="space-y-2">
-                  <label
-                    htmlFor="testing-repository-output"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Repository output folder
-                  </label>
-                  <Input
-                    id="testing-repository-output"
-                    value={repositoryOutputPath}
-                    onChange={(event) => setRepositoryOutputPath(event.target.value)}
-                    placeholder="tests/e2e/generated"
-                    disabled={busyAction !== null}
-                  />
-                </div>
-              ) : null}
-
-              <div className="space-y-2">
-                <label
-                  htmlFor="testing-template-path"
-                  className="text-sm font-medium text-foreground"
-                >
-                  Company template manifest (optional)
-                </label>
-                <Input
-                  id="testing-template-path"
-                  value={templatePath}
-                  onChange={(event) => setTemplatePath(event.target.value)}
-                  placeholder="testing/templates/company-playwright.json"
-                  aria-describedby="testing-template-help"
-                  disabled={busyAction !== null}
-                />
-                <p id="testing-template-help" className="text-xs leading-5 text-muted-foreground">
-                  Leave empty for the built-in Page Object Model template. The manifest may only
-                  choose relative folders, file patterns, and class naming; it cannot execute code
-                  or add prompt instructions.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Provider and batch guardrails</CardTitle>
-              <CardDescription>
-                Generation uses an existing local coding-agent provider. Dispatch stops before the
-                next case would exceed a configured cap; reported cost is an estimate.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-foreground">Fusion model</div>
-                  <GitModelPicker
-                    selection={generationModelSelection}
-                    onSelect={setGenerationModelSelection}
-                    filterSourceMode="connected"
-                    persistSelection={false}
-                    ariaLabel="Select the coding-agent model for test generation"
-                    className="w-full"
-                    disabled={busyAction !== null}
-                  />
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Uses the same configured subscription providers and discovered models as the
-                    rest of Tabs. Direct API-key models are excluded from Testing generation.
+            {activeTestingSection === "discover" ? (
+              <div className="space-y-6">
+                <div className="space-y-1">
+                  <h2 className="text-xl font-semibold text-foreground">
+                    Discover the application
+                  </h2>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Connect, prepare access, and gather only the context this testing task needs.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <label
-                    htmlFor="testing-generation-reasoning"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Reasoning
-                  </label>
-                  <Select
-                    value={generationReasoning}
-                    onValueChange={(value) =>
-                      setGenerationReasoning(value as "low" | "medium" | "high")
-                    }
-                    disabled={busyAction !== null}
-                  >
-                    <SelectTrigger id="testing-generation-reasoning" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectItem value="low">Low — deterministic formatting</SelectItem>
-                      <SelectItem value="medium">Medium — semantic mapping</SelectItem>
-                      <SelectItem value="high">High — unresolved ambiguity</SelectItem>
-                    </SelectPopup>
-                  </Select>
-                </div>
-              </div>
 
-              <div className="grid gap-5 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <label htmlFor="testing-generation-max-cases" className="text-sm font-medium">
-                    Maximum cases
-                  </label>
-                  <Input
-                    id="testing-generation-max-cases"
-                    type="number"
-                    min={1}
-                    value={generationMaxCases}
-                    onChange={(event) => setGenerationMaxCases(event.target.value)}
-                    disabled={busyAction !== null}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="testing-generation-max-tokens" className="text-sm font-medium">
-                    Estimated token cap
-                  </label>
-                  <Input
-                    id="testing-generation-max-tokens"
-                    type="number"
-                    min={1}
-                    value={generationMaxTokens}
-                    onChange={(event) => setGenerationMaxTokens(event.target.value)}
-                    disabled={busyAction !== null}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label htmlFor="testing-generation-max-cost" className="text-sm font-medium">
-                    Estimated USD cap
-                  </label>
-                  <Input
-                    id="testing-generation-max-cost"
-                    type="number"
-                    min={0.01}
-                    step={0.01}
-                    value={generationMaxCost}
-                    onChange={(event) => setGenerationMaxCost(event.target.value)}
-                    disabled={busyAction !== null}
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 p-4">
-                <div>
-                  <label htmlFor="testing-network-replay" className="text-sm font-medium">
-                    Capture sanitized network replay metadata
-                  </label>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Off by default. Credentials, cookies, authorization headers, and response bodies
-                    are never included.
-                  </p>
-                </div>
-                <Switch
-                  id="testing-network-replay"
-                  checked={captureReplay}
-                  onCheckedChange={setCaptureReplay}
-                  disabled={busyAction !== null}
-                />
-              </div>
-
-              <Button
-                type="button"
-                onClick={() => void generateTests()}
-                disabled={
-                  busyAction !== null ||
-                  !cases.some(
-                    (testCase) =>
-                      testCase.reviewDecision === "accepted" ||
-                      testCase.reviewDecision === "edited",
-                  )
-                }
-              >
-                {busyAction === "generate-tests" ? (
-                  <LoaderIcon aria-hidden="true" className="animate-spin" />
-                ) : (
-                  <WorkflowIcon aria-hidden="true" />
-                )}
-                Generate accepted cases
-              </Button>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3" aria-live="polite">
-            {generationJobs.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  No generation jobs yet. Accept at least one reconciled case to begin.
-                </CardContent>
-              </Card>
-            ) : (
-              generationJobs.map((job) => (
-                <Card key={job.id}>
-                  <CardHeader>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-base">Playwright TypeScript batch</CardTitle>
-                        <CardDescription className="break-all">
-                          {job.outputDirectory}
-                        </CardDescription>
+                <div className="space-y-4" aria-label="Application discovery setup">
+                  <Card>
+                    <CardHeader>
+                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
+                        Step 1
                       </div>
-                      <Badge variant={job.status === "completed" ? "success" : "outline"}>
-                        {job.status.replace("-", " ")}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      {job.completedCases} of {job.totalCases} cases · approximately{" "}
-                      {job.estimatedTokens.toLocaleString()} tokens · approximately $
-                      {job.estimatedCostUsd.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Generated with {job.modelSelection.instanceId} / {job.modelSelection.model}
-                    </p>
-                    {job.error ? <p className="text-sm text-destructive">{job.error}</p> : null}
-                    {job.status === "queued" || job.status === "running" ? (
+                      <CardTitle>Choose what to test</CardTitle>
+                      <CardDescription>
+                        Start from the page relevant to the task and keep the crawl as narrow as
+                        practical.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-target-url"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Target URL
+                        </label>
+                        <Input
+                          id="testing-target-url"
+                          type="url"
+                          inputMode="url"
+                          autoComplete="url"
+                          placeholder="https://uat.example.com/settings"
+                          value={targetUrl}
+                          onChange={(event) => setTargetUrl(event.target.value)}
+                          aria-describedby="testing-target-help"
+                          aria-invalid={targetUrl.trim().length > 0 && normalizedTarget === null}
+                          disabled={busyAction !== null || authCaptureOpen}
+                        />
+                        <p id="testing-target-help" className="text-xs text-muted-foreground">
+                          Use the exact page where this testing task should begin.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-exploration-scope"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          How much should be explored?
+                        </label>
+                        <Select
+                          value={explorationScope}
+                          onValueChange={(value) =>
+                            setExplorationScope(value as TestingExplorationScope)
+                          }
+                          disabled={busyAction !== null || authCaptureOpen}
+                        >
+                          <SelectTrigger
+                            id="testing-exploration-scope"
+                            className="w-full"
+                            aria-describedby="testing-exploration-scope-help"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="page">Only this exact page</SelectItem>
+                            <SelectItem value="path">This page and its subpages</SelectItem>
+                            <SelectItem value="origin">The entire application origin</SelectItem>
+                          </SelectPopup>
+                        </Select>
+                        <p
+                          id="testing-exploration-scope-help"
+                          className="text-xs text-muted-foreground"
+                        >
+                          {explorationScope === "page"
+                            ? "Interactions may change the page state, but navigation to another URL is excluded."
+                            : explorationScope === "path"
+                              ? "Includes child paths and hash-router subpages without exploring unrelated sections."
+                              : "Allows every reachable path on the same origin. Use this only for broad coverage."}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
+                        Step 2
+                      </div>
+                      <CardTitle>Prepare access</CardTitle>
+                      <CardDescription>
+                        Tabs never asks for or stores the username, password, MFA code, cookie, or
+                        token as test data.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-authentication-mode"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Authentication method
+                        </label>
+                        <Select
+                          value={authenticationMode}
+                          onValueChange={(value) =>
+                            setAuthenticationMode(value as TestingAuthenticationMode)
+                          }
+                          disabled={busyAction !== null || authCaptureOpen}
+                        >
+                          <SelectTrigger id="testing-authentication-mode" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="none">No sign-in required</SelectItem>
+                            <SelectItem value="local-profile">
+                              Sign in manually in a local browser
+                            </SelectItem>
+                            <SelectItem value="connected-session">
+                              Use a signed-in Electron / Chromium session
+                            </SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      </div>
+
+                      {authenticationMode === "local-profile" ? (
+                        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            A headed browser opens at the target. Enter credentials there—not in
+                            Tabs—then save the local browser profile. Cookies remain under the local
+                            Tabs state directory and are excluded from snapshots, prompts, caches,
+                            and reports.
+                          </p>
+                          <p className="text-xs font-medium text-foreground">
+                            {status?.authCapturedAt
+                              ? "A local browser session is ready for this project."
+                              : "No local browser session has been captured yet."}
+                          </p>
+                          {!authCaptureOpen ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void startAuthCapture()}
+                              disabled={!normalizedTarget || busyAction !== null}
+                            >
+                              {busyAction === "auth" ? (
+                                <LoaderIcon aria-hidden="true" className="animate-spin" />
+                              ) : null}
+                              Open Browser to Sign In
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void finishAuthCapture()}
+                              disabled={busyAction !== null}
+                            >
+                              {busyAction === "finish-auth" ? (
+                                <LoaderIcon aria-hidden="true" className="animate-spin" />
+                              ) : null}
+                              Finish &amp; Save Local Session
+                            </Button>
+                          )}
+                        </div>
+                      ) : authenticationMode === "connected-session" ? (
+                        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            Sign in directly in the isolated Electron or Chromium instance. Tabs
+                            connects to that existing session and does not copy its credentials into
+                            the graph.
+                          </p>
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="testing-cdp-endpoint"
+                              className="text-sm font-medium text-foreground"
+                            >
+                              Local CDP endpoint
+                            </label>
+                            <Input
+                              id="testing-cdp-endpoint"
+                              type="url"
+                              inputMode="url"
+                              placeholder="http://127.0.0.1:9224"
+                              value={cdpEndpoint}
+                              onChange={(event) => setCdpEndpoint(event.target.value)}
+                              aria-describedby="testing-cdp-endpoint-help"
+                              aria-invalid={normalizedCdpEndpoint === null}
+                              disabled={busyAction !== null || authCaptureOpen}
+                            />
+                            <p
+                              id="testing-cdp-endpoint-help"
+                              className="text-xs text-muted-foreground"
+                            >
+                              Only a loopback endpoint from an isolated local dev instance is
+                              accepted.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-border/70 bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
+                          Use this for public pages or targets where the selected browser session is
+                          already sufficient. No credential material is collected.
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
+                        Step 3
+                      </div>
+                      <CardTitle>Set limits and explore</CardTitle>
+                      <CardDescription>
+                        The run stops at whichever boundary is reached first: scope, states, time,
+                        or a natural plateau.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="testing-max-states"
+                            className="text-sm font-medium text-foreground"
+                          >
+                            Maximum states
+                          </label>
+                          <Input
+                            id="testing-max-states"
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={MAX_TESTING_MAX_STATES}
+                            step={1}
+                            value={maxStates}
+                            onChange={(event) => setMaxStates(event.target.value)}
+                            aria-describedby="testing-max-states-help"
+                            aria-invalid={normalizedMaxStates === null}
+                            disabled={busyAction !== null || authCaptureOpen}
+                          />
+                          <p id="testing-max-states-help" className="text-xs text-muted-foreground">
+                            Enter 1 to {MAX_TESTING_MAX_STATES.toLocaleString()}.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="testing-max-duration"
+                            className="text-sm font-medium text-foreground"
+                          >
+                            Time budget in minutes
+                          </label>
+                          <Input
+                            id="testing-max-duration"
+                            type="number"
+                            inputMode="decimal"
+                            min={1 / 60}
+                            max={MAX_TESTING_DURATION_SECONDS / 60}
+                            step={1}
+                            value={maxDurationMinutes}
+                            onChange={(event) => setMaxDurationMinutes(event.target.value)}
+                            aria-describedby="testing-max-duration-help"
+                            aria-invalid={normalizedMaxDurationSeconds === null}
+                            disabled={busyAction !== null || authCaptureOpen}
+                          />
+                          <p
+                            id="testing-max-duration-help"
+                            className="text-xs text-muted-foreground"
+                          >
+                            Clear for no time limit.
+                          </p>
+                        </div>
+                      </div>
+
+                      {!authenticationReady ? (
+                        <p className="text-sm text-amber-600" role="note">
+                          Complete the authentication setup in Step 2 before starting exploration.
+                        </p>
+                      ) : null}
+
                       <Button
                         type="button"
-                        size="sm"
+                        onClick={() => void startExploration()}
+                        disabled={
+                          !normalizedTarget ||
+                          normalizedMaxStates === null ||
+                          normalizedMaxDurationSeconds === null ||
+                          !authenticationReady ||
+                          busyAction !== null ||
+                          authCaptureOpen
+                        }
+                      >
+                        {busyAction === "explore" ? (
+                          <LoaderIcon aria-hidden="true" className="animate-spin" />
+                        ) : (
+                          <PlayIcon aria-hidden="true" />
+                        )}
+                        Start Scoped Exploration
+                      </Button>
+
+                      <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+                        {message}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <section aria-labelledby="testing-graph-heading" className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2
+                        id="testing-graph-heading"
+                        className="text-lg font-semibold text-foreground"
+                      >
+                        Stored graph
+                      </h2>
+                      <p className="text-xs text-muted-foreground">
+                        Every completed exploration updates this local graph. Run Step 3 again to
+                        refresh it from the latest application state.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
                         variant="outline"
-                        onClick={() => void cancelGeneration(job.id)}
+                        size="sm"
+                        onClick={() => void startExploration()}
+                        disabled={
+                          !normalizedTarget ||
+                          normalizedMaxStates === null ||
+                          normalizedMaxDurationSeconds === null ||
+                          !authenticationReady ||
+                          busyAction !== null
+                        }
+                      >
+                        <RefreshCwIcon aria-hidden="true" />
+                        Update graph
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void clearGraph()}
+                        disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
+                      >
+                        <Trash2Icon aria-hidden="true" />
+                        Clear graph
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      ["States", status?.nodeCount ?? 0],
+                      ["Transitions", status?.edgeCount ?? 0],
+                      ["Cached subtrees", status?.cacheEntryCount ?? 0],
+                      ["Cache hits", status?.cacheHitCount ?? 0],
+                    ].map(([label, value]) => (
+                      <Card key={label}>
+                        <CardContent className="py-5">
+                          <div className="text-2xl font-semibold text-foreground">{value}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  <p className="break-all text-xs text-muted-foreground">
+                    {status?.databasePath
+                      ? `Local workspace database: ${status.databasePath}`
+                      : "The local graph database is created when Testing initializes."}
+                  </p>
+                </section>
+              </div>
+            ) : null}
+
+            {activeTestingSection === "cases" ? (
+              <section aria-labelledby="testing-cases-heading" className="space-y-4">
+                <div className="space-y-1">
+                  <h2 id="testing-cases-heading" className="text-lg font-semibold text-foreground">
+                    Test case workspace
+                  </h2>
+                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                    Bring an existing QA plan or start from verified app paths. Case IDs, workbook
+                    rows, findings, and review decisions stay together in one queue.
+                  </p>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Add cases</CardTitle>
+                    <CardDescription>
+                      Excel columns may use common variations of Case ID, Description, and Steps.
+                      For a large assigned batch, importing the workbook is the fastest path.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void chooseWorkbook()}
                         disabled={busyAction !== null}
                       >
-                        Cancel generation
+                        Choose .xlsx workbook
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        render={
+                          <a
+                            href="/testing/testing-cases-template.xlsx"
+                            download="Tabs-Testing-Test-Cases-Template.xlsx"
+                          />
+                        }
+                      >
+                        <ArrowDownIcon aria-hidden="true" />
+                        Download blank template
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => void importWorkbook()}
+                        disabled={
+                          !workbookPath || busyAction !== null || (status?.nodeCount ?? 0) === 0
+                        }
+                      >
+                        {busyAction === "import" ? (
+                          <LoaderIcon aria-hidden="true" className="animate-spin" />
+                        ) : null}
+                        Import and verify
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void generateScenarios()}
+                        disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
+                      >
+                        {busyAction === "generate" ? (
+                          <LoaderIcon aria-hidden="true" className="animate-spin" />
+                        ) : null}
+                        Generate from graph
+                      </Button>
+                    </div>
+                    <p className="break-all text-xs text-muted-foreground">
+                      {workbookPath || "No workbook selected."}
+                    </p>
+                    {(status?.nodeCount ?? 0) === 0 ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
+                        <p className="max-w-xl text-xs leading-5 text-muted-foreground">
+                          Select the workbook now, then connect the relevant app page. Testing needs
+                          a small verified graph before it can compare written steps with the live
+                          UI.
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setActiveTestingSection("discover")}
+                        >
+                          Configure app connection
+                          <ArrowRightIcon aria-hidden="true" />
+                        </Button>
+                      </div>
                     ) : null}
-                    {job.artifacts.length > 0 ? (
-                      <ul className="space-y-1 text-xs text-muted-foreground">
-                        {job.artifacts.map((artifact) => (
-                          <li key={`${job.id}-${artifact.caseId}`}>
-                            {artifact.externalId}: page, data, and spec generated with{" "}
-                            {artifact.fingerprintCount} locator fingerprints
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-4" aria-live="polite">
+                  {cases.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                        No reconciled cases yet. Import a workbook or generate scenarios from the
+                        graph.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {[
+                          ["Total cases", cases.length, "text-foreground"],
+                          ["Need review", reviewCaseCount, "text-amber-600"],
+                          ["Ready to automate", acceptedCaseCount, "text-emerald-600"],
+                        ].map(([label, value, color]) => (
+                          <Card key={label}>
+                            <CardContent className="py-4">
+                              <div className={cn("text-xl font-semibold tabular-nums", color)}>
+                                {value}
+                              </div>
+                              <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                        <div className="relative">
+                          <SearchIcon
+                            aria-hidden="true"
+                            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                          />
+                          <Input
+                            value={caseSearch}
+                            onChange={(event) => setCaseSearch(event.target.value)}
+                            placeholder="Search test ID or description"
+                            aria-label="Search test cases"
+                            className="pl-9"
+                          />
+                        </div>
+                        <Select
+                          value={caseFilter}
+                          onValueChange={(value) => setCaseFilter(value as TestingCaseFilter)}
+                        >
+                          <SelectTrigger aria-label="Filter test cases">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="all">All cases</SelectItem>
+                            <SelectItem value="needs-review">Needs review</SelectItem>
+                            <SelectItem value="accepted">Accepted</SelectItem>
+                            <SelectItem value="blocked">Blocked</SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      </div>
+                      <div className="grid min-h-[30rem] overflow-hidden rounded-xl border border-border/70 bg-card lg:grid-cols-[19rem_minmax(0,1fr)]">
+                        <div className="max-h-[40rem] overflow-auto border-b border-border/70 lg:border-b-0 lg:border-r">
+                          <div
+                            className="border-b border-border/70 px-4 py-3 text-xs text-muted-foreground"
+                            role="status"
+                          >
+                            {filteredCases.length} of {cases.length} cases
+                          </div>
+                          <ul aria-label="Test case IDs">
+                            {filteredCases.map((testCase) => (
+                              <li
+                                key={testCase.id}
+                                className="border-b border-border/60 last:border-b-0"
+                              >
+                                <button
+                                  type="button"
+                                  aria-current={
+                                    selectedCase?.id === testCase.id ? "true" : undefined
+                                  }
+                                  onClick={() => {
+                                    setSelectedCaseId(testCase.id);
+                                    setEditingCaseId(null);
+                                  }}
+                                  className={cn(
+                                    "w-full px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                                    selectedCase?.id === testCase.id
+                                      ? "bg-primary/10"
+                                      : "hover:bg-muted/50",
+                                  )}
+                                >
+                                  <span className="flex items-center justify-between gap-2">
+                                    <span className="truncate text-sm font-medium text-foreground">
+                                      {testCase.externalId}
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "size-2 shrink-0 rounded-full",
+                                        testCase.status === "matches"
+                                          ? "bg-emerald-500"
+                                          : testCase.status === "blocked"
+                                            ? "bg-destructive"
+                                            : "bg-amber-500",
+                                      )}
+                                      aria-hidden="true"
+                                    />
+                                  </span>
+                                  <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                    {testCase.description}
+                                  </span>
+                                  <span className="mt-2 block text-[11px] capitalize text-muted-foreground">
+                                    {testCase.status.replace("-", " ")} · {testCase.reviewDecision}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="min-w-0 p-4 sm:p-5">
+                          {selectedCase ? (
+                            <Card key={selectedCase.id} className="border-0 shadow-none">
+                              <CardHeader>
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="space-y-1">
+                                    <CardTitle className="text-base">
+                                      {selectedCase.externalId}: {selectedCase.description}
+                                    </CardTitle>
+                                    <CardDescription>
+                                      {selectedCase.source === "excel"
+                                        ? `${selectedCase.sourceSheet ?? "Workbook"}, row ${selectedCase.sourceRow ?? "unknown"}`
+                                        : "Generated from a verified graph transition"}
+                                    </CardDescription>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Badge variant="outline">{selectedCase.source}</Badge>
+                                    <Badge
+                                      variant={
+                                        selectedCase.status === "matches" ? "success" : "secondary"
+                                      }
+                                    >
+                                      {selectedCase.status.replace("-", " ")}
+                                    </Badge>
+                                    <Badge variant="outline">{selectedCase.reviewDecision}</Badge>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                {editingCaseId === selectedCase.id ? (
+                                  <div className="space-y-3">
+                                    <div className="space-y-2">
+                                      <label
+                                        htmlFor={`testing-case-id-${selectedCase.id}`}
+                                        className="text-sm font-medium text-foreground"
+                                      >
+                                        Case ID
+                                      </label>
+                                      <Input
+                                        id={`testing-case-id-${selectedCase.id}`}
+                                        value={editedExternalId}
+                                        onChange={(event) =>
+                                          setEditedExternalId(event.target.value)
+                                        }
+                                        aria-describedby={`testing-case-id-help-${selectedCase.id}`}
+                                      />
+                                      <p
+                                        id={`testing-case-id-help-${selectedCase.id}`}
+                                        className="text-xs text-muted-foreground"
+                                      >
+                                        Must be unique within {basenameOfPath(props.projectPath)}.
+                                      </p>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label
+                                        htmlFor={`testing-case-description-${selectedCase.id}`}
+                                        className="text-sm font-medium text-foreground"
+                                      >
+                                        Reviewed description
+                                      </label>
+                                      <Input
+                                        id={`testing-case-description-${selectedCase.id}`}
+                                        value={editedDescription}
+                                        onChange={(event) =>
+                                          setEditedDescription(event.target.value)
+                                        }
+                                      />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label
+                                        htmlFor={`testing-case-steps-${selectedCase.id}`}
+                                        className="text-sm font-medium text-foreground"
+                                      >
+                                        Reviewed steps, one per line
+                                      </label>
+                                      <Textarea
+                                        id={`testing-case-steps-${selectedCase.id}`}
+                                        value={editedSteps}
+                                        onChange={(event) => setEditedSteps(event.target.value)}
+                                      />
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => void reviewCase(selectedCase, "edited")}
+                                        disabled={busyAction !== null}
+                                      >
+                                        Save reviewed case
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setEditingCaseId(null)}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <ol className="list-decimal space-y-1 pl-5 text-sm text-foreground">
+                                      {selectedCase.steps.map((step) => (
+                                        <li key={`${selectedCase.id}-${step}`}>{step}</li>
+                                      ))}
+                                    </ol>
+                                    {selectedCase.mismatches.length > 0 ? (
+                                      <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                                        <div className="text-sm font-medium text-foreground">
+                                          Review findings
+                                        </div>
+                                        {selectedCase.mismatches.map((mismatch) => (
+                                          <p
+                                            key={`${selectedCase.id}-${mismatch.kind}-${mismatch.stepIndex ?? "case"}-${mismatch.expected}`}
+                                            className="text-xs leading-5 text-muted-foreground"
+                                          >
+                                            Expected: {mismatch.expected}. Observed:{" "}
+                                            {mismatch.actual}.
+                                          </p>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                    <div className="flex flex-wrap gap-2">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => void reviewCase(selectedCase, "accepted")}
+                                        disabled={busyAction !== null}
+                                      >
+                                        Accept
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => beginEditCase(selectedCase)}
+                                        disabled={busyAction !== null}
+                                      >
+                                        <PencilIcon aria-hidden="true" />
+                                        Edit
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => void reviewCase(selectedCase, "rejected")}
+                                        disabled={busyAction !== null}
+                                      >
+                                        Reject
+                                      </Button>
+                                    </div>
+                                  </>
+                                )}
+                              </CardContent>
+                            </Card>
+                          ) : (
+                            <div className="py-16 text-center text-sm text-muted-foreground">
+                              No cases match this search and filter.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {activeTestingSection === "automate" ? (
+              <section aria-labelledby="testing-generation-heading" className="space-y-4">
+                <div className="space-y-1">
+                  <h2
+                    id="testing-generation-heading"
+                    className="text-lg font-semibold text-foreground"
+                  >
+                    Automate reviewed cases
+                  </h2>
+                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                    Turn accepted cases into Playwright TypeScript with separate page objects, test
+                    data, and business-flow specs. Use the built-in template or map output into your
+                    company structure with a validated JSON manifest.
+                  </p>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Generation template and destination</CardTitle>
+                    <CardDescription>
+                      Start safely with Tabs-managed output, or fit generated tests into an existing
+                      repository by choosing its folder and company template manifest.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-framework"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Framework
+                        </label>
+                        <Select value="playwright-ts" disabled>
+                          <SelectTrigger id="testing-framework" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="playwright-ts">Playwright TypeScript</SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-generation-output"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Output destination
+                        </label>
+                        <Select
+                          value={generationOutputMode}
+                          onValueChange={(value) =>
+                            setGenerationOutputMode(value as "managed" | "repository")
+                          }
+                          disabled={busyAction !== null}
+                        >
+                          <SelectTrigger id="testing-generation-output" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="managed">Tabs-managed testing directory</SelectItem>
+                            <SelectItem value="repository">This project repository</SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {generationOutputMode === "repository" ? (
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-repository-output"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Repository output folder
+                        </label>
+                        <Input
+                          id="testing-repository-output"
+                          value={repositoryOutputPath}
+                          onChange={(event) => setRepositoryOutputPath(event.target.value)}
+                          placeholder="tests/e2e/generated"
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="testing-template-path"
+                        className="text-sm font-medium text-foreground"
+                      >
+                        Company template manifest (optional)
+                      </label>
+                      <Input
+                        id="testing-template-path"
+                        value={templatePath}
+                        onChange={(event) => setTemplatePath(event.target.value)}
+                        placeholder="testing/templates/company-playwright.json"
+                        aria-describedby="testing-template-help"
+                        disabled={busyAction !== null}
+                      />
+                      <p
+                        id="testing-template-help"
+                        className="text-xs leading-5 text-muted-foreground"
+                      >
+                        Leave empty for the built-in Page Object Model template. The manifest may
+                        only choose relative folders, file patterns, and class naming; it cannot
+                        execute code or add prompt instructions. Use this when your organization
+                        already has naming, page-object, and test-folder conventions.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Provider and batch guardrails</CardTitle>
+                    <CardDescription>
+                      Generation uses an existing local coding-agent provider. Dispatch stops before
+                      the next case would exceed a configured cap; reported cost is an estimate.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-foreground">Fusion model</div>
+                        <GitModelPicker
+                          selection={generationModelSelection}
+                          onSelect={setGenerationModelSelection}
+                          filterSourceMode="connected"
+                          persistSelection={false}
+                          ariaLabel="Select the coding-agent model for test generation"
+                          className="w-full"
+                          disabled={busyAction !== null}
+                        />
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          Uses the same configured subscription providers and discovered models as
+                          the rest of Tabs. Direct API-key models are excluded from Testing
+                          generation.
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-generation-reasoning"
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Reasoning
+                        </label>
+                        <Select
+                          value={generationReasoning}
+                          onValueChange={(value) =>
+                            setGenerationReasoning(value as "low" | "medium" | "high")
+                          }
+                          disabled={busyAction !== null}
+                        >
+                          <SelectTrigger id="testing-generation-reasoning" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="low">Low — deterministic formatting</SelectItem>
+                            <SelectItem value="medium">Medium — semantic mapping</SelectItem>
+                            <SelectItem value="high">High — unresolved ambiguity</SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-5 sm:grid-cols-3">
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-generation-max-cases"
+                          className="text-sm font-medium"
+                        >
+                          Maximum cases
+                        </label>
+                        <Input
+                          id="testing-generation-max-cases"
+                          type="number"
+                          min={1}
+                          value={generationMaxCases}
+                          onChange={(event) => setGenerationMaxCases(event.target.value)}
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-generation-max-tokens"
+                          className="text-sm font-medium"
+                        >
+                          Estimated token cap
+                        </label>
+                        <Input
+                          id="testing-generation-max-tokens"
+                          type="number"
+                          min={1}
+                          value={generationMaxTokens}
+                          onChange={(event) => setGenerationMaxTokens(event.target.value)}
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="testing-generation-max-cost"
+                          className="text-sm font-medium"
+                        >
+                          Estimated USD cap
+                        </label>
+                        <Input
+                          id="testing-generation-max-cost"
+                          type="number"
+                          min={0.01}
+                          step={0.01}
+                          value={generationMaxCost}
+                          onChange={(event) => setGenerationMaxCost(event.target.value)}
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 p-4">
+                      <div>
+                        <label htmlFor="testing-network-replay" className="text-sm font-medium">
+                          Capture sanitized network replay metadata
+                        </label>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Off by default. Credentials, cookies, authorization headers, and response
+                          bodies are never included.
+                        </p>
+                      </div>
+                      <Switch
+                        id="testing-network-replay"
+                        checked={captureReplay}
+                        onCheckedChange={setCaptureReplay}
+                        disabled={busyAction !== null}
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      onClick={() => void generateTests()}
+                      disabled={
+                        busyAction !== null ||
+                        !cases.some(
+                          (testCase) =>
+                            testCase.reviewDecision === "accepted" ||
+                            testCase.reviewDecision === "edited",
+                        )
+                      }
+                    >
+                      {busyAction === "generate-tests" ? (
+                        <LoaderIcon aria-hidden="true" className="animate-spin" />
+                      ) : (
+                        <WorkflowIcon aria-hidden="true" />
+                      )}
+                      Generate accepted cases
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-3" aria-live="polite">
+                  {generationJobs.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                        No generation jobs yet. Accept at least one reconciled case to begin.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    generationJobs.map((job) => (
+                      <Card key={job.id}>
+                        <CardHeader>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <CardTitle className="text-base">
+                                Playwright TypeScript batch
+                              </CardTitle>
+                              <CardDescription className="break-all">
+                                {job.outputDirectory}
+                              </CardDescription>
+                            </div>
+                            <Badge variant={job.status === "completed" ? "success" : "outline"}>
+                              {job.status.replace("-", " ")}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            {job.completedCases} of {job.totalCases} cases · approximately{" "}
+                            {job.estimatedTokens.toLocaleString()} tokens · approximately $
+                            {job.estimatedCostUsd.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Generated with {job.modelSelection.instanceId} /{" "}
+                            {job.modelSelection.model}
+                          </p>
+                          {job.error ? (
+                            <p className="text-sm text-destructive">{job.error}</p>
+                          ) : null}
+                          {job.status === "queued" || job.status === "running" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void cancelGeneration(job.id)}
+                              disabled={busyAction !== null}
+                            >
+                              Cancel generation
+                            </Button>
+                          ) : null}
+                          {job.artifacts.length > 0 ? (
+                            <ul className="space-y-1 text-xs text-muted-foreground">
+                              {job.artifacts.map((artifact) => (
+                                <li key={`${job.id}-${artifact.caseId}`}>
+                                  {artifact.externalId}: page, data, and spec generated with{" "}
+                                  {artifact.fingerprintCount} locator fingerprints
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {activeTestingSection === "runs" ? (
+              <section aria-labelledby="testing-execution-heading" className="space-y-4">
+                <div className="space-y-1">
+                  <h2
+                    id="testing-execution-heading"
+                    className="text-lg font-semibold text-foreground"
+                  >
+                    Run and investigate
+                  </h2>
+                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                    Standalone mode is for manual UAT. CI mode returns the same persisted results
+                    for a release gate. Locator changes are proposed for review and are never
+                    silently applied.
+                  </p>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Execution controls</CardTitle>
+                    <CardDescription>
+                      Runs use the latest completed automation batch and the target URL from
+                      Discover.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="grid gap-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="testing-execution-mode" className="text-sm font-medium">
+                          Operating mode
+                        </label>
+                        <Select
+                          value={executionMode}
+                          onValueChange={(value) => setExecutionMode(value as "standalone" | "ci")}
+                          disabled={busyAction !== null}
+                        >
+                          <SelectTrigger id="testing-execution-mode" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectPopup>
+                            <SelectItem value="standalone">Standalone / UAT</SelectItem>
+                            <SelectItem value="ci">CI release gate</SelectItem>
+                          </SelectPopup>
+                        </Select>
+                      </div>
+                      <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 p-4">
+                        <div>
+                          <label
+                            htmlFor="testing-visual-comparison"
+                            className="text-sm font-medium"
+                          >
+                            Visual comparison
+                          </label>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Opt in to local screenshots and approved baselines.
+                          </p>
+                        </div>
+                        <Switch
+                          id="testing-visual-comparison"
+                          checked={visualComparison}
+                          onCheckedChange={setVisualComparison}
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => void runGeneratedTests()}
+                      disabled={
+                        busyAction !== null ||
+                        !normalizedTarget ||
+                        !generationJobs.some((job) => job.status === "completed")
+                      }
+                    >
+                      {busyAction === "run-tests" ? (
+                        <LoaderIcon aria-hidden="true" className="animate-spin" />
+                      ) : (
+                        <PlayIcon aria-hidden="true" />
+                      )}
+                      Run generated tests
+                    </Button>
+
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                      <div className="space-y-2">
+                        <label htmlFor="testing-schedule-time" className="text-sm font-medium">
+                          One-off local schedule
+                        </label>
+                        <Input
+                          id="testing-schedule-time"
+                          type="datetime-local"
+                          value={scheduleTime}
+                          onChange={(event) => setScheduleTime(event.target.value)}
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="self-end"
+                        onClick={() => void createTestingSchedule()}
+                        disabled={
+                          busyAction !== null ||
+                          !scheduleTime ||
+                          !normalizedTarget ||
+                          !generationJobs.some((job) => job.status === "completed")
+                        }
+                      >
+                        Schedule run
+                      </Button>
+                    </div>
+                    {testingSchedules.length > 0 ? (
+                      <ul
+                        className="space-y-1 text-xs text-muted-foreground"
+                        aria-label="Local schedules"
+                      >
+                        {testingSchedules.map((schedule) => (
+                          <li key={schedule.id}>
+                            {new Date(schedule.nextRunAt).toLocaleString()} · {schedule.timezone} ·{" "}
+                            {schedule.recurrence}
                           </li>
                         ))}
                       </ul>
                     ) : null}
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
-        </section>
 
-        <section aria-labelledby="testing-execution-heading" className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-              Phase 4
-            </div>
-            <h2 id="testing-execution-heading" className="text-lg font-semibold text-foreground">
-              Run, compare, and review
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Standalone mode is for manual UAT. CI mode returns the same persisted results for a
-              release gate. Locator changes are proposed for review and are never silently applied.
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Execution controls</CardTitle>
-              <CardDescription>
-                Runs use the latest completed generation batch and the target URL from Step 1.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <label htmlFor="testing-execution-mode" className="text-sm font-medium">
-                    Operating mode
-                  </label>
-                  <Select
-                    value={executionMode}
-                    onValueChange={(value) => setExecutionMode(value as "standalone" | "ci")}
-                    disabled={busyAction !== null}
-                  >
-                    <SelectTrigger id="testing-execution-mode" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      <SelectItem value="standalone">Standalone / UAT</SelectItem>
-                      <SelectItem value="ci">CI release gate</SelectItem>
-                    </SelectPopup>
-                  </Select>
-                </div>
-                <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 p-4">
-                  <div>
-                    <label htmlFor="testing-visual-comparison" className="text-sm font-medium">
-                      Visual comparison
-                    </label>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Opt in to local screenshots and approved baselines.
-                    </p>
-                  </div>
-                  <Switch
-                    id="testing-visual-comparison"
-                    checked={visualComparison}
-                    onCheckedChange={setVisualComparison}
-                    disabled={busyAction !== null}
-                  />
-                </div>
-              </div>
-              <Button
-                type="button"
-                onClick={() => void runGeneratedTests()}
-                disabled={
-                  busyAction !== null ||
-                  !normalizedTarget ||
-                  !generationJobs.some((job) => job.status === "completed")
-                }
-              >
-                {busyAction === "run-tests" ? (
-                  <LoaderIcon aria-hidden="true" className="animate-spin" />
-                ) : (
-                  <PlayIcon aria-hidden="true" />
-                )}
-                Run generated tests
-              </Button>
-
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                <div className="space-y-2">
-                  <label htmlFor="testing-schedule-time" className="text-sm font-medium">
-                    One-off local schedule
-                  </label>
-                  <Input
-                    id="testing-schedule-time"
-                    type="datetime-local"
-                    value={scheduleTime}
-                    onChange={(event) => setScheduleTime(event.target.value)}
-                    disabled={busyAction !== null}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="self-end"
-                  onClick={() => void createTestingSchedule()}
-                  disabled={
-                    busyAction !== null ||
-                    !scheduleTime ||
-                    !normalizedTarget ||
-                    !generationJobs.some((job) => job.status === "completed")
-                  }
-                >
-                  Schedule run
-                </Button>
-              </div>
-              {testingSchedules.length > 0 ? (
-                <ul
-                  className="space-y-1 text-xs text-muted-foreground"
-                  aria-label="Local schedules"
-                >
-                  {testingSchedules.map((schedule) => (
-                    <li key={schedule.id}>
-                      {new Date(schedule.nextRunAt).toLocaleString()} · {schedule.timezone} ·{" "}
-                      {schedule.recurrence}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3" aria-live="polite">
-            {executionRuns.length === 0 ? (
-              <Card>
-                <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  No execution rounds yet.
-                </CardContent>
-              </Card>
-            ) : (
-              executionRuns.map((run) => (
-                <Card key={run.id}>
-                  <CardHeader>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-base">
-                          {run.mode === "ci" ? "CI" : "Standalone"} round
-                        </CardTitle>
-                        <CardDescription>
-                          {run.results.length} cases · {(run.durationMs / 1000).toFixed(1)} seconds
-                        </CardDescription>
-                      </div>
-                      <Badge variant={run.status === "passed" ? "success" : "outline"}>
-                        {run.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <ul className="space-y-2" aria-label="Case execution results">
-                      {run.results.map((result) => (
-                        <li
-                          key={`${run.id}-${result.caseId}`}
-                          className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground"
-                        >
-                          <span>
-                            {result.externalId}: {result.status}
-                            {result.quarantined ? " · flaky, quarantined from gate" : ""}
-                            {result.visualStatus !== "disabled"
-                              ? ` · visual ${result.visualStatus}`
-                              : ""}
-                          </span>
-                          {result.status === "failed" ? (
-                            <div className="flex gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void draftFailedCaseBug(run, result.caseId)}
-                                disabled={busyAction !== null}
-                              >
-                                Draft local bug
-                              </Button>
-                              {run.mode === "ci" && !result.quarantined ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => void triageFailedCase(run, result.caseId)}
-                                  disabled={busyAction !== null}
-                                >
-                                  Triage with Fusion model
-                                </Button>
-                              ) : null}
+                <div className="space-y-3" aria-live="polite">
+                  {executionRuns.length === 0 ? (
+                    <Card>
+                      <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                        No execution rounds yet.
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    executionRuns.map((run) => (
+                      <Card key={run.id}>
+                        <CardHeader>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <CardTitle className="text-base">
+                                {run.mode === "ci" ? "CI" : "Standalone"} round
+                              </CardTitle>
+                              <CardDescription>
+                                {run.results.length} cases · {(run.durationMs / 1000).toFixed(1)}{" "}
+                                seconds
+                              </CardDescription>
                             </div>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                    {run.healingProposals.map((proposal) => (
-                      <div
-                        key={proposal.id}
-                        className="space-y-3 rounded-lg border border-border/70 p-4"
-                      >
-                        <p className="text-sm font-medium">
-                          Locator proposal ({Math.round(proposal.confidence * 100)}% confidence)
-                        </p>
-                        <pre className="overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
-                          {proposal.diff}
-                        </pre>
-                        {proposal.status === "pending" ? (
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => void decideHealing(proposal.id, "accepted")}
-                              disabled={busyAction !== null}
-                            >
-                              Accept proposal
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void decideHealing(proposal.id, "rejected")}
-                              disabled={busyAction !== null}
-                            >
-                              Reject
-                            </Button>
+                            <Badge variant={run.status === "passed" ? "success" : "outline"}>
+                              {run.status}
+                            </Badge>
                           </div>
-                        ) : (
-                          <Badge variant="outline">{proposal.status.replace("-", " ")}</Badge>
-                        )}
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <ul className="space-y-2" aria-label="Case execution results">
+                            {run.results.map((result) => (
+                              <li
+                                key={`${run.id}-${result.caseId}`}
+                                className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground"
+                              >
+                                <span>
+                                  {result.externalId}: {result.status}
+                                  {result.quarantined ? " · flaky, quarantined from gate" : ""}
+                                  {result.visualStatus !== "disabled"
+                                    ? ` · visual ${result.visualStatus}`
+                                    : ""}
+                                </span>
+                                {result.status === "failed" ? (
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => void draftFailedCaseBug(run, result.caseId)}
+                                      disabled={busyAction !== null}
+                                    >
+                                      Draft local bug
+                                    </Button>
+                                    {run.mode === "ci" && !result.quarantined ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => void triageFailedCase(run, result.caseId)}
+                                        disabled={busyAction !== null}
+                                      >
+                                        Triage with Fusion model
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                          {run.healingProposals.map((proposal) => (
+                            <div
+                              key={proposal.id}
+                              className="space-y-3 rounded-lg border border-border/70 p-4"
+                            >
+                              <p className="text-sm font-medium">
+                                Locator proposal ({Math.round(proposal.confidence * 100)}%
+                                confidence)
+                              </p>
+                              <pre className="overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+                                {proposal.diff}
+                              </pre>
+                              {proposal.status === "pending" ? (
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => void decideHealing(proposal.id, "accepted")}
+                                    disabled={busyAction !== null}
+                                  >
+                                    Accept proposal
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => void decideHealing(proposal.id, "rejected")}
+                                    disabled={busyAction !== null}
+                                  >
+                                    Reject
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Badge variant="outline">{proposal.status.replace("-", " ")}</Badge>
+                              )}
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {activeTestingSection === "reports" ? (
+              <section aria-labelledby="testing-reporting-heading" className="space-y-4">
+                <div className="space-y-1">
+                  <h2
+                    id="testing-reporting-heading"
+                    className="text-lg font-semibold text-foreground"
+                  >
+                    Reports and traceability
+                  </h2>
+                  <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                    Export a sign-off packet, resolve a case ID through its full evidence chain, and
+                    inspect the stored model of the application without reading source code.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>UAT sign-off report</CardTitle>
+                      <CardDescription>
+                        Creates matching Word and PDF reports from the latest completed Standalone
+                        round.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="testing-tester-name" className="text-sm font-medium">
+                          Tester name
+                        </label>
+                        <Input
+                          id="testing-tester-name"
+                          value={testerName}
+                          onChange={(event) => setTesterName(event.target.value)}
+                          disabled={busyAction !== null}
+                        />
                       </div>
-                    ))}
+                      <Button
+                        type="button"
+                        onClick={() => void generateSignoffReport()}
+                        disabled={
+                          busyAction !== null ||
+                          !testerName.trim() ||
+                          !executionRuns.some((run) => run.mode === "standalone" && run.completedAt)
+                        }
+                      >
+                        {busyAction === "report" ? (
+                          <LoaderIcon aria-hidden="true" className="animate-spin" />
+                        ) : null}
+                        Generate Word and PDF
+                      </Button>
+                      {reportPaths ? (
+                        <div className="space-y-1 text-xs text-muted-foreground" role="status">
+                          <p className="break-all">Word: {reportPaths.docxPath}</p>
+                          <p className="break-all">PDF: {reportPaths.pdfPath}</p>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Exact case lookup</CardTitle>
+                      <CardDescription>
+                        Use the original Excel ID or generated scenario ID; partial matches are not
+                        guessed.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="testing-trace-case-id" className="text-sm font-medium">
+                          Case ID
+                        </label>
+                        <Input
+                          id="testing-trace-case-id"
+                          value={traceCaseId}
+                          onChange={(event) => setTraceCaseId(event.target.value)}
+                          placeholder="QA-0042"
+                          disabled={busyAction !== null}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void resolveTraceability()}
+                        disabled={busyAction !== null || !traceCaseId.trim()}
+                      >
+                        Resolve evidence chain
+                      </Button>
+                      {traceability ? (
+                        <div className="space-y-2 rounded-lg border border-border/70 p-4 text-sm">
+                          <p className="font-medium">
+                            {traceability.case.externalId}: {traceability.case.description}
+                          </p>
+                          <p className="text-muted-foreground">
+                            Current status: {traceability.case.standaloneStatus} ·{" "}
+                            {traceability.generatedArtifacts.length} generated artifacts ·{" "}
+                            {traceability.executions.length} executions ·{" "}
+                            {traceability.healing.length} healing decisions
+                          </p>
+                          {traceability.import ? (
+                            <p className="break-all text-xs text-muted-foreground">
+                              Workbook: {traceability.import.workbookName} (
+                              {traceability.import.workbookPath})
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {bugDraft ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Local bug draft</CardTitle>
+                      <CardDescription>
+                        Review this draft. Testing will not file or transmit it.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-xs">
+                        {bugDraft}
+                      </pre>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {triageResult ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Coding-agent triage</CardTitle>
+                      <CardDescription>
+                        Model inference is advisory and is kept separate from persisted observed
+                        facts.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-xs">
+                        {triageResult}
+                      </pre>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>State graph explorer</CardTitle>
+                    <CardDescription>
+                      Accessible list alternative showing URLs, stored accessibility snapshots,
+                      linked cases, and transitions.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="max-h-96 overflow-auto rounded-lg border border-border/70">
+                      <table className="w-full text-left text-xs">
+                        <caption className="sr-only">
+                          Stored application states and linked cases
+                        </caption>
+                        <thead className="sticky top-0 bg-muted">
+                          <tr>
+                            <th scope="col" className="p-3">
+                              State
+                            </th>
+                            <th scope="col" className="p-3">
+                              URL and snapshot
+                            </th>
+                            <th scope="col" className="p-3">
+                              Linked cases
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(graphExplorer?.nodes ?? []).map((node) => (
+                            <tr key={node.stateId} className="border-t border-border/70 align-top">
+                              <th scope="row" className="p-3 font-medium">
+                                {node.pageTitle || node.stateId}
+                              </th>
+                              <td className="p-3">
+                                <div className="break-all text-muted-foreground">
+                                  {node.pageUrl}
+                                </div>
+                                <pre className="mt-2 max-w-xl whitespace-pre-wrap">
+                                  {node.snapshot.slice(0, 500)}
+                                </pre>
+                              </td>
+                              <td className="p-3 text-muted-foreground">
+                                {node.linkedCaseIds.join(", ") || "None"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-muted-foreground" role="status">
+                      {graphExplorer?.nodes.length ?? 0} states and{" "}
+                      {graphExplorer?.edges.length ?? 0} transitions loaded.
+                    </p>
                   </CardContent>
                 </Card>
-              ))
-            )}
+              </section>
+            ) : null}
           </div>
-        </section>
-
-        <section aria-labelledby="testing-reporting-heading" className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
-              Phase 5
-            </div>
-            <h2 id="testing-reporting-heading" className="text-lg font-semibold text-foreground">
-              Report and traceability
-            </h2>
-            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Export a sign-off packet, resolve a case ID through its full evidence chain, and
-              inspect the stored model of the application without reading source code.
-            </p>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>UAT sign-off report</CardTitle>
-                <CardDescription>
-                  Creates matching Word and PDF reports from the latest completed Standalone round.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="testing-tester-name" className="text-sm font-medium">
-                    Tester name
-                  </label>
-                  <Input
-                    id="testing-tester-name"
-                    value={testerName}
-                    onChange={(event) => setTesterName(event.target.value)}
-                    disabled={busyAction !== null}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => void generateSignoffReport()}
-                  disabled={
-                    busyAction !== null ||
-                    !testerName.trim() ||
-                    !executionRuns.some((run) => run.mode === "standalone" && run.completedAt)
-                  }
-                >
-                  {busyAction === "report" ? (
-                    <LoaderIcon aria-hidden="true" className="animate-spin" />
-                  ) : null}
-                  Generate Word and PDF
-                </Button>
-                {reportPaths ? (
-                  <div className="space-y-1 text-xs text-muted-foreground" role="status">
-                    <p className="break-all">Word: {reportPaths.docxPath}</p>
-                    <p className="break-all">PDF: {reportPaths.pdfPath}</p>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Exact case lookup</CardTitle>
-                <CardDescription>
-                  Use the original Excel ID or generated scenario ID; partial matches are not
-                  guessed.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="testing-trace-case-id" className="text-sm font-medium">
-                    Case ID
-                  </label>
-                  <Input
-                    id="testing-trace-case-id"
-                    value={traceCaseId}
-                    onChange={(event) => setTraceCaseId(event.target.value)}
-                    placeholder="QA-0042"
-                    disabled={busyAction !== null}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void resolveTraceability()}
-                  disabled={busyAction !== null || !traceCaseId.trim()}
-                >
-                  Resolve evidence chain
-                </Button>
-                {traceability ? (
-                  <div className="space-y-2 rounded-lg border border-border/70 p-4 text-sm">
-                    <p className="font-medium">
-                      {traceability.case.externalId}: {traceability.case.description}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Current status: {traceability.case.standaloneStatus} ·{" "}
-                      {traceability.generatedArtifacts.length} generated artifacts ·{" "}
-                      {traceability.executions.length} executions · {traceability.healing.length}{" "}
-                      healing decisions
-                    </p>
-                    {traceability.import ? (
-                      <p className="break-all text-xs text-muted-foreground">
-                        Workbook: {traceability.import.workbookName} (
-                        {traceability.import.workbookPath})
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          </div>
-
-          {bugDraft ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Local bug draft</CardTitle>
-                <CardDescription>
-                  Review this draft. Testing will not file or transmit it.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-xs">
-                  {bugDraft}
-                </pre>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {triageResult ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Coding-agent triage</CardTitle>
-                <CardDescription>
-                  Model inference is advisory and is kept separate from persisted observed facts.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-xs">
-                  {triageResult}
-                </pre>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>State graph explorer</CardTitle>
-              <CardDescription>
-                Accessible list alternative showing URLs, stored accessibility snapshots, linked
-                cases, and transitions.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="max-h-96 overflow-auto rounded-lg border border-border/70">
-                <table className="w-full text-left text-xs">
-                  <caption className="sr-only">Stored application states and linked cases</caption>
-                  <thead className="sticky top-0 bg-muted">
-                    <tr>
-                      <th scope="col" className="p-3">
-                        State
-                      </th>
-                      <th scope="col" className="p-3">
-                        URL and snapshot
-                      </th>
-                      <th scope="col" className="p-3">
-                        Linked cases
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(graphExplorer?.nodes ?? []).map((node) => (
-                      <tr key={node.stateId} className="border-t border-border/70 align-top">
-                        <th scope="row" className="p-3 font-medium">
-                          {node.pageTitle || node.stateId}
-                        </th>
-                        <td className="p-3">
-                          <div className="break-all text-muted-foreground">{node.pageUrl}</div>
-                          <pre className="mt-2 max-w-xl whitespace-pre-wrap">
-                            {node.snapshot.slice(0, 500)}
-                          </pre>
-                        </td>
-                        <td className="p-3 text-muted-foreground">
-                          {node.linkedCaseIds.join(", ") || "None"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-xs text-muted-foreground" role="status">
-                {graphExplorer?.nodes.length ?? 0} states and {graphExplorer?.edges.length ?? 0}{" "}
-                transitions loaded.
-              </p>
-            </CardContent>
-          </Card>
-        </section>
+        </div>
       </div>
     </main>
   );
