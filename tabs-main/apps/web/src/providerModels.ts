@@ -182,20 +182,7 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
       capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
     },
   ],
-  kilo: [
-    {
-      slug: "openai/gpt-5",
-      name: "OpenAI GPT-5",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "anthropic/claude-sonnet-5",
-      name: "Claude Sonnet 5",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-  ],
+  kilo: [],
   gemini: [
     {
       slug: "gemini-3.6-flash",

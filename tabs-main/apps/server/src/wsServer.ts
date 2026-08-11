@@ -24,6 +24,11 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  type TestingCaseReviewInput,
+  type TestingExplorationInput,
+  type TestingProjectInput,
+  type TestingTargetInput,
+  type TestingWorkbookImportInput,
   WS_CHANNELS,
   WS_METHODS,
   WebSocketRequest,
@@ -88,6 +93,7 @@ import { makeServerReadiness } from "./wsServer/readiness.ts";
 import { decodeJsonResult, formatSchemaError } from "@tabs/shared/schemaJson";
 import { discoverSourceControl } from "./sourceControl/discovery";
 import { runProcess } from "./processRunner";
+import { TestingService } from "./testing/TestingService";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -289,6 +295,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const gitEnvironment = yield* GitEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const testingService = new TestingService(serverConfig.stateDir);
+  yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
   yield* keybindingsManager.syncDefaultKeybindingsOnStartup.pipe(
     Effect.catch((error) =>
@@ -772,6 +780,63 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   const routeRequest = Effect.fnUntraced(function* (ws: WebSocket, request: WebSocketRequest) {
     switch (request.body._tag) {
+      case WS_METHODS.testingGetStatus: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.getStatus(body);
+      }
+
+      case WS_METHODS.testingStartAuthCapture: {
+        const body = stripRequestTag(request.body) as TestingTargetInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.startAuthCapture(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingFinishAuthCapture: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.finishAuthCapture(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingStartExploration: {
+        const body = stripRequestTag(request.body) as TestingExplorationInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.startExploration(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingImportWorkbook: {
+        const body = stripRequestTag(request.body) as TestingWorkbookImportInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.importWorkbook(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingListCases: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.listCases(body);
+      }
+
+      case WS_METHODS.testingReviewCase: {
+        const body = stripRequestTag(request.body) as TestingCaseReviewInput;
+        return testingService.reviewCase(body);
+      }
+
+      case WS_METHODS.testingGenerateScenarios: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.generateScenarios(body);
+      }
+
+      case WS_METHODS.testingClearGraph: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.clearGraph(body);
+      }
+
       case ORCHESTRATION_WS_METHODS.getSnapshot:
         return yield* projectionReadModelQuery.getSnapshot();
 
@@ -1186,8 +1251,6 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.watchedBranchStatuses(body);
       }
 
-
-
       case WS_METHODS.terminalOpen: {
         const body = stripRequestTag(request.body);
         return yield* terminalManager.open(body);
@@ -1541,10 +1604,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     const result = yield* Effect.exit(routeRequest(ws, request.success));
     if (Exit.isFailure(result)) {
       const failure = Cause.findErrorOption(result.cause);
-      const errVal: any = Option.isSome(failure) && typeof failure.value === "object" && failure.value !== null ? failure.value : null;
-      const userMessage = errVal && "message" in errVal ? String(errVal.message) : "Internal server error";
+      const errVal: any =
+        Option.isSome(failure) && typeof failure.value === "object" && failure.value !== null
+          ? failure.value
+          : null;
+      const userMessage =
+        errVal && "message" in errVal ? String(errVal.message) : "Internal server error";
       const phase = errVal && "phase" in errVal && errVal.phase ? String(errVal.phase) : undefined;
-      const createdCommitSha = errVal && "createdCommitSha" in errVal && errVal.createdCommitSha ? String(errVal.createdCommitSha) : undefined;
+      const createdCommitSha =
+        errVal && "createdCommitSha" in errVal && errVal.createdCommitSha
+          ? String(errVal.createdCommitSha)
+          : undefined;
       return yield* sendWsResponse({
         id: request.success.id,
         error: {

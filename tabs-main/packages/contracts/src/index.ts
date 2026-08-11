@@ -29,6 +29,7 @@ export * from "./sarif.ts";
 export * from "./repoIntelligence.ts";
 export * from "./preview.ts";
 export * from "./previewAutomation.ts";
+export * from "./testing.ts";
 export * from "./rpc.ts";
 export * from "./ws.ts";
 export { WS_METHODS } from "./ws.ts";

@@ -1399,6 +1399,11 @@ function ensurePrimaryCodeOssFileProtocol(
  * lose their Chromium profile data (localStorage, cookies, sessions).
  */
 function resolveUserDataPath(): string {
+  const configuredPath = process.env.TABS_DESKTOP_USER_DATA_DIR?.trim();
+  if (configuredPath) {
+    return Path.resolve(configuredPath);
+  }
+
   const appDataBase =
     process.platform === "win32"
       ? process.env.APPDATA || Path.join(OS.homedir(), "AppData", "Roaming")

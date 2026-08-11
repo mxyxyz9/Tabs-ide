@@ -22,6 +22,7 @@ import type {
   VcsStatusInput,
   VcsStatusResult,
 } from "./git.ts";
+import type { TestingApi } from "./testing.ts";
 import type {
   GitListBranchesInput,
   GitListBranchesResult,
@@ -89,7 +90,11 @@ import type {
   GitGetReviewHistoryResult,
   GitActionProgressEvent,
 } from "./git.ts";
-import type { ReviewDiffPreviewInput, ReviewDiffPreviewResult, ReviewProgressEvent } from "./review.ts";
+import type {
+  ReviewDiffPreviewInput,
+  ReviewDiffPreviewResult,
+  ReviewProgressEvent,
+} from "./review.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
 import type { AssetCreateUrlInput, AssetCreateUrlResult } from "./assets.ts";
 import type {
@@ -1298,7 +1303,9 @@ export interface EnvironmentApi {
       input: GitPreparePullRequestThreadInput,
     ) => Promise<GitPreparePullRequestThreadResult>;
     listWorkflowRuns: (input: GitListWorkflowRunsInput) => Promise<GitListWorkflowRunsResult>;
-    generateDiffSummary: (input: GitGenerateDiffSummaryInput) => Promise<GitGenerateDiffSummaryResult>;
+    generateDiffSummary: (
+      input: GitGenerateDiffSummaryInput,
+    ) => Promise<GitGenerateDiffSummaryResult>;
     generateReview: (input: GitGenerateReviewInput) => Promise<GitGenerateReviewResult>;
     submitFindingFeedback: (
       input: GitSubmitFindingFeedbackInput,
@@ -1367,6 +1374,7 @@ export type DesktopCloneRepositoryResult =
   | { ok: false; error: string };
 
 export interface NativeApi extends LocalApi, EnvironmentApi {
+  testing: TestingApi;
   terminal: EnvironmentApi["terminal"] & {
     list: () => Promise<ReadonlyArray<TerminalSessionSnapshot>>;
     onEvent: (callback: (event: TerminalEvent) => void) => () => void;
@@ -1421,8 +1429,12 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     cherryPick: (input: GitCherryPickInput) => Promise<void>;
     createTag: (input: GitCreateTagInput) => Promise<void>;
     listTags: (input: GitListTagsInput) => Promise<GitListTagsResult>;
-    watchedBranchStatuses: (input: GitWatchedBranchStatusesInput) => Promise<GitWatchedBranchStatusesResult>;
-    generateDiffSummary: (input: GitGenerateDiffSummaryInput) => Promise<GitGenerateDiffSummaryResult>;
+    watchedBranchStatuses: (
+      input: GitWatchedBranchStatusesInput,
+    ) => Promise<GitWatchedBranchStatusesResult>;
+    generateDiffSummary: (
+      input: GitGenerateDiffSummaryInput,
+    ) => Promise<GitGenerateDiffSummaryResult>;
   };
   server: LocalApi["server"] & {
     cloneRepository: (

@@ -12,6 +12,12 @@ import {
   ThreadId,
   type GitBranch,
   type GitStatusFile,
+  type TestingGraphSummary,
+  type TestingCaseSummary,
+  type TestingExplorationScope,
+  DEFAULT_TESTING_MAX_STATES,
+  MAX_TESTING_DURATION_SECONDS,
+  MAX_TESTING_MAX_STATES,
   DEFAULT_MODEL,
 } from "@tabs/contracts";
 import { makeAppModelSelection } from "../modelSelection";
@@ -46,6 +52,7 @@ import {
   RocketIcon,
   RotateCwIcon,
   SearchIcon,
+  ShieldCheckIcon,
   ServerIcon,
   SettingsIcon,
   Trash2Icon,
@@ -436,6 +443,8 @@ function toolIcon(tool: ProjectToolKind) {
     case "browser":
     case "custom_embed":
       return <GlobeIcon className="size-3.5" />;
+    case "testing":
+      return <ShieldCheckIcon aria-hidden="true" className="size-3.5" />;
     case "custom_process":
       return <TerminalSquareIcon className="size-3.5" />;
   }
@@ -954,12 +963,20 @@ function ProjectToolBar(props: {
   const trackRef = useRef<HTMLDivElement>(null);
   const pillRef = useRef<HTMLDivElement>(null);
 
+  const focusAdjacentTool = (direction: -1 | 1) => {
+    const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>(".nav-tab");
+    if (!tabs?.length) return;
+    const focusedIndex = [...tabs].findIndex((tab) => tab === document.activeElement);
+    const nextIndex = (Math.max(focusedIndex, activeIndex) + direction + tabs.length) % tabs.length;
+    tabs[nextIndex]?.focus();
+  };
+
   useEffect(() => {
     if (!trackRef.current || !pillRef.current || activeIndex === -1) return;
-    
+
     // Delay slightly to ensure layout is calculated properly
     const timeoutId = setTimeout(() => {
-      const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>('.nav-tab');
+      const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>(".nav-tab");
       if (!tabs) return;
       const targetTab = tabs[activeIndex];
       if (!targetTab) return;
@@ -977,12 +994,19 @@ function ProjectToolBar(props: {
 
   return (
     <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-card/85 px-3 py-2">
-      <div 
-        ref={trackRef} 
+      <div
+        ref={trackRef}
+        role="tablist"
+        aria-label="Project tools"
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          focusAdjacentTool(event.key === "ArrowLeft" ? -1 : 1);
+        }}
         className={cn(
-          "nav-track", 
+          "nav-track",
           `design-${toolbarStyle ?? "solid"}`,
-          "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          "overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         )}
       >
         <div ref={pillRef} className="active-pill" />
@@ -992,6 +1016,9 @@ function ProjectToolBar(props: {
             <button
               key={tool.id}
               type="button"
+              role="tab"
+              aria-selected={active}
+              tabIndex={active ? 0 : -1}
               onClick={() => props.onSelectTool(tool.id)}
               className={cn("nav-tab", active && "active")}
             >
@@ -1015,6 +1042,838 @@ function ProjectToolBar(props: {
         </Button>
       </div>
     </div>
+  );
+}
+
+type TestingAuthenticationMode = "none" | "local-profile" | "connected-session";
+
+function TestingTool(props: { projectId: ProjectId }) {
+  const [targetUrl, setTargetUrl] = useState("");
+  const [cdpEndpoint, setCdpEndpoint] = useState("");
+  const [explorationScope, setExplorationScope] = useState<TestingExplorationScope>("path");
+  const [authenticationMode, setAuthenticationMode] = useState<TestingAuthenticationMode>("none");
+  const [maxStates, setMaxStates] = useState(String(DEFAULT_TESTING_MAX_STATES));
+  const [maxDurationMinutes, setMaxDurationMinutes] = useState("5");
+  const [status, setStatus] = useState<TestingGraphSummary | null>(null);
+  const [cases, setCases] = useState<ReadonlyArray<TestingCaseSummary>>([]);
+  const [workbookPath, setWorkbookPath] = useState("");
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  const [editedDescription, setEditedDescription] = useState("");
+  const [editedSteps, setEditedSteps] = useState("");
+  const [busyAction, setBusyAction] = useState<
+    "auth" | "finish-auth" | "explore" | "import" | "generate" | "review" | "clear" | null
+  >(null);
+  const [authCaptureOpen, setAuthCaptureOpen] = useState(false);
+  const [message, setMessage] = useState("Ready to explore a UAT application.");
+
+  const refreshStatus = useCallback(async () => {
+    const api = readNativeApi() ?? ensureNativeApi();
+    const nextStatus = await api.testing.getStatus({ projectId: props.projectId });
+    setStatus(nextStatus);
+    if (nextStatus.targetUrl) {
+      setTargetUrl((current) => current || nextStatus.targetUrl || "");
+    }
+  }, [props.projectId]);
+
+  const refreshCases = useCallback(async () => {
+    const result = await (readNativeApi() ?? ensureNativeApi()).testing.listCases({
+      projectId: props.projectId,
+    });
+    setCases(result.cases);
+  }, [props.projectId]);
+
+  useEffect(() => {
+    void Promise.all([refreshStatus(), refreshCases()]).catch((error) => {
+      setMessage(error instanceof Error ? error.message : "Could not load Testing status.");
+    });
+  }, [refreshCases, refreshStatus]);
+
+  const normalizedTarget = useMemo(() => {
+    const trimmed = targetUrl.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
+    } catch {
+      return null;
+    }
+  }, [targetUrl]);
+
+  const normalizedMaxStates = useMemo(() => {
+    const parsed = Number(maxStates);
+    return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= MAX_TESTING_MAX_STATES
+      ? parsed
+      : null;
+  }, [maxStates]);
+
+  const normalizedMaxDurationSeconds = useMemo(() => {
+    const trimmed = maxDurationMinutes.trim();
+    if (!trimmed) return undefined;
+    const parsedMinutes = Number(trimmed);
+    const parsedSeconds = parsedMinutes * 60;
+    return Number.isSafeInteger(parsedSeconds) &&
+      parsedSeconds >= 1 &&
+      parsedSeconds <= MAX_TESTING_DURATION_SECONDS
+      ? parsedSeconds
+      : null;
+  }, [maxDurationMinutes]);
+
+  const normalizedCdpEndpoint = useMemo(() => {
+    const trimmed = cdpEndpoint.trim();
+    if (!trimmed) return undefined;
+    try {
+      const parsed = new URL(trimmed);
+      const isLoopback =
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "[::1]";
+      return (parsed.protocol === "http:" || parsed.protocol === "https:") && isLoopback
+        ? parsed.href
+        : null;
+    } catch {
+      return null;
+    }
+  }, [cdpEndpoint]);
+
+  const authenticationReady =
+    authenticationMode === "none" ||
+    (authenticationMode === "local-profile" && Boolean(status?.authCapturedAt)) ||
+    (authenticationMode === "connected-session" && typeof normalizedCdpEndpoint === "string");
+
+  const startAuthCapture = async () => {
+    if (!normalizedTarget) return;
+    setBusyAction("auth");
+    setMessage("Opening a browser for manual sign-in...");
+    try {
+      await ensureNativeApi().testing.startAuthCapture({
+        projectId: props.projectId,
+        targetUrl: normalizedTarget,
+      });
+      setAuthCaptureOpen(true);
+      setMessage("Sign in in the opened browser, then choose Finish & Save Session.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not open the sign-in browser.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const finishAuthCapture = async () => {
+    setBusyAction("finish-auth");
+    setMessage("Saving the authenticated browser profile...");
+    try {
+      const nextStatus = await ensureNativeApi().testing.finishAuthCapture({
+        projectId: props.projectId,
+      });
+      setStatus(nextStatus);
+      setAuthCaptureOpen(false);
+      setMessage("Authenticated session saved locally and ready for reuse.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save the browser session.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const startExploration = async () => {
+    if (!normalizedTarget || normalizedMaxStates === null || normalizedMaxDurationSeconds === null)
+      return;
+    setBusyAction("explore");
+    setMessage("Exploring accessibility states and building the transition graph...");
+    try {
+      const result = await ensureNativeApi().testing.startExploration({
+        projectId: props.projectId,
+        targetUrl: normalizedTarget,
+        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+          ? { cdpEndpoint: normalizedCdpEndpoint }
+          : {}),
+        scope: explorationScope,
+        maxStates: normalizedMaxStates,
+        ...(normalizedMaxDurationSeconds
+          ? { maxDurationSeconds: normalizedMaxDurationSeconds }
+          : {}),
+      });
+      setStatus(result);
+      const terminationMessage =
+        result.terminationReason === "plateaued"
+          ? "exploration plateaued naturally"
+          : result.terminationReason === "time-budget"
+            ? `reached the ${Math.round((result.maxDurationSeconds ?? 0) / 60)}-minute time budget`
+            : `reached the ${result.maxStates}-state limit`;
+      setMessage(
+        `Exploration complete: ${result.statesVisited} states and ${result.transitionsObserved} transitions observed in ${(result.durationMs / 1000).toFixed(1)} seconds; ${terminationMessage}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Exploration failed.");
+      await refreshStatus().catch(() => undefined);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const chooseWorkbook = async () => {
+    const selected = await ensureNativeApi().dialogs.pickFile();
+    if (!selected) return;
+    setWorkbookPath(selected);
+    setMessage("Workbook selected. Import it to reconcile its cases against the live graph.");
+  };
+
+  const importWorkbook = async () => {
+    if (!workbookPath) return;
+    setBusyAction("import");
+    setMessage("Parsing the workbook and verifying graph paths against the live target...");
+    try {
+      const result = await ensureNativeApi().testing.importWorkbook({
+        projectId: props.projectId,
+        workbookPath,
+        ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
+        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+          ? { cdpEndpoint: normalizedCdpEndpoint }
+          : {}),
+      });
+      setCases(result.cases);
+      setMessage(
+        `Imported ${result.importedCount} cases: ${result.matchesCount} match, ${result.needsReviewCount} need review, and ${result.blockedCount} are blocked.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Workbook import failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const generateScenarios = async () => {
+    setBusyAction("generate");
+    setMessage("Creating candidate scenarios from reachable graph transitions...");
+    try {
+      const result = await ensureNativeApi().testing.generateScenarios({
+        projectId: props.projectId,
+      });
+      setCases(result.cases);
+      setMessage("Reachable graph scenarios were added to the same review queue.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not generate graph scenarios.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const reviewCase = async (
+    testCase: TestingCaseSummary,
+    decision: "accepted" | "edited" | "rejected",
+  ) => {
+    setBusyAction("review");
+    try {
+      const result = await ensureNativeApi().testing.reviewCase({
+        projectId: props.projectId,
+        caseId: testCase.id,
+        decision,
+        ...(decision === "edited"
+          ? {
+              description: editedDescription,
+              steps: editedSteps.split("\n").map((step) => step.trim()),
+            }
+          : {}),
+      });
+      setCases(result.cases);
+      setEditingCaseId(null);
+      setMessage(`Case ${testCase.externalId} was ${decision}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save the review decision.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const beginEditCase = (testCase: TestingCaseSummary) => {
+    setEditingCaseId(testCase.id);
+    setEditedDescription(testCase.description);
+    setEditedSteps(testCase.steps.join("\n"));
+  };
+
+  const clearGraph = async () => {
+    const confirmed = await ensureNativeApi().dialogs.confirm(
+      "Clear the stored state graph and its cached/tokenized crawl data? Imported test cases and the local login profile are preserved.",
+    );
+    if (!confirmed) return;
+    setBusyAction("clear");
+    try {
+      const result = await ensureNativeApi().testing.clearGraph({ projectId: props.projectId });
+      setStatus(result);
+      setMessage(
+        `Cleared ${result.clearedNodeCount} states and ${result.clearedEdgeCount} transitions. Imported cases and authentication were preserved.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not clear the stored graph.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  return (
+    <main className="h-full overflow-auto bg-background" aria-labelledby="testing-heading">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10 lg:px-10">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-emerald-500">
+            <ShieldCheckIcon aria-hidden="true" className="size-4" />
+            Standalone / UAT mode
+          </div>
+          <h1
+            id="testing-heading"
+            className="text-3xl font-semibold tracking-tight text-foreground"
+          >
+            Testing
+          </h1>
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            Explore a running application through its accessibility tree and store a privacy-safe
+            state transition graph. No source-code access is required.
+          </p>
+        </div>
+
+        <div className="space-y-4" aria-label="Testing setup steps">
+          <Card>
+            <CardHeader>
+              <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+                Step 1
+              </div>
+              <CardTitle>Choose what to test</CardTitle>
+              <CardDescription>
+                Start from the page relevant to the task and keep the crawl as narrow as practical.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <label htmlFor="testing-target-url" className="text-sm font-medium text-foreground">
+                  Target URL
+                </label>
+                <Input
+                  id="testing-target-url"
+                  type="url"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://uat.example.com/settings"
+                  value={targetUrl}
+                  onChange={(event) => setTargetUrl(event.target.value)}
+                  aria-describedby="testing-target-help"
+                  aria-invalid={targetUrl.trim().length > 0 && normalizedTarget === null}
+                  disabled={busyAction !== null || authCaptureOpen}
+                />
+                <p id="testing-target-help" className="text-xs text-muted-foreground">
+                  Use the exact page where this testing task should begin.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="testing-exploration-scope"
+                  className="text-sm font-medium text-foreground"
+                >
+                  How much should be explored?
+                </label>
+                <Select
+                  value={explorationScope}
+                  onValueChange={(value) => setExplorationScope(value as TestingExplorationScope)}
+                  disabled={busyAction !== null || authCaptureOpen}
+                >
+                  <SelectTrigger
+                    id="testing-exploration-scope"
+                    className="w-full"
+                    aria-describedby="testing-exploration-scope-help"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="page">Only this exact page</SelectItem>
+                    <SelectItem value="path">This page and its subpages</SelectItem>
+                    <SelectItem value="origin">The entire application origin</SelectItem>
+                  </SelectPopup>
+                </Select>
+                <p id="testing-exploration-scope-help" className="text-xs text-muted-foreground">
+                  {explorationScope === "page"
+                    ? "Interactions may change the page state, but navigation to another URL is excluded."
+                    : explorationScope === "path"
+                      ? "Includes child paths and hash-router subpages without exploring unrelated sections."
+                      : "Allows every reachable path on the same origin. Use this only for broad coverage."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+                Step 2
+              </div>
+              <CardTitle>Prepare access</CardTitle>
+              <CardDescription>
+                Tabs never asks for or stores the username, password, MFA code, cookie, or token as
+                test data.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="space-y-2">
+                <label
+                  htmlFor="testing-authentication-mode"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Authentication method
+                </label>
+                <Select
+                  value={authenticationMode}
+                  onValueChange={(value) =>
+                    setAuthenticationMode(value as TestingAuthenticationMode)
+                  }
+                  disabled={busyAction !== null || authCaptureOpen}
+                >
+                  <SelectTrigger id="testing-authentication-mode" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="none">No sign-in required</SelectItem>
+                    <SelectItem value="local-profile">
+                      Sign in manually in a local browser
+                    </SelectItem>
+                    <SelectItem value="connected-session">
+                      Use a signed-in Electron / Chromium session
+                    </SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+
+              {authenticationMode === "local-profile" ? (
+                <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    A headed browser opens at the target. Enter credentials there—not in Tabs—then
+                    save the local browser profile. Cookies remain under the local Tabs state
+                    directory and are excluded from snapshots, prompts, caches, and reports.
+                  </p>
+                  <p className="text-xs font-medium text-foreground">
+                    {status?.authCapturedAt
+                      ? "A local browser session is ready for this project."
+                      : "No local browser session has been captured yet."}
+                  </p>
+                  {!authCaptureOpen ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void startAuthCapture()}
+                      disabled={!normalizedTarget || busyAction !== null}
+                    >
+                      {busyAction === "auth" ? (
+                        <LoaderIcon aria-hidden="true" className="animate-spin" />
+                      ) : null}
+                      Open Browser to Sign In
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void finishAuthCapture()}
+                      disabled={busyAction !== null}
+                    >
+                      {busyAction === "finish-auth" ? (
+                        <LoaderIcon aria-hidden="true" className="animate-spin" />
+                      ) : null}
+                      Finish &amp; Save Local Session
+                    </Button>
+                  )}
+                </div>
+              ) : authenticationMode === "connected-session" ? (
+                <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Sign in directly in the isolated Electron or Chromium instance. Tabs connects to
+                    that existing session and does not copy its credentials into the graph.
+                  </p>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="testing-cdp-endpoint"
+                      className="text-sm font-medium text-foreground"
+                    >
+                      Local CDP endpoint
+                    </label>
+                    <Input
+                      id="testing-cdp-endpoint"
+                      type="url"
+                      inputMode="url"
+                      placeholder="http://127.0.0.1:9224"
+                      value={cdpEndpoint}
+                      onChange={(event) => setCdpEndpoint(event.target.value)}
+                      aria-describedby="testing-cdp-endpoint-help"
+                      aria-invalid={normalizedCdpEndpoint === null}
+                      disabled={busyAction !== null || authCaptureOpen}
+                    />
+                    <p id="testing-cdp-endpoint-help" className="text-xs text-muted-foreground">
+                      Only a loopback endpoint from an isolated local dev instance is accepted.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border/70 bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
+                  Use this for public pages or targets where the selected browser session is already
+                  sufficient. No credential material is collected.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+                Step 3
+              </div>
+              <CardTitle>Set limits and explore</CardTitle>
+              <CardDescription>
+                The run stops at whichever boundary is reached first: scope, states, time, or a
+                natural plateau.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="testing-max-states"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Maximum states
+                  </label>
+                  <Input
+                    id="testing-max-states"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_TESTING_MAX_STATES}
+                    step={1}
+                    value={maxStates}
+                    onChange={(event) => setMaxStates(event.target.value)}
+                    aria-describedby="testing-max-states-help"
+                    aria-invalid={normalizedMaxStates === null}
+                    disabled={busyAction !== null || authCaptureOpen}
+                  />
+                  <p id="testing-max-states-help" className="text-xs text-muted-foreground">
+                    Enter 1 to {MAX_TESTING_MAX_STATES.toLocaleString()}.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor="testing-max-duration"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Time budget in minutes
+                  </label>
+                  <Input
+                    id="testing-max-duration"
+                    type="number"
+                    inputMode="decimal"
+                    min={1 / 60}
+                    max={MAX_TESTING_DURATION_SECONDS / 60}
+                    step={1}
+                    value={maxDurationMinutes}
+                    onChange={(event) => setMaxDurationMinutes(event.target.value)}
+                    aria-describedby="testing-max-duration-help"
+                    aria-invalid={normalizedMaxDurationSeconds === null}
+                    disabled={busyAction !== null || authCaptureOpen}
+                  />
+                  <p id="testing-max-duration-help" className="text-xs text-muted-foreground">
+                    Clear for no time limit.
+                  </p>
+                </div>
+              </div>
+
+              {!authenticationReady ? (
+                <p className="text-sm text-amber-600" role="note">
+                  Complete the authentication setup in Step 2 before starting exploration.
+                </p>
+              ) : null}
+
+              <Button
+                type="button"
+                onClick={() => void startExploration()}
+                disabled={
+                  !normalizedTarget ||
+                  normalizedMaxStates === null ||
+                  normalizedMaxDurationSeconds === null ||
+                  !authenticationReady ||
+                  busyAction !== null ||
+                  authCaptureOpen
+                }
+              >
+                {busyAction === "explore" ? (
+                  <LoaderIcon aria-hidden="true" className="animate-spin" />
+                ) : (
+                  <PlayIcon aria-hidden="true" />
+                )}
+                Start Scoped Exploration
+              </Button>
+
+              <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+                {message}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <section aria-labelledby="testing-graph-heading" className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="testing-graph-heading" className="text-lg font-semibold text-foreground">
+                Stored graph
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Every completed exploration updates this local graph. Run Step 3 again to refresh it
+                from the latest application state.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void startExploration()}
+                disabled={
+                  !normalizedTarget ||
+                  normalizedMaxStates === null ||
+                  normalizedMaxDurationSeconds === null ||
+                  !authenticationReady ||
+                  busyAction !== null
+                }
+              >
+                <RefreshCwIcon aria-hidden="true" />
+                Update graph
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void clearGraph()}
+                disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
+              >
+                <Trash2Icon aria-hidden="true" />
+                Clear graph
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["States", status?.nodeCount ?? 0],
+              ["Transitions", status?.edgeCount ?? 0],
+              ["Cached subtrees", status?.cacheEntryCount ?? 0],
+              ["Cache hits", status?.cacheHitCount ?? 0],
+            ].map(([label, value]) => (
+              <Card key={label}>
+                <CardContent className="py-5">
+                  <div className="text-2xl font-semibold text-foreground">{value}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <p className="break-all text-xs text-muted-foreground">
+            {status?.databasePath
+              ? `Local workspace database: ${status.databasePath}`
+              : "The local graph database is created when Testing initializes."}
+          </p>
+        </section>
+
+        <section aria-labelledby="testing-cases-heading" className="space-y-4">
+          <div className="space-y-1">
+            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+              Phase 2
+            </div>
+            <h2 id="testing-cases-heading" className="text-lg font-semibold text-foreground">
+              Reconcile test cases
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Import an existing company workbook or start from reachable scenarios discovered in
+              the graph. Imported rows keep their original sheet and row references.
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Choose a starting point</CardTitle>
+              <CardDescription>
+                Excel columns may use common variations of Case ID, Description, and Steps.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void chooseWorkbook()}
+                  disabled={busyAction !== null}
+                >
+                  Choose .xlsx workbook
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => void importWorkbook()}
+                  disabled={!workbookPath || busyAction !== null || (status?.nodeCount ?? 0) === 0}
+                >
+                  {busyAction === "import" ? (
+                    <LoaderIcon aria-hidden="true" className="animate-spin" />
+                  ) : null}
+                  Import and verify
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void generateScenarios()}
+                  disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
+                >
+                  {busyAction === "generate" ? (
+                    <LoaderIcon aria-hidden="true" className="animate-spin" />
+                  ) : null}
+                  Generate from graph
+                </Button>
+              </div>
+              <p className="break-all text-xs text-muted-foreground">
+                {workbookPath || "No workbook selected."}
+              </p>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-3" aria-live="polite">
+            {cases.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No reconciled cases yet. Import a workbook or generate scenarios from the graph.
+                </CardContent>
+              </Card>
+            ) : (
+              cases.map((testCase) => (
+                <Card key={testCase.id}>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <CardTitle className="text-base">
+                          {testCase.externalId}: {testCase.description}
+                        </CardTitle>
+                        <CardDescription>
+                          {testCase.source === "excel"
+                            ? `${testCase.sourceSheet ?? "Workbook"}, row ${testCase.sourceRow ?? "unknown"}`
+                            : "Generated from a verified graph transition"}
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline">{testCase.source}</Badge>
+                        <Badge variant={testCase.status === "matches" ? "success" : "secondary"}>
+                          {testCase.status.replace("-", " ")}
+                        </Badge>
+                        <Badge variant="outline">{testCase.reviewDecision}</Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {editingCaseId === testCase.id ? (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <label
+                            htmlFor={`testing-case-description-${testCase.id}`}
+                            className="text-sm font-medium text-foreground"
+                          >
+                            Reviewed description
+                          </label>
+                          <Input
+                            id={`testing-case-description-${testCase.id}`}
+                            value={editedDescription}
+                            onChange={(event) => setEditedDescription(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label
+                            htmlFor={`testing-case-steps-${testCase.id}`}
+                            className="text-sm font-medium text-foreground"
+                          >
+                            Reviewed steps, one per line
+                          </label>
+                          <Textarea
+                            id={`testing-case-steps-${testCase.id}`}
+                            value={editedSteps}
+                            onChange={(event) => setEditedSteps(event.target.value)}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void reviewCase(testCase, "edited")}
+                            disabled={busyAction !== null}
+                          >
+                            Save reviewed case
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingCaseId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <ol className="list-decimal space-y-1 pl-5 text-sm text-foreground">
+                          {testCase.steps.map((step, index) => (
+                            <li key={`${testCase.id}-${index}`}>{step}</li>
+                          ))}
+                        </ol>
+                        {testCase.mismatches.length > 0 ? (
+                          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                            <div className="text-sm font-medium text-foreground">
+                              Review findings
+                            </div>
+                            {testCase.mismatches.map((mismatch, index) => (
+                              <p
+                                key={`${testCase.id}-mismatch-${index}`}
+                                className="text-xs leading-5 text-muted-foreground"
+                              >
+                                Expected: {mismatch.expected}. Observed: {mismatch.actual}.
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void reviewCase(testCase, "accepted")}
+                            disabled={busyAction !== null}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => beginEditCase(testCase)}
+                            disabled={busyAction !== null}
+                          >
+                            <PencilIcon aria-hidden="true" />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void reviewCase(testCase, "rejected")}
+                            disabled={busyAction !== null}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }
 
@@ -2440,7 +3299,7 @@ function emitGitWorkspaceTelemetry(
     new CustomEvent("tabs:git-telemetry", {
       detail: {
         event,
-        ...(detail ?? {}),
+        ...detail,
       },
     }),
   );
@@ -10495,6 +11354,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     content = serverTool;
   } else if (activeTool?.kind === "git") {
     content = gitTool;
+  } else if (activeTool?.kind === "testing") {
+    content = <TestingTool projectId={activeProject.id} />;
   } else if (activeTool?.kind === "custom_embed") {
     content = customEmbedTool;
   } else if (activeTool?.kind === "custom_process") {

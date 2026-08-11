@@ -147,6 +147,22 @@ export function createWsNativeApi(): NativeApi {
   });
 
   const api: NativeApi = {
+    testing: {
+      getStatus: (input) => transport.request(WS_METHODS.testingGetStatus, input),
+      startAuthCapture: (input) =>
+        transport.request(WS_METHODS.testingStartAuthCapture, input, { timeoutMs: null }),
+      finishAuthCapture: (input) =>
+        transport.request(WS_METHODS.testingFinishAuthCapture, input, { timeoutMs: null }),
+      startExploration: (input) =>
+        transport.request(WS_METHODS.testingStartExploration, input, { timeoutMs: null }),
+      importWorkbook: (input) =>
+        transport.request(WS_METHODS.testingImportWorkbook, input, { timeoutMs: null }),
+      listCases: (input) => transport.request(WS_METHODS.testingListCases, input),
+      reviewCase: (input) => transport.request(WS_METHODS.testingReviewCase, input),
+      generateScenarios: (input) =>
+        transport.request(WS_METHODS.testingGenerateScenarios, input, { timeoutMs: null }),
+      clearGraph: (input) => transport.request(WS_METHODS.testingClearGraph, input),
+    },
     dialogs: {
       pickFolder: async () => {
         if (!window.desktopBridge) return null;
@@ -219,7 +235,8 @@ export function createWsNativeApi(): NativeApi {
       createWorktree: (input) => transport.request(WS_METHODS.gitCreateWorktree, input),
       removeWorktree: (input) => transport.request(WS_METHODS.gitRemoveWorktree, input),
       createBranch: (input) => transport.request(WS_METHODS.gitCreateBranch, input),
-      createFork: (input) => transport.request(WS_METHODS.gitCreateFork, input, { timeoutMs: 45_000 }),
+      createFork: (input) =>
+        transport.request(WS_METHODS.gitCreateFork, input, { timeoutMs: 45_000 }),
       checkout: (input) => transport.request(WS_METHODS.gitCheckout, input),
       renameBranch: (input) => transport.request(WS_METHODS.gitRenameBranch, input),
       deleteBranch: (input) => transport.request(WS_METHODS.gitDeleteBranch, input),
@@ -257,16 +274,14 @@ export function createWsNativeApi(): NativeApi {
       cherryPick: (input) => transport.request(WS_METHODS.gitCherryPick, input),
       createTag: (input) => transport.request(WS_METHODS.gitCreateTag, input),
       listTags: (input) => transport.request(WS_METHODS.gitListTags, input),
-      watchedBranchStatuses: (input) => transport.request(WS_METHODS.gitWatchedBranchStatuses, input),
+      watchedBranchStatuses: (input) =>
+        transport.request(WS_METHODS.gitWatchedBranchStatuses, input),
       generateDiffSummary: (input) => transport.request(WS_METHODS.gitGenerateDiffSummary, input),
       generateReview: (input) =>
         transport.request(WS_METHODS.gitGenerateReview, input, { timeoutMs: null }),
       submitFindingFeedback: (input) =>
         transport.request(WS_METHODS.gitSubmitFindingFeedback, input),
-      getReviewHistory: (input) =>
-        transport.request(WS_METHODS.gitGetReviewHistory, input),
-
-
+      getReviewHistory: (input) => transport.request(WS_METHODS.gitGetReviewHistory, input),
 
       onActionProgress: (callback) => {
         gitActionProgressListeners.add(callback);

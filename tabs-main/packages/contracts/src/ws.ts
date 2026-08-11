@@ -89,10 +89,26 @@ import {
   SourceControlRepositoryLookupInput,
 } from "./sourceControl";
 import { ReviewProgressEvent } from "./review";
+import {
+  TestingCaseReviewInput,
+  TestingExplorationInput,
+  TestingProjectInput,
+  TestingTargetInput,
+  TestingWorkbookImportInput,
+} from "./testing";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
 export const WS_METHODS = {
+  testingGetStatus: "testing.getStatus",
+  testingStartAuthCapture: "testing.startAuthCapture",
+  testingFinishAuthCapture: "testing.finishAuthCapture",
+  testingStartExploration: "testing.startExploration",
+  testingImportWorkbook: "testing.importWorkbook",
+  testingListCases: "testing.listCases",
+  testingReviewCase: "testing.reviewCase",
+  testingGenerateScenarios: "testing.generateScenarios",
+  testingClearGraph: "testing.clearGraph",
   projectsAdd: "projects.add",
   projectsList: "projects.list",
   projectsListEntries: "projects.listEntries",
@@ -120,7 +136,6 @@ export const WS_METHODS = {
   gitGenerateReview: "git.generateReview",
   gitSubmitFindingFeedback: "git.submitFindingFeedback",
   gitGetReviewHistory: "git.getReviewHistory",
-
 
   gitCreateWorktree: "git.createWorktree",
   gitDeleteBranch: "git.deleteBranch",
@@ -247,6 +262,17 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(ORCHESTRATION_WS_METHODS.getFullThreadDiff, OrchestrationGetFullThreadDiffInput),
   tagRequestBody(ORCHESTRATION_WS_METHODS.replayEvents, OrchestrationReplayEventsInput),
 
+  // Testing crawler
+  tagRequestBody(WS_METHODS.testingGetStatus, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingStartAuthCapture, TestingTargetInput),
+  tagRequestBody(WS_METHODS.testingFinishAuthCapture, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingStartExploration, TestingExplorationInput),
+  tagRequestBody(WS_METHODS.testingImportWorkbook, TestingWorkbookImportInput),
+  tagRequestBody(WS_METHODS.testingListCases, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingReviewCase, TestingCaseReviewInput),
+  tagRequestBody(WS_METHODS.testingGenerateScenarios, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingClearGraph, TestingProjectInput),
+
   // Project Search
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),
   tagRequestBody(WS_METHODS.projectsReadFile, ProjectReadFileInput),
@@ -307,8 +333,6 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.gitGenerateReview, GitGenerateReviewInput),
   tagRequestBody(WS_METHODS.gitSubmitFindingFeedback, GitSubmitFindingFeedbackInput),
   tagRequestBody(WS_METHODS.gitGetReviewHistory, GitGetReviewHistoryInput),
-
-
 
   // Terminal methods
   tagRequestBody(WS_METHODS.terminalOpen, TerminalOpenInput),

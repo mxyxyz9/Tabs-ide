@@ -121,6 +121,35 @@ export function createDefaultProjectWorkspaceSettings(): ProjectWorkspaceSetting
   return decodeProjectWorkspaceSettings({});
 }
 
+function mergeMissingBuiltInTools(
+  tools: ProjectWorkspaceSettingsType["tools"],
+): ProjectWorkspaceSettingsType["tools"] {
+  const defaults = decodeProjectWorkspaceSettingsSchema({}).tools;
+  const merged = [...tools];
+
+  for (const [defaultIndex, defaultTool] of defaults.entries()) {
+    if (merged.some((tool) => tool.kind === defaultTool.kind)) continue;
+    const migratedTool = { ...defaultTool, visible: false };
+
+    const previousKinds = new Set(defaults.slice(0, defaultIndex).map((tool) => tool.kind));
+    let previousIndex = -1;
+    for (const [toolIndex, tool] of merged.entries()) {
+      if (previousKinds.has(tool.kind)) previousIndex = toolIndex;
+    }
+
+    if (previousIndex >= 0) {
+      merged.splice(previousIndex + 1, 0, migratedTool);
+      continue;
+    }
+
+    const nextKinds = new Set(defaults.slice(defaultIndex + 1).map((tool) => tool.kind));
+    const nextIndex = merged.findIndex((tool) => nextKinds.has(tool.kind));
+    merged.splice(nextIndex >= 0 ? nextIndex : merged.length, 0, migratedTool);
+  }
+
+  return merged;
+}
+
 function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSettingsType {
   let toDecode = input;
 
@@ -175,6 +204,7 @@ function decodeProjectWorkspaceSettings(input: unknown): ProjectWorkspaceSetting
 
   return {
     ...decoded,
+    tools: mergeMissingBuiltInTools(decoded.tools),
     terminalProcesses: (decoded.terminalProcesses || []).map(normalizeProcess),
     serverPresets: (decoded.serverPresets || []).map(normalizeProcess),
   };
@@ -815,18 +845,16 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             rememberedThreadIdByProjectId: state.session.rememberedThreadIdByProjectId ?? {},
           };
         }
-        // Sanitize each project's settings so arrays are never undefined
+        // Decode persisted settings and merge built-in tools introduced after the
+        // project was first saved. Custom tools and user visibility/order survive.
         if (state.projectSettingsByProjectId) {
           const sanitized: typeof state.projectSettingsByProjectId = {};
           for (const [id, settings] of Object.entries(state.projectSettingsByProjectId)) {
-            sanitized[id as keyof typeof sanitized] = {
-              ...settings,
-              tools: settings.tools ?? [],
-              terminalProcesses: settings.terminalProcesses ?? [],
-              serverPresets: settings.serverPresets ?? [],
-              customEmbeds: settings.customEmbeds ?? [],
-              browser: settings.browser ?? { defaultUrl: "", openExternalByDefault: false },
-            };
+            try {
+              sanitized[id as keyof typeof sanitized] = decodeProjectWorkspaceSettings(settings);
+            } catch {
+              sanitized[id as keyof typeof sanitized] = createDefaultProjectWorkspaceSettings();
+            }
           }
           state.projectSettingsByProjectId = sanitized;
         }

@@ -60,7 +60,7 @@ export const ToolbarStyle = Schema.Literals([
   "refraction",
   "material",
   "titanium",
-  "groove"
+  "groove",
 ]);
 export type ToolbarStyle = typeof ToolbarStyle.Type;
 export const DEFAULT_TOOLBAR_STYLE: ToolbarStyle = "solid";
@@ -420,6 +420,10 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    experimentalWebSockets: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
   },
   {
     order: ["binaryPath", "serverUrl", "serverPassword"],
@@ -704,6 +708,7 @@ const OpenCodeSettingsPatch = Schema.Struct({
   serverUrl: Schema.optionalKey(TrimmedString),
   serverPassword: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+  experimentalWebSockets: Schema.optionalKey(Schema.Boolean),
 });
 
 const GeminiSettingsPatch = Schema.Struct({
@@ -848,6 +853,7 @@ export const ProjectToolKind = Schema.Literals([
   "server",
   "git",
   "browser",
+  "testing",
   "custom_embed",
   "custom_process",
 ]);
@@ -870,6 +876,7 @@ export const DEFAULT_PROJECT_TOOL_ORDER = [
   "server",
   "git",
   "browser",
+  "testing",
 ] as const satisfies ReadonlyArray<ProjectToolKind>;
 
 // Land on the lightweight Agents (chat) tab by default rather than the embedded
@@ -955,7 +962,9 @@ export const ProjectWorkspaceSettings = Schema.Struct({
                   ? "Server"
                   : kind === "git"
                     ? "Git"
-                    : "Browser",
+                    : kind === "browser"
+                      ? "Browser"
+                      : "Testing",
           visible: true,
         })),
       ),

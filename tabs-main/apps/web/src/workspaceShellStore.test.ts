@@ -109,6 +109,66 @@ describe("workspaceShellStore", () => {
     expect(state.session.activeToolIdByProjectId[projectId]).toBe("agents");
   });
 
+  it("merges newly registered built-in tools into persisted project tool lists", () => {
+    const project = makeProject("project-before-testing-tool");
+    const baseState = createDefaultWorkspaceShellPersistedState();
+    const next = syncWorkspaceShellState(
+      {
+        ...baseState,
+        projectSettingsByProjectId: {
+          [project.id]: {
+            tools: [
+              { id: "code", kind: "code", label: "Code", visible: true },
+              { id: "agents", kind: "agents", label: "Agents", visible: true },
+              { id: "server", kind: "server", label: "Server", visible: true },
+              { id: "git", kind: "git", label: "Git", visible: true },
+              { id: "browser", kind: "browser", label: "Browser", visible: true },
+              {
+                id: "browser-figma",
+                kind: "custom_embed",
+                label: "Figma",
+                visible: true,
+                customEmbedId: "figma",
+              },
+            ],
+            browser: {
+              defaultUrl: "",
+              openExternalByDefault: false,
+              resumeLastVisitedPage: true,
+            },
+            terminalProcesses: [],
+            serverPresets: [],
+            customEmbeds: [
+              {
+                id: "figma",
+                label: "Figma",
+                url: "https://figma.com",
+                resumeLastVisitedPage: false,
+              },
+            ],
+          },
+        },
+      },
+      [project],
+      [],
+    );
+
+    expect(next.projectSettingsByProjectId[project.id]?.tools.map((tool) => tool.id)).toEqual([
+      "code",
+      "agents",
+      "server",
+      "git",
+      "browser",
+      "testing",
+      "browser-figma",
+    ]);
+    expect(next.projectSettingsByProjectId[project.id]?.tools[5]).toMatchObject({
+      kind: "testing",
+      label: "Testing",
+      visible: false,
+    });
+  });
+
   it("syncs persisted shell state against available projects and valid threads", () => {
     const alpha = makeProject("project-alpha");
     const beta = makeProject("project-beta");

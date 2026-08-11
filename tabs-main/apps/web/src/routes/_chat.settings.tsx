@@ -4636,6 +4636,26 @@ function SettingsRouteView() {
                                 </div>
 
                                 <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+                                  {providerCard.needsInstall && providerCard.installCommand ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                      disabled={providerActionBusy}
+                                      onClick={() =>
+                                        startProviderAction({
+                                          provider: providerCard.provider,
+                                          providerName: providerDisplayName,
+                                          command: providerCard.installCommand!,
+                                          kind: "install",
+                                        })
+                                      }
+                                    >
+                                      <DownloadIcon className="size-3.5" />
+                                      Install
+                                    </Button>
+                                  ) : null}
+
                                   {providerCard.updatePrompt && providerCard.installCommand ? (
                                     <Button
                                       size="sm"
