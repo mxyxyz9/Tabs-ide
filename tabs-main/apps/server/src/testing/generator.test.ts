@@ -156,11 +156,11 @@ describe("TestingGenerator", () => {
         const configPath = join(root, "playwright.generated.config.ts");
         await writeFile(
           configPath,
-          `import { defineConfig } from "@playwright/test";\nexport default defineConfig({ testDir: ${JSON.stringify(dirname(artifact.specPath))} });\n`,
+          `import { defineConfig } from "playwright/test";\nexport default defineConfig({ testDir: ${JSON.stringify(dirname(artifact.specPath))} });\n`,
           "utf8",
         );
         const discovery = await runCommand(process.execPath, [
-          join(process.cwd(), "node_modules", "@playwright", "test", "cli.js"),
+          join(process.cwd(), "node_modules", "playwright", "cli.js"),
           "test",
           "--config",
           configPath,

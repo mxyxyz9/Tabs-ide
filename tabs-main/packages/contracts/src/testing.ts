@@ -84,6 +84,42 @@ export const TestingGenerationJobInput = Schema.Struct({
 });
 export type TestingGenerationJobInput = typeof TestingGenerationJobInput.Type;
 
+export const TestingExecutionInput = Schema.Struct({
+  projectId: Schema.String,
+  generationJobId: Schema.String,
+  targetUrl: Schema.String,
+  mode: Schema.Literals(["standalone", "ci"]),
+  caseIds: Schema.optionalKey(Schema.Array(Schema.String)),
+  timeoutSeconds: Schema.optionalKey(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(Schema.isLessThanOrEqualTo(3_600)),
+  ),
+  visualComparison: Schema.optionalKey(Schema.Boolean),
+});
+export type TestingExecutionInput = typeof TestingExecutionInput.Type;
+
+export const TestingExecutionRunInput = Schema.Struct({
+  projectId: Schema.String,
+  runId: Schema.String,
+});
+export type TestingExecutionRunInput = typeof TestingExecutionRunInput.Type;
+
+export const TestingHealingDecisionInput = Schema.Struct({
+  projectId: Schema.String,
+  proposalId: Schema.String,
+  decision: Schema.Literals(["accepted", "rejected"]),
+});
+export type TestingHealingDecisionInput = typeof TestingHealingDecisionInput.Type;
+
+export const TestingScheduleInput = Schema.Struct({
+  projectId: Schema.String,
+  generationJobId: Schema.String,
+  targetUrl: Schema.String,
+  timezone: Schema.String,
+  runAt: Schema.String,
+  recurrence: Schema.optionalKey(Schema.Literals(["none", "daily", "weekly"])),
+});
+export type TestingScheduleInput = typeof TestingScheduleInput.Type;
+
 export const TestingCaseSource = Schema.Literals(["excel", "generated"]);
 export type TestingCaseSource = typeof TestingCaseSource.Type;
 export const TestingReconciliationStatus = Schema.Literals(["matches", "needs-review", "blocked"]);
@@ -162,6 +198,75 @@ export interface TestingGenerationJobListResult {
   readonly jobs: ReadonlyArray<TestingGenerationJob>;
 }
 
+export interface TestingHealingProposal {
+  readonly id: string;
+  readonly caseId: string;
+  readonly locatorKey: string;
+  readonly previousRole: string;
+  readonly previousName: string;
+  readonly proposedRole: string;
+  readonly proposedName: string;
+  readonly confidence: number;
+  readonly margin: number;
+  readonly diff: string;
+  readonly status: "pending" | "accepted" | "rejected" | "below-threshold";
+  readonly consecutiveAttempts: number;
+}
+
+export interface TestingExecutionCaseResult {
+  readonly caseId: string;
+  readonly externalId: string;
+  readonly status: "passed" | "failed" | "blocked" | "not-applicable";
+  readonly durationMs: number;
+  readonly error: string | null;
+  readonly tracePath: string | null;
+  readonly screenshotPath: string | null;
+  readonly flaky: boolean;
+  readonly quarantined: boolean;
+  readonly visualStatus:
+    | "disabled"
+    | "baseline-created"
+    | "matched"
+    | "changed"
+    | "review-required";
+}
+
+export interface TestingExecutionRun {
+  readonly id: string;
+  readonly projectId: string;
+  readonly generationJobId: string;
+  readonly mode: "standalone" | "ci";
+  readonly status: "queued" | "running" | "passed" | "failed" | "blocked";
+  readonly targetUrl: string;
+  readonly startedAt: string;
+  readonly completedAt: string | null;
+  readonly durationMs: number;
+  readonly artifactRevision: string;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly results: ReadonlyArray<TestingExecutionCaseResult>;
+  readonly healingProposals: ReadonlyArray<TestingHealingProposal>;
+}
+
+export interface TestingExecutionRunListResult {
+  readonly runs: ReadonlyArray<TestingExecutionRun>;
+}
+
+export interface TestingSchedule {
+  readonly id: string;
+  readonly projectId: string;
+  readonly generationJobId: string;
+  readonly targetUrl: string;
+  readonly timezone: string;
+  readonly recurrence: "none" | "daily" | "weekly";
+  readonly nextRunAt: string;
+  readonly enabled: boolean;
+}
+
+export interface TestingScheduleListResult {
+  readonly schedules: ReadonlyArray<TestingSchedule>;
+}
+
 export interface TestingGraphSummary {
   readonly projectId: string;
   readonly targetUrl: string | null;
@@ -210,4 +315,13 @@ export interface TestingApi {
     input: TestingProjectInput,
   ) => Promise<TestingGenerationJobListResult>;
   readonly cancelGenerationJob: (input: TestingGenerationJobInput) => Promise<TestingGenerationJob>;
+  readonly runTests: (input: TestingExecutionInput) => Promise<TestingExecutionRun>;
+  readonly listExecutionRuns: (
+    input: TestingProjectInput,
+  ) => Promise<TestingExecutionRunListResult>;
+  readonly decideHealingProposal: (
+    input: TestingHealingDecisionInput,
+  ) => Promise<TestingExecutionRunListResult>;
+  readonly createSchedule: (input: TestingScheduleInput) => Promise<TestingSchedule>;
+  readonly listSchedules: (input: TestingProjectInput) => Promise<TestingScheduleListResult>;
 }

@@ -17,6 +17,8 @@ import {
   type TestingCaseSummary,
   type TestingGenerationJob,
   type TestingExplorationScope,
+  type TestingExecutionRun,
+  type TestingSchedule,
   DEFAULT_TESTING_BATCH_MAX_CASES,
   DEFAULT_TESTING_BATCH_MAX_COST_USD,
   DEFAULT_TESTING_BATCH_MAX_TOKENS,
@@ -1067,6 +1069,11 @@ function TestingTool(props: {
   const [status, setStatus] = useState<TestingGraphSummary | null>(null);
   const [cases, setCases] = useState<ReadonlyArray<TestingCaseSummary>>([]);
   const [generationJobs, setGenerationJobs] = useState<ReadonlyArray<TestingGenerationJob>>([]);
+  const [executionRuns, setExecutionRuns] = useState<ReadonlyArray<TestingExecutionRun>>([]);
+  const [testingSchedules, setTestingSchedules] = useState<ReadonlyArray<TestingSchedule>>([]);
+  const [executionMode, setExecutionMode] = useState<"standalone" | "ci">("standalone");
+  const [visualComparison, setVisualComparison] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("");
   const [generationModelSelection, setGenerationModelSelection] = useState<ModelSelection>(
     () => props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL),
   );
@@ -1102,6 +1109,9 @@ function TestingTool(props: {
     | "review"
     | "clear"
     | "cancel-generation"
+    | "run-tests"
+    | "healing-decision"
+    | "schedule"
     | null
   >(null);
   const [authCaptureOpen, setAuthCaptureOpen] = useState(false);
@@ -1130,11 +1140,26 @@ function TestingTool(props: {
     setGenerationJobs(result.jobs);
   }, [props.projectId]);
 
+  const refreshExecution = useCallback(async () => {
+    const api = readNativeApi() ?? ensureNativeApi();
+    const [runs, schedules] = await Promise.all([
+      api.testing.listExecutionRuns({ projectId: props.projectId }),
+      api.testing.listSchedules({ projectId: props.projectId }),
+    ]);
+    setExecutionRuns(runs.runs);
+    setTestingSchedules(schedules.schedules);
+  }, [props.projectId]);
+
   useEffect(() => {
-    void Promise.all([refreshStatus(), refreshCases(), refreshGenerationJobs()]).catch((error) => {
+    void Promise.all([
+      refreshStatus(),
+      refreshCases(),
+      refreshGenerationJobs(),
+      refreshExecution(),
+    ]).catch((error) => {
       setMessage(error instanceof Error ? error.message : "Could not load Testing status.");
     });
-  }, [refreshCases, refreshGenerationJobs, refreshStatus]);
+  }, [refreshCases, refreshExecution, refreshGenerationJobs, refreshStatus]);
 
   const normalizedTarget = useMemo(() => {
     const trimmed = targetUrl.trim();
@@ -1414,6 +1439,74 @@ function TestingTool(props: {
       setMessage("Generation cancellation requested.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not cancel generation.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const runGeneratedTests = async () => {
+    const job = generationJobs.find((candidate) => candidate.status === "completed");
+    if (!job || !normalizedTarget) return;
+    setBusyAction("run-tests");
+    setMessage(`Running ${job.totalCases} generated cases in ${executionMode} mode...`);
+    try {
+      const run = await ensureNativeApi().testing.runTests({
+        projectId: props.projectId,
+        generationJobId: job.id,
+        targetUrl: normalizedTarget,
+        mode: executionMode,
+        visualComparison,
+      });
+      await Promise.all([refreshExecution(), refreshCases()]);
+      setMessage(
+        `Run ${run.status}: ${run.results.filter((result) => result.status === "passed").length} passed, ${run.results.filter((result) => result.status === "failed").length} failed in ${(run.durationMs / 1000).toFixed(1)} seconds.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Generated test execution failed.");
+      await refreshExecution().catch(() => undefined);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const decideHealing = async (proposalId: string, decision: "accepted" | "rejected") => {
+    setBusyAction("healing-decision");
+    try {
+      const result = await ensureNativeApi().testing.decideHealingProposal({
+        projectId: props.projectId,
+        proposalId,
+        decision,
+      });
+      setExecutionRuns(result.runs);
+      setMessage(
+        decision === "accepted"
+          ? "Healing proposal accepted for the next generated revision; source was not silently rewritten."
+          : "Healing proposal rejected and retained in the audit trail.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not record the healing decision.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const createTestingSchedule = async () => {
+    const job = generationJobs.find((candidate) => candidate.status === "completed");
+    if (!job || !normalizedTarget || !scheduleTime) return;
+    setBusyAction("schedule");
+    try {
+      await ensureNativeApi().testing.createSchedule({
+        projectId: props.projectId,
+        generationJobId: job.id,
+        targetUrl: normalizedTarget,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        runAt: new Date(scheduleTime).toISOString(),
+        recurrence: "none",
+      });
+      await refreshExecution();
+      setMessage("Local one-off run scheduled. Its timezone and next run remain visible here.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not create the schedule.");
     } finally {
       setBusyAction(null);
     }
@@ -2279,6 +2372,208 @@ function TestingTool(props: {
                         ))}
                       </ul>
                     ) : null}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="testing-execution-heading" className="space-y-4">
+          <div className="space-y-1">
+            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+              Phase 4
+            </div>
+            <h2 id="testing-execution-heading" className="text-lg font-semibold text-foreground">
+              Run, compare, and review
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Standalone mode is for manual UAT. CI mode returns the same persisted results for a
+              release gate. Locator changes are proposed for review and are never silently applied.
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Execution controls</CardTitle>
+              <CardDescription>
+                Runs use the latest completed generation batch and the target URL from Step 1.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label htmlFor="testing-execution-mode" className="text-sm font-medium">
+                    Operating mode
+                  </label>
+                  <Select
+                    value={executionMode}
+                    onValueChange={(value) => setExecutionMode(value as "standalone" | "ci")}
+                    disabled={busyAction !== null}
+                  >
+                    <SelectTrigger id="testing-execution-mode" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="standalone">Standalone / UAT</SelectItem>
+                      <SelectItem value="ci">CI release gate</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 p-4">
+                  <div>
+                    <label htmlFor="testing-visual-comparison" className="text-sm font-medium">
+                      Visual comparison
+                    </label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Opt in to local screenshots and approved baselines.
+                    </p>
+                  </div>
+                  <Switch
+                    id="testing-visual-comparison"
+                    checked={visualComparison}
+                    onCheckedChange={setVisualComparison}
+                    disabled={busyAction !== null}
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={() => void runGeneratedTests()}
+                disabled={
+                  busyAction !== null ||
+                  !normalizedTarget ||
+                  !generationJobs.some((job) => job.status === "completed")
+                }
+              >
+                {busyAction === "run-tests" ? (
+                  <LoaderIcon aria-hidden="true" className="animate-spin" />
+                ) : (
+                  <PlayIcon aria-hidden="true" />
+                )}
+                Run generated tests
+              </Button>
+
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                <div className="space-y-2">
+                  <label htmlFor="testing-schedule-time" className="text-sm font-medium">
+                    One-off local schedule
+                  </label>
+                  <Input
+                    id="testing-schedule-time"
+                    type="datetime-local"
+                    value={scheduleTime}
+                    onChange={(event) => setScheduleTime(event.target.value)}
+                    disabled={busyAction !== null}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="self-end"
+                  onClick={() => void createTestingSchedule()}
+                  disabled={
+                    busyAction !== null ||
+                    !scheduleTime ||
+                    !normalizedTarget ||
+                    !generationJobs.some((job) => job.status === "completed")
+                  }
+                >
+                  Schedule run
+                </Button>
+              </div>
+              {testingSchedules.length > 0 ? (
+                <ul
+                  className="space-y-1 text-xs text-muted-foreground"
+                  aria-label="Local schedules"
+                >
+                  {testingSchedules.map((schedule) => (
+                    <li key={schedule.id}>
+                      {new Date(schedule.nextRunAt).toLocaleString()} · {schedule.timezone} ·{" "}
+                      {schedule.recurrence}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-3" aria-live="polite">
+            {executionRuns.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No execution rounds yet.
+                </CardContent>
+              </Card>
+            ) : (
+              executionRuns.map((run) => (
+                <Card key={run.id}>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-base">
+                          {run.mode === "ci" ? "CI" : "Standalone"} round
+                        </CardTitle>
+                        <CardDescription>
+                          {run.results.length} cases · {(run.durationMs / 1000).toFixed(1)} seconds
+                        </CardDescription>
+                      </div>
+                      <Badge variant={run.status === "passed" ? "success" : "outline"}>
+                        {run.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <ul className="space-y-2" aria-label="Case execution results">
+                      {run.results.map((result) => (
+                        <li
+                          key={`${run.id}-${result.caseId}`}
+                          className="text-sm text-muted-foreground"
+                        >
+                          {result.externalId}: {result.status}
+                          {result.quarantined ? " · flaky, quarantined from gate" : ""}
+                          {result.visualStatus !== "disabled"
+                            ? ` · visual ${result.visualStatus}`
+                            : ""}
+                        </li>
+                      ))}
+                    </ul>
+                    {run.healingProposals.map((proposal) => (
+                      <div
+                        key={proposal.id}
+                        className="space-y-3 rounded-lg border border-border/70 p-4"
+                      >
+                        <p className="text-sm font-medium">
+                          Locator proposal ({Math.round(proposal.confidence * 100)}% confidence)
+                        </p>
+                        <pre className="overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">
+                          {proposal.diff}
+                        </pre>
+                        {proposal.status === "pending" ? (
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void decideHealing(proposal.id, "accepted")}
+                              disabled={busyAction !== null}
+                            >
+                              Accept proposal
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void decideHealing(proposal.id, "rejected")}
+                              disabled={busyAction !== null}
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        ) : (
+                          <Badge variant="outline">{proposal.status.replace("-", " ")}</Badge>
+                        )}
+                      </div>
+                    ))}
                   </CardContent>
                 </Card>
               ))

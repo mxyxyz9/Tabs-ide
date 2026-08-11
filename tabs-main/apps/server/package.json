@@ -19,6 +19,7 @@
     "dev:bundle": "tsdown --watch",
     "build": "bun scripts/cli.ts build",
     "start": "node dist/index.mjs",
+    "testing:ci": "bun scripts/testing-ci.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun scripts/test.ts"
   },
@@ -41,7 +42,6 @@
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "@effect/vitest": "catalog:",
-    "@playwright/test": "1.61.1",
     "@tabs/contracts": "workspace:*",
     "@tabs/shared": "workspace:*",
     "@tabs/web": "workspace:*",

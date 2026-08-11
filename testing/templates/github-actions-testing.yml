@@ -1,0 +1,23 @@
+name: Tabs generated tests
+
+on:
+  pull_request:
+  deployment_status:
+
+jobs:
+  generated-tests:
+    if: github.event_name == 'pull_request' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - name: Run generated Testing suite
+        working-directory: tabs-main/apps/server
+        env:
+          TABS_TESTING_STATE_DIRECTORY: ${{ github.workspace }}/.tabs-state
+          TABS_TESTING_PROJECT_ID: ${{ vars.TABS_TESTING_PROJECT_ID }}
+          TABS_TESTING_GENERATION_JOB_ID: ${{ vars.TABS_TESTING_GENERATION_JOB_ID }}
+          TABS_TESTING_TARGET_URL: ${{ vars.TABS_TESTING_TARGET_URL }}
+        run: bun run testing:ci

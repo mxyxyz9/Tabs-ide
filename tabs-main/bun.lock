@@ -16,7 +16,7 @@
     },
     "apps/desktop": {
       "name": "@tabs/desktop",
-      "version": "1.2.119",
+      "version": "1.2.121",
       "dependencies": {
         "effect": "catalog:",
         "electron": "40.6.0",
@@ -45,7 +45,7 @@
     },
     "apps/server": {
       "name": "tabs",
-      "version": "1.2.119",
+      "version": "1.2.121",
       "bin": {
         "tabs": "./dist/index.mjs",
       },
@@ -68,7 +68,6 @@
       "devDependencies": {
         "@effect/language-service": "catalog:",
         "@effect/vitest": "catalog:",
-        "@playwright/test": "1.61.1",
         "@tabs/contracts": "workspace:*",
         "@tabs/shared": "workspace:*",
         "@tabs/web": "workspace:*",
@@ -82,7 +81,7 @@
     },
     "apps/web": {
       "name": "@tabs/web",
-      "version": "1.2.119",
+      "version": "1.2.121",
       "dependencies": {
         "@base-ui/react": "^1.2.0",
         "@dnd-kit/core": "^6.3.1",
@@ -150,7 +149,7 @@
     },
     "packages/contracts": {
       "name": "@tabs/contracts",
-      "version": "1.2.119",
+      "version": "1.2.121",
       "dependencies": {
         "effect": "catalog:",
       },
@@ -698,8 +697,6 @@
     "@pierre/theme": ["@pierre/theme@1.0.3", "", {}, "sha512-sWHv11TMoqKxKDgTIk5VbhQjdPhs8DCcBxbjh3mRlS3YOM/OcrWoGX6MM8eBGn9cUu3M46Py0JnxsG2nJaFTuA=="],
 
     "@playwright/mcp": ["@playwright/mcp@0.0.78", "", { "dependencies": { "playwright": "1.62.0-alpha-1783623505000", "playwright-core": "1.62.0-alpha-1783623505000" }, "bin": { "playwright-mcp": "cli.js" } }, "sha512-XLTUeA6mEN9sQ+hJ4dfG8EIkDbxS0K3Trc2RBkUJuf02TgE2FQRNTMtq/aJfhyRMINsRl/Ybc4sxcWLtFn4/TQ=="],
-
-    "@playwright/test": ["@playwright/test@1.61.1", "", { "dependencies": { "playwright": "1.61.1" }, "bin": { "playwright": "cli.js" } }, "sha512-8nKv6+0RJSL9FE4jYOEGXnPeM/Hg12qZpmqzZjRh3qM0Y7c3z1mrOTfFLids72RDQYVh9WpLEfR5WdpNX4fkig=="],
 
     "@polka/url": ["@polka/url@1.0.0-next.29", "", {}, "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww=="],
 

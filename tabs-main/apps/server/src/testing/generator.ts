@@ -194,7 +194,7 @@ function pageObjectSource(input: {
     ];
   });
   return [
-    'import type { Locator, Page } from "@playwright/test";',
+    'import type { Locator, Page } from "playwright/test";',
     "",
     `export class ${input.className} {`,
     "  readonly page: Page;",
@@ -242,7 +242,7 @@ function specSource(input: {
   readonly pageImport: string;
 }): string {
   return [
-    'import { expect, test } from "@playwright/test";',
+    'import { expect, test } from "playwright/test";',
     `import { testData } from ${JSON.stringify(input.dataImport)};`,
     `import { ${input.className} } from ${JSON.stringify(input.pageImport)};`,
     "",

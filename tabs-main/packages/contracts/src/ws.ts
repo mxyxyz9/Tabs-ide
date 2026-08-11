@@ -92,9 +92,12 @@ import { ReviewProgressEvent } from "./review";
 import {
   TestingCaseReviewInput,
   TestingExplorationInput,
+  TestingExecutionInput,
   TestingGenerationInput,
   TestingGenerationJobInput,
+  TestingHealingDecisionInput,
   TestingProjectInput,
+  TestingScheduleInput,
   TestingTargetInput,
   TestingWorkbookImportInput,
 } from "./testing";
@@ -114,6 +117,11 @@ export const WS_METHODS = {
   testingGenerateTests: "testing.generateTests",
   testingListGenerationJobs: "testing.listGenerationJobs",
   testingCancelGenerationJob: "testing.cancelGenerationJob",
+  testingRunTests: "testing.runTests",
+  testingListExecutionRuns: "testing.listExecutionRuns",
+  testingDecideHealingProposal: "testing.decideHealingProposal",
+  testingCreateSchedule: "testing.createSchedule",
+  testingListSchedules: "testing.listSchedules",
   projectsAdd: "projects.add",
   projectsList: "projects.list",
   projectsListEntries: "projects.listEntries",
@@ -280,6 +288,11 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.testingGenerateTests, TestingGenerationInput),
   tagRequestBody(WS_METHODS.testingListGenerationJobs, TestingProjectInput),
   tagRequestBody(WS_METHODS.testingCancelGenerationJob, TestingGenerationJobInput),
+  tagRequestBody(WS_METHODS.testingRunTests, TestingExecutionInput),
+  tagRequestBody(WS_METHODS.testingListExecutionRuns, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingDecideHealingProposal, TestingHealingDecisionInput),
+  tagRequestBody(WS_METHODS.testingCreateSchedule, TestingScheduleInput),
+  tagRequestBody(WS_METHODS.testingListSchedules, TestingProjectInput),
 
   // Project Search
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),

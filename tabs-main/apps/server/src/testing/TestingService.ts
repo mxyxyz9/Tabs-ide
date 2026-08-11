@@ -7,12 +7,19 @@ import type {
   TestingClearGraphResult,
   TestingExplorationInput,
   TestingExplorationResult,
+  TestingExecutionInput,
+  TestingExecutionRun,
+  TestingExecutionRunListResult,
   TestingGraphSummary,
   TestingGenerationInput,
   TestingGenerationJob,
   TestingGenerationJobInput,
   TestingGenerationJobListResult,
+  TestingHealingDecisionInput,
   TestingProjectInput,
+  TestingSchedule,
+  TestingScheduleInput,
+  TestingScheduleListResult,
   TestingTargetInput,
   TestingWorkbookImportInput,
   TestingWorkbookImportResult,
@@ -22,6 +29,7 @@ import type { TextGenerationShape } from "../textGeneration/TextGeneration";
 import { TestingCrawler } from "./crawler";
 import { TestingGraphStore } from "./graphStore";
 import { TestingGenerator } from "./generator";
+import { TestingExecutor } from "./execution";
 import { createPlaywrightMcpSession, type PlaywrightMcpSession } from "./playwrightMcp";
 import {
   reconcileWorkbookCase,
@@ -42,6 +50,7 @@ export class TestingService {
   readonly #authCaptures = new Map<string, AuthCapture>();
   readonly #runningCrawls = new Set<string>();
   readonly #generator: TestingGenerator | null;
+  readonly #executor: TestingExecutor;
 
   constructor(stateDirectory: string, textGeneration?: TextGenerationShape) {
     this.#testingRoot = join(stateDirectory, "testing");
@@ -49,6 +58,7 @@ export class TestingService {
     this.#generator = textGeneration
       ? new TestingGenerator(this.#store, this.#testingRoot, textGeneration)
       : null;
+    this.#executor = new TestingExecutor(this.#store, this.#testingRoot);
   }
 
   close(): void {
@@ -179,5 +189,25 @@ export class TestingService {
       throw new Error("No configured coding-agent text-generation backend is available");
     }
     return this.#generator.cancel(input.projectId, input.jobId);
+  }
+
+  runTests(input: TestingExecutionInput): Promise<TestingExecutionRun> {
+    return this.#executor.execute(input);
+  }
+
+  listExecutionRuns(input: TestingProjectInput): TestingExecutionRunListResult {
+    return this.#store.executionRuns(input.projectId);
+  }
+
+  decideHealingProposal(input: TestingHealingDecisionInput): TestingExecutionRunListResult {
+    return this.#store.decideHealingProposal(input);
+  }
+
+  createSchedule(input: TestingScheduleInput): TestingSchedule {
+    return this.#store.createSchedule(input);
+  }
+
+  listSchedules(input: TestingProjectInput): TestingScheduleListResult {
+    return this.#store.listSchedules(input.projectId);
   }
 }

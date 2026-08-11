@@ -263,3 +263,67 @@
 - The upstream provider baseline is not expanded into this feature's scope. Phase 4 may proceed
   using the green scoped Testing gates and successful production build, while continuing to report
   the repository-wide baseline separately.
+
+## 2026-08-12 — Phase 4: Execution, Healing, Flakiness, Visuals, and CI
+
+### Built
+
+- Added one bounded Playwright execution engine shared by Standalone/UAT and CI modes. It resolves
+  the repository-installed Playwright CLI, passes every argument without shell interpolation,
+  limits each case to 120 seconds by default, caps stdout/stderr at 512 KiB, and persists round and
+  per-case status, duration, trace, screenshot, environment target, and artifact revision.
+- Added review-only locator healing. Failed locator output is compared with persisted role/name
+  fingerprints and current graph edges. A proposal is eligible only at confidence `>= 0.90` with a
+  `>= 0.10` lead over the second candidate. Source files are never silently changed. A third
+  consecutive proposal is forced below threshold because the cap is two attempts per locator.
+- Added independent flaky classification. At least three executions with the same generated
+  artifact revision must contain both pass and fail before a case is marked flaky and visibly
+  quarantined from the CI gate; its underlying failure result remains stored and visible.
+- Added opt-in screenshot capture and exact pixel-output baselines, local one-off/daily/weekly
+  schedule records with IANA timezone and next-run visibility, optional scoped `caseIds` with a
+  full-suite fallback, machine-readable CI output/exit codes, and a GitHub Actions template for PR
+  and successful-deployment triggers.
+- Added an accessible Phase 4 UI with an operating-mode selector, labelled visual toggle, manual
+  run action, local schedule input, polite run-result updates, per-case status, flaky/quarantine and
+  visual state, and explicit keyboard-operable accept/reject controls for locator proposals.
+
+### Additive SQLite schema
+
+- `execution_runs` and `execution_case_results`: execution mode, target, artifact revision, bounded
+  output, result/evidence paths, standalone/CI status, visual status, and flaky/quarantine flags.
+- `healing_proposals`: original and proposed role/name, confidence, runner-up margin, diff, attempt
+  count, review status, and decision timestamp.
+- `visual_baselines`: locally approved screenshot hash/path. `testing_schedules`: project/job,
+  target, timezone, recurrence, enabled state, and next-run timestamp.
+
+### Verification
+
+- A real generated Playwright TypeScript spec launched Chromium against a controlled local HTTP
+  application, asserted the visible `Ready` heading, and passed end to end. The persisted round
+  reported **1 passed**, retained duration/output, and created the first opt-in visual baseline.
+- The generated-suite gate and execution gate together reported **2 files, 7 tests passed**. The
+  normal focused execution/generation/store/contracts set reported **4 files, 27 passed, 1
+  skipped**; the real-browser test is intentionally opt-in outside the live verification gate.
+- A deliberately failed locator run proposed `Save setting` for the stored `Save settings`
+  fingerprint above the 0.90/0.10 thresholds. The original generated source remained byte-for-byte
+  unchanged. Attempts one and two remained reviewable; attempt three became `below-threshold`.
+- Three comparable fake-runner rounds (fail/pass/fail) marked the third result flaky and
+  quarantined; the second round was not prematurely quarantined. The CI command returned one JSON
+  object and exit code 2 for missing configuration. Web typecheck passed and web API tests reported
+  **14 passed**. Full lint exited 0 with existing warnings; the full build passed **5/5**.
+
+### Decisions and deferred work
+
+- Standalone and CI are an explicit input/UI choice over the same runner. CI callers may pass case
+  IDs derived from graph impact; absence or uncertainty intentionally runs the full generated job.
+- Exact screenshot equality is deterministic but sensitive to font/anti-aliasing noise. The
+  configured provider abstraction currently has no image attachment operation, so an ambiguous
+  visual change remains human review instead of pretending a text-only call is vision analysis.
+  Adding a sanitized image-capable provider operation is deferred and must preserve the no-direct-
+  API rule.
+- Schedule definitions persist with correct timezone/next-run data, but this checkpoint does not
+  claim an always-on background dispatcher while Tabs is closed. The GitHub Actions template also
+  requires the caller to restore the managed Testing database/artifacts or export generated tests.
+- The live gate deliberately used a small controlled web app rather than exhaustively driving the
+  large Tabs Electron shell. Electron execution remains supported through a generated target/CDP
+  setup, but a broad Electron run was avoided per the agreed resource boundary.

@@ -8,11 +8,19 @@ import type {
   TestingClearGraphResult,
   TestingExplorationResult,
   TestingExplorationScope,
+  TestingExecutionCaseResult,
+  TestingExecutionRun,
+  TestingExecutionRunListResult,
   TestingGraphSummary,
+  TestingHealingDecisionInput,
+  TestingHealingProposal,
   TestingGeneratedArtifact,
   TestingGenerationJob,
   TestingGenerationJobListResult,
   TestingMismatch,
+  TestingSchedule,
+  TestingScheduleInput,
+  TestingScheduleListResult,
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
 
@@ -85,6 +93,62 @@ interface StoredGenerationJobRow {
   readonly estimated_tokens: number;
   readonly estimated_cost_usd: number;
   readonly error: string | null;
+}
+
+interface StoredExecutionRunRow {
+  readonly id: string;
+  readonly project_id: string;
+  readonly generation_job_id: string;
+  readonly mode: TestingExecutionRun["mode"];
+  readonly status: TestingExecutionRun["status"];
+  readonly target_url: string;
+  readonly started_at: string;
+  readonly completed_at: string | null;
+  readonly duration_ms: number;
+  readonly artifact_revision: string;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+interface StoredExecutionCaseRow {
+  readonly case_id: string;
+  readonly external_id: string;
+  readonly status: TestingExecutionCaseResult["status"];
+  readonly duration_ms: number;
+  readonly error: string | null;
+  readonly trace_path: string | null;
+  readonly screenshot_path: string | null;
+  readonly flaky: number;
+  readonly quarantined: number;
+  readonly visual_status: TestingExecutionCaseResult["visualStatus"];
+}
+
+interface StoredHealingRow {
+  readonly id: string;
+  readonly case_id: string;
+  readonly locator_key: string;
+  readonly previous_role: string;
+  readonly previous_name: string;
+  readonly proposed_role: string;
+  readonly proposed_name: string;
+  readonly confidence: number;
+  readonly margin: number;
+  readonly diff: string;
+  readonly status: TestingHealingProposal["status"];
+  readonly consecutive_attempts: number;
+}
+
+export interface TestingExecutionArtifact {
+  readonly caseId: string;
+  readonly externalId: string;
+  readonly specPath: string;
+  readonly pageObjectPath: string;
+  readonly fingerprints: ReadonlyArray<{
+    readonly locatorKey: string;
+    readonly role: string;
+    readonly accessibleName: string;
+    readonly graphStateId: string;
+  }>;
 }
 
 function ensureCrawlRunColumn(
@@ -292,6 +356,78 @@ export class TestingGraphStore {
         case_id TEXT NOT NULL,
         enabled INTEGER NOT NULL,
         sanitized_entries_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS execution_runs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        generation_job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+        mode TEXT NOT NULL CHECK (mode IN ('standalone', 'ci')),
+        status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'passed', 'failed', 'blocked')),
+        target_url TEXT NOT NULL,
+        artifact_revision TEXT NOT NULL,
+        stdout TEXT NOT NULL DEFAULT '',
+        stderr TEXT NOT NULL DEFAULT '',
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        started_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS execution_runs_project_started
+        ON execution_runs(project_id, started_at DESC);
+
+      CREATE TABLE IF NOT EXISTS execution_case_results (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES execution_runs(id),
+        case_id TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('passed', 'failed', 'blocked', 'not-applicable')),
+        duration_ms INTEGER NOT NULL,
+        error TEXT,
+        trace_path TEXT,
+        screenshot_path TEXT,
+        flaky INTEGER NOT NULL DEFAULT 0,
+        quarantined INTEGER NOT NULL DEFAULT 0,
+        visual_status TEXT NOT NULL DEFAULT 'disabled',
+        app_revision TEXT NOT NULL DEFAULT '',
+        artifact_revision TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS healing_proposals (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES execution_runs(id),
+        case_id TEXT NOT NULL,
+        locator_key TEXT NOT NULL,
+        previous_role TEXT NOT NULL,
+        previous_name TEXT NOT NULL,
+        proposed_role TEXT NOT NULL,
+        proposed_name TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        margin REAL NOT NULL,
+        diff TEXT NOT NULL,
+        status TEXT NOT NULL,
+        consecutive_attempts INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        decided_at TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS visual_baselines (
+        case_id TEXT PRIMARY KEY,
+        screenshot_hash TEXT NOT NULL,
+        screenshot_path TEXT NOT NULL,
+        approved_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS testing_schedules (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        generation_job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+        target_url TEXT NOT NULL,
+        timezone TEXT NOT NULL,
+        recurrence TEXT NOT NULL CHECK (recurrence IN ('none', 'daily', 'weekly')),
+        next_run_at TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL
       );
     `);
@@ -894,6 +1030,338 @@ export class TestingGraphStore {
 
   generationJob(projectId: string, jobId: string): TestingGenerationJob | null {
     return this.listGenerationJobs(projectId).jobs.find((job) => job.id === jobId) ?? null;
+  }
+
+  executionArtifacts(
+    jobId: string,
+    caseIds?: ReadonlyArray<string>,
+  ): ReadonlyArray<TestingExecutionArtifact> {
+    const rows = this.#database
+      .query<
+        { case_id: string; external_id: string; spec_path: string; page_object_path: string },
+        [string]
+      >(
+        `SELECT case_id, external_id, spec_path, page_object_path
+         FROM generated_artifacts WHERE job_id = ? ORDER BY created_at`,
+      )
+      .all(jobId)
+      .filter((row) => !caseIds || caseIds.includes(row.case_id));
+    const fingerprints = this.#database.query<
+      { locator_key: string; role: string; accessible_name: string; graph_state_id: string },
+      [string, string]
+    >(
+      `SELECT f.locator_key, f.role, f.accessible_name, f.graph_state_id
+       FROM locator_fingerprints f JOIN generated_artifacts a ON a.id = f.artifact_id
+       WHERE a.job_id = ? AND f.case_id = ? ORDER BY f.id`,
+    );
+    return rows.map((row) => ({
+      caseId: row.case_id,
+      externalId: row.external_id,
+      specPath: row.spec_path,
+      pageObjectPath: row.page_object_path,
+      fingerprints: fingerprints.all(jobId, row.case_id).map((fingerprint) => ({
+        locatorKey: fingerprint.locator_key,
+        role: fingerprint.role,
+        accessibleName: fingerprint.accessible_name,
+        graphStateId: fingerprint.graph_state_id,
+      })),
+    }));
+  }
+
+  beginExecutionRun(input: {
+    readonly id: string;
+    readonly projectId: string;
+    readonly generationJobId: string;
+    readonly mode: TestingExecutionRun["mode"];
+    readonly targetUrl: string;
+    readonly artifactRevision: string;
+  }): void {
+    this.#database
+      .query(
+        `INSERT INTO execution_runs
+         (id, project_id, generation_job_id, mode, status, target_url, artifact_revision, started_at)
+         VALUES (?, ?, ?, ?, 'running', ?, ?, ?)`,
+      )
+      .run(
+        input.id,
+        input.projectId,
+        input.generationJobId,
+        input.mode,
+        input.targetUrl,
+        input.artifactRevision,
+        new Date().toISOString(),
+      );
+  }
+
+  finishExecutionRun(input: {
+    readonly runId: string;
+    readonly status: TestingExecutionRun["status"];
+    readonly durationMs: number;
+    readonly stdout: string;
+    readonly stderr: string;
+    readonly artifactRevision: string;
+    readonly results: ReadonlyArray<TestingExecutionCaseResult>;
+    readonly proposals: ReadonlyArray<
+      Omit<TestingHealingProposal, "id"> & { readonly id?: string }
+    >;
+  }): void {
+    const now = new Date().toISOString();
+    this.#database.transaction(() => {
+      this.#database
+        .query(
+          `UPDATE execution_runs SET status = ?, duration_ms = ?, stdout = ?, stderr = ?,
+           completed_at = ? WHERE id = ?`,
+        )
+        .run(input.status, input.durationMs, input.stdout, input.stderr, now, input.runId);
+      const resultStatement = this.#database.query(
+        `INSERT INTO execution_case_results
+         (id, run_id, case_id, external_id, status, duration_ms, error, trace_path,
+          screenshot_path, flaky, quarantined, visual_status, artifact_revision, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const result of input.results) {
+        resultStatement.run(
+          crypto.randomUUID(),
+          input.runId,
+          result.caseId,
+          result.externalId,
+          result.status,
+          result.durationMs,
+          result.error,
+          result.tracePath,
+          result.screenshotPath,
+          result.flaky ? 1 : 0,
+          result.quarantined ? 1 : 0,
+          result.visualStatus,
+          input.artifactRevision,
+          now,
+        );
+        this.#database
+          .query(
+            `UPDATE test_cases SET standalone_status = ?, ci_status = ?, updated_at = ? WHERE id = ?`,
+          )
+          .run(
+            input.status === "passed" ? "passed" : "failed",
+            result.status === "passed" ? "pass" : "fail",
+            now,
+            result.caseId,
+          );
+      }
+      const proposalStatement = this.#database.query(
+        `INSERT INTO healing_proposals
+         (id, run_id, case_id, locator_key, previous_role, previous_name, proposed_role,
+          proposed_name, confidence, margin, diff, status, consecutive_attempts, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const proposal of input.proposals) {
+        proposalStatement.run(
+          proposal.id ?? crypto.randomUUID(),
+          input.runId,
+          proposal.caseId,
+          proposal.locatorKey,
+          proposal.previousRole,
+          proposal.previousName,
+          proposal.proposedRole,
+          proposal.proposedName,
+          proposal.confidence,
+          proposal.margin,
+          proposal.diff,
+          proposal.status,
+          proposal.consecutiveAttempts,
+          now,
+        );
+      }
+    })();
+  }
+
+  executionRuns(projectId: string): TestingExecutionRunListResult {
+    const runs = this.#database
+      .query<StoredExecutionRunRow, [string]>(
+        `SELECT * FROM execution_runs WHERE project_id = ? ORDER BY started_at DESC`,
+      )
+      .all(projectId);
+    const results = this.#database.query<StoredExecutionCaseRow, [string]>(
+      `SELECT case_id, external_id, status, duration_ms, error, trace_path, screenshot_path,
+       flaky, quarantined, visual_status FROM execution_case_results WHERE run_id = ? ORDER BY created_at`,
+    );
+    const proposals = this.#database.query<StoredHealingRow, [string]>(
+      `SELECT id, case_id, locator_key, previous_role, previous_name, proposed_role,
+       proposed_name, confidence, margin, diff, status, consecutive_attempts
+       FROM healing_proposals WHERE run_id = ? ORDER BY created_at`,
+    );
+    return {
+      runs: runs.map((run) => ({
+        id: run.id,
+        projectId: run.project_id,
+        generationJobId: run.generation_job_id,
+        mode: run.mode,
+        status: run.status,
+        targetUrl: run.target_url,
+        startedAt: run.started_at,
+        completedAt: run.completed_at,
+        durationMs: run.duration_ms,
+        artifactRevision: run.artifact_revision,
+        stdout: run.stdout,
+        stderr: run.stderr,
+        results: results.all(run.id).map((result) => ({
+          caseId: result.case_id,
+          externalId: result.external_id,
+          status: result.status,
+          durationMs: result.duration_ms,
+          error: result.error,
+          tracePath: result.trace_path,
+          screenshotPath: result.screenshot_path,
+          flaky: Boolean(result.flaky),
+          quarantined: Boolean(result.quarantined),
+          visualStatus: result.visual_status,
+        })),
+        healingProposals: proposals.all(run.id).map((proposal) => ({
+          id: proposal.id,
+          caseId: proposal.case_id,
+          locatorKey: proposal.locator_key,
+          previousRole: proposal.previous_role,
+          previousName: proposal.previous_name,
+          proposedRole: proposal.proposed_role,
+          proposedName: proposal.proposed_name,
+          confidence: proposal.confidence,
+          margin: proposal.margin,
+          diff: proposal.diff,
+          status: proposal.status,
+          consecutiveAttempts: proposal.consecutive_attempts,
+        })),
+      })),
+    };
+  }
+
+  comparableCaseStatuses(
+    caseId: string,
+    artifactRevision: string,
+  ): ReadonlyArray<"passed" | "failed"> {
+    return this.#database
+      .query<{ status: "passed" | "failed" }, [string, string]>(
+        `SELECT status FROM execution_case_results
+       WHERE case_id = ? AND artifact_revision = ? AND app_revision = ''
+         AND status IN ('passed', 'failed') ORDER BY created_at`,
+      )
+      .all(caseId, artifactRevision)
+      .map((row) => row.status);
+  }
+
+  consecutiveHealingAttempts(caseId: string, locatorKey: string): number {
+    return (
+      this.#database
+        .query<CountRow, [string, string]>(
+          `SELECT COUNT(*) AS count FROM healing_proposals
+       WHERE case_id = ? AND locator_key = ? AND status != 'accepted'`,
+        )
+        .get(caseId, locatorKey)?.count ?? 0
+    );
+  }
+
+  compareVisualBaseline(
+    caseId: string,
+    screenshotHash: string,
+    screenshotPath: string,
+  ): "baseline-created" | "matched" | "changed" {
+    const baseline = this.#database
+      .query<{ screenshot_hash: string }, [string]>(
+        "SELECT screenshot_hash FROM visual_baselines WHERE case_id = ?",
+      )
+      .get(caseId);
+    if (!baseline) {
+      this.#database
+        .query(
+          `INSERT INTO visual_baselines (case_id, screenshot_hash, screenshot_path, approved_at)
+         VALUES (?, ?, ?, ?)`,
+        )
+        .run(caseId, screenshotHash, screenshotPath, new Date().toISOString());
+      return "baseline-created";
+    }
+    return baseline.screenshot_hash === screenshotHash ? "matched" : "changed";
+  }
+
+  decideHealingProposal(input: TestingHealingDecisionInput): TestingExecutionRunListResult {
+    const proposal = this.#database
+      .query<{ project_id: string }, [string]>(
+        `SELECT r.project_id FROM healing_proposals h JOIN execution_runs r ON r.id = h.run_id
+       WHERE h.id = ?`,
+      )
+      .get(input.proposalId);
+    if (!proposal || proposal.project_id !== input.projectId)
+      throw new Error("Healing proposal not found");
+    this.#database
+      .query(
+        `UPDATE healing_proposals SET status = ?, decided_at = ? WHERE id = ? AND status = 'pending'`,
+      )
+      .run(input.decision, new Date().toISOString(), input.proposalId);
+    return this.executionRuns(input.projectId);
+  }
+
+  createSchedule(input: TestingScheduleInput): TestingSchedule {
+    const nextRunAt = new Date(input.runAt);
+    if (Number.isNaN(nextRunAt.valueOf())) throw new Error("Schedule run time is invalid");
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: input.timezone }).format();
+    } catch {
+      throw new Error("Schedule timezone is invalid");
+    }
+    const schedule: TestingSchedule = {
+      id: crypto.randomUUID(),
+      projectId: input.projectId,
+      generationJobId: input.generationJobId,
+      targetUrl: input.targetUrl,
+      timezone: input.timezone,
+      recurrence: input.recurrence ?? "none",
+      nextRunAt: nextRunAt.toISOString(),
+      enabled: true,
+    };
+    this.#database
+      .query(
+        `INSERT INTO testing_schedules
+       (id, project_id, generation_job_id, target_url, timezone, recurrence, next_run_at, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        schedule.id,
+        schedule.projectId,
+        schedule.generationJobId,
+        schedule.targetUrl,
+        schedule.timezone,
+        schedule.recurrence,
+        schedule.nextRunAt,
+        new Date().toISOString(),
+      );
+    return schedule;
+  }
+
+  listSchedules(projectId: string): TestingScheduleListResult {
+    const schedules = this.#database
+      .query<
+        {
+          id: string;
+          project_id: string;
+          generation_job_id: string;
+          target_url: string;
+          timezone: string;
+          recurrence: TestingSchedule["recurrence"];
+          next_run_at: string;
+          enabled: number;
+        },
+        [string]
+      >(`SELECT * FROM testing_schedules WHERE project_id = ? ORDER BY next_run_at`)
+      .all(projectId);
+    return {
+      schedules: schedules.map((schedule) => ({
+        id: schedule.id,
+        projectId: schedule.project_id,
+        generationJobId: schedule.generation_job_id,
+        targetUrl: schedule.target_url,
+        timezone: schedule.timezone,
+        recurrence: schedule.recurrence,
+        nextRunAt: schedule.next_run_at,
+        enabled: Boolean(schedule.enabled),
+      })),
+    };
   }
 
   summary(projectId: string): TestingGraphSummary {

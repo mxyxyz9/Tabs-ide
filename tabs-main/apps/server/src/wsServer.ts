@@ -26,9 +26,12 @@ import {
   ThreadId,
   type TestingCaseReviewInput,
   type TestingExplorationInput,
+  type TestingExecutionInput,
   type TestingGenerationInput,
   type TestingGenerationJobInput,
+  type TestingHealingDecisionInput,
   type TestingProjectInput,
+  type TestingScheduleInput,
   type TestingTargetInput,
   type TestingWorkbookImportInput,
   WS_CHANNELS,
@@ -858,6 +861,34 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.testingCancelGenerationJob: {
         const body = stripRequestTag(request.body) as TestingGenerationJobInput;
         return testingService.cancelGenerationJob(body);
+      }
+
+      case WS_METHODS.testingRunTests: {
+        const body = stripRequestTag(request.body) as TestingExecutionInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.runTests(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingListExecutionRuns: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.listExecutionRuns(body);
+      }
+
+      case WS_METHODS.testingDecideHealingProposal: {
+        const body = stripRequestTag(request.body) as TestingHealingDecisionInput;
+        return testingService.decideHealingProposal(body);
+      }
+
+      case WS_METHODS.testingCreateSchedule: {
+        const body = stripRequestTag(request.body) as TestingScheduleInput;
+        return testingService.createSchedule(body);
+      }
+
+      case WS_METHODS.testingListSchedules: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.listSchedules(body);
       }
 
       case ORCHESTRATION_WS_METHODS.getSnapshot:
