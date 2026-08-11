@@ -1,4 +1,5 @@
 import * as Schema from "effect/Schema";
+import { ModelSelection } from "./orchestration.ts";
 
 export const TestingProjectInput = Schema.Struct({
   projectId: Schema.String,
@@ -56,6 +57,33 @@ export const TestingCaseReviewInput = Schema.Struct({
 });
 export type TestingCaseReviewInput = typeof TestingCaseReviewInput.Type;
 
+export const DEFAULT_TESTING_BATCH_MAX_CASES = 25;
+export const DEFAULT_TESTING_BATCH_MAX_TOKENS = 200_000;
+export const DEFAULT_TESTING_BATCH_MAX_COST_USD = 5;
+
+export const TestingGenerationInput = Schema.Struct({
+  projectId: Schema.String,
+  projectPath: Schema.String,
+  caseIds: Schema.optionalKey(Schema.Array(Schema.String)),
+  framework: Schema.optionalKey(Schema.Literal("playwright-ts")),
+  modelSelection: ModelSelection,
+  reasoningTier: Schema.optionalKey(Schema.Literals(["low", "medium", "high"])),
+  outputMode: Schema.optionalKey(Schema.Literals(["managed", "repository"])),
+  repositoryOutputPath: Schema.optionalKey(Schema.String),
+  templatePath: Schema.optionalKey(Schema.String),
+  captureReplay: Schema.optionalKey(Schema.Boolean),
+  maxCases: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+  maxEstimatedTokens: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
+  maxEstimatedCostUsd: Schema.optionalKey(Schema.Number.check(Schema.isGreaterThan(0))),
+});
+export type TestingGenerationInput = typeof TestingGenerationInput.Type;
+
+export const TestingGenerationJobInput = Schema.Struct({
+  projectId: Schema.String,
+  jobId: Schema.String,
+});
+export type TestingGenerationJobInput = typeof TestingGenerationJobInput.Type;
+
 export const TestingCaseSource = Schema.Literals(["excel", "generated"]);
 export type TestingCaseSource = typeof TestingCaseSource.Type;
 export const TestingReconciliationStatus = Schema.Literals(["matches", "needs-review", "blocked"]);
@@ -105,6 +133,35 @@ export interface TestingClearGraphResult extends TestingGraphSummary {
   readonly clearedEdgeCount: number;
 }
 
+export interface TestingGeneratedArtifact {
+  readonly caseId: string;
+  readonly externalId: string;
+  readonly featureSlug: string;
+  readonly pageObjectPath: string;
+  readonly dataPath: string;
+  readonly specPath: string;
+  readonly fingerprintCount: number;
+}
+
+export interface TestingGenerationJob {
+  readonly id: string;
+  readonly projectId: string;
+  readonly status: "queued" | "running" | "completed" | "failed" | "cancelled" | "budget-stopped";
+  readonly framework: "playwright-ts";
+  readonly modelSelection: ModelSelection;
+  readonly outputDirectory: string;
+  readonly totalCases: number;
+  readonly completedCases: number;
+  readonly estimatedTokens: number;
+  readonly estimatedCostUsd: number;
+  readonly error: string | null;
+  readonly artifacts: ReadonlyArray<TestingGeneratedArtifact>;
+}
+
+export interface TestingGenerationJobListResult {
+  readonly jobs: ReadonlyArray<TestingGenerationJob>;
+}
+
 export interface TestingGraphSummary {
   readonly projectId: string;
   readonly targetUrl: string | null;
@@ -148,4 +205,9 @@ export interface TestingApi {
   readonly reviewCase: (input: TestingCaseReviewInput) => Promise<TestingCaseListResult>;
   readonly generateScenarios: (input: TestingProjectInput) => Promise<TestingCaseListResult>;
   readonly clearGraph: (input: TestingProjectInput) => Promise<TestingClearGraphResult>;
+  readonly generateTests: (input: TestingGenerationInput) => Promise<TestingGenerationJob>;
+  readonly listGenerationJobs: (
+    input: TestingProjectInput,
+  ) => Promise<TestingGenerationJobListResult>;
+  readonly cancelGenerationJob: (input: TestingGenerationJobInput) => Promise<TestingGenerationJob>;
 }

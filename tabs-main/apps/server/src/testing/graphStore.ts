@@ -9,6 +9,9 @@ import type {
   TestingExplorationResult,
   TestingExplorationScope,
   TestingGraphSummary,
+  TestingGeneratedArtifact,
+  TestingGenerationJob,
+  TestingGenerationJobListResult,
   TestingMismatch,
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
@@ -68,6 +71,22 @@ interface StoredCaseRow {
   readonly notes: string;
 }
 
+interface StoredGenerationJobRow {
+  readonly id: string;
+  readonly project_id: string;
+  readonly status: TestingGenerationJob["status"];
+  readonly framework: "playwright-ts";
+  readonly provider_instance_id: string;
+  readonly model: string;
+  readonly model_options_json: string;
+  readonly output_directory: string;
+  readonly total_cases: number;
+  readonly completed_cases: number;
+  readonly estimated_tokens: number;
+  readonly estimated_cost_usd: number;
+  readonly error: string | null;
+}
+
 function ensureCrawlRunColumn(
   database: RuntimeSqliteDatabase,
   name: string,
@@ -76,6 +95,18 @@ function ensureCrawlRunColumn(
   const columns = database.query<TableInfoRow, []>("PRAGMA table_info(crawl_runs)").all();
   if (!columns.some((column) => column.name === name)) {
     database.exec(`ALTER TABLE crawl_runs ADD COLUMN ${name} ${definition}`);
+  }
+}
+
+function ensureTableColumn(
+  database: RuntimeSqliteDatabase,
+  table: string,
+  name: string,
+  definition: string,
+): void {
+  const columns = database.query<TableInfoRow, []>(`PRAGMA table_info(${table})`).all();
+  if (!columns.some((column) => column.name === name)) {
+    database.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
   }
 }
 
@@ -207,6 +238,62 @@ export class TestingGraphStore {
         notes TEXT NOT NULL,
         reviewed_at TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS generation_jobs (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (
+          status IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'budget-stopped')
+        ),
+        framework TEXT NOT NULL,
+        provider_instance_id TEXT NOT NULL DEFAULT 'codex',
+        model TEXT NOT NULL DEFAULT 'gpt-5.3-codex',
+        model_options_json TEXT NOT NULL DEFAULT '[]',
+        output_directory TEXT NOT NULL,
+        total_cases INTEGER NOT NULL,
+        completed_cases INTEGER NOT NULL DEFAULT 0,
+        estimated_tokens INTEGER NOT NULL DEFAULT 0,
+        estimated_cost_usd REAL NOT NULL DEFAULT 0,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS generation_jobs_project_created
+        ON generation_jobs(project_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS generated_artifacts (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL REFERENCES generation_jobs(id),
+        case_id TEXT NOT NULL REFERENCES test_cases(id),
+        external_id TEXT NOT NULL,
+        feature_slug TEXT NOT NULL,
+        page_object_path TEXT NOT NULL,
+        data_path TEXT NOT NULL,
+        spec_path TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS locator_fingerprints (
+        id TEXT PRIMARY KEY,
+        artifact_id TEXT NOT NULL REFERENCES generated_artifacts(id),
+        case_id TEXT NOT NULL,
+        locator_key TEXT NOT NULL,
+        role TEXT NOT NULL,
+        accessible_name TEXT NOT NULL,
+        stable_attributes_json TEXT NOT NULL DEFAULT '{}',
+        semantic_context TEXT NOT NULL,
+        graph_state_id TEXT NOT NULL,
+        url_pattern TEXT NOT NULL,
+        verified_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS network_replay_metadata (
+        id TEXT PRIMARY KEY,
+        case_id TEXT NOT NULL,
+        enabled INTEGER NOT NULL,
+        sanitized_entries_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL
+      );
     `);
     ensureCrawlRunColumn(this.#database, "scope", "TEXT NOT NULL DEFAULT 'origin'");
     ensureCrawlRunColumn(this.#database, "max_states", "INTEGER");
@@ -215,6 +302,24 @@ export class TestingGraphStore {
     ensureCrawlRunColumn(this.#database, "states_visited", "INTEGER");
     ensureCrawlRunColumn(this.#database, "transitions_observed", "INTEGER");
     ensureCrawlRunColumn(this.#database, "duration_ms", "INTEGER");
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "provider_instance_id",
+      "TEXT NOT NULL DEFAULT 'codex'",
+    );
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "model",
+      "TEXT NOT NULL DEFAULT 'gpt-5.3-codex'",
+    );
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "model_options_json",
+      "TEXT NOT NULL DEFAULT '[]'",
+    );
     this.#database
       .query(
         `UPDATE crawl_runs
@@ -613,6 +718,182 @@ export class TestingGraphStore {
       clearedNodeCount: before.nodeCount,
       clearedEdgeCount: before.edgeCount,
     };
+  }
+
+  createGenerationJob(input: {
+    readonly id: string;
+    readonly projectId: string;
+    readonly outputDirectory: string;
+    readonly totalCases: number;
+    readonly modelSelection: TestingGenerationJob["modelSelection"];
+  }): void {
+    const now = new Date().toISOString();
+    this.#database
+      .query(
+        `INSERT INTO generation_jobs
+          (id, project_id, status, framework, provider_instance_id, model, model_options_json,
+           output_directory, total_cases, created_at, updated_at)
+         VALUES (?, ?, 'queued', 'playwright-ts', ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.id,
+        input.projectId,
+        input.modelSelection.instanceId,
+        input.modelSelection.model,
+        JSON.stringify(input.modelSelection.options ?? []),
+        input.outputDirectory,
+        input.totalCases,
+        now,
+        now,
+      );
+  }
+
+  updateGenerationJob(
+    id: string,
+    patch: {
+      readonly status: TestingGenerationJob["status"];
+      readonly completedCases?: number;
+      readonly estimatedTokens?: number;
+      readonly estimatedCostUsd?: number;
+      readonly error?: string | null;
+    },
+  ): void {
+    this.#database
+      .query(
+        `UPDATE generation_jobs SET status = ?, completed_cases = COALESCE(?, completed_cases),
+         estimated_tokens = COALESCE(?, estimated_tokens),
+         estimated_cost_usd = COALESCE(?, estimated_cost_usd), error = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        patch.status,
+        patch.completedCases ?? null,
+        patch.estimatedTokens ?? null,
+        patch.estimatedCostUsd ?? null,
+        patch.error ?? null,
+        new Date().toISOString(),
+        id,
+      );
+  }
+
+  addGeneratedArtifact(input: {
+    readonly jobId: string;
+    readonly caseId: string;
+    readonly externalId: string;
+    readonly featureSlug: string;
+    readonly pageObjectPath: string;
+    readonly dataPath: string;
+    readonly specPath: string;
+    readonly fingerprints: ReadonlyArray<{
+      readonly locatorKey: string;
+      readonly role: string;
+      readonly accessibleName: string;
+      readonly semanticContext: string;
+      readonly graphStateId: string;
+      readonly urlPattern: string;
+    }>;
+    readonly captureReplay: boolean;
+  }): void {
+    const artifactId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    this.#database.transaction(() => {
+      this.#database
+        .query(
+          `INSERT INTO generated_artifacts
+           (id, job_id, case_id, external_id, feature_slug, page_object_path, data_path,
+            spec_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          artifactId,
+          input.jobId,
+          input.caseId,
+          input.externalId,
+          input.featureSlug,
+          input.pageObjectPath,
+          input.dataPath,
+          input.specPath,
+          now,
+        );
+      const fingerprintStatement = this.#database.query(
+        `INSERT INTO locator_fingerprints
+         (id, artifact_id, case_id, locator_key, role, accessible_name, semantic_context,
+          graph_state_id, url_pattern, verified_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      for (const fingerprint of input.fingerprints) {
+        fingerprintStatement.run(
+          crypto.randomUUID(),
+          artifactId,
+          input.caseId,
+          fingerprint.locatorKey,
+          fingerprint.role,
+          fingerprint.accessibleName,
+          fingerprint.semanticContext,
+          fingerprint.graphStateId,
+          fingerprint.urlPattern,
+          now,
+        );
+      }
+      this.#database
+        .query(
+          `INSERT INTO network_replay_metadata
+           (id, case_id, enabled, sanitized_entries_json, created_at) VALUES (?, ?, ?, '[]', ?)`,
+        )
+        .run(crypto.randomUUID(), input.caseId, input.captureReplay ? 1 : 0, now);
+    })();
+  }
+
+  listGenerationJobs(projectId: string): TestingGenerationJobListResult {
+    const rows = this.#database
+      .query<StoredGenerationJobRow, [string]>(
+        `SELECT id, project_id, status, framework, provider_instance_id, model,
+          model_options_json, output_directory, total_cases,
+          completed_cases, estimated_tokens, estimated_cost_usd, error
+         FROM generation_jobs WHERE project_id = ? ORDER BY created_at DESC`,
+      )
+      .all(projectId);
+    const artifactStatement = this.#database.query<
+      Omit<TestingGeneratedArtifact, "fingerprintCount"> & { fingerprint_count: number },
+      [string]
+    >(
+      `SELECT a.case_id AS caseId, a.external_id AS externalId, a.feature_slug AS featureSlug,
+        a.page_object_path AS pageObjectPath, a.data_path AS dataPath, a.spec_path AS specPath,
+        COUNT(f.id) AS fingerprint_count
+       FROM generated_artifacts a LEFT JOIN locator_fingerprints f ON f.artifact_id = a.id
+       WHERE a.job_id = ? GROUP BY a.id ORDER BY a.created_at`,
+    );
+    return {
+      jobs: rows.map((row) => {
+        const options = JSON.parse(row.model_options_json) as NonNullable<
+          TestingGenerationJob["modelSelection"]["options"]
+        >;
+        return {
+          id: row.id,
+          projectId: row.project_id,
+          status: row.status,
+          framework: row.framework,
+          modelSelection: {
+            instanceId:
+              row.provider_instance_id as TestingGenerationJob["modelSelection"]["instanceId"],
+            model: row.model,
+            ...(options.length > 0 ? { options } : {}),
+          },
+          outputDirectory: row.output_directory,
+          totalCases: row.total_cases,
+          completedCases: row.completed_cases,
+          estimatedTokens: row.estimated_tokens,
+          estimatedCostUsd: row.estimated_cost_usd,
+          error: row.error,
+          artifacts: artifactStatement.all(row.id).map((artifact) => ({
+            ...artifact,
+            fingerprintCount: artifact.fingerprint_count,
+          })),
+        };
+      }),
+    };
+  }
+
+  generationJob(projectId: string, jobId: string): TestingGenerationJob | null {
+    return this.listGenerationJobs(projectId).jobs.find((job) => job.id === jobId) ?? null;
   }
 
   summary(projectId: string): TestingGraphSummary {

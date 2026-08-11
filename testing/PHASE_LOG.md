@@ -190,3 +190,76 @@
 - Deterministic graph search remains the first pass. Ambiguous semantic ranking through a configured coding-agent backend will use the structured testing operation introduced in Phase 3; unresolved ambiguity already remains human-reviewed rather than silently accepted.
 - No user-provided real QA workbook exists in the workspace, so real-company workbook compatibility is not claimed. The controlled workbook gate passed; a real workbook must still be supplied for that additional validation.
 - Script generation, execution/healing, and reporting remain owned by Phases 3 through 5.
+
+## 2026-08-12 — Phase 3: Template-Driven Test Generation
+
+### Built
+
+- Extended the existing provider-instance text-generation abstraction with a schema-decoded
+  `generateStructuredTesting` operation. Codex, Claude, Cursor, Grok, and OpenCode reuse their
+  existing local CLI/runtime implementations; the direct Gemini API implementation rejects this
+  operation so Testing cannot bypass the coding-agent boundary.
+- Added a Testing generation queue with persisted job IDs, status, selected provider instance,
+  model/options, output directory, case progress, estimated tokens, estimated cost, errors, and
+  generated artifacts. Default caps are 25 cases, 200,000 estimated tokens, and USD 5; a case is
+  not dispatched when it would cross a cap. Queue concurrency is one and cancellation is exposed.
+- Added Playwright TypeScript generation with strict separation between page objects, external
+  data fixtures, and business-flow specs. Role/name locators come only from reviewed graph edges.
+  Locator fingerprints persist separately with semantic context, graph state, URL pattern, and
+  verification timestamp.
+- Added a stepwise Phase 3 UI. The shared Fusion backend picker lists configured subscription
+  provider instances and discovered models while excluding direct API-key models. The selected
+  `ModelSelection` is persisted on the generation job. Users also choose reasoning tier, managed
+  versus explicit repository output, limits, and opt-in sanitized replay metadata.
+- Added the built-in Page Object Model template and a versioned company-manifest format under
+  `testing/templates/`. A manifest may map relative page/data/spec directories, file patterns, and
+  class naming into an existing company repository. It cannot execute code, traverse outside the
+  project, or inject prompt instructions. Nested output folders and TypeScript identifiers are
+  validated before files are written.
+- Added `@playwright/test` 1.61.1 to the server development dependencies after the generated-suite
+  compile gate identified that the runtime package alone did not provide the generated imports.
+
+### Additive SQLite schema
+
+- `generation_jobs`: project, lifecycle status, framework, exact provider/model/options,
+  server-managed or repository output location, batch progress, estimates, error, and timestamps.
+- `generated_artifacts`: job/case identity plus page-object, data, and spec paths.
+- `locator_fingerprints`: artifact/case, locator key, role/name, stable-attribute JSON, nearby
+  semantic context, graph state, URL pattern, and last verification timestamp.
+- `network_replay_metadata`: per-case opt-in flag and sanitized metadata JSON. It starts empty;
+  cookies, authorization headers, credentials, and unapproved bodies are not captured.
+
+### Verification
+
+- The controlled Phase 2 reviewed case generated one page object, one data fixture, and one spec,
+  with one persisted locator fingerprint. The opt-in verification gate compiled all three files
+  under strict TypeScript and Playwright discovery listed `opens account settings` successfully.
+- A company-manifest test generated nested `qa/pages`, `qa/data`, and `qa/specs` output with the
+  requested `AccountSettingsScreen` naming. A separate one-token budget test stopped before any
+  provider dispatch.
+- Structured provider routing and schema decoding passed for the shared registry and the Codex
+  command path. Codex, Claude, Cursor, Grok, and OpenCode text-generation suites passed: **5 files,
+  38 tests**. Phase 3 generator/store/registry tests passed, and the final focused set reported
+  **4 files, 26 tests**.
+- Contracts passed **31 files, 391 tests** before the existing upstream server baseline was entered.
+  Web API/store tests passed **2 files, 21 tests**, and web typecheck passed. Full lint exited 0
+  with existing warnings. Full build passed: **5 successful, 5 total**.
+- Full monorepo test reached **118 server files passed, 5 skipped, 6 failed; 1,060 tests passed,
+  29 skipped, 29 failed**. The same 29 failures are in the pre-existing upstream Claude/OpenCode
+  provider baseline recorded by Phase 2; no Testing suite failed. Full typecheck likewise remains
+  blocked by that upstream provider/contracts mismatch. A filtered server typecheck reported no
+  errors in Testing, text-generation, GitManager test stubs, or the Testing server route.
+
+### Decisions and deferred work
+
+- Managed output under the Tabs Testing state directory remains the default. Repository output is
+  explicit, stays under the selected project, and is the only mode intended for CI integration.
+- Generation currently uses the controlled reviewed Phase 2 case because no real company workbook
+  has been supplied. Real-workbook compatibility and generation from those cases remain an honest
+  external validation item, not a claimed success.
+- Network replay storage and policy are present, but live request interception remains opt-in work
+  for Phase 4 execution. No credentials, cookies, authorization headers, or response bodies were
+  placed in generated fixtures or model prompts.
+- The upstream provider baseline is not expanded into this feature's scope. Phase 4 may proceed
+  using the green scoped Testing gates and successful production build, while continuing to report
+  the repository-wide baseline separately.

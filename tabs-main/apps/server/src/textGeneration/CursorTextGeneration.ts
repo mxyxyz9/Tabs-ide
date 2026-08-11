@@ -16,6 +16,7 @@ import {
   buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
 import {
@@ -31,7 +32,8 @@ function mapCursorAcpError(
     | "generatePrContent"
     | "generateBranchName"
     | "generateThreadTitle"
-    | "generateDiffSummary",
+    | "generateDiffSummary"
+    | "generateStructuredTesting",
   detail: string,
   cause: unknown,
 ): TextGenerationError {
@@ -73,7 +75,8 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -296,11 +299,24 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
     };
   });
 
+  const generateStructuredTesting: TextGenerationShape["generateStructuredTesting"] = Effect.fn(
+    "CursorTextGeneration.generateStructuredTesting",
+  )(function* (input) {
+    return yield* runCursorJson({
+      operation: "generateStructuredTesting",
+      cwd: input.cwd,
+      prompt: buildStructuredTestingPrompt(input),
+      outputSchemaJson: input.outputSchema,
+      modelSelection: input.modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateDiffSummary,
+    generateStructuredTesting,
   } satisfies TextGenerationShape;
 });

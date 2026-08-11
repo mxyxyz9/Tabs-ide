@@ -17,6 +17,7 @@ import {
   buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
 import {
@@ -34,7 +35,8 @@ function mapGrokAcpError(
     | "generatePrContent"
     | "generateBranchName"
     | "generateThreadTitle"
-    | "generateDiffSummary",
+    | "generateDiffSummary"
+    | "generateStructuredTesting",
   detail: string,
   cause: unknown,
 ): TextGenerationError {
@@ -72,7 +74,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -290,11 +293,24 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
     };
   });
 
+  const generateStructuredTesting: TextGenerationShape["generateStructuredTesting"] = Effect.fn(
+    "GrokTextGeneration.generateStructuredTesting",
+  )(function* (input) {
+    return yield* runGrokJson({
+      operation: "generateStructuredTesting",
+      cwd: input.cwd,
+      prompt: buildStructuredTestingPrompt(input),
+      outputSchemaJson: input.outputSchema,
+      modelSelection: input.modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateDiffSummary,
+    generateStructuredTesting,
   } satisfies TextGenerationShape;
 });

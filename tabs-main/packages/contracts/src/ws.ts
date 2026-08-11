@@ -92,6 +92,8 @@ import { ReviewProgressEvent } from "./review";
 import {
   TestingCaseReviewInput,
   TestingExplorationInput,
+  TestingGenerationInput,
+  TestingGenerationJobInput,
   TestingProjectInput,
   TestingTargetInput,
   TestingWorkbookImportInput,
@@ -109,6 +111,9 @@ export const WS_METHODS = {
   testingReviewCase: "testing.reviewCase",
   testingGenerateScenarios: "testing.generateScenarios",
   testingClearGraph: "testing.clearGraph",
+  testingGenerateTests: "testing.generateTests",
+  testingListGenerationJobs: "testing.listGenerationJobs",
+  testingCancelGenerationJob: "testing.cancelGenerationJob",
   projectsAdd: "projects.add",
   projectsList: "projects.list",
   projectsListEntries: "projects.listEntries",
@@ -272,6 +277,9 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.testingReviewCase, TestingCaseReviewInput),
   tagRequestBody(WS_METHODS.testingGenerateScenarios, TestingProjectInput),
   tagRequestBody(WS_METHODS.testingClearGraph, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingGenerateTests, TestingGenerationInput),
+  tagRequestBody(WS_METHODS.testingListGenerationJobs, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingCancelGenerationJob, TestingGenerationJobInput),
 
   // Project Search
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),

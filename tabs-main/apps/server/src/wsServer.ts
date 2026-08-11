@@ -26,6 +26,8 @@ import {
   ThreadId,
   type TestingCaseReviewInput,
   type TestingExplorationInput,
+  type TestingGenerationInput,
+  type TestingGenerationJobInput,
   type TestingProjectInput,
   type TestingTargetInput,
   type TestingWorkbookImportInput,
@@ -94,6 +96,7 @@ import { decodeJsonResult, formatSchemaError } from "@tabs/shared/schemaJson";
 import { discoverSourceControl } from "./sourceControl/discovery";
 import { runProcess } from "./processRunner";
 import { TestingService } from "./testing/TestingService";
+import { TextGeneration } from "./textGeneration/TextGeneration";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -243,6 +246,7 @@ export type ServerRuntimeServices =
   | TerminalManager
   | Keybindings
   | ServerSettingsService
+  | TextGeneration
   | Open
   | AnalyticsService;
 
@@ -295,7 +299,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const gitEnvironment = yield* GitEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const testingService = new TestingService(serverConfig.stateDir);
+  const textGeneration = yield* TextGeneration;
+  const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
   yield* keybindingsManager.syncDefaultKeybindingsOnStartup.pipe(
@@ -835,6 +840,24 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.testingClearGraph: {
         const body = stripRequestTag(request.body) as TestingProjectInput;
         return testingService.clearGraph(body);
+      }
+
+      case WS_METHODS.testingGenerateTests: {
+        const body = stripRequestTag(request.body) as TestingGenerationInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.generateTests(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingListGenerationJobs: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.listGenerationJobs(body);
+      }
+
+      case WS_METHODS.testingCancelGenerationJob: {
+        const body = stripRequestTag(request.body) as TestingGenerationJobInput;
+        return testingService.cancelGenerationJob(body);
       }
 
       case ORCHESTRATION_WS_METHODS.getSnapshot:

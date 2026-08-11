@@ -8,14 +8,20 @@ import type {
   TestingExplorationInput,
   TestingExplorationResult,
   TestingGraphSummary,
+  TestingGenerationInput,
+  TestingGenerationJob,
+  TestingGenerationJobInput,
+  TestingGenerationJobListResult,
   TestingProjectInput,
   TestingTargetInput,
   TestingWorkbookImportInput,
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
+import type { TextGenerationShape } from "../textGeneration/TextGeneration";
 
 import { TestingCrawler } from "./crawler";
 import { TestingGraphStore } from "./graphStore";
+import { TestingGenerator } from "./generator";
 import { createPlaywrightMcpSession, type PlaywrightMcpSession } from "./playwrightMcp";
 import {
   reconcileWorkbookCase,
@@ -35,10 +41,14 @@ export class TestingService {
   readonly #store: TestingGraphStore;
   readonly #authCaptures = new Map<string, AuthCapture>();
   readonly #runningCrawls = new Set<string>();
+  readonly #generator: TestingGenerator | null;
 
-  constructor(stateDirectory: string) {
+  constructor(stateDirectory: string, textGeneration?: TextGenerationShape) {
     this.#testingRoot = join(stateDirectory, "testing");
     this.#store = new TestingGraphStore(join(this.#testingRoot, "state-graph.sqlite"));
+    this.#generator = textGeneration
+      ? new TestingGenerator(this.#store, this.#testingRoot, textGeneration)
+      : null;
   }
 
   close(): void {
@@ -151,5 +161,23 @@ export class TestingService {
       throw new Error("Wait for the active exploration to finish before clearing its graph");
     }
     return this.#store.clearGraph(input.projectId);
+  }
+
+  generateTests(input: TestingGenerationInput): Promise<TestingGenerationJob> {
+    if (!this.#generator) {
+      throw new Error("No configured coding-agent text-generation backend is available");
+    }
+    return this.#generator.generate(input);
+  }
+
+  listGenerationJobs(input: TestingProjectInput): TestingGenerationJobListResult {
+    return this.#store.listGenerationJobs(input.projectId);
+  }
+
+  cancelGenerationJob(input: TestingGenerationJobInput): TestingGenerationJob {
+    if (!this.#generator) {
+      throw new Error("No configured coding-agent text-generation backend is available");
+    }
+    return this.#generator.cancel(input.projectId, input.jobId);
   }
 }

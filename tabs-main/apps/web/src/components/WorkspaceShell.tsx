@@ -12,9 +12,14 @@ import {
   ThreadId,
   type GitBranch,
   type GitStatusFile,
+  type ModelSelection,
   type TestingGraphSummary,
   type TestingCaseSummary,
+  type TestingGenerationJob,
   type TestingExplorationScope,
+  DEFAULT_TESTING_BATCH_MAX_CASES,
+  DEFAULT_TESTING_BATCH_MAX_COST_USD,
+  DEFAULT_TESTING_BATCH_MAX_TOKENS,
   DEFAULT_TESTING_MAX_STATES,
   MAX_TESTING_DURATION_SECONDS,
   MAX_TESTING_MAX_STATES,
@@ -129,6 +134,7 @@ import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
 import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, KiloIcon, CursorIcon, type Icon } from "./Icons";
 import GitCommitComposer from "./GitCommitComposer";
+import { GitModelPicker } from "./git/gitPrimitives";
 import { Badge } from "./ui/badge";
 import { initializeZoom, resetZoom, zoomIn, zoomOut } from "../state/zoom";
 import { Button } from "./ui/button";
@@ -1047,7 +1053,11 @@ function ProjectToolBar(props: {
 
 type TestingAuthenticationMode = "none" | "local-profile" | "connected-session";
 
-function TestingTool(props: { projectId: ProjectId }) {
+function TestingTool(props: {
+  projectId: ProjectId;
+  projectPath: string;
+  defaultModelSelection: ModelSelection | null;
+}) {
   const [targetUrl, setTargetUrl] = useState("");
   const [cdpEndpoint, setCdpEndpoint] = useState("");
   const [explorationScope, setExplorationScope] = useState<TestingExplorationScope>("path");
@@ -1056,12 +1066,43 @@ function TestingTool(props: { projectId: ProjectId }) {
   const [maxDurationMinutes, setMaxDurationMinutes] = useState("5");
   const [status, setStatus] = useState<TestingGraphSummary | null>(null);
   const [cases, setCases] = useState<ReadonlyArray<TestingCaseSummary>>([]);
+  const [generationJobs, setGenerationJobs] = useState<ReadonlyArray<TestingGenerationJob>>([]);
+  const [generationModelSelection, setGenerationModelSelection] = useState<ModelSelection>(
+    () => props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL),
+  );
+  const [generationReasoning, setGenerationReasoning] = useState<"low" | "medium" | "high">(
+    "medium",
+  );
+  const [generationOutputMode, setGenerationOutputMode] = useState<"managed" | "repository">(
+    "managed",
+  );
+  const [repositoryOutputPath, setRepositoryOutputPath] = useState("tests/e2e/generated");
+  const [templatePath, setTemplatePath] = useState("");
+  const [captureReplay, setCaptureReplay] = useState(false);
+  const [generationMaxCases, setGenerationMaxCases] = useState(
+    String(DEFAULT_TESTING_BATCH_MAX_CASES),
+  );
+  const [generationMaxTokens, setGenerationMaxTokens] = useState(
+    String(DEFAULT_TESTING_BATCH_MAX_TOKENS),
+  );
+  const [generationMaxCost, setGenerationMaxCost] = useState(
+    String(DEFAULT_TESTING_BATCH_MAX_COST_USD),
+  );
   const [workbookPath, setWorkbookPath] = useState("");
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
   const [editedDescription, setEditedDescription] = useState("");
   const [editedSteps, setEditedSteps] = useState("");
   const [busyAction, setBusyAction] = useState<
-    "auth" | "finish-auth" | "explore" | "import" | "generate" | "review" | "clear" | null
+    | "auth"
+    | "finish-auth"
+    | "explore"
+    | "import"
+    | "generate"
+    | "generate-tests"
+    | "review"
+    | "clear"
+    | "cancel-generation"
+    | null
   >(null);
   const [authCaptureOpen, setAuthCaptureOpen] = useState(false);
   const [message, setMessage] = useState("Ready to explore a UAT application.");
@@ -1082,11 +1123,18 @@ function TestingTool(props: { projectId: ProjectId }) {
     setCases(result.cases);
   }, [props.projectId]);
 
+  const refreshGenerationJobs = useCallback(async () => {
+    const result = await (readNativeApi() ?? ensureNativeApi()).testing.listGenerationJobs({
+      projectId: props.projectId,
+    });
+    setGenerationJobs(result.jobs);
+  }, [props.projectId]);
+
   useEffect(() => {
-    void Promise.all([refreshStatus(), refreshCases()]).catch((error) => {
+    void Promise.all([refreshStatus(), refreshCases(), refreshGenerationJobs()]).catch((error) => {
       setMessage(error instanceof Error ? error.message : "Could not load Testing status.");
     });
-  }, [refreshCases, refreshStatus]);
+  }, [refreshCases, refreshGenerationJobs, refreshStatus]);
 
   const normalizedTarget = useMemo(() => {
     const trimmed = targetUrl.trim();
@@ -1305,6 +1353,67 @@ function TestingTool(props: { projectId: ProjectId }) {
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not clear the stored graph.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const generateTests = async () => {
+    const maxCasesValue = Number(generationMaxCases);
+    const maxTokensValue = Number(generationMaxTokens);
+    const maxCostValue = Number(generationMaxCost);
+    if (
+      !Number.isSafeInteger(maxCasesValue) ||
+      maxCasesValue < 1 ||
+      !Number.isSafeInteger(maxTokensValue) ||
+      maxTokensValue < 1 ||
+      !Number.isFinite(maxCostValue) ||
+      maxCostValue <= 0
+    ) {
+      setMessage("Enter positive generation limits.");
+      return;
+    }
+    setBusyAction("generate-tests");
+    setMessage("Generating Playwright tests from reviewed graph paths...");
+    try {
+      const job = await ensureNativeApi().testing.generateTests({
+        projectId: props.projectId,
+        projectPath: props.projectPath,
+        framework: "playwright-ts",
+        modelSelection: generationModelSelection,
+        reasoningTier: generationReasoning,
+        outputMode: generationOutputMode,
+        ...(generationOutputMode === "repository"
+          ? { repositoryOutputPath: repositoryOutputPath.trim() || "tests/e2e/generated" }
+          : {}),
+        ...(templatePath.trim() ? { templatePath: templatePath.trim() } : {}),
+        captureReplay,
+        maxCases: maxCasesValue,
+        maxEstimatedTokens: maxTokensValue,
+        maxEstimatedCostUsd: maxCostValue,
+      });
+      await refreshGenerationJobs();
+      setMessage(
+        job.status === "completed"
+          ? `Generated ${job.completedCases} Playwright test case${job.completedCases === 1 ? "" : "s"} in ${job.outputDirectory}.`
+          : `Generation stopped with status ${job.status}${job.error ? `: ${job.error}` : "."}`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Test generation failed.");
+      await refreshGenerationJobs().catch(() => undefined);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const cancelGeneration = async (jobId: string) => {
+    setBusyAction("cancel-generation");
+    try {
+      await ensureNativeApi().testing.cancelGenerationJob({ projectId: props.projectId, jobId });
+      await refreshGenerationJobs();
+      setMessage("Generation cancellation requested.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not cancel generation.");
     } finally {
       setBusyAction(null);
     }
@@ -1866,6 +1975,310 @@ function TestingTool(props: { projectId: ProjectId }) {
                         </div>
                       </>
                     )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section aria-labelledby="testing-generation-heading" className="space-y-4">
+          <div className="space-y-1">
+            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+              Phase 3
+            </div>
+            <h2 id="testing-generation-heading" className="text-lg font-semibold text-foreground">
+              Generate maintainable tests
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Turn accepted cases into Playwright TypeScript with separate page objects, test data,
+              and business-flow specs. Use the built-in template or map output into your company
+              structure with a validated JSON manifest.
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Generation template and destination</CardTitle>
+              <CardDescription>
+                Managed output is kept outside the repository. Repository output is an explicit
+                choice and is always constrained to this project folder.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="testing-framework"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Framework
+                  </label>
+                  <Select value="playwright-ts" disabled>
+                    <SelectTrigger id="testing-framework" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="playwright-ts">Playwright TypeScript</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="testing-generation-output"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Output destination
+                  </label>
+                  <Select
+                    value={generationOutputMode}
+                    onValueChange={(value) =>
+                      setGenerationOutputMode(value as "managed" | "repository")
+                    }
+                    disabled={busyAction !== null}
+                  >
+                    <SelectTrigger id="testing-generation-output" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="managed">Tabs-managed testing directory</SelectItem>
+                      <SelectItem value="repository">This project repository</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                </div>
+              </div>
+
+              {generationOutputMode === "repository" ? (
+                <div className="space-y-2">
+                  <label
+                    htmlFor="testing-repository-output"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Repository output folder
+                  </label>
+                  <Input
+                    id="testing-repository-output"
+                    value={repositoryOutputPath}
+                    onChange={(event) => setRepositoryOutputPath(event.target.value)}
+                    placeholder="tests/e2e/generated"
+                    disabled={busyAction !== null}
+                  />
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="testing-template-path"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Company template manifest (optional)
+                </label>
+                <Input
+                  id="testing-template-path"
+                  value={templatePath}
+                  onChange={(event) => setTemplatePath(event.target.value)}
+                  placeholder="testing/templates/company-playwright.json"
+                  aria-describedby="testing-template-help"
+                  disabled={busyAction !== null}
+                />
+                <p id="testing-template-help" className="text-xs leading-5 text-muted-foreground">
+                  Leave empty for the built-in Page Object Model template. The manifest may only
+                  choose relative folders, file patterns, and class naming; it cannot execute code
+                  or add prompt instructions.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Provider and batch guardrails</CardTitle>
+              <CardDescription>
+                Generation uses an existing local coding-agent provider. Dispatch stops before the
+                next case would exceed a configured cap; reported cost is an estimate.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-foreground">Fusion model</div>
+                  <GitModelPicker
+                    selection={generationModelSelection}
+                    onSelect={setGenerationModelSelection}
+                    filterSourceMode="connected"
+                    persistSelection={false}
+                    ariaLabel="Select the coding-agent model for test generation"
+                    className="w-full"
+                    disabled={busyAction !== null}
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Uses the same configured subscription providers and discovered models as the
+                    rest of Tabs. Direct API-key models are excluded from Testing generation.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="testing-generation-reasoning"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Reasoning
+                  </label>
+                  <Select
+                    value={generationReasoning}
+                    onValueChange={(value) =>
+                      setGenerationReasoning(value as "low" | "medium" | "high")
+                    }
+                    disabled={busyAction !== null}
+                  >
+                    <SelectTrigger id="testing-generation-reasoning" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="low">Low — deterministic formatting</SelectItem>
+                      <SelectItem value="medium">Medium — semantic mapping</SelectItem>
+                      <SelectItem value="high">High — unresolved ambiguity</SelectItem>
+                    </SelectPopup>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-5 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <label htmlFor="testing-generation-max-cases" className="text-sm font-medium">
+                    Maximum cases
+                  </label>
+                  <Input
+                    id="testing-generation-max-cases"
+                    type="number"
+                    min={1}
+                    value={generationMaxCases}
+                    onChange={(event) => setGenerationMaxCases(event.target.value)}
+                    disabled={busyAction !== null}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="testing-generation-max-tokens" className="text-sm font-medium">
+                    Estimated token cap
+                  </label>
+                  <Input
+                    id="testing-generation-max-tokens"
+                    type="number"
+                    min={1}
+                    value={generationMaxTokens}
+                    onChange={(event) => setGenerationMaxTokens(event.target.value)}
+                    disabled={busyAction !== null}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="testing-generation-max-cost" className="text-sm font-medium">
+                    Estimated USD cap
+                  </label>
+                  <Input
+                    id="testing-generation-max-cost"
+                    type="number"
+                    min={0.01}
+                    step={0.01}
+                    value={generationMaxCost}
+                    onChange={(event) => setGenerationMaxCost(event.target.value)}
+                    disabled={busyAction !== null}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border/70 p-4">
+                <div>
+                  <label htmlFor="testing-network-replay" className="text-sm font-medium">
+                    Capture sanitized network replay metadata
+                  </label>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Off by default. Credentials, cookies, authorization headers, and response bodies
+                    are never included.
+                  </p>
+                </div>
+                <Switch
+                  id="testing-network-replay"
+                  checked={captureReplay}
+                  onCheckedChange={setCaptureReplay}
+                  disabled={busyAction !== null}
+                />
+              </div>
+
+              <Button
+                type="button"
+                onClick={() => void generateTests()}
+                disabled={
+                  busyAction !== null ||
+                  !cases.some(
+                    (testCase) =>
+                      testCase.reviewDecision === "accepted" ||
+                      testCase.reviewDecision === "edited",
+                  )
+                }
+              >
+                {busyAction === "generate-tests" ? (
+                  <LoaderIcon aria-hidden="true" className="animate-spin" />
+                ) : (
+                  <WorkflowIcon aria-hidden="true" />
+                )}
+                Generate accepted cases
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-3" aria-live="polite">
+            {generationJobs.length === 0 ? (
+              <Card>
+                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                  No generation jobs yet. Accept at least one reconciled case to begin.
+                </CardContent>
+              </Card>
+            ) : (
+              generationJobs.map((job) => (
+                <Card key={job.id}>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="text-base">Playwright TypeScript batch</CardTitle>
+                        <CardDescription className="break-all">
+                          {job.outputDirectory}
+                        </CardDescription>
+                      </div>
+                      <Badge variant={job.status === "completed" ? "success" : "outline"}>
+                        {job.status.replace("-", " ")}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      {job.completedCases} of {job.totalCases} cases · approximately{" "}
+                      {job.estimatedTokens.toLocaleString()} tokens · approximately $
+                      {job.estimatedCostUsd.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Generated with {job.modelSelection.instanceId} / {job.modelSelection.model}
+                    </p>
+                    {job.error ? <p className="text-sm text-destructive">{job.error}</p> : null}
+                    {job.status === "queued" || job.status === "running" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void cancelGeneration(job.id)}
+                        disabled={busyAction !== null}
+                      >
+                        Cancel generation
+                      </Button>
+                    ) : null}
+                    {job.artifacts.length > 0 ? (
+                      <ul className="space-y-1 text-xs text-muted-foreground">
+                        {job.artifacts.map((artifact) => (
+                          <li key={`${job.id}-${artifact.caseId}`}>
+                            {artifact.externalId}: page, data, and spec generated with{" "}
+                            {artifact.fingerprintCount} locator fingerprints
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </CardContent>
                 </Card>
               ))
@@ -11355,7 +11768,13 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   } else if (activeTool?.kind === "git") {
     content = gitTool;
   } else if (activeTool?.kind === "testing") {
-    content = <TestingTool projectId={activeProject.id} />;
+    content = (
+      <TestingTool
+        projectId={activeProject.id}
+        projectPath={activeProject.cwd}
+        defaultModelSelection={activeProject.defaultModelSelection}
+      />
+    );
   } else if (activeTool?.kind === "custom_embed") {
     content = customEmbedTool;
   } else if (activeTool?.kind === "custom_process") {

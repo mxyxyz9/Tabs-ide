@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "Company Playwright Page Object Model",
+  "directories": {
+    "pages": "tests/e2e/pages",
+    "data": "tests/e2e/fixtures",
+    "specs": "tests/e2e/specs"
+  },
+  "filePatterns": {
+    "pageObject": "{feature}/{caseId}.page.ts",
+    "data": "{feature}/{caseId}.data.ts",
+    "spec": "{feature}/{caseId}.spec.ts"
+  },
+  "classPattern": "{featurePascal}Page"
+}

@@ -25,6 +25,7 @@ import {
   buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import {
   normalizeCliError,
@@ -104,7 +105,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary",
+      | "generateDiffSummary"
+      | "generateStructuredTesting",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -166,7 +168,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -434,11 +437,31 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     };
   });
 
+  const generateStructuredTesting: TextGenerationShape["generateStructuredTesting"] = Effect.fn(
+    "CodexTextGeneration.generateStructuredTesting",
+  )(function* (input) {
+    const modelSelection = {
+      ...input.modelSelection,
+      options: [
+        ...(input.modelSelection.options ?? []).filter((option) => option.id !== "reasoningEffort"),
+        { id: "reasoningEffort", value: input.reasoningTier },
+      ],
+    };
+    return yield* runCodexJson({
+      operation: "generateStructuredTesting",
+      cwd: input.cwd,
+      prompt: buildStructuredTestingPrompt(input),
+      outputSchemaJson: input.outputSchema,
+      modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateDiffSummary,
+    generateStructuredTesting,
   } satisfies TextGenerationShape;
 });

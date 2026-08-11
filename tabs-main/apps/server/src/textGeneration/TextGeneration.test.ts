@@ -2,6 +2,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as PubSub from "effect/PubSub";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vitest";
 
@@ -21,6 +22,8 @@ const makeStubTextGeneration = (overrides: Partial<TextGenerationShape>): TextGe
   generateBranchName: () => Effect.die("generateBranchName stub not configured for this test"),
   generateThreadTitle: () => Effect.die("generateThreadTitle stub not configured for this test"),
   generateDiffSummary: () => Effect.die("generateDiffSummary stub not configured for this test"),
+  generateStructuredTesting: () =>
+    Effect.die("generateStructuredTesting stub not configured for this test"),
   ...overrides,
 });
 
@@ -113,6 +116,37 @@ describe("makeTextGenerationFromRegistry", () => {
         expect(result.failure.operation).toBe("generateBranchName");
         expect(result.failure.detail).toContain("missing_instance");
       }
+    }),
+  );
+
+  it.effect("routes structured Testing tasks through the selected provider instance", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.makeUnsafe("codex_work");
+      const calls: string[] = [];
+      const outputSchema = Schema.Struct({ title: Schema.String });
+      const provider = makeStubInstance(
+        instanceId,
+        makeStubTextGeneration({
+          generateStructuredTesting: (input) => {
+            calls.push(`${input.taskKind}:${input.reasoningTier}:${input.sanitizedPrompt}`);
+            return Effect.succeed({ title: "Generated test" });
+          },
+        }),
+      );
+      const tg = makeTextGenerationFromRegistry(makeStubRegistry([provider]));
+
+      const result = yield* tg.generateStructuredTesting({
+        cwd: process.cwd(),
+        taskKind: "test-generation",
+        sanitizedPrompt: "Reviewed case without credentials",
+        outputSchema,
+        modelSelection: createModelSelection(instanceId, "gpt-5"),
+        reasoningTier: "medium",
+        budget: { maxEstimatedTokens: 2_000, maxEstimatedCostUsd: 1 },
+      });
+
+      expect(result).toEqual({ title: "Generated test" });
+      expect(calls).toEqual(["test-generation:medium:Reviewed case without credentials"]);
     }),
   );
 });

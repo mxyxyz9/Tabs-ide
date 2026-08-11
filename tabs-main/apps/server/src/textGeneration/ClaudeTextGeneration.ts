@@ -24,6 +24,7 @@ import {
   buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import {
   normalizeCliError,
@@ -86,7 +87,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary",
+      | "generateDiffSummary"
+      | "generateStructuredTesting",
     value: unknown,
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -117,7 +119,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -386,11 +389,31 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     };
   });
 
+  const generateStructuredTesting: TextGenerationShape["generateStructuredTesting"] = Effect.fn(
+    "ClaudeTextGeneration.generateStructuredTesting",
+  )(function* (input) {
+    const modelSelection = {
+      ...input.modelSelection,
+      options: [
+        ...(input.modelSelection.options ?? []).filter((option) => option.id !== "effort"),
+        { id: "effort", value: input.reasoningTier },
+      ],
+    };
+    return yield* runClaudeJson({
+      operation: "generateStructuredTesting",
+      cwd: input.cwd,
+      prompt: buildStructuredTestingPrompt(input),
+      outputSchemaJson: input.outputSchema,
+      modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateDiffSummary,
+    generateStructuredTesting,
   } satisfies TextGenerationShape;
 });

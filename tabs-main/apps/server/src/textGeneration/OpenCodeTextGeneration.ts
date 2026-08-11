@@ -24,6 +24,7 @@ import {
   buildDiffSummaryPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
+  buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import { type TextGenerationShape } from "./TextGeneration";
 import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
@@ -159,7 +160,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
   }) =>
     sharedServerMutex.withPermit(
       Effect.gen(function* () {
@@ -270,7 +272,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
     readonly cwd: string;
     readonly prompt: string;
     readonly outputSchemaJson: S;
@@ -485,11 +488,24 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     };
   });
 
+  const generateStructuredTesting: TextGenerationShape["generateStructuredTesting"] = Effect.fn(
+    "OpenCodeTextGeneration.generateStructuredTesting",
+  )(function* (input) {
+    return yield* runOpenCodeJson({
+      operation: "generateStructuredTesting",
+      cwd: input.cwd,
+      prompt: buildStructuredTestingPrompt(input),
+      outputSchemaJson: input.outputSchema,
+      modelSelection: input.modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
     generateDiffSummary,
+    generateStructuredTesting,
   } satisfies TextGenerationShape;
 });

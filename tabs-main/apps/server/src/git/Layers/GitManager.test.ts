@@ -212,6 +212,7 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
         keyChanges: "- Added README file",
         notesAndRisk: "",
       }),
+    generateStructuredTesting: () => Effect.die("not used by GitManager tests"),
   };
 }
 
@@ -2100,7 +2101,9 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           Effect.map((err) => err.message),
         );
 
-      expect(result).toContain("No text generation model configured — set one up in Settings → Providers");
+      expect(result).toContain(
+        "No text generation model configured — set one up in Settings → Providers",
+      );
     }),
   );
 
@@ -2155,7 +2158,10 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       });
 
       const fileSystem = yield* FileSystem.FileSystem;
-      yield* fileSystem.writeFileString(path.join(repoDir, "package-lock.json"), '{"lockfile": true}\n');
+      yield* fileSystem.writeFileString(
+        path.join(repoDir, "package-lock.json"),
+        '{"lockfile": true}\n',
+      );
       yield* runGit(repoDir, ["add", "package-lock.json"]);
 
       const result = yield* manager.generateDiffSummary({

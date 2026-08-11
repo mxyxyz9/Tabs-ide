@@ -24,7 +24,8 @@ function mapGeminiError(
     | "generatePrContent"
     | "generateBranchName"
     | "generateThreadTitle"
-    | "generateDiffSummary",
+    | "generateDiffSummary"
+    | "generateStructuredTesting",
   detail: string,
   cause?: unknown,
 ): TextGenerationError {
@@ -49,7 +50,8 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
       | "generatePrContent"
       | "generateBranchName"
       | "generateThreadTitle"
-      | "generateDiffSummary";
+      | "generateDiffSummary"
+      | "generateStructuredTesting";
     prompt: string;
     outputSchemaJson: S;
     modelSelection: ModelSelection;
@@ -93,7 +95,9 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => "");
-          throw new Error(`Gemini API HTTP ${response.status}: ${errorText || response.statusText}`);
+          throw new Error(
+            `Gemini API HTTP ${response.status}: ${errorText || response.statusText}`,
+          );
         }
 
         return (await response.json()) as {
@@ -112,9 +116,7 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
         ),
     });
 
-    const responseOpt = yield* fetchEffect.pipe(
-      Effect.timeoutOption(GEMINI_TIMEOUT_MS),
-    );
+    const responseOpt = yield* fetchEffect.pipe(Effect.timeoutOption(GEMINI_TIMEOUT_MS));
 
     const responseJson = yield* Option.match(responseOpt, {
       onNone: () =>
@@ -139,7 +141,11 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
 
     return yield* Schema.decodeUnknownEffect(outputSchemaJson)(jsonObject).pipe(
       Effect.mapError((err) =>
-        mapGeminiError(operation, `Gemini response did not match expected schema: ${String(err)}`, err),
+        mapGeminiError(
+          operation,
+          `Gemini response did not match expected schema: ${String(err)}`,
+          err,
+        ),
       ),
     );
   });
@@ -257,6 +263,14 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
           ...(result.findings ? { findings: result.findings } : {}),
         };
       }),
+
+    generateStructuredTesting: () =>
+      Effect.fail(
+        mapGeminiError(
+          "generateStructuredTesting",
+          "Testing automation requires a configured coding-agent CLI backend; direct Gemini API generation is disabled for this operation.",
+        ),
+      ),
   };
 
   return service;

@@ -41,6 +41,7 @@
   "devDependencies": {
     "@effect/language-service": "catalog:",
     "@effect/vitest": "catalog:",
+    "@playwright/test": "1.61.1",
     "@tabs/contracts": "workspace:*",
     "@tabs/shared": "workspace:*",
     "@tabs/web": "workspace:*",

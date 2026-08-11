@@ -6,6 +6,7 @@ import {
   MAX_TESTING_DURATION_SECONDS,
   MAX_TESTING_MAX_STATES,
   TestingExplorationInput,
+  TestingGenerationInput,
   TestingCaseReviewInput,
   TestingWorkbookImportInput,
 } from "./testing";
@@ -100,6 +101,49 @@ describe("Testing Phase 2 inputs", () => {
         caseId: "case",
         decision: "approved",
       }),
+    ).toThrow();
+  });
+});
+
+describe("Testing Phase 3 inputs", () => {
+  const validInput = {
+    projectId: "project",
+    projectPath: "/tmp/project",
+    framework: "playwright-ts",
+    modelSelection: { instanceId: "codex", model: "gpt-5" },
+    reasoningTier: "medium",
+    outputMode: "managed",
+    maxCases: 25,
+    maxEstimatedTokens: 200_000,
+    maxEstimatedCostUsd: 5,
+  };
+
+  it("accepts provider routing, template, output, and budget controls", () => {
+    expect(
+      Schema.decodeUnknownSync(TestingGenerationInput)({
+        ...validInput,
+        outputMode: "repository",
+        repositoryOutputPath: "tests/e2e/generated",
+        templatePath: "testing/templates/company.json",
+        captureReplay: true,
+      }),
+    ).toMatchObject({
+      framework: "playwright-ts",
+      reasoningTier: "medium",
+      outputMode: "repository",
+      captureReplay: true,
+    });
+  });
+
+  it.each([
+    { maxCases: 0 },
+    { maxEstimatedTokens: 0 },
+    { maxEstimatedCostUsd: 0 },
+    { framework: "selenium" },
+    { reasoningTier: "unbounded" },
+  ])("rejects unsupported or non-positive generation controls: %o", (patch) => {
+    expect(() =>
+      Schema.decodeUnknownSync(TestingGenerationInput)({ ...validInput, ...patch }),
     ).toThrow();
   });
 });

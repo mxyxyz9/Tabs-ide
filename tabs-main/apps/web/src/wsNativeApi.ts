@@ -162,6 +162,11 @@ export function createWsNativeApi(): NativeApi {
       generateScenarios: (input) =>
         transport.request(WS_METHODS.testingGenerateScenarios, input, { timeoutMs: null }),
       clearGraph: (input) => transport.request(WS_METHODS.testingClearGraph, input),
+      generateTests: (input) =>
+        transport.request(WS_METHODS.testingGenerateTests, input, { timeoutMs: null }),
+      listGenerationJobs: (input) => transport.request(WS_METHODS.testingListGenerationJobs, input),
+      cancelGenerationJob: (input) =>
+        transport.request(WS_METHODS.testingCancelGenerationJob, input),
     },
     dialogs: {
       pickFolder: async () => {

@@ -1,7 +1,13 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { ChatAttachment, ModelSelection, ProviderInstanceId, ReviewFinding } from "@tabs/contracts";
+import type * as Schema from "effect/Schema";
+import type {
+  ChatAttachment,
+  ModelSelection,
+  ProviderInstanceId,
+  ReviewFinding,
+} from "@tabs/contracts";
 import { TextGenerationError } from "@tabs/contracts";
 
 import {
@@ -10,7 +16,13 @@ import {
 } from "../provider/Services/ProviderInstanceRegistry";
 import type { ProviderInstance } from "../provider/ProviderDriver";
 
-export type TextGenerationProvider = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode" | "gemini";
+export type TextGenerationProvider =
+  | "codex"
+  | "claudeAgent"
+  | "cursor"
+  | "grok"
+  | "opencode"
+  | "gemini";
 
 export interface CommitMessageGenerationInput {
   cwd: string;
@@ -91,6 +103,29 @@ export interface DiffSummaryGenerationResult {
   findings?: ReadonlyArray<ReviewFinding> | undefined;
 }
 
+export type TestingTaskKind =
+  | "semantic-ranking"
+  | "scenario-generation"
+  | "test-generation"
+  | "healing"
+  | "visual-triage"
+  | "failure-triage";
+
+export type TestingReasoningTier = "low" | "medium" | "high";
+
+export interface StructuredTestingGenerationInput<S extends Schema.Top> {
+  readonly cwd: string;
+  readonly taskKind: TestingTaskKind;
+  readonly sanitizedPrompt: string;
+  readonly outputSchema: S;
+  readonly modelSelection: ModelSelection;
+  readonly reasoningTier: TestingReasoningTier;
+  readonly budget: {
+    readonly maxEstimatedTokens: number;
+    readonly maxEstimatedCostUsd: number;
+  };
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -99,6 +134,9 @@ export interface TextGenerationService {
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
   generateDiffSummary(input: DiffSummaryGenerationInput): Promise<DiffSummaryGenerationResult>;
+  generateStructuredTesting<S extends Schema.Top>(
+    input: StructuredTestingGenerationInput<S>,
+  ): Promise<S["Type"]>;
 }
 
 /**
@@ -139,6 +177,10 @@ export interface TextGenerationShape {
   readonly generateDiffSummary: (
     input: DiffSummaryGenerationInput,
   ) => Effect.Effect<DiffSummaryGenerationResult, TextGenerationError>;
+
+  readonly generateStructuredTesting: <S extends Schema.Top>(
+    input: StructuredTestingGenerationInput<S>,
+  ) => Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]>;
 }
 
 /**
@@ -153,7 +195,8 @@ type TextGenerationOp =
   | "generatePrContent"
   | "generateBranchName"
   | "generateThreadTitle"
-  | "generateDiffSummary";
+  | "generateDiffSummary"
+  | "generateStructuredTesting";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistryShape,
@@ -195,6 +238,10 @@ export const makeTextGenerationFromRegistry = (
   generateDiffSummary: (input) =>
     resolveInstance(registry, "generateDiffSummary", input.modelSelection.instanceId).pipe(
       Effect.flatMap((textGeneration) => textGeneration.generateDiffSummary(input)),
+    ),
+  generateStructuredTesting: (input) =>
+    resolveInstance(registry, "generateStructuredTesting", input.modelSelection.instanceId).pipe(
+      Effect.flatMap((textGeneration) => textGeneration.generateStructuredTesting(input)),
     ),
 });
 

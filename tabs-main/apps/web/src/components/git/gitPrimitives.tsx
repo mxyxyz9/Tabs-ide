@@ -30,12 +30,31 @@ const ACCENT = "var(--gt-accent, var(--primary, #ffffff))";
 const ACCENT_CONTRAST = "var(--gt-accent-contrast, var(--primary-foreground, #ffffff))";
 
 export const TONE = {
-  ok: { color: "var(--sem-emerald)", dot: "var(--sem-emerald)", soft: "var(--sem-emerald-soft)", border: "var(--sem-emerald-border)" },
-  warn: { color: "var(--sem-amber)", dot: "var(--sem-amber)", soft: "var(--sem-amber-soft)", border: "var(--sem-amber-border)" },
-  bad: { color: "var(--sem-red)", dot: "var(--sem-red)", soft: "var(--sem-red-soft)", border: "var(--sem-red-border)" },
-  info: { color: "var(--sem-sky)", dot: "var(--sem-sky)", soft: "var(--sem-sky-soft)", border: "var(--sem-sky-border)" },
+  ok: {
+    color: "var(--sem-emerald)",
+    dot: "var(--sem-emerald)",
+    soft: "var(--sem-emerald-soft)",
+    border: "var(--sem-emerald-border)",
+  },
+  warn: {
+    color: "var(--sem-amber)",
+    dot: "var(--sem-amber)",
+    soft: "var(--sem-amber-soft)",
+    border: "var(--sem-amber-border)",
+  },
+  bad: {
+    color: "var(--sem-red)",
+    dot: "var(--sem-red)",
+    soft: "var(--sem-red-soft)",
+    border: "var(--sem-red-border)",
+  },
+  info: {
+    color: "var(--sem-sky)",
+    dot: "var(--sem-sky)",
+    soft: "var(--sem-sky-soft)",
+    border: "var(--sem-sky-border)",
+  },
 };
-
 
 export function Banner({
   tone = "info",
@@ -69,7 +88,13 @@ export function Banner({
   );
 }
 
-export function PanelToolbar({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function PanelToolbar({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
     <div className={`flex items-center justify-between gap-3 mb-4 ${className}`}>
       <div className="flex items-center gap-2 ms-auto">{children}</div>
@@ -77,21 +102,44 @@ export function PanelToolbar({ children, className = "" }: { children: ReactNode
   );
 }
 
-
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
-export function SectionLabel({ children, action, className }: { children: ReactNode; action?: ReactNode; className?: string }) {
+export function SectionLabel({
+  children,
+  action,
+  className,
+}: {
+  children: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
   return (
     <div className={cn("flex items-center justify-between mt-5 mb-2 first:mt-0", className)}>
-      <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground/70">{children}</span>
+      <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground/70">
+        {children}
+      </span>
       {action}
     </div>
   );
 }
 
-export function Card({ children, className = "", style, onClick }: { children: ReactNode; className?: string; style?: React.CSSProperties; onClick?: () => void }) {
+export function Card({
+  children,
+  className = "",
+  style,
+  onClick,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+  onClick?: () => void;
+}) {
   return (
-    <div className={`border border-border rounded-lg ${className}`} style={{ backgroundColor: "var(--bg-surface)", ...style }} onClick={onClick}>
+    <div
+      className={`border border-border rounded-lg ${className}`}
+      style={{ backgroundColor: "var(--bg-surface)", ...style }}
+      onClick={onClick}
+    >
       {children}
     </div>
   );
@@ -102,14 +150,18 @@ export function PathBreadcrumb({ path }: { path: string }) {
   const file = parts.pop();
   const content = (
     <span className="text-xs font-mono truncate flex items-center gap-1 min-w-0">
-      {parts.length > 0 && <span className="text-muted-foreground/70 truncate">{parts.join("/")}/</span>}
+      {parts.length > 0 && (
+        <span className="text-muted-foreground/70 truncate">{parts.join("/")}/</span>
+      )}
       <span className="text-foreground/90 font-medium shrink-0">{file}</span>
     </span>
   );
   return (
     <Tooltip>
       <TooltipTrigger render={content} />
-      <TooltipPopup side="top" className="max-w-md break-all">{path}</TooltipPopup>
+      <TooltipPopup side="top" className="max-w-md break-all">
+        {path}
+      </TooltipPopup>
     </Tooltip>
   );
 }
@@ -120,14 +172,22 @@ export function FilePathLabel({ path, size = "text-[11px]" }: { path: string; si
   const dir = parts.join("/");
   const content = (
     <div className="min-w-0 flex-1">
-      {dir && <div className="text-[10px] font-mono text-muted-foreground/70 truncate leading-normal pb-0.5">{dir}/</div>}
-      <div className={`${size} font-mono text-foreground/90 truncate leading-normal pb-0.5`}>{file}</div>
+      {dir && (
+        <div className="text-[10px] font-mono text-muted-foreground/70 truncate leading-normal pb-0.5">
+          {dir}/
+        </div>
+      )}
+      <div className={`${size} font-mono text-foreground/90 truncate leading-normal pb-0.5`}>
+        {file}
+      </div>
     </div>
   );
   return (
     <Tooltip>
       <TooltipTrigger render={content} />
-      <TooltipPopup side="top" className="max-w-md break-all">{path}</TooltipPopup>
+      <TooltipPopup side="top" className="max-w-md break-all">
+        {path}
+      </TooltipPopup>
     </Tooltip>
   );
 }
@@ -135,10 +195,16 @@ export function FilePathLabel({ path, size = "text-[11px]" }: { path: string; si
 export function StatPill({ ins, del }: { ins: number; del: number }) {
   return (
     <span className="flex items-center gap-1.5 text-[11px] font-mono shrink-0">
-      <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--sem-emerald-soft)", color: "var(--sem-emerald)" }}>
+      <span
+        className="px-1.5 py-0.5 rounded"
+        style={{ backgroundColor: "var(--sem-emerald-soft)", color: "var(--sem-emerald)" }}
+      >
         +{ins}
       </span>
-      <span className="px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--sem-red-soft)", color: "var(--sem-red)" }}>
+      <span
+        className="px-1.5 py-0.5 rounded"
+        style={{ backgroundColor: "var(--sem-red-soft)", color: "var(--sem-red)" }}
+      >
         -{del}
       </span>
     </span>
@@ -220,7 +286,9 @@ export function InlineForm({
   })();
 
   return (
-    <div className={`flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-2.5 py-2 ${className || "mb-2"}`}>
+    <div
+      className={`flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-2.5 py-2 ${className || "mb-2"}`}
+    >
       <input
         autoFocus
         disabled={submitting}
@@ -280,10 +348,22 @@ export function AutoTextarea({
   );
 }
 
-export const Field = ({ label, description, children }: { label: ReactNode; description?: ReactNode; children: ReactNode }) => (
+export const Field = ({
+  label,
+  description,
+  children,
+}: {
+  label: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+}) => (
   <div className="mb-3">
-    <label className="text-[10px] uppercase tracking-widest text-muted-foreground/70 block mb-1">{label}</label>
-    {description && <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-1.5">{description}</p>}
+    <label className="text-[10px] uppercase tracking-widest text-muted-foreground/70 block mb-1">
+      {label}
+    </label>
+    {description && (
+      <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-1.5">{description}</p>
+    )}
     {children}
   </div>
 );
@@ -328,7 +408,7 @@ export const Select = ({
     }
   });
 
-  const strVal = value !== undefined ? String(value) : options[0]?.value ?? "";
+  const strVal = value !== undefined ? String(value) : (options[0]?.value ?? "");
   const selectedLabel = options.find((o) => o.value === strVal)?.label ?? strVal;
 
   return (
@@ -342,7 +422,9 @@ export const Select = ({
       }}
     >
       <SelectTrigger className={className}>
-        <SelectValue placeholder={typeof selectedLabel === "string" ? selectedLabel : "Select…"}>{selectedLabel}</SelectValue>
+        <SelectValue placeholder={typeof selectedLabel === "string" ? selectedLabel : "Select…"}>
+          {selectedLabel}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent side="bottom" align="start">
         {options.map((o) => (
@@ -416,8 +498,8 @@ export function DiffSummaryCard({
     targetScope === "staged"
       ? "Staged changes"
       : targetScope === "commit"
-      ? "Commit summary"
-      : "Working tree changes";
+        ? "Commit summary"
+        : "Working tree changes";
 
   return (
     <div className="rounded-xl border border-primary/20 bg-card p-4 shadow-lg space-y-3 mb-4 relative">
@@ -450,7 +532,10 @@ export function DiffSummaryCard({
       {wasTruncated && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs">
           <AlertTriangle className="size-3.5 shrink-0" />
-          <span>{truncatedReason || "Summary based on partial diff — large files/patches were truncated."}</span>
+          <span>
+            {truncatedReason ||
+              "Summary based on partial diff — large files/patches were truncated."}
+          </span>
         </div>
       )}
 
@@ -497,9 +582,20 @@ export interface GitModelPickerProps {
   onSelect?: (selection: ModelSelection) => void;
   className?: string | undefined;
   filterSourceMode?: "connected" | "direct_gemini" | undefined;
+  persistSelection?: boolean | undefined;
+  ariaLabel?: string | undefined;
+  disabled?: boolean | undefined;
 }
 
-export function GitModelPicker({ selection, onSelect, className, filterSourceMode }: GitModelPickerProps) {
+export function GitModelPicker({
+  selection,
+  onSelect,
+  className,
+  filterSourceMode,
+  persistSelection = true,
+  ariaLabel = "Select AI model",
+  disabled = false,
+}: GitModelPickerProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const settings = useSettings();
@@ -508,8 +604,7 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
 
   const isGeminiKeyConfigured = Boolean(settings?.providers?.gemini?.apiKey?.trim());
 
-  const activeSelection =
-    selection ||
+  const activeSelection = selection ||
     settings?.gitAi?.gitTextGenerationModelSelection || {
       instanceId: "gemini" as ProviderInstanceId,
       model: "gemini-3.6-flash",
@@ -528,21 +623,23 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
       activeSelection.model,
     );
 
-    return entries.map((entry) => {
-      const opts = optionsMap.get(entry.instanceId) ?? [];
-      return {
-        id: "connected",
-        group: `${entry.displayName} (Connected Subscription)`,
-        items: opts.map((opt) => ({
-          instanceId: entry.instanceId,
-          model: opt.slug,
-          name: opt.name || opt.slug,
-          description: `${entry.displayName} subscription backend`,
-          badge: "Fusion",
-          badgeColor: "bg-primary/10 text-primary border-primary/20",
-        })),
-      };
-    }).filter((g) => g.items.length > 0);
+    return entries
+      .map((entry) => {
+        const opts = optionsMap.get(entry.instanceId) ?? [];
+        return {
+          id: "connected",
+          group: `${entry.displayName} (Connected Subscription)`,
+          items: opts.map((opt) => ({
+            instanceId: entry.instanceId,
+            model: opt.slug,
+            name: opt.name || opt.slug,
+            description: `${entry.displayName} subscription backend`,
+            badge: "Fusion",
+            badgeColor: "bg-primary/10 text-primary border-primary/20",
+          })),
+        };
+      })
+      .filter((g) => g.items.length > 0);
   }, [serverProviders, settings, activeSelection.instanceId, activeSelection.model]);
 
   const directGeminiGroup = useMemo(() => {
@@ -556,7 +653,9 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
           name: "Gemini 3.6 Flash",
           description: "Ultra-fast, 1M context token window (Recommended)",
           badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
-          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+          badgeColor: isGeminiKeyConfigured
+            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+            : "bg-amber-500/10 text-amber-500 border-amber-500/20",
         },
         {
           instanceId: "gemini" as ProviderInstanceId,
@@ -564,7 +663,9 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
           name: "Gemini 2.5 Pro",
           description: "Deep reasoning 1M context model",
           badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
-          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+          badgeColor: isGeminiKeyConfigured
+            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+            : "bg-amber-500/10 text-amber-500 border-amber-500/20",
         },
         {
           instanceId: "gemini" as ProviderInstanceId,
@@ -572,7 +673,9 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
           name: "Gemini 2.0 Flash",
           description: "Lightweight high-speed model",
           badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
-          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+          badgeColor: isGeminiKeyConfigured
+            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+            : "bg-amber-500/10 text-amber-500 border-amber-500/20",
         },
         {
           instanceId: "gemini" as ProviderInstanceId,
@@ -580,7 +683,9 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
           name: "Gemini 1.5 Pro",
           description: "High capacity reasoning model",
           badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
-          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+          badgeColor: isGeminiKeyConfigured
+            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+            : "bg-amber-500/10 text-amber-500 border-amber-500/20",
         },
         {
           instanceId: "gemini" as ProviderInstanceId,
@@ -588,7 +693,9 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
           name: "Gemini 1.5 Flash",
           description: "Fast multimodal model",
           badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
-          badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+          badgeColor: isGeminiKeyConfigured
+            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+            : "bg-amber-500/10 text-amber-500 border-amber-500/20",
         },
       ],
     };
@@ -606,12 +713,54 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
               id: "connected",
               group: "Connected Subscriptions (Fusion Backends)",
               items: [
-                { instanceId: "codex" as ProviderInstanceId, model: "gpt-5.4-mini", name: "Codex (GPT-5.4 Mini)", description: "Codex subscription backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
-                { instanceId: "codex" as ProviderInstanceId, model: "gpt-5.4", name: "Codex (GPT-5.4)", description: "Codex subscription backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
-                { instanceId: "claudeAgent" as ProviderInstanceId, model: "claude-haiku-4-5", name: "Claude (Haiku 4.5)", description: "Claude Agent backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
-                { instanceId: "claudeAgent" as ProviderInstanceId, model: "claude-sonnet-5", name: "Claude (Sonnet 5)", description: "Claude Agent backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
-                { instanceId: "grok" as ProviderInstanceId, model: "grok-build", name: "Grok (Build)", description: "xAI Grok backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
-                { instanceId: "cursor" as ProviderInstanceId, model: "composer-2", name: "Cursor (Composer 2)", description: "Cursor subscription backend", badge: "Fusion", badgeColor: "bg-primary/10 text-primary border-primary/20" },
+                {
+                  instanceId: "codex" as ProviderInstanceId,
+                  model: "gpt-5.4-mini",
+                  name: "Codex (GPT-5.4 Mini)",
+                  description: "Codex subscription backend",
+                  badge: "Fusion",
+                  badgeColor: "bg-primary/10 text-primary border-primary/20",
+                },
+                {
+                  instanceId: "codex" as ProviderInstanceId,
+                  model: "gpt-5.4",
+                  name: "Codex (GPT-5.4)",
+                  description: "Codex subscription backend",
+                  badge: "Fusion",
+                  badgeColor: "bg-primary/10 text-primary border-primary/20",
+                },
+                {
+                  instanceId: "claudeAgent" as ProviderInstanceId,
+                  model: "claude-haiku-4-5",
+                  name: "Claude (Haiku 4.5)",
+                  description: "Claude Agent backend",
+                  badge: "Fusion",
+                  badgeColor: "bg-primary/10 text-primary border-primary/20",
+                },
+                {
+                  instanceId: "claudeAgent" as ProviderInstanceId,
+                  model: "claude-sonnet-5",
+                  name: "Claude (Sonnet 5)",
+                  description: "Claude Agent backend",
+                  badge: "Fusion",
+                  badgeColor: "bg-primary/10 text-primary border-primary/20",
+                },
+                {
+                  instanceId: "grok" as ProviderInstanceId,
+                  model: "grok-build",
+                  name: "Grok (Build)",
+                  description: "xAI Grok backend",
+                  badge: "Fusion",
+                  badgeColor: "bg-primary/10 text-primary border-primary/20",
+                },
+                {
+                  instanceId: "cursor" as ProviderInstanceId,
+                  model: "composer-2",
+                  name: "Cursor (Composer 2)",
+                  description: "Cursor subscription backend",
+                  badge: "Fusion",
+                  badgeColor: "bg-primary/10 text-primary border-primary/20",
+                },
               ],
             },
           ];
@@ -642,29 +791,44 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
     name: "Gemini 2.5 Flash",
     description: "Ultra-fast, 1M context token window",
     badge: isGeminiKeyConfigured ? "Ready" : "Key Required",
-    badgeColor: isGeminiKeyConfigured ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    badgeColor: isGeminiKeyConfigured
+      ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+      : "bg-amber-500/10 text-amber-500 border-amber-500/20",
   };
 
   const currentItem =
-    allModelGroups.flatMap((g) => g.items).find((i) => i.instanceId === activeSelection.instanceId && i.model === activeSelection.model) ??
-    defaultItem;
+    allModelGroups
+      .flatMap((g) => g.items)
+      .find(
+        (i) => i.instanceId === activeSelection.instanceId && i.model === activeSelection.model,
+      ) ?? defaultItem;
 
   const handleSelect = (inst: ProviderInstanceId, mdl: string) => {
     const nextSelection = { instanceId: inst, model: mdl };
     onSelect?.(nextSelection);
-    updateSettings.updateSettings({
-      gitAi: {
-        gitTextGenerationModelSelection: nextSelection,
-      },
-    });
+    if (persistSelection) {
+      updateSettings.updateSettings({
+        gitAi: {
+          gitTextGenerationModelSelection: nextSelection,
+        },
+      });
+    }
     setOpen(false);
   };
 
   return (
-    <Popover open={open} onOpenChange={(val) => { setOpen(val); if (!val) setSearchQuery(""); }}>
+    <Popover
+      open={open}
+      onOpenChange={(val) => {
+        setOpen(val);
+        if (!val) setSearchQuery("");
+      }}
+    >
       <PopoverTrigger
         render={
           <Button
+            aria-label={ariaLabel}
+            disabled={disabled}
             variant="outline"
             size="sm"
             className={cn(
@@ -673,16 +837,24 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
             )}
           >
             <span className="truncate flex items-center gap-1.5">
-              <span className="font-semibold text-foreground">{currentItem?.name ?? "Gemini 2.5 Flash"}</span>
+              <span className="font-semibold text-foreground">
+                {currentItem?.name ?? "Gemini 2.5 Flash"}
+              </span>
             </span>
             <ChevronDown className="size-3.5 text-muted-foreground shrink-0" />
           </Button>
         }
       />
-      <PopoverPopup align="start" className="w-[340px] p-0 overflow-hidden bg-background/95 backdrop-blur-md border border-border shadow-2xl rounded-xl z-50">
+      <PopoverPopup
+        align="start"
+        className="w-[340px] p-0 overflow-hidden bg-background/95 backdrop-blur-md border border-border shadow-2xl rounded-xl z-50"
+      >
         <div className="p-2 border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
           <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+            />
             <TextInput
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -714,7 +886,9 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
                   {group.group}
                 </div>
                 {group.items.map((item) => {
-                  const isSelected = activeSelection.instanceId === item.instanceId && activeSelection.model === item.model;
+                  const isSelected =
+                    activeSelection.instanceId === item.instanceId &&
+                    activeSelection.model === item.model;
                   return (
                     <button
                       key={`${item.instanceId}::${item.model}`}
@@ -722,16 +896,25 @@ export function GitModelPicker({ selection, onSelect, className, filterSourceMod
                       onClick={() => handleSelect(item.instanceId, item.model)}
                       className={cn(
                         "w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer",
-                        isSelected ? "bg-primary/10 border border-primary/20 text-foreground" : "hover:bg-muted/60 text-foreground/80",
+                        isSelected
+                          ? "bg-primary/10 border border-primary/20 text-foreground"
+                          : "hover:bg-muted/60 text-foreground/80",
                       )}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-foreground flex items-center gap-1.5">
                           <span className="truncate">{item.name}</span>
                         </div>
-                        <div className="text-[10px] text-muted-foreground/70 truncate">{item.description}</div>
+                        <div className="text-[10px] text-muted-foreground/70 truncate">
+                          {item.description}
+                        </div>
                       </div>
-                      <span className={cn("text-[9px] font-mono px-1.5 py-0.5 rounded border shrink-0", item.badgeColor)}>
+                      <span
+                        className={cn(
+                          "text-[9px] font-mono px-1.5 py-0.5 rounded border shrink-0",
+                          item.badgeColor,
+                        )}
+                      >
                         {item.badge}
                       </span>
                     </button>
