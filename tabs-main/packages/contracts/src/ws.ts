@@ -91,14 +91,18 @@ import {
 import { ReviewProgressEvent } from "./review";
 import {
   TestingCaseReviewInput,
+  TestingBugDraftInput,
   TestingExplorationInput,
   TestingExecutionInput,
   TestingGenerationInput,
   TestingGenerationJobInput,
   TestingHealingDecisionInput,
   TestingProjectInput,
+  TestingReportInput,
   TestingScheduleInput,
   TestingTargetInput,
+  TestingTraceabilityInput,
+  TestingTriageInput,
   TestingWorkbookImportInput,
 } from "./testing";
 
@@ -122,6 +126,11 @@ export const WS_METHODS = {
   testingDecideHealingProposal: "testing.decideHealingProposal",
   testingCreateSchedule: "testing.createSchedule",
   testingListSchedules: "testing.listSchedules",
+  testingGenerateReport: "testing.generateReport",
+  testingGetTraceability: "testing.getTraceability",
+  testingDraftBug: "testing.draftBug",
+  testingGetGraphExplorer: "testing.getGraphExplorer",
+  testingTriageFailure: "testing.triageFailure",
   projectsAdd: "projects.add",
   projectsList: "projects.list",
   projectsListEntries: "projects.listEntries",
@@ -293,6 +302,11 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.testingDecideHealingProposal, TestingHealingDecisionInput),
   tagRequestBody(WS_METHODS.testingCreateSchedule, TestingScheduleInput),
   tagRequestBody(WS_METHODS.testingListSchedules, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingGenerateReport, TestingReportInput),
+  tagRequestBody(WS_METHODS.testingGetTraceability, TestingTraceabilityInput),
+  tagRequestBody(WS_METHODS.testingDraftBug, TestingBugDraftInput),
+  tagRequestBody(WS_METHODS.testingGetGraphExplorer, TestingProjectInput),
+  tagRequestBody(WS_METHODS.testingTriageFailure, TestingTriageInput),
 
   // Project Search
   tagRequestBody(WS_METHODS.projectsSearchEntries, ProjectSearchEntriesInput),

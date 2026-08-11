@@ -327,3 +327,67 @@
 - The live gate deliberately used a small controlled web app rather than exhaustively driving the
   large Tabs Electron shell. Electron execution remains supported through a generated target/CDP
   setup, but a broad Electron run was avoided per the agreed resource boundary.
+
+## 2026-08-12 — Phase 5: Reporting, Traceability, and Closed-Loop Triage
+
+### Built
+
+- Added primary sign-off report generation for completed Standalone/UAT rounds. A neutral
+  `standard_business_brief` design produces a Word document with explicit Letter geometry,
+  Calibri styles, fixed-DXA result table, running label/page number, executive totals,
+  environment/build/tester metadata, per-case evidence, round-over-round changes, healing/flaky/
+  visual summary, and traceability statement. The matching PDF is printed deterministically from
+  HTML through the repository Playwright/Chromium runtime with native page numbering.
+- Added exact external case-ID traceability across original workbook path/sheet/row or generated
+  scenario, reviewed case, generated POM/data/spec and locator count, every execution result, and
+  healing history. Partial IDs are not guessed. Added local-only bug drafts with executed steps,
+  expected/actual, target/revision, and trace/screenshot paths; no filing connector is called.
+- Added closed-loop CI failure triage through the existing selected Fusion provider/model. Only
+  non-quarantined failed CI cases qualify. Error context is PII-tokenized and credential-like
+  fields are redacted before the structured `failure-triage` operation; observed facts, model
+  inference, classification, and recommendation stay visibly separate and no source is changed.
+- Added a graph explorer API and an accessible UI table alternative that exposes every state URL,
+  page title, sanitized accessibility snapshot, linked case IDs, and transition count. Added
+  report inputs/paths, exact lookup, local bug drafts, and advisory triage to the stepwise Testing
+  UI with labelled controls, keyboard operation, and polite status messages.
+
+### Additive SQLite schema and storage
+
+- `testing_reports` records run, DOCX path, PDF path, and creation timestamp. Reports remain under
+  the server-managed `testing/reports/<report-id>/` directory beside the existing graph database,
+  profiles, generated suites, and execution evidence.
+- Traceability and graph exploration query the existing additive Phase 1-4 tables; no graph,
+  authentication profile, workbook provenance, artifact, execution, or healing record is copied or
+  discarded.
+
+### Verification
+
+- A persisted controlled Standalone run for exact ID `QA-0042` generated a real DOCX and PDF. The
+  traceability query returned `QA-0042`, workbook `controlled.xlsx`, one generated artifact with
+  one locator fingerprint, and the current `passed` execution/run ID. The report-generation test
+  opened the DOCX ZIP package and PDF header successfully and reported **1 passed**.
+- The first PDF render exposed a blank second page caused by fixed-footer print geometry. Chromium
+  native footer/page numbering replaced it. The final DOCX and final PDF each rendered to exactly
+  **1 US Letter page**; every page was inspected at original resolution with no clipping, overlap,
+  broken tables, missing glyphs, or inconsistent pagination. PDF text extraction confirmed `UAT
+  Sign-off Report`, `QA-0042`, `PASSED`, and `Traceability`. The DOCX accessibility audit returned
+  **0 high, 0 medium, 0 low findings**.
+- Final focused reporting/execution/generation/store/contracts/web verification reported **5 files
+  passed, 1 skipped; 41 tests passed, 2 skipped**. Web typecheck passed. Filtered server typecheck
+  produced no Testing or WebSocket errors; the repository-wide command remains non-zero only for
+  the previously logged upstream provider/contracts baseline. Full lint exited 0 with existing
+  warnings and the final full production build passed **5/5**.
+
+### End-to-end state and deferred validation
+
+- The integrated feature now covers scoped web/Electron-oriented discovery, local sign-in profile
+  reuse, Excel reconciliation/review, Fusion-model template generation, bounded execution,
+  review-only healing, flaky quarantine, visual evidence, Standalone/CI modes, reports,
+  traceability, local bug drafting, advisory coding-agent triage, and graph inspection.
+- No real company QA workbook, real authenticated UAT target, or credentials were supplied. Those
+  validations remain unclaimed. The Tabs Electron shell was not exhaustively crawled, in keeping
+  with the agreed resource boundary; testing can instead begin at a task-specific page/path.
+- Closed-loop triage is contract/provider tested but was not dispatched to a live paid provider in
+  this checkpoint. Ambiguous screenshot vision remains deferred until the shared provider layer
+  supports sanitized image attachments. Persistent schedule definitions are present, but an
+  always-on dispatcher while Tabs is closed is not claimed.

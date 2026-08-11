@@ -25,14 +25,18 @@ import {
   ProviderInstanceId,
   ThreadId,
   type TestingCaseReviewInput,
+  type TestingBugDraftInput,
   type TestingExplorationInput,
   type TestingExecutionInput,
   type TestingGenerationInput,
   type TestingGenerationJobInput,
   type TestingHealingDecisionInput,
   type TestingProjectInput,
+  type TestingReportInput,
   type TestingScheduleInput,
   type TestingTargetInput,
+  type TestingTraceabilityInput,
+  type TestingTriageInput,
   type TestingWorkbookImportInput,
   WS_CHANNELS,
   WS_METHODS,
@@ -889,6 +893,37 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.testingListSchedules: {
         const body = stripRequestTag(request.body) as TestingProjectInput;
         return testingService.listSchedules(body);
+      }
+
+      case WS_METHODS.testingGenerateReport: {
+        const body = stripRequestTag(request.body) as TestingReportInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.generateReport(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingGetTraceability: {
+        const body = stripRequestTag(request.body) as TestingTraceabilityInput;
+        return testingService.getTraceability(body);
+      }
+
+      case WS_METHODS.testingDraftBug: {
+        const body = stripRequestTag(request.body) as TestingBugDraftInput;
+        return testingService.draftBug(body);
+      }
+
+      case WS_METHODS.testingGetGraphExplorer: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.getGraphExplorer(body);
+      }
+
+      case WS_METHODS.testingTriageFailure: {
+        const body = stripRequestTag(request.body) as TestingTriageInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.triageFailure(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
       }
 
       case ORCHESTRATION_WS_METHODS.getSnapshot:

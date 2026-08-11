@@ -120,6 +120,37 @@ export const TestingScheduleInput = Schema.Struct({
 });
 export type TestingScheduleInput = typeof TestingScheduleInput.Type;
 
+export const TestingReportInput = Schema.Struct({
+  projectId: Schema.String,
+  runId: Schema.String,
+  testerName: Schema.String,
+  buildLabel: Schema.optionalKey(Schema.String),
+  environmentLabel: Schema.optionalKey(Schema.String),
+});
+export type TestingReportInput = typeof TestingReportInput.Type;
+
+export const TestingTraceabilityInput = Schema.Struct({
+  projectId: Schema.String,
+  externalId: Schema.String,
+});
+export type TestingTraceabilityInput = typeof TestingTraceabilityInput.Type;
+
+export const TestingBugDraftInput = Schema.Struct({
+  projectId: Schema.String,
+  runId: Schema.String,
+  caseId: Schema.String,
+});
+export type TestingBugDraftInput = typeof TestingBugDraftInput.Type;
+
+export const TestingTriageInput = Schema.Struct({
+  projectId: Schema.String,
+  projectPath: Schema.String,
+  runId: Schema.String,
+  caseId: Schema.String,
+  modelSelection: ModelSelection,
+});
+export type TestingTriageInput = typeof TestingTriageInput.Type;
+
 export const TestingCaseSource = Schema.Literals(["excel", "generated"]);
 export type TestingCaseSource = typeof TestingCaseSource.Type;
 export const TestingReconciliationStatus = Schema.Literals(["matches", "needs-review", "blocked"]);
@@ -267,6 +298,59 @@ export interface TestingScheduleListResult {
   readonly schedules: ReadonlyArray<TestingSchedule>;
 }
 
+export interface TestingReport {
+  readonly id: string;
+  readonly runId: string;
+  readonly docxPath: string;
+  readonly pdfPath: string;
+  readonly createdAt: string;
+}
+
+export interface TestingTraceabilityResult {
+  readonly case: TestingCaseSummary;
+  readonly import: { readonly workbookName: string; readonly workbookPath: string } | null;
+  readonly generatedArtifacts: ReadonlyArray<TestingGeneratedArtifact & { readonly jobId: string }>;
+  readonly executions: ReadonlyArray<{
+    readonly runId: string;
+    readonly mode: "standalone" | "ci";
+    readonly status: TestingExecutionCaseResult["status"];
+    readonly verifiedAt: string;
+    readonly durationMs: number;
+    readonly error: string | null;
+  }>;
+  readonly healing: ReadonlyArray<TestingHealingProposal & { readonly runId: string }>;
+}
+
+export interface TestingBugDraft {
+  readonly title: string;
+  readonly markdown: string;
+  readonly localOnly: true;
+}
+
+export interface TestingTriageResult {
+  readonly classification: "application-regression" | "test-update" | "uncertain";
+  readonly observedFacts: ReadonlyArray<string>;
+  readonly inference: string;
+  readonly recommendation: string;
+}
+
+export interface TestingGraphExplorerResult {
+  readonly nodes: ReadonlyArray<{
+    readonly stateId: string;
+    readonly pageUrl: string;
+    readonly pageTitle: string;
+    readonly snapshot: string;
+    readonly linkedCaseIds: ReadonlyArray<string>;
+  }>;
+  readonly edges: ReadonlyArray<{
+    readonly fromStateId: string;
+    readonly toStateId: string;
+    readonly role: string;
+    readonly name: string;
+    readonly intentLocator: string;
+  }>;
+}
+
 export interface TestingGraphSummary {
   readonly projectId: string;
   readonly targetUrl: string | null;
@@ -324,4 +408,9 @@ export interface TestingApi {
   ) => Promise<TestingExecutionRunListResult>;
   readonly createSchedule: (input: TestingScheduleInput) => Promise<TestingSchedule>;
   readonly listSchedules: (input: TestingProjectInput) => Promise<TestingScheduleListResult>;
+  readonly generateReport: (input: TestingReportInput) => Promise<TestingReport>;
+  readonly getTraceability: (input: TestingTraceabilityInput) => Promise<TestingTraceabilityResult>;
+  readonly draftBug: (input: TestingBugDraftInput) => Promise<TestingBugDraft>;
+  readonly getGraphExplorer: (input: TestingProjectInput) => Promise<TestingGraphExplorerResult>;
+  readonly triageFailure: (input: TestingTriageInput) => Promise<TestingTriageResult>;
 }

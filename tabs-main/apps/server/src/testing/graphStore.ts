@@ -12,6 +12,7 @@ import type {
   TestingExecutionRun,
   TestingExecutionRunListResult,
   TestingGraphSummary,
+  TestingGraphExplorerResult,
   TestingHealingDecisionInput,
   TestingHealingProposal,
   TestingGeneratedArtifact,
@@ -21,6 +22,7 @@ import type {
   TestingSchedule,
   TestingScheduleInput,
   TestingScheduleListResult,
+  TestingTraceabilityResult,
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
 
@@ -428,6 +430,14 @@ export class TestingGraphStore {
         recurrence TEXT NOT NULL CHECK (recurrence IN ('none', 'daily', 'weekly')),
         next_run_at TEXT NOT NULL,
         enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS testing_reports (
+        id TEXT PRIMARY KEY,
+        run_id TEXT NOT NULL REFERENCES execution_runs(id),
+        docx_path TEXT NOT NULL,
+        pdf_path TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
     `);
@@ -1362,6 +1372,134 @@ export class TestingGraphStore {
         enabled: Boolean(schedule.enabled),
       })),
     };
+  }
+
+  traceability(projectId: string, externalId: string): TestingTraceabilityResult {
+    const testCase = this.listCases(projectId).cases.find((item) => item.externalId === externalId);
+    if (!testCase) throw new Error(`Case ${externalId} was not found`);
+    const imported = this.#database
+      .query<
+        {
+          workbook_name: string;
+          workbook_path: string;
+        },
+        [string]
+      >(
+        `SELECT i.workbook_name, i.workbook_path FROM test_cases c
+       LEFT JOIN test_imports i ON i.id = c.import_id WHERE c.id = ?`,
+      )
+      .get(testCase.id);
+    const artifacts = this.#database
+      .query<
+        {
+          job_id: string;
+          case_id: string;
+          external_id: string;
+          feature_slug: string;
+          page_object_path: string;
+          data_path: string;
+          spec_path: string;
+          fingerprint_count: number;
+        },
+        [string]
+      >(
+        `SELECT a.job_id, a.case_id, a.external_id, a.feature_slug, a.page_object_path,
+       a.data_path, a.spec_path, COUNT(f.id) AS fingerprint_count
+       FROM generated_artifacts a LEFT JOIN locator_fingerprints f ON f.artifact_id = a.id
+       WHERE a.case_id = ? GROUP BY a.id ORDER BY a.created_at`,
+      )
+      .all(testCase.id);
+    const executions = this.#database
+      .query<
+        {
+          run_id: string;
+          mode: "standalone" | "ci";
+          status: TestingExecutionCaseResult["status"];
+          started_at: string;
+          duration_ms: number;
+          error: string | null;
+        },
+        [string]
+      >(
+        `SELECT r.id AS run_id, r.mode, cr.status, r.started_at, cr.duration_ms, cr.error
+       FROM execution_case_results cr JOIN execution_runs r ON r.id = cr.run_id
+       WHERE cr.case_id = ? ORDER BY r.started_at DESC`,
+      )
+      .all(testCase.id);
+    const healing = this.#database
+      .query<StoredHealingRow & { run_id: string }, [string]>(
+        `SELECT id, run_id, case_id, locator_key, previous_role, previous_name, proposed_role,
+       proposed_name, confidence, margin, diff, status, consecutive_attempts
+       FROM healing_proposals WHERE case_id = ? ORDER BY created_at DESC`,
+      )
+      .all(testCase.id);
+    return {
+      case: testCase,
+      import: imported?.workbook_name
+        ? {
+            workbookName: imported.workbook_name,
+            workbookPath: imported.workbook_path,
+          }
+        : null,
+      generatedArtifacts: artifacts.map((artifact) => ({
+        jobId: artifact.job_id,
+        caseId: artifact.case_id,
+        externalId: artifact.external_id,
+        featureSlug: artifact.feature_slug,
+        pageObjectPath: artifact.page_object_path,
+        dataPath: artifact.data_path,
+        specPath: artifact.spec_path,
+        fingerprintCount: artifact.fingerprint_count,
+      })),
+      executions: executions.map((execution) => ({
+        runId: execution.run_id,
+        mode: execution.mode,
+        status: execution.status,
+        verifiedAt: execution.started_at,
+        durationMs: execution.duration_ms,
+        error: execution.error,
+      })),
+      healing: healing.map((proposal) => ({
+        id: proposal.id,
+        runId: proposal.run_id,
+        caseId: proposal.case_id,
+        locatorKey: proposal.locator_key,
+        previousRole: proposal.previous_role,
+        previousName: proposal.previous_name,
+        proposedRole: proposal.proposed_role,
+        proposedName: proposal.proposed_name,
+        confidence: proposal.confidence,
+        margin: proposal.margin,
+        diff: proposal.diff,
+        status: proposal.status,
+        consecutiveAttempts: proposal.consecutive_attempts,
+      })),
+    };
+  }
+
+  graphExplorer(projectId: string): TestingGraphExplorerResult {
+    const graph = this.graph(projectId);
+    const cases = this.listCases(projectId).cases;
+    return {
+      nodes: graph.nodes.map((node) => ({
+        ...node,
+        linkedCaseIds: cases
+          .filter((testCase) => testCase.matchedStateIds.includes(node.stateId))
+          .map((testCase) => testCase.externalId),
+      })),
+      edges: graph.edges,
+    };
+  }
+
+  saveReport(runId: string, docxPath: string, pdfPath: string): { id: string; createdAt: string } {
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    this.#database
+      .query(
+        "INSERT INTO testing_reports (id, run_id, docx_path, pdf_path, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(id, runId, docxPath, pdfPath, createdAt);
+    return { id, createdAt };
   }
 
   summary(projectId: string): TestingGraphSummary {

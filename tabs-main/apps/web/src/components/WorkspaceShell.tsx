@@ -14,11 +14,13 @@ import {
   type GitStatusFile,
   type ModelSelection,
   type TestingGraphSummary,
+  type TestingGraphExplorerResult,
   type TestingCaseSummary,
   type TestingGenerationJob,
   type TestingExplorationScope,
   type TestingExecutionRun,
   type TestingSchedule,
+  type TestingTraceabilityResult,
   DEFAULT_TESTING_BATCH_MAX_CASES,
   DEFAULT_TESTING_BATCH_MAX_COST_USD,
   DEFAULT_TESTING_BATCH_MAX_TOKENS,
@@ -1074,6 +1076,15 @@ function TestingTool(props: {
   const [executionMode, setExecutionMode] = useState<"standalone" | "ci">("standalone");
   const [visualComparison, setVisualComparison] = useState(false);
   const [scheduleTime, setScheduleTime] = useState("");
+  const [testerName, setTesterName] = useState("");
+  const [traceCaseId, setTraceCaseId] = useState("");
+  const [traceability, setTraceability] = useState<TestingTraceabilityResult | null>(null);
+  const [graphExplorer, setGraphExplorer] = useState<TestingGraphExplorerResult | null>(null);
+  const [reportPaths, setReportPaths] = useState<{ docxPath: string; pdfPath: string } | null>(
+    null,
+  );
+  const [bugDraft, setBugDraft] = useState("");
+  const [triageResult, setTriageResult] = useState("");
   const [generationModelSelection, setGenerationModelSelection] = useState<ModelSelection>(
     () => props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL),
   );
@@ -1112,6 +1123,10 @@ function TestingTool(props: {
     | "run-tests"
     | "healing-decision"
     | "schedule"
+    | "report"
+    | "trace"
+    | "bug-draft"
+    | "triage"
     | null
   >(null);
   const [authCaptureOpen, setAuthCaptureOpen] = useState(false);
@@ -1150,16 +1165,24 @@ function TestingTool(props: {
     setTestingSchedules(schedules.schedules);
   }, [props.projectId]);
 
+  const refreshGraphExplorer = useCallback(async () => {
+    const result = await (readNativeApi() ?? ensureNativeApi()).testing.getGraphExplorer({
+      projectId: props.projectId,
+    });
+    setGraphExplorer(result);
+  }, [props.projectId]);
+
   useEffect(() => {
     void Promise.all([
       refreshStatus(),
       refreshCases(),
       refreshGenerationJobs(),
       refreshExecution(),
+      refreshGraphExplorer(),
     ]).catch((error) => {
       setMessage(error instanceof Error ? error.message : "Could not load Testing status.");
     });
-  }, [refreshCases, refreshExecution, refreshGenerationJobs, refreshStatus]);
+  }, [refreshCases, refreshExecution, refreshGenerationJobs, refreshGraphExplorer, refreshStatus]);
 
   const normalizedTarget = useMemo(() => {
     const trimmed = targetUrl.trim();
@@ -1507,6 +1530,89 @@ function TestingTool(props: {
       setMessage("Local one-off run scheduled. Its timezone and next run remain visible here.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not create the schedule.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const generateSignoffReport = async () => {
+    const run = executionRuns.find(
+      (candidate) => candidate.mode === "standalone" && candidate.completedAt,
+    );
+    if (!run || !testerName.trim()) return;
+    setBusyAction("report");
+    try {
+      const report = await ensureNativeApi().testing.generateReport({
+        projectId: props.projectId,
+        runId: run.id,
+        testerName: testerName.trim(),
+        environmentLabel: normalizedTarget ?? "Configured target",
+        buildLabel: run.artifactRevision,
+      });
+      setReportPaths({ docxPath: report.docxPath, pdfPath: report.pdfPath });
+      setMessage("Word and PDF sign-off reports were generated from persisted run evidence.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not generate the sign-off report.",
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const resolveTraceability = async () => {
+    if (!traceCaseId.trim()) return;
+    setBusyAction("trace");
+    try {
+      const result = await ensureNativeApi().testing.getTraceability({
+        projectId: props.projectId,
+        externalId: traceCaseId.trim(),
+      });
+      setTraceability(result);
+      setMessage(`Resolved ${result.case.externalId} through generation and execution evidence.`);
+    } catch (error) {
+      setTraceability(null);
+      setMessage(error instanceof Error ? error.message : "Case traceability lookup failed.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const draftFailedCaseBug = async (run: TestingExecutionRun, caseId: string) => {
+    setBusyAction("bug-draft");
+    try {
+      const draft = await ensureNativeApi().testing.draftBug({
+        projectId: props.projectId,
+        runId: run.id,
+        caseId,
+      });
+      setBugDraft(draft.markdown);
+      setMessage("Local bug draft created. Nothing was filed or transmitted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not draft the bug.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const triageFailedCase = async (run: TestingExecutionRun, caseId: string) => {
+    setBusyAction("triage");
+    try {
+      const result = await ensureNativeApi().testing.triageFailure({
+        projectId: props.projectId,
+        projectPath: props.projectPath,
+        runId: run.id,
+        caseId,
+        modelSelection: generationModelSelection,
+      });
+      setTriageResult(
+        `${result.classification}: ${result.inference}\n\nObserved facts:\n${result.observedFacts.map((fact) => `- ${fact}`).join("\n")}\n\nRecommendation: ${result.recommendation}`,
+      );
+      setMessage(
+        "Coding-agent triage completed. Its inference is shown separately from observed facts.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not triage the failed CI case.");
     } finally {
       setBusyAction(null);
     }
@@ -2528,13 +2634,39 @@ function TestingTool(props: {
                       {run.results.map((result) => (
                         <li
                           key={`${run.id}-${result.caseId}`}
-                          className="text-sm text-muted-foreground"
+                          className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground"
                         >
-                          {result.externalId}: {result.status}
-                          {result.quarantined ? " · flaky, quarantined from gate" : ""}
-                          {result.visualStatus !== "disabled"
-                            ? ` · visual ${result.visualStatus}`
-                            : ""}
+                          <span>
+                            {result.externalId}: {result.status}
+                            {result.quarantined ? " · flaky, quarantined from gate" : ""}
+                            {result.visualStatus !== "disabled"
+                              ? ` · visual ${result.visualStatus}`
+                              : ""}
+                          </span>
+                          {result.status === "failed" ? (
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void draftFailedCaseBug(run, result.caseId)}
+                                disabled={busyAction !== null}
+                              >
+                                Draft local bug
+                              </Button>
+                              {run.mode === "ci" && !result.quarantined ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void triageFailedCase(run, result.caseId)}
+                                  disabled={busyAction !== null}
+                                >
+                                  Triage with Fusion model
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
@@ -2579,6 +2711,200 @@ function TestingTool(props: {
               ))
             )}
           </div>
+        </section>
+
+        <section aria-labelledby="testing-reporting-heading" className="space-y-4">
+          <div className="space-y-1">
+            <div className="text-xs font-medium uppercase tracking-[0.14em] text-emerald-600">
+              Phase 5
+            </div>
+            <h2 id="testing-reporting-heading" className="text-lg font-semibold text-foreground">
+              Report and traceability
+            </h2>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Export a sign-off packet, resolve a case ID through its full evidence chain, and
+              inspect the stored model of the application without reading source code.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>UAT sign-off report</CardTitle>
+                <CardDescription>
+                  Creates matching Word and PDF reports from the latest completed Standalone round.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="testing-tester-name" className="text-sm font-medium">
+                    Tester name
+                  </label>
+                  <Input
+                    id="testing-tester-name"
+                    value={testerName}
+                    onChange={(event) => setTesterName(event.target.value)}
+                    disabled={busyAction !== null}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void generateSignoffReport()}
+                  disabled={
+                    busyAction !== null ||
+                    !testerName.trim() ||
+                    !executionRuns.some((run) => run.mode === "standalone" && run.completedAt)
+                  }
+                >
+                  {busyAction === "report" ? (
+                    <LoaderIcon aria-hidden="true" className="animate-spin" />
+                  ) : null}
+                  Generate Word and PDF
+                </Button>
+                {reportPaths ? (
+                  <div className="space-y-1 text-xs text-muted-foreground" role="status">
+                    <p className="break-all">Word: {reportPaths.docxPath}</p>
+                    <p className="break-all">PDF: {reportPaths.pdfPath}</p>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Exact case lookup</CardTitle>
+                <CardDescription>
+                  Use the original Excel ID or generated scenario ID; partial matches are not
+                  guessed.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="testing-trace-case-id" className="text-sm font-medium">
+                    Case ID
+                  </label>
+                  <Input
+                    id="testing-trace-case-id"
+                    value={traceCaseId}
+                    onChange={(event) => setTraceCaseId(event.target.value)}
+                    placeholder="QA-0042"
+                    disabled={busyAction !== null}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void resolveTraceability()}
+                  disabled={busyAction !== null || !traceCaseId.trim()}
+                >
+                  Resolve evidence chain
+                </Button>
+                {traceability ? (
+                  <div className="space-y-2 rounded-lg border border-border/70 p-4 text-sm">
+                    <p className="font-medium">
+                      {traceability.case.externalId}: {traceability.case.description}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Current status: {traceability.case.standaloneStatus} ·{" "}
+                      {traceability.generatedArtifacts.length} generated artifacts ·{" "}
+                      {traceability.executions.length} executions · {traceability.healing.length}{" "}
+                      healing decisions
+                    </p>
+                    {traceability.import ? (
+                      <p className="break-all text-xs text-muted-foreground">
+                        Workbook: {traceability.import.workbookName} (
+                        {traceability.import.workbookPath})
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
+
+          {bugDraft ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Local bug draft</CardTitle>
+                <CardDescription>
+                  Review this draft. Testing will not file or transmit it.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-xs">
+                  {bugDraft}
+                </pre>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {triageResult ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Coding-agent triage</CardTitle>
+                <CardDescription>
+                  Model inference is advisory and is kept separate from persisted observed facts.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-4 text-xs">
+                  {triageResult}
+                </pre>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>State graph explorer</CardTitle>
+              <CardDescription>
+                Accessible list alternative showing URLs, stored accessibility snapshots, linked
+                cases, and transitions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="max-h-96 overflow-auto rounded-lg border border-border/70">
+                <table className="w-full text-left text-xs">
+                  <caption className="sr-only">Stored application states and linked cases</caption>
+                  <thead className="sticky top-0 bg-muted">
+                    <tr>
+                      <th scope="col" className="p-3">
+                        State
+                      </th>
+                      <th scope="col" className="p-3">
+                        URL and snapshot
+                      </th>
+                      <th scope="col" className="p-3">
+                        Linked cases
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(graphExplorer?.nodes ?? []).map((node) => (
+                      <tr key={node.stateId} className="border-t border-border/70 align-top">
+                        <th scope="row" className="p-3 font-medium">
+                          {node.pageTitle || node.stateId}
+                        </th>
+                        <td className="p-3">
+                          <div className="break-all text-muted-foreground">{node.pageUrl}</div>
+                          <pre className="mt-2 max-w-xl whitespace-pre-wrap">
+                            {node.snapshot.slice(0, 500)}
+                          </pre>
+                        </td>
+                        <td className="p-3 text-muted-foreground">
+                          {node.linkedCaseIds.join(", ") || "None"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-muted-foreground" role="status">
+                {graphExplorer?.nodes.length ?? 0} states and {graphExplorer?.edges.length ?? 0}{" "}
+                transitions loaded.
+              </p>
+            </CardContent>
+          </Card>
         </section>
       </div>
     </main>

@@ -174,6 +174,13 @@ export function createWsNativeApi(): NativeApi {
         transport.request(WS_METHODS.testingDecideHealingProposal, input),
       createSchedule: (input) => transport.request(WS_METHODS.testingCreateSchedule, input),
       listSchedules: (input) => transport.request(WS_METHODS.testingListSchedules, input),
+      generateReport: (input) =>
+        transport.request(WS_METHODS.testingGenerateReport, input, { timeoutMs: null }),
+      getTraceability: (input) => transport.request(WS_METHODS.testingGetTraceability, input),
+      draftBug: (input) => transport.request(WS_METHODS.testingDraftBug, input),
+      getGraphExplorer: (input) => transport.request(WS_METHODS.testingGetGraphExplorer, input),
+      triageFailure: (input) =>
+        transport.request(WS_METHODS.testingTriageFailure, input, { timeoutMs: null }),
     },
     dialogs: {
       pickFolder: async () => {

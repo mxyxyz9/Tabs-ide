@@ -2,6 +2,8 @@ import { join } from "node:path";
 
 import type {
   TestingAuthStartResult,
+  TestingBugDraft,
+  TestingBugDraftInput,
   TestingCaseListResult,
   TestingCaseReviewInput,
   TestingClearGraphResult,
@@ -10,6 +12,7 @@ import type {
   TestingExecutionInput,
   TestingExecutionRun,
   TestingExecutionRunListResult,
+  TestingGraphExplorerResult,
   TestingGraphSummary,
   TestingGenerationInput,
   TestingGenerationJob,
@@ -17,13 +20,21 @@ import type {
   TestingGenerationJobListResult,
   TestingHealingDecisionInput,
   TestingProjectInput,
+  TestingReport,
+  TestingReportInput,
   TestingSchedule,
   TestingScheduleInput,
   TestingScheduleListResult,
   TestingTargetInput,
+  TestingTraceabilityInput,
+  TestingTraceabilityResult,
+  TestingTriageInput,
+  TestingTriageResult,
   TestingWorkbookImportInput,
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
+import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
 
 import { TestingCrawler } from "./crawler";
@@ -31,18 +42,26 @@ import { TestingGraphStore } from "./graphStore";
 import { TestingGenerator } from "./generator";
 import { TestingExecutor } from "./execution";
 import { createPlaywrightMcpSession, type PlaywrightMcpSession } from "./playwrightMcp";
+import { TestingReporter } from "./reporting";
 import {
   reconcileWorkbookCase,
   scenariosFromGraph,
   verifyReconciledCaseLive,
 } from "./reconciliation";
-import { shortDigest } from "./security";
+import { shortDigest, tokenizePii } from "./security";
 import { parseTestingWorkbook } from "./workbookParser";
 
 interface AuthCapture {
   readonly session: PlaywrightMcpSession;
   readonly profilePath: string;
 }
+
+const FailureTriage = Schema.Struct({
+  classification: Schema.Literals(["application-regression", "test-update", "uncertain"]),
+  observedFacts: Schema.Array(Schema.String),
+  inference: Schema.String,
+  recommendation: Schema.String,
+});
 
 export class TestingService {
   readonly #testingRoot: string;
@@ -51,6 +70,8 @@ export class TestingService {
   readonly #runningCrawls = new Set<string>();
   readonly #generator: TestingGenerator | null;
   readonly #executor: TestingExecutor;
+  readonly #reporter: TestingReporter;
+  readonly #textGeneration: TextGenerationShape | null;
 
   constructor(stateDirectory: string, textGeneration?: TextGenerationShape) {
     this.#testingRoot = join(stateDirectory, "testing");
@@ -58,7 +79,9 @@ export class TestingService {
     this.#generator = textGeneration
       ? new TestingGenerator(this.#store, this.#testingRoot, textGeneration)
       : null;
+    this.#textGeneration = textGeneration ?? null;
     this.#executor = new TestingExecutor(this.#store, this.#testingRoot);
+    this.#reporter = new TestingReporter(this.#store, this.#testingRoot);
   }
 
   close(): void {
@@ -209,5 +232,100 @@ export class TestingService {
 
   listSchedules(input: TestingProjectInput): TestingScheduleListResult {
     return this.#store.listSchedules(input.projectId);
+  }
+
+  generateReport(input: TestingReportInput): Promise<TestingReport> {
+    return this.#reporter.generate(input);
+  }
+
+  getTraceability(input: TestingTraceabilityInput): TestingTraceabilityResult {
+    return this.#store.traceability(input.projectId, input.externalId);
+  }
+
+  draftBug(input: TestingBugDraftInput): TestingBugDraft {
+    const run = this.#store
+      .executionRuns(input.projectId)
+      .runs.find((item) => item.id === input.runId);
+    const result = run?.results.find((item) => item.caseId === input.caseId);
+    const testCase = this.#store
+      .listCases(input.projectId)
+      .cases.find((item) => item.id === input.caseId);
+    if (!run || !result || !testCase || result.status !== "failed") {
+      throw new Error("A failed execution result is required to draft a bug");
+    }
+    return {
+      title: `${testCase.externalId}: ${testCase.description}`,
+      markdown: [
+        `# ${testCase.externalId}: ${testCase.description}`,
+        "",
+        "## Environment",
+        `- Target: ${run.targetUrl}`,
+        `- Run: ${run.id}`,
+        `- Artifact revision: ${run.artifactRevision}`,
+        "",
+        "## Reproduction steps",
+        ...testCase.steps.map((step, index) => `${index + 1}. ${step}`),
+        "",
+        "## Expected",
+        testCase.description,
+        "",
+        "## Actual",
+        result.error ?? "The generated test failed without additional error text.",
+        "",
+        "## Local evidence",
+        `- Trace: ${result.tracePath ?? "Not captured"}`,
+        `- Screenshot: ${result.screenshotPath ?? "Not captured"}`,
+        "",
+        "Draft only - review before filing or transmitting.",
+      ].join("\n"),
+      localOnly: true,
+    };
+  }
+
+  getGraphExplorer(input: TestingProjectInput): TestingGraphExplorerResult {
+    return this.#store.graphExplorer(input.projectId);
+  }
+
+  async triageFailure(input: TestingTriageInput): Promise<TestingTriageResult> {
+    if (!this.#textGeneration) throw new Error("No configured coding-agent backend is available");
+    const run = this.#store
+      .executionRuns(input.projectId)
+      .runs.find((item) => item.id === input.runId);
+    const result = run?.results.find((item) => item.caseId === input.caseId);
+    const testCase = this.#store
+      .listCases(input.projectId)
+      .cases.find((item) => item.id === input.caseId);
+    if (
+      !run ||
+      run.mode !== "ci" ||
+      !result ||
+      !testCase ||
+      result.status !== "failed" ||
+      result.quarantined
+    ) {
+      throw new Error("Triage requires a non-quarantined failed CI case");
+    }
+    const raw = [
+      `Case: ${testCase.externalId} - ${testCase.description}`,
+      `Expected steps: ${testCase.steps.join(" | ")}`,
+      `Observed failure: ${result.error ?? "No error text"}`,
+      `Artifact revision: ${run.artifactRevision}`,
+      "Separate observed facts from inference. Decide whether this is an application regression, a test update, or uncertain.",
+    ].join("\n");
+    const sanitized = tokenizePii(input.projectId, raw).tokenized.replace(
+      /(?:authorization|cookie|password|token)\s*[:=]\s*\S+/gi,
+      "$1=<REDACTED>",
+    );
+    return Effect.runPromise(
+      this.#textGeneration.generateStructuredTesting({
+        cwd: input.projectPath,
+        taskKind: "failure-triage",
+        sanitizedPrompt: sanitized,
+        outputSchema: FailureTriage,
+        modelSelection: input.modelSelection,
+        reasoningTier: "high",
+        budget: { maxEstimatedTokens: 8_000, maxEstimatedCostUsd: 1 },
+      }),
+    );
   }
 }
