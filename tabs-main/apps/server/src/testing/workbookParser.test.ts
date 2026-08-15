@@ -59,9 +59,11 @@ describe("Testing workbook ingestion and reconciliation", () => {
     expect(parsed.cases[0]).toMatchObject({
       externalId: "QA-001",
       sourceSheet: "QA Cases",
-      sourceRow: 4,
+      sourceRow: 5,
       steps: ['Activate link "Profile"', 'Activate button "Save changes"'],
     });
+    // expectedResult defaults to empty string for workbooks without the column.
+    expect(typeof parsed.cases[0]?.expectedResult).toBe("string");
     expect(parsed.cases[0]?.errors).toContain("Duplicate Case ID");
     expect(parsed.cases[2]?.errors).toContain("Duplicate Case ID");
     expect(parsed.cases[3]?.errors).toContain("Case ID is blank");
@@ -104,5 +106,24 @@ describe("Testing workbook ingestion and reconciliation", () => {
       externalId: "DISCOVERED-002",
       matchedStateIds: ["root", "profile", "saved"],
     });
+    // Each auto-generated scenario should carry an expectedResult string.
+    expect(typeof scenarios[0]?.expectedResult).toBe("string");
+    expect(scenarios[1]?.expectedResult).toContain("Saved");
+  });
+
+  it("flags an expected-result mismatch when the described outcome has no graph evidence", () => {
+    const parsedWithExpected = {
+      externalId: "QA-ER-001",
+      description: "Submit the checkout form",
+      steps: ['Activate link "Profile"'],
+      expectedResult: "Order confirmation screen appears with invoice number",
+      sourceSheet: "QA Cases",
+      sourceRow: 2,
+      errors: [],
+    };
+    const result = reconcileWorkbookCase(parsedWithExpected, graph);
+    expect(result.mismatches.some((m) => m.kind === "expected-result")).toBe(true);
+    const erMismatch = result.mismatches.find((m) => m.kind === "expected-result")!;
+    expect(erMismatch.expected).toBe("Order confirmation screen appears with invoice number");
   });
 });

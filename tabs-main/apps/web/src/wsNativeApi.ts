@@ -149,6 +149,42 @@ export function createWsNativeApi(): NativeApi {
   const api: NativeApi = {
     testing: {
       getStatus: (input) => transport.request(WS_METHODS.testingGetStatus, input),
+      getLocatorLibrary: (input) => transport.request(WS_METHODS.testingGetLocatorLibrary, input),
+      setDiscoveryExperience: (input) =>
+        transport.request(WS_METHODS.testingSetDiscoveryExperience, input),
+      getCaseIdPolicy: (input) => transport.request(WS_METHODS.testingGetCaseIdPolicy, input),
+      setCaseIdPolicy: (input) => transport.request(WS_METHODS.testingSetCaseIdPolicy, input),
+      getTestInventory: (input) => transport.request(WS_METHODS.testingGetTestInventory, input),
+      startLocatorDiscovery: (input) =>
+        transport.request(WS_METHODS.testingStartLocatorDiscovery, input, { timeoutMs: null }),
+      navigateLocatorDiscovery: (input) =>
+        transport.request(WS_METHODS.testingNavigateLocatorDiscovery, input, { timeoutMs: null }),
+      captureLocatorPage: (input) =>
+        transport.request(WS_METHODS.testingCaptureLocatorPage, input, { timeoutMs: null }),
+      finishLocatorDiscovery: (input) =>
+        transport.request(WS_METHODS.testingFinishLocatorDiscovery, input, { timeoutMs: null }),
+      cancelLocatorDiscovery: (input) =>
+        transport.request(WS_METHODS.testingCancelLocatorDiscovery, input, { timeoutMs: null }),
+      reviewLocatorEntry: (input) => transport.request(WS_METHODS.testingReviewLocatorEntry, input),
+      updateLocatorPage: (input) => transport.request(WS_METHODS.testingUpdateLocatorPage, input),
+      setLocatorPageSelection: (input) =>
+        transport.request(WS_METHODS.testingSetLocatorPageSelection, input),
+      updatePageObjectCode: (input) =>
+        transport.request(WS_METHODS.testingUpdatePageObjectCode, input),
+      previewLocatorRepositoryWrite: (input) =>
+        transport.request(WS_METHODS.testingPreviewLocatorRepositoryWrite, input),
+      applyLocatorRepositoryWrite: (input) =>
+        transport.request(WS_METHODS.testingApplyLocatorRepositoryWrite, input),
+      previewLocatorSync: (input) => transport.request(WS_METHODS.testingPreviewLocatorSync, input),
+      resolveLocatorSync: (input) => transport.request(WS_METHODS.testingResolveLocatorSync, input),
+      disconnectLocatorFolder: (input) =>
+        transport.request(WS_METHODS.testingDisconnectLocatorFolder, input),
+      indexLocatorFolder: (input) =>
+        transport.request(WS_METHODS.testingIndexLocatorFolder, input, { timeoutMs: null }),
+      verifyLocators: (input) =>
+        transport.request(WS_METHODS.testingVerifyLocators, input, { timeoutMs: null }),
+      importUserStory: (input) =>
+        transport.request(WS_METHODS.testingImportUserStory, input, { timeoutMs: null }),
       startAuthCapture: (input) =>
         transport.request(WS_METHODS.testingStartAuthCapture, input, { timeoutMs: null }),
       finishAuthCapture: (input) =>
@@ -158,6 +194,7 @@ export function createWsNativeApi(): NativeApi {
       importWorkbook: (input) =>
         transport.request(WS_METHODS.testingImportWorkbook, input, { timeoutMs: null }),
       listCases: (input) => transport.request(WS_METHODS.testingListCases, input),
+      createCase: (input) => transport.request(WS_METHODS.testingCreateCase, input),
       reviewCase: (input) => transport.request(WS_METHODS.testingReviewCase, input),
       generateScenarios: (input) =>
         transport.request(WS_METHODS.testingGenerateScenarios, input, { timeoutMs: null }),

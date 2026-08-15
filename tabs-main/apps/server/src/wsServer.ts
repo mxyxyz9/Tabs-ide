@@ -24,17 +24,33 @@ import {
   ProjectId,
   ProviderInstanceId,
   ThreadId,
+  type TestingCaseCreateInput,
   type TestingCaseReviewInput,
+  type TestingCaseIdPolicyInput,
   type TestingBugDraftInput,
+  type TestingDiscoveryExperienceInput,
   type TestingExplorationInput,
   type TestingExecutionInput,
   type TestingGenerationInput,
   type TestingGenerationJobInput,
   type TestingHealingDecisionInput,
+  type TestingLocatorDiscoveryInput,
+  type TestingLocatorDiscoveryNavigateInput,
+  type TestingLocatorDiscoverySessionInput,
+  type TestingLocatorEntryReviewInput,
+  type TestingLocatorPageSelectionInput,
+  type TestingLocatorPageUpdateInput,
+  type TestingPageObjectCodeUpdateInput,
+  type TestingLocatorRepositoryApplyInput,
+  type TestingLocatorRepositoryPreviewInput,
+  type TestingLocatorSyncDecisionInput,
+  type TestingLocatorFolderInput,
+  type TestingLocatorVerificationInput,
   type TestingProjectInput,
   type TestingReportInput,
   type TestingScheduleInput,
   type TestingTargetInput,
+  type TestingStoryImportInput,
   type TestingTraceabilityInput,
   type TestingTriageInput,
   type TestingWorkbookImportInput,
@@ -797,6 +813,148 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return testingService.getStatus(body);
       }
 
+      case WS_METHODS.testingGetLocatorLibrary: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.getLocatorLibrary(body);
+      }
+
+      case WS_METHODS.testingSetDiscoveryExperience: {
+        const body = stripRequestTag(request.body) as TestingDiscoveryExperienceInput;
+        return testingService.setDiscoveryExperience(body);
+      }
+
+      case WS_METHODS.testingGetCaseIdPolicy: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.getCaseIdPolicy(body);
+      }
+
+      case WS_METHODS.testingSetCaseIdPolicy: {
+        const body = stripRequestTag(request.body) as TestingCaseIdPolicyInput;
+        return testingService.setCaseIdPolicy(body);
+      }
+
+      case WS_METHODS.testingGetTestInventory: {
+        const body = stripRequestTag(request.body) as TestingProjectInput & {
+          readonly projectPath: string;
+        };
+        return testingService.getTestInventory(body);
+      }
+
+      case WS_METHODS.testingStartLocatorDiscovery: {
+        const body = stripRequestTag(request.body) as TestingLocatorDiscoveryInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.startLocatorDiscovery(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingNavigateLocatorDiscovery: {
+        const body = stripRequestTag(request.body) as TestingLocatorDiscoveryNavigateInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.navigateLocatorDiscovery(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingCaptureLocatorPage: {
+        const body = stripRequestTag(request.body) as TestingLocatorDiscoverySessionInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.captureLocatorPage(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingFinishLocatorDiscovery: {
+        const body = stripRequestTag(request.body) as TestingLocatorDiscoverySessionInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.finishLocatorDiscovery(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingCancelLocatorDiscovery: {
+        const body = stripRequestTag(request.body) as TestingLocatorDiscoverySessionInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.cancelLocatorDiscovery(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingReviewLocatorEntry: {
+        const body = stripRequestTag(request.body) as TestingLocatorEntryReviewInput;
+        return testingService.reviewLocatorEntry(body);
+      }
+
+      case WS_METHODS.testingUpdateLocatorPage: {
+        const body = stripRequestTag(request.body) as TestingLocatorPageUpdateInput;
+        return testingService.updateLocatorPage(body);
+      }
+
+      case WS_METHODS.testingSetLocatorPageSelection: {
+        const body = stripRequestTag(request.body) as TestingLocatorPageSelectionInput;
+        return testingService.setLocatorPageSelection(body);
+      }
+
+      case WS_METHODS.testingUpdatePageObjectCode: {
+        const body = stripRequestTag(request.body) as TestingPageObjectCodeUpdateInput;
+        return testingService.updatePageObjectCode(body);
+      }
+
+      case WS_METHODS.testingPreviewLocatorRepositoryWrite: {
+        const body = stripRequestTag(request.body) as TestingLocatorRepositoryPreviewInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.previewLocatorRepositoryWrite(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingApplyLocatorRepositoryWrite: {
+        const body = stripRequestTag(request.body) as TestingLocatorRepositoryApplyInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.applyLocatorRepositoryWrite(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingPreviewLocatorSync: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.previewLocatorSync(body);
+      }
+
+      case WS_METHODS.testingResolveLocatorSync: {
+        const body = stripRequestTag(request.body) as TestingLocatorSyncDecisionInput;
+        return testingService.resolveLocatorSync(body);
+      }
+
+      case WS_METHODS.testingDisconnectLocatorFolder: {
+        const body = stripRequestTag(request.body) as TestingProjectInput;
+        return testingService.disconnectLocatorFolder(body);
+      }
+
+      case WS_METHODS.testingIndexLocatorFolder: {
+        const body = stripRequestTag(request.body) as TestingLocatorFolderInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.indexLocatorFolder(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingVerifyLocators: {
+        const body = stripRequestTag(request.body) as TestingLocatorVerificationInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.verifyLocators(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
+      case WS_METHODS.testingImportUserStory: {
+        const body = stripRequestTag(request.body) as TestingStoryImportInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.importUserStory(body),
+          catch: (cause) => new RouteRequestError({ message: String(cause) }),
+        });
+      }
+
       case WS_METHODS.testingStartAuthCapture: {
         const body = stripRequestTag(request.body) as TestingTargetInput;
         return yield* Effect.tryPromise({
@@ -832,6 +990,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.testingListCases: {
         const body = stripRequestTag(request.body) as TestingProjectInput;
         return testingService.listCases(body);
+      }
+
+      case WS_METHODS.testingCreateCase: {
+        const body = stripRequestTag(request.body) as TestingCaseCreateInput;
+        return testingService.createCase(body);
       }
 
       case WS_METHODS.testingReviewCase: {

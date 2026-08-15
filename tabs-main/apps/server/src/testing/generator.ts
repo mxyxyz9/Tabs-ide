@@ -8,13 +8,15 @@ import {
   type TestingCaseSummary,
   type TestingGenerationInput,
   type TestingGenerationJob,
+  type TestingLocatorEntry,
 } from "@tabs/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
 import type { StoredGraphEdge, StoredGraphNode, TestingGraphStore } from "./graphStore";
-import { shortDigest } from "./security";
+import type { LocatorLibraryStore } from "./locatorLibrary";
+import { sanitizePersistedUrl, shortDigest } from "./security";
 
 const GenerationPlan = Schema.Struct({
   featureSlug: Schema.String,
@@ -38,6 +40,17 @@ interface TestingGenerationTemplate {
     readonly spec: string;
   };
   readonly classPattern: string;
+}
+
+interface GenerationLocator {
+  readonly key: string;
+  readonly strategy: TestingLocatorEntry["strategy"];
+  readonly arguments: Readonly<Record<string, string | number | boolean>>;
+  readonly semanticContext: string;
+  readonly graphStateId: string;
+  readonly urlPattern: string;
+  readonly locatorEntryId?: string;
+  readonly locatorVersionId?: string;
 }
 
 const BUILT_IN_TEMPLATE: TestingGenerationTemplate = {
@@ -92,6 +105,37 @@ function edgesForCase(
     if (edge) edges.push(edge);
   }
   return edges;
+}
+
+function graphLocators(
+  edges: ReadonlyArray<StoredGraphEdge>,
+  graph: { readonly nodes: ReadonlyArray<StoredGraphNode> },
+  targetUrl: string,
+): ReadonlyArray<GenerationLocator> {
+  return edges.map((edge, index) => ({
+    key: identifier(`${edge.name}-${index + 1}`),
+    strategy: "role",
+    arguments: { role: edge.role, name: edge.name },
+    semanticContext: `${edge.role} ${edge.name}`,
+    graphStateId: edge.fromStateId,
+    urlPattern: graph.nodes.find((node) => node.stateId === edge.fromStateId)?.pageUrl ?? targetUrl,
+  }));
+}
+
+function libraryLocators(
+  entries: ReadonlyArray<TestingLocatorEntry>,
+  targetUrl: string,
+): ReadonlyArray<GenerationLocator> {
+  return entries.map((entry) => ({
+    key: identifier(entry.locatorKey),
+    strategy: entry.strategy,
+    arguments: entry.arguments,
+    semanticContext: entry.semanticContext,
+    graphStateId: entry.pageId,
+    urlPattern: targetUrl,
+    locatorEntryId: entry.id,
+    locatorVersionId: entry.currentVersionId,
+  }));
 }
 
 function ensureRepositoryOutput(projectPath: string, configuredPath: string | undefined): string {
@@ -162,33 +206,60 @@ function applyTemplatePattern(
   return rendered;
 }
 
-function buildPrompt(testCase: TestingCaseSummary, edges: ReadonlyArray<StoredGraphEdge>): string {
-  return [
+function buildPrompt(
+  testCase: TestingCaseSummary,
+  locators: ReadonlyArray<GenerationLocator>,
+): string {
+  const lines = [
     `Case ID: ${testCase.externalId}`,
     `Description: ${testCase.description}`,
     "Reviewed steps:",
     ...testCase.steps.map((step, index) => `${index + 1}. ${step}`),
     "Verified intent path:",
-    ...edges.map((edge) => `${edge.role}: ${edge.name}`),
-    "Choose a concise feature slug, a business-readable test title, and one final visible assertion text grounded in this verified path.",
-  ].join("\n");
+    ...locators.map(
+      (locator) => `${locator.key}: ${locator.strategy} ${JSON.stringify(locator.arguments)}`,
+    ),
+  ];
+  lines.push(`Expected Result: ${testCase.expectedResult}`);
+  lines.push(
+    "Given the expected result above, choose a concise feature slug, a business-readable test title, and one final visible assertion text that can be confirmed with page.getByText().",
+  );
+  return lines.join("\n");
 }
 
 function pageObjectSource(input: {
   readonly className: string;
-  readonly edges: ReadonlyArray<StoredGraphEdge>;
+  readonly locators: ReadonlyArray<GenerationLocator>;
 }): string {
-  const declarations = input.edges.map(
-    (edge, index) => `  readonly ${identifier(`${edge.name}-${index + 1}`)}: Locator;`,
+  const declarations = input.locators.map((locator) => `  readonly ${locator.key}: Locator;`);
+  const expression = (locator: GenerationLocator): string => {
+    const args = locator.arguments;
+    switch (locator.strategy) {
+      case "role":
+        return `page.getByRole(${JSON.stringify(String(args.role))} as Parameters<Page["getByRole"]>[0], { name: ${JSON.stringify(String(args.name ?? ""))} })`;
+      case "label":
+        return `page.getByLabel(${JSON.stringify(String(args.label))})`;
+      case "test-id":
+        return `page.getByTestId(${JSON.stringify(String(args.testId))})`;
+      case "placeholder":
+        return `page.getByPlaceholder(${JSON.stringify(String(args.placeholder))})`;
+      case "alt-text":
+        return `page.getByAltText(${JSON.stringify(String(args.altText))})`;
+      case "title":
+        return `page.getByTitle(${JSON.stringify(String(args.title))})`;
+      case "text":
+        return `page.getByText(${JSON.stringify(String(args.text))})`;
+      case "css":
+        return `page.locator(${JSON.stringify(String(args.selector))})`;
+    }
+  };
+  const assignments = input.locators.map(
+    (locator) => `    this.${locator.key} = ${expression(locator)};`,
   );
-  const assignments = input.edges.map(
-    (edge, index) =>
-      `    this.${identifier(`${edge.name}-${index + 1}`)} = page.getByRole(${JSON.stringify(edge.role)} as Parameters<Page["getByRole"]>[0], { name: ${JSON.stringify(edge.name)} });`,
-  );
-  const methods = input.edges.flatMap((edge, index) => {
-    const key = identifier(`${edge.name}-${index + 1}`);
+  const methods = input.locators.flatMap((locator) => {
+    const key = locator.key;
     return [
-      `  async ${identifier(`activate-${edge.name}-${index + 1}`)}(): Promise<void> {`,
+      `  async ${identifier(`activate-${key}`)}(): Promise<void> {`,
       `    await this.${key}.click();`,
       "  }",
     ];
@@ -224,6 +295,7 @@ function dataSource(input: {
         targetUrl: input.targetUrl,
         description: input.testCase.description,
         steps: input.testCase.steps,
+        expectedResult: input.testCase.expectedResult,
         assertionText: input.plan.assertionText,
       },
       null,
@@ -237,7 +309,7 @@ function dataSource(input: {
 function specSource(input: {
   readonly className: string;
   readonly plan: GenerationPlan;
-  readonly edges: ReadonlyArray<StoredGraphEdge>;
+  readonly locators: ReadonlyArray<GenerationLocator>;
   readonly dataImport: string;
   readonly pageImport: string;
 }): string {
@@ -249,9 +321,7 @@ function specSource(input: {
     `test(${JSON.stringify(input.plan.testTitle)}, async ({ page }) => {`,
     "  const app = new " + input.className + "(page);",
     "  await page.goto(process.env.TESTING_BASE_URL ?? testData.targetUrl);",
-    ...input.edges.map(
-      (edge, index) => `  await app.${identifier(`activate-${edge.name}-${index + 1}`)}();`,
-    ),
+    ...input.locators.map((locator) => `  await app.${identifier(`activate-${locator.key}`)}();`),
     "  await expect(page.getByText(testData.assertionText, { exact: false }).first()).toBeVisible();",
     "});",
     "",
@@ -264,6 +334,7 @@ export class TestingGenerator {
 
   constructor(
     private readonly store: TestingGraphStore,
+    private readonly locatorStore: LocatorLibraryStore,
     private readonly testingRoot: string,
     private readonly textGeneration: TextGenerationShape,
   ) {}
@@ -280,6 +351,12 @@ export class TestingGenerator {
     const cases = requested.slice(0, maxCases);
     if (cases.length === 0) {
       throw new Error("Select or accept at least one reconciled case before generation");
+    }
+    const missingExpected = cases.find((c) => !c.expectedResult?.trim());
+    if (missingExpected) {
+      throw new Error(
+        `Case ${missingExpected.externalId} is missing an expected result. Update the case before generation.`,
+      );
     }
     const jobId = crypto.randomUUID();
     const outputDirectory =
@@ -323,6 +400,7 @@ export class TestingGenerator {
     let completedCases = 0;
     let estimatedTokens = 0;
     let estimatedCostUsd = 0;
+    const blockedCases: string[] = [];
     this.store.updateGenerationJob(jobId, { status: "running" });
     try {
       const template = await loadTemplate(input.projectPath, input.templatePath);
@@ -332,15 +410,40 @@ export class TestingGenerator {
         ),
       );
       const graph = this.store.graph(input.projectId);
-      const targetUrl = this.store.summary(input.projectId).targetUrl;
+      const targetUrl =
+        (input.targetUrl ? sanitizePersistedUrl(input.targetUrl) : null) ??
+        this.store.summary(input.projectId).targetUrl ??
+        this.locatorStore
+          .library(input.projectId)
+          .pages.find((page) => !page.urlPattern.startsWith("https://repository.invalid/"))
+          ?.urlPattern;
       if (!targetUrl)
-        throw new Error("The project graph has no target URL for generated test data");
+        throw new Error("The project has no captured target URL for generated test data");
       for (const testCase of cases) {
         if (this.#cancelledJobs.has(jobId)) break;
         const edges = edgesForCase(testCase, graph);
-        if (edges.length === 0)
-          throw new Error(`Case ${testCase.externalId} has no verified graph path`);
-        const sanitizedPrompt = buildPrompt(testCase, edges);
+        const caseLocatorEntries = this.locatorStore.caseLocators(input.projectId, testCase.id);
+        const invalidEntry = caseLocatorEntries.find(
+          (entry) =>
+            entry.lifecycleStatus !== "accepted" || entry.verificationStatus !== "verified",
+        );
+        if (invalidEntry) {
+          blockedCases.push(
+            `${testCase.externalId}: ${invalidEntry.locatorKey} is ${invalidEntry.verificationStatus}`,
+          );
+          continue;
+        }
+        const mappedLocators = libraryLocators(
+          caseLocatorEntries.filter((entry) => entry.classification === "action"),
+          targetUrl,
+        );
+        const locators =
+          mappedLocators.length > 0 ? mappedLocators : graphLocators(edges, graph, targetUrl);
+        if (locators.length === 0) {
+          blockedCases.push(`${testCase.externalId}: no verified Locator Library mapping`);
+          continue;
+        }
+        const sanitizedPrompt = buildPrompt(testCase, locators);
         const nextTokens = Math.ceil(sanitizedPrompt.length / 4) + 1_500;
         const nextCost = nextTokens * 0.00001;
         if (estimatedTokens + nextTokens > maxTokens || estimatedCostUsd + nextCost > maxCost) {
@@ -406,14 +509,14 @@ export class TestingGenerator {
           mkdir(dirname(specPath), { recursive: true }),
         ]);
         await Promise.all([
-          writeFile(pageObjectPath, pageObjectSource({ className, edges }), "utf8"),
+          writeFile(pageObjectPath, pageObjectSource({ className, locators }), "utf8"),
           writeFile(dataPath, dataSource({ targetUrl, testCase, plan }), "utf8"),
           writeFile(
             specPath,
             specSource({
               className,
               plan,
-              edges,
+              locators,
               dataImport: dataImport.startsWith(".") ? dataImport : `./${dataImport}`,
               pageImport: pageImport.startsWith(".") ? pageImport : `./${pageImport}`,
             }),
@@ -429,14 +532,21 @@ export class TestingGenerator {
           dataPath,
           specPath,
           captureReplay: input.captureReplay ?? false,
-          fingerprints: edges.map((edge, index) => ({
-            locatorKey: identifier(`${edge.name}-${index + 1}`),
-            role: edge.role,
-            accessibleName: edge.name,
-            semanticContext: testCase.steps[index] ?? testCase.description,
-            graphStateId: edge.fromStateId,
-            urlPattern:
-              graph.nodes.find((node) => node.stateId === edge.fromStateId)?.pageUrl ?? targetUrl,
+          fingerprints: locators.map((locator, index) => ({
+            locatorKey: locator.key,
+            role: String(locator.arguments.role ?? locator.strategy),
+            accessibleName: String(
+              locator.arguments.name ??
+                locator.arguments.label ??
+                locator.arguments.testId ??
+                locator.arguments.text ??
+                "",
+            ),
+            semanticContext: testCase.steps[index] ?? locator.semanticContext,
+            graphStateId: locator.graphStateId,
+            urlPattern: locator.urlPattern,
+            ...(locator.locatorEntryId ? { locatorEntryId: locator.locatorEntryId } : {}),
+            ...(locator.locatorVersionId ? { locatorVersionId: locator.locatorVersionId } : {}),
           })),
         });
         completedCases += 1;
@@ -449,12 +559,19 @@ export class TestingGenerator {
           estimatedCostUsd,
         });
       }
-      const status = this.#cancelledJobs.has(jobId) ? "cancelled" : "completed";
+      const status = this.#cancelledJobs.has(jobId)
+        ? "cancelled"
+        : completedCases === 0 && blockedCases.length > 0
+          ? "failed"
+          : "completed";
       this.store.updateGenerationJob(jobId, {
         status,
         completedCases,
         estimatedTokens,
         estimatedCostUsd,
+        ...(blockedCases.length > 0
+          ? { error: `Blocked cases requiring locator resolution: ${blockedCases.join("; ")}` }
+          : {}),
       });
     } catch (error) {
       this.store.updateGenerationJob(jobId, {

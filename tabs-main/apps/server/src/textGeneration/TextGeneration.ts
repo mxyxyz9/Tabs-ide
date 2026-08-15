@@ -106,6 +106,7 @@ export interface DiffSummaryGenerationResult {
 export type TestingTaskKind =
   | "semantic-ranking"
   | "scenario-generation"
+  | "story-to-cases"
   | "test-generation"
   | "healing"
   | "visual-triage"

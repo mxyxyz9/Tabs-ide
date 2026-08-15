@@ -52,5 +52,8 @@
     "untrustedWorkspaces": {
       "supported": true
     }
-  }
+  },
+  "enabledApiProposals": [
+    "testObserver"
+  ]
 }

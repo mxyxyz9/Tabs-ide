@@ -21,10 +21,17 @@ import type {
   CodeActivityViewId,
   CodeChromeState,
   CodeCursorPosition,
+  CodeTestItem,
   CustomActivityBarItem,
 } from "@tabs/contracts";
 
-export type { CodeActivityViewId, CodeChromeState, CodeCursorPosition, CustomActivityBarItem };
+export type {
+  CodeActivityViewId,
+  CodeChromeState,
+  CodeCursorPosition,
+  CodeTestItem,
+  CustomActivityBarItem,
+};
 
 /** lucide-react icon names (resolved to components in the web layer). */
 export type CodeActivityIcon = "files" | "search" | "git-branch" | "bug" | "puzzle";
@@ -629,7 +636,9 @@ export function coerceChromeState(value: unknown): CodeChromeState {
     state.openTabs = record.openTabs
       .filter(
         (t): t is Record<string, unknown> =>
-          t !== null && typeof t === "object" && typeof (t as Record<string, unknown>).filePath === "string",
+          t !== null &&
+          typeof t === "object" &&
+          typeof (t as Record<string, unknown>).filePath === "string",
       )
       .map((t) => ({
         filePath: t.filePath as string,
@@ -638,6 +647,34 @@ export function coerceChromeState(value: unknown): CodeChromeState {
         ...(typeof t.pinned === "boolean" ? { pinned: t.pinned as boolean } : {}),
         ...(typeof t.preview === "boolean" ? { preview: t.preview as boolean } : {}),
       }));
+  }
+
+  const coerceTestItem = (value: unknown): CodeTestItem | null => {
+    if (!value || typeof value !== "object") return null;
+    const item = value as Record<string, unknown>;
+    if (typeof item.id !== "string" || typeof item.label !== "string") return null;
+    return {
+      id: item.id,
+      label: item.label,
+      uri: typeof item.uri === "string" ? item.uri : null,
+      line:
+        typeof item.line === "number" && Number.isFinite(item.line)
+          ? Math.max(1, Math.floor(item.line))
+          : null,
+      busy: item.busy === true,
+      children: Array.isArray(item.children)
+        ? item.children.flatMap((child) => {
+            const coerced = coerceTestItem(child);
+            return coerced ? [coerced] : [];
+          })
+        : [],
+    };
+  };
+  if (Array.isArray(record.testItems)) {
+    state.testItems = record.testItems.flatMap((item) => {
+      const coerced = coerceTestItem(item);
+      return coerced ? [coerced] : [];
+    });
   }
 
   return state;

@@ -14,6 +14,10 @@ export default defineConfig({
   // covers the `@tabs/*` packages plus the (unscoped) `effect-acp` and
   // `effect-codex-app-server` workspace packages.
   deps: {
+    // The Locator Library uses the compiler API to parse company page objects
+    // without executing them. Keep TypeScript as a runtime dependency instead
+    // of embedding its CommonJS-oriented Node host in our ESM server bundle.
+    neverBundle: ["typescript"],
     alwaysBundle: (id) =>
       id.startsWith("@tabs/") ||
       id === "effect-acp" ||

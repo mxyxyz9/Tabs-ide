@@ -4,6 +4,8 @@ import {
   normalizeAccessibilityForStorage,
   normalizeStructuralSnapshot,
   sanitizeAccessibilitySnapshot,
+  sanitizeModelBoundText,
+  sanitizePersistedUrl,
   structuralHash,
   tokenizePii,
 } from "./security";
@@ -70,5 +72,31 @@ describe("testing accessibility security boundary", () => {
     expect(structuralHash(normalizeAccessibilityForStorage(first))).toBe(
       structuralHash(normalizeAccessibilityForStorage(second)),
     );
+  });
+
+  it("sanitizes URL credentials, values, hash queries, and high-entropy path segments", () => {
+    const result = sanitizePersistedUrl(
+      "https://user:password@example.test/account/sk_live_1234567890abcdefghijklmnop?token=secret&view=private#/workspace/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature?session=raw",
+    );
+
+    expect(result).not.toContain("user");
+    expect(result).not.toContain("password");
+    expect(result).not.toContain("sk_live");
+    expect(result).not.toContain("secret");
+    expect(result).not.toContain("private");
+    expect(result).not.toContain("eyJhbGci");
+    expect(decodeURIComponent(result)).toContain("<REDACTED_PATH_SEGMENT>");
+    expect(decodeURIComponent(result)).toContain("<SENSITIVE_PARAM>");
+  });
+
+  it("redacts credential-like semantic text before model dispatch", () => {
+    const result = sanitizeModelBoundText(
+      "project-a",
+      "Contact qa@example.com with Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456",
+    );
+
+    expect(result.tokenized).not.toContain("qa@example.com");
+    expect(result.tokenized).not.toContain("abcdefghijklmnopqrstuvwxyz123456");
+    expect(result.tokenized).toContain("<REDACTED_CREDENTIAL>");
   });
 });

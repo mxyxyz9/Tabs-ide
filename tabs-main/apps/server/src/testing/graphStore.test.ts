@@ -151,6 +151,7 @@ describe("TestingGraphStore", () => {
             externalId: "QA-001",
             description: "Open home",
             steps: ["Open home"],
+            expectedResult: "Home page is visible",
             sourceSheet: "Cases",
             sourceRow: 2,
             status: "matches",
@@ -163,6 +164,7 @@ describe("TestingGraphStore", () => {
       expect(imported).toMatchObject({ importedCount: 1, matchesCount: 1 });
       expect(imported.cases[0]).toMatchObject({
         externalId: "QA-001",
+        expectedResult: "Home page is visible",
         standaloneStatus: "not-yet-tested",
         ciStatus: null,
       });
@@ -187,6 +189,41 @@ describe("TestingGraphStore", () => {
       const cleared = store.clearGraph("project");
       expect(cleared).toMatchObject({ clearedNodeCount: 1, nodeCount: 0, edgeCount: 0 });
       expect(store.listCases("project").cases).toHaveLength(1);
+    } finally {
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a project-scoped manual case and rejects duplicate IDs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tabs-testing-manual-case-"));
+    const store = new TestingGraphStore(join(root, "testing.sqlite"));
+    try {
+      const result = store.createCase({
+        projectId: "project-a",
+        externalId: "TC-00042",
+        description: "Save workspace settings",
+        steps: ["Open Settings", "Save the workspace"],
+        expectedResult: "The workspace is saved",
+      });
+
+      expect(result.cases[0]).toMatchObject({
+        externalId: "TC-00042",
+        description: "Save workspace settings",
+        creationMethod: "manual",
+        reviewDecision: "edited",
+        notes: "Created manually in Testing",
+      });
+      expect(store.listCases("project-b").cases).toHaveLength(0);
+      expect(() =>
+        store.createCase({
+          projectId: "project-a",
+          externalId: "TC-00042",
+          description: "Duplicate",
+          steps: ["Try again"],
+          expectedResult: "Rejected",
+        }),
+      ).toThrow(/already exists/);
     } finally {
       store.close();
       await rm(root, { recursive: true, force: true });

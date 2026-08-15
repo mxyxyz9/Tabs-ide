@@ -217,6 +217,10 @@ export class TestingExecutor {
             diff: `- getByRole(${JSON.stringify(fingerprint.role)}, { name: ${JSON.stringify(fingerprint.accessibleName)} })\n+ getByRole(${JSON.stringify(best.edge.role)}, { name: ${JSON.stringify(best.edge.name)} })`,
             status: eligible ? "pending" : "below-threshold",
             consecutiveAttempts: attempts,
+            ...(fingerprint.locatorEntryId ? { locatorEntryId: fingerprint.locatorEntryId } : {}),
+            ...(fingerprint.locatorVersionId
+              ? { locatorVersionId: fingerprint.locatorVersionId }
+              : {}),
           });
         }
       }

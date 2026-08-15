@@ -124,7 +124,7 @@ export function CloneRepositoryDialog(props: CloneRepositoryDialogProps) {
                 {parentDir ? `Into ${parentDir}` : "No destination chosen"}
               </span>
             </div>
-            {error ? <p className="text-xs text-destructive-foreground">{error}</p> : null}
+            {error ? <p className="text-xs font-medium text-destructive dark:text-red-400">{error}</p> : null}
           </div>
 
           <DialogFooter>

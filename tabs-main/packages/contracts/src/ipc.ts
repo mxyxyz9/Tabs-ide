@@ -1482,6 +1482,15 @@ export interface CodeTabInfo {
   preview?: boolean;
 }
 
+export interface CodeTestItem {
+  id: string;
+  label: string;
+  uri: string | null;
+  line: number | null;
+  busy: boolean;
+  children: readonly CodeTestItem[];
+}
+
 export interface CodeChromeState {
   activeViewId: string | null;
   panelOpen: boolean;
@@ -1493,6 +1502,7 @@ export interface CodeChromeState {
   languageId?: string | null;
   cursor?: CodeCursorPosition | null;
   openTabs?: readonly CodeTabInfo[];
+  testItems?: readonly CodeTestItem[];
 }
 
 export interface DesktopCodeHostState {

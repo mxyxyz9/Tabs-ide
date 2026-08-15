@@ -93,9 +93,85 @@ const PII_PATTERNS = [
   },
 ] as const;
 
+const CREDENTIAL_TEXT_PATTERN =
+  /\b(?:bearer\s+[A-Za-z0-9._~+/-]{20,}|eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]{16,}|(?:api[_-]?key|access[_-]?token|refresh[_-]?token|session[_-]?token|password|secret)\s*[:=]\s*[^\s,;]+)\b/gi;
+const CREDENTIAL_PARAMETER_PATTERN =
+  /^(?:authorization|auth|code|credential|jwt|key|password|secret|session|signature|token)$/i;
+const SECRET_PREFIX_PATTERN = /^(?:sk|pk|api|key|secret|session|token)[_-][A-Za-z0-9_-]{12,}$/i;
+const JWT_PATTERN = /^eyJ[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}$/;
+const LONG_ENCODED_PATTERN = /^(?:[A-Fa-f0-9]{24,}|[A-Za-z0-9_-]{32,}={0,2})$/;
+
+function safeDecodeUrlSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function shouldRedactPathSegment(value: string): boolean {
+  const decoded = safeDecodeUrlSegment(value);
+  return (
+    JWT_PATTERN.test(decoded) ||
+    SECRET_PREFIX_PATTERN.test(decoded) ||
+    LONG_ENCODED_PATTERN.test(decoded) ||
+    /(?:password|secret|token|credential|authorization)[=:]/i.test(decoded)
+  );
+}
+
+function sanitizePathname(pathname: string): string {
+  const sanitized = pathname
+    .split("/")
+    .filter((segment, index) => index === 0 || segment.length > 0)
+    .map((segment) => (shouldRedactPathSegment(segment) ? "<REDACTED_PATH_SEGMENT>" : segment));
+  const joined = sanitized.join("/") || "/";
+  return joined.startsWith("/") ? joined : `/${joined}`;
+}
+
+function sanitizeHashRoute(hash: string): string {
+  if (!hash.startsWith("#/")) return "";
+  const route = new URL(hash.slice(1), "https://tabs-testing.invalid");
+  return `#${sanitizePathname(route.pathname)}`;
+}
+
+export function sanitizePersistedUrl(rawUrl: string): string {
+  const url = new URL(rawUrl);
+  url.username = "";
+  url.password = "";
+  url.pathname = sanitizePathname(url.pathname);
+  const parameterNames = [...new Set(url.searchParams.keys())].toSorted();
+  url.search = "";
+  for (const name of parameterNames) {
+    url.searchParams.append(
+      CREDENTIAL_PARAMETER_PATTERN.test(name) ? "<SENSITIVE_PARAM>" : name,
+      "<QUERY_VALUE>",
+    );
+  }
+  url.hash = sanitizeHashRoute(url.hash);
+  return url.href;
+}
+
+export function redactCredentialLikeText(value: string): string {
+  return value
+    .replace(CREDENTIAL_TEXT_PATTERN, "<REDACTED_CREDENTIAL>")
+    .replace(/\b[A-Fa-f0-9]{40,}\b/g, "<REDACTED_HIGH_ENTROPY>")
+    .replace(/\b[A-Za-z0-9_-]{48,}={0,2}\b/g, "<REDACTED_HIGH_ENTROPY>");
+}
+
+export function sanitizeModelBoundText(projectId: string, value: string): TokenizationResult {
+  const bounded = value
+    .split("\n")
+    .filter((line) => !looksInjected(line))
+    .join("\n")
+    .split(String.fromCharCode(0))
+    .join("")
+    .slice(0, 120_000);
+  return tokenizePii(projectId, redactCredentialLikeText(bounded));
+}
+
 export function tokenizePii(projectId: string, text: string): TokenizationResult {
   const discovered = new Map<string, PiiToken>();
-  let tokenized = text;
+  let tokenized = redactCredentialLikeText(text);
 
   for (const { kind, pattern } of PII_PATTERNS) {
     tokenized = tokenized.replace(pattern, (plaintext) => {

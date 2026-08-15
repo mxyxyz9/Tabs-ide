@@ -63,3 +63,29 @@ The repository is divided into `apps/` (runnable applications) and `packages/` (
 - The `dev-runner.ts` script orchestrates Turborepo to start the Vite dev server (`apps/web`), the backend WebSocket server (`apps/server`), and the Electron host (`apps/desktop`).
 
 *Note to Agents: When architectural changes are made (e.g., new packages, major state management shifts), you MUST update this file to ensure future agents have accurate context.*
+
+## Testing Workspace Architecture
+
+Testing is a project-scoped feature spanning the shared contracts, local server, React workspace,
+Electron browser host, and built-in Code workbench integration.
+
+- `packages/contracts/src/testing.ts` and `packages/contracts/src/ws.ts` define the Testing API and
+  long-running operation inputs. All calls carry the top-level Tabs project ID.
+- `apps/server/src/testing/` owns the additive SQLite schema, sanitized accessibility capture,
+  Locator Library, page-object artifacts, workbook/story reconciliation, generation, execution,
+  healing, and reporting. The Locator Library is canonical; generated Playwright page objects are
+  immutable derived artifacts linked to exact locator versions.
+- `apps/web/src/components/WorkspaceShell.tsx` hosts the Testing workflow. Locator-first is the
+  default when no explicit project preference exists and the server flag is enabled. Classic
+  discovery remains available under Advanced and is the kill-switch fallback.
+- Desktop Testing preview sessions reuse the project-isolated Electron browser host partition via
+  a dedicated `testing:<projectId>` session ID. Browser-only clients fall back to an iframe and the
+  server-managed Playwright path where framing is unavailable.
+- `apps/server/src/testing/testInventory.ts` statically indexes Playwright test files without
+  executing repository code. The built-in `tabs-workbench-integration` extension observes VS Code
+  `TestItem` state when that proposed API is available; live editor state takes precedence in the
+  merged inventory.
+
+Captured URLs, accessibility names, semantic context, generated code, prompts, and logs cross the
+Testing sanitization boundary before persistence. Authentication cookies and credentials remain in
+the project-scoped browser profile and are not written to Testing records.

@@ -20,6 +20,7 @@ import {
 import {
   normalizeAccessibilityForStorage,
   sanitizeAccessibilitySnapshot,
+  sanitizePersistedUrl,
   shortDigest,
   splitStaticSubtrees,
   structuralHash,
@@ -184,6 +185,8 @@ export class TestingCrawler {
   constructor(
     private readonly store: TestingGraphStore,
     private readonly testingRoot: string,
+    private readonly shouldContinue: () => boolean = () => true,
+    private readonly mayActivate: (action: CrawlAction) => boolean = () => true,
   ) {}
 
   async explore(input: TestingExplorationInput): Promise<TestingExplorationResult> {
@@ -213,7 +216,7 @@ export class TestingCrawler {
     const startedAt = Date.now();
     const deadline =
       maxDurationSeconds === undefined ? null : startedAt + maxDurationSeconds * 1_000;
-    const runId = this.store.beginRun(input.projectId, target.href, {
+    const runId = this.store.beginRun(input.projectId, sanitizePersistedUrl(target.href), {
       scope,
       maxStates,
       ...(maxDurationSeconds === undefined ? {} : { maxDurationSeconds }),
@@ -237,6 +240,9 @@ export class TestingCrawler {
 
     try {
       while (queue.length > 0 && visitedStates.size < maxStates) {
+        if (!this.shouldContinue()) {
+          throw new Error("Locator-first discovery was disabled during this session");
+        }
         if (deadline !== null && Date.now() >= deadline) {
           timeBudgetReached = true;
           break;
@@ -244,10 +250,16 @@ export class TestingCrawler {
         queue.sort((left, right) => right.priority - left.priority);
         const plan = queue.shift()!;
         await session.call("browser_navigate", { url: target.href });
+        if (!this.shouldContinue()) {
+          throw new Error("Locator-first discovery was disabled during this session");
+        }
         await waitForSettledNavigation(session);
 
         let replayFailed = false;
         for (const step of plan.path) {
+          if (!this.shouldContinue()) {
+            throw new Error("Locator-first discovery was disabled during this session");
+          }
           if (deadline !== null && Date.now() >= deadline) {
             timeBudgetReached = true;
             break;
@@ -278,6 +290,9 @@ export class TestingCrawler {
             replayFailed = true;
             break;
           }
+          if (!this.shouldContinue()) {
+            throw new Error("Locator-first discovery was disabled during this session");
+          }
         }
         if (timeBudgetReached) break;
         if (replayFailed) continue;
@@ -299,11 +314,14 @@ export class TestingCrawler {
 
         const stateId = structuralHash(storedSnapshot);
         const isNewState = !visitedStates.has(stateId);
+        if (!this.shouldContinue()) {
+          throw new Error("Locator-first discovery was disabled during this session");
+        }
         this.store.upsertNode({
           projectId: input.projectId,
           runId,
           stateId,
-          pageUrl,
+          pageUrl: sanitizePersistedUrl(pageUrl),
           pageTitle: titleFromSnapshot(storedSnapshot, pageUrl),
           snapshot: storedSnapshot,
         });
@@ -322,7 +340,9 @@ export class TestingCrawler {
 
         if (!isNewState) continue;
         visitedStates.add(stateId);
-        const actions = parseActionableElements(tokenized.tokenized).slice(0, 12);
+        const actions = parseActionableElements(tokenized.tokenized)
+          .filter((action) => this.mayActivate(action))
+          .slice(0, 12);
         for (const action of actions) {
           const key = actionKey(action);
           const occurrencesInPath = plan.path.filter((step) => actionKey(step) === key).length;
@@ -340,6 +360,10 @@ export class TestingCrawler {
             parentStateId: stateId,
             action: { role: action.role, name: action.name },
           });
+        }
+
+        if (visitedStates.size % 2 === 0) {
+          this.store.updateRunProgress(runId, visitedStates.size, transitionsObserved);
         }
       }
 

@@ -341,7 +341,7 @@ function startCodeControlChannel(context) {
   // commands/state to the right editor when multiple projects are open.
   const projectId = process.env.TABS_PROJECT_ID || "";
 
-  /** @type {{ activeViewId: string | null, panelOpen: boolean, panelMaximized: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean, openTabs: any[] }} */
+  /** @type {{ activeViewId: string | null, panelOpen: boolean, panelMaximized: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean, openTabs: any[], testItems: any[] }} */
   const state = {
     activeViewId: null,
     panelOpen: false,
@@ -351,6 +351,7 @@ function startCodeControlChannel(context) {
     activityBarItems: [],
     autoSaveEnabled: false,
     openTabs: [],
+    testItems: [],
   };
   let socket = null;
   let disposed = false;
@@ -374,6 +375,37 @@ function startCodeControlChannel(context) {
     }
   };
   const pushState = () => send({ type: "chromeState", projectId, state: { ...state } });
+
+  const serializeTestItem = (item) => {
+    const children = [];
+    try {
+      item.children.forEach((child) => children.push(serializeTestItem(child)));
+    } catch {
+      /* A provider may dispose an item while the observer is refreshing. */
+    }
+    return {
+      id: item.id,
+      label: item.label,
+      uri: item.uri && item.uri.fsPath ? item.uri.fsPath : null,
+      line: item.range ? item.range.start.line + 1 : null,
+      busy: item.busy === true,
+      children,
+    };
+  };
+
+  try {
+    if (vscode.tests && typeof vscode.tests.createTestObserver === "function") {
+      const testObserver = vscode.tests.createTestObserver();
+      const refreshTests = () => {
+        state.testItems = testObserver.tests.map(serializeTestItem);
+        pushState();
+      };
+      context.subscriptions.push(testObserver, testObserver.onDidChangeTest(refreshTests));
+      refreshTests();
+    }
+  } catch (error) {
+    log(`test observer unavailable: ${error && error.message ? error.message : error}`);
+  }
 
   const computeDirtyCount = () =>
     vscode.workspace.textDocuments.filter((doc) => doc.isDirty).length;
@@ -399,7 +431,11 @@ function startCodeControlChannel(context) {
         if (!Array.isArray(group.tabs)) continue;
         for (const tab of group.tabs) {
           const input = tab.input;
-          if (input && input.uri && (input.uri.scheme === "file" || input.uri.scheme === "vscode-remote")) {
+          if (
+            input &&
+            input.uri &&
+            (input.uri.scheme === "file" || input.uri.scheme === "vscode-remote")
+          ) {
             const filePath = input.uri.fsPath;
             if (filePath) {
               result.push({
@@ -770,7 +806,8 @@ function startCodeControlChannel(context) {
               const options = {};
               if (typeof parsed.preview === "boolean") options.preview = parsed.preview;
               if (typeof parsed.pinned === "boolean") options.pinned = parsed.pinned;
-              if (typeof parsed.preserveFocus === "boolean") options.preserveFocus = parsed.preserveFocus;
+              if (typeof parsed.preserveFocus === "boolean")
+                options.preserveFocus = parsed.preserveFocus;
               if (typeof parsed.viewColumn === "number") options.viewColumn = parsed.viewColumn;
               await vscode.commands.executeCommand("vscode.open", fileUri, options);
             } catch (err) {
@@ -783,132 +820,216 @@ function startCodeControlChannel(context) {
             try {
               const themeId = parsed.theme;
 
-function getLuminance(hex) {
-  let clean = (hex || "").replace("#", "").trim();
-  if (clean.length === 3) clean = clean.split("").map((c) => c + c).join("");
-  if (clean.length !== 6 && clean.length !== 8) return 0.5;
-  const r = parseInt(clean.substring(0, 2), 16) / 255;
-  const g = parseInt(clean.substring(2, 4), 16) / 255;
-  const b = parseInt(clean.substring(4, 6), 16) / 255;
-  const a = [r, g, b].map((v) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
-  return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.722;
-}
+              function getLuminance(hex) {
+                let clean = (hex || "").replace("#", "").trim();
+                if (clean.length === 3)
+                  clean = clean
+                    .split("")
+                    .map((c) => c + c)
+                    .join("");
+                if (clean.length !== 6 && clean.length !== 8) return 0.5;
+                const r = parseInt(clean.substring(0, 2), 16) / 255;
+                const g = parseInt(clean.substring(2, 4), 16) / 255;
+                const b = parseInt(clean.substring(4, 6), 16) / 255;
+                const a = [r, g, b].map((v) =>
+                  v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4),
+                );
+                return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.722;
+              }
 
-function getOptimalPrimaryForeground(primaryHex) {
-  const L1 = getLuminance(primaryHex);
-  const L_white = 1.0;
-  const L_dark = getLuminance("#090d16");
-  const contrastWhite = (Math.max(L1, L_white) + 0.05) / (Math.min(L1, L_white) + 0.05);
-  const contrastDark = (Math.max(L1, L_dark) + 0.05) / (Math.min(L1, L_dark) + 0.05);
-  if (contrastWhite >= 3.0) return "#ffffff";
-  return contrastWhite >= contrastDark ? "#ffffff" : "#090d16";
-}
+              function getOptimalPrimaryForeground(primaryHex) {
+                const L1 = getLuminance(primaryHex);
+                const L_white = 1.0;
+                const L_dark = getLuminance("#090d16");
+                const contrastWhite =
+                  (Math.max(L1, L_white) + 0.05) / (Math.min(L1, L_white) + 0.05);
+                const contrastDark = (Math.max(L1, L_dark) + 0.05) / (Math.min(L1, L_dark) + 0.05);
+                if (contrastWhite >= 3.0) return "#ffffff";
+                return contrastWhite >= contrastDark ? "#ffffff" : "#090d16";
+              }
 
-function toHexColor(colorStr) {
-  if (!colorStr || typeof colorStr !== "string") return undefined;
-  const str = colorStr.trim();
-  if (str === "transparent") return "#00000000";
-  if (str.startsWith("#")) {
-    const clean = str.replace("#", "");
-    if (clean.length === 3) return `#${clean.split("").map((c) => c + c).join("")}ff`;
-    if (clean.length === 6) return `#${clean}ff`;
-    if (clean.length === 8) return `#${clean}`;
-    return str;
-  }
-  const rgbaMatch = str.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/);
-  if (rgbaMatch) {
-    const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, "0");
-    const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, "0");
-    const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, "0");
-    const a = Math.round((rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1.0) * 255).toString(16).padStart(2, "0");
-    return `#${r}${g}${b}${a}`;
-  }
-  return str;
-}
+              function toHexColor(colorStr) {
+                if (!colorStr || typeof colorStr !== "string") return undefined;
+                const str = colorStr.trim();
+                if (str === "transparent") return "#00000000";
+                if (str.startsWith("#")) {
+                  const clean = str.replace("#", "");
+                  if (clean.length === 3)
+                    return `#${clean
+                      .split("")
+                      .map((c) => c + c)
+                      .join("")}ff`;
+                  if (clean.length === 6) return `#${clean}ff`;
+                  if (clean.length === 8) return `#${clean}`;
+                  return str;
+                }
+                const rgbaMatch = str.match(
+                  /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)/,
+                );
+                if (rgbaMatch) {
+                  const r = parseInt(rgbaMatch[1]).toString(16).padStart(2, "0");
+                  const g = parseInt(rgbaMatch[2]).toString(16).padStart(2, "0");
+                  const b = parseInt(rgbaMatch[3]).toString(16).padStart(2, "0");
+                  const a = Math.round(
+                    (rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1.0) * 255,
+                  )
+                    .toString(16)
+                    .padStart(2, "0");
+                  return `#${r}${g}${b}${a}`;
+                }
+                return str;
+              }
 
-const { evaluateThemeTokens, VSCODE_TOKEN_REGISTRY } = require("./themeDerivation.js");
+              const {
+                evaluateThemeTokens,
+                VSCODE_TOKEN_REGISTRY,
+              } = require("./themeDerivation.js");
 
-function generateVsCodeColorCustomizations(customConfig) {
-  if (!customConfig || !customConfig.colors) return {};
-  return evaluateThemeTokens(customConfig);
-}
+              function generateVsCodeColorCustomizations(customConfig) {
+                if (!customConfig || !customConfig.colors) return {};
+                return evaluateThemeTokens(customConfig);
+              }
 
-const BUILTIN_THEMES = {
-  "tabs-dark": {
-    baseVariant: "dark",
-    colors: { background: "#141414", card: "#181818", foreground: "#f5f5f5", border: "rgba(255, 255, 255, 0.06)", primary: "#366ffb" },
-  },
-  "true-black": {
-    baseVariant: "dark",
-    colors: { background: "#000000", card: "#0a0a0a", foreground: "#ffffff", border: "rgba(255, 255, 255, 0.12)", primary: "#366ffb" },
-  },
-  "tabs-light": {
-    baseVariant: "light",
-    colors: { background: "#ffffff", card: "#f6f6f6", foreground: "#262626", border: "rgba(0, 0, 0, 0.08)", primary: "#2563eb" },
-  },
-  "tabs-monotone": {
-    baseVariant: "dark",
-    colors: { background: "#09090b", card: "#18181b", foreground: "#fafafa", border: "rgba(255, 255, 255, 0.12)", primary: "#e5e5e5" },
-  },
-  "abyss": {
-    baseVariant: "dark",
-    colors: { background: "#000c18", card: "#041426", foreground: "#c0cbe0", border: "rgba(0, 153, 255, 0.14)", primary: "#0099ff" },
-  },
-  "dracula": {
-    baseVariant: "dark",
-    colors: { background: "#282a36", card: "#21222c", foreground: "#f8f8f2", border: "rgba(98, 114, 164, 0.35)", primary: "#bd93f9" },
-  },
-  "deep-blue": {
-    baseVariant: "dark",
-    colors: { background: "#0f172a", card: "#1e293b", foreground: "#f1f5f9", border: "rgba(51, 65, 85, 0.65)", primary: "#38bdf8" },
-  },
-  "solarized-dark": {
-    baseVariant: "dark",
-    colors: { background: "#002b36", card: "#073642", foreground: "#839496", border: "rgba(38, 139, 210, 0.25)", primary: "#268bd2" },
-  },
-  "solarized-light": {
-    baseVariant: "light",
-    colors: { background: "#fdf6e3", card: "#eee8d5", foreground: "#657b83", border: "rgba(147, 161, 161, 0.28)", primary: "#268bd2" },
-  },
-};
+              const BUILTIN_THEMES = {
+                "tabs-dark": {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#141414",
+                    card: "#181818",
+                    foreground: "#f5f5f5",
+                    border: "rgba(255, 255, 255, 0.06)",
+                    primary: "#366ffb",
+                  },
+                },
+                "true-black": {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#000000",
+                    card: "#0a0a0a",
+                    foreground: "#ffffff",
+                    border: "rgba(255, 255, 255, 0.12)",
+                    primary: "#366ffb",
+                  },
+                },
+                "tabs-light": {
+                  baseVariant: "light",
+                  colors: {
+                    background: "#ffffff",
+                    card: "#f6f6f6",
+                    foreground: "#262626",
+                    border: "rgba(0, 0, 0, 0.08)",
+                    primary: "#2563eb",
+                  },
+                },
+                "tabs-monotone": {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#09090b",
+                    card: "#18181b",
+                    foreground: "#fafafa",
+                    border: "rgba(255, 255, 255, 0.12)",
+                    primary: "#e5e5e5",
+                  },
+                },
+                abyss: {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#000c18",
+                    card: "#041426",
+                    foreground: "#c0cbe0",
+                    border: "rgba(0, 153, 255, 0.14)",
+                    primary: "#0099ff",
+                  },
+                },
+                dracula: {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#282a36",
+                    card: "#21222c",
+                    foreground: "#f8f8f2",
+                    border: "rgba(98, 114, 164, 0.35)",
+                    primary: "#bd93f9",
+                  },
+                },
+                "deep-blue": {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#0f172a",
+                    card: "#1e293b",
+                    foreground: "#f1f5f9",
+                    border: "rgba(51, 65, 85, 0.65)",
+                    primary: "#38bdf8",
+                  },
+                },
+                "solarized-dark": {
+                  baseVariant: "dark",
+                  colors: {
+                    background: "#002b36",
+                    card: "#073642",
+                    foreground: "#839496",
+                    border: "rgba(38, 139, 210, 0.25)",
+                    primary: "#268bd2",
+                  },
+                },
+                "solarized-light": {
+                  baseVariant: "light",
+                  colors: {
+                    background: "#fdf6e3",
+                    card: "#eee8d5",
+                    foreground: "#657b83",
+                    border: "rgba(147, 161, 161, 0.28)",
+                    primary: "#268bd2",
+                  },
+                },
+              };
 
-const CUSTOM_THEME_COLOR_KEYS = VSCODE_TOKEN_REGISTRY.map((t) => t.id);
+              const CUSTOM_THEME_COLOR_KEYS = VSCODE_TOKEN_REGISTRY.map((t) => t.id);
 
-const activeConfig =
-  themeId === "custom" && parsed.customConfig && parsed.customConfig.colors
-    ? parsed.customConfig
-    : BUILTIN_THEMES[themeId] || BUILTIN_THEMES["tabs-dark"];
+              const activeConfig =
+                themeId === "custom" && parsed.customConfig && parsed.customConfig.colors
+                  ? parsed.customConfig
+                  : BUILTIN_THEMES[themeId] || BUILTIN_THEMES["tabs-dark"];
 
-const isLight = activeConfig.baseVariant === "light";
-const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
-const workspaceConfig = vscode.workspace.getConfiguration();
-await workspaceConfig.update("workbench.colorTheme", targetTheme, vscode.ConfigurationTarget.Global);
+              const isLight = activeConfig.baseVariant === "light";
+              const targetTheme = isLight ? "Default Light Modern" : "Default Dark Modern";
+              const workspaceConfig = vscode.workspace.getConfiguration();
+              await workspaceConfig.update(
+                "workbench.colorTheme",
+                targetTheme,
+                vscode.ConfigurationTarget.Global,
+              );
 
-const themeOverrides = generateVsCodeColorCustomizations(activeConfig);
-const currentCustomizations = {
-  ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
-};
+              const themeOverrides = generateVsCodeColorCustomizations(activeConfig);
+              const currentCustomizations = {
+                ...(workspaceConfig.get("workbench.colorCustomizations") || {}),
+              };
 
-for (const key of CUSTOM_THEME_COLOR_KEYS) {
-  const val = themeOverrides[key];
-  if (val !== undefined) {
-    currentCustomizations[key] = val;
-  } else {
-    delete currentCustomizations[key];
-  }
-}
+              for (const key of CUSTOM_THEME_COLOR_KEYS) {
+                const val = themeOverrides[key];
+                if (val !== undefined) {
+                  currentCustomizations[key] = val;
+                } else {
+                  delete currentCustomizations[key];
+                }
+              }
 
-await workspaceConfig.update(
-  "workbench.colorCustomizations",
-  Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined,
-  vscode.ConfigurationTarget.Global,
-);
+              await workspaceConfig.update(
+                "workbench.colorCustomizations",
+                Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined,
+                vscode.ConfigurationTarget.Global,
+              );
 
               const editorFont =
                 (parsed.fontPreferences && parsed.fontPreferences.editorFont) ||
-                (parsed.customConfig && parsed.customConfig.fonts && parsed.customConfig.fonts.editorFont);
+                (parsed.customConfig &&
+                  parsed.customConfig.fonts &&
+                  parsed.customConfig.fonts.editorFont);
               if (editorFont) {
-                await workspaceConfig.update("editor.fontFamily", editorFont, vscode.ConfigurationTarget.Global);
+                await workspaceConfig.update(
+                  "editor.fontFamily",
+                  editorFont,
+                  vscode.ConfigurationTarget.Global,
+                );
               }
             } catch (err) {
               log(`setTheme error: ${err && err.message ? err.message : err}`);
@@ -1014,7 +1135,8 @@ await workspaceConfig.update(
     ...(vscode.window.tabGroups && typeof vscode.window.tabGroups.onDidChangeTabs === "function"
       ? [vscode.window.tabGroups.onDidChangeTabs(recomputeOpenTabs)]
       : []),
-    ...(vscode.window.tabGroups && typeof vscode.window.tabGroups.onDidChangeTabGroups === "function"
+    ...(vscode.window.tabGroups &&
+    typeof vscode.window.tabGroups.onDidChangeTabGroups === "function"
       ? [vscode.window.tabGroups.onDidChangeTabGroups(recomputeOpenTabs)]
       : []),
     extensionChangeSub,

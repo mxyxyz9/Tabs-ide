@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type {
+  TestingCaseCreateInput,
   TestingCaseListResult,
   TestingCaseReviewInput,
   TestingCaseSummary,
@@ -26,7 +27,7 @@ import type {
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
 
-import type { PiiToken } from "./security";
+import { sanitizePersistedUrl, type PiiToken } from "./security";
 import { RuntimeSqliteDatabase } from "./sqlite";
 
 type RunStatus = TestingGraphSummary["lastRunStatus"];
@@ -39,6 +40,12 @@ interface StatusRow {
   readonly target_url: string;
   readonly status: RunStatus;
   readonly error: string | null;
+  readonly termination_reason: "plateaued" | "max-states" | "time-budget" | null;
+  readonly states_visited: number | null;
+  readonly transitions_observed: number | null;
+  readonly duration_ms: number | null;
+  readonly max_states: number | null;
+  readonly max_duration_seconds: number | null;
 }
 
 interface AuthRow {
@@ -70,6 +77,7 @@ interface StoredCaseRow {
   readonly source: TestingCaseSummary["source"];
   readonly description: string;
   readonly steps_json: string;
+  readonly expected_result: string;
   readonly source_sheet: string | null;
   readonly source_row: number | null;
   readonly reconciliation_status: TestingCaseSummary["status"];
@@ -138,6 +146,8 @@ interface StoredHealingRow {
   readonly diff: string;
   readonly status: TestingHealingProposal["status"];
   readonly consecutive_attempts: number;
+  readonly locator_entry_id: string | null;
+  readonly locator_version_id: string | null;
 }
 
 export interface TestingExecutionArtifact {
@@ -150,6 +160,8 @@ export interface TestingExecutionArtifact {
     readonly role: string;
     readonly accessibleName: string;
     readonly graphStateId: string;
+    readonly locatorEntryId?: string;
+    readonly locatorVersionId?: string;
   }>;
 }
 
@@ -274,6 +286,7 @@ export class TestingGraphStore {
         source TEXT NOT NULL CHECK (source IN ('excel', 'generated')),
         description TEXT NOT NULL,
         steps_json TEXT NOT NULL,
+        expected_result TEXT NOT NULL DEFAULT '',
         source_sheet TEXT,
         source_row INTEGER,
         reconciliation_status TEXT NOT NULL CHECK (
@@ -441,6 +454,10 @@ export class TestingGraphStore {
         created_at TEXT NOT NULL
       );
     `);
+    ensureTableColumn(this.#database, "locator_fingerprints", "locator_entry_id", "TEXT");
+    ensureTableColumn(this.#database, "locator_fingerprints", "locator_version_id", "TEXT");
+    ensureTableColumn(this.#database, "healing_proposals", "locator_entry_id", "TEXT");
+    ensureTableColumn(this.#database, "healing_proposals", "locator_version_id", "TEXT");
     ensureCrawlRunColumn(this.#database, "scope", "TEXT NOT NULL DEFAULT 'origin'");
     ensureCrawlRunColumn(this.#database, "max_states", "INTEGER");
     ensureCrawlRunColumn(this.#database, "max_duration_seconds", "INTEGER");
@@ -466,6 +483,25 @@ export class TestingGraphStore {
       "model_options_json",
       "TEXT NOT NULL DEFAULT '[]'",
     );
+    ensureTableColumn(this.#database, "test_cases", "expected_result", "TEXT NOT NULL DEFAULT ''");
+    this.#database.exec(`
+      DELETE FROM test_cases
+      WHERE id NOT IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER(
+            PARTITION BY project_id, description, steps_json, expected_result
+            ORDER BY created_at ASC, id ASC
+          ) as rn
+          FROM test_cases
+          WHERE source = 'generated'
+        ) WHERE rn = 1
+      ) AND source = 'generated';
+    `);
+    this.#database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS test_cases_generated_dedup_idx
+      ON test_cases(project_id, description, steps_json, expected_result)
+      WHERE source = 'generated';
+    `);
     this.#database
       .query(
         `UPDATE crawl_runs
@@ -698,10 +734,10 @@ export class TestingGraphStore {
     const importedCaseIds: string[] = [];
     const insertCase = this.#database.query(
       `INSERT INTO test_cases
-        (id, project_id, import_id, external_id, source, description, steps_json, source_sheet,
-         source_row, reconciliation_status, mismatches_json, matched_state_ids_json, created_at,
-         updated_at)
-       VALUES (?, ?, ?, ?, 'excel', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, project_id, import_id, external_id, source, description, steps_json, expected_result,
+         source_sheet, source_row, reconciliation_status, mismatches_json, matched_state_ids_json,
+         created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'excel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.#database.transaction(() => {
       this.#database
@@ -720,6 +756,7 @@ export class TestingGraphStore {
           testCase.externalId,
           testCase.description,
           JSON.stringify(testCase.steps),
+          testCase.expectedResult,
           testCase.sourceSheet,
           testCase.sourceRow,
           testCase.status,
@@ -750,15 +787,16 @@ export class TestingGraphStore {
       readonly externalId: string;
       readonly description: string;
       readonly steps: ReadonlyArray<string>;
+      readonly expectedResult: string;
       readonly matchedStateIds: ReadonlyArray<string>;
     }>,
   ): TestingCaseListResult {
     const now = new Date().toISOString();
     const statement = this.#database.query(
-      `INSERT INTO test_cases
-        (id, project_id, external_id, source, description, steps_json, reconciliation_status,
-         mismatches_json, matched_state_ids_json, created_at, updated_at)
-       VALUES (?, ?, ?, 'generated', ?, ?, 'matches', '[]', ?, ?, ?)`,
+      `INSERT OR IGNORE INTO test_cases
+        (id, project_id, external_id, source, description, steps_json, expected_result,
+         reconciliation_status, mismatches_json, matched_state_ids_json, created_at, updated_at)
+       VALUES (?, ?, ?, 'generated', ?, ?, ?, 'matches', '[]', ?, ?, ?)`,
     );
     this.#database.transaction(() => {
       for (const testCase of cases) {
@@ -768,6 +806,7 @@ export class TestingGraphStore {
           testCase.externalId,
           testCase.description,
           JSON.stringify(testCase.steps),
+          testCase.expectedResult,
           JSON.stringify(testCase.matchedStateIds),
           now,
           now,
@@ -780,9 +819,9 @@ export class TestingGraphStore {
   listCases(projectId: string): TestingCaseListResult {
     const rows = this.#database
       .query<StoredCaseRow, [string]>(
-        `SELECT id, external_id, source, description, steps_json, source_sheet, source_row,
-          reconciliation_status, review_decision, mismatches_json, matched_state_ids_json,
-          standalone_status, ci_status, notes
+        `SELECT id, external_id, source, description, steps_json, expected_result,
+          source_sheet, source_row, reconciliation_status, review_decision, mismatches_json,
+          matched_state_ids_json, standalone_status, ci_status, notes
          FROM test_cases WHERE project_id = ? ORDER BY created_at DESC, source_row`,
       )
       .all(projectId);
@@ -791,8 +830,15 @@ export class TestingGraphStore {
         id: row.id,
         externalId: row.external_id,
         source: row.source,
+        creationMethod:
+          row.source === "excel"
+            ? "imported"
+            : row.notes === "Created manually in Testing"
+              ? "manual"
+              : "generated",
         description: row.description,
         steps: JSON.parse(row.steps_json) as string[],
+        expectedResult: row.expected_result,
         sourceSheet: row.source_sheet,
         sourceRow: row.source_row,
         status: row.reconciliation_status,
@@ -806,12 +852,50 @@ export class TestingGraphStore {
     };
   }
 
+  createCase(
+    input: TestingCaseCreateInput & { readonly externalId: string },
+  ): TestingCaseListResult {
+    const description = input.description.trim();
+    const steps = input.steps.map((step) => step.trim()).filter(Boolean);
+    const externalId = input.externalId.trim();
+    if (!externalId || !description || steps.length === 0) {
+      throw new Error("Manual cases require a Case ID, description, and at least one step");
+    }
+    const duplicate = this.listCases(input.projectId).cases.some(
+      (item) => item.externalId.trim().toLocaleLowerCase() === externalId.toLocaleLowerCase(),
+    );
+    if (duplicate) throw new Error(`Case ID ${externalId} already exists in this project`);
+    const now = new Date().toISOString();
+    this.#database
+      .query(
+        `INSERT INTO test_cases
+          (id, project_id, external_id, source, description, steps_json, expected_result,
+           reconciliation_status, review_decision, mismatches_json, matched_state_ids_json,
+           notes, created_at, updated_at)
+         VALUES (?, ?, ?, 'generated', ?, ?, ?, 'matches', 'edited', '[]', '[]', ?, ?, ?)`,
+      )
+      .run(
+        crypto.randomUUID(),
+        input.projectId,
+        externalId,
+        description,
+        JSON.stringify(steps),
+        input.expectedResult.trim(),
+        "Created manually in Testing",
+        now,
+        now,
+      );
+    return this.listCases(input.projectId);
+  }
+
   reviewCase(input: TestingCaseReviewInput): TestingCaseListResult {
     const existing = this.listCases(input.projectId).cases.find((item) => item.id === input.caseId);
     if (!existing) throw new Error("Testing case was not found in this project");
     const externalId = input.externalId?.trim() || existing.externalId;
     const description = input.description?.trim() || existing.description;
     const steps = input.steps?.map((step) => step.trim()).filter(Boolean) ?? existing.steps;
+    const expectedResult =
+      input.expectedResult !== undefined ? input.expectedResult : existing.expectedResult;
     if (input.decision === "edited" && (!externalId || !description || steps.length === 0)) {
       throw new Error("Edited cases require a Case ID, description, and at least one step");
     }
@@ -826,19 +910,22 @@ export class TestingGraphStore {
       externalId,
       description,
       steps,
+      expectedResult,
       reviewDecision: input.decision,
     };
     const now = new Date().toISOString();
     this.#database.transaction(() => {
       this.#database
         .query(
-          `UPDATE test_cases SET external_id = ?, description = ?, steps_json = ?, review_decision = ?, notes = ?,
+          `UPDATE test_cases SET external_id = ?, description = ?, steps_json = ?,
+           expected_result = ?, review_decision = ?, notes = ?,
            updated_at = ? WHERE id = ? AND project_id = ?`,
         )
         .run(
           externalId,
           description,
           JSON.stringify(steps),
+          expectedResult,
           input.decision,
           input.notes ?? existing.notes,
           now,
@@ -951,6 +1038,8 @@ export class TestingGraphStore {
       readonly semanticContext: string;
       readonly graphStateId: string;
       readonly urlPattern: string;
+      readonly locatorEntryId?: string;
+      readonly locatorVersionId?: string;
     }>;
     readonly captureReplay: boolean;
   }): void {
@@ -977,7 +1066,8 @@ export class TestingGraphStore {
       const fingerprintStatement = this.#database.query(
         `INSERT INTO locator_fingerprints
          (id, artifact_id, case_id, locator_key, role, accessible_name, semantic_context,
-          graph_state_id, url_pattern, verified_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          graph_state_id, url_pattern, verified_at, locator_entry_id, locator_version_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const fingerprint of input.fingerprints) {
         fingerprintStatement.run(
@@ -991,6 +1081,8 @@ export class TestingGraphStore {
           fingerprint.graphStateId,
           fingerprint.urlPattern,
           now,
+          fingerprint.locatorEntryId ?? null,
+          fingerprint.locatorVersionId ?? null,
         );
       }
       this.#database
@@ -1071,10 +1163,18 @@ export class TestingGraphStore {
       .all(jobId)
       .filter((row) => !caseIds || caseIds.includes(row.case_id));
     const fingerprints = this.#database.query<
-      { locator_key: string; role: string; accessible_name: string; graph_state_id: string },
+      {
+        locator_key: string;
+        role: string;
+        accessible_name: string;
+        graph_state_id: string;
+        locator_entry_id: string | null;
+        locator_version_id: string | null;
+      },
       [string, string]
     >(
-      `SELECT f.locator_key, f.role, f.accessible_name, f.graph_state_id
+      `SELECT f.locator_key, f.role, f.accessible_name, f.graph_state_id,
+        f.locator_entry_id, f.locator_version_id
        FROM locator_fingerprints f JOIN generated_artifacts a ON a.id = f.artifact_id
        WHERE a.job_id = ? AND f.case_id = ? ORDER BY f.id`,
     );
@@ -1088,6 +1188,10 @@ export class TestingGraphStore {
         role: fingerprint.role,
         accessibleName: fingerprint.accessible_name,
         graphStateId: fingerprint.graph_state_id,
+        ...(fingerprint.locator_entry_id ? { locatorEntryId: fingerprint.locator_entry_id } : {}),
+        ...(fingerprint.locator_version_id
+          ? { locatorVersionId: fingerprint.locator_version_id }
+          : {}),
       })),
     }));
   }
@@ -1111,7 +1215,7 @@ export class TestingGraphStore {
         input.projectId,
         input.generationJobId,
         input.mode,
-        input.targetUrl,
+        sanitizePersistedUrl(input.targetUrl),
         input.artifactRevision,
         new Date().toISOString(),
       );
@@ -1174,8 +1278,9 @@ export class TestingGraphStore {
       const proposalStatement = this.#database.query(
         `INSERT INTO healing_proposals
          (id, run_id, case_id, locator_key, previous_role, previous_name, proposed_role,
-          proposed_name, confidence, margin, diff, status, consecutive_attempts, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          proposed_name, confidence, margin, diff, status, consecutive_attempts, created_at,
+          locator_entry_id, locator_version_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const proposal of input.proposals) {
         proposalStatement.run(
@@ -1193,6 +1298,8 @@ export class TestingGraphStore {
           proposal.status,
           proposal.consecutiveAttempts,
           now,
+          proposal.locatorEntryId ?? null,
+          proposal.locatorVersionId ?? null,
         );
       }
     })();
@@ -1210,7 +1317,8 @@ export class TestingGraphStore {
     );
     const proposals = this.#database.query<StoredHealingRow, [string]>(
       `SELECT id, case_id, locator_key, previous_role, previous_name, proposed_role,
-       proposed_name, confidence, margin, diff, status, consecutive_attempts
+       proposed_name, confidence, margin, diff, status, consecutive_attempts,
+       locator_entry_id, locator_version_id
        FROM healing_proposals WHERE run_id = ? ORDER BY created_at`,
     );
     return {
@@ -1252,6 +1360,8 @@ export class TestingGraphStore {
           diff: proposal.diff,
           status: proposal.status,
           consecutiveAttempts: proposal.consecutive_attempts,
+          ...(proposal.locator_entry_id ? { locatorEntryId: proposal.locator_entry_id } : {}),
+          ...(proposal.locator_version_id ? { locatorVersionId: proposal.locator_version_id } : {}),
         })),
       })),
     };
@@ -1321,6 +1431,43 @@ export class TestingGraphStore {
     return this.executionRuns(input.projectId);
   }
 
+  healingProposal(
+    projectId: string,
+    proposalId: string,
+  ):
+    | (TestingHealingProposal & {
+        readonly targetUrl: string;
+      })
+    | null {
+    const proposal = this.#database
+      .query<StoredHealingRow & { target_url: string; project_id: string }, [string]>(
+        `SELECT h.id, h.case_id, h.locator_key, h.previous_role, h.previous_name,
+          h.proposed_role, h.proposed_name, h.confidence, h.margin, h.diff, h.status,
+          h.consecutive_attempts, h.locator_entry_id, h.locator_version_id,
+          r.target_url, r.project_id
+         FROM healing_proposals h JOIN execution_runs r ON r.id = h.run_id WHERE h.id = ?`,
+      )
+      .get(proposalId);
+    if (!proposal || proposal.project_id !== projectId) return null;
+    return {
+      id: proposal.id,
+      caseId: proposal.case_id,
+      locatorKey: proposal.locator_key,
+      previousRole: proposal.previous_role,
+      previousName: proposal.previous_name,
+      proposedRole: proposal.proposed_role,
+      proposedName: proposal.proposed_name,
+      confidence: proposal.confidence,
+      margin: proposal.margin,
+      diff: proposal.diff,
+      status: proposal.status,
+      consecutiveAttempts: proposal.consecutive_attempts,
+      ...(proposal.locator_entry_id ? { locatorEntryId: proposal.locator_entry_id } : {}),
+      ...(proposal.locator_version_id ? { locatorVersionId: proposal.locator_version_id } : {}),
+      targetUrl: proposal.target_url,
+    };
+  }
+
   createSchedule(input: TestingScheduleInput): TestingSchedule {
     const nextRunAt = new Date(input.runAt);
     if (Number.isNaN(nextRunAt.valueOf())) throw new Error("Schedule run time is invalid");
@@ -1333,7 +1480,7 @@ export class TestingGraphStore {
       id: crypto.randomUUID(),
       projectId: input.projectId,
       generationJobId: input.generationJobId,
-      targetUrl: input.targetUrl,
+      targetUrl: sanitizePersistedUrl(input.targetUrl),
       timezone: input.timezone,
       recurrence: input.recurrence ?? "none",
       nextRunAt: nextRunAt.toISOString(),
@@ -1443,7 +1590,8 @@ export class TestingGraphStore {
     const healing = this.#database
       .query<StoredHealingRow & { run_id: string }, [string]>(
         `SELECT id, run_id, case_id, locator_key, previous_role, previous_name, proposed_role,
-       proposed_name, confidence, margin, diff, status, consecutive_attempts
+       proposed_name, confidence, margin, diff, status, consecutive_attempts,
+       locator_entry_id, locator_version_id
        FROM healing_proposals WHERE case_id = ? ORDER BY created_at DESC`,
       )
       .all(testCase.id);
@@ -1487,6 +1635,8 @@ export class TestingGraphStore {
         diff: proposal.diff,
         status: proposal.status,
         consecutiveAttempts: proposal.consecutive_attempts,
+        ...(proposal.locator_entry_id ? { locatorEntryId: proposal.locator_entry_id } : {}),
+        ...(proposal.locator_version_id ? { locatorVersionId: proposal.locator_version_id } : {}),
       })),
     };
   }
@@ -1516,10 +1666,16 @@ export class TestingGraphStore {
     return { id, createdAt };
   }
 
+  updateRunProgress(runId: string, statesVisited: number, transitionsObserved: number): void {
+    this.#database
+      .query("UPDATE crawl_runs SET states_visited = ?, transitions_observed = ? WHERE id = ?")
+      .run(statesVisited, transitionsObserved, runId);
+  }
+
   summary(projectId: string): TestingGraphSummary {
     const latest = this.#database
       .query<StatusRow, [string]>(
-        "SELECT target_url, status, error FROM crawl_runs WHERE project_id = ? ORDER BY started_at DESC LIMIT 1",
+        "SELECT target_url, status, error, termination_reason, states_visited, transitions_observed, duration_ms, max_states, max_duration_seconds FROM crawl_runs WHERE project_id = ? ORDER BY started_at DESC LIMIT 1",
       )
       .get(projectId);
     const auth = this.#database
@@ -1547,6 +1703,16 @@ export class TestingGraphStore {
       cacheHitCount: cacheHits,
       lastRunStatus: latest?.status ?? "idle",
       lastRunError: latest?.error ?? null,
+      lastRunMetrics: latest
+        ? {
+            terminationReason: latest.termination_reason,
+            statesVisited: latest.states_visited,
+            transitionsObserved: latest.transitions_observed,
+            durationMs: latest.duration_ms,
+            maxStates: latest.max_states,
+            maxDurationSeconds: latest.max_duration_seconds,
+          }
+        : null,
     };
   }
 }

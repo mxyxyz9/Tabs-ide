@@ -5,8 +5,10 @@ import {
   DEFAULT_TESTING_MAX_STATES,
   MAX_TESTING_DURATION_SECONDS,
   MAX_TESTING_MAX_STATES,
+  TestingCaseIdPolicyInput,
   TestingExplorationInput,
   TestingGenerationInput,
+  TestingLocatorDiscoveryInput,
   TestingCaseReviewInput,
   TestingWorkbookImportInput,
 } from "./testing";
@@ -145,6 +147,45 @@ describe("Testing Phase 3 inputs", () => {
   ])("rejects unsupported or non-positive generation controls: %o", (patch) => {
     expect(() =>
       Schema.decodeUnknownSync(TestingGenerationInput)({ ...validInput, ...patch }),
+    ).toThrow();
+  });
+});
+
+describe("Testing Phase 6 workspace inputs", () => {
+  it("decodes task-focused locator capture and configurable case IDs", () => {
+    expect(
+      Schema.decodeUnknownSync(TestingLocatorDiscoveryInput)({
+        projectId: "project",
+        targetUrl: "https://example.test/account",
+        environmentLabel: "uat",
+        mode: "guided",
+        scope: "path",
+        coverage: "actions-assertions",
+        safetyProfile: "supervised",
+        maxElementsPerPage: 500,
+        maxPagesPerSession: 25,
+        captureScope: "task",
+        taskContext: "Update the account profile",
+      }),
+    ).toMatchObject({ captureScope: "task", scope: "path" });
+    expect(
+      Schema.decodeUnknownSync(TestingCaseIdPolicyInput)({
+        projectId: "project",
+        prefix: "QA-",
+        padding: 4,
+        nextSequence: 42,
+      }),
+    ).toMatchObject({ prefix: "QA-", padding: 4, nextSequence: 42 });
+  });
+
+  it("rejects invalid Case ID widths", () => {
+    expect(() =>
+      Schema.decodeUnknownSync(TestingCaseIdPolicyInput)({
+        projectId: "project",
+        prefix: "TC-",
+        padding: 0,
+        nextSequence: 1,
+      }),
     ).toThrow();
   });
 });

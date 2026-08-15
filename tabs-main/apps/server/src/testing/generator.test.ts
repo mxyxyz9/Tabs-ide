@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
 import { TestingGenerator } from "./generator";
 import { TestingGraphStore } from "./graphStore";
+import { LocatorLibraryStore } from "./locatorLibrary";
 
 const execFile = promisify(execFileCallback);
 
@@ -77,6 +78,7 @@ function seedAcceptedCase(store: TestingGraphStore): TestingCaseSummary {
         externalId: "QA-101",
         description: "Open account settings",
         steps: ["Open Settings", "Choose Account"],
+        expectedResult: "Account Settings page is visible",
         sourceSheet: "Cases",
         sourceRow: 2,
         status: "matches",
@@ -113,10 +115,18 @@ describe("TestingGenerator", () => {
         "tabs-testing-generation-",
       ),
     );
-    const store = new TestingGraphStore(join(root, "state.sqlite"));
+    const databasePath = join(root, "state.sqlite");
+    const store = new TestingGraphStore(databasePath);
+    const locatorStore = new LocatorLibraryStore(databasePath);
+    const localGenerate = vi.fn();
     try {
       seedAcceptedCase(store);
-      const generator = new TestingGenerator(store, join(root, "state"), textGeneration());
+      const generator = new TestingGenerator(
+        store,
+        locatorStore,
+        join(root, "state"),
+        textGeneration(localGenerate),
+      );
       const job = await generator.generate(generationInput(root));
 
       expect(job).toMatchObject({ status: "completed", completedCases: 1, totalCases: 1 });
@@ -135,8 +145,15 @@ describe("TestingGenerator", () => {
       expect(page).toContain('page.getByRole("link"');
       expect(page).toContain("async activateAccount1");
       expect(data).toContain('caseId": "QA-101"');
+      expect(data).toContain('"expectedResult"');
+      expect(data).toContain('"assertionText"');
       expect(spec).toContain("await app.activateAccount1()");
       expect(spec).not.toContain("Open account settings");
+      // Verify the prompt sent to the LLM was enriched with the expected result.
+      const promptArg =
+        (localGenerate.mock.calls[0]?.[0] as { sanitizedPrompt?: string } | undefined)
+          ?.sanitizedPrompt ?? "";
+      expect(promptArg).toContain("Expected Result:");
       if (process.env.TABS_VERIFY_GENERATED_SUITE) {
         await runCommand("bunx", [
           "tsc",
@@ -169,6 +186,7 @@ describe("TestingGenerator", () => {
         expect(discovery.stdout).toContain("opens account settings");
       }
     } finally {
+      locatorStore.close();
       store.close();
       await rm(root, { recursive: true, force: true });
     }
@@ -176,7 +194,9 @@ describe("TestingGenerator", () => {
 
   it("uses a declarative company manifest for repository layout", async () => {
     const root = await mkdtemp(join(tmpdir(), "tabs-testing-template-"));
-    const store = new TestingGraphStore(join(root, "state.sqlite"));
+    const databasePath = join(root, "state.sqlite");
+    const store = new TestingGraphStore(databasePath);
+    const locatorStore = new LocatorLibraryStore(databasePath);
     try {
       seedAcceptedCase(store);
       await mkdir(join(root, "testing"), { recursive: true });
@@ -195,7 +215,12 @@ describe("TestingGenerator", () => {
         }),
         "utf8",
       );
-      const generator = new TestingGenerator(store, join(root, "state"), textGeneration());
+      const generator = new TestingGenerator(
+        store,
+        locatorStore,
+        join(root, "state"),
+        textGeneration(),
+      );
       const job = await generator.generate({
         ...generationInput(root),
         outputMode: "repository",
@@ -211,6 +236,7 @@ describe("TestingGenerator", () => {
         "class AccountSettingsScreen",
       );
     } finally {
+      locatorStore.close();
       store.close();
       await rm(root, { recursive: true, force: true });
     }
@@ -218,11 +244,18 @@ describe("TestingGenerator", () => {
 
   it("stops before provider dispatch when the next case exceeds a budget", async () => {
     const root = await mkdtemp(join(tmpdir(), "tabs-testing-budget-"));
-    const store = new TestingGraphStore(join(root, "state.sqlite"));
+    const databasePath = join(root, "state.sqlite");
+    const store = new TestingGraphStore(databasePath);
+    const locatorStore = new LocatorLibraryStore(databasePath);
     const generate = vi.fn();
     try {
       seedAcceptedCase(store);
-      const generator = new TestingGenerator(store, join(root, "state"), textGeneration(generate));
+      const generator = new TestingGenerator(
+        store,
+        locatorStore,
+        join(root, "state"),
+        textGeneration(generate),
+      );
       const job = await generator.generate({
         ...generationInput(root),
         maxEstimatedTokens: 1,
@@ -231,6 +264,7 @@ describe("TestingGenerator", () => {
       expect(job).toMatchObject({ status: "budget-stopped", completedCases: 0 });
       expect(generate).not.toHaveBeenCalled();
     } finally {
+      locatorStore.close();
       store.close();
       await rm(root, { recursive: true, force: true });
     }

@@ -13,14 +13,33 @@ import {
   type GitBranch,
   type GitStatusFile,
   type ModelSelection,
+  type ModelSlug,
   type TestingGraphSummary,
   type TestingGraphExplorerResult,
   type TestingCaseSummary,
+  type TestingCaseIdPolicy,
   type TestingGenerationJob,
   type TestingExplorationScope,
   type TestingExecutionRun,
   type TestingSchedule,
   type TestingTraceabilityResult,
+  type TestingDiscoveryMode,
+  type TestingDiscoverySafetyProfile,
+  type TestingLocatorCoverageMode,
+  type TestingLocatorDiscoverySession,
+  type TestingLocatorEntry,
+  type TestingLocatorFolderResult,
+  type TestingLocatorLibraryResult,
+  type TestingLocatorRepositoryProposal,
+  type TestingLocatorSyncPreview,
+  type TestingLocatorStorageMode,
+  type TestingTestInventoryNode,
+  type TestingTestInventoryResult,
+  DEFAULT_TESTING_MAX_ELEMENTS_PER_PAGE,
+  DEFAULT_TESTING_MAX_PAGES_PER_SESSION,
+  MAX_TESTING_MAX_ELEMENTS_PER_PAGE,
+  MAX_TESTING_MAX_PAGES_PER_SESSION,
+  MIN_TESTING_MAX_ELEMENTS_PER_PAGE,
   DEFAULT_TESTING_BATCH_MAX_CASES,
   DEFAULT_TESTING_BATCH_MAX_COST_USD,
   DEFAULT_TESTING_BATCH_MAX_TOKENS,
@@ -48,12 +67,17 @@ import {
   ChevronRightIcon,
   ChevronUpIcon,
   ExternalLinkIcon,
+  FlaskConicalIcon,
   FolderSearchIcon,
   GitBranchIcon,
   GlobeIcon,
+  HelpCircleIcon,
   HistoryIcon,
   LoaderIcon,
+  Maximize2Icon,
+  Minimize2Icon,
   MoreHorizontalIcon,
+  MonitorIcon,
   PlayIcon,
   PencilIcon,
   PlusIcon,
@@ -61,9 +85,10 @@ import {
   RocketIcon,
   RotateCwIcon,
   SearchIcon,
-  ShieldCheckIcon,
   ServerIcon,
   SettingsIcon,
+  SmartphoneIcon,
+  TabletIcon,
   Trash2Icon,
   PanelTopCloseIcon,
   PanelTopOpenIcon,
@@ -96,6 +121,7 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { isElectron } from "../env";
 import { useOpenAddProjectCommandPalette } from "../commandPaletteContext";
 import { toGitUserFacingErrorMessage } from "../lib/gitErrorMessages";
+import { clipTestingPreviewBounds } from "../lib/testingPreviewBounds";
 import {
   gitBranchesQueryOptions,
   gitConflictSnapshotQueryOptions,
@@ -138,12 +164,15 @@ import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
 import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, KiloIcon, CursorIcon, type Icon } from "./Icons";
 import GitCommitComposer from "./GitCommitComposer";
-import { GitModelPicker } from "./git/gitPrimitives";
+import { FusedModelPicker } from "./chat/FusedModelPicker";
+import type { ProviderPickerKind } from "../session-logic";
+import { useServerConfig } from "../state/settings";
 import { Badge } from "./ui/badge";
 import { initializeZoom, resetZoom, zoomIn, zoomOut } from "../state/zoom";
 import { Button } from "./ui/button";
 import { CloneRepositoryDialog } from "./CloneRepositoryDialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Checkbox } from "./ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import {
   Dialog,
@@ -454,7 +483,7 @@ function toolIcon(tool: ProjectToolKind) {
     case "custom_embed":
       return <GlobeIcon className="size-3.5" />;
     case "testing":
-      return <ShieldCheckIcon aria-hidden="true" className="size-3.5" />;
+      return <FlaskConicalIcon aria-hidden="true" className="size-3.5" />;
     case "custom_process":
       return <TerminalSquareIcon className="size-3.5" />;
   }
@@ -1059,11 +1088,454 @@ type TestingAuthenticationMode = "none" | "local-profile" | "connected-session";
 type TestingWorkspaceSection = "overview" | "discover" | "cases" | "automate" | "runs" | "reports";
 type TestingCaseFilter = "all" | "needs-review" | "accepted" | "blocked";
 
+function InfoTooltip(props: { content: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="ml-1.5 inline-flex items-center text-muted-foreground/60 hover:text-foreground focus:outline-none transition-colors"
+        aria-label="More information"
+      >
+        <HelpCircleIcon className="size-3.5" />
+      </button>
+      {open ? (
+        <span className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 w-64 rounded-xl border border-border/80 bg-popover p-2.5 text-xs font-normal leading-relaxed text-popover-foreground shadow-xl">
+          {props.content}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function NumberStepperInput(props: {
+  id: string;
+  value: string;
+  onChange: (val: string) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  disabled?: boolean;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
+}) {
+  const step = props.step ?? 1;
+
+  const handleStep = (dir: 1 | -1) => {
+    const current = parseFloat(props.value) || 0;
+    let next = current + dir * step;
+    if (props.min !== undefined && next < props.min) next = props.min;
+    if (props.max !== undefined && next > props.max) next = props.max;
+    props.onChange(String(Number(next.toFixed(2))));
+  };
+
+  return (
+    <div className="relative flex items-center">
+      <Input
+        id={props.id}
+        type="number"
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        disabled={props.disabled}
+        aria-describedby={props.ariaDescribedBy}
+        aria-invalid={props.ariaInvalid}
+        className="pr-16 font-mono text-sm"
+      />
+      <div className="absolute right-1.5 flex items-center gap-0.5 rounded-md bg-muted/60 p-0.5 border border-border/40">
+        <button
+          type="button"
+          onClick={() => handleStep(-1)}
+          disabled={props.disabled}
+          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30 transition-colors"
+          aria-label="Decrease value"
+        >
+          <ChevronDownIcon className="size-3" />
+        </button>
+        <div className="h-3 w-px bg-border/40" />
+        <button
+          type="button"
+          onClick={() => handleStep(1)}
+          disabled={props.disabled}
+          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30 transition-colors"
+          aria-label="Increase value"
+        >
+          <ChevronUpIcon className="size-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function testingLocatorHasRedactedArgument(entry: TestingLocatorEntry): boolean {
+  return Object.values(entry.arguments).some(
+    (value) => typeof value === "string" && /<(?:PII_|REDACTED_)[^>]*>/u.test(value),
+  );
+}
+
+function testingLocatorCode(entry: TestingLocatorEntry, pageVariable = "page"): string {
+  if (entry.lifecycleStatus === "manual-required" || testingLocatorHasRedactedArgument(entry)) {
+    return "Manual locator required - choose a stable test ID or non-sensitive label";
+  }
+  const args = entry.arguments;
+  const value = (key: string) => JSON.stringify(String(args[key] ?? ""));
+  switch (entry.strategy) {
+    case "role":
+      return `${pageVariable}.getByRole(${value("role")}, { name: ${value("name")} })`;
+    case "label":
+      return `${pageVariable}.getByLabel(${value("text")})`;
+    case "test-id":
+      return `${pageVariable}.getByTestId(${value("testId")})`;
+    case "placeholder":
+      return `${pageVariable}.getByPlaceholder(${value("text")})`;
+    case "alt-text":
+      return `${pageVariable}.getByAltText(${value("text")})`;
+    case "title":
+      return `${pageVariable}.getByTitle(${value("text")})`;
+    case "text":
+      return `${pageVariable}.getByText(${value("text")})`;
+    case "css":
+      return `${pageVariable}.locator(${value("selector")})`;
+  }
+}
+
+const TESTING_FUSION_PROVIDER_IDS: ReadonlyArray<ProviderPickerKind> = [
+  "codex",
+  "claudeAgent",
+  "cursor",
+  "grok",
+  "opencode",
+  "kilo",
+];
+
+function testingReasoningTierFromOptions(
+  options: ModelSelection["options"],
+): "low" | "medium" | "high" {
+  const effort = options
+    ?.find((option) => /reasoning|effort/iu.test(option.id))
+    ?.value.toString()
+    .toLocaleLowerCase();
+  if (!effort || effort === "medium" || effort === "standard") return "medium";
+  if (effort === "none" || effort === "minimal" || effort === "low") return "low";
+  return "high";
+}
+
+function TestingCaseLocatorPicker(props: {
+  library: TestingLocatorLibraryResult | null;
+  selectedIds: ReadonlySet<string>;
+  onChange: (next: ReadonlySet<string>) => void;
+  label: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const pages = (props.library?.pages ?? [])
+    .map((page) => ({
+      page,
+      entries: page.entries.filter(
+        (entry) =>
+          entry.lifecycleStatus !== "archived" &&
+          (!normalizedQuery ||
+            page.name.toLocaleLowerCase().includes(normalizedQuery) ||
+            entry.locatorKey.toLocaleLowerCase().includes(normalizedQuery) ||
+            entry.semanticContext.toLocaleLowerCase().includes(normalizedQuery)),
+      ),
+    }))
+    .filter(({ entries }) => entries.length > 0);
+  const toggleEntries = (entryIds: ReadonlyArray<string>, selected: boolean) => {
+    const next = new Set(props.selectedIds);
+    for (const entryId of entryIds) {
+      if (selected) next.add(entryId);
+      else next.delete(entryId);
+    }
+    props.onChange(next);
+  };
+  return (
+    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-medium">{props.label}</div>
+          <p className="text-xs text-muted-foreground">
+            Select any number of pages or individual locators for this case.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">{props.selectedIds.size} selected</Badge>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            aria-expanded={open}
+            onClick={() => setOpen((current) => !current)}
+          >
+            {open ? "Done" : "Choose locators"}
+            <ChevronDownIcon
+              aria-hidden="true"
+              className={cn("transition-transform", open && "rotate-180")}
+            />
+          </Button>
+        </div>
+      </div>
+      {open ? (
+        <>
+          <div className="relative">
+            <SearchIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search locator pages or keys"
+              aria-label={`Search ${props.label.toLocaleLowerCase()}`}
+              className="pl-9"
+            />
+          </div>
+          <div className="max-h-64 space-y-2 overflow-auto" aria-label={props.label}>
+            {pages.map(({ page, entries }) => {
+              const pageEntryIds = entries.map((entry) => entry.id);
+              const selectedCount = pageEntryIds.filter((id) => props.selectedIds.has(id)).length;
+              return (
+                <div
+                  key={page.id}
+                  className="rounded-lg border border-border/60 bg-background/70 p-3"
+                >
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                    <Checkbox
+                      checked={selectedCount === pageEntryIds.length && pageEntryIds.length > 0}
+                      onCheckedChange={(checked) => toggleEntries(pageEntryIds, Boolean(checked))}
+                      aria-label={`Use all locators from ${page.name}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate">{page.name}</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {selectedCount}/{pageEntryIds.length}
+                    </span>
+                  </label>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {entries.map((entry) => (
+                      <label
+                        key={entry.id}
+                        className={cn(
+                          "flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs",
+                          props.selectedIds.has(entry.id)
+                            ? "border-primary/30 bg-primary/10 text-foreground"
+                            : "border-border/60 text-muted-foreground",
+                        )}
+                      >
+                        <Checkbox
+                          checked={props.selectedIds.has(entry.id)}
+                          onCheckedChange={(checked) => toggleEntries([entry.id], Boolean(checked))}
+                          aria-label={`Use locator ${entry.locatorKey}`}
+                          className="size-3.5"
+                        />
+                        <span className="font-mono">{entry.locatorKey}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {pages.length === 0 ? (
+              <div className="py-6 text-center text-xs text-muted-foreground">
+                No locator pages match this search. Capture locators in App & locators first.
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function TestingApplicationPreview(props: {
+  projectId: ProjectId;
+  targetUrl: string;
+  sessionId: string;
+  viewport: "desktop" | "tablet" | "mobile";
+}) {
+  const bridge = window.desktopBridge;
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [sessionState, setSessionState] = useState<DesktopBrowserSessionState>(() =>
+    createEmptyBrowserSessionState(props.projectId, props.sessionId),
+  );
+
+  useEffect(() => {
+    if (!bridge || !props.targetUrl) return;
+    let disposed = false;
+    void bridge
+      .ensureBrowserSession({
+        projectId: props.projectId,
+        sessionId: props.sessionId,
+        initialUrl: props.targetUrl,
+      })
+      .then(() =>
+        bridge.activateBrowserSession({ projectId: props.projectId, sessionId: props.sessionId }),
+      )
+      .catch(() => undefined);
+    const unsubscribe = bridge.onBrowserSessionState((nextState) => {
+      if (
+        disposed ||
+        nextState.projectId !== props.projectId ||
+        nextState.sessionId !== props.sessionId
+      ) {
+        return;
+      }
+      setSessionState(nextState);
+    });
+    return () => {
+      disposed = true;
+      unsubscribe();
+      void bridge.hideBrowserSession().catch(() => undefined);
+    };
+  }, [bridge, props.projectId, props.sessionId]);
+
+  useEffect(() => {
+    if (!bridge || !props.targetUrl || isSameWebUrl(sessionState.currentUrl, props.targetUrl)) {
+      return;
+    }
+    void bridge
+      .navigateBrowserSession({
+        projectId: props.projectId,
+        sessionId: props.sessionId,
+        url: props.targetUrl,
+      })
+      .catch(() => undefined);
+  }, [bridge, props.projectId, props.sessionId, props.targetUrl, sessionState.currentUrl]);
+
+  useEffect(() => {
+    if (!bridge) return;
+    const host = hostRef.current;
+    if (!host) return;
+    let frame = 0;
+    let lastSignature = "";
+    const publish = () => {
+      frame = 0;
+      const cssZoom =
+        (typeof document !== "undefined" && parseFloat(document.documentElement.style.zoom)) || 1;
+      const rect = host.getBoundingClientRect();
+      const scrollViewport = host.closest("main")?.getBoundingClientRect();
+      const clipTop = Math.max(0, scrollViewport?.top ?? 0);
+      const clipLeft = Math.max(0, scrollViewport?.left ?? 0);
+      const clipRight = Math.min(window.innerWidth, scrollViewport?.right ?? window.innerWidth);
+      const clipBottom = Math.min(window.innerHeight, scrollViewport?.bottom ?? window.innerHeight);
+      const clipped = clipTestingPreviewBounds({
+        host: rect,
+        viewport: { left: clipLeft, top: clipTop, right: clipRight, bottom: clipBottom },
+        zoom: cssZoom,
+      });
+      const bounds = {
+        projectId: props.projectId,
+        sessionId: props.sessionId,
+        ...clipped,
+      };
+      const signature = `${bounds.x}:${bounds.y}:${bounds.width}:${bounds.height}:${bounds.visible}`;
+      if (signature === lastSignature) return;
+      lastSignature = signature;
+      void bridge.setBrowserBounds(bounds).catch(() => undefined);
+    };
+    const schedule = () => {
+      if (frame === 0) frame = window.requestAnimationFrame(publish);
+    };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(host);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("tabs-zoom-change", schedule);
+    document.addEventListener("scroll", schedule, true);
+    schedule();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("tabs-zoom-change", schedule);
+      document.removeEventListener("scroll", schedule, true);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+      void bridge
+        .setBrowserBounds({
+          projectId: props.projectId,
+          sessionId: props.sessionId,
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          visible: false,
+        })
+        .catch(() => undefined);
+    };
+  }, [bridge, props.projectId, props.sessionId, props.viewport]);
+
+  useEffect(() => {
+    if (!bridge) return;
+    let hiddenForOverlay = false;
+    let frame = 0;
+    const sync = () => {
+      frame = 0;
+      const overlayOpen = document.querySelector(CODE_HOST_OVERLAY_SELECTOR) !== null;
+      if (overlayOpen === hiddenForOverlay) return;
+      hiddenForOverlay = overlayOpen;
+      if (overlayOpen) {
+        void bridge.hideBrowserSession().catch(() => undefined);
+      } else {
+        void bridge
+          .activateBrowserSession({ projectId: props.projectId, sessionId: props.sessionId })
+          .catch(() => undefined);
+      }
+    };
+    const schedule = () => {
+      if (frame === 0) frame = window.requestAnimationFrame(sync);
+    };
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true });
+    schedule();
+    return () => {
+      observer.disconnect();
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+    };
+  }, [bridge, props.projectId, props.sessionId]);
+
+  const viewportClass =
+    props.viewport === "mobile"
+      ? "mx-auto h-full w-[31.64%]"
+      : props.viewport === "tablet"
+        ? "mx-auto h-full w-3/4"
+        : "h-full w-full";
+  if (!bridge) {
+    return (
+      <iframe
+        title="Testing application preview"
+        src={props.targetUrl}
+        className={cn("h-full min-h-0 rounded-lg border-0 bg-background", viewportClass)}
+        referrerPolicy="no-referrer"
+        sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
+      />
+    );
+  }
+  return (
+    <div
+      ref={hostRef}
+      className={cn(
+        "relative h-full min-h-0 overflow-hidden rounded-lg bg-background",
+        viewportClass,
+      )}
+      aria-label="Live Testing application preview"
+    >
+      {sessionState.loading ? (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden bg-primary/15">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TestingTool(props: {
   projectId: ProjectId;
   projectPath: string;
   defaultModelSelection: ModelSelection | null;
 }) {
+  const serverConfig = useServerConfig();
   const [targetUrl, setTargetUrl] = useState("");
   const [cdpEndpoint, setCdpEndpoint] = useState("");
   const [explorationScope, setExplorationScope] = useState<TestingExplorationScope>("path");
@@ -1072,9 +1544,10 @@ function TestingTool(props: {
     useState<TestingWorkspaceSection>("overview");
   const [caseSearch, setCaseSearch] = useState("");
   const [caseFilter, setCaseFilter] = useState<TestingCaseFilter>("all");
+  const [implementedInventoryOpen, setImplementedInventoryOpen] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [maxStates, setMaxStates] = useState(String(DEFAULT_TESTING_MAX_STATES));
-  const [maxDurationMinutes, setMaxDurationMinutes] = useState("5");
+  const [maxDurationMinutes, setMaxDurationMinutes] = useState("30");
   const [status, setStatus] = useState<TestingGraphSummary | null>(null);
   const [cases, setCases] = useState<ReadonlyArray<TestingCaseSummary>>([]);
   const [generationJobs, setGenerationJobs] = useState<ReadonlyArray<TestingGenerationJob>>([]);
@@ -1114,10 +1587,30 @@ function TestingTool(props: {
     String(DEFAULT_TESTING_BATCH_MAX_COST_USD),
   );
   const [workbookPath, setWorkbookPath] = useState("");
+  const [caseIntakeMode, setCaseIntakeMode] = useState<"manual" | "excel" | "story" | "graph">(
+    "manual",
+  );
+  const [storyText, setStoryText] = useState("");
+  const [storyFilePath, setStoryFilePath] = useState("");
+  const [manualCaseId, setManualCaseId] = useState("");
+  const [manualCaseDescription, setManualCaseDescription] = useState("");
+  const [manualCaseSteps, setManualCaseSteps] = useState<ReadonlyArray<string>>([""]);
+  const [manualCaseExpected, setManualCaseExpected] = useState("");
+  const [manualCaseLocatorIds, setManualCaseLocatorIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [selectedGenerationCaseIds, setSelectedGenerationCaseIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const generationSelectionInitializedRef = useRef(false);
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
   const [editedExternalId, setEditedExternalId] = useState("");
   const [editedDescription, setEditedDescription] = useState("");
-  const [editedSteps, setEditedSteps] = useState("");
+  const [editedSteps, setEditedSteps] = useState<ReadonlyArray<string>>([]);
+  const [editedExpectedResult, setEditedExpectedResult] = useState("");
+  const [editedCaseLocatorIds, setEditedCaseLocatorIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [busyAction, setBusyAction] = useState<
     | "auth"
     | "finish-auth"
@@ -1135,10 +1628,129 @@ function TestingTool(props: {
     | "trace"
     | "bug-draft"
     | "triage"
+    | "locator-discovery"
+    | "locator-capture"
+    | "locator-review"
+    | "locator-index"
+    | "locator-page"
+    | "locator-code"
+    | "locator-repository"
+    | "story-import"
     | null
   >(null);
   const [authCaptureOpen, setAuthCaptureOpen] = useState(false);
   const [message, setMessage] = useState("Ready to explore a UAT application.");
+  const [locatorLibrary, setLocatorLibrary] = useState<TestingLocatorLibraryResult | null>(null);
+  const [locatorSession, setLocatorSession] = useState<TestingLocatorDiscoverySession | null>(null);
+  const [locatorMode, setLocatorMode] = useState<TestingDiscoveryMode>("guided");
+  const [locatorCoverage, setLocatorCoverage] =
+    useState<TestingLocatorCoverageMode>("actions-assertions");
+  const [locatorSafety, setLocatorSafety] = useState<TestingDiscoverySafetyProfile>("supervised");
+  const [locatorMaxElements, setLocatorMaxElements] = useState(
+    String(DEFAULT_TESTING_MAX_ELEMENTS_PER_PAGE),
+  );
+  const [locatorMaxPages, setLocatorMaxPages] = useState(
+    String(DEFAULT_TESTING_MAX_PAGES_PER_SESSION),
+  );
+  const [locatorNavigateUrl, setLocatorNavigateUrl] = useState("");
+  const [locatorStorageMode, setLocatorStorageMode] =
+    useState<TestingLocatorStorageMode>("managed");
+  const [locatorFolderResult, setLocatorFolderResult] = useState<TestingLocatorFolderResult | null>(
+    null,
+  );
+  const [locatorSyncPreview, setLocatorSyncPreview] = useState<TestingLocatorSyncPreview | null>(
+    null,
+  );
+  const [editingLocatorId, setEditingLocatorId] = useState<string | null>(null);
+  const [editingLocatorKey, setEditingLocatorKey] = useState("");
+  const [editingLocatorClassification, setEditingLocatorClassification] =
+    useState<TestingLocatorEntry["classification"]>("action");
+  const [editingLocatorStrategy, setEditingLocatorStrategy] =
+    useState<TestingLocatorEntry["strategy"]>("role");
+  const [editingLocatorArguments, setEditingLocatorArguments] = useState("{}");
+  const [editingLocatorContext, setEditingLocatorContext] = useState("");
+  const [locatorSearch, setLocatorSearch] = useState("");
+  const [locatorFilter, setLocatorFilter] = useState<
+    "all" | "selected" | "needs-review" | "archived"
+  >("all");
+  const [locatorPendingRemoveId, setLocatorPendingRemoveId] = useState<string | null>(null);
+  const [locatorCaptureScope, setLocatorCaptureScope] = useState<
+    "task" | "page" | "path" | "origin"
+  >("page");
+  const [locatorTaskContext, setLocatorTaskContext] = useState("");
+  const [locatorAdvancedOpen, setLocatorAdvancedOpen] = useState(false);
+  const [locatorViewport, setLocatorViewport] = useState<"desktop" | "tablet" | "mobile">(
+    "desktop",
+  );
+  const [locatorPreviewExpanded, setLocatorPreviewExpanded] = useState(false);
+  const locatorPreviewFocusButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [selectedLocatorPageId, setSelectedLocatorPageId] = useState<string | null>(null);
+  const [locatorPageTab, setLocatorPageTab] = useState<"locators" | "code" | "diff" | "history">(
+    "locators",
+  );
+  const [locatorPageName, setLocatorPageName] = useState("");
+  const [locatorCodeEntryIds, setLocatorCodeEntryIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [locatorRepositoryFolder, setLocatorRepositoryFolder] = useState("");
+  const [locatorRepositoryFileName, setLocatorRepositoryFileName] = useState("");
+  const [locatorRepositoryProposal, setLocatorRepositoryProposal] =
+    useState<TestingLocatorRepositoryProposal | null>(null);
+  const [locatorRepositoryConfirmOpen, setLocatorRepositoryConfirmOpen] = useState(false);
+  const [locatorCodeEditing, setLocatorCodeEditing] = useState(false);
+  const [locatorCodeDraft, setLocatorCodeDraft] = useState("");
+  const [selectedLocatorEntryIds, setSelectedLocatorEntryIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [caseIdPolicy, setCaseIdPolicy] = useState<TestingCaseIdPolicy | null>(null);
+  const [caseIdPrefix, setCaseIdPrefix] = useState("TC-");
+  const [caseIdPadding, setCaseIdPadding] = useState("5");
+  const [caseIdNext, setCaseIdNext] = useState("1");
+  const [testInventory, setTestInventory] = useState<TestingTestInventoryResult | null>(null);
+  const [testInventoryView, setTestInventoryView] = useState<"tree" | "table">("tree");
+  const [expandedTestNodes, setExpandedTestNodes] = useState<ReadonlySet<string>>(
+    () => new Set(["managed", "repository"]),
+  );
+  const [selectedTestNodeId, setSelectedTestNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!locatorPreviewExpanded) return;
+    const focusButton = locatorPreviewFocusButtonRef.current;
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setLocatorPreviewExpanded(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const dialog = document.querySelector<HTMLElement>(
+        '[aria-label="Focused application preview"]',
+      );
+      const focusable = Array.from(
+        dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      );
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      window.requestAnimationFrame(() => focusButton?.focus());
+    };
+  }, [locatorPreviewExpanded]);
 
   const refreshStatus = useCallback(async () => {
     const api = readNativeApi() ?? ensureNativeApi();
@@ -1149,12 +1761,50 @@ function TestingTool(props: {
     }
   }, [props.projectId]);
 
+  const refreshLocatorLibrary = useCallback(async () => {
+    const result = await (readNativeApi() ?? ensureNativeApi()).testing.getLocatorLibrary({
+      projectId: props.projectId,
+    });
+    setLocatorLibrary(result);
+  }, [props.projectId]);
+
+  const setWorkspaceCases = useCallback((nextCases: ReadonlyArray<TestingCaseSummary>) => {
+    setCases(nextCases);
+    setSelectedGenerationCaseIds((current) => {
+      const available = new Set(nextCases.map((testCase) => testCase.id));
+      const retained = new Set([...current].filter((id) => available.has(id)));
+      if (generationSelectionInitializedRef.current || nextCases.length === 0) return retained;
+      generationSelectionInitializedRef.current = true;
+      return new Set(
+        nextCases
+          .filter(
+            (testCase) =>
+              testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited",
+          )
+          .map((testCase) => testCase.id),
+      );
+    });
+  }, []);
+
   const refreshCases = useCallback(async () => {
     const result = await (readNativeApi() ?? ensureNativeApi()).testing.listCases({
       projectId: props.projectId,
     });
-    setCases(result.cases);
-  }, [props.projectId]);
+    setWorkspaceCases(result.cases);
+  }, [props.projectId, setWorkspaceCases]);
+
+  const refreshTestingWorkspace = useCallback(async () => {
+    const api = readNativeApi() ?? ensureNativeApi();
+    const [policy, inventory] = await Promise.all([
+      api.testing.getCaseIdPolicy({ projectId: props.projectId }),
+      api.testing.getTestInventory({ projectId: props.projectId, projectPath: props.projectPath }),
+    ]);
+    setCaseIdPolicy(policy);
+    setCaseIdPrefix(policy.prefix);
+    setCaseIdPadding(String(policy.padding));
+    setCaseIdNext(String(policy.nextSequence));
+    setTestInventory(inventory);
+  }, [props.projectId, props.projectPath]);
 
   const refreshGenerationJobs = useCallback(async () => {
     const result = await (readNativeApi() ?? ensureNativeApi()).testing.listGenerationJobs({
@@ -1187,10 +1837,66 @@ function TestingTool(props: {
       refreshGenerationJobs(),
       refreshExecution(),
       refreshGraphExplorer(),
+      refreshLocatorLibrary(),
+      refreshTestingWorkspace(),
     ]).catch((error) => {
       setMessage(error instanceof Error ? error.message : "Could not load Testing status.");
     });
-  }, [refreshCases, refreshExecution, refreshGenerationJobs, refreshGraphExplorer, refreshStatus]);
+  }, [
+    refreshCases,
+    refreshExecution,
+    refreshGenerationJobs,
+    refreshGraphExplorer,
+    refreshLocatorLibrary,
+    refreshTestingWorkspace,
+    refreshStatus,
+  ]);
+
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge?.onCodeChromeState) return;
+    const toInventoryNode = (
+      item: NonNullable<CodeChromeState["testItems"]>[number],
+      parentId: string,
+    ): TestingTestInventoryNode => ({
+      id: `vscode:${item.id}`,
+      parentId,
+      kind: item.children.length > 0 ? "suite" : "test",
+      label: item.label,
+      source: "vscode",
+      status: item.busy ? "running" : "unknown",
+      filePath: item.uri,
+      line: item.line,
+      externalCaseId: item.label.match(/\b(?:TC-|QA-)?\d{2,}\b/i)?.[0] ?? null,
+      runnable: item.children.length === 0,
+      children: item.children.map((child) => toInventoryNode(child, `vscode:${item.id}`)),
+    });
+    return bridge.onCodeChromeState((update) => {
+      if (update.projectId !== props.projectId || update.state.testItems === undefined) return;
+      setTestInventory((current) => {
+        if (!current) return current;
+        const vscodeRoot: TestingTestInventoryNode = {
+          id: "vscode",
+          parentId: null,
+          kind: "root",
+          label: "VS Code test providers",
+          source: "vscode",
+          status: "unknown",
+          filePath: null,
+          line: null,
+          externalCaseId: null,
+          runnable: false,
+          children: update.state.testItems!.map((item) => toInventoryNode(item, "vscode")),
+        };
+        return {
+          ...current,
+          editorProviderConnected: true,
+          roots: [...current.roots.filter((root) => root.source !== "vscode"), vscodeRoot],
+        };
+      });
+      setExpandedTestNodes((current) => new Set([...current, "vscode"]));
+    });
+  }, [props.projectId]);
 
   const normalizedTarget = useMemo(() => {
     const trimmed = targetUrl.trim();
@@ -1247,6 +1953,14 @@ function TestingTool(props: {
   const acceptedCaseCount = cases.filter(
     (testCase) => testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited",
   ).length;
+  const readyCases = useMemo(
+    () =>
+      cases.filter(
+        (testCase) =>
+          testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited",
+      ),
+    [cases],
+  );
   const reviewCaseCount = cases.filter(
     (testCase) => testCase.status === "needs-review" && testCase.reviewDecision === "pending",
   ).length;
@@ -1271,6 +1985,92 @@ function TestingTool(props: {
   }, [caseFilter, caseSearch, cases]);
   const selectedCase =
     filteredCases.find((testCase) => testCase.id === selectedCaseId) ?? filteredCases[0] ?? null;
+  const fusionProviders = useMemo(() => serverConfig?.providers ?? [], [serverConfig?.providers]);
+  const generationFusionProvider = TESTING_FUSION_PROVIDER_IDS.includes(
+    generationModelSelection.instanceId as ProviderPickerKind,
+  )
+    ? (generationModelSelection.instanceId as ProviderPickerKind)
+    : "codex";
+  const updateTestingFusionModel = (
+    provider: ProviderPickerKind,
+    model: ModelSlug,
+    options?: ModelSelection["options"],
+  ) => {
+    const selection = makeAppModelSelection(provider, model, options);
+    setGenerationModelSelection(selection);
+    setGenerationReasoning(testingReasoningTierFromOptions(selection.options));
+  };
+  const updateTestingFusionOptions = (options: ModelSelection["options"] | undefined) => {
+    const selection = makeAppModelSelection(
+      generationFusionProvider,
+      generationModelSelection.model,
+      options,
+    );
+    setGenerationModelSelection(selection);
+    setGenerationReasoning(testingReasoningTierFromOptions(selection.options));
+  };
+  const selectedLocatorPage =
+    locatorLibrary?.pages.find((page) => page.id === selectedLocatorPageId) ??
+    locatorLibrary?.pages[0] ??
+    null;
+  const filteredLocatorEntries = useMemo(() => {
+    const query = locatorSearch.trim().toLocaleLowerCase();
+    return (selectedLocatorPage?.entries ?? []).filter((entry) => {
+      const matchesQuery =
+        !query ||
+        entry.locatorKey.toLocaleLowerCase().includes(query) ||
+        entry.strategy.toLocaleLowerCase().includes(query) ||
+        entry.classification.toLocaleLowerCase().includes(query) ||
+        entry.semanticContext.toLocaleLowerCase().includes(query) ||
+        testingLocatorCode(entry).toLocaleLowerCase().includes(query);
+      const matchesFilter =
+        locatorFilter === "all"
+          ? entry.lifecycleStatus !== "archived"
+          : locatorFilter === "selected"
+            ? locatorCodeEntryIds.has(entry.id) && entry.lifecycleStatus !== "archived"
+            : locatorFilter === "needs-review"
+              ? (entry.lifecycleStatus === "draft" ||
+                  entry.lifecycleStatus === "manual-required" ||
+                  entry.fragile) &&
+                entry.lifecycleStatus !== "archived"
+              : entry.lifecycleStatus === "archived";
+      return matchesQuery && matchesFilter;
+    });
+  }, [locatorCodeEntryIds, locatorFilter, locatorSearch, selectedLocatorPage]);
+  const editingLocatorEntry =
+    selectedLocatorPage?.entries.find((entry) => entry.id === editingLocatorId) ?? null;
+  const pendingRemoveLocator =
+    selectedLocatorPage?.entries.find((entry) => entry.id === locatorPendingRemoveId) ?? null;
+  useEffect(() => {
+    if (!selectedLocatorPage) return;
+    setLocatorPageName(selectedLocatorPage.name);
+    setLocatorCodeEntryIds(
+      new Set(
+        selectedLocatorPage.entries
+          .filter((entry) => entry.lifecycleStatus === "accepted")
+          .map((entry) => entry.id),
+      ),
+    );
+    setLocatorRepositoryFolder(selectedLocatorPage.repositoryTarget?.folderPath ?? "");
+    setLocatorRepositoryFileName(
+      selectedLocatorPage.repositoryTarget?.fileName ??
+        selectedLocatorPage.pageObject?.fileName ??
+        "page.ts",
+    );
+    setLocatorRepositoryProposal(null);
+    setLocatorCodeEditing(false);
+    setLocatorCodeDraft(selectedLocatorPage.pageObject?.code ?? "");
+  }, [selectedLocatorPage]);
+  const flattenedTestInventory = useMemo(() => {
+    const rows: Array<{ node: TestingTestInventoryNode; depth: number }> = [];
+    const visit = (node: TestingTestInventoryNode, depth: number) => {
+      rows.push({ node, depth });
+      if (!expandedTestNodes.has(node.id)) return;
+      for (const child of node.children) visit(child, depth + 1);
+    };
+    for (const root of testInventory?.roots ?? []) visit(root, 0);
+    return rows;
+  }, [expandedTestNodes, testInventory]);
 
   const startAuthCapture = async () => {
     if (!normalizedTarget) return;
@@ -1307,11 +2107,52 @@ function TestingTool(props: {
     }
   };
 
+  useEffect(() => {
+    if (busyAction !== "explore") return;
+    const interval = setInterval(() => {
+      const api = readNativeApi();
+      if (!api) return;
+      api.testing
+        .getStatus({ projectId: props.projectId })
+        .then((nextStatus) => {
+          setStatus(nextStatus);
+          if (nextStatus.targetUrl) {
+            setTargetUrl((current) => current || nextStatus.targetUrl || "");
+          }
+          if (nextStatus.lastRunStatus === "running") {
+            const res = nextStatus.lastRunMetrics;
+            setMessage(
+              `Exploring accessibility states... Discovered ${res?.statesVisited ?? 0} states and ${res?.transitionsObserved ?? 0} transitions so far.`,
+            );
+          } else if (nextStatus.lastRunStatus === "completed" && nextStatus.lastRunMetrics) {
+            const res = nextStatus.lastRunMetrics;
+            const terminationMessage =
+              res.terminationReason === "plateaued"
+                ? "exploration plateaued naturally"
+                : res.terminationReason === "time-budget"
+                  ? `reached the ${Math.round((res.maxDurationSeconds ?? 0) / 60)}-minute time budget`
+                  : `reached the ${res.maxStates}-state limit`;
+            setMessage(
+              `Exploration complete: ${res.statesVisited} states and ${res.transitionsObserved} transitions observed in ${((res.durationMs ?? 0) / 1000).toFixed(1)} seconds; ${terminationMessage}.`,
+            );
+            setBusyAction(null);
+          } else if (nextStatus.lastRunStatus === "failed") {
+            setMessage(`Exploration failed: ${nextStatus.lastRunError ?? "Unknown error"}`);
+            setBusyAction(null);
+          }
+        })
+        .catch(() => undefined);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [busyAction, props.projectId]);
+
   const startExploration = async () => {
     if (!normalizedTarget || normalizedMaxStates === null || normalizedMaxDurationSeconds === null)
       return;
     setBusyAction("explore");
     setMessage("Exploring accessibility states and building the transition graph...");
+    let isRpcCompleted = false;
+    let rpcError: unknown = null;
     try {
       const result = await ensureNativeApi().testing.startExploration({
         projectId: props.projectId,
@@ -1325,6 +2166,7 @@ function TestingTool(props: {
           ? { maxDurationSeconds: normalizedMaxDurationSeconds }
           : {}),
       });
+      isRpcCompleted = true;
       setStatus(result);
       const terminationMessage =
         result.terminationReason === "plateaued"
@@ -1335,11 +2177,531 @@ function TestingTool(props: {
       setMessage(
         `Exploration complete: ${result.statesVisited} states and ${result.transitionsObserved} transitions observed in ${(result.durationMs / 1000).toFixed(1)} seconds; ${terminationMessage}.`,
       );
+      setBusyAction(null);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Exploration failed.");
-      await refreshStatus().catch(() => undefined);
+      rpcError = error;
+    }
+
+    if (!isRpcCompleted) {
+      const api = readNativeApi() ?? ensureNativeApi();
+      const currentStatus = await api.testing
+        .getStatus({ projectId: props.projectId })
+        .catch(() => null);
+      if (currentStatus?.lastRunStatus === "running") {
+        // The RPC dropped/timed out, but the backend is still exploring.
+        // Don't clear busyAction; let the polling interval handle the rest of the progress.
+        setStatus(currentStatus);
+      } else {
+        setMessage(rpcError instanceof Error ? rpcError.message : "Exploration failed.");
+        await refreshStatus().catch(() => undefined);
+        setBusyAction(null);
+      }
+    }
+  };
+
+  const setDiscoveryExperience = async (experience: "classic" | "locator-first") => {
+    try {
+      const result = await ensureNativeApi().testing.setDiscoveryExperience({
+        projectId: props.projectId,
+        experience,
+      });
+      setLocatorLibrary(result);
+      setMessage(
+        experience === "locator-first"
+          ? "Locator-first Discover is enabled for this project."
+          : "Classic Discover is enabled for this project.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not change discovery experience.");
+    }
+  };
+
+  const startLocatorDiscovery = async () => {
+    if (!normalizedTarget) return;
+    const maxElementsPerPage = Number(locatorMaxElements);
+    const maxPagesPerSession = Number(locatorMaxPages);
+    if (
+      !Number.isSafeInteger(maxElementsPerPage) ||
+      maxElementsPerPage < MIN_TESTING_MAX_ELEMENTS_PER_PAGE ||
+      maxElementsPerPage > MAX_TESTING_MAX_ELEMENTS_PER_PAGE ||
+      !Number.isSafeInteger(maxPagesPerSession) ||
+      maxPagesPerSession < 1 ||
+      maxPagesPerSession > MAX_TESTING_MAX_PAGES_PER_SESSION
+    ) {
+      setMessage("Choose valid page and element limits before discovery.");
+      return;
+    }
+    setBusyAction("locator-discovery");
+    setMessage("Opening the locator discovery workspace...");
+    try {
+      const api = ensureNativeApi().testing;
+      let result = await api.startLocatorDiscovery({
+        projectId: props.projectId,
+        targetUrl: normalizedTarget,
+        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+          ? { cdpEndpoint: normalizedCdpEndpoint }
+          : {}),
+        mode: locatorMode,
+        scope:
+          locatorCaptureScope === "origin"
+            ? "origin"
+            : locatorCaptureScope === "path"
+              ? "path"
+              : "page",
+        coverage: locatorCoverage,
+        safetyProfile: locatorSafety,
+        captureScope: locatorCaptureScope,
+        ...(locatorCaptureScope === "task" && locatorTaskContext.trim()
+          ? { taskContext: locatorTaskContext.trim() }
+          : {}),
+        maxElementsPerPage,
+        maxPagesPerSession,
+        environmentLabel: "default",
+        ...(locatorMode === "automatic" && normalizedMaxStates !== null
+          ? { maxStates: normalizedMaxStates }
+          : {}),
+        ...(locatorMode === "automatic" && normalizedMaxDurationSeconds
+          ? { maxDurationSeconds: normalizedMaxDurationSeconds }
+          : {}),
+      });
+      if (locatorMode === "manual" && result.status === "running") {
+        result = await api.captureLocatorPage({
+          projectId: props.projectId,
+          sessionId: result.id,
+          captureMode: locatorCaptureScope === "task" ? "relevant" : "page",
+        });
+      }
+      setLocatorSession(result);
+      setLocatorLibrary(result.library);
+      setLocatorNavigateUrl(result.currentUrl ?? normalizedTarget);
+      const capturedPage = result.library.pages[0];
+      if (capturedPage) {
+        setSelectedLocatorPageId(capturedPage.id);
+        setSelectedLocatorEntryIds(
+          new Set(
+            capturedPage.entries
+              .filter((entry) => entry.lifecycleStatus === "draft")
+              .map((entry) => entry.id),
+          ),
+        );
+      }
+      setMessage(
+        capturedPage
+          ? `Found ${capturedPage.entries.length} locator candidates. Choose which ones belong in the page object.`
+          : result.message,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Locator discovery could not start.");
     } finally {
       setBusyAction(null);
+    }
+  };
+
+  const navigateLocatorDiscovery = async () => {
+    if (!locatorSession || !locatorNavigateUrl.trim()) return;
+    setBusyAction("locator-capture");
+    try {
+      const result = await ensureNativeApi().testing.navigateLocatorDiscovery({
+        projectId: props.projectId,
+        sessionId: locatorSession.id,
+        targetUrl: locatorNavigateUrl.trim(),
+      });
+      setLocatorSession(result);
+      setLocatorLibrary(result.library);
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not navigate discovery.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const captureLocatorPage = async (captureMode: "relevant" | "page" = "relevant") => {
+    if (!locatorSession) return;
+    setBusyAction("locator-capture");
+    try {
+      const result = await ensureNativeApi().testing.captureLocatorPage({
+        projectId: props.projectId,
+        sessionId: locatorSession.id,
+        captureMode,
+      });
+      setLocatorSession(result);
+      setLocatorLibrary(result.library);
+      const capturedPage = result.library.pages[0];
+      if (capturedPage) {
+        setSelectedLocatorPageId(capturedPage.id);
+        setSelectedLocatorEntryIds(
+          new Set(
+            capturedPage.entries
+              .filter((entry) => entry.lifecycleStatus === "draft")
+              .map((entry) => entry.id),
+          ),
+        );
+      }
+      setMessage(
+        capturedPage
+          ? `Found ${capturedPage.entries.length} locator candidates. Review the selection before adding them to code.`
+          : result.message,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not capture this page.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const finishLocatorDiscovery = async (cancel: boolean) => {
+    if (!locatorSession) return;
+    setBusyAction("locator-capture");
+    try {
+      const api = ensureNativeApi().testing;
+      const result = cancel
+        ? await api.cancelLocatorDiscovery({
+            projectId: props.projectId,
+            sessionId: locatorSession.id,
+          })
+        : await api.finishLocatorDiscovery({
+            projectId: props.projectId,
+            sessionId: locatorSession.id,
+          });
+      setLocatorSession(result);
+      setLocatorLibrary(result.library);
+      setMessage(result.message);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not finish locator discovery.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const indexLocatorFolder = async (
+    storageMode: TestingLocatorStorageMode = locatorStorageMode,
+  ) => {
+    const folderPath = await ensureNativeApi().dialogs.pickFolder();
+    if (!folderPath) return;
+    setBusyAction("locator-index");
+    setMessage("Statically indexing locator files. Repository code will not be executed.");
+    try {
+      const result = await ensureNativeApi().testing.indexLocatorFolder({
+        projectId: props.projectId,
+        projectPath: props.projectPath,
+        folderPath,
+        storageMode,
+      });
+      setLocatorFolderResult(result);
+      setLocatorLibrary(result.library);
+      setLocatorSyncPreview(
+        await ensureNativeApi().testing.previewLocatorSync({ projectId: props.projectId }),
+      );
+      setMessage(
+        `Indexed ${result.filesScanned} supported files without executing repository code.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not index the locator folder.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const chooseStoryFile = async () => {
+    const selected = await ensureNativeApi().dialogs.pickFile();
+    if (selected) setStoryFilePath(selected);
+  };
+
+  const importUserStory = async () => {
+    if (!storyText.trim() && !storyFilePath) return;
+    setBusyAction("story-import");
+    setMessage("Generating reviewable cases from the sanitized user story...");
+    try {
+      const result = await ensureNativeApi().testing.importUserStory({
+        projectId: props.projectId,
+        projectPath: props.projectPath,
+        sourceKind: storyFilePath ? "file" : "text",
+        ...(storyFilePath ? { filePath: storyFilePath } : { content: storyText.trim() }),
+        modelSelection: generationModelSelection,
+      });
+      setWorkspaceCases(result.cases);
+      setMessage(`Created ${result.generatedCount} reviewable cases from ${result.sourceName}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not import the user story.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const reviewLocator = async (
+    entryId: string,
+    decision: "accept" | "archive" | "keep-managed" | "restore",
+    locatorKey?: string,
+  ) => {
+    try {
+      const result = await ensureNativeApi().testing.reviewLocatorEntry({
+        projectId: props.projectId,
+        entryId,
+        decision,
+        ...(locatorKey?.trim() ? { locatorKey: locatorKey.trim() } : {}),
+      });
+      setLocatorLibrary(result);
+      setEditingLocatorId(null);
+      setLocatorPendingRemoveId(null);
+      setMessage(
+        decision === "archive"
+          ? "Locator removed from active use. You can restore it from the Archived filter."
+          : decision === "restore"
+            ? "Locator restored as a draft for review."
+            : "Locator review decision saved locally.",
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not review the locator.");
+    }
+  };
+
+  const startEditingLocator = (entry: TestingLocatorEntry) => {
+    setEditingLocatorId(entry.id);
+    setEditingLocatorKey(entry.locatorKey);
+    setEditingLocatorClassification(entry.classification);
+    setEditingLocatorStrategy(entry.strategy);
+    setEditingLocatorArguments(JSON.stringify(entry.arguments, null, 2));
+    setEditingLocatorContext(entry.semanticContext);
+  };
+
+  const saveLocatorChanges = async () => {
+    if (!editingLocatorId) return;
+    let locatorArguments: Record<string, string | number | boolean>;
+    try {
+      const parsed = JSON.parse(editingLocatorArguments) as unknown;
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+        throw new Error("Locator arguments must be a JSON object.");
+      }
+      locatorArguments = Object.fromEntries(
+        Object.entries(parsed).map(([key, value]) => {
+          if (!["string", "number", "boolean"].includes(typeof value)) {
+            throw new Error(`Argument ${key} must be text, a number, or true/false.`);
+          }
+          return [key, value as string | number | boolean];
+        }),
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Locator arguments are not valid JSON.");
+      return;
+    }
+    setBusyAction("locator-review");
+    try {
+      const result = await ensureNativeApi().testing.reviewLocatorEntry({
+        projectId: props.projectId,
+        entryId: editingLocatorId,
+        decision: "accept",
+        locatorKey: editingLocatorKey.trim(),
+        classification: editingLocatorClassification,
+        strategy: editingLocatorStrategy,
+        arguments: locatorArguments,
+        semanticContext: editingLocatorContext.trim(),
+      });
+      setLocatorLibrary(result);
+      setEditingLocatorId(null);
+      setLocatorRepositoryProposal(null);
+      setMessage("Locator saved as a new version and added to the managed page object.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update the locator.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const saveLocatorPageName = async () => {
+    if (!selectedLocatorPage || !locatorPageName.trim()) return;
+    setBusyAction("locator-page");
+    try {
+      const library = await ensureNativeApi().testing.updateLocatorPage({
+        projectId: props.projectId,
+        pageId: selectedLocatorPage.id,
+        name: locatorPageName.trim(),
+      });
+      setLocatorLibrary(library);
+      setLocatorRepositoryProposal(null);
+      setMessage("Page name saved. Its managed page object was regenerated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not rename this page.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const saveLocatorCodeSelection = async () => {
+    if (!selectedLocatorPage) return;
+    setBusyAction("locator-page");
+    try {
+      const library = await ensureNativeApi().testing.setLocatorPageSelection({
+        projectId: props.projectId,
+        pageId: selectedLocatorPage.id,
+        entryIds: [...locatorCodeEntryIds],
+      });
+      setLocatorLibrary(library);
+      setLocatorRepositoryProposal(null);
+      setLocatorPageTab("code");
+      setMessage(
+        `Page object regenerated with ${locatorCodeEntryIds.size} selected locator${locatorCodeEntryIds.size === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not update the page object.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const savePageObjectCode = async () => {
+    if (!selectedLocatorPage?.pageObject) return;
+    setBusyAction("locator-code");
+    try {
+      const library = await ensureNativeApi().testing.updatePageObjectCode({
+        projectId: props.projectId,
+        pageId: selectedLocatorPage.id,
+        expectedSourceHash: selectedLocatorPage.pageObject.sourceHash,
+        code: locatorCodeDraft,
+      });
+      setLocatorLibrary(library);
+      setLocatorRepositoryProposal(null);
+      setLocatorCodeEditing(false);
+      setMessage("Edited page-object code saved as a new local version.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save the edited page object.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const chooseLocatorRepositoryFolder = async () => {
+    const folder = await ensureNativeApi().dialogs.pickFolder();
+    if (!folder) return;
+    setLocatorRepositoryFolder(folder);
+    setLocatorRepositoryProposal(null);
+  };
+
+  const previewLocatorRepositoryChange = async () => {
+    if (!selectedLocatorPage || !locatorRepositoryFolder || !locatorRepositoryFileName.trim()) {
+      setMessage("Choose a repository folder and TypeScript filename first.");
+      return;
+    }
+    setBusyAction("locator-repository");
+    try {
+      const proposal = await ensureNativeApi().testing.previewLocatorRepositoryWrite({
+        projectId: props.projectId,
+        projectPath: props.projectPath,
+        pageId: selectedLocatorPage.id,
+        destinationFolder: locatorRepositoryFolder,
+        fileName: locatorRepositoryFileName.trim(),
+      });
+      setLocatorRepositoryProposal(proposal);
+      setMessage(
+        proposal.changeKind === "unchanged"
+          ? "The repository file already matches this page object."
+          : `Review the ${proposal.changeKind} proposal before applying it.`,
+      );
+    } catch (error) {
+      setLocatorRepositoryProposal(null);
+      setMessage(error instanceof Error ? error.message : "Could not prepare the repository diff.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const applyLocatorRepositoryChange = async () => {
+    if (!selectedLocatorPage || !locatorRepositoryProposal) return;
+    setBusyAction("locator-repository");
+    try {
+      const result = await ensureNativeApi().testing.applyLocatorRepositoryWrite({
+        projectId: props.projectId,
+        projectPath: props.projectPath,
+        pageId: selectedLocatorPage.id,
+        destinationFolder: locatorRepositoryFolder,
+        fileName: locatorRepositoryFileName.trim(),
+        expectedArtifactSourceHash: locatorRepositoryProposal.artifactSourceHash,
+        expectedDestinationSourceHash: locatorRepositoryProposal.destinationSourceHash,
+      });
+      setLocatorLibrary(result.library);
+      setLocatorRepositoryProposal(result.proposal);
+      setLocatorRepositoryConfirmOpen(false);
+      setMessage(`Applied the reviewed page object to ${result.proposal.relativePath}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not apply the repository change.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const approveSelectedLocators = async () => {
+    const entries = locatorLibrary?.pages
+      .flatMap((page) => page.entries)
+      .filter(
+        (entry) => selectedLocatorEntryIds.has(entry.id) && entry.lifecycleStatus !== "accepted",
+      );
+    if (!entries?.length) {
+      setMessage("Select at least one unapproved locator candidate.");
+      return;
+    }
+    setBusyAction("locator-review");
+    try {
+      const api = ensureNativeApi().testing;
+      const prepareRepositoryProposal =
+        locatorStorageMode === "connected-repository" || locatorFolderResult !== null;
+      for (const entry of entries) {
+        await api.reviewLocatorEntry({
+          projectId: props.projectId,
+          entryId: entry.id,
+          decision: prepareRepositoryProposal ? "keep-managed" : "accept",
+        });
+      }
+      const library = await api.getLocatorLibrary({ projectId: props.projectId });
+      setLocatorLibrary(library);
+      setSelectedLocatorEntryIds(new Set());
+      setLocatorPageTab("code");
+      if (locatorFolderResult || locatorStorageMode === "connected-repository") {
+        setLocatorSyncPreview(await api.previewLocatorSync({ projectId: props.projectId }));
+      }
+      setMessage(
+        `${entries.length} locator${entries.length === 1 ? "" : "s"} approved. The managed page object was regenerated${prepareRepositoryProposal ? " and a repository proposal is ready for review" : ""}.`,
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not approve the selected locators.",
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const resolveLocatorSync = async (
+    conflictId: string,
+    decision: "keep-managed" | "accept-repository" | "archive",
+  ) => {
+    try {
+      const result = await ensureNativeApi().testing.resolveLocatorSync({
+        projectId: props.projectId,
+        conflictId,
+        decision,
+      });
+      setLocatorSyncPreview(result);
+      setLocatorLibrary(result.library);
+      setMessage("Synchronization decision saved. No repository file was overwritten.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not resolve locator synchronization.",
+      );
+    }
+  };
+
+  const disconnectLocatorFolder = async () => {
+    try {
+      const result = await ensureNativeApi().testing.disconnectLocatorFolder({
+        projectId: props.projectId,
+      });
+      setLocatorLibrary(result);
+      setLocatorSyncPreview(null);
+      setMessage("Locator source disconnected. Imported entries and history were preserved.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Could not disconnect the locator source.",
+      );
     }
   };
 
@@ -1348,6 +2710,48 @@ function TestingTool(props: {
     if (!selected) return;
     setWorkbookPath(selected);
     setMessage("Workbook selected. Import it to reconcile its cases against the live graph.");
+  };
+
+  const createManualCase = async () => {
+    const steps = manualCaseSteps.map((step) => step.trim()).filter(Boolean);
+    if (!manualCaseDescription.trim() || steps.length === 0) {
+      setMessage("Add a description and at least one test step.");
+      return;
+    }
+    setBusyAction("review");
+    try {
+      const result = await ensureNativeApi().testing.createCase({
+        projectId: props.projectId,
+        ...(manualCaseId.trim() ? { externalId: manualCaseId.trim() } : {}),
+        description: manualCaseDescription.trim(),
+        steps,
+        expectedResult: manualCaseExpected.trim(),
+        locatorEntryIds: [...manualCaseLocatorIds],
+      });
+      setWorkspaceCases(result.cases);
+      const created = result.cases.find(
+        (testCase) =>
+          (manualCaseId.trim() && testCase.externalId === manualCaseId.trim()) ||
+          testCase.description === manualCaseDescription.trim(),
+      );
+      if (created) setSelectedCaseId(created.id);
+      setManualCaseId("");
+      setManualCaseDescription("");
+      setManualCaseSteps([""]);
+      setManualCaseExpected("");
+      setManualCaseLocatorIds(new Set());
+      setMessage(`Created ${created?.externalId ?? "the case"} in this project.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not create the test case.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const updateManualCaseStep = (index: number, value: string) => {
+    setManualCaseSteps((current) =>
+      current.map((step, stepIndex) => (stepIndex === index ? value : step)),
+    );
   };
 
   const importWorkbook = async () => {
@@ -1363,7 +2767,7 @@ function TestingTool(props: {
           ? { cdpEndpoint: normalizedCdpEndpoint }
           : {}),
       });
-      setCases(result.cases);
+      setWorkspaceCases(result.cases);
       setMessage(
         `Imported ${result.importedCount} cases: ${result.matchesCount} match, ${result.needsReviewCount} need review, and ${result.blockedCount} are blocked.`,
       );
@@ -1378,11 +2782,21 @@ function TestingTool(props: {
     setBusyAction("generate");
     setMessage("Creating candidate scenarios from reachable graph transitions...");
     try {
+      const oldLength = cases.length;
       const result = await ensureNativeApi().testing.generateScenarios({
         projectId: props.projectId,
       });
-      setCases(result.cases);
-      setMessage("Reachable graph scenarios were added to the same review queue.");
+      setWorkspaceCases(result.cases);
+      await refreshTestingWorkspace();
+
+      const newAdded = result.cases.length - oldLength;
+      if (newAdded > 0) {
+        setMessage(`${newAdded} reachable graph scenarios were added to the review queue.`);
+      } else {
+        setMessage(
+          "No new scenarios were generated. All reachable paths from the graph already exist in the queue.",
+        );
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not generate graph scenarios.");
     } finally {
@@ -1404,11 +2818,13 @@ function TestingTool(props: {
           ? {
               externalId: editedExternalId,
               description: editedDescription,
-              steps: editedSteps.split("\n").map((step) => step.trim()),
+              steps: editedSteps.map((step) => step.trim()),
+              expectedResult: editedExpectedResult,
+              locatorEntryIds: [...editedCaseLocatorIds],
             }
           : {}),
       });
-      setCases(result.cases);
+      setWorkspaceCases(result.cases);
       setEditingCaseId(null);
       setMessage(`Case ${testCase.externalId} was ${decision}.`);
     } catch (error) {
@@ -1422,7 +2838,52 @@ function TestingTool(props: {
     setEditingCaseId(testCase.id);
     setEditedExternalId(testCase.externalId);
     setEditedDescription(testCase.description);
-    setEditedSteps(testCase.steps.join("\n"));
+    setEditedSteps(testCase.steps);
+    setEditedExpectedResult(testCase.expectedResult);
+    setEditedCaseLocatorIds(new Set(testCase.locatorEntryIds ?? []));
+  };
+
+  const updateEditedStep = (index: number, value: string) => {
+    setEditedSteps((current) =>
+      current.map((step, stepIndex) => (stepIndex === index ? value : step)),
+    );
+  };
+
+  const moveEditedStep = (index: number, direction: -1 | 1) => {
+    setEditedSteps((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target]!, next[index]!];
+      return next;
+    });
+  };
+
+  const saveCaseIdPolicy = async () => {
+    const padding = Number(caseIdPadding);
+    const nextSequence = Number(caseIdNext);
+    if (
+      !Number.isSafeInteger(padding) ||
+      padding < 1 ||
+      padding > 12 ||
+      !Number.isSafeInteger(nextSequence) ||
+      nextSequence < 1
+    ) {
+      setMessage("Case ID width must be 1-12 and the next number must be at least 1.");
+      return;
+    }
+    try {
+      const policy = await ensureNativeApi().testing.setCaseIdPolicy({
+        projectId: props.projectId,
+        prefix: caseIdPrefix,
+        padding,
+        nextSequence,
+      });
+      setCaseIdPolicy(policy);
+      setMessage(`New generated cases will start at ${policy.example}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not save the Case ID format.");
+    }
   };
 
   const clearGraph = async () => {
@@ -1459,12 +2920,21 @@ function TestingTool(props: {
       setMessage("Enter positive generation limits.");
       return;
     }
+    if (selectedGenerationCaseIds.size === 0) {
+      setMessage("Select at least one reviewed case to build.");
+      return;
+    }
     setBusyAction("generate-tests");
     setMessage("Generating Playwright tests from reviewed graph paths...");
     try {
       const job = await ensureNativeApi().testing.generateTests({
         projectId: props.projectId,
         projectPath: props.projectPath,
+        caseIds: [...selectedGenerationCaseIds],
+        ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
+        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+          ? { cdpEndpoint: normalizedCdpEndpoint }
+          : {}),
         framework: "playwright-ts",
         modelSelection: generationModelSelection,
         reasoningTier: generationReasoning,
@@ -1672,50 +3142,70 @@ function TestingTool(props: {
     description: string;
     count?: number;
   }> = [
-    { id: "overview", label: "Start", description: "Choose the right workflow" },
+    { id: "overview", label: "Home", description: "Choose where to begin" },
     {
       id: "discover",
-      label: "Discover",
-      description: "Connect and understand the app",
+      label: "App & locators",
+      description: "Open a page and capture controls",
       count: status?.nodeCount ?? 0,
     },
-    { id: "cases", label: "Cases", description: "Import, map, and review", count: cases.length },
+    {
+      id: "cases",
+      label: "Test cases",
+      description: "Import, edit, and map steps",
+      count: cases.length,
+    },
     {
       id: "automate",
-      label: "Automate",
-      description: "Generate maintainable tests",
+      label: "Build tests",
+      description: "Generate maintainable code",
       count: completedGenerationJob?.artifacts.length ?? 0,
     },
     {
       id: "runs",
-      label: "Runs",
-      description: "Execute and investigate",
+      label: "Test runs",
+      description: "Run tests and inspect failures",
       count: executionRuns.length,
     },
-    { id: "reports", label: "Reports", description: "Sign-off and traceability" },
+    { id: "reports", label: "Evidence", description: "Reports and traceability" },
   ];
 
   return (
     <main className="h-full overflow-auto bg-background" aria-labelledby="testing-heading">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border/70 pb-5">
+        <header
+          className={cn(
+            "flex flex-wrap justify-between gap-4 border-b border-border/70",
+            activeTestingSection === "overview" ? "items-end pb-5" : "items-center pb-3",
+          )}
+        >
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-primary">
-              <ShieldCheckIcon aria-hidden="true" className="size-4" />
+            <div
+              className={cn(
+                "items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70",
+                activeTestingSection === "overview" ? "flex" : "hidden",
+              )}
+            >
+              <FlaskConicalIcon aria-hidden="true" className="size-4 text-muted-foreground/60" />
               Private testing workspace
             </div>
             <h1
               id="testing-heading"
-              className="text-3xl font-semibold tracking-tight text-foreground"
+              className={cn(
+                "font-semibold tracking-tight text-foreground",
+                activeTestingSection === "overview" ? "text-3xl" : "text-xl",
+              )}
             >
               Testing
             </h1>
-            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-              Turn a test plan or a running app into reviewed, repeatable evidence. Start small;
-              Testing will guide you to the next useful step.
-            </p>
+            {activeTestingSection === "overview" ? (
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                Turn a test plan or a running app into reviewed, repeatable evidence. Start small;
+                Testing will guide you to the next useful step.
+              </p>
+            ) : null}
           </div>
-          <div className="flex flex-wrap gap-2" aria-label="Workspace testing summary">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Workspace testing summary">
             <Badge variant="secondary">Project: {basenameOfPath(props.projectPath)}</Badge>
             <Badge variant="outline">{status?.nodeCount ?? 0} states</Badge>
             <Badge variant="outline">{cases.length} cases</Badge>
@@ -1727,7 +3217,7 @@ function TestingTool(props: {
 
         <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
           <nav aria-label="Testing workflow" className="lg:sticky lg:top-4 lg:self-start">
-            <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:border-border/70 lg:bg-card/40 lg:p-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:border-border/50 lg:bg-card/30 lg:p-1.5">
               {testingSections.map((section) => {
                 const active = activeTestingSection === section.id;
                 const recommended = recommendedTestingSection === section.id;
@@ -1738,26 +3228,54 @@ function TestingTool(props: {
                     aria-current={active ? "page" : undefined}
                     onClick={() => setActiveTestingSection(section.id)}
                     className={cn(
-                      "group min-w-40 rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-w-0",
+                      "group relative min-w-40 rounded-lg px-3 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-w-0",
                       active
-                        ? "border-primary/40 bg-primary/10 text-foreground"
-                        : "border-border/70 bg-background/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground lg:border-transparent",
+                        ? "bg-background/80 text-foreground shadow-sm ring-1 ring-border/60"
+                        : "text-muted-foreground hover:bg-background/50 hover:text-foreground/80",
                     )}
                   >
-                    <span className="flex items-center justify-between gap-2 text-sm font-medium">
+                    {active && (
+                      <span
+                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-foreground/40"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "flex items-center justify-between gap-2 text-sm font-medium",
+                        active ? "pl-2.5" : "",
+                      )}
+                    >
                       {section.label}
                       {typeof section.count === "number" ? (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums">
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs tabular-nums",
+                            active
+                              ? "bg-foreground/10 text-foreground"
+                              : "bg-muted text-muted-foreground",
+                          )}
+                        >
                           {section.count}
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                    <span
+                      className={cn(
+                        "mt-0.5 block text-xs leading-5 text-muted-foreground",
+                        active ? "pl-2.5" : "",
+                      )}
+                    >
                       {section.description}
                     </span>
                     {recommended && section.id !== "overview" ? (
-                      <span className="mt-2 block text-[11px] font-medium text-primary">
-                        Recommended next
+                      <span
+                        className={cn(
+                          "mt-1.5 block text-xs font-medium text-muted-foreground",
+                          active ? "pl-2.5" : "",
+                        )}
+                      >
+                        ↑ Recommended next
                       </span>
                     ) : null}
                   </button>
@@ -1782,12 +3300,74 @@ function TestingTool(props: {
                     imported cases, graph data, or previous runs.
                   </p>
                 </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Case ID format</CardTitle>
+                    <CardDescription>
+                      Imported IDs remain unchanged. This format applies only to newly generated
+                      cases.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_8rem_9rem_auto] sm:items-end">
+                    <div className="space-y-2">
+                      <label htmlFor="testing-case-prefix" className="text-sm font-medium">
+                        Prefix
+                      </label>
+                      <Input
+                        id="testing-case-prefix"
+                        value={caseIdPrefix}
+                        onChange={(event) => setCaseIdPrefix(event.target.value)}
+                        placeholder="TC-"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="testing-case-padding" className="text-sm font-medium">
+                        Digits
+                      </label>
+                      <Input
+                        id="testing-case-padding"
+                        type="number"
+                        min={1}
+                        max={12}
+                        value={caseIdPadding}
+                        onChange={(event) => setCaseIdPadding(event.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label htmlFor="testing-case-next" className="text-sm font-medium">
+                        Next number
+                      </label>
+                      <Input
+                        id="testing-case-next"
+                        type="number"
+                        min={1}
+                        value={caseIdNext}
+                        onChange={(event) => setCaseIdNext(event.target.value)}
+                      />
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => void saveCaseIdPolicy()}>
+                      Save format
+                    </Button>
+                    <p className="text-xs text-muted-foreground sm:col-span-4">
+                      Next generated ID:{" "}
+                      <span className="font-mono text-foreground">
+                        {caseIdPolicy?.example ?? "TC-00001"}
+                      </span>
+                      . Leave the prefix blank for numeric-only IDs.
+                    </p>
+                  </CardContent>
+                </Card>
                 <div className="grid gap-4 xl:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => setActiveTestingSection("cases")}
-                    className="rounded-xl border border-primary/30 bg-gradient-to-b from-primary/10 to-card p-5 text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="group relative overflow-hidden rounded-xl border border-border/70 bg-card p-5 text-left shadow-sm transition-all duration-200 hover:border-border hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
+                    <span
+                      className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/20 to-transparent"
+                      aria-hidden="true"
+                    />
                     <span className="flex items-center justify-between gap-3">
                       <FolderSearchIcon aria-hidden="true" className="size-5 text-primary" />
                       <Badge variant="success">Best for QA batches</Badge>
@@ -1799,8 +3379,12 @@ function TestingTool(props: {
                       Import an Excel workbook, map its case IDs to the live app, and review only
                       differences or blocked steps.
                     </span>
-                    <span className="mt-4 flex items-center gap-1 text-sm font-medium text-primary">
-                      Open case workspace <ArrowRightIcon aria-hidden="true" className="size-4" />
+                    <span className="mt-4 flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+                      Open case workspace{" "}
+                      <ArrowRightIcon
+                        aria-hidden="true"
+                        className="size-4 transition-transform group-hover:translate-x-0.5"
+                      />
                     </span>
                   </button>
                   <button
@@ -1869,380 +3453,1923 @@ function TestingTool(props: {
 
             {activeTestingSection === "discover" ? (
               <div className="space-y-6">
-                <div className="space-y-1">
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Discover the application
-                  </h2>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Connect, prepare access, and gather only the context this testing task needs.
-                  </p>
-                </div>
+                {locatorLibrary?.featureAvailable && locatorLibrary.experience === "classic" ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium">Classic discovery</div>
+                      <div className="text-xs text-muted-foreground">
+                        Legacy graph-first controls are active for this project.
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void setDiscoveryExperience("locator-first")}
+                    >
+                      Use Locator-first Discover
+                    </Button>
+                  </div>
+                ) : null}
 
-                <div className="space-y-4" aria-label="Application discovery setup">
-                  <Card>
-                    <CardHeader>
-                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
-                        Step 1
-                      </div>
-                      <CardTitle>Choose what to test</CardTitle>
-                      <CardDescription>
-                        Start from the page relevant to the task and keep the crawl as narrow as
-                        practical.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="testing-target-url"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          Target URL
-                        </label>
-                        <Input
-                          id="testing-target-url"
-                          type="url"
-                          inputMode="url"
-                          autoComplete="url"
-                          placeholder="https://uat.example.com/settings"
-                          value={targetUrl}
-                          onChange={(event) => setTargetUrl(event.target.value)}
-                          aria-describedby="testing-target-help"
-                          aria-invalid={targetUrl.trim().length > 0 && normalizedTarget === null}
-                          disabled={busyAction !== null || authCaptureOpen}
-                        />
-                        <p id="testing-target-help" className="text-xs text-muted-foreground">
-                          Use the exact page where this testing task should begin.
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="testing-exploration-scope"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          How much should be explored?
-                        </label>
-                        <Select
-                          value={explorationScope}
-                          onValueChange={(value) =>
-                            setExplorationScope(value as TestingExplorationScope)
-                          }
-                          disabled={busyAction !== null || authCaptureOpen}
-                        >
-                          <SelectTrigger
-                            id="testing-exploration-scope"
-                            className="w-full"
-                            aria-describedby="testing-exploration-scope-help"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectItem value="page">Only this exact page</SelectItem>
-                            <SelectItem value="path">This page and its subpages</SelectItem>
-                            <SelectItem value="origin">The entire application origin</SelectItem>
-                          </SelectPopup>
-                        </Select>
-                        <p
-                          id="testing-exploration-scope-help"
-                          className="text-xs text-muted-foreground"
-                        >
-                          {explorationScope === "page"
-                            ? "Interactions may change the page state, but navigation to another URL is excluded."
-                            : explorationScope === "path"
-                              ? "Includes child paths and hash-router subpages without exploring unrelated sections."
-                              : "Allows every reachable path on the same origin. Use this only for broad coverage."}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
-                        Step 2
-                      </div>
-                      <CardTitle>Prepare access</CardTitle>
-                      <CardDescription>
-                        Tabs never asks for or stores the username, password, MFA code, cookie, or
-                        token as test data.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="testing-authentication-mode"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          Authentication method
-                        </label>
-                        <Select
-                          value={authenticationMode}
-                          onValueChange={(value) =>
-                            setAuthenticationMode(value as TestingAuthenticationMode)
-                          }
-                          disabled={busyAction !== null || authCaptureOpen}
-                        >
-                          <SelectTrigger id="testing-authentication-mode" className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectItem value="none">No sign-in required</SelectItem>
-                            <SelectItem value="local-profile">
-                              Sign in manually in a local browser
-                            </SelectItem>
-                            <SelectItem value="connected-session">
-                              Use a signed-in Electron / Chromium session
-                            </SelectItem>
-                          </SelectPopup>
-                        </Select>
-                      </div>
-
-                      {authenticationMode === "local-profile" ? (
-                        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            A headed browser opens at the target. Enter credentials there—not in
-                            Tabs—then save the local browser profile. Cookies remain under the local
-                            Tabs state directory and are excluded from snapshots, prompts, caches,
-                            and reports.
-                          </p>
-                          <p className="text-xs font-medium text-foreground">
-                            {status?.authCapturedAt
-                              ? "A local browser session is ready for this project."
-                              : "No local browser session has been captured yet."}
-                          </p>
-                          {!authCaptureOpen ? (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void startAuthCapture()}
-                              disabled={!normalizedTarget || busyAction !== null}
-                            >
-                              {busyAction === "auth" ? (
-                                <LoaderIcon aria-hidden="true" className="animate-spin" />
-                              ) : null}
-                              Open Browser to Sign In
-                            </Button>
-                          ) : (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => void finishAuthCapture()}
-                              disabled={busyAction !== null}
-                            >
-                              {busyAction === "finish-auth" ? (
-                                <LoaderIcon aria-hidden="true" className="animate-spin" />
-                              ) : null}
-                              Finish &amp; Save Local Session
-                            </Button>
-                          )}
-                        </div>
-                      ) : authenticationMode === "connected-session" ? (
-                        <div className="space-y-3 rounded-lg border border-border/70 bg-muted/30 p-4">
-                          <p className="text-sm leading-6 text-muted-foreground">
-                            Sign in directly in the isolated Electron or Chromium instance. Tabs
-                            connects to that existing session and does not copy its credentials into
-                            the graph.
-                          </p>
+                {locatorLibrary?.experience !== "locator-first" ? (
+                  <>
+                    <div className="space-y-4" aria-label="Application discovery setup">
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+                            Step 1
+                          </div>
+                          <CardTitle className="text-base font-semibold">
+                            Choose Target &amp; Scope
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
                           <div className="space-y-2">
                             <label
-                              htmlFor="testing-cdp-endpoint"
-                              className="text-sm font-medium text-foreground"
+                              htmlFor="testing-target-url"
+                              className="flex items-center text-sm font-medium text-foreground"
                             >
-                              Local CDP endpoint
+                              Target URL
+                              <InfoTooltip content="Exact starting web or local URL for exploration." />
                             </label>
                             <Input
-                              id="testing-cdp-endpoint"
+                              id="testing-target-url"
                               type="url"
                               inputMode="url"
-                              placeholder="http://127.0.0.1:9224"
-                              value={cdpEndpoint}
-                              onChange={(event) => setCdpEndpoint(event.target.value)}
-                              aria-describedby="testing-cdp-endpoint-help"
-                              aria-invalid={normalizedCdpEndpoint === null}
+                              autoComplete="url"
+                              placeholder="https://uat.example.com/settings"
+                              value={targetUrl}
+                              onChange={(event) => setTargetUrl(event.target.value)}
+                              aria-describedby="testing-target-help"
+                              aria-invalid={
+                                targetUrl.trim().length > 0 && normalizedTarget === null
+                              }
                               disabled={busyAction !== null || authCaptureOpen}
                             />
-                            <p
-                              id="testing-cdp-endpoint-help"
-                              className="text-xs text-muted-foreground"
-                            >
-                              Only a loopback endpoint from an isolated local dev instance is
-                              accepted.
-                            </p>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="rounded-lg border border-border/70 bg-muted/30 p-4 text-sm leading-6 text-muted-foreground">
-                          Use this for public pages or targets where the selected browser session is
-                          already sufficient. No credential material is collected.
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-primary">
-                        Step 3
-                      </div>
-                      <CardTitle>Set limits and explore</CardTitle>
-                      <CardDescription>
-                        The run stops at whichever boundary is reached first: scope, states, time,
-                        or a natural plateau.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      <div className="grid gap-5 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <label
-                            htmlFor="testing-max-states"
-                            className="text-sm font-medium text-foreground"
-                          >
-                            Maximum states
-                          </label>
-                          <Input
-                            id="testing-max-states"
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={MAX_TESTING_MAX_STATES}
-                            step={1}
-                            value={maxStates}
-                            onChange={(event) => setMaxStates(event.target.value)}
-                            aria-describedby="testing-max-states-help"
-                            aria-invalid={normalizedMaxStates === null}
-                            disabled={busyAction !== null || authCaptureOpen}
-                          />
-                          <p id="testing-max-states-help" className="text-xs text-muted-foreground">
-                            Enter 1 to {MAX_TESTING_MAX_STATES.toLocaleString()}.
-                          </p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label
-                            htmlFor="testing-max-duration"
-                            className="text-sm font-medium text-foreground"
-                          >
-                            Time budget in minutes
-                          </label>
-                          <Input
-                            id="testing-max-duration"
-                            type="number"
-                            inputMode="decimal"
-                            min={1 / 60}
-                            max={MAX_TESTING_DURATION_SECONDS / 60}
-                            step={1}
-                            value={maxDurationMinutes}
-                            onChange={(event) => setMaxDurationMinutes(event.target.value)}
-                            aria-describedby="testing-max-duration-help"
-                            aria-invalid={normalizedMaxDurationSeconds === null}
-                            disabled={busyAction !== null || authCaptureOpen}
-                          />
-                          <p
-                            id="testing-max-duration-help"
-                            className="text-xs text-muted-foreground"
-                          >
-                            Clear for no time limit.
-                          </p>
-                        </div>
-                      </div>
-
-                      {!authenticationReady ? (
-                        <p className="text-sm text-amber-600" role="note">
-                          Complete the authentication setup in Step 2 before starting exploration.
-                        </p>
-                      ) : null}
-
-                      <Button
-                        type="button"
-                        onClick={() => void startExploration()}
-                        disabled={
-                          !normalizedTarget ||
-                          normalizedMaxStates === null ||
-                          normalizedMaxDurationSeconds === null ||
-                          !authenticationReady ||
-                          busyAction !== null ||
-                          authCaptureOpen
-                        }
-                      >
-                        {busyAction === "explore" ? (
-                          <LoaderIcon aria-hidden="true" className="animate-spin" />
-                        ) : (
-                          <PlayIcon aria-hidden="true" />
-                        )}
-                        Start Scoped Exploration
-                      </Button>
-
-                      <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
-                        {message}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <section aria-labelledby="testing-graph-heading" className="space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h2
-                        id="testing-graph-heading"
-                        className="text-lg font-semibold text-foreground"
-                      >
-                        Stored graph
-                      </h2>
-                      <p className="text-xs text-muted-foreground">
-                        Every completed exploration updates this local graph. Run Step 3 again to
-                        refresh it from the latest application state.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void startExploration()}
-                        disabled={
-                          !normalizedTarget ||
-                          normalizedMaxStates === null ||
-                          normalizedMaxDurationSeconds === null ||
-                          !authenticationReady ||
-                          busyAction !== null
-                        }
-                      >
-                        <RefreshCwIcon aria-hidden="true" />
-                        Update graph
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void clearGraph()}
-                        disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
-                      >
-                        <Trash2Icon aria-hidden="true" />
-                        Clear graph
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {[
-                      ["States", status?.nodeCount ?? 0],
-                      ["Transitions", status?.edgeCount ?? 0],
-                      ["Cached subtrees", status?.cacheEntryCount ?? 0],
-                      ["Cache hits", status?.cacheHitCount ?? 0],
-                    ].map(([label, value]) => (
-                      <Card key={label}>
-                        <CardContent className="py-5">
-                          <div className="text-2xl font-semibold text-foreground">{value}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+                          <div className="space-y-2">
+                            <label className="flex items-center text-sm font-medium text-foreground">
+                              Exploration Scope
+                              <InfoTooltip content="Single Page limits to target URL. Subpaths crawls child routes. Entire Origin explores all reachable domain links." />
+                            </label>
+                            <div
+                              role="radiogroup"
+                              aria-label="Exploration Scope"
+                              className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+                            >
+                              {[
+                                {
+                                  id: "page",
+                                  title: "Single Page",
+                                  subtitle: "Exact URL only",
+                                },
+                                {
+                                  id: "path",
+                                  title: "Page & Subpaths",
+                                  subtitle: "Child routes & subpages",
+                                },
+                                {
+                                  id: "origin",
+                                  title: "Entire Origin",
+                                  subtitle: "All domain paths",
+                                },
+                              ].map((option) => {
+                                const active = explorationScope === option.id;
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={active}
+                                    onClick={() =>
+                                      setExplorationScope(option.id as TestingExplorationScope)
+                                    }
+                                    disabled={busyAction !== null || authCaptureOpen}
+                                    className={cn(
+                                      "flex flex-col text-left p-3 rounded-xl border transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed",
+                                      active
+                                        ? "border-foreground/30 bg-card text-foreground shadow-sm ring-1 ring-border/80"
+                                        : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                                    )}
+                                  >
+                                    <span className="text-xs font-semibold text-foreground flex items-center justify-between">
+                                      {option.title}
+                                      {active ? (
+                                        <span className="size-1.5 rounded-full bg-foreground" />
+                                      ) : null}
+                                    </span>
+                                    <span className="mt-0.5 text-[11px] text-muted-foreground/80 font-normal">
+                                      {option.subtitle}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </CardContent>
                       </Card>
-                    ))}
+
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+                            Step 2
+                          </div>
+                          <CardTitle className="text-base font-semibold">Prepare Access</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="space-y-2">
+                            <label className="flex items-center text-sm font-medium text-foreground">
+                              Authentication Method
+                              <InfoTooltip content="Tabs never asks for or stores usernames, passwords, cookies, or MFA tokens in test data." />
+                            </label>
+                            <div
+                              role="radiogroup"
+                              aria-label="Authentication Method"
+                              className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+                            >
+                              {[
+                                {
+                                  id: "none",
+                                  title: "Public / None",
+                                  subtitle: "No sign-in required",
+                                },
+                                {
+                                  id: "local-profile",
+                                  title: "Local Browser",
+                                  subtitle: "Interactive sign-in",
+                                },
+                                {
+                                  id: "connected-session",
+                                  title: "CDP Session",
+                                  subtitle: "Existing dev instance",
+                                },
+                              ].map((option) => {
+                                const active = authenticationMode === option.id;
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={active}
+                                    onClick={() =>
+                                      setAuthenticationMode(option.id as TestingAuthenticationMode)
+                                    }
+                                    disabled={busyAction !== null || authCaptureOpen}
+                                    className={cn(
+                                      "flex flex-col text-left p-3 rounded-xl border transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed",
+                                      active
+                                        ? "border-foreground/30 bg-card text-foreground shadow-sm ring-1 ring-border/80"
+                                        : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+                                    )}
+                                  >
+                                    <span className="text-xs font-semibold text-foreground flex items-center justify-between">
+                                      {option.title}
+                                      {active ? (
+                                        <span className="size-1.5 rounded-full bg-foreground" />
+                                      ) : null}
+                                    </span>
+                                    <span className="mt-0.5 text-[11px] text-muted-foreground/80 font-normal">
+                                      {option.subtitle}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {authenticationMode === "local-profile" ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-muted/20 p-3.5">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "size-2.5 rounded-full shrink-0",
+                                    status?.authCapturedAt
+                                      ? "bg-emerald-500 shadow-sm"
+                                      : "bg-amber-500",
+                                  )}
+                                  aria-hidden="true"
+                                />
+                                <span className="text-xs font-medium text-foreground">
+                                  {status?.authCapturedAt
+                                    ? "Local browser session active & saved"
+                                    : "No local browser session captured"}
+                                </span>
+                              </div>
+                              {!authCaptureOpen ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void startAuthCapture()}
+                                  disabled={!normalizedTarget || busyAction !== null}
+                                >
+                                  {busyAction === "auth" ? (
+                                    <LoaderIcon aria-hidden="true" className="animate-spin" />
+                                  ) : null}
+                                  Open Browser to Sign In
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void finishAuthCapture()}
+                                  disabled={busyAction !== null}
+                                >
+                                  {busyAction === "finish-auth" ? (
+                                    <LoaderIcon aria-hidden="true" className="animate-spin" />
+                                  ) : null}
+                                  Finish &amp; Save Local Session
+                                </Button>
+                              )}
+                            </div>
+                          ) : authenticationMode === "connected-session" ? (
+                            <div className="rounded-xl border border-border/70 bg-muted/20 p-3.5">
+                              <div className="space-y-2">
+                                <label
+                                  htmlFor="testing-cdp-endpoint"
+                                  className="text-sm font-medium text-foreground"
+                                >
+                                  Local CDP Endpoint
+                                </label>
+                                <Input
+                                  id="testing-cdp-endpoint"
+                                  type="url"
+                                  inputMode="url"
+                                  placeholder="http://127.0.0.1:9224"
+                                  value={cdpEndpoint}
+                                  onChange={(event) => setCdpEndpoint(event.target.value)}
+                                  aria-describedby="testing-cdp-endpoint-help"
+                                  aria-invalid={normalizedCdpEndpoint === null}
+                                  disabled={busyAction !== null || authCaptureOpen}
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="border border-border/80 shadow-sm">
+                        <CardHeader className="pb-3">
+                          <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+                            Step 3
+                          </div>
+                          <CardTitle className="text-base font-semibold">
+                            Set Limits &amp; Explore
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-5">
+                          <div className="grid gap-5 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <label
+                                htmlFor="testing-max-states"
+                                className="flex items-center text-sm font-medium text-foreground"
+                              >
+                                Maximum States
+                                <InfoTooltip content="Exploration stops automatically when this number of unique application states is discovered (1 to 10,000)." />
+                              </label>
+                              <NumberStepperInput
+                                id="testing-max-states"
+                                min={1}
+                                max={MAX_TESTING_MAX_STATES}
+                                step={1}
+                                value={maxStates}
+                                onChange={setMaxStates}
+                                ariaDescribedBy="testing-max-states-help"
+                                ariaInvalid={normalizedMaxStates === null}
+                                disabled={busyAction !== null || authCaptureOpen}
+                              />
+                              <p
+                                id="testing-max-states-help"
+                                className="text-xs text-muted-foreground"
+                              >
+                                Target limit (1 - {MAX_TESTING_MAX_STATES.toLocaleString()})
+                              </p>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label
+                                htmlFor="testing-max-duration"
+                                className="flex items-center text-sm font-medium text-foreground"
+                              >
+                                Time Budget (Minutes)
+                                <InfoTooltip content="Maximum run time limit in minutes. Leave clear for no time restriction." />
+                              </label>
+                              <NumberStepperInput
+                                id="testing-max-duration"
+                                min={1 / 60}
+                                max={MAX_TESTING_DURATION_SECONDS / 60}
+                                step={1}
+                                value={maxDurationMinutes}
+                                onChange={setMaxDurationMinutes}
+                                ariaDescribedBy="testing-max-duration-help"
+                                ariaInvalid={normalizedMaxDurationSeconds === null}
+                                disabled={busyAction !== null || authCaptureOpen}
+                              />
+                              <p
+                                id="testing-max-duration-help"
+                                className="text-xs text-muted-foreground"
+                              >
+                                Optional time boundary
+                              </p>
+                            </div>
+                          </div>
+
+                          {!authenticationReady ? (
+                            <p className="text-xs font-medium text-amber-600/90" role="note">
+                              Complete Step 2 authentication setup before beginning exploration.
+                            </p>
+                          ) : null}
+
+                          {/* Action Bar Footer */}
+                          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/70 bg-card/60 p-3.5 shadow-sm">
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className={cn(
+                                  "size-2 rounded-full shrink-0",
+                                  normalizedTarget && authenticationReady
+                                    ? "bg-emerald-500"
+                                    : "bg-amber-500",
+                                )}
+                                aria-hidden="true"
+                              />
+                              <span className="text-xs font-medium text-muted-foreground">
+                                {message || "Ready to explore workspace application."}
+                              </span>
+                            </div>
+
+                            <Button
+                              type="button"
+                              size="default"
+                              onClick={() => void startExploration()}
+                              disabled={
+                                !normalizedTarget ||
+                                normalizedMaxStates === null ||
+                                normalizedMaxDurationSeconds === null ||
+                                !authenticationReady ||
+                                busyAction !== null ||
+                                authCaptureOpen
+                              }
+                              className="px-5 font-semibold shadow-sm"
+                            >
+                              {busyAction === "explore" ? (
+                                <LoaderIcon aria-hidden="true" className="animate-spin" />
+                              ) : (
+                                <PlayIcon aria-hidden="true" />
+                              )}
+                              Start Scoped Exploration
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <section aria-labelledby="testing-graph-heading" className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h2
+                            id="testing-graph-heading"
+                            className="text-lg font-semibold text-foreground"
+                          >
+                            Stored graph
+                          </h2>
+                          <p className="text-xs text-muted-foreground">
+                            Every completed exploration updates this local graph. Run Step 3 again
+                            to refresh it from the latest application state.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void startExploration()}
+                            disabled={
+                              !normalizedTarget ||
+                              normalizedMaxStates === null ||
+                              normalizedMaxDurationSeconds === null ||
+                              !authenticationReady ||
+                              busyAction !== null
+                            }
+                          >
+                            <RefreshCwIcon aria-hidden="true" />
+                            Update graph
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void clearGraph()}
+                            disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
+                          >
+                            <Trash2Icon aria-hidden="true" />
+                            Clear graph
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {[
+                          ["States", status?.nodeCount ?? 0],
+                          ["Transitions", status?.edgeCount ?? 0],
+                          ["Cached subtrees", status?.cacheEntryCount ?? 0],
+                          ["Cache hits", status?.cacheHitCount ?? 0],
+                        ].map(([label, value]) => (
+                          <Card key={label}>
+                            <CardContent className="py-5">
+                              <div className="text-2xl font-semibold text-foreground">{value}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                      <p className="break-all text-xs text-muted-foreground">
+                        {status?.databasePath
+                          ? `Local workspace database: ${status.databasePath}`
+                          : "The local graph database is created when Testing initializes."}
+                      </p>
+                    </section>
+                  </>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                      <div className="space-y-1">
+                        <Badge variant="outline">Locator-first</Badge>
+                        <h2 className="text-xl font-semibold text-foreground">
+                          Capture locators from the page you need
+                        </h2>
+                        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+                          Open the app, scan the current page, then choose the controls and outcomes
+                          that belong in your page object. Nothing is written to your repository
+                          without a reviewed diff.
+                        </p>
+                      </div>
+                      <div
+                        className="flex items-center gap-2 text-xs text-muted-foreground"
+                        aria-label="Locator workflow"
+                      >
+                        <Badge variant={locatorSession ? "secondary" : "default"}>1 Open</Badge>
+                        <ChevronRightIcon aria-hidden="true" className="size-3" />
+                        <Badge variant={selectedLocatorEntryIds.size > 0 ? "secondary" : "outline"}>
+                          2 Choose
+                        </Badge>
+                        <ChevronRightIcon aria-hidden="true" className="size-3" />
+                        <Badge
+                          variant={
+                            selectedLocatorPage?.entries.some(
+                              (entry) => entry.lifecycleStatus === "accepted",
+                            )
+                              ? "secondary"
+                              : "outline"
+                          }
+                        >
+                          3 Use in code
+                        </Badge>
+                      </div>
+                    </div>
+                    <section
+                      className={cn(
+                        "rounded-2xl border border-border/70 bg-card shadow-sm",
+                        locatorPreviewExpanded ? "overflow-visible" : "overflow-hidden",
+                      )}
+                    >
+                      <div className="divide-y divide-border/60">
+                        <aside className="space-y-3 bg-muted/15 p-4 sm:p-5">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+                                Step 1
+                              </div>
+                              <h3 className="mt-1 text-base font-semibold">Choose the capture</h3>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                One page is usually enough. Describe a task only when you want a
+                                smaller, relevant subset.
+                              </p>
+                            </div>
+                            <Badge variant="outline">Capture only - no code changes</Badge>
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold" htmlFor="locator-scope">
+                                Capture scope
+                              </label>
+                              <Select
+                                value={locatorCaptureScope}
+                                onValueChange={(value) =>
+                                  setLocatorCaptureScope(value as typeof locatorCaptureScope)
+                                }
+                              >
+                                <SelectTrigger id="locator-scope">
+                                  <span className="flex-1 truncate">
+                                    {
+                                      {
+                                        task: "A specific case or task",
+                                        page: "The current page",
+                                        path: "A page flow or section",
+                                        origin: "The complete application",
+                                      }[locatorCaptureScope]
+                                    }
+                                  </span>
+                                </SelectTrigger>
+                                <SelectPopup>
+                                  <SelectItem value="task">A specific case or task</SelectItem>
+                                  <SelectItem value="page">The current page</SelectItem>
+                                  <SelectItem value="path">A page flow or section</SelectItem>
+                                  <SelectItem value="origin">The complete application</SelectItem>
+                                </SelectPopup>
+                              </Select>
+                              {locatorCaptureScope === "task" ? (
+                                <Textarea
+                                  value={locatorTaskContext}
+                                  onChange={(event) => setLocatorTaskContext(event.target.value)}
+                                  placeholder="Example: update account profile and verify success"
+                                  aria-label="Case or task to capture locators for"
+                                  className="min-h-20 text-xs"
+                                />
+                              ) : null}
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold">Application access</div>
+                              <Select
+                                value={authenticationMode}
+                                onValueChange={(value) =>
+                                  setAuthenticationMode(value as TestingAuthenticationMode)
+                                }
+                              >
+                                <SelectTrigger aria-label="Application access method">
+                                  <span className="flex-1 truncate">
+                                    {
+                                      {
+                                        none: "No authentication",
+                                        "local-profile": "Sign in manually",
+                                        "connected-session": "Reuse Electron / Chromium",
+                                      }[authenticationMode]
+                                    }
+                                  </span>
+                                </SelectTrigger>
+                                <SelectPopup>
+                                  <SelectItem value="none">No authentication</SelectItem>
+                                  <SelectItem value="local-profile">Sign in manually</SelectItem>
+                                  <SelectItem value="connected-session">
+                                    Reuse Electron / Chromium
+                                  </SelectItem>
+                                </SelectPopup>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-xs font-semibold">How to explore</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                {(["manual", "guided"] as const).map((mode) => (
+                                  <Button
+                                    key={mode}
+                                    type="button"
+                                    size="sm"
+                                    variant={locatorMode === mode ? "secondary" : "outline"}
+                                    aria-pressed={locatorMode === mode}
+                                    onClick={() => setLocatorMode(mode)}
+                                    className="capitalize"
+                                  >
+                                    {mode}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            className="flex gap-3 rounded-xl border border-border/60 bg-muted/20 p-3"
+                            role="note"
+                          >
+                            <HelpCircleIcon
+                              aria-hidden="true"
+                              className="mt-0.5 size-4 shrink-0 text-primary"
+                            />
+                            <div className="text-xs leading-5">
+                              <span className="font-semibold text-foreground">
+                                What will be captured?{" "}
+                              </span>
+                              <span className="text-muted-foreground">
+                                {locatorCoverage === "actions-only"
+                                  ? "Interactive controls such as buttons, links, inputs, checkboxes, switches, menus, and tabs."
+                                  : locatorCoverage === "everything-accessible"
+                                    ? "All named accessible elements on the page, including controls, outcomes, and readable content."
+                                    : "Interactive controls plus useful outcomes such as headings, dialogs, alerts, statuses, progress indicators, and tables. Decorative layout and hidden content are excluded."}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-start justify-between gap-3 border-t border-border/50 pt-3">
+                            <Collapsible
+                              open={locatorAdvancedOpen}
+                              onOpenChange={setLocatorAdvancedOpen}
+                              className="min-w-64 flex-1"
+                            >
+                              <CollapsibleTrigger className="flex w-full max-w-xs items-center justify-between rounded-lg px-2 py-2 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                Advanced options
+                                <ChevronDownIcon aria-hidden="true" className="size-4" />
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="grid max-w-2xl gap-3 pt-3 sm:grid-cols-2">
+                                <div className="space-y-2 sm:col-span-2">
+                                  <label
+                                    htmlFor="locator-coverage"
+                                    className="text-xs font-semibold"
+                                  >
+                                    What to capture
+                                  </label>
+                                  <Select
+                                    value={locatorCoverage}
+                                    onValueChange={(value) =>
+                                      setLocatorCoverage(value as TestingLocatorCoverageMode)
+                                    }
+                                  >
+                                    <SelectTrigger id="locator-coverage">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectPopup>
+                                      <SelectItem value="actions-assertions">
+                                        Controls + outcomes (recommended)
+                                      </SelectItem>
+                                      <SelectItem value="actions-only">Controls only</SelectItem>
+                                      <SelectItem value="everything-accessible">
+                                        Everything accessible
+                                      </SelectItem>
+                                    </SelectPopup>
+                                  </Select>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={locatorMode === "automatic" ? "secondary" : "outline"}
+                                  onClick={() => setLocatorMode("automatic")}
+                                  className="w-full"
+                                >
+                                  Automatic exploration
+                                </Button>
+                                {locatorMode === "automatic" ? (
+                                  <div className="grid gap-3">
+                                    <Input
+                                      type="number"
+                                      aria-label="Maximum elements per page"
+                                      min={MIN_TESTING_MAX_ELEMENTS_PER_PAGE}
+                                      max={MAX_TESTING_MAX_ELEMENTS_PER_PAGE}
+                                      value={locatorMaxElements}
+                                      onChange={(event) =>
+                                        setLocatorMaxElements(event.target.value)
+                                      }
+                                    />
+                                    <Input
+                                      type="number"
+                                      aria-label="Maximum pages per session"
+                                      min={1}
+                                      max={MAX_TESTING_MAX_PAGES_PER_SESSION}
+                                      value={locatorMaxPages}
+                                      onChange={(event) => setLocatorMaxPages(event.target.value)}
+                                    />
+                                  </div>
+                                ) : null}
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void setDiscoveryExperience("classic")}
+                                  className="w-full"
+                                >
+                                  Open Classic discovery
+                                </Button>
+                              </CollapsibleContent>
+                            </Collapsible>
+                            <Button
+                              type="button"
+                              onClick={() => void startLocatorDiscovery()}
+                              disabled={
+                                !normalizedTarget ||
+                                busyAction !== null ||
+                                locatorSession?.status === "running" ||
+                                (locatorCaptureScope === "task" && !locatorTaskContext.trim())
+                              }
+                              className="w-full sm:w-auto"
+                            >
+                              {busyAction === "locator-discovery" ? (
+                                <LoaderIcon className="animate-spin" aria-hidden="true" />
+                              ) : (
+                                <PlayIcon aria-hidden="true" />
+                              )}
+                              {locatorSession?.status === "running"
+                                ? "Discovery is active"
+                                : "Scan this page"}
+                            </Button>
+                          </div>
+                        </aside>
+
+                        <div
+                          className={cn(
+                            "min-w-0",
+                            locatorPreviewExpanded &&
+                              "fixed inset-3 z-[80] flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl",
+                          )}
+                          role={locatorPreviewExpanded ? "dialog" : undefined}
+                          aria-modal={locatorPreviewExpanded ? true : undefined}
+                          aria-label={
+                            locatorPreviewExpanded ? "Focused application preview" : undefined
+                          }
+                        >
+                          <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/10 p-3">
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="outline"
+                              aria-label="Go back in preview"
+                              onClick={() =>
+                                void window.desktopBridge?.goBackBrowserSession({
+                                  projectId: props.projectId,
+                                  sessionId: `testing:${props.projectId}`,
+                                })
+                              }
+                            >
+                              <ArrowLeftIcon aria-hidden="true" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="outline"
+                              aria-label="Go forward in preview"
+                              onClick={() =>
+                                void window.desktopBridge?.goForwardBrowserSession({
+                                  projectId: props.projectId,
+                                  sessionId: `testing:${props.projectId}`,
+                                })
+                              }
+                            >
+                              <ArrowRightIcon aria-hidden="true" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="outline"
+                              aria-label="Refresh preview"
+                              onClick={() =>
+                                void window.desktopBridge?.reloadBrowserSession({
+                                  projectId: props.projectId,
+                                  sessionId: `testing:${props.projectId}`,
+                                })
+                              }
+                            >
+                              <RefreshCwIcon aria-hidden="true" />
+                            </Button>
+                            <Input
+                              id="locator-target-url"
+                              type="url"
+                              value={locatorNavigateUrl || targetUrl}
+                              onChange={(event) => {
+                                setLocatorNavigateUrl(event.target.value);
+                                if (!locatorSession) setTargetUrl(event.target.value);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" && locatorSession) {
+                                  void navigateLocatorDiscovery();
+                                }
+                              }}
+                              placeholder="https://uat.example.com/account"
+                              aria-label="Testing preview URL"
+                              className="min-w-56 flex-1"
+                            />
+                            <div
+                              className="flex items-center rounded-lg border border-border/60 bg-background p-0.5"
+                              role="group"
+                              aria-label="Preview viewport"
+                            >
+                              {(
+                                [
+                                  ["desktop", "Desktop", MonitorIcon],
+                                  ["tablet", "Tablet", TabletIcon],
+                                  ["mobile", "Mobile", SmartphoneIcon],
+                                ] as const
+                              ).map(([viewport, label, Icon]) => (
+                                <Button
+                                  key={viewport}
+                                  type="button"
+                                  size="icon-sm"
+                                  variant={locatorViewport === viewport ? "secondary" : "ghost"}
+                                  aria-label={`${label} preview`}
+                                  aria-pressed={locatorViewport === viewport}
+                                  onClick={() => setLocatorViewport(viewport)}
+                                >
+                                  <Icon aria-hidden="true" />
+                                </Button>
+                              ))}
+                            </div>
+                            <Badge variant="outline" className="tabular-nums">
+                              {locatorViewport === "desktop"
+                                ? "Desktop / 16:9"
+                                : locatorViewport === "tablet"
+                                  ? "Tablet / 4:3"
+                                  : "Mobile / 9:16"}
+                            </Badge>
+                            <Button
+                              ref={locatorPreviewFocusButtonRef}
+                              type="button"
+                              size="icon-sm"
+                              variant="outline"
+                              aria-label={
+                                locatorPreviewExpanded ? "Exit focused preview" : "Focus preview"
+                              }
+                              aria-pressed={locatorPreviewExpanded}
+                              onClick={() => setLocatorPreviewExpanded((current) => !current)}
+                            >
+                              {locatorPreviewExpanded ? (
+                                <Minimize2Icon aria-hidden="true" />
+                              ) : (
+                                <Maximize2Icon aria-hidden="true" />
+                              )}
+                            </Button>
+                          </div>
+                          <div
+                            className={cn(
+                              locatorPreviewExpanded &&
+                                "flex min-h-0 flex-1 items-center justify-center bg-black/20 p-3",
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "relative aspect-video overflow-hidden bg-muted/20",
+                                locatorPreviewExpanded ? "h-full w-auto max-w-full" : "w-full",
+                              )}
+                            >
+                              {normalizedTarget ? (
+                                <TestingApplicationPreview
+                                  projectId={props.projectId}
+                                  targetUrl={locatorNavigateUrl || normalizedTarget}
+                                  sessionId={`testing:${props.projectId}`}
+                                  viewport={locatorViewport}
+                                />
+                              ) : (
+                                <div className="flex h-full min-h-80 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/40 p-8 text-center text-sm text-muted-foreground">
+                                  Enter a starting URL above. The page stays contained here while
+                                  you navigate and scroll.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 p-3">
+                            <div className="text-xs text-muted-foreground" aria-live="polite">
+                              <span className="block">
+                                {locatorSession
+                                  ? `${locatorSession.capturedPages} pages, ${locatorSession.storedElements} locators captured`
+                                  : "Preview first, then start a focused discovery session."}
+                              </span>
+                              <span className="block text-[11px]">
+                                Navigate here so Testing sees the same session. A separate browser
+                                window is not connected to this capture.
+                              </span>
+                            </div>
+                            {locatorSession?.status === "running" ? (
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void captureLocatorPage("relevant")}
+                                  disabled={busyAction !== null}
+                                >
+                                  Scan relevant controls
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void captureLocatorPage("page")}
+                                  disabled={busyAction !== null}
+                                >
+                                  Scan all on this page
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void finishLocatorDiscovery(false)}
+                                  disabled={busyAction !== null}
+                                >
+                                  Finish
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => void finishLocatorDiscovery(true)}
+                                  disabled={busyAction !== null}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <aside className="min-w-0 bg-muted/10">
+                          <div className="border-b border-border/60 p-4">
+                            <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
+                              Step 2
+                            </div>
+                            <div className="mt-1 flex items-center justify-between gap-2">
+                              <h3 className="text-sm font-semibold">Choose locators</h3>
+                              <Badge variant="secondary">
+                                {selectedLocatorEntryIds.size} selected
+                              </Badge>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Review the Playwright locator before it becomes part of your page
+                              object.
+                            </p>
+                            {(selectedLocatorPage?.entries.length ?? 0) > 0 ? (
+                              <div className="mt-3 flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setSelectedLocatorEntryIds(
+                                      new Set(
+                                        selectedLocatorPage?.entries
+                                          .filter((entry) => entry.lifecycleStatus === "draft")
+                                          .map((entry) => entry.id) ?? [],
+                                      ),
+                                    )
+                                  }
+                                >
+                                  Select proposed
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setSelectedLocatorEntryIds(new Set())}
+                                >
+                                  Clear
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                          <div
+                            className="grid max-h-[34rem] grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-4 md:grid-cols-2 xl:grid-cols-3"
+                            aria-label="Captured locator candidates"
+                          >
+                            {(selectedLocatorPage?.entries ?? [])
+                              .filter((entry) => entry.lifecycleStatus !== "archived")
+                              .slice(0, 100)
+                              .map((entry) => {
+                                const approved = entry.lifecycleStatus === "accepted";
+                                const manualRequired =
+                                  entry.lifecycleStatus === "manual-required" ||
+                                  testingLocatorHasRedactedArgument(entry);
+                                const selected = selectedLocatorEntryIds.has(entry.id);
+                                return (
+                                  <label
+                                    key={entry.id}
+                                    className={cn(
+                                      "block rounded-xl border p-3 transition-colors",
+                                      selected
+                                        ? "border-primary/40 bg-primary/5"
+                                        : "border-border/60 bg-background/70",
+                                      approved || manualRequired
+                                        ? "cursor-default"
+                                        : "cursor-pointer",
+                                    )}
+                                  >
+                                    <span className="flex items-start gap-2.5">
+                                      {approved ? (
+                                        <span className="mt-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                                          <CheckIcon aria-hidden="true" className="size-3" />
+                                        </span>
+                                      ) : manualRequired ? (
+                                        <span
+                                          className="mt-0.5 flex size-4 items-center justify-center rounded-full border border-amber-500/50 text-amber-600"
+                                          aria-label="Manual locator required"
+                                        >
+                                          <HelpCircleIcon aria-hidden="true" className="size-3" />
+                                        </span>
+                                      ) : (
+                                        <Checkbox
+                                          checked={selected}
+                                          onCheckedChange={(checked) =>
+                                            setSelectedLocatorEntryIds((current) => {
+                                              const next = new Set(current);
+                                              if (checked) next.add(entry.id);
+                                              else next.delete(entry.id);
+                                              return next;
+                                            })
+                                          }
+                                          aria-label={`Include ${entry.locatorKey}`}
+                                          className="mt-0.5"
+                                        />
+                                      )}
+                                      <span className="min-w-0 flex-1">
+                                        <span className="flex items-center justify-between gap-2">
+                                          <span className="truncate font-mono text-xs font-medium">
+                                            {entry.locatorKey}
+                                          </span>
+                                          {manualRequired ? (
+                                            <Badge variant="outline">Manual setup</Badge>
+                                          ) : entry.fragile ? (
+                                            <Badge variant="destructive">Ambiguous</Badge>
+                                          ) : approved ? (
+                                            <Badge variant="secondary">In page object</Badge>
+                                          ) : null}
+                                        </span>
+                                        <code className="mt-2 block overflow-x-auto rounded-md bg-muted/70 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+                                          {testingLocatorCode(entry)}
+                                        </code>
+                                      </span>
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            {locatorLibrary.locatorCount === 0 ? (
+                              <div className="rounded-lg border border-dashed border-border/70 p-5 text-center text-xs leading-5 text-muted-foreground">
+                                Scan the page to see named buttons, links, fields, headings, and
+                                outcomes here.
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-background/50 p-4">
+                            <Button
+                              type="button"
+                              className="w-full whitespace-normal sm:w-auto"
+                              onClick={() => void approveSelectedLocators()}
+                              disabled={selectedLocatorEntryIds.size === 0 || busyAction !== null}
+                            >
+                              {busyAction === "locator-review" ? (
+                                <LoaderIcon aria-hidden="true" className="animate-spin" />
+                              ) : (
+                                <CheckIcon aria-hidden="true" />
+                              )}
+                              Add selected to page object
+                            </Button>
+                            <p className="max-w-2xl text-[11px] leading-4 text-muted-foreground">
+                              This updates the managed draft. Repository changes are prepared as a
+                              separate diff you must approve.
+                            </p>
+                          </div>
+                        </aside>
+                      </div>
+                    </section>
+
+                    <Card>
+                      <CardHeader>
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="space-y-1.5">
+                            <CardTitle>Your locator code is ready</CardTitle>
+                            <CardDescription>
+                              Approved locators are saved as a versioned draft inside this Tabs
+                              project. Your repository has not been changed.
+                            </CardDescription>
+                          </div>
+                          <Badge variant="outline">Step 3</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-5">
+                        <div className="grid gap-3 md:grid-cols-3" aria-label="Code status">
+                          {[
+                            ["1", "Saved locally", "Safe managed draft with version history."],
+                            ["2", "Review by page", "Choose locators, preview code, or edit it."],
+                            ["3", "Apply only when ready", "Choose a file and confirm the diff."],
+                          ].map(([number, label, description]) => (
+                            <div
+                              key={number}
+                              className="flex gap-3 rounded-xl border border-border/60 bg-muted/15 p-3"
+                            >
+                              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                                {number}
+                              </span>
+                              <div>
+                                <div className="text-sm font-semibold">{label}</div>
+                                <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                                  {description}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 p-4">
+                          <div className="max-w-2xl">
+                            <h4 className="text-sm font-semibold">
+                              {locatorFolderResult
+                                ? "Existing page-object folder connected"
+                                : "Already have company page objects?"}
+                            </h4>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                              Optional: compare against a folder inside this project. Tabs reads
+                              TypeScript and JavaScript statically and never executes it.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant={locatorFolderResult ? "outline" : "default"}
+                              disabled={busyAction !== null}
+                              onClick={() => {
+                                setLocatorStorageMode("connected-repository");
+                                void indexLocatorFolder("connected-repository");
+                              }}
+                            >
+                              <FolderSearchIcon aria-hidden="true" />
+                              {locatorFolderResult ? "Compare another folder" : "Compare a folder"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={busyAction !== null}
+                              onClick={() => {
+                                setLocatorStorageMode("snapshot-export");
+                                void indexLocatorFolder("snapshot-export");
+                              }}
+                            >
+                              Import an independent copy
+                            </Button>
+                            {locatorFolderResult ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => void disconnectLocatorFolder()}
+                              >
+                                Disconnect
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                        {locatorFolderResult ? (
+                          <div className="space-y-3" aria-live="polite">
+                            <div className="grid gap-2 sm:grid-cols-4">
+                              {[
+                                ["Recognized", locatorFolderResult.recognized],
+                                ["Warnings", locatorFolderResult.warnings],
+                                ["Unsupported / dynamic", locatorFolderResult.unsupportedDynamic],
+                                [
+                                  "Files parsed",
+                                  `${locatorFolderResult.filesParsed}/${locatorFolderResult.filesScanned}`,
+                                ],
+                              ].map(([label, value]) => (
+                                <div key={label} className="rounded-lg bg-muted/35 p-3">
+                                  <div className="font-semibold">{value}</div>
+                                  <div className="text-xs text-muted-foreground">{label}</div>
+                                </div>
+                              ))}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Recognition rate:{" "}
+                              {locatorFolderResult.recognitionRate === null
+                                ? "Not applicable"
+                                : `${locatorFolderResult.recognitionRate.toFixed(1)}%`}
+                              . File parse coverage:{" "}
+                              {locatorFolderResult.fileParseCoverage === null
+                                ? "Not applicable"
+                                : `${locatorFolderResult.fileParseCoverage.toFixed(1)}%`}
+                              .
+                            </p>
+                          </div>
+                        ) : null}
+                        {locatorSyncPreview?.items.some((item) => item.status === "pending") ? (
+                          <div className="space-y-2">
+                            <h4 className="text-sm font-medium">Synchronization review</h4>
+                            {locatorSyncPreview.items
+                              .filter((item) => item.status === "pending")
+                              .map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
+                                >
+                                  <div>
+                                    <div className="font-mono text-sm">{item.locatorKey}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {item.kind} {item.sourceFile ? `· ${item.sourceFile}` : ""}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        void resolveLocatorSync(item.id, "keep-managed")
+                                      }
+                                    >
+                                      Keep managed
+                                    </Button>
+                                    {item.kind === "conflict" ? (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() =>
+                                          void resolveLocatorSync(item.id, "accept-repository")
+                                        }
+                                      >
+                                        Accept repository version
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => void resolveLocatorSync(item.id, "archive")}
+                                    >
+                                      Archive
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            <p className="text-xs text-muted-foreground">
+                              Decisions update Tabs metadata and version history. Repository files
+                              are changed only through a separately reviewed source diff.
+                            </p>
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+
+                    <section aria-labelledby="locator-library-heading" className="space-y-3">
+                      <div>
+                        <h3 id="locator-library-heading" className="text-lg font-semibold">
+                          Locator Library
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {locatorLibrary.pageCount} pages · {locatorLibrary.locatorCount} locators
+                          · {locatorLibrary.verifiedCount} verified · {locatorLibrary.reviewCount}{" "}
+                          need review
+                        </p>
+                      </div>
+                      {locatorLibrary.pages.length === 0 ? (
+                        <Card>
+                          <CardContent className="py-6 text-sm text-muted-foreground">
+                            Start a capture or connect an existing page-object folder. Nothing is
+                            shared with another Tabs project.
+                          </CardContent>
+                        </Card>
+                      ) : selectedLocatorPage ? (
+                        <Card className="overflow-hidden">
+                          <div className="grid min-h-[30rem] lg:grid-cols-[15rem_minmax(0,1fr)]">
+                            <div className="border-b border-border/60 bg-muted/15 p-2 lg:border-b-0 lg:border-r">
+                              {locatorLibrary.pages.map((page) => (
+                                <button
+                                  key={page.id}
+                                  type="button"
+                                  aria-current={
+                                    selectedLocatorPage.id === page.id ? "page" : undefined
+                                  }
+                                  onClick={() => setSelectedLocatorPageId(page.id)}
+                                  className={cn(
+                                    "mb-1 w-full rounded-lg px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                    selectedLocatorPage.id === page.id
+                                      ? "bg-primary/10 text-foreground"
+                                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                                  )}
+                                >
+                                  <span className="block truncate text-sm font-medium">
+                                    {page.name}
+                                  </span>
+                                  <span className="mt-0.5 block text-[11px]">
+                                    {page.entries.length} locators
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="border-b border-border/60 p-4">
+                                <div className="flex flex-wrap items-end justify-between gap-3">
+                                  <div className="min-w-0 flex-1 space-y-1.5">
+                                    <label
+                                      htmlFor="locator-page-name"
+                                      className="text-xs font-medium text-muted-foreground"
+                                    >
+                                      Page name
+                                    </label>
+                                    <div className="flex max-w-xl gap-2">
+                                      <Input
+                                        id="locator-page-name"
+                                        value={locatorPageName}
+                                        onChange={(event) => setLocatorPageName(event.target.value)}
+                                        placeholder="Landing page"
+                                        className="text-base font-semibold"
+                                      />
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={
+                                          !locatorPageName.trim() ||
+                                          locatorPageName.trim() === selectedLocatorPage.name ||
+                                          busyAction !== null
+                                        }
+                                        onClick={() => void saveLocatorPageName()}
+                                      >
+                                        Save name
+                                      </Button>
+                                    </div>
+                                    <CardDescription className="break-all">
+                                      {selectedLocatorPage.urlPattern}
+                                    </CardDescription>
+                                  </div>
+                                  <div className="rounded-lg bg-muted/40 px-3 py-2 text-right">
+                                    <div className="text-sm font-semibold">
+                                      {
+                                        selectedLocatorPage.entries.filter(
+                                          (entry) => entry.lifecycleStatus === "accepted",
+                                        ).length
+                                      }{" "}
+                                      in code
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground">
+                                      {selectedLocatorPage.entries.length} discovered
+                                    </div>
+                                  </div>
+                                </div>
+                                <div
+                                  className="mt-4 flex flex-wrap gap-1"
+                                  role="tablist"
+                                  aria-label="Page Object details"
+                                >
+                                  {(
+                                    [
+                                      ["locators", "1. Choose locators"],
+                                      ["code", "2. Preview code"],
+                                      ["diff", "3. Write to repository"],
+                                      ["history", "History"],
+                                    ] as const
+                                  ).map(([id, label]) => (
+                                    <Button
+                                      key={id}
+                                      id={`locator-page-tab-${id}`}
+                                      type="button"
+                                      size="sm"
+                                      variant={locatorPageTab === id ? "secondary" : "ghost"}
+                                      role="tab"
+                                      aria-selected={locatorPageTab === id}
+                                      aria-controls="locator-page-tabpanel"
+                                      tabIndex={locatorPageTab === id ? 0 : -1}
+                                      onClick={() => setLocatorPageTab(id)}
+                                      onKeyDown={(event) => {
+                                        const tabs = [
+                                          "locators",
+                                          "code",
+                                          "diff",
+                                          "history",
+                                        ] as const;
+                                        const current = tabs.indexOf(id);
+                                        const next =
+                                          event.key === "Home"
+                                            ? 0
+                                            : event.key === "End"
+                                              ? tabs.length - 1
+                                              : event.key === "ArrowRight"
+                                                ? (current + 1) % tabs.length
+                                                : event.key === "ArrowLeft"
+                                                  ? (current - 1 + tabs.length) % tabs.length
+                                                  : -1;
+                                        if (next < 0) return;
+                                        event.preventDefault();
+                                        const nextId = tabs[next]!;
+                                        setLocatorPageTab(nextId);
+                                        window.requestAnimationFrame(() =>
+                                          document
+                                            .getElementById(`locator-page-tab-${nextId}`)
+                                            ?.focus(),
+                                        );
+                                      }}
+                                    >
+                                      {label}
+                                    </Button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div
+                                id="locator-page-tabpanel"
+                                className="p-4"
+                                role="tabpanel"
+                                aria-labelledby={`locator-page-tab-${locatorPageTab}`}
+                              >
+                                {locatorPageTab === "locators" ? (
+                                  <div className="space-y-4">
+                                    <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                                      <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                          <h4 className="text-sm font-semibold">
+                                            Choose exactly what belongs in this page object
+                                          </h4>
+                                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                            Discovery can find many elements. Only checked locators
+                                            are generated into code.
+                                          </p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              setLocatorCodeEntryIds(
+                                                new Set(
+                                                  selectedLocatorPage.entries
+                                                    .filter(
+                                                      (entry) =>
+                                                        entry.lifecycleStatus !== "archived" &&
+                                                        entry.lifecycleStatus !== "manual-required",
+                                                    )
+                                                    .map((entry) => entry.id),
+                                                ),
+                                              )
+                                            }
+                                          >
+                                            Select usable
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => setLocatorCodeEntryIds(new Set())}
+                                          >
+                                            Clear
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                                      <div className="relative">
+                                        <SearchIcon
+                                          aria-hidden="true"
+                                          className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                                        />
+                                        <Input
+                                          value={locatorSearch}
+                                          onChange={(event) => setLocatorSearch(event.target.value)}
+                                          placeholder="Search key, role, text, or generated code"
+                                          aria-label="Search locators on this page"
+                                          className="pl-9"
+                                        />
+                                      </div>
+                                      <Select
+                                        value={locatorFilter}
+                                        onValueChange={(value) =>
+                                          setLocatorFilter(value as typeof locatorFilter)
+                                        }
+                                      >
+                                        <SelectTrigger aria-label="Filter locators">
+                                          <span className="flex-1 truncate text-left">
+                                            {
+                                              {
+                                                all: "Active locators",
+                                                selected: "Selected for code",
+                                                "needs-review": "Needs review",
+                                                archived: "Removed locators",
+                                              }[locatorFilter]
+                                            }
+                                          </span>
+                                        </SelectTrigger>
+                                        <SelectPopup>
+                                          <SelectItem value="all">Active locators</SelectItem>
+                                          <SelectItem value="selected">
+                                            Selected for code
+                                          </SelectItem>
+                                          <SelectItem value="needs-review">Needs review</SelectItem>
+                                          <SelectItem value="archived">Removed locators</SelectItem>
+                                        </SelectPopup>
+                                      </Select>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground" role="status">
+                                      {filteredLocatorEntries.length} of{" "}
+                                      {selectedLocatorPage.entries.length} locators shown
+                                    </p>
+                                    <div className="divide-y divide-border/60">
+                                      {filteredLocatorEntries.slice(0, 100).map((entry) => (
+                                        <div
+                                          key={entry.id}
+                                          className="flex flex-wrap items-start justify-between gap-3 py-3"
+                                        >
+                                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                                            <Checkbox
+                                              checked={locatorCodeEntryIds.has(entry.id)}
+                                              disabled={
+                                                entry.lifecycleStatus === "archived" ||
+                                                entry.lifecycleStatus === "manual-required"
+                                              }
+                                              onCheckedChange={(checked) =>
+                                                setLocatorCodeEntryIds((current) => {
+                                                  const next = new Set(current);
+                                                  if (checked) next.add(entry.id);
+                                                  else next.delete(entry.id);
+                                                  return next;
+                                                })
+                                              }
+                                              aria-label={`Include ${entry.locatorKey} in generated code`}
+                                              className="mt-1"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                              <div className="font-mono text-sm text-foreground">
+                                                {entry.locatorKey}
+                                              </div>
+                                              <div className="text-xs text-muted-foreground">
+                                                {entry.strategy} · {entry.classification} ·{" "}
+                                                {entry.verificationStatus} · {entry.syncStatus}
+                                              </div>
+                                              <code className="mt-2 block max-w-2xl overflow-x-auto rounded-md bg-muted/55 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+                                                {testingLocatorCode(entry)}
+                                              </code>
+                                            </div>
+                                          </div>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <Badge
+                                              variant={entry.fragile ? "destructive" : "secondary"}
+                                            >
+                                              {entry.fragile ? "Review fragile" : entry.source}
+                                            </Badge>
+                                            {entry.lifecycleStatus === "archived" ? (
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() =>
+                                                  void reviewLocator(entry.id, "restore")
+                                                }
+                                              >
+                                                <ArchiveRestoreIcon aria-hidden="true" />
+                                                Restore
+                                              </Button>
+                                            ) : (
+                                              <>
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => startEditingLocator(entry)}
+                                                >
+                                                  <PencilIcon aria-hidden="true" />
+                                                  Edit
+                                                </Button>
+                                                {entry.syncStatus === "managed-only" ? (
+                                                  <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() =>
+                                                      void reviewLocator(entry.id, "keep-managed")
+                                                    }
+                                                  >
+                                                    Keep managed-only
+                                                  </Button>
+                                                ) : null}
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  className="text-destructive hover:text-destructive"
+                                                  onClick={() =>
+                                                    setLocatorPendingRemoveId(entry.id)
+                                                  }
+                                                >
+                                                  <Trash2Icon aria-hidden="true" />
+                                                  Remove
+                                                </Button>
+                                              </>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {filteredLocatorEntries.length === 0 ? (
+                                        <div className="py-10 text-center text-sm text-muted-foreground">
+                                          No locators match this search and filter.
+                                        </div>
+                                      ) : null}
+                                      {filteredLocatorEntries.length > 100 ? (
+                                        <div className="py-4 text-center text-xs text-muted-foreground">
+                                          Showing the first 100 matches. Narrow the search to find a
+                                          specific locator.
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/95 p-3 shadow-sm backdrop-blur">
+                                      <p
+                                        className="text-xs text-muted-foreground"
+                                        aria-live="polite"
+                                      >
+                                        {locatorCodeEntryIds.size} locator
+                                        {locatorCodeEntryIds.size === 1 ? "" : "s"} selected
+                                      </p>
+                                      <Button
+                                        type="button"
+                                        disabled={
+                                          busyAction !== null || locatorCodeEntryIds.size === 0
+                                        }
+                                        onClick={() => void saveLocatorCodeSelection()}
+                                      >
+                                        Generate page object
+                                        <ArrowRightIcon aria-hidden="true" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : locatorPageTab === "code" && selectedLocatorPage.pageObject ? (
+                                  <div className="space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className="font-mono text-sm">
+                                            {selectedLocatorPage.pageObject.fileName}
+                                          </span>
+                                          {selectedLocatorPage.pageObject.origin === "manual" ? (
+                                            <Badge variant="secondary">Edited draft</Badge>
+                                          ) : (
+                                            <Badge variant="outline">Generated</Badge>
+                                          )}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          Version {selectedLocatorPage.pageObject.versionNumber} -{" "}
+                                          {selectedLocatorPage.pageObject.status}
+                                        </div>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {!locatorCodeEditing ? (
+                                          <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                              setLocatorCodeDraft(
+                                                selectedLocatorPage.pageObject?.code ?? "",
+                                              );
+                                              setLocatorCodeEditing(true);
+                                            }}
+                                          >
+                                            <PencilIcon aria-hidden="true" />
+                                            Edit code
+                                          </Button>
+                                        ) : null}
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            void navigator.clipboard
+                                              .writeText(selectedLocatorPage.pageObject?.code ?? "")
+                                              .then(() => setMessage("Page Object code copied."))
+                                          }
+                                        >
+                                          Copy code
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    {locatorCodeEditing ? (
+                                      <div className="space-y-3">
+                                        <div
+                                          id="locator-code-edit-help"
+                                          className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground"
+                                        >
+                                          Small code edits are saved as a new local version. Keep
+                                          the exported {selectedLocatorPage.pageObject.className}{" "}
+                                          class. Changing the page name or selected locators later
+                                          regenerates this draft from the Locator Library.
+                                        </div>
+                                        <Textarea
+                                          value={locatorCodeDraft}
+                                          onChange={(event) =>
+                                            setLocatorCodeDraft(event.target.value)
+                                          }
+                                          aria-label={`Edit ${selectedLocatorPage.pageObject.fileName}`}
+                                          aria-describedby="locator-code-edit-help"
+                                          spellCheck={false}
+                                          className="min-h-[28rem] resize-y whitespace-pre font-mono text-xs leading-5"
+                                        />
+                                        <div className="flex flex-wrap justify-end gap-2">
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            disabled={busyAction !== null}
+                                            onClick={() => {
+                                              setLocatorCodeDraft(
+                                                selectedLocatorPage.pageObject?.code ?? "",
+                                              );
+                                              setLocatorCodeEditing(false);
+                                            }}
+                                          >
+                                            Cancel
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            disabled={
+                                              busyAction !== null ||
+                                              !locatorCodeDraft.trim() ||
+                                              locatorCodeDraft ===
+                                                selectedLocatorPage.pageObject.code
+                                            }
+                                            onClick={() => void savePageObjectCode()}
+                                          >
+                                            {busyAction === "locator-code" ? (
+                                              <LoaderIcon
+                                                aria-hidden="true"
+                                                className="animate-spin"
+                                              />
+                                            ) : null}
+                                            Save new version
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <pre className="max-h-[32rem] overflow-auto rounded-xl border border-border/60 bg-background/70 p-4 text-xs leading-5">
+                                        <code>{selectedLocatorPage.pageObject.code}</code>
+                                      </pre>
+                                    )}
+                                    {!locatorCodeEditing ? (
+                                      <p className="text-xs leading-5 text-muted-foreground">
+                                        This is a local managed draft. Edit it here for a small code
+                                        change, or edit the locator selection to regenerate it from
+                                        verified entries. Nothing reaches your repository until you
+                                        preview and confirm a file change.
+                                      </p>
+                                    ) : null}
+                                    <div className="flex flex-wrap justify-between gap-2">
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        disabled={locatorCodeEditing}
+                                        onClick={() => setLocatorPageTab("locators")}
+                                      >
+                                        Edit selected locators
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        disabled={locatorCodeEditing}
+                                        onClick={() => setLocatorPageTab("diff")}
+                                      >
+                                        Choose repository destination
+                                        <ArrowRightIcon aria-hidden="true" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : locatorPageTab === "diff" ? (
+                                  <div className="space-y-5">
+                                    <div>
+                                      <h4 className="text-sm font-semibold">
+                                        Choose the exact destination
+                                      </h4>
+                                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                        The folder must be inside this project. Testing never writes
+                                        until you review and confirm the proposed file.
+                                      </p>
+                                    </div>
+                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                                      <div className="space-y-1.5">
+                                        <label
+                                          className="text-xs font-medium"
+                                          htmlFor="locator-repository-folder"
+                                        >
+                                          Page-object folder
+                                        </label>
+                                        <div className="flex gap-2">
+                                          <Input
+                                            id="locator-repository-folder"
+                                            value={locatorRepositoryFolder}
+                                            readOnly
+                                            placeholder="Choose a folder inside this project"
+                                          />
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => void chooseLocatorRepositoryFolder()}
+                                          >
+                                            <FolderSearchIcon aria-hidden="true" />
+                                            Choose
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1.5">
+                                        <label
+                                          className="text-xs font-medium"
+                                          htmlFor="locator-repository-file"
+                                        >
+                                          TypeScript file
+                                        </label>
+                                        <Input
+                                          id="locator-repository-file"
+                                          value={locatorRepositoryFileName}
+                                          onChange={(event) => {
+                                            setLocatorRepositoryFileName(event.target.value);
+                                            setLocatorRepositoryProposal(null);
+                                          }}
+                                          placeholder="landing.page.ts"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Button
+                                        type="button"
+                                        disabled={
+                                          busyAction !== null ||
+                                          !locatorRepositoryFolder ||
+                                          !locatorRepositoryFileName.trim() ||
+                                          !selectedLocatorPage.pageObject
+                                        }
+                                        onClick={() => void previewLocatorRepositoryChange()}
+                                      >
+                                        {busyAction === "locator-repository" ? (
+                                          <LoaderIcon aria-hidden="true" className="animate-spin" />
+                                        ) : null}
+                                        Preview file change
+                                      </Button>
+                                      <span className="text-xs text-muted-foreground">
+                                        {selectedLocatorPage.pageObject
+                                          ? `${selectedLocatorPage.pageObject.className} · ${selectedLocatorPage.pageObject.versionNumber}`
+                                          : "Select locators before choosing repository output"}
+                                      </span>
+                                    </div>
+                                    {locatorRepositoryProposal ? (
+                                      <div className="space-y-4 rounded-xl border border-border/70 bg-muted/15 p-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                          <div>
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant="secondary">
+                                                {locatorRepositoryProposal.changeKind}
+                                              </Badge>
+                                              <span className="font-mono text-sm">
+                                                {locatorRepositoryProposal.relativePath}
+                                              </span>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">
+                                              {locatorRepositoryProposal.selectedLocatorCount}{" "}
+                                              selected locator
+                                              {locatorRepositoryProposal.selectedLocatorCount === 1
+                                                ? ""
+                                                : "s"}{" "}
+                                              · {locatorRepositoryProposal.className}
+                                            </p>
+                                          </div>
+                                          <Button
+                                            type="button"
+                                            disabled={
+                                              locatorRepositoryProposal.changeKind ===
+                                                "unchanged" || busyAction !== null
+                                            }
+                                            onClick={() => setLocatorRepositoryConfirmOpen(true)}
+                                          >
+                                            Review and apply
+                                          </Button>
+                                        </div>
+                                        <div
+                                          className={cn(
+                                            "grid gap-3",
+                                            locatorRepositoryProposal.existingCode &&
+                                              "xl:grid-cols-2",
+                                          )}
+                                        >
+                                          {locatorRepositoryProposal.existingCode ? (
+                                            <div className="min-w-0">
+                                              <div className="mb-2 text-xs font-medium text-muted-foreground">
+                                                Current repository file
+                                              </div>
+                                              <pre className="max-h-80 overflow-auto rounded-lg border border-border/60 bg-background p-3 text-[10px] leading-4">
+                                                <code>
+                                                  {locatorRepositoryProposal.existingCode}
+                                                </code>
+                                              </pre>
+                                            </div>
+                                          ) : null}
+                                          <div className="min-w-0">
+                                            <div className="mb-2 text-xs font-medium text-muted-foreground">
+                                              Proposed page object
+                                            </div>
+                                            <pre className="max-h-80 overflow-auto rounded-lg border border-primary/20 bg-background p-3 text-[10px] leading-4">
+                                              <code>{locatorRepositoryProposal.proposedCode}</code>
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {selectedLocatorPage.entries.map((entry) => (
+                                      <div
+                                        key={entry.id}
+                                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 p-3"
+                                      >
+                                        <span className="font-mono text-xs">
+                                          {entry.locatorKey}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          v{entry.versionNumber} - {entry.verificationStatus}
+                                          {entry.verifiedAt
+                                            ? ` - ${new Date(entry.verifiedAt).toLocaleString()}`
+                                            : ""}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {selectedLocatorPage.entries.length > 100 &&
+                                locatorPageTab === "locators" ? (
+                                  <p className="pt-3 text-xs text-muted-foreground">
+                                    Showing 100 entries on this page. Use the inventory search and
+                                    pagination for the remaining entries.
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      ) : null}
+                    </section>
                   </div>
-                  <p className="break-all text-xs text-muted-foreground">
-                    {status?.databasePath
-                      ? `Local workspace database: ${status.databasePath}`
-                      : "The local graph database is created when Testing initializes."}
-                  </p>
-                </section>
+                )}
               </div>
             ) : null}
 
@@ -2260,80 +5387,541 @@ function TestingTool(props: {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Add cases</CardTitle>
+                    <CardTitle>Add test cases</CardTitle>
                     <CardDescription>
-                      Excel columns may use common variations of Case ID, Description, and Steps.
-                      For a large assigned batch, importing the workbook is the fastest path.
+                      Start one case yourself, bring a QA workbook, turn a story into candidates, or
+                      reuse paths already captured from the application.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void chooseWorkbook()}
-                        disabled={busyAction !== null}
-                      >
-                        Choose .xlsx workbook
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        render={
-                          <a
-                            href="/testing/testing-cases-template.xlsx"
-                            download="Tabs-Testing-Test-Cases-Template.xlsx"
-                          />
-                        }
-                      >
-                        <ArrowDownIcon aria-hidden="true" />
-                        Download blank template
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => void importWorkbook()}
-                        disabled={
-                          !workbookPath || busyAction !== null || (status?.nodeCount ?? 0) === 0
-                        }
-                      >
-                        {busyAction === "import" ? (
-                          <LoaderIcon aria-hidden="true" className="animate-spin" />
-                        ) : null}
-                        Import and verify
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => void generateScenarios()}
-                        disabled={busyAction !== null || (status?.nodeCount ?? 0) === 0}
-                      >
-                        {busyAction === "generate" ? (
-                          <LoaderIcon aria-hidden="true" className="animate-spin" />
-                        ) : null}
-                        Generate from graph
-                      </Button>
+                  <CardContent className="space-y-5">
+                    <div
+                      className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+                      role="group"
+                      aria-label="Choose how to add test cases"
+                    >
+                      {(
+                        [
+                          ["manual", "Write a case", "Create and map one case"],
+                          ["excel", "Import Excel", "Best for assigned QA batches"],
+                          ["story", "Use a user story", "Generate reviewable candidates"],
+                          ["graph", "From captured app", "Reuse verified app paths"],
+                        ] as const
+                      ).map(([value, label, description]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={caseIntakeMode === value}
+                          onClick={() => setCaseIntakeMode(value)}
+                          className={cn(
+                            "rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            caseIntakeMode === value
+                              ? "border-primary/40 bg-primary/10"
+                              : "border-border/70 bg-background hover:bg-muted/50",
+                          )}
+                        >
+                          <span className="block text-sm font-medium text-foreground">{label}</span>
+                          <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                            {description}
+                          </span>
+                        </button>
+                      ))}
                     </div>
-                    <p className="break-all text-xs text-muted-foreground">
-                      {workbookPath || "No workbook selected."}
-                    </p>
-                    {(status?.nodeCount ?? 0) === 0 ? (
-                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-sky-500/30 bg-sky-500/5 p-4">
-                        <p className="max-w-xl text-xs leading-5 text-muted-foreground">
-                          Select the workbook now, then connect the relevant app page. Testing needs
-                          a small verified graph before it can compare written steps with the live
-                          UI.
+
+                    {caseIntakeMode === "manual" ? (
+                      <div className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4">
+                        <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                          <div className="space-y-2">
+                            <label htmlFor="testing-manual-case-id" className="text-sm font-medium">
+                              Case ID{" "}
+                              <span className="font-normal text-muted-foreground">(optional)</span>
+                            </label>
+                            <Input
+                              id="testing-manual-case-id"
+                              value={manualCaseId}
+                              onChange={(event) => setManualCaseId(event.target.value)}
+                              placeholder={caseIdPolicy?.example ?? "TC-00001"}
+                              disabled={busyAction !== null}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Leave blank to use the next project ID.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <label
+                              htmlFor="testing-manual-description"
+                              className="text-sm font-medium"
+                            >
+                              What should this test prove?
+                            </label>
+                            <Input
+                              id="testing-manual-description"
+                              value={manualCaseDescription}
+                              onChange={(event) => setManualCaseDescription(event.target.value)}
+                              placeholder="A workspace owner can update project settings"
+                              disabled={busyAction !== null}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-sm font-medium">Steps</div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setManualCaseSteps((current) => [...current, ""])}
+                            >
+                              <PlusIcon aria-hidden="true" />
+                              Add step
+                            </Button>
+                          </div>
+                          <ol className="space-y-2" aria-label="New test case steps">
+                            {manualCaseSteps.map((step, index) => (
+                              <li
+                                key={`manual-step-${index}`}
+                                className="grid gap-2 rounded-lg border border-border/60 bg-background p-2 sm:grid-cols-[2rem_minmax(0,1fr)_auto]"
+                              >
+                                <div className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                                  {index + 1}
+                                </div>
+                                <Textarea
+                                  value={step}
+                                  onChange={(event) =>
+                                    updateManualCaseStep(index, event.target.value)
+                                  }
+                                  aria-label={`New case step ${index + 1}`}
+                                  placeholder="Describe one user action"
+                                  className="min-h-14 resize-y"
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  aria-label={`Delete new case step ${index + 1}`}
+                                  disabled={manualCaseSteps.length === 1}
+                                  onClick={() =>
+                                    setManualCaseSteps((current) =>
+                                      current.filter((_, stepIndex) => stepIndex !== index),
+                                    )
+                                  }
+                                >
+                                  <Trash2Icon aria-hidden="true" />
+                                </Button>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="testing-manual-expected" className="text-sm font-medium">
+                            Expected result
+                          </label>
+                          <Textarea
+                            id="testing-manual-expected"
+                            value={manualCaseExpected}
+                            onChange={(event) => setManualCaseExpected(event.target.value)}
+                            placeholder="Describe the visible outcome"
+                            className="min-h-20"
+                          />
+                        </div>
+                        <TestingCaseLocatorPicker
+                          library={locatorLibrary}
+                          selectedIds={manualCaseLocatorIds}
+                          onChange={setManualCaseLocatorIds}
+                          label="Locator context"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            onClick={() => void createManualCase()}
+                            disabled={busyAction !== null}
+                          >
+                            {busyAction === "review" ? (
+                              <LoaderIcon aria-hidden="true" className="animate-spin" />
+                            ) : null}
+                            Create test case
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {caseIntakeMode === "excel" ? (
+                      <div className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void chooseWorkbook()}
+                            disabled={busyAction !== null}
+                          >
+                            Choose .xlsx workbook
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            render={
+                              <a
+                                href="/testing/testing-cases-template.xlsx"
+                                download="Tabs-Testing-Test-Cases-Template.xlsx"
+                              />
+                            }
+                          >
+                            <ArrowDownIcon aria-hidden="true" />
+                            Download template
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => void importWorkbook()}
+                            disabled={!workbookPath || busyAction !== null}
+                          >
+                            {busyAction === "import" ? (
+                              <LoaderIcon aria-hidden="true" className="animate-spin" />
+                            ) : null}
+                            Import and verify
+                          </Button>
+                        </div>
+                        <p className="break-all text-xs text-muted-foreground">
+                          {workbookPath || "No workbook selected."}
                         </p>
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          The template documents supported columns. Imported IDs are preserved and
+                          every row remains reviewable before generation.
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {caseIntakeMode === "story" ? (
+                      <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/10 p-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+                        <div className="space-y-3">
+                          <label htmlFor="testing-story-text" className="text-sm font-medium">
+                            User story
+                          </label>
+                          <Textarea
+                            id="testing-story-text"
+                            rows={7}
+                            value={storyText}
+                            onChange={(event) => setStoryText(event.target.value)}
+                            placeholder="As a workspace owner, I want to update project settings..."
+                            disabled={Boolean(storyFilePath) || busyAction !== null}
+                          />
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => void chooseStoryFile()}
+                              disabled={busyAction !== null}
+                            >
+                              Choose story file
+                            </Button>
+                            {storyFilePath ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => setStoryFilePath("")}
+                              >
+                                Clear
+                              </Button>
+                            ) : null}
+                            <span className="break-all text-xs text-muted-foreground">
+                              {storyFilePath || "TXT, Markdown, DOCX, or text-based PDF"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <div className="text-sm font-medium">Fusion model</div>
+                            <p className="text-xs text-muted-foreground">
+                              Choose the provider, model, and reasoning level in one matrix.
+                            </p>
+                          </div>
+                          <FusedModelPicker
+                            provider={generationFusionProvider}
+                            model={generationModelSelection.model as ModelSlug}
+                            lockedProvider={null}
+                            providers={fusionProviders}
+                            prompt={storyText}
+                            onPromptChange={setStoryText}
+                            modelOptions={generationModelSelection.options}
+                            onProviderModelChange={updateTestingFusionModel}
+                            onModelOptionsChange={updateTestingFusionOptions}
+                            triggerClassName="w-full justify-between"
+                          />
+                          <Button
+                            type="button"
+                            className="w-full"
+                            onClick={() => void importUserStory()}
+                            disabled={(!storyText.trim() && !storyFilePath) || busyAction !== null}
+                          >
+                            {busyAction === "story-import" ? (
+                              <LoaderIcon className="animate-spin" aria-hidden="true" />
+                            ) : null}
+                            Generate reviewable cases
+                          </Button>
+                          <p className="text-xs leading-5 text-muted-foreground">
+                            Story and locator context are sanitized before provider dispatch.
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {caseIntakeMode === "graph" ? (
+                      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/10 p-4">
+                        <div className="max-w-2xl">
+                          <div className="text-sm font-medium">
+                            Create cases from captured paths
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Testing proposes cases only from reachable states and verified
+                            transitions. Review them before building any code.
+                          </p>
+                        </div>
+                        {(status?.nodeCount ?? 0) > 0 ? (
+                          <Button
+                            type="button"
+                            onClick={() => void generateScenarios()}
+                            disabled={busyAction !== null}
+                          >
+                            {busyAction === "generate" ? (
+                              <LoaderIcon aria-hidden="true" className="animate-spin" />
+                            ) : null}
+                            Generate from captured app
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setActiveTestingSection("discover")}
+                          >
+                            Configure app connection
+                            <ArrowRightIcon aria-hidden="true" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle>Implemented tests</CardTitle>
+                        <CardDescription>
+                          Managed cases and statically discovered Playwright tests, grouped like a
+                          Test Explorer.
+                        </CardDescription>
+                      </div>
+                      <div className="flex gap-1" role="group" aria-label="Test inventory view">
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => setActiveTestingSection("discover")}
+                          aria-expanded={implementedInventoryOpen}
+                          onClick={() => setImplementedInventoryOpen((current) => !current)}
                         >
-                          Configure app connection
-                          <ArrowRightIcon aria-hidden="true" />
+                          {implementedInventoryOpen ? "Hide inventory" : "Show inventory"}
+                          <ChevronDownIcon
+                            aria-hidden="true"
+                            className={cn(
+                              "transition-transform",
+                              implementedInventoryOpen && "rotate-180",
+                            )}
+                          />
                         </Button>
+                        {implementedInventoryOpen ? (
+                          <>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={testInventoryView === "tree" ? "secondary" : "ghost"}
+                              aria-pressed={testInventoryView === "tree"}
+                              onClick={() => setTestInventoryView("tree")}
+                            >
+                              Tree
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={testInventoryView === "table" ? "secondary" : "ghost"}
+                              aria-pressed={testInventoryView === "table"}
+                              onClick={() => setTestInventoryView("table")}
+                            >
+                              Table
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void refreshTestingWorkspace()}
+                            >
+                              <RefreshCwIcon aria-hidden="true" />
+                              Refresh
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
-                    ) : null}
+                    </div>
+                  </CardHeader>
+                  <CardContent className={cn(!implementedInventoryOpen && "hidden")}>
+                    {testInventoryView === "tree" ? (
+                      <div
+                        role="tree"
+                        aria-label="Implemented test inventory"
+                        className="max-h-80 overflow-auto rounded-xl border border-border/60 p-2"
+                      >
+                        {flattenedTestInventory.map(({ node, depth }, index) => {
+                          const expandable = node.children.length > 0;
+                          const expanded = expandedTestNodes.has(node.id);
+                          return (
+                            <button
+                              key={node.id}
+                              type="button"
+                              role="treeitem"
+                              aria-level={depth + 1}
+                              aria-expanded={expandable ? expanded : undefined}
+                              aria-selected={selectedTestNodeId === node.id}
+                              tabIndex={
+                                selectedTestNodeId === node.id ||
+                                (!selectedTestNodeId && index === 0)
+                                  ? 0
+                                  : -1
+                              }
+                              data-testing-tree-index={index}
+                              onClick={() => {
+                                setSelectedTestNodeId(node.id);
+                                if (!expandable) return;
+                                setExpandedTestNodes((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(node.id)) next.delete(node.id);
+                                  else next.add(node.id);
+                                  return next;
+                                });
+                              }}
+                              onDoubleClick={() => {
+                                if (node.filePath)
+                                  void openInPreferredEditor(ensureNativeApi(), node.filePath);
+                              }}
+                              onKeyDown={(event) => {
+                                const items = Array.from(
+                                  event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                                    "[data-testing-tree-index]",
+                                  ) ?? [],
+                                );
+                                const focusAt = (target: number) =>
+                                  items[Math.max(0, Math.min(items.length - 1, target))]?.focus();
+                                if (event.key === "ArrowDown") {
+                                  event.preventDefault();
+                                  focusAt(index + 1);
+                                } else if (event.key === "ArrowUp") {
+                                  event.preventDefault();
+                                  focusAt(index - 1);
+                                } else if (event.key === "Home") {
+                                  event.preventDefault();
+                                  focusAt(0);
+                                } else if (event.key === "End") {
+                                  event.preventDefault();
+                                  focusAt(items.length - 1);
+                                } else if (event.key === "ArrowRight" && expandable && !expanded) {
+                                  event.preventDefault();
+                                  setExpandedTestNodes((current) => new Set([...current, node.id]));
+                                } else if (event.key === "ArrowLeft" && expandable && expanded) {
+                                  event.preventDefault();
+                                  setExpandedTestNodes((current) => {
+                                    const next = new Set(current);
+                                    next.delete(node.id);
+                                    return next;
+                                  });
+                                } else if (event.key === "ArrowLeft" && node.parentId) {
+                                  event.preventDefault();
+                                  const parentIndex = flattenedTestInventory.findIndex(
+                                    ({ node: candidate }) => candidate.id === node.parentId,
+                                  );
+                                  if (parentIndex >= 0) focusAt(parentIndex);
+                                } else if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  setSelectedTestNodeId(node.id);
+                                  if (node.filePath) {
+                                    void openInPreferredEditor(ensureNativeApi(), node.filePath);
+                                  }
+                                } else if (
+                                  event.key.length === 1 &&
+                                  !event.ctrlKey &&
+                                  !event.metaKey &&
+                                  !event.altKey
+                                ) {
+                                  const query = event.key.toLocaleLowerCase();
+                                  const matchOffset = flattenedTestInventory
+                                    .slice(index + 1)
+                                    .findIndex(({ node: candidate }) =>
+                                      candidate.label.toLocaleLowerCase().startsWith(query),
+                                    );
+                                  if (matchOffset >= 0) {
+                                    event.preventDefault();
+                                    focusAt(index + 1 + matchOffset);
+                                  }
+                                }
+                              }}
+                              className={cn(
+                                "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                selectedTestNodeId === node.id && "bg-primary/10 text-foreground",
+                              )}
+                              style={{ paddingLeft: `${8 + depth * 18}px` }}
+                            >
+                              {expandable ? (
+                                expanded ? (
+                                  <ChevronDownIcon aria-hidden="true" className="size-4" />
+                                ) : (
+                                  <ChevronRightIcon aria-hidden="true" className="size-4" />
+                                )
+                              ) : (
+                                <span className="size-4" aria-hidden="true" />
+                              )}
+                              <span className="min-w-0 flex-1 truncate">{node.label}</span>
+                              <Badge variant="outline">{node.source}</Badge>
+                              {node.status !== "unknown" ? (
+                                <Badge variant={node.status === "passed" ? "success" : "secondary"}>
+                                  {node.status}
+                                </Badge>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="max-h-80 overflow-auto rounded-xl border border-border/60">
+                        <table className="w-full text-left text-sm">
+                          <thead className="sticky top-0 bg-card text-xs text-muted-foreground">
+                            <tr>
+                              <th className="px-3 py-2">Test</th>
+                              <th className="px-3 py-2">Source</th>
+                              <th className="px-3 py-2">Location</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/60">
+                            {flattenedTestInventory
+                              .filter(({ node }) => node.kind === "test" || node.kind === "case")
+                              .map(({ node }) => (
+                                <tr key={node.id}>
+                                  <td className="px-3 py-2">{node.label}</td>
+                                  <td className="px-3 py-2">{node.source}</td>
+                                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                                    {node.filePath
+                                      ? `${node.filePath}:${node.line ?? 1}`
+                                      : node.externalCaseId}
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {testInventory?.repositoryFilesScanned ?? 0} repository test files scanned. VS
+                      Code provider:{" "}
+                      {testInventory?.editorProviderConnected
+                        ? "connected"
+                        : "unavailable; repository scan is active"}
+                      .
+                    </p>
                   </CardContent>
                 </Card>
 
@@ -2392,6 +5980,44 @@ function TestingTool(props: {
                           </SelectPopup>
                         </Select>
                       </div>
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
+                        <div className="text-sm text-foreground">
+                          <span className="font-medium">{selectedGenerationCaseIds.size}</span>{" "}
+                          ready case{selectedGenerationCaseIds.size === 1 ? "" : "s"} selected for
+                          Build tests
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setSelectedGenerationCaseIds(
+                                new Set(readyCases.map((testCase) => testCase.id)),
+                              )
+                            }
+                          >
+                            Select all ready
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedGenerationCaseIds(new Set())}
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={selectedGenerationCaseIds.size === 0}
+                            onClick={() => setActiveTestingSection("automate")}
+                          >
+                            Continue to Build tests
+                            <ArrowRightIcon aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
                       <div className="grid min-h-[30rem] overflow-hidden rounded-xl border border-border/70 bg-card lg:grid-cols-[19rem_minmax(0,1fr)]">
                         <div className="max-h-[40rem] overflow-auto border-b border-border/70 lg:border-b-0 lg:border-r">
                           <div
@@ -2401,52 +6027,76 @@ function TestingTool(props: {
                             {filteredCases.length} of {cases.length} cases
                           </div>
                           <ul aria-label="Test case IDs">
-                            {filteredCases.map((testCase) => (
-                              <li
-                                key={testCase.id}
-                                className="border-b border-border/60 last:border-b-0"
-                              >
-                                <button
-                                  type="button"
-                                  aria-current={
-                                    selectedCase?.id === testCase.id ? "true" : undefined
-                                  }
-                                  onClick={() => {
-                                    setSelectedCaseId(testCase.id);
-                                    setEditingCaseId(null);
-                                  }}
-                                  className={cn(
-                                    "w-full px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                                    selectedCase?.id === testCase.id
-                                      ? "bg-primary/10"
-                                      : "hover:bg-muted/50",
-                                  )}
+                            {filteredCases.map((testCase) => {
+                              const ready =
+                                testCase.reviewDecision === "accepted" ||
+                                testCase.reviewDecision === "edited";
+                              return (
+                                <li
+                                  key={testCase.id}
+                                  className="flex items-start gap-2 border-b border-border/60 px-3 py-3 last:border-b-0"
                                 >
-                                  <span className="flex items-center justify-between gap-2">
-                                    <span className="truncate text-sm font-medium text-foreground">
-                                      {testCase.externalId}
+                                  <Checkbox
+                                    checked={selectedGenerationCaseIds.has(testCase.id)}
+                                    disabled={!ready}
+                                    onCheckedChange={(checked) => {
+                                      setSelectedGenerationCaseIds((current) => {
+                                        const next = new Set(current);
+                                        if (checked) next.add(testCase.id);
+                                        else next.delete(testCase.id);
+                                        return next;
+                                      });
+                                    }}
+                                    aria-label={
+                                      ready
+                                        ? `Select ${testCase.externalId} for test generation`
+                                        : `${testCase.externalId} must be reviewed before generation`
+                                    }
+                                    className="mt-1"
+                                  />
+                                  <button
+                                    type="button"
+                                    aria-current={
+                                      selectedCase?.id === testCase.id ? "true" : undefined
+                                    }
+                                    onClick={() => {
+                                      setSelectedCaseId(testCase.id);
+                                      setEditingCaseId(null);
+                                    }}
+                                    className={cn(
+                                      "min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                      selectedCase?.id === testCase.id
+                                        ? "bg-foreground/[0.06]"
+                                        : "hover:bg-muted/50",
+                                    )}
+                                  >
+                                    <span className="flex items-center justify-between gap-2">
+                                      <span className="truncate text-sm font-medium text-foreground">
+                                        {testCase.externalId}
+                                      </span>
+                                      <span
+                                        className={cn(
+                                          "size-2 shrink-0 rounded-full",
+                                          testCase.status === "matches"
+                                            ? "bg-emerald-500"
+                                            : testCase.status === "blocked"
+                                              ? "bg-destructive"
+                                              : "bg-amber-500",
+                                        )}
+                                        aria-hidden="true"
+                                      />
                                     </span>
-                                    <span
-                                      className={cn(
-                                        "size-2 shrink-0 rounded-full",
-                                        testCase.status === "matches"
-                                          ? "bg-emerald-500"
-                                          : testCase.status === "blocked"
-                                            ? "bg-destructive"
-                                            : "bg-amber-500",
-                                      )}
-                                      aria-hidden="true"
-                                    />
-                                  </span>
-                                  <span className="mt-1 block truncate text-xs text-muted-foreground">
-                                    {testCase.description}
-                                  </span>
-                                  <span className="mt-2 block text-[11px] capitalize text-muted-foreground">
-                                    {testCase.status.replace("-", " ")} · {testCase.reviewDecision}
-                                  </span>
-                                </button>
-                              </li>
-                            ))}
+                                    <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                      {testCase.description}
+                                    </span>
+                                    <span className="mt-2 block text-[11px] capitalize text-muted-foreground">
+                                      {testCase.status.replace("-", " ")} ·{" "}
+                                      {testCase.reviewDecision}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                         <div className="min-w-0 p-4 sm:p-5">
@@ -2459,13 +6109,17 @@ function TestingTool(props: {
                                       {selectedCase.externalId}: {selectedCase.description}
                                     </CardTitle>
                                     <CardDescription>
-                                      {selectedCase.source === "excel"
-                                        ? `${selectedCase.sourceSheet ?? "Workbook"}, row ${selectedCase.sourceRow ?? "unknown"}`
-                                        : "Generated from a verified graph transition"}
+                                      {selectedCase.creationMethod === "manual"
+                                        ? "Created manually in this Testing project"
+                                        : selectedCase.source === "excel"
+                                          ? `${selectedCase.sourceSheet ?? "Workbook"}, row ${selectedCase.sourceRow ?? "unknown"}`
+                                          : "Generated from a verified graph transition"}
                                     </CardDescription>
                                   </div>
                                   <div className="flex flex-wrap gap-2">
-                                    <Badge variant="outline">{selectedCase.source}</Badge>
+                                    <Badge variant="outline">
+                                      {selectedCase.creationMethod ?? selectedCase.source}
+                                    </Badge>
                                     <Badge
                                       variant={
                                         selectedCase.status === "matches" ? "success" : "secondary"
@@ -2518,16 +6172,117 @@ function TestingTool(props: {
                                       />
                                     </div>
                                     <div className="space-y-2">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="text-sm font-medium text-foreground">
+                                          Test steps
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            setEditedSteps((current) => [...current, ""])
+                                          }
+                                        >
+                                          <PlusIcon aria-hidden="true" />
+                                          Add step
+                                        </Button>
+                                      </div>
+                                      <ol className="space-y-2" aria-label="Editable test steps">
+                                        {editedSteps.map((step, index) => (
+                                          <li
+                                            key={`${selectedCase.id}-edited-step-${index}`}
+                                            className="grid gap-2 rounded-xl border border-border/60 bg-muted/15 p-3 sm:grid-cols-[2rem_minmax(0,1fr)_auto]"
+                                          >
+                                            <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                                              {index + 1}
+                                            </div>
+                                            <Textarea
+                                              id={`testing-case-step-${selectedCase.id}-${index}`}
+                                              value={step}
+                                              onChange={(event) =>
+                                                updateEditedStep(index, event.target.value)
+                                              }
+                                              aria-label={`Step ${index + 1}`}
+                                              className="min-h-16 resize-y"
+                                            />
+                                            <div className="flex items-start gap-1">
+                                              <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="ghost"
+                                                aria-label={`Move step ${index + 1} up`}
+                                                disabled={index === 0}
+                                                onClick={() => moveEditedStep(index, -1)}
+                                              >
+                                                <ArrowUpIcon aria-hidden="true" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="ghost"
+                                                aria-label={`Move step ${index + 1} down`}
+                                                disabled={index === editedSteps.length - 1}
+                                                onClick={() => moveEditedStep(index, 1)}
+                                              >
+                                                <ArrowDownIcon aria-hidden="true" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="ghost"
+                                                aria-label={`Duplicate step ${index + 1}`}
+                                                onClick={() =>
+                                                  setEditedSteps((current) => [
+                                                    ...current.slice(0, index + 1),
+                                                    current[index] ?? "",
+                                                    ...current.slice(index + 1),
+                                                  ])
+                                                }
+                                              >
+                                                <PlusIcon aria-hidden="true" />
+                                              </Button>
+                                              <Button
+                                                type="button"
+                                                size="icon-sm"
+                                                variant="ghost"
+                                                aria-label={`Delete step ${index + 1}`}
+                                                disabled={editedSteps.length === 1}
+                                                onClick={() =>
+                                                  setEditedSteps((current) =>
+                                                    current.filter(
+                                                      (_, stepIndex) => stepIndex !== index,
+                                                    ),
+                                                  )
+                                                }
+                                              >
+                                                <Trash2Icon aria-hidden="true" />
+                                              </Button>
+                                            </div>
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    </div>
+                                    <TestingCaseLocatorPicker
+                                      library={locatorLibrary}
+                                      selectedIds={editedCaseLocatorIds}
+                                      onChange={setEditedCaseLocatorIds}
+                                      label="Locator context for this case"
+                                    />
+                                    <div className="space-y-2">
                                       <label
-                                        htmlFor={`testing-case-steps-${selectedCase.id}`}
+                                        htmlFor={`testing-case-expected-${selectedCase.id}`}
                                         className="text-sm font-medium text-foreground"
                                       >
-                                        Reviewed steps, one per line
+                                        Expected result
                                       </label>
                                       <Textarea
-                                        id={`testing-case-steps-${selectedCase.id}`}
-                                        value={editedSteps}
-                                        onChange={(event) => setEditedSteps(event.target.value)}
+                                        id={`testing-case-expected-${selectedCase.id}`}
+                                        value={editedExpectedResult}
+                                        onChange={(event) =>
+                                          setEditedExpectedResult(event.target.value)
+                                        }
+                                        className="min-h-20"
                                       />
                                     </div>
                                     <div className="flex flex-wrap gap-2">
@@ -2556,6 +6311,26 @@ function TestingTool(props: {
                                         <li key={`${selectedCase.id}-${step}`}>{step}</li>
                                       ))}
                                     </ol>
+                                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/10 p-3">
+                                      <div>
+                                        <div className="text-sm font-medium text-foreground">
+                                          Locator context
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                          {(selectedCase.locatorEntryIds ?? []).length === 0
+                                            ? "No explicit locators mapped; generation will use verified path context."
+                                            : `${(selectedCase.locatorEntryIds ?? []).length} locator${(selectedCase.locatorEntryIds ?? []).length === 1 ? "" : "s"} mapped to this case.`}
+                                        </p>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => beginEditCase(selectedCase)}
+                                      >
+                                        Choose locators
+                                      </Button>
+                                    </div>
                                     {selectedCase.mismatches.length > 0 ? (
                                       <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
                                         <div className="text-sm font-medium text-foreground">
@@ -2636,7 +6411,94 @@ function TestingTool(props: {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Generation template and destination</CardTitle>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle>1. Choose reviewed cases</CardTitle>
+                        <CardDescription>
+                          Build only what you need now. Locator context mapped in Cases travels with
+                          each selected test.
+                        </CardDescription>
+                      </div>
+                      <Badge variant="secondary">
+                        {selectedGenerationCaseIds.size} of {readyCases.length} selected
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setSelectedGenerationCaseIds(
+                            new Set(readyCases.map((testCase) => testCase.id)),
+                          )
+                        }
+                      >
+                        Select all ready
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedGenerationCaseIds(new Set())}
+                      >
+                        Clear selection
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setActiveTestingSection("cases")}
+                      >
+                        Review or add cases
+                      </Button>
+                    </div>
+                    <div className="max-h-64 overflow-auto rounded-xl border border-border/60">
+                      {readyCases.map((testCase) => (
+                        <label
+                          key={testCase.id}
+                          className="flex cursor-pointer items-start gap-3 border-b border-border/60 px-3 py-2.5 last:border-b-0 hover:bg-muted/40"
+                        >
+                          <Checkbox
+                            checked={selectedGenerationCaseIds.has(testCase.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedGenerationCaseIds((current) => {
+                                const next = new Set(current);
+                                if (checked) next.add(testCase.id);
+                                else next.delete(testCase.id);
+                                return next;
+                              });
+                            }}
+                            aria-label={`Build ${testCase.externalId}`}
+                            className="mt-0.5"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-foreground">
+                              {testCase.externalId}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {testCase.description}
+                            </span>
+                          </span>
+                          <Badge variant="outline">
+                            {(testCase.locatorEntryIds ?? []).length} locators
+                          </Badge>
+                        </label>
+                      ))}
+                      {readyCases.length === 0 ? (
+                        <div className="p-6 text-center text-sm text-muted-foreground">
+                          No reviewed cases are ready. Accept or edit a case before building tests.
+                        </div>
+                      ) : null}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>2. Choose the output</CardTitle>
                     <CardDescription>
                       Start safely with Tabs-managed output, or fit generated tests into an existing
                       repository by choosing its folder and company template manifest.
@@ -2733,54 +6595,35 @@ function TestingTool(props: {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Provider and batch guardrails</CardTitle>
+                    <CardTitle>3. Choose the Fusion model and guardrails</CardTitle>
                     <CardDescription>
                       Generation uses an existing local coding-agent provider. Dispatch stops before
                       the next case would exceed a configured cap; reported cost is an estimate.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-5">
-                    <div className="grid gap-5 sm:grid-cols-2">
-                      <div className="space-y-2">
+                    <div className="rounded-xl border border-border/60 bg-muted/10 p-4">
+                      <div className="space-y-3">
                         <div className="text-sm font-medium text-foreground">Fusion model</div>
-                        <GitModelPicker
-                          selection={generationModelSelection}
-                          onSelect={setGenerationModelSelection}
-                          filterSourceMode="connected"
-                          persistSelection={false}
-                          ariaLabel="Select the coding-agent model for test generation"
-                          className="w-full"
-                          disabled={busyAction !== null}
+                        <FusedModelPicker
+                          provider={generationFusionProvider}
+                          model={generationModelSelection.model as ModelSlug}
+                          lockedProvider={null}
+                          providers={fusionProviders}
+                          prompt=""
+                          onPromptChange={() => undefined}
+                          modelOptions={generationModelSelection.options}
+                          onProviderModelChange={updateTestingFusionModel}
+                          onModelOptionsChange={updateTestingFusionOptions}
+                          triggerClassName="w-full justify-between"
                         />
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Uses the same configured subscription providers and discovered models as
-                          the rest of Tabs. Direct API-key models are excluded from Testing
-                          generation.
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <label
-                          htmlFor="testing-generation-reasoning"
-                          className="text-sm font-medium text-foreground"
-                        >
-                          Reasoning
-                        </label>
-                        <Select
-                          value={generationReasoning}
-                          onValueChange={(value) =>
-                            setGenerationReasoning(value as "low" | "medium" | "high")
-                          }
-                          disabled={busyAction !== null}
-                        >
-                          <SelectTrigger id="testing-generation-reasoning" className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectItem value="low">Low — deterministic formatting</SelectItem>
-                            <SelectItem value="medium">Medium — semantic mapping</SelectItem>
-                            <SelectItem value="high">High — unresolved ambiguity</SelectItem>
-                          </SelectPopup>
-                        </Select>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline">{generationReasoning} reasoning</Badge>
+                          <span>
+                            Uses the same configured subscription providers, pinned models, and
+                            reasoning controls as Agents.
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -2857,21 +6700,15 @@ function TestingTool(props: {
                     <Button
                       type="button"
                       onClick={() => void generateTests()}
-                      disabled={
-                        busyAction !== null ||
-                        !cases.some(
-                          (testCase) =>
-                            testCase.reviewDecision === "accepted" ||
-                            testCase.reviewDecision === "edited",
-                        )
-                      }
+                      disabled={busyAction !== null || selectedGenerationCaseIds.size === 0}
                     >
                       {busyAction === "generate-tests" ? (
                         <LoaderIcon aria-hidden="true" className="animate-spin" />
                       ) : (
                         <WorkflowIcon aria-hidden="true" />
                       )}
-                      Generate accepted cases
+                      Generate {selectedGenerationCaseIds.size || "selected"} case
+                      {selectedGenerationCaseIds.size === 1 ? "" : "s"}
                     </Button>
                   </CardContent>
                 </Card>
@@ -3384,6 +7221,197 @@ function TestingTool(props: {
           </div>
         </div>
       </div>
+      <Dialog
+        open={editingLocatorEntry !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingLocatorId(null);
+        }}
+      >
+        <DialogPopup>
+          <DialogPanel className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit locator</DialogTitle>
+              <DialogDescription>
+                Update the stable key or Playwright locator. Saving creates a new immutable locator
+                version and refreshes the managed page-object draft.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-1 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <label htmlFor="locator-edit-key" className="text-sm font-medium">
+                  Locator key
+                </label>
+                <Input
+                  id="locator-edit-key"
+                  value={editingLocatorKey}
+                  onChange={(event) => setEditingLocatorKey(event.target.value)}
+                  placeholder="submit-account"
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Start with a letter; use letters, numbers, underscores, or hyphens.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="locator-edit-classification" className="text-sm font-medium">
+                  Purpose
+                </label>
+                <Select
+                  value={editingLocatorClassification}
+                  onValueChange={(value) =>
+                    setEditingLocatorClassification(value as TestingLocatorEntry["classification"])
+                  }
+                >
+                  <SelectTrigger id="locator-edit-classification">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="action">Action</SelectItem>
+                    <SelectItem value="assertion">Assertion</SelectItem>
+                    <SelectItem value="content">Content</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="locator-edit-strategy" className="text-sm font-medium">
+                  Playwright strategy
+                </label>
+                <Select
+                  value={editingLocatorStrategy}
+                  onValueChange={(value) =>
+                    setEditingLocatorStrategy(value as TestingLocatorEntry["strategy"])
+                  }
+                >
+                  <SelectTrigger id="locator-edit-strategy">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="role">Role and accessible name</SelectItem>
+                    <SelectItem value="label">Label</SelectItem>
+                    <SelectItem value="test-id">Test ID</SelectItem>
+                    <SelectItem value="placeholder">Placeholder</SelectItem>
+                    <SelectItem value="alt-text">Alternative text</SelectItem>
+                    <SelectItem value="title">Title</SelectItem>
+                    <SelectItem value="text">Visible text</SelectItem>
+                    <SelectItem value="css">Scoped CSS (fragile)</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <label htmlFor="locator-edit-arguments" className="text-sm font-medium">
+                  Strategy arguments
+                </label>
+                <Textarea
+                  id="locator-edit-arguments"
+                  value={editingLocatorArguments}
+                  onChange={(event) => setEditingLocatorArguments(event.target.value)}
+                  spellCheck={false}
+                  className="min-h-32 font-mono text-xs"
+                  aria-describedby="locator-edit-arguments-help"
+                />
+                <p id="locator-edit-arguments-help" className="text-xs text-muted-foreground">
+                  JSON object, for example {`{ "role": "button", "name": "Save" }`}.
+                </p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <label htmlFor="locator-edit-context" className="text-sm font-medium">
+                  Semantic context
+                </label>
+                <Textarea
+                  id="locator-edit-context"
+                  value={editingLocatorContext}
+                  onChange={(event) => setEditingLocatorContext(event.target.value)}
+                  placeholder="Where and why this element is used"
+                  className="min-h-20"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+              <Button
+                type="button"
+                disabled={!editingLocatorKey.trim() || busyAction !== null}
+                onClick={() => void saveLocatorChanges()}
+              >
+                {busyAction === "locator-review" ? (
+                  <LoaderIcon aria-hidden="true" className="animate-spin" />
+                ) : null}
+                Save new version
+              </Button>
+            </DialogFooter>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
+      <AlertDialog
+        open={pendingRemoveLocator !== null}
+        onOpenChange={(open) => {
+          if (!open) setLocatorPendingRemoveId(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this locator?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingRemoveLocator
+                ? `${pendingRemoveLocator.locatorKey} will be removed from active selection and generated page objects. Its version and verification history are preserved, and you can restore it later.`
+                : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button type="button" variant="outline" />}>
+              Cancel
+            </AlertDialogClose>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (pendingRemoveLocator) {
+                  void reviewLocator(pendingRemoveLocator.id, "archive");
+                }
+              }}
+            >
+              Remove locator
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+      <Dialog open={locatorRepositoryConfirmOpen} onOpenChange={setLocatorRepositoryConfirmOpen}>
+        <DialogPopup>
+          <DialogPanel>
+            <DialogHeader>
+              <DialogTitle>Apply this page object?</DialogTitle>
+              <DialogDescription>
+                Testing will {locatorRepositoryProposal?.changeKind ?? "update"} only the reviewed
+                file below. If the generated code or repository file changed since preview, the
+                operation will stop and ask you to review again.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 rounded-xl border border-border/70 bg-muted/25 p-4">
+              <div className="break-all font-mono text-sm">
+                {locatorRepositoryProposal?.relativePath}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {locatorRepositoryProposal?.selectedLocatorCount ?? 0} selected locator
+                {(locatorRepositoryProposal?.selectedLocatorCount ?? 0) === 1 ? "" : "s"} · no other
+                repository file will be changed
+              </div>
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button type="button" variant="outline" />}>Cancel</DialogClose>
+              <Button
+                type="button"
+                disabled={busyAction !== null || !locatorRepositoryProposal}
+                onClick={() => void applyLocatorRepositoryChange()}
+              >
+                {busyAction === "locator-repository" ? (
+                  <LoaderIcon aria-hidden="true" className="animate-spin" />
+                ) : null}
+                Apply reviewed file
+              </Button>
+            </DialogFooter>
+          </DialogPanel>
+        </DialogPopup>
+      </Dialog>
     </main>
   );
 }

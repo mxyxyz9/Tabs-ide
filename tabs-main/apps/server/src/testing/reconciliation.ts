@@ -85,6 +85,7 @@ export interface ReconciledWorkbookCase {
   readonly externalId: string;
   readonly description: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResult: string;
   readonly sourceSheet: string;
   readonly sourceRow: number;
   readonly status: TestingCaseSummary["status"];
@@ -156,6 +157,28 @@ export function reconcileWorkbookCase(
     }
     currentStateId = selected.edge.toStateId;
   });
+
+  // Check whether the expected result is grounded in a reachable graph state.
+  if (parsedCase.expectedResult && start) {
+    const maxScore = Math.max(
+      0,
+      ...graph.nodes.map((node) =>
+        Math.max(
+          semanticScore(parsedCase.expectedResult, node.pageTitle),
+          semanticScore(parsedCase.expectedResult, node.pageUrl),
+          semanticScore(parsedCase.expectedResult, node.snapshot),
+        ),
+      ),
+    );
+    if (maxScore < 0.2) {
+      mismatches.push({
+        stepIndex: null,
+        expected: parsedCase.expectedResult,
+        actual: "No state in the discovered graph matches the described expected result",
+        kind: "expected-result",
+      });
+    }
+  }
 
   const status =
     parsedCase.errors.length > 0 || !start
@@ -236,6 +259,7 @@ export function scenariosFromGraph(graph: {
   readonly externalId: string;
   readonly description: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResult: string;
   readonly matchedStateIds: ReadonlyArray<string>;
 }> {
   const start = entryNode(graph.nodes, graph.edges);
@@ -243,10 +267,12 @@ export function scenariosFromGraph(graph: {
   return graph.edges.slice(0, 25).map((edge, index) => {
     const target = graph.nodes.find((node) => node.stateId === edge.toStateId);
     const path = shortestPath(start.stateId, edge.toStateId, graph.edges) ?? [edge];
+    const targetLabel = target?.pageTitle || target?.pageUrl || edge.toStateId;
     return {
       externalId: `DISCOVERED-${String(index + 1).padStart(3, "0")}`,
-      description: `Reach ${target?.pageTitle || target?.pageUrl || edge.toStateId}`,
+      description: `Reach ${targetLabel}`,
       steps: path.map((item) => `Activate ${item.role} "${item.name}"`),
+      expectedResult: target?.pageTitle ? `${target.pageTitle} page is displayed` : "",
       matchedStateIds: [start.stateId, ...path.map((item) => item.toStateId)],
     };
   });

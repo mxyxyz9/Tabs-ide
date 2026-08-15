@@ -6,6 +6,7 @@ export interface ParsedWorkbookCase {
   readonly externalId: string;
   readonly description: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResult: string;
   readonly sourceSheet: string;
   readonly sourceRow: number;
   readonly errors: ReadonlyArray<string>;
@@ -21,6 +22,14 @@ const HEADER_ALIASES = {
   description: new Set(["description", "testdescription", "scenario", "title", "testcase"]),
   steps: new Set(["steps", "teststeps", "procedure", "actions", "testprocedure"]),
 } as const;
+
+const EXPECTED_RESULT_ALIASES = new Set([
+  "expectedresult",
+  "expectedresults",
+  "expectedoutcome",
+  "outcome",
+  "expected",
+]);
 
 function normalizedHeader(value: unknown): string {
   return String(value ?? "")
@@ -55,11 +64,16 @@ export function parseSteps(value: string): ReadonlyArray<string> {
 
 function findHeaderRow(
   worksheet: ExcelJS.Worksheet,
-): { rowNumber: number; columns: Record<keyof typeof HEADER_ALIASES, number> } | null {
+): {
+  rowNumber: number;
+  columns: Record<keyof typeof HEADER_ALIASES, number> & { readonly expectedResult?: number };
+} | null {
   const lastCandidate = Math.min(worksheet.rowCount, 20);
   for (let rowNumber = 1; rowNumber <= lastCandidate; rowNumber += 1) {
     const row = worksheet.getRow(rowNumber);
-    const columns: Partial<Record<keyof typeof HEADER_ALIASES, number>> = {};
+    const columns: Partial<Record<keyof typeof HEADER_ALIASES, number>> & {
+      expectedResult?: number;
+    } = {};
     row.eachCell((cell, columnNumber) => {
       const header = normalizedHeader(cell.value);
       for (const [field, aliases] of Object.entries(HEADER_ALIASES) as Array<
@@ -67,9 +81,20 @@ function findHeaderRow(
       >) {
         if (!columns[field] && aliases.has(header)) columns[field] = columnNumber;
       }
+      if (!columns.expectedResult && EXPECTED_RESULT_ALIASES.has(header)) {
+        columns.expectedResult = columnNumber;
+      }
     });
     if (columns.caseId && columns.description && columns.steps) {
-      return { rowNumber, columns: columns as Record<keyof typeof HEADER_ALIASES, number> };
+      return {
+        rowNumber,
+        columns: {
+          caseId: columns.caseId,
+          description: columns.description,
+          steps: columns.steps,
+          ...(columns.expectedResult !== undefined ? { expectedResult: columns.expectedResult } : {}),
+        },
+      };
     }
   }
   return null;
@@ -93,6 +118,9 @@ export async function parseTestingWorkbook(workbookPath: string): Promise<Parsed
       const externalId = cellText(row.getCell(header.columns.caseId).value);
       const description = cellText(row.getCell(header.columns.description).value);
       const rawSteps = cellText(row.getCell(header.columns.steps).value);
+      const expectedResult = header.columns.expectedResult
+        ? cellText(row.getCell(header.columns.expectedResult).value)
+        : "";
       if (!externalId && !description && !rawSteps) continue;
       const errors: string[] = [];
       if (!externalId) errors.push("Case ID is blank");
@@ -103,6 +131,7 @@ export async function parseTestingWorkbook(workbookPath: string): Promise<Parsed
         externalId: externalId || `ROW-${rowNumber}`,
         description,
         steps,
+        expectedResult,
         sourceSheet: worksheet.name,
         sourceRow: rowNumber,
         errors,

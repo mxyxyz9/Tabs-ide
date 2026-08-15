@@ -33,6 +33,7 @@ async function seedRun(root: string) {
         externalId: "QA-0042",
         description: "Open workspace settings",
         steps: ["Open Settings", "Choose Workspace"],
+        expectedResult: "",
         sourceSheet: "Cases",
         sourceRow: 42,
         status: "matches",

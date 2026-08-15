@@ -53,6 +53,7 @@ async function seedExecutableArtifact(root: string, targetUrl: string) {
         steps: ["Open the application"],
         sourceSheet: "Cases",
         sourceRow: 2,
+        expectedResult: "",
         status: "matches",
         mismatches: [],
         matchedStateIds: ["home"],

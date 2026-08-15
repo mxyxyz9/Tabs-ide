@@ -180,6 +180,7 @@ describe.runIf(runIntegration)("Testing crawler Playwright MCP integration", () 
       externalId: "QA-001",
       description: "Update profile",
       steps: ["Open profile", "Save changes"],
+      expectedResult: "",
       sourceSheet: "Cases",
       sourceRow: 2,
       status: "matches" as const,
