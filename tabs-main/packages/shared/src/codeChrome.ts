@@ -66,8 +66,12 @@ export const CODE_CHROME_COMMANDS = {
   toggleTerminal: "workbench.action.terminal.toggleTerminal",
   /** Toggle the secondary (right) side bar — the third layout-control icon. */
   toggleAuxiliaryBar: "workbench.action.toggleAuxiliaryBar",
+  /** Close the secondary side bar. */
+  closeAuxiliaryBar: "workbench.action.closeAuxiliaryBar",
   /** Maximise the bottom panel to fill the editor area (and restore). */
   toggleMaximizedPanel: "workbench.action.toggleMaximizedPanel",
+  /** Customize layout menu / quick pick. */
+  customizeLayout: "workbench.action.customizeLayout",
   quickOpen: "workbench.action.quickOpen",
   settings: "workbench.action.openSettings",
   runTask: "workbench.action.tasks.runTask",

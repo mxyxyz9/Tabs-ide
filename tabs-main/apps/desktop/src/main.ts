@@ -86,6 +86,7 @@ const PICK_FILE_CHANNEL = "desktop:pick-file";
 const CONFIRM_CHANNEL = "desktop:confirm";
 const SET_THEME_CHANNEL = "desktop:set-theme";
 const SET_ICON_THEME_CHANNEL = "desktop:set-icon-theme";
+const SET_AI_PROVIDER_CHANNEL = "desktop:set-ai-provider";
 const SET_ZOOM_FACTOR_CHANNEL = "desktop:set-zoom-factor";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
@@ -2004,6 +2005,13 @@ function registerIpcHandlers(): void {
     }
 
     applyDesktopIconTheme(theme);
+  });
+
+  ipcMain.removeHandler(SET_AI_PROVIDER_CHANNEL);
+  ipcMain.handle(SET_AI_PROVIDER_CHANNEL, async (_event, rawProvider: unknown) => {
+    if (rawProvider === "tabs" || rawProvider === "copilot") {
+      codeHostManager.setAiProvider(rawProvider);
+    }
   });
 
   ipcMain.removeHandler(SET_ZOOM_FACTOR_CHANNEL);

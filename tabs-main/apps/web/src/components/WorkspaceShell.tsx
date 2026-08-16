@@ -248,7 +248,11 @@ import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { getCodeHostUnavailableMessage } from "./codeHost.logic";
 import { CodeActivityRail } from "./code/CodeActivityRail";
 import { CodeHeaderBar } from "./code/CodeHeaderBar";
-import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
+import {
+  CODE_CHROME_COMMANDS,
+  DEFAULT_CODE_CHROME_STATE,
+  type CodeChromeState,
+} from "@tabs/shared/codeChrome";
 import { resolveShortcutCommand } from "../keybindings";
 import { useKeybindings } from "../state/settings";
 import { projectsAtom, threadsAtom, threadsHydratedAtom } from "../state/threads";
@@ -8232,6 +8236,7 @@ function FallbackCodeTool(props: { project: Project }) {
 }
 
 function DesktopCodeTool(props: { project: Project }) {
+  const aiProvider = useSettings((s) => s.aiProvider ?? "tabs");
   const api = readNativeApi();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scheduleBoundsRef = useRef<(() => void) | null>(null);
@@ -8398,6 +8403,14 @@ function DesktopCodeTool(props: { project: Project }) {
     },
     [projectId],
   );
+
+  useEffect(() => {
+    if (aiProvider === "copilot") {
+      setSideChatOpen(false);
+    } else {
+      runCodeCommand(CODE_CHROME_COMMANDS.closeAuxiliaryBar);
+    }
+  }, [aiProvider, setSideChatOpen, runCodeCommand]);
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!bridge?.onCodeChromeState) {
@@ -8674,8 +8687,15 @@ function DesktopCodeTool(props: { project: Project }) {
         activeFilePath={headerActiveFilePath}
         branch={chromeState.branch}
         panelMaximized={chromeState.panelMaximized}
-        sideChatOpen={sideChatOpen}
-        onToggleSideChat={() => setSideChatOpen(!sideChatOpen)}
+        sideChatOpen={aiProvider === "copilot" ? false : sideChatOpen}
+        showSideChatToggle={aiProvider === "tabs"}
+        onToggleSideChat={() => {
+          if (aiProvider === "copilot") {
+            runCodeCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar);
+          } else {
+            setSideChatOpen(!sideChatOpen);
+          }
+        }}
         onRunCommand={runCodeCommand}
       />
       <div className="flex min-h-0 min-w-0 flex-1">
@@ -8696,7 +8716,7 @@ function DesktopCodeTool(props: { project: Project }) {
             </div>
           ) : null}
         </div>
-        {sideChatOpen ? (
+        {sideChatOpen && aiProvider === "tabs" ? (
           <aside
             style={{ width: sideChatWidth }}
             className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-border/70 bg-background text-foreground"

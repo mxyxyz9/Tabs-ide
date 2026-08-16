@@ -154,7 +154,7 @@ import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQue
 import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../timestampFormat";
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
-import { DEFAULT_DESKTOP_ICON_THEME, DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
+import { type AiProvider, DEFAULT_DESKTOP_ICON_THEME, DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
 import { SourceControlSettingsPanel } from "../components/settings/SourceControlSettings";
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
@@ -245,6 +245,11 @@ const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 
 type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode" | "kilo";
+
+const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
+  tabs: "Tabs Agent",
+  copilot: "GitHub Copilot",
+};
 
 type InstallProviderSettings = {
   provider: ProviderSettingsKey;
@@ -2290,6 +2295,9 @@ function SettingsRouteView() {
   );
   const changedSettingLabels = [
     ...(theme !== "system" ? ["Theme"] : []),
+    ...(settings.aiProvider !== DEFAULT_UNIFIED_SETTINGS.aiProvider
+      ? ["AI Provider"]
+      : []),
     ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
       ? ["Time format"]
       : []),
@@ -2671,6 +2679,7 @@ function SettingsRouteView() {
                               if (confirmed) {
                                 setTheme("system");
                                 updateSettings({
+                                  aiProvider: DEFAULT_UNIFIED_SETTINGS.aiProvider,
                                   timestampFormat: DEFAULT_UNIFIED_SETTINGS.timestampFormat,
                                   diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
                                   enableAssistantStreaming:
@@ -2865,6 +2874,43 @@ function SettingsRouteView() {
 
                     {/* Group 2: Assistant & Code Generation */}
                     <SettingsSection title="Assistant & Code Generation">
+                      <SettingsRow
+                        title="Code tool AI provider"
+                        description="Choose the AI assistant used within the embedded Code editor (Tabs Agent built-in side chat vs GitHub Copilot native chat). The standalone Agents tab always runs the Tabs agent."
+                        resetAction={
+                          settings.aiProvider !== DEFAULT_UNIFIED_SETTINGS.aiProvider ? (
+                            <SettingResetButton
+                              label="code tool AI provider"
+                              onClick={() =>
+                                updateSettings({
+                                  aiProvider: DEFAULT_UNIFIED_SETTINGS.aiProvider,
+                                })
+                              }
+                            />
+                          ) : null
+                        }
+                        control={
+                          <div className="flex gap-0.5 rounded-lg bg-muted p-1 border border-border/40">
+                            {(["tabs", "copilot"] as const).map((provider) => (
+                              <button
+                                key={provider}
+                                type="button"
+                                onClick={() => updateSettings({ aiProvider: provider })}
+                                aria-label={`AI Provider: ${AI_PROVIDER_LABELS[provider]}`}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
+                                  settings.aiProvider === provider
+                                    ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
+                                )}
+                              >
+                                {AI_PROVIDER_LABELS[provider]}
+                              </button>
+                            ))}
+                          </div>
+                        }
+                      />
+
                       <SettingsRow
                         title="Assistant output"
                         description="Show token-by-token output while a response is in progress."

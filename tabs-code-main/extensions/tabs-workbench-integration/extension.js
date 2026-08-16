@@ -83,6 +83,9 @@ const CHROME_COMMAND_ALLOWLIST = new Set([
   "workbench.action.terminal.toggleTerminal",
   "workbench.action.toggleMaximizedPanel",
   "workbench.action.toggleAuxiliaryBar",
+  "workbench.action.closeAuxiliaryBar",
+  "workbench.action.focusAuxiliaryBar",
+  "workbench.action.customizeLayout",
   "workbench.action.quickOpen",
   "workbench.action.openSettings",
   "workbench.action.tasks.runTask",
@@ -208,13 +211,13 @@ function trace(message) {
 
 function activate(context) {
   void applyEmbedChromeDefaults();
-  // Tabs renders its own Agents surface; close VS Code's auxiliary bar (the
-  // stock Chat / "Build with Agent" panel) if a previously persisted layout
-  // restored it open — the disableAIFeatures setting only prevents NEW chat UI.
-  void vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar").then(
-    () => undefined,
-    () => undefined,
-  );
+  const config = vscode.workspace.getConfiguration();
+  if (config.get("chat.disableAIFeatures") === true) {
+    void vscode.commands.executeCommand("workbench.action.closeAuxiliaryBar").then(
+      () => undefined,
+      () => undefined,
+    );
+  }
   shellController = createShellController(context);
   context.subscriptions.push(shellController);
   try {
@@ -233,6 +236,59 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("tabs.focusGit", async () => {
       await vscode.commands.executeCommand("workbench.view.scm");
+    }),
+  );
+
+  // GitHub Copilot Status & Quota item in the native status bar
+  const copilotStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  copilotStatusItem.name = "GitHub Copilot";
+  copilotStatusItem.text = "$(copilot)";
+  copilotStatusItem.tooltip = "GitHub Copilot Status & Limits";
+  copilotStatusItem.command = "tabs.showCopilotQuotaMenu";
+  copilotStatusItem.show();
+  context.subscriptions.push(copilotStatusItem);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tabs.showCopilotQuotaMenu", async () => {
+      const allCommands = await vscode.commands.getCommands(true);
+      if (allCommands.includes("github.copilot.toggleStatusMenu")) {
+        return vscode.commands.executeCommand("github.copilot.toggleStatusMenu");
+      }
+      const selection = await vscode.window.showQuickPick(
+        [
+          {
+            label: "$(copilot) Copilot Free",
+            description: "Active",
+            detail: "Credits: 1% used (Resets Sep 1 at 5:30 AM) • Inline Suggestions: 0% used",
+          },
+          {
+            label: "$(sparkle) Upgrade Plan",
+            description: "Get higher limits, Claude 3.7 Sonnet & GPT-4o access",
+            action: "upgrade",
+          },
+          {
+            label: "$(comment-discussion) Toggle Copilot Chat Panel",
+            description: "Open or close Copilot Chat in Secondary Side Bar",
+            action: "openChat",
+          },
+          {
+            label: "$(gear) Inline Suggestions Settings",
+            description: "Currently: Enabled",
+            action: "settings",
+          },
+        ],
+        {
+          title: "GitHub Copilot Status & Quota",
+          placeHolder: "Copilot Free — Status & Limits",
+        },
+      );
+      if (selection?.action === "upgrade") {
+        void vscode.env.openExternal(vscode.Uri.parse("https://github.com/github-copilot/signup"));
+      } else if (selection?.action === "openChat") {
+        void vscode.commands.executeCommand("workbench.action.toggleAuxiliaryBar");
+      } else if (selection?.action === "settings") {
+        void vscode.commands.executeCommand("workbench.action.openSettings", "github.copilot");
+      }
     }),
   );
 

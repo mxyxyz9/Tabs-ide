@@ -287,14 +287,10 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   max-width: 0 !important;
   overflow: hidden !important;
 }
-/* Collapse the secondary (auxiliary) side bar entirely — Tabs renders its OWN
-   native React AI side chat (a compact Agents chat) to the right of the editor,
-   so VS Code's auxiliary bar (which would host GitHub Copilot's "Build with
-   Agent" panel) must never paint. */
+/* Auxiliary bar (GitHub Copilot / secondary sidebar when Copilot provider is selected) */
 .monaco-workbench .part.auxiliarybar {
-  display: none !important;
-  width: 0 !important;
-  min-width: 0 !important;
+  border-left: 1px solid var(--tabs-hairline) !important;
+  background: var(--vscode-sideBar-background, var(--tabs-bg)) !important;
 }
 /* Pull the sidebar flush-left in case the grid kept the activity-bar offset. */
 .monaco-workbench .part.sidebar {
@@ -312,14 +308,20 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 }
 .monaco-workbench .statusbar .statusbar-item > a,
 .monaco-workbench .statusbar .statusbar-item > span {
-  border-radius: 5px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  padding: 2px 6px;
 }
 .monaco-workbench .statusbar .statusbar-item a.statusbar-item-label:hover {
-  border-radius: 5px;
+  border-radius: 6px;
+  background-color: var(--tabs-ov-08, rgba(255, 255, 255, 0.08));
+}
+.monaco-workbench.vs .statusbar .statusbar-item a.statusbar-item-label:hover {
+  background-color: rgba(0, 0, 0, 0.06);
 }
 /* The remote/host indicator (left edge) is just text in our palette, no pill. */
 .monaco-workbench .statusbar .statusbar-item.has-background-color {
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 /* ====================================================== EDITOR AREA === */
@@ -1124,15 +1126,43 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   background: var(--tabs-accent-soft) !important;
   color: var(--tabs-text) !important;
 }
-/* Table-of-contents rail (left): tighter, quieter, accent selection. */
+/* Table-of-contents rail (left): sleek rounded rows, no dotted outlines, calm selection */
 .monaco-workbench .settings-editor .settings-toc-container .monaco-list-row {
   border-radius: 8px !important;
   font-size: 12px !important;
+  outline: none !important;
+  border: none !important;
+  transition: background 120ms ease, color 120ms ease !important;
 }
-.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row.selected {
-  background: var(--tabs-accent-soft) !important;
+.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row:hover {
+  background: var(--tabs-ov-04) !important;
   color: var(--tabs-text) !important;
-  box-shadow: inset 2px 0 0 0 var(--tabs-accent) !important;
+}
+.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row.selected,
+.monaco-workbench .settings-editor .settings-toc-container .monaco-list-row.focused {
+  background: var(--tabs-ov-08) !important;
+  color: var(--tabs-text) !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: none !important;
+}
+.monaco-workbench .settings-editor .monaco-list:focus .monaco-list-row.focused,
+.monaco-workbench .settings-toc-container .monaco-list:focus .monaco-list-row.focused,
+.monaco-workbench .settings-toc-container .monaco-list-row.focused {
+  outline: none !important;
+  border: none !important;
+}
+.monaco-workbench.vs .settings-editor .settings-toc-container .monaco-list-row:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+.monaco-workbench.vs .settings-editor .settings-toc-container .monaco-list-row.selected,
+.monaco-workbench.vs .settings-editor .settings-toc-container .monaco-list-row.focused {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 /* Settings sidebar table of contents twistie / chevron icon (Issue A) */
 .monaco-workbench .settings-editor .settings-toc-container .monaco-tl-twistie,
@@ -1291,49 +1321,323 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   overflow: hidden;
 }
 
-/* ============================================ SIDE PANES (OUTLINE/TIMELINE) === */
-/* The VS Code Outline and Timeline panes serve no purpose in the Tabs embed
-   and steal file-tree space. VS Code's JS SplitView sets inline height/top on
-   each .split-view-view, so display:none alone is not enough -- the explorer's
-   inline height stays at its JS-allocated value (total - outline - timeline).
-   Fix: hide every split-view-view except the first (explorer is always first)
-   and force the explorer to fill 100% of the container height. */
-.monaco-workbench .part.sidebar .split-view-container > .split-view-view:not(:first-child) {
-  display: none !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-}
-.monaco-workbench .part.sidebar .split-view-container > .split-view-view:first-child {
-  height: 100% !important;
-}
-
 /* ============================================ MODAL DIALOGS === */
-/* The centred confirmation dialogs (Save?, Discard?, …) — shell card treatment. */
-.monaco-workbench .monaco-dialog-box {
-  border-radius: 14px !important;
-  border: 1px solid var(--tabs-hairline-strong) !important;
-  background: var(--tabs-bg-popover) !important;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.55) !important;
-  overflow: hidden;
-}
-.monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button {
-  border-radius: 8px !important;
+/* Centred confirmation dialogs & alerts — sleek card treatment matching Tabs popovers. */
+.monaco-workbench .monaco-dialog-modal-block,
+.monaco-dialog-modal-block,
+.monaco-workbench .dialog-modal-block {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(8px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 10000 !important;
 }
 .monaco-workbench .dialog-shadow,
-.monaco-workbench .dialog-modal-block {
-  background: rgba(0,0,0,0.45) !important;
+.dialog-shadow {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+.monaco-workbench .monaco-dialog-box,
+.monaco-dialog-box,
+.dialog-shadow .monaco-dialog-box,
+.monaco-dialog-modal-block .monaco-dialog-box,
+.monaco-workbench .simple-dialog {
+  position: relative !important;
+  width: 440px !important;
+  max-width: 90vw !important;
+  box-sizing: border-box !important;
+  border-radius: 16px !important;
+  padding: 22px 24px 20px 24px !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+.monaco-workbench.vs-dark .monaco-dialog-box,
+.monaco-workbench.vs-dark .simple-dialog,
+.monaco-dialog-box {
+  background: #121214 !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box,
+.monaco-workbench.vs .simple-dialog {
+  background: #ffffff !important;
+  color: #09090b !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-toolbar-row,
+.monaco-workbench .dialog-toolbar-row,
+.dialog-toolbar-row {
+  order: 1 !important;
+  position: absolute !important;
+  top: 14px !important;
+  right: 14px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  z-index: 10 !important;
+}
+.monaco-workbench .dialog-toolbar-row .action-label.codicon-dialog-close,
+.monaco-workbench .dialog-toolbar-row .codicon-close,
+.dialog-toolbar-row .action-label.codicon-dialog-close,
+.dialog-toolbar-row .codicon-close {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 6px !important;
+  color: #71717a !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+.monaco-workbench.vs-dark .dialog-toolbar-row .action-label.codicon-dialog-close:hover,
+.monaco-workbench.vs-dark .dialog-toolbar-row .codicon-close:hover,
+.dialog-toolbar-row .action-label.codicon-dialog-close:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+.monaco-workbench.vs .dialog-toolbar-row .action-label.codicon-dialog-close:hover,
+.monaco-workbench.vs .dialog-toolbar-row .codicon-close:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #09090b !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-message-row,
+.monaco-workbench .dialog-message-row,
+.dialog-message-row {
+  order: 2 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 14px !important;
+  padding: 0 !important;
+  margin: 0 0 20px 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.monaco-workbench .dialog-message-row .dialog-icon,
+.dialog-message-row .dialog-icon {
+  font-size: 22px !important;
+  line-height: 1 !important;
+  margin-top: 1px !important;
+  flex-shrink: 0 !important;
+}
+.dialog-icon.codicon-dialog-warning { color: #f59e0b !important; }
+.dialog-icon.codicon-dialog-info { color: #3b82f6 !important; }
+.dialog-icon.codicon-dialog-error { color: #ef4444 !important; }
+
+.monaco-workbench .monaco-dialog-box .dialog-message-container,
+.monaco-workbench .dialog-message-container,
+.dialog-message-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-message,
+.monaco-workbench .dialog-message-text,
+.dialog-message-text {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  background: transparent !important;
+  border: none !important;
+}
+.monaco-workbench.vs-dark .monaco-dialog-box .dialog-message,
+.monaco-workbench.vs-dark .dialog-message-text,
+.dialog-message-text {
+  color: #ffffff !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-message,
+.monaco-workbench.vs .dialog-message-text {
+  color: #09090b !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-message-body,
+.monaco-workbench .monaco-dialog-box .dialog-message-detail,
+.monaco-workbench .dialog-message-body,
+.monaco-workbench .dialog-message-detail,
+.dialog-message-body,
+.dialog-message-detail {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+}
+.monaco-workbench.vs-dark .monaco-dialog-box .dialog-message-body,
+.monaco-workbench.vs-dark .monaco-dialog-box .dialog-message-detail,
+.monaco-workbench.vs-dark .dialog-message-body,
+.dialog-message-body {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-message-body,
+.monaco-workbench.vs .monaco-dialog-box .dialog-message-detail,
+.monaco-workbench.vs .dialog-message-body {
+  color: #52525b !important;
+}
+.monaco-workbench .dialog-message-body a,
+.dialog-message-body a {
+  color: #3b82f6 !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons-row,
+.monaco-workbench .dialog-buttons-row,
+.dialog-buttons-row {
+  order: 4 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  width: 100% !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons,
+.monaco-workbench .dialog-buttons,
+.dialog-buttons {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  background: transparent !important;
+  border: none !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button,
+.monaco-workbench .dialog-buttons .monaco-button,
+.dialog-buttons .monaco-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 32px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  text-decoration: none !important;
+  transition: all 0.15s ease !important;
+  box-sizing: border-box !important;
+}
+.monaco-workbench.vs-dark .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary,
+.monaco-workbench.vs-dark .dialog-buttons .monaco-button.secondary,
+.dialog-buttons .monaco-button.secondary {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #f4f4f5 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+.monaco-workbench.vs-dark .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary:hover,
+.monaco-workbench.vs-dark .dialog-buttons .monaco-button.secondary:hover,
+.dialog-buttons .monaco-button.secondary:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary,
+.monaco-workbench.vs .dialog-buttons .monaco-button.secondary {
+  background: #f4f4f5 !important;
+  color: #09090b !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary:hover,
+.monaco-workbench.vs .dialog-buttons .monaco-button.secondary:hover {
+  background: #e4e4e7 !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary),
+.monaco-workbench .dialog-buttons .monaco-button:not(.secondary),
+.dialog-buttons .monaco-button:not(.secondary) {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary),
+.monaco-workbench.vs .dialog-buttons .monaco-button:not(.secondary) {
+  background: #2563eb !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary):hover,
+.dialog-buttons .monaco-button:not(.secondary):hover {
+  background: #1d4ed8 !important;
 }
 
 /* ============================================ NOTIFICATIONS CENTRE === */
 .monaco-workbench .notifications-center {
-  border-radius: 12px !important;
+  border-radius: 14px !important;
   border: 1px solid var(--tabs-hairline-strong) !important;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
-  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+  overflow: hidden !important;
+}
+.monaco-workbench.vs-dark .notifications-center {
+  background: #18181b !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.monaco-workbench.vs .notifications-center {
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.14) !important;
 }
 .monaco-workbench .notifications-center .notifications-center-header {
   background: var(--tabs-bg-elevated) !important;
+  border-bottom: 1px solid var(--tabs-hairline) !important;
+  padding: 8px 14px !important;
+}
+.monaco-workbench.vs-dark .notifications-center .notifications-center-header {
+  background: #202023 !important;
+}
+.monaco-workbench.vs .notifications-center .notifications-center-header {
+  background: #f8fafc !important;
+}
+.monaco-workbench .notifications-toasts .notification-toast {
+  border-radius: 12px !important;
+  border: 1px solid var(--tabs-hairline-strong) !important;
+  backdrop-filter: blur(12px) !important;
+  overflow: hidden !important;
+}
+.monaco-workbench.vs-dark .notifications-toasts .notification-toast {
+  background: rgba(24, 24, 27, 0.95) !important;
+  color: #f4f4f5 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5) !important;
+}
+.monaco-workbench.vs .notifications-toasts .notification-toast {
+  background: rgba(255, 255, 255, 0.98) !important;
+  color: #09090b !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12) !important;
+}
+.monaco-workbench .notification-toast .notification-list-item-buttons-container .monaco-button,
+.monaco-workbench .notifications-center .notification-list-item-buttons-container .monaco-button {
+  border-radius: 6px !important;
+  padding: 4px 10px !important;
+  font-size: 11.5px !important;
 }
 
 /* ============================================ DIFF / MINIMAP SLIDER === */
@@ -1346,18 +1650,10 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 
 /* ============================================ ARTEFACT SUPPRESSION === */
 /* The "Get Started" walkthrough / welcome page (startupEditor=none is the
-   primary fix; this is the CSS backstop), the GitHub Copilot "Build with Agent"
-   panel, and any "sign in to sync" banners must leave no trace in the embed. */
+   primary fix; this is the CSS backstop) and any "sign in to sync" banners
+   must leave no trace in the embed. */
 .monaco-workbench .welcomePageContainer,
 .monaco-workbench .editor-instance .welcomePage {
-  display: none !important;
-}
-.monaco-workbench [id*="github.copilot"],
-.monaco-workbench [id*="GitHub.copilot"] {
-  display: none !important;
-}
-.monaco-workbench .part.banner,
-.monaco-workbench .monaco-workbench-banner {
   display: none !important;
 }
 
@@ -1383,4 +1679,233 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 .monaco-workbench .split-view-view {
   --separator-border: var(--tabs-hairline);
 }
+
+/* ==================================== GITHUB COPILOT / CHAT / AUXILIARY BAR === */
+/* Theme-aware, cohesive styling for GitHub Copilot Chat in both Dark and Light mode. */
+.monaco-workbench .part.auxiliarybar {
+  background: var(--tabs-bg-sidebar) !important;
+  border-left: 1px solid var(--tabs-hairline) !important;
+}
+.monaco-workbench .part.auxiliarybar .composite.title {
+  background: transparent !important;
+  border-bottom: 1px solid var(--tabs-hairline) !important;
+  padding: 0 12px !important;
+  height: 38px !important;
+}
+.monaco-workbench .part.auxiliarybar .composite.title h2 {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: var(--tabs-text-muted) !important;
+}
+.monaco-workbench .interactive-session,
+.monaco-workbench .chat-widget,
+.monaco-workbench .interactive-session-container {
+  background: var(--tabs-bg-sidebar) !important;
+}
+.monaco-workbench .interactive-item-container,
+.monaco-workbench .chat-item-container {
+  padding: 8px 12px !important;
+}
+/* Request (user prompt) bubble */
+.monaco-workbench .chat-item-container.user,
+.monaco-workbench .interactive-item-container.request {
+  background: var(--tabs-bg-elevated) !important;
+  border: 1px solid var(--tabs-hairline) !important;
+  border-radius: 8px !important;
+  margin: 6px 12px !important;
+  padding: 8px 12px !important;
+}
+/* Chat Input Container & Editor */
+.monaco-workbench .interactive-input-part {
+  background: transparent !important;
+  padding: 8px 12px 12px !important;
+}
+.monaco-workbench .chat-input-container {
+  background: var(--tabs-bg-popover, var(--tabs-input-bg)) !important;
+  border: 1px solid var(--tabs-hairline-strong) !important;
+  border-radius: 10px !important;
+  padding: 8px 10px 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12) !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease !important;
+}
+.monaco-workbench .chat-input-container:focus-within {
+  border-color: var(--tabs-accent) !important;
+  box-shadow: 0 0 0 1px var(--tabs-accent), 0 4px 14px rgba(54,111,251,0.16) !important;
+}
+.monaco-workbench .interactive-input-part .monaco-editor,
+.monaco-workbench .interactive-input-part .monaco-editor .lines-content,
+.monaco-workbench .interactive-input-part .monaco-editor-background,
+.monaco-workbench .interactive-input-part .margin {
+  background: transparent !important;
+}
+/* Context Pills & Attachments */
+.monaco-workbench .chat-attached-context {
+  margin-bottom: 8px !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.monaco-workbench .chat-attached-context-attachment,
+.monaco-workbench .chat-input-pill {
+  background: var(--tabs-ov-04) !important;
+  border: 1px solid var(--tabs-hairline-strong) !important;
+  border-radius: 9999px !important;
+  padding: 2px 10px 2px 6px !important;
+  font-size: 11.5px !important;
+  height: 22px !important;
+  box-sizing: border-box !important;
+  line-height: 1 !important;
+  color: var(--tabs-text) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+  transition: all 120ms ease !important;
+  user-select: none !important;
+}
+.monaco-workbench .chat-attached-context-attachment:hover,
+.monaco-workbench .chat-input-pill:hover {
+  background: var(--tabs-ov-08) !important;
+  border-color: var(--tabs-accent) !important;
+}
+.monaco-workbench .chat-attached-context-attachment .monaco-button,
+.monaco-workbench .chat-input-pill .monaco-button {
+  background: transparent !important;
+  color: var(--tabs-accent) !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 9999px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 14px !important;
+  height: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+.monaco-workbench .chat-attached-context-attachment .monaco-button::before,
+.monaco-workbench .chat-input-pill .monaco-button::before {
+  line-height: 1 !important;
+}
+.monaco-workbench .chat-attached-context-attachment .monaco-icon-label,
+.monaco-workbench .chat-attached-context-attachment .monaco-icon-label-container,
+.monaco-workbench .chat-attached-context-attachment .monaco-icon-name-container,
+.monaco-workbench .chat-attached-context-attachment .label-name,
+.monaco-workbench .chat-attached-context-attachment .monaco-highlighted-label {
+  display: inline-flex !important;
+  align-items: center !important;
+  line-height: 1 !important;
+  font-size: 11.5px !important;
+  height: 100% !important;
+}
+.monaco-workbench .chat-attached-context-attachment .monaco-icon-label::before {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-right: 5px !important;
+  line-height: 1 !important;
+  font-size: 12px !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+}
+/* Toolbars and Send Button */
+.monaco-workbench .chat-secondary-toolbar,
+.monaco-workbench .chat-input-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  margin-top: 6px !important;
+  padding-top: 4px !important;
+}
+.monaco-workbench .chat-input-actions .action-label,
+.monaco-workbench .chat-secondary-toolbar .action-label {
+  border-radius: 6px !important;
+  color: var(--tabs-text-muted) !important;
+  transition: color 120ms ease, background-color 120ms ease !important;
+}
+.monaco-workbench .chat-input-actions .action-label:hover,
+.monaco-workbench .chat-secondary-toolbar .action-label:hover {
+  color: var(--tabs-text) !important;
+  background: var(--tabs-ov-06) !important;
+}
+.monaco-workbench .chat-input-container .action-label.codicon-arrow-up,
+.monaco-workbench .chat-input-actions .action-label[aria-label*="Send"] {
+  border-radius: 8px !important;
+  width: 26px !important;
+  height: 26px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 120ms ease !important;
+}
+.monaco-workbench .chat-input-container .action-label.codicon-arrow-up:not(.disabled),
+.monaco-workbench .chat-input-actions .action-label[aria-label*="Send"]:not(.disabled) {
+  background: var(--tabs-ov-14, rgba(255, 255, 255, 0.14)) !important;
+  color: var(--tabs-text, #ffffff) !important;
+}
+.monaco-workbench .chat-input-container .action-label.codicon-arrow-up:not(.disabled):hover,
+.monaco-workbench .chat-input-actions .action-label[aria-label*="Send"]:not(.disabled):hover {
+  background: var(--tabs-accent) !important;
+  color: #ffffff !important;
+}
+.monaco-workbench .chat-input-container .action-label.codicon-arrow-up:not(.disabled)::before,
+.monaco-workbench .chat-input-actions .action-label[aria-label*="Send"]:not(.disabled)::before {
+  color: inherit !important;
+}
+
+/* Light Theme Overrides (.monaco-workbench.vs) */
+.monaco-workbench.vs .chat-input-container {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.12) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04) !important;
+}
+.monaco-workbench.vs .chat-input-container:focus-within {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 1px #2563eb, 0 2px 8px rgba(37,99,235,0.08) !important;
+}
+.monaco-workbench.vs .chat-attached-context-attachment,
+.monaco-workbench.vs .chat-input-pill {
+  background: #f1f5f9 !important;
+  border-color: rgba(0,0,0,0.10) !important;
+  color: #1e293b !important;
+}
+.monaco-workbench.vs .chat-attached-context-attachment:hover,
+.monaco-workbench.vs .chat-input-pill:hover {
+  background: #e2e8f0 !important;
+  border-color: #2563eb !important;
+}
+.monaco-workbench.vs .chat-attached-context-attachment .monaco-button,
+.monaco-workbench.vs .chat-input-pill .monaco-button {
+  color: #2563eb !important;
+}
+.monaco-workbench.vs .chat-attached-context-attachment .monaco-button::before,
+.monaco-workbench.vs .chat-input-pill .monaco-button::before {
+  color: #2563eb !important;
+}
+.monaco-workbench.vs .chat-input-container .action-label.codicon-arrow-up:not(.disabled),
+.monaco-workbench.vs .chat-input-actions .action-label[aria-label*="Send"]:not(.disabled) {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
+}
+.monaco-workbench.vs .chat-input-container .action-label.codicon-arrow-up:not(.disabled):hover,
+.monaco-workbench.vs .chat-input-actions .action-label[aria-label*="Send"]:not(.disabled):hover {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+.monaco-workbench.vs .chat-input-container .action-label.codicon-arrow-up:not(.disabled)::before,
+.monaco-workbench.vs .chat-input-actions .action-label[aria-label*="Send"]:not(.disabled)::before {
+  color: inherit !important;
+}
+.monaco-workbench.vs .chat-item-container.user,
+.monaco-workbench.vs .interactive-item-container.request {
+  background: #f8fafc !important;
+  border-color: rgba(0,0,0,0.08) !important;
+}
+
+
 `;

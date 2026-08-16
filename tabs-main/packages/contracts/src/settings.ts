@@ -88,7 +88,12 @@ export const PinnedModelEntry = Schema.Struct({
 });
 export type PinnedModelEntry = typeof PinnedModelEntry.Type;
 
+export const AiProvider = Schema.Literals(["tabs", "copilot"]);
+export type AiProvider = typeof AiProvider.Type;
+export const DEFAULT_AI_PROVIDER: AiProvider = "tabs";
+
 export const ClientSettingsSchema = Schema.Struct({
+  aiProvider: AiProvider.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_AI_PROVIDER))),
   toolbarStyle: ToolbarStyle.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_TOOLBAR_STYLE)),
   ),

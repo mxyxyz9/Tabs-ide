@@ -5,9 +5,11 @@ import {
   MessageSquareIcon,
   PanelBottomIcon,
   PanelLeftIcon,
+  PanelRightIcon,
   PlayIcon,
   SearchIcon,
   SettingsIcon,
+  SlidersHorizontalIcon,
 } from "lucide-react";
 import { CODE_CHROME_COMMANDS, deriveActiveFileName } from "@tabs/shared/codeChrome";
 
@@ -23,6 +25,8 @@ interface CodeHeaderBarProps {
   panelMaximized: boolean;
   /** Whether the native AI side chat is open (drives the toggle highlight). */
   sideChatOpen: boolean;
+  /** Whether to show the side chat toggle. */
+  showSideChatToggle?: boolean;
   /** Toggle the native AI side chat (Tabs Agents chat, replaces Copilot). */
   onToggleSideChat: () => void;
   onRunCommand: (commandId: string) => void;
@@ -123,9 +127,9 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
         <span className="mx-1 h-4 w-px bg-border/70" />
 
         {/* VS Code layout controls: toggle primary sidebar / bottom panel /
-            secondary sidebar — mirrors the editor's top-right layout cluster. */}
+            maximize panel / secondary sidebar / customize layout — mirrors the editor's top-right layout cluster. */}
         <HeaderAction
-          label="Toggle Sidebar"
+          label="Toggle Primary Side Bar"
           onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.toggleSidebar)}
         >
           <PanelLeftIcon className="size-4" />
@@ -147,27 +151,40 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
             <ChevronsUpDownIcon className="size-4" />
           )}
         </HeaderAction>
-        {/* Native AI side chat (Tabs Agents chat) — replaces VS Code's secondary
-            sidebar / GitHub Copilot panel. */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label="Toggle AI Chat"
-                aria-pressed={props.sideChatOpen}
-                onClick={props.onToggleSideChat}
-                className={cn(
-                  "flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-                  props.sideChatOpen && "bg-accent text-foreground",
-                )}
-              >
-                <MessageSquareIcon className="size-4" />
-              </button>
-            }
-          />
-          <TooltipPopup side="bottom">Toggle AI Chat</TooltipPopup>
-        </Tooltip>
+        <HeaderAction
+          label="Toggle Secondary Side Bar"
+          onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar)}
+        >
+          <PanelRightIcon className="size-4" />
+        </HeaderAction>
+        <HeaderAction
+          label="Customize Layout"
+          onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.customizeLayout)}
+        >
+          <SlidersHorizontalIcon className="size-4" />
+        </HeaderAction>
+        {/* Native AI side chat (Tabs Agents chat) — when Tabs provider is active */}
+        {props.showSideChatToggle !== false ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Toggle AI Chat"
+                  aria-pressed={props.sideChatOpen}
+                  onClick={props.onToggleSideChat}
+                  className={cn(
+                    "flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                    props.sideChatOpen && "bg-accent text-foreground",
+                  )}
+                >
+                  <MessageSquareIcon className="size-4" />
+                </button>
+              }
+            />
+            <TooltipPopup side="bottom">Toggle AI Chat</TooltipPopup>
+          </Tooltip>
+        ) : null}
       </div>
     </header>
   );

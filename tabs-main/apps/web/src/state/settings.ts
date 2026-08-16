@@ -80,7 +80,11 @@ export function hydrateClientSettings(force = false) {
   clientSettingsHydrated = true;
   try {
     const persisted = getLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, ClientSettingsSchema);
-    appAtomRegistry.set(clientSettingsAtom, persisted ?? DEFAULT_CLIENT_SETTINGS);
+    const settings = persisted ?? DEFAULT_CLIENT_SETTINGS;
+    appAtomRegistry.set(clientSettingsAtom, settings);
+    if (settings.aiProvider && typeof window !== "undefined") {
+      void window.desktopBridge?.setAiProvider?.(settings.aiProvider);
+    }
   } catch (error) {
     console.error("[CLIENT_SETTINGS] hydrate failed", error);
     appAtomRegistry.set(clientSettingsAtom, DEFAULT_CLIENT_SETTINGS);
@@ -91,6 +95,9 @@ export function updateClientSettings(update: (current: ClientSettings) => Client
   hydrateClientSettings();
   appAtomRegistry.update(clientSettingsAtom, (current) => {
     const next = update(current);
+    if (next.aiProvider && next.aiProvider !== current.aiProvider && typeof window !== "undefined") {
+      void window.desktopBridge?.setAiProvider?.(next.aiProvider);
+    }
     try {
       setLocalStorageItem(CLIENT_SETTINGS_STORAGE_KEY, next, ClientSettingsSchema);
     } catch (error) {

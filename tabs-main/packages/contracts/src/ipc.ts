@@ -1050,6 +1050,7 @@ export interface DesktopBridge {
   confirm: (message: string) => Promise<boolean>;
   setTheme: (theme: DesktopTheme) => Promise<void>;
   setIconTheme: (theme: DesktopIconTheme) => Promise<void>;
+  setAiProvider?: (provider: "tabs" | "copilot") => Promise<void>;
   setZoomFactor: (factor: number) => Promise<void>;
   showContextMenu: <T extends string>(
     items: readonly ContextMenuItem<T>[],
