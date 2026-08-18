@@ -50,7 +50,14 @@ import {
   MAX_TESTING_MAX_STATES,
   MIN_TESTING_MAX_ELEMENTS_PER_PAGE,
 } from "@tabs/contracts";
-import { FlaskConicalIcon, LoaderIcon } from "lucide-react";
+import {
+  CircleDotIcon,
+  FileTextIcon,
+  FlaskConicalIcon,
+  FolderIcon,
+  LoaderIcon,
+  NetworkIcon,
+} from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { useServerConfig } from "~/state/settings";
 import { makeAppModelSelection } from "~/modelSelection";
@@ -2211,44 +2218,98 @@ export function TestingTool(props: {
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
           <header
             className={cn(
-              "flex flex-wrap justify-between gap-4 border-b border-border/70",
-              activeTestingSection === "overview" ? "items-end pb-5" : "items-center pb-3",
+              "border-b border-border/70",
+              activeTestingSection === "overview"
+                ? "flex flex-col gap-3 pb-5"
+                : "flex flex-wrap items-center justify-between gap-4 pb-3.5",
             )}
           >
-            <div className="space-y-2">
-              <div
-                className={cn(
-                  "items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70",
-                  activeTestingSection === "overview" ? "flex" : "hidden",
-                )}
-              >
-                <FlaskConicalIcon aria-hidden="true" className="size-4 text-muted-foreground/60" />
-                Private testing workspace
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <h1
+                  id="testing-heading"
+                  className={cn(
+                    "font-semibold tracking-tight text-foreground leading-snug pb-0.5",
+                    activeTestingSection === "overview" ? "text-3xl" : "text-xl",
+                  )}
+                >
+                  Testing
+                </h1>
+                {activeTestingSection === "overview" ? (
+                  <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                    <FlaskConicalIcon aria-hidden="true" className="size-3 text-primary" />
+                    <span>Private Workspace</span>
+                  </div>
+                ) : null}
               </div>
-              <h1
-                id="testing-heading"
-                className={cn(
-                  "font-semibold tracking-tight text-foreground",
-                  activeTestingSection === "overview" ? "text-3xl" : "text-xl",
-                )}
+
+              <div
+                className="flex flex-wrap items-center gap-2"
+                role="group"
+                aria-label="Workspace testing summary"
               >
-                Testing
-              </h1>
-              {activeTestingSection === "overview" ? (
-                <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                  Turn a test plan or a running app into reviewed, repeatable evidence. Start small;
-                  Testing will guide you to the next useful step.
-                </p>
-              ) : null}
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  <FolderIcon className="size-3.5 text-muted-foreground/80" aria-hidden="true" />
+                  <span>Project:</span>
+                  <span className="font-semibold text-foreground">
+                    {basenameOfPath(props.projectPath)}
+                  </span>
+                </div>
+
+                <div className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-2.5 py-1 text-xs font-medium text-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <NetworkIcon className="size-3.5 text-sky-500" aria-hidden="true" />
+                    <span className="font-semibold">{status?.nodeCount ?? 0}</span>
+                    <span className="text-muted-foreground text-[11px]">states</span>
+                  </span>
+                  <span className="h-3 w-px bg-border/80" aria-hidden="true" />
+                  <span className="inline-flex items-center gap-1">
+                    <FileTextIcon className="size-3.5 text-violet-500" aria-hidden="true" />
+                    <span className="font-semibold">{cases.length}</span>
+                    <span className="text-muted-foreground text-[11px]">cases</span>
+                  </span>
+                </div>
+
+                <div
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium",
+                    latestExecutionRun
+                      ? latestExecutionRun.status === "passed"
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                      : "border-border/60 bg-muted/20 text-muted-foreground",
+                  )}
+                >
+                  <CircleDotIcon
+                    className={cn(
+                      "size-3",
+                      latestExecutionRun
+                        ? latestExecutionRun.status === "passed"
+                          ? "text-emerald-500 fill-emerald-500/20"
+                          : "text-rose-500 fill-rose-500/20"
+                        : "text-muted-foreground/60",
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span>
+                    {latestExecutionRun
+                      ? `Latest run: ${latestExecutionRun.status}`
+                      : "No runs yet"}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Workspace testing summary">
-              <Badge variant="secondary">Project: {basenameOfPath(props.projectPath)}</Badge>
-              <Badge variant="outline">{status?.nodeCount ?? 0} states</Badge>
-              <Badge variant="outline">{cases.length} cases</Badge>
-              <Badge variant={latestExecutionRun?.status === "passed" ? "success" : "outline"}>
-                {latestExecutionRun ? `Latest run: ${latestExecutionRun.status}` : "No runs yet"}
-              </Badge>
-            </div>
+
+            {activeTestingSection === "overview" ? (
+              <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
+                <span className="font-medium text-foreground/90">
+                  Turn test plans and live applications into reviewed, repeatable evidence
+                </span>
+                <span className="text-muted-foreground/80">
+                  {" "}— guided step-by-step with reviewed diffs and automated code.
+                </span>
+              </p>
+            ) : null}
           </header>
 
           <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">

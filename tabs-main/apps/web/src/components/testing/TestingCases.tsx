@@ -1,9 +1,12 @@
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import type { ModelSlug } from "@tabs/contracts";
 import {
+  ActivityIcon,
   ArrowDownIcon,
   ArrowRightIcon,
   ArrowUpIcon,
+  BookOpenIcon,
+  CheckCircle2Icon,
   ChevronDownIcon,
   ChevronRightIcon,
   CompassIcon,
@@ -11,13 +14,18 @@ import {
   FileSpreadsheetIcon,
   FileTextIcon,
   FolderOpenIcon,
+  GitBranchIcon,
+  GlobeIcon,
   InfoIcon,
+  LayersIcon,
+  ListChecksIcon,
+  ListPlusIcon,
   LoaderIcon,
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
   SearchIcon,
-  SparklesIcon,
+  SquarePenIcon,
   Trash2Icon,
   UploadCloudIcon,
   XIcon,
@@ -120,6 +128,10 @@ export const TestingCases = memo(function TestingCases({
   );
   const [storyText, setStoryText] = useState("");
   const [storyFilePath, setStoryFilePath] = useState("");
+  const [graphFeedback, setGraphFeedback] = useState<{
+    type: "success" | "info" | "error";
+    text: string;
+  } | null>(null);
 
   const {
     projectId,
@@ -247,6 +259,54 @@ export const TestingCases = memo(function TestingCases({
     );
   }, []);
 
+  const generatedCases = useMemo(() => cases.filter((c) => c.source === "generated"), [cases]);
+  const reviewGeneratedCount = useMemo(
+    () =>
+      generatedCases.filter(
+        (c) => c.reviewDecision === "pending" || c.status === "needs-review",
+      ).length,
+    [generatedCases],
+  );
+  const acceptedGeneratedCount = useMemo(
+    () =>
+      generatedCases.filter(
+        (c) => c.reviewDecision === "accepted" || c.status === "matches",
+      ).length,
+    [generatedCases],
+  );
+
+  const handleGenerateGraphScenarios = useCallback(async () => {
+    setBusyAction("generate");
+    setGraphFeedback(null);
+    message_setter("Creating candidate scenarios from reachable graph transitions...");
+    try {
+      const oldLength = cases.length;
+      const result = await ensureNativeApi().testing.generateScenarios({
+        projectId,
+      });
+      setWorkspaceCases(result.cases);
+      await refreshTestingWorkspace();
+
+      const newAdded = result.cases.length - oldLength;
+      if (newAdded > 0) {
+        const msg = `${newAdded} new reachable graph scenario${newAdded === 1 ? "" : "s"} added to the review queue below.`;
+        message_setter(msg);
+        setGraphFeedback({ type: "success", text: msg });
+      } else {
+        const existingCount = result.cases.filter((c) => c.source === "generated").length;
+        const msg = `All ${existingCount} reachable paths from the state graph already exist in your review queue.`;
+        message_setter(msg);
+        setGraphFeedback({ type: "info", text: msg });
+      }
+    } catch (error) {
+      const errText = error instanceof Error ? error.message : "Could not generate graph scenarios.";
+      message_setter(errText);
+      setGraphFeedback({ type: "error", text: errText });
+    } finally {
+      setBusyAction(null);
+    }
+  }, [cases.length, message_setter, projectId, refreshTestingWorkspace, setBusyAction, setWorkspaceCases]);
+
   const importUserStory = useCallback(async () => {
     if (!storyText.trim() && !storyFilePath) return;
     setBusyAction("story-import");
@@ -305,9 +365,9 @@ export const TestingCases = memo(function TestingCases({
           >
             {(
               [
-                ["manual", "Write a case", "Create and map one case", FileTextIcon],
+                ["manual", "Write a case", "Create and map one case", SquarePenIcon],
                 ["excel", "Import Excel", "Best for assigned QA batches", FileSpreadsheetIcon],
-                ["story", "Use a user story", "Generate reviewable candidates", SparklesIcon],
+                ["story", "Use a user story", "Generate reviewable candidates", BookOpenIcon],
                 ["graph", "From captured app", "Reuse verified app paths", CompassIcon],
               ] as const
             ).map(([value, label, description, Icon]) => {
@@ -326,22 +386,21 @@ export const TestingCases = memo(function TestingCases({
                       : "border border-transparent text-muted-foreground hover:border-border/40 hover:bg-background/50 hover:text-foreground",
                   )}
                 >
-                  <div className="flex w-full items-center gap-2.5">
-                    <div
+                  <div className="flex w-full items-center gap-2">
+                    <Icon
                       className={cn(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                        "size-4 shrink-0 transition-colors",
                         isSelected
-                          ? "border-primary/40 bg-primary/10 text-primary dark:border-primary/50 dark:bg-primary/20"
-                          : "border-border/60 bg-muted/60 text-muted-foreground group-hover:border-border group-hover:bg-muted group-hover:text-foreground",
+                          ? "text-primary"
+                          : "text-muted-foreground group-hover:text-foreground",
                       )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
+                      aria-hidden="true"
+                    />
                     <span className="truncate text-sm font-semibold text-foreground">
                       {label}
                     </span>
                   </div>
-                  <span className="block pl-0.5 text-xs leading-relaxed text-muted-foreground">
+                  <span className="block text-xs leading-relaxed text-muted-foreground">
                     {description}
                   </span>
                 </button>
@@ -622,126 +681,303 @@ export const TestingCases = memo(function TestingCases({
           ) : null}
 
           {caseIntakeMode === "story" ? (
-            <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-1">
-                  <label htmlFor="testing-story-text" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    User story
-                  </label>
-                  <span className="text-[11px] text-muted-foreground/75">
-                    Feature spec or requirements
-                  </span>
-                </div>
-                <Textarea
-                  id="testing-story-text"
-                  rows={7}
-                  value={storyText}
-                  onChange={(event) => setStoryText(event.target.value)}
-                  placeholder="As a workspace owner, I want to update project settings..."
-                  disabled={Boolean(storyFilePath) || busyAction !== null}
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs"
-                    onClick={() => void chooseStoryFile()}
-                    disabled={busyAction !== null}
-                  >
-                    <FolderOpenIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                    Choose story file
-                  </Button>
-                  {storyFilePath ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs text-muted-foreground hover:text-destructive"
-                      onClick={() => setStoryFilePath("")}
-                    >
-                      Clear
-                    </Button>
-                  ) : null}
-                  <span className="break-all text-xs text-muted-foreground">
-                    {storyFilePath || "TXT, Markdown, DOCX, or text-based PDF"}
-                  </span>
-                </div>
-              </div>
-              <div className="space-y-3">
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Fusion model
+                  <div className="text-sm font-semibold text-foreground">
+                    Draft Cases from User Story or Spec
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Choose provider, model, and reasoning level in one matrix.
+                    Paste acceptance criteria or attach a document (.txt, .md, .docx, .pdf) to draft structured test cases.
                   </p>
                 </div>
-                <FusedModelPicker
-                  provider={generationFusionProvider}
-                  model={generationModelSelection.model as ModelSlug}
-                  lockedProvider={null}
-                  providers={fusionProviders as any}
-                  prompt={storyText}
-                  onPromptChange={setStoryText}
-                  modelOptions={generationModelSelection.options}
-                  onProviderModelChange={updateTestingFusionModel}
-                  onModelOptionsChange={updateTestingFusionOptions}
-                  triggerClassName="w-full justify-between"
-                />
                 <Button
                   type="button"
-                  className="w-full gap-2"
-                  onClick={() => void importUserStory()}
-                  disabled={(!storyText.trim() && !storyFilePath) || busyAction !== null}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 self-start gap-1.5 text-xs sm:self-auto"
+                  onClick={() => void chooseStoryFile()}
+                  disabled={busyAction !== null}
                 >
-                  {busyAction === "story-import" ? (
-                    <LoaderIcon className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <SparklesIcon className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  Generate reviewable cases
+                  <FolderOpenIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {storyFilePath ? "Change document" : "Attach story document"}
                 </Button>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
-                  <span>Story and locator context are sanitized before provider dispatch.</span>
+              </div>
+
+              {storyFilePath ? (
+                <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 transition-all dark:bg-primary/10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                        <BookOpenIcon className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-mono text-sm font-medium text-foreground">
+                            {basenameOfPath(storyFilePath)}
+                          </span>
+                          <Badge variant="secondary" className="border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
+                            Document attached
+                          </Badge>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground" title={storyFilePath}>
+                          {storyFilePath}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => void chooseStoryFile()}
+                        disabled={busyAction !== null}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Remove selected document"
+                        className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setStoryFilePath("")}
+                        disabled={busyAction !== null}
+                      >
+                        <XIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Textarea
+                    id="testing-story-text"
+                    rows={6}
+                    value={storyText}
+                    onChange={(event) => setStoryText(event.target.value)}
+                    placeholder="Paste user stories, acceptance criteria, or behavioral requirements here...&#10;&#10;Example:&#10;As a workspace owner, I want to invite team members and assign role-based permissions so they can collaborate on tests."
+                    disabled={busyAction !== null}
+                    className="max-h-60 overflow-y-auto resize-y font-sans text-sm leading-relaxed"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-3 border-t border-border/40 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Fusion model:</span>
+                  <div className="w-64 max-w-full">
+                    <FusedModelPicker
+                      provider={generationFusionProvider}
+                      model={generationModelSelection.model as ModelSlug}
+                      lockedProvider={null}
+                      providers={fusionProviders as any}
+                      prompt={storyText}
+                      onPromptChange={setStoryText}
+                      modelOptions={generationModelSelection.options}
+                      onProviderModelChange={updateTestingFusionModel}
+                      onModelOptionsChange={updateTestingFusionOptions}
+                      align="start"
+                      side="top"
+                      sideOffset={8}
+                      alignOffset={0}
+                      triggerClassName="w-full justify-between bg-background/80 border border-border/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 sm:self-auto">
+                  <Button
+                    type="button"
+                    onClick={() => void importUserStory()}
+                    disabled={(!storyText.trim() && !storyFilePath) || busyAction !== null}
+                    className="shrink-0 gap-2"
+                  >
+                    {busyAction === "story-import" ? (
+                      <LoaderIcon className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <ListPlusIcon className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    Draft reviewable cases
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                <span>Story and locator context are sanitized before provider dispatch.</span>
               </div>
             </div>
           ) : null}
 
           {caseIntakeMode === "graph" ? (
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5">
-              <div className="max-w-2xl space-y-1">
-                <div className="text-sm font-semibold text-foreground">Create cases from captured paths</div>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Testing proposes cases only from reachable states and verified transitions recorded during discovery. Review them before building any code.
-                </p>
-              </div>
+            <div className="space-y-4">
               {(status?.nodeCount ?? 0) > 0 ? (
-                <Button
-                  type="button"
-                  onClick={() => void generateScenarios()}
-                  disabled={busyAction !== null}
-                  className="gap-2"
-                >
-                  {busyAction === "generate" ? (
-                    <LoaderIcon aria-hidden="true" className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <SparklesIcon className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  Generate from captured app
-                </Button>
+                <div className="rounded-xl border border-border/70 bg-card/40 p-5 space-y-4 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 pb-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">
+                          Discovered App State Graph
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className="h-5 gap-1.5 px-2 text-[11px] font-normal border-border/80 text-muted-foreground"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          Graph active
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Proposes reviewable test cases directly from verified DOM states and interactive transition paths recorded during exploration.
+                      </p>
+                    </div>
+                    {status?.targetUrl ? (
+                      <div className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground">
+                        <GlobeIcon className="h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
+                        <span className="font-mono text-[11px] text-foreground max-w-[240px] truncate" title={status.targetUrl}>
+                          {status.targetUrl}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="text-xs font-medium">Reachable States</span>
+                        <LayersIcon className="h-3.5 w-3.5 text-primary/70" aria-hidden="true" />
+                      </div>
+                      <div className="text-xl font-bold text-foreground">
+                        {status?.nodeCount ?? 0}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground/80">DOM state snapshots</span>
+                    </div>
+
+                    <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="text-xs font-medium">Observed Transitions</span>
+                        <GitBranchIcon className="h-3.5 w-3.5 text-blue-500/70" aria-hidden="true" />
+                      </div>
+                      <div className="text-xl font-bold text-foreground">
+                        {status?.edgeCount ?? 0}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground/80">Interactive paths mapped</span>
+                    </div>
+
+                    <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="text-xs font-medium">Generated Cases</span>
+                        <ListChecksIcon className="h-3.5 w-3.5 text-violet-500/70" aria-hidden="true" />
+                      </div>
+                      <div className="text-xl font-bold text-foreground">
+                        {generatedCases.length}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground/80">
+                        {reviewGeneratedCount > 0
+                          ? `${reviewGeneratedCount} in review`
+                          : `${acceptedGeneratedCount} accepted`}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span className="text-xs font-medium">Graph Sync</span>
+                        <ActivityIcon className="h-3.5 w-3.5 text-emerald-500/70" aria-hidden="true" />
+                      </div>
+                      <div className="text-xl font-bold text-emerald-500">
+                        {status?.lastRunStatus === "completed" ? "Synchronized" : "Ready"}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground/80">Discovery graph ready</span>
+                    </div>
+                  </div>
+
+                  {graphFeedback ? (
+                    <div
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-xs animate-in fade-in duration-200",
+                        graphFeedback.type === "success" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                        graphFeedback.type === "info" && "border-blue-500/30 bg-blue-500/10 text-blue-300",
+                        graphFeedback.type === "error" && "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        {graphFeedback.type === "success" ? (
+                          <CheckCircle2Icon className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                        ) : graphFeedback.type === "info" ? (
+                          <InfoIcon className="h-4 w-4 shrink-0 text-blue-400" aria-hidden="true" />
+                        ) : (
+                          <InfoIcon className="h-4 w-4 shrink-0 text-rose-400" aria-hidden="true" />
+                        )}
+                        <span>{graphFeedback.text}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setGraphFeedback(null)}
+                        className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                        aria-label="Dismiss notification"
+                      >
+                        <XIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                      <span>Scenarios are extracted deterministically from reachable graph trajectories without hallucinations.</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onNavigate("discover")}
+                        className="gap-1.5 h-8 text-xs"
+                      >
+                        Explore more states
+                        <ArrowRightIcon className="h-3 w-3" aria-hidden="true" />
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleGenerateGraphScenarios()}
+                        disabled={busyAction !== null}
+                        className="gap-2 h-8 text-xs font-medium"
+                      >
+                        {busyAction === "generate" ? (
+                          <LoaderIcon aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CompassIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                        Generate from captured app
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onNavigate("discover")}
-                  className="gap-1.5"
-                >
-                  Configure app connection
-                  <ArrowRightIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                </Button>
+                <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/10 p-8 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <CompassIcon className="h-6 w-6" aria-hidden="true" />
+                  </div>
+                  <div className="max-w-md space-y-1">
+                    <div className="text-sm font-semibold text-foreground">No captured application paths found</div>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Explore your web application to map interactive elements, navigation flows, and form actions. Testing will automatically generate reviewable test cases from reachable paths.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => onNavigate("discover")}
+                    className="gap-2 mt-2"
+                  >
+                    <CompassIcon className="h-4 w-4" aria-hidden="true" />
+                    Open App Discovery & Explore
+                  </Button>
+                </div>
               )}
             </div>
           ) : null}
@@ -828,27 +1064,14 @@ const TestingImplementedInventory = memo(function TestingImplementedInventory({
   return (
     <Card>
       <CardHeader>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <CardTitle>Implemented tests</CardTitle>
-            <CardDescription>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <CardTitle className="text-base font-semibold">Implemented tests</CardTitle>
+            <CardDescription className="text-xs">
               Managed cases and statically discovered Playwright tests, grouped like a Test Explorer.
             </CardDescription>
           </div>
-          <div className="flex gap-1" role="group" aria-label="Test inventory view">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              aria-expanded={implementedInventoryOpen}
-              onClick={() => setImplementedInventoryOpen(!implementedInventoryOpen)}
-            >
-              {implementedInventoryOpen ? "Hide inventory" : "Show inventory"}
-              <ChevronDownIcon
-                aria-hidden="true"
-                className={cn("transition-transform", implementedInventoryOpen && "rotate-180")}
-              />
-            </Button>
+          <div className="flex items-center gap-2" role="group" aria-label="Test inventory view controls">
             {implementedInventoryOpen ? (
               <>
                 <SegmentedControl
@@ -866,12 +1089,32 @@ const TestingImplementedInventory = memo(function TestingImplementedInventory({
                   size="sm"
                   variant="outline"
                   onClick={() => void refreshTestingWorkspace()}
+                  className="h-8 gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                  title="Refresh repository test scan"
                 >
-                  <RefreshCwIcon aria-hidden="true" />
-                  Refresh
+                  <RefreshCwIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                  <span>Refresh</span>
                 </Button>
+                <div className="h-4 w-px bg-border/60" aria-hidden="true" />
               </>
             ) : null}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-expanded={implementedInventoryOpen}
+              onClick={() => setImplementedInventoryOpen(!implementedInventoryOpen)}
+              className="h-8 gap-1.5 px-3 text-xs font-medium"
+            >
+              <span>{implementedInventoryOpen ? "Hide inventory" : "Show inventory"}</span>
+              <ChevronDownIcon
+                aria-hidden="true"
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-200",
+                  implementedInventoryOpen && "rotate-180",
+                )}
+              />
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -1093,77 +1336,116 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
               </Card>
             ))}
           </div>
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
-            <div className="relative">
-              <SearchIcon
-                aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                value={caseSearch}
-                onChange={(event) => setCaseSearch(event.target.value)}
-                placeholder="Search test ID or description"
-                aria-label="Search test cases"
-                className="pl-9"
-              />
-            </div>
-            <Select
-              value={caseFilter}
-              onValueChange={(value) => setCaseFilter(value as TestingCaseFilter)}
-            >
-              <SelectTrigger aria-label="Filter test cases">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="all">All cases</SelectItem>
-                <SelectItem value="needs-review">Needs review</SelectItem>
-                <SelectItem value="accepted">Accepted</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-              </SelectPopup>
-            </Select>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
-            <div className="text-sm text-foreground">
-              <span className="font-medium">{selectedGenerationCaseIds.size}</span> ready case
-              {selectedGenerationCaseIds.size === 1 ? "" : "s"} selected for Build tests
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setSelectedGenerationCaseIds(new Set(readyCases.map((testCase) => testCase.id)))
-                }
+          <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-card/60 p-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 items-center gap-2">
+              <div className="relative flex-1 min-w-[200px] max-w-md">
+                <SearchIcon
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                />
+                <Input
+                  value={caseSearch}
+                  onChange={(event) => setCaseSearch(event.target.value)}
+                  placeholder="Search test ID or description..."
+                  aria-label="Search test cases"
+                  className="h-8 pl-9 text-xs bg-background/80"
+                />
+                {caseSearch ? (
+                  <button
+                    type="button"
+                    onClick={() => setCaseSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                ) : null}
+              </div>
+
+              <Select
+                value={caseFilter}
+                onValueChange={(value) => setCaseFilter(value as TestingCaseFilter)}
               >
-                Select all ready
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setSelectedGenerationCaseIds(new Set())}
-              >
-                Clear
-              </Button>
+                <SelectTrigger aria-label="Filter test cases" className="h-8 w-[130px] text-xs bg-background/80 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectPopup>
+                  <SelectItem value="all">All cases</SelectItem>
+                  <SelectItem value="needs-review">Needs review</SelectItem>
+                  <SelectItem value="accepted">Accepted</SelectItem>
+                  <SelectItem value="blocked">Blocked</SelectItem>
+                </SelectPopup>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-t-0 sm:pt-0 sm:border-l sm:border-border/60 sm:pl-3 sm:justify-end">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span
+                    className={cn(
+                      "font-medium tabular-nums",
+                      selectedGenerationCaseIds.size > 0
+                        ? "text-primary font-semibold"
+                        : "text-foreground",
+                    )}
+                  >
+                    {selectedGenerationCaseIds.size}
+                  </span>
+                  <span>selected</span>
+                </div>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setSelectedGenerationCaseIds(
+                      new Set(readyCases.map((testCase) => testCase.id)),
+                    )
+                  }
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  disabled={readyCases.length === 0}
+                >
+                  Select ready ({readyCases.length})
+                </Button>
+
+                {selectedGenerationCaseIds.size > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedGenerationCaseIds(new Set())}
+                    className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+
               <Button
                 type="button"
                 size="sm"
                 disabled={selectedGenerationCaseIds.size === 0}
                 onClick={() => onNavigate("automate")}
+                className="h-8 gap-1.5 px-3 text-xs font-medium shrink-0"
               >
-                Continue to Build tests
-                <ArrowRightIcon aria-hidden="true" />
+                <span>Continue to Build tests</span>
+                <ArrowRightIcon className="size-3.5" aria-hidden="true" />
               </Button>
             </div>
           </div>
           <div className="grid min-h-[30rem] overflow-hidden rounded-xl border border-border/70 bg-card lg:grid-cols-[19rem_minmax(0,1fr)]">
             <div className="max-h-[40rem] overflow-auto border-b border-border/70 lg:border-b-0 lg:border-r">
               <div
-                className="border-b border-border/70 px-4 py-3 text-xs text-muted-foreground"
+                className="border-b border-border/70 px-4 py-2.5 text-xs text-muted-foreground flex items-center justify-between"
                 role="status"
               >
-                {filteredCases.length} of {cases.length} cases
+                <span>{filteredCases.length} of {cases.length} cases</span>
+                {caseFilter !== "all" || caseSearch ? (
+                  <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    Filtered
+                  </span>
+                ) : null}
               </div>
               <ul aria-label="Test case IDs">
                 {filteredCases.map((testCase) => {

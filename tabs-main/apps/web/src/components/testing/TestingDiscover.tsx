@@ -612,28 +612,116 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                 reviewed diff.
               </p>
             </div>
-            <div
-              className="flex items-center gap-2 text-xs text-muted-foreground"
-              aria-label="Locator workflow"
-            >
-              <Badge variant={locatorSession ? "secondary" : "default"}>1 Open</Badge>
-              <ChevronRightIcon aria-hidden="true" className="size-3" />
-              <Badge variant={selectedLocatorEntryIds.size > 0 ? "secondary" : "outline"}>
-                2 Choose
-              </Badge>
-              <ChevronRightIcon aria-hidden="true" className="size-3" />
-              <Badge
-                variant={
+            {(() => {
+              const step1Done = Boolean(locatorSession);
+              const step2Done = step1Done && selectedLocatorEntryIds.size > 0;
+              const step3Done =
+                step2Done &&
+                Boolean(
                   selectedLocatorPage?.entries.some(
                     (entry) => entry.lifecycleStatus === "accepted",
-                  )
-                    ? "secondary"
-                    : "outline"
-                }
-              >
-                3 Use in code
-              </Badge>
-            </div>
+                  ),
+                );
+
+              const step1Active = !step1Done;
+              const step2Active = step1Done && !step2Done;
+              const step3Active = step2Done && !step3Done;
+
+              return (
+                <div
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/60 p-1 text-xs shadow-xs"
+                  aria-label="Locator workflow progression"
+                >
+                  {/* Step 1: Open */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-all",
+                      step1Done
+                        ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : step1Active
+                          ? "border border-primary/30 bg-primary/10 font-semibold text-primary"
+                          : "border border-transparent text-muted-foreground",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
+                        step1Done
+                          ? "bg-emerald-500 text-white"
+                          : step1Active
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {step1Done ? <CheckIcon className="size-2.5 stroke-[3]" /> : "1"}
+                    </span>
+                    <span>Open</span>
+                  </div>
+
+                  <ChevronRightIcon
+                    aria-hidden="true"
+                    className="size-3 shrink-0 text-muted-foreground/30"
+                  />
+
+                  {/* Step 2: Choose */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-all",
+                      step2Done
+                        ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : step2Active
+                          ? "border border-primary/30 bg-primary/10 font-semibold text-primary"
+                          : "border border-transparent text-muted-foreground/80",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
+                        step2Done
+                          ? "bg-emerald-500 text-white"
+                          : step2Active
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/80 text-muted-foreground",
+                      )}
+                    >
+                      {step2Done ? <CheckIcon className="size-2.5 stroke-[3]" /> : "2"}
+                    </span>
+                    <span>Choose</span>
+                  </div>
+
+                  <ChevronRightIcon
+                    aria-hidden="true"
+                    className="size-3 shrink-0 text-muted-foreground/30"
+                  />
+
+                  {/* Step 3: Use in code */}
+                  <div
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-all",
+                      step3Done
+                        ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                        : step3Active
+                          ? "border border-primary/30 bg-primary/10 font-semibold text-primary"
+                          : "border border-transparent text-muted-foreground/80",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
+                        step3Done
+                          ? "bg-emerald-500 text-white"
+                          : step3Active
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/80 text-muted-foreground",
+                      )}
+                    >
+                      {step3Done ? <CheckIcon className="size-2.5 stroke-[3]" /> : "3"}
+                    </span>
+                    <span>Use in code</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <section
             className={cn(

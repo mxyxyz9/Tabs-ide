@@ -87,6 +87,10 @@ interface FusedModelPickerProps {
   /** Optional ref to anchor the popup to a specific element (e.g. the composer card) instead of the trigger */
   popupAnchorRef?: React.RefObject<HTMLElement | null>;
   triggerClassName?: string;
+  align?: "start" | "center" | "end";
+  side?: "top" | "bottom" | "left" | "right";
+  sideOffset?: number;
+  alignOffset?: number;
 }
 
 export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModelPickerProps) {
@@ -103,37 +107,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   const { updateSettings } = useUpdateSettings();
   const pinnedList = useMemo(() => getPinnedModels(settings), [settings]);
 
-  const [leftCollisionPadding, setLeftCollisionPadding] = useState(16);
-
-  useEffect(() => {
-    if (props.popupAnchorRef) return;
-    if (!isOpen) return;
-
-    const measureLeftBoundary = () => {
-      const rail = document.querySelector<HTMLElement>(
-        '[data-slot="sidebar-wrapper"], [data-sidebar="sidebar"], aside, .sidebar-rail, .code-activity-rail',
-      );
-      if (rail) {
-        const rect = rail.getBoundingClientRect();
-        if (rect.right > 0 && rect.width > 0) {
-          setLeftCollisionPadding(Math.max(16, rect.right + 12));
-          return;
-        }
-      }
-      setLeftCollisionPadding(16);
-    };
-
-    measureLeftBoundary();
-    window.addEventListener("resize", measureLeftBoundary);
-    return () => window.removeEventListener("resize", measureLeftBoundary);
-  }, [isOpen, props.popupAnchorRef]);
-
   const collisionPadding = useMemo(
-    () =>
-      props.popupAnchorRef
-        ? { top: 12, right: 12, bottom: 12, left: 12 }
-        : { top: 12, right: 12, bottom: 12, left: leftCollisionPadding },
-    [leftCollisionPadding, props.popupAnchorRef],
+    () => ({ top: 12, right: 16, bottom: 12, left: 16 }),
+    [],
   );
 
   const checkIsPinned = useCallback(
@@ -400,17 +376,17 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         <ChevronDownIcon aria-hidden="true" className="size-3 shrink-0 opacity-60" />
       </MenuTrigger>
       <MenuPopup
-        side="top"
-        sideOffset={8}
-        align={isExpandedPicker ? "center" : "start"}
-        alignOffset={isExpandedPicker ? 0 : 8}
+        side={props.side ?? "top"}
+        sideOffset={props.sideOffset ?? 8}
+        align={props.align ?? "start"}
+        alignOffset={props.alignOffset ?? 0}
         anchor={props.popupAnchorRef}
         collisionPadding={collisionPadding}
-        className="w-auto p-0 border-0 bg-transparent shadow-none before:hidden before:shadow-none dark:before:hidden [&>div]:p-0"
+        className="w-auto max-w-[calc(100vw-32px)] p-0 border-0 bg-transparent shadow-none before:hidden before:shadow-none dark:before:hidden [&>div]:p-0"
       >
         <style>{COSMIC_KEYFRAMES}</style>
         <div
-          className="relative flex gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-2xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150"
+          className="relative flex max-w-[calc(100vw-32px)] gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-2xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150"
           style={panelStyle}
         >
           {/* Provider Sidebar navigation on Left */}
