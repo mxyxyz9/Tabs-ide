@@ -109,6 +109,11 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
       },
     });
   });
+  it("parses the narrowly scoped request to open a Tabs project tab", () => {
+    expect(
+      parseCodeControlClientMessage(JSON.stringify({ type: "openTabsProjectTab", projectId: "p4" })),
+    ).toEqual({ type: "openTabsProjectTab", projectId: "p4" });
+  });
   it("parses editor state (language + cursor) folded into chromeState", () => {
     const parsed = parseCodeControlClientMessage(
       JSON.stringify({

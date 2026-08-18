@@ -13,6 +13,10 @@ const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const APP_CLOSING_CHANNEL = "desktop:app-closing";
+const QUIT_CONFIRMATION_REQUEST_CHANNEL = "desktop:quit-confirmation-request";
+const QUIT_CONFIRMATION_RESPONSE_CHANNEL = "desktop:quit-confirmation-response";
+const GET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:get-confirm-before-quit";
+const SET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:set-confirm-before-quit";
 const APP_CLEANUP_DONE_CHANNEL = "desktop:app-cleanup-done";
 const APP_READY_TO_EXIT_CHANNEL = "desktop:app-ready-to-exit";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
@@ -164,6 +168,19 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     return () => {
       ipcRenderer.removeListener(APP_CLOSING_CHANNEL, wrapped);
     };
+  },
+  getConfirmBeforeQuit: () => ipcRenderer.invoke(GET_CONFIRM_BEFORE_QUIT_CHANNEL),
+  setConfirmBeforeQuit: (value: boolean) =>
+    ipcRenderer.invoke(SET_CONFIRM_BEFORE_QUIT_CHANNEL, value),
+  onQuitConfirmationRequested: (listener) => {
+    const wrapped = () => listener();
+    ipcRenderer.on(QUIT_CONFIRMATION_REQUEST_CHANNEL, wrapped);
+    return () => {
+      ipcRenderer.removeListener(QUIT_CONFIRMATION_REQUEST_CHANNEL, wrapped);
+    };
+  },
+  respondToQuitConfirmation: (choice) => {
+    ipcRenderer.send(QUIT_CONFIRMATION_RESPONSE_CHANNEL, choice);
   },
   onAppCleanupDone: (listener) => {
     const wrapped = () => listener();

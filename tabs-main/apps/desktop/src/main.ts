@@ -92,6 +92,10 @@ const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const APP_CLOSING_CHANNEL = "desktop:app-closing";
+const QUIT_CONFIRMATION_REQUEST_CHANNEL = "desktop:quit-confirmation-request";
+const QUIT_CONFIRMATION_RESPONSE_CHANNEL = "desktop:quit-confirmation-response";
+const GET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:get-confirm-before-quit";
+const SET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:set-confirm-before-quit";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
 const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
@@ -171,6 +175,7 @@ const LOG_FILE_MAX_FILES = 10;
 
 type DesktopPreferences = {
   iconTheme?: DesktopIconTheme;
+  confirmBeforeQuit?: boolean;
 };
 const APP_RUN_ID = Crypto.randomBytes(6).toString("hex");
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
@@ -191,6 +196,8 @@ let backendHttpUrl = "";
 let restartAttempt = 0;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 let isQuitting = false;
+let isQuittingConfirmed = false;
+let isQuitConfirmationOpen = false;
 let desktopProtocolRegistered = false;
 let codeOssFileProtocolRegistered = false;
 let aboutCommitHashCache: string | null | undefined;
@@ -1001,6 +1008,14 @@ function loadDesktopIconThemePreference(): DesktopIconTheme {
   return readDesktopPreferences().iconTheme ?? DEFAULT_DESKTOP_ICON_THEME;
 }
 
+function shouldConfirmBeforeQuit(): boolean {
+  return readDesktopPreferences().confirmBeforeQuit !== false;
+}
+
+function setConfirmBeforeQuit(confirmBeforeQuit: boolean): void {
+  writeDesktopPreferences({ ...readDesktopPreferences(), confirmBeforeQuit });
+}
+
 function resolveIconPath(
   ext: "ico" | "icns" | "png",
   theme: DesktopIconTheme = currentDesktopIconTheme,
@@ -1540,6 +1555,7 @@ async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed
         ),
       ),
     ]);
+    isQuittingConfirmed = true;
     autoUpdater.quitAndInstall();
     return { accepted: true, completed: true };
   } catch (error: unknown) {
@@ -1867,6 +1883,31 @@ function registerIpcHandlers(): void {
   ipcMain.removeAllListeners(GET_WS_URL_CHANNEL);
   ipcMain.on(GET_WS_URL_CHANNEL, (event) => {
     event.returnValue = backendWsUrl;
+  });
+
+  ipcMain.removeHandler(GET_CONFIRM_BEFORE_QUIT_CHANNEL);
+  ipcMain.handle(GET_CONFIRM_BEFORE_QUIT_CHANNEL, async () => shouldConfirmBeforeQuit());
+
+  ipcMain.removeHandler(SET_CONFIRM_BEFORE_QUIT_CHANNEL);
+  ipcMain.handle(SET_CONFIRM_BEFORE_QUIT_CHANNEL, async (_event, value: unknown) => {
+    if (typeof value === "boolean") {
+      setConfirmBeforeQuit(value);
+    }
+  });
+
+  ipcMain.removeAllListeners(QUIT_CONFIRMATION_RESPONSE_CHANNEL);
+  ipcMain.on(QUIT_CONFIRMATION_RESPONSE_CHANNEL, (_event, choice: unknown) => {
+    if (!isQuitConfirmationOpen) return;
+    if (choice === "cancel") {
+      isQuitConfirmationOpen = false;
+      return;
+    }
+    if (choice !== "save-and-quit") return;
+
+    isQuitConfirmationOpen = false;
+    codeHostManager.saveAllOpenSessions();
+    isQuittingConfirmed = true;
+    app.quit();
   });
 
   ipcMain.removeHandler("get-tailscale-status");
@@ -2745,10 +2786,21 @@ function createCodeOssWindow(
 
 function createWindow(): BrowserWindow {
   const runtime = codeHostConfig.runtime;
-  if (runtime && runtime.kind === "desktop-renderer") {
-    return createCodeOssWindow(runtime);
-  }
-  return createLegacyWindow();
+  const window = runtime && runtime.kind === "desktop-renderer"
+    ? createCodeOssWindow(runtime)
+    : createLegacyWindow();
+  window.on("close", (event) => {
+    if (
+      isQuittingConfirmed ||
+      !shouldConfirmBeforeQuit() ||
+      BrowserWindow.getAllWindows().length > 1
+    ) {
+      return;
+    }
+    event.preventDefault();
+    requestQuitConfirmation();
+  });
+  return window;
 }
 
 // Override Electron's userData path before the `ready` event so that
@@ -2873,6 +2925,11 @@ async function bootstrap(): Promise<void> {
         mainWindow.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, { projectId, state });
       }
     });
+    codeControlChannel.onOpenTabsProjectTab(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(MENU_ACTION_CHANNEL, "tab-new");
+      }
+    });
     writeDesktopLogHeader("bootstrap code control channel started");
   } catch (error) {
     writeDesktopLogHeader(`bootstrap code control channel failed: ${formatErrorMessage(error)}`);
@@ -2946,7 +3003,34 @@ async function bootstrap(): Promise<void> {
 let isCleanupFinished = false;
 let isCleaningUp = false;
 
+function requestQuitConfirmation(): void {
+  if (isQuitConfirmationOpen || isQuittingConfirmed) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  isQuitConfirmationOpen = true;
+  const sendRequest = () => {
+    if (isQuitConfirmationOpen && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(QUIT_CONFIRMATION_REQUEST_CHANNEL);
+    }
+  };
+  if (mainWindow.webContents.isLoadingMainFrame()) {
+    mainWindow.webContents.once("did-finish-load", sendRequest);
+  } else {
+    sendRequest();
+  }
+}
+
 app.on("before-quit", (event) => {
+  if (
+    !isCleanupFinished &&
+    !isQuittingConfirmed &&
+    shouldConfirmBeforeQuit() &&
+    mainWindow &&
+    !mainWindow.isDestroyed()
+  ) {
+    event.preventDefault();
+    requestQuitConfirmation();
+    return;
+  }
   if (isCleanupFinished) {
     return;
   }

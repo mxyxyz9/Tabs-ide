@@ -430,6 +430,11 @@ function startCodeControlChannel(context) {
       /* ignore */
     }
   };
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tabs.openProjectTab", () => {
+      send({ type: "openTabsProjectTab", projectId });
+    }),
+  );
   const pushState = () => send({ type: "chromeState", projectId, state: { ...state } });
 
   const serializeTestItem = (item) => {

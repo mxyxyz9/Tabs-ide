@@ -28,6 +28,11 @@
         "category": "Tabs"
       },
       {
+        "command": "tabs.openProjectTab",
+        "title": "Tabs: New Project Tab",
+        "category": "Tabs"
+      },
+      {
         "command": "tabs.focusCode",
         "title": "Tabs: Focus Code",
         "category": "Tabs"
@@ -36,6 +41,13 @@
         "command": "tabs.focusGit",
         "title": "Tabs: Focus Git",
         "category": "Tabs"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "tabs.openProjectTab",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n"
       }
     ]
   },

@@ -420,8 +420,16 @@ function ensureCodeOssWebServerDefaultKeybindings(): void {
         command: "-workbench.action.newWindow",
       },
       {
+        key: "cmd+shift+n",
+        command: "tabs.openProjectTab",
+      },
+      {
         key: "ctrl+shift+n",
         command: "-workbench.action.newWindow",
+      },
+      {
+        key: "ctrl+shift+n",
+        command: "tabs.openProjectTab",
       },
     ]);
     console.log(`[code-oss] embed keybindings written (managed-server) → ${keybindingsPath}`);
@@ -1889,6 +1897,13 @@ export class CodeHostManager {
     this.activeProjectId = null;
   }
 
+  /** Ask every connected embedded workbench to save its dirty editors before shutdown. */
+  saveAllOpenSessions(): void {
+    for (const projectId of this.sessions.keys()) {
+      this.controlChannel?.runCommand(projectId, "workbench.action.files.saveAll");
+    }
+  }
+
   async openFile(input: DesktopCodeHostOpenFileInput): Promise<void> {
     if (!this.config.state.available) {
       return;
@@ -2863,8 +2878,16 @@ export class CodeHostManager {
           command: "-workbench.action.newWindow",
         },
         {
+          key: "cmd+shift+n",
+          command: "tabs.openProjectTab",
+        },
+        {
           key: "ctrl+shift+n",
           command: "-workbench.action.newWindow",
+        },
+        {
+          key: "ctrl+shift+n",
+          command: "tabs.openProjectTab",
         },
       ]);
       console.log(

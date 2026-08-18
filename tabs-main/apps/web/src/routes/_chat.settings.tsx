@@ -1833,6 +1833,16 @@ function SettingsRouteView() {
   const activeProjectId = useWorkspaceActiveProjectId();
   const settings = useSettings();
   const { updateSettings, resetSettings } = useUpdateSettings();
+  const [confirmBeforeQuit, setConfirmBeforeQuit] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    void window.desktopBridge?.getConfirmBeforeQuit?.().then((value) => {
+      if (!cancelled && typeof value === "boolean") setConfirmBeforeQuit(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const { copyToClipboard } = useCopyToClipboard<{ providerName: string }>({
     onCopy: ({ providerName }) => {
       toastManager.add({
@@ -3204,6 +3214,22 @@ function SettingsRouteView() {
                               })
                             }
                             aria-label="Confirm before closing a tab"
+                          />
+                        }
+                      />
+
+                      <SettingsRow
+                        title="Confirm before quitting"
+                        description="Ask for confirmation when quitting the app (Cmd+Q / closing the window)."
+                        control={
+                          <Switch
+                            checked={confirmBeforeQuit}
+                            onCheckedChange={(checked) => {
+                              const next = Boolean(checked);
+                              setConfirmBeforeQuit(next);
+                              void window.desktopBridge?.setConfirmBeforeQuit?.(next);
+                            }}
+                            aria-label="Confirm before quitting"
                           />
                         }
                       />

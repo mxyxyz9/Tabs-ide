@@ -57,6 +57,7 @@ export class CodeControlChannel {
   private token = "";
   private port = 0;
   private readonly chromeStateListeners: ((projectId: string, state: CodeChromeState) => void)[] = [];
+  private readonly openTabsProjectTabListeners: ((projectId: string) => void)[] = [];
   private extensionHostConnectedListener: ((projectId: string) => void) | null = null;
   private urlFilePath: string | null = null;
 
@@ -137,6 +138,10 @@ export class CodeControlChannel {
           for (const listener of this.chromeStateListeners) {
             listener(message.projectId, message.state);
           }
+        } else if (message.type === "openTabsProjectTab") {
+          for (const listener of this.openTabsProjectTabListeners) {
+            listener(message.projectId);
+          }
         }
       }
     });
@@ -188,6 +193,11 @@ export class CodeControlChannel {
   /** Register the callback invoked whenever an extension pushes chrome state. */
   onChromeState(listener: (projectId: string, state: CodeChromeState) => void): void {
     this.chromeStateListeners.push(listener);
+  }
+
+  /** Register the callback invoked when an extension requests a new Tabs project tab. */
+  onOpenTabsProjectTab(listener: (projectId: string) => void): void {
+    this.openTabsProjectTabListeners.push(listener);
   }
 
   /** Register a callback fired the moment an extension host connects (hello handshake). */

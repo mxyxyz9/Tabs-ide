@@ -6,6 +6,7 @@ import { useAppClosing } from "./hooks/useAppClosing";
 import { useClientSettings } from "./state/settings";
 import { useTheme } from "./hooks/useTheme";
 import { CloseScreen } from "./components/CloseScreen";
+import { QuitConfirmationModal, type QuitConfirmationChoice } from "./components/QuitConfirmationModal";
 import type { ClosePhase } from "./components/CloseScreen";
 import type { AppRouter } from "./router";
 
@@ -43,10 +44,23 @@ function CloseScreenOverlay({ cleanupDone }: { cleanupDone: boolean }) {
 
 export function AppRoot({ router }: { readonly router: AppRouter }) {
   const { isClosing, cleanupDone } = useAppClosing();
+  const [isQuitConfirmationOpen, setIsQuitConfirmationOpen] = useState(false);
+
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge?.onQuitConfirmationRequested) return;
+    return bridge.onQuitConfirmationRequested(() => setIsQuitConfirmationOpen(true));
+  }, []);
+
+  const respondToQuitConfirmation = (choice: QuitConfirmationChoice) => {
+    setIsQuitConfirmationOpen(false);
+    window.desktopBridge?.respondToQuitConfirmation?.(choice);
+  };
 
   return (
     <AppAtomRegistryProvider>
       <RouterProvider router={router} />
+      <QuitConfirmationModal open={isQuitConfirmationOpen} onChoice={respondToQuitConfirmation} />
       {isClosing && <CloseScreenOverlay cleanupDone={cleanupDone} />}
     </AppAtomRegistryProvider>
   );

@@ -490,7 +490,8 @@ export type CodeControlServerMessage =
  */
 export type CodeControlClientMessage =
   | { type: "hello"; projectId: string; token: string }
-  | { type: "chromeState"; projectId: string; state: CodeChromeState };
+  | { type: "chromeState"; projectId: string; state: CodeChromeState }
+  | { type: "openTabsProjectTab"; projectId: string };
 
 /**
  * Parse/validate an inbound control message from a JSON string. Returns null on
@@ -513,6 +514,9 @@ export function parseCodeControlClientMessage(raw: string): CodeControlClientMes
   }
   if (record.type === "chromeState") {
     return { type: "chromeState", projectId, state: coerceChromeState(record.state) };
+  }
+  if (record.type === "openTabsProjectTab") {
+    return { type: "openTabsProjectTab", projectId };
   }
   return null;
 }

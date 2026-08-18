@@ -1107,6 +1107,10 @@ export interface DesktopBridge {
   onAppClosing: (listener: () => void) => () => void;
   onAppCleanupDone: (listener: () => void) => () => void;
   notifyReadyToExit: () => Promise<void>;
+  getConfirmBeforeQuit: () => Promise<boolean>;
+  setConfirmBeforeQuit: (value: boolean) => Promise<void>;
+  onQuitConfirmationRequested: (listener: () => void) => () => void;
+  respondToQuitConfirmation: (choice: "save-and-quit" | "cancel") => void;
 }
 
 export interface DesktopPreviewBridge {
