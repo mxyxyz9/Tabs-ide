@@ -26,6 +26,18 @@ describe("reasoningOrdering", () => {
         "EXTRA",
         "HIGH",
       ]);
+      expect(formatThinkingHeaderWords({ id: "xhigh", label: "xhigh" })).toEqual([
+        "EXTRA",
+        "HIGH",
+      ]);
+      expect(formatThinkingHeaderWords({ id: "instantthinking", label: "instantthinking" })).toEqual([
+        "INSTANT",
+        "THINK",
+      ]);
+      expect(formatThinkingHeaderWords({ id: "instant_thinking", label: "Instant Thinking" })).toEqual([
+        "INSTANT",
+        "THINKING",
+      ]);
     });
 
     it("handles single-word terms without splitting unnecessarily", () => {
@@ -100,7 +112,7 @@ describe("reasoningOrdering", () => {
       ]);
     });
 
-    it("falls back to default standard choices when descriptor sets do not contain reasoning effort options", () => {
+    it("returns empty array when descriptor sets do not contain reasoning effort options (e.g. non-reasoning models)", () => {
       const descriptors: ProviderOptionDescriptor[][] = [
         [
           {
@@ -112,14 +124,7 @@ describe("reasoningOrdering", () => {
         ],
       ];
 
-      expect(collectReasoningChoices(descriptors).map((c) => c.id)).toEqual([
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-        "max",
-        "ultra",
-      ]);
+      expect(collectReasoningChoices(descriptors)).toEqual([]);
     });
 
     it("collects, deduplicates by ID, and sorts choices from reasoning effort descriptors", () => {
@@ -154,6 +159,36 @@ describe("reasoningOrdering", () => {
       const result = collectReasoningChoices([set1, set2]);
       expect(result.map((c) => c.id)).toEqual(["low", "medium", "high", "max", "ultra"]);
       expect(result.find((c) => c.id === "ultra")?.label).toBe("Ultra Thinking");
+    });
+
+    it("correctly extracts choices that use value property instead of id", () => {
+      const serverSet: ProviderOptionDescriptor[] = [
+        {
+          id: "effort",
+          type: "select",
+          label: "Reasoning",
+          options: [
+            { value: "low", label: "Low" } as any,
+            { value: "medium", label: "Medium" } as any,
+            { value: "high", label: "High" } as any,
+            { value: "xhigh", label: "Extra High" } as any,
+            { value: "max", label: "Max" } as any,
+            { value: "ultracode", label: "Ultracode" } as any,
+            { value: "ultrathink", label: "Ultrathink" } as any,
+          ],
+        },
+      ];
+
+      const result = collectReasoningChoices([serverSet]);
+      expect(result.map((c) => c.id)).toEqual([
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultracode",
+        "ultrathink",
+      ]);
     });
   });
 });

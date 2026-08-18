@@ -2,15 +2,20 @@ import type { ProviderOptionChoice, ProviderOptionDescriptor } from "@tabs/contr
 
 export const REASONING_LEVEL_RANKS: Readonly<Record<string, number>> = {
   none: 0,
+  instant: 5,
+  instantthink: 5,
+  instantthinking: 5,
   low: 10,
   minimal: 15,
   medium: 20,
   high: 30,
   xhigh: 40,
+  extrahigh: 40,
   max: 50,
   ultra: 60,
   ultracode: 70,
   ultrathink: 80,
+  ultrathinking: 80,
 };
 
 /**
@@ -65,6 +70,7 @@ export function collectReasoningChoices(
   }
 
   const choicesMap = new Map<string, ProviderOptionChoice>();
+  let hasAnyReasoningDescriptor = false;
 
   for (const descriptors of descriptorSets) {
     const primary = descriptors.find(
@@ -78,17 +84,26 @@ export function collectReasoningChoices(
         d.id.toLowerCase().includes("variant"),
     );
 
-    if (primary && primary.type === "select" && Array.isArray(primary.options)) {
-      for (const choice of primary.options) {
-        if (choice && choice.id && !choicesMap.has(choice.id)) {
-          choicesMap.set(choice.id, choice);
+    if (primary && primary.type === "select" && Array.isArray(primary.options) && primary.options.length > 0) {
+      hasAnyReasoningDescriptor = true;
+      for (const rawChoice of primary.options) {
+        if (!rawChoice) continue;
+        const choiceId = (rawChoice.id ?? (rawChoice as any).value)?.toString().trim();
+        if (!choiceId) continue;
+        const choiceLabel = rawChoice.label ?? choiceId;
+        if (!choicesMap.has(choiceId)) {
+          choicesMap.set(choiceId, {
+            id: choiceId,
+            label: choiceLabel,
+            ...(rawChoice.isDefault !== undefined ? { isDefault: rawChoice.isDefault } : {}),
+          });
         }
       }
     }
   }
 
   if (choicesMap.size === 0) {
-    return [...DEFAULT_STANDARD_REASONING_CHOICES];
+    return hasAnyReasoningDescriptor ? [...DEFAULT_STANDARD_REASONING_CHOICES] : [];
   }
 
   return sortReasoningChoices(Array.from(choicesMap.values()));
@@ -96,14 +111,20 @@ export function collectReasoningChoices(
 
 /**
  * Splits and formats thinking level labels for multi-line display to prevent header text overlap in matrix grids.
- * Compound terms like `Ultrathink`, `Ultracode`, and `ExtraHigh` are split across multiple lines cleanly.
+ * Compound terms like `Ultrathink`, `Ultracode`, `InstantThinking`, and `XHigh` are split across multiple lines cleanly.
  */
 export function formatThinkingHeaderWords(stop: { id: string; label?: string }): string[] {
   const raw = (stop.label || stop.id).trim();
   const normalized = raw
-    .replace(/^ultra[-_]?think$/i, "Ultra Think")
-    .replace(/^ultra[-_]?code(r?)$/i, "Ultra Code$1")
+    .replace(/^x[-_]?high$/i, "Extra High")
     .replace(/^extra[-_]?high$/i, "Extra High")
+    .replace(/^ultra[-_]?think(ing)?$/i, "Ultra Think")
+    .replace(/^ultra[-_]?code(r?)$/i, "Ultra Code$1")
+    .replace(/^instant[-_]?think(ing)?$/i, "Instant Think")
+    .replace(/^fast[-_]?think(ing)?$/i, "Fast Think")
+    .replace(/^deep[-_]?think(ing)?$/i, "Deep Think")
+    .replace(/^high[-_]?reasoning$/i, "High Reasoning")
+    .replace(/^low[-_]?reasoning$/i, "Low Reasoning")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/[-_]/g, " ");
 

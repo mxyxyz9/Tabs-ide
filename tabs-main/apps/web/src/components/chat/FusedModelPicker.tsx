@@ -13,7 +13,7 @@ import {
   getProviderOptionDescriptors,
 } from "@tabs/shared/model";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDownIcon, PinIcon } from "lucide-react";
+import { ChevronDownIcon, PinIcon, SearchIcon, XIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ClaudeAI, CursorIcon, GrokIcon, type Icon, KiloIcon, OpenAI, OpenCodeIcon } from "../Icons";
@@ -93,9 +93,31 @@ interface FusedModelPickerProps {
   alignOffset?: number;
 }
 
+function getCleanModelName(name: string, activeTab: ProviderPickerKind | "pinned" | null): string {
+  if (activeTab === "pinned" || activeTab === null) {
+    return name;
+  }
+  const prefixes: Record<string, ReadonlyArray<string>> = {
+    claudeAgent: ["Claude "],
+    opencode: ["OpenCode ", "opencode/"],
+    codex: ["Codex "],
+    cursor: ["Cursor "],
+    grok: ["Grok "],
+  };
+  const list = prefixes[activeTab];
+  if (!list) return name;
+  for (const prefix of list) {
+    if (name.startsWith(prefix)) {
+      return name.slice(prefix.length);
+    }
+  }
+  return name;
+}
+
 export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<ProviderPickerKind | "pinned" | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const activeTab = selectedTab ?? props.lockedProvider ?? props.provider;
   const activeProvider = props.lockedProvider ?? props.provider;
@@ -259,7 +281,34 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         return [];
       }
       const caps = m.capabilities ?? EMPTY_CAPABILITIES;
-      return getProviderOptionDescriptors({ caps, selections: undefined }).filter(
+      let effectiveCaps = caps;
+      const optionDescriptors = (caps as any).optionDescriptors as ProviderOptionDescriptor[] | undefined;
+      const reasoningEffortLevels = (caps as any).reasoningEffortLevels as
+        | Array<{ value: string; label: string; isDefault?: boolean }>
+        | undefined;
+      if (
+        (!optionDescriptors || optionDescriptors.length === 0) &&
+        reasoningEffortLevels &&
+        reasoningEffortLevels.length > 0
+      ) {
+        effectiveCaps = {
+          ...caps,
+          optionDescriptors: [
+            {
+              id: "effort",
+              label: "Reasoning",
+              type: "select",
+              options: reasoningEffortLevels.map((lvl) => ({
+                id: lvl.value,
+                label: lvl.label,
+                isDefault: lvl.isDefault,
+              })),
+            },
+            ...(optionDescriptors ?? []),
+          ],
+        };
+      }
+      return getProviderOptionDescriptors({ caps: effectiveCaps, selections: undefined }).filter(
         (d) => d.id !== "agent",
       );
     });
@@ -271,15 +320,39 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   }, [modelDescriptorsList]);
 
   const matrixMinWidthClass =
-    globalStops.length >= 8
-      ? "min-w-[44rem]"
-      : globalStops.length >= 7
-        ? "min-w-[41rem]"
-        : globalStops.length >= 6
+    globalStops.length >= 9
+      ? "min-w-[46rem]"
+      : globalStops.length === 8
+        ? "min-w-[42rem]"
+        : globalStops.length === 7
           ? "min-w-[37rem]"
-          : "min-w-[33rem]";
+          : globalStops.length === 6
+            ? "min-w-[33rem]"
+            : globalStops.length >= 4
+              ? "min-w-[28rem]"
+              : "min-w-[24rem]";
 
-  // Group models hierarchically by subProvider or provider name
+  // Filter models based on search query
+  const filteredModels = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return models;
+    return models.filter((m) => {
+      const cleanName = getCleanModelName(m.name, activeTab).toLowerCase();
+      const fullName = m.name.toLowerCase();
+      const slug = m.slug.toLowerCase();
+      const subProvider = (m.subProvider ?? "").toLowerCase();
+      const providerName = ((m as any).providerName ?? "").toLowerCase();
+      return (
+        cleanName.includes(query) ||
+        fullName.includes(query) ||
+        slug.includes(query) ||
+        subProvider.includes(query) ||
+        providerName.includes(query)
+      );
+    });
+  }, [models, searchQuery, activeTab]);
+
+  // Group filtered models hierarchically by subProvider or provider name
   const groupedModels = useMemo(() => {
     const groups: Array<{
       name: string | null;
@@ -287,8 +360,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     }> = [];
 
     if (activeTab === "pinned") {
-      for (const model of pinnedModels) {
-        const groupName = model.providerName ?? model.subProvider ?? "Pinned";
+      for (const model of filteredModels) {
+        const groupName = (model as any).providerName ?? model.subProvider ?? "Pinned";
         let group = groups.find((g) => g.name === groupName);
         if (!group) {
           group = { name: groupName, items: [] };
@@ -299,9 +372,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       return groups;
     }
 
-    const sortedList = models;
-
-    for (const model of sortedList) {
+    for (const model of filteredModels) {
       const groupName = model.subProvider ?? null;
       let group = groups.find((g) => g.name === groupName);
       if (!group) {
@@ -311,7 +382,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       group.items.push(model);
     }
     return groups;
-  }, [activeTab, pinnedModels, models]);
+  }, [activeTab, filteredModels]);
 
   const triggerLabel = useMemo(() => {
     if (!activeModel) return "Select model";
@@ -349,6 +420,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const isExpandedPicker = Boolean(leverDescriptor) || globalStops.length >= 8;
 
+  const showSearch = models.length > 15 || searchQuery.length > 0;
+
   return (
     <Menu
       open={isOpen}
@@ -356,6 +429,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         setIsOpen(open);
         if (!open) {
           setSelectedTab(null);
+          setSearchQuery("");
         }
       }}
     >
@@ -397,7 +471,10 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                 key="pinned"
                 type="button"
                 title="Pinned"
-                onClick={() => setSelectedTab("pinned")}
+                onClick={() => {
+                  setSelectedTab("pinned");
+                  setSearchQuery("");
+                }}
                 className={cn(
                   "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative",
                   activeTab === "pinned" && "bg-accent border-border text-foreground shadow-xs",
@@ -432,6 +509,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                     disabled={disabled}
                     onClick={() => {
                       setSelectedTab(option.value);
+                      setSearchQuery("");
                       const nextModels = getProviderModels(props.providers, option.value);
                       const fallback = nextModels.find((m) => !m.isCustom) ?? nextModels[0];
                       if (fallback) setModelAndOptions(option.value, fallback.slug);
@@ -453,37 +531,76 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           <div
             className={cn("flex flex-col justify-center overflow-x-hidden", matrixMinWidthClass)}
           >
+            {showSearch && (
+              <div className="relative mb-2 mr-6">
+                <SearchIcon
+                  aria-hidden="true"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search models..."
+                  className="w-full h-8 pl-8 pr-7 text-xs bg-muted/40 hover:bg-muted/60 focus:bg-background border border-border/60 focus:border-ring rounded-lg outline-none text-foreground placeholder:text-muted-foreground/50 transition-colors"
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      if (searchQuery) {
+                        e.stopPropagation();
+                        setSearchQuery("");
+                      }
+                    }
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear search"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Pinned header labels with border line strictly above the scrolling model rows */}
+            {globalStops.length > 0 && (
+              <div className="relative h-10 mb-2 mr-6 select-none border-b border-border/80 dark:border-white/10 shrink-0">
+                {globalStops.map((stop, idx) => {
+                  const words = formatThinkingHeaderWords(stop);
+                  const fullLabel = words.join(" ");
+                  return (
+                    <div
+                      key={stop.id}
+                      title={fullLabel}
+                      className={cn(
+                        "absolute bottom-1.5 -translate-x-1/2 flex flex-col items-center justify-end text-center font-bold uppercase transition-colors leading-[1.1] pointer-events-none px-0.5",
+                        globalStops.length >= 8
+                          ? "text-[7.5px] tracking-tight text-muted-foreground/80 dark:text-zinc-400/80"
+                          : "text-[8px] tracking-wider text-muted-foreground/80 dark:text-zinc-400/80",
+                      )}
+                      style={{
+                        left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
+                        width: `calc((100% - 176px - 40px) / ${Math.max(1, globalStops.length - 1)})`,
+                      }}
+                    >
+                      {words.map((word, wIdx) => (
+                        <span
+                          key={wIdx}
+                          className="block whitespace-nowrap text-center leading-[1.1]"
+                        >
+                          {word}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-              {/* Header labels aligned absolutely to the global columns */}
-              {globalStops.length > 0 && (
-                <div className="sticky top-0 z-30 h-12 mb-2 select-none w-full bg-popover border-b border-border/60 pt-1.5 pb-2">
-                  {globalStops.map((stop, idx) => {
-                    const words = formatThinkingHeaderWords(stop);
-                    const fullLabel = words.join(" ");
-                    return (
-                      <div
-                        key={stop.id}
-                        title={fullLabel}
-                        className="absolute top-1 -translate-x-1/2 flex flex-col items-center justify-start text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors leading-[1.05] pointer-events-none"
-                        style={{
-                          left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
-                          width: `calc((100% - 176px - 40px) / ${Math.max(1, globalStops.length - 1)})`,
-                          maxWidth: "72px",
-                        }}
-                      >
-                        {words.map((word, wIdx) => (
-                          <span
-                            key={wIdx}
-                            className="block max-w-full truncate text-center leading-[1.05]"
-                          >
-                            {word}
-                          </span>
-                        ))}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
 
               {activeTab === "pinned" && pinnedModels.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none">
@@ -491,6 +608,14 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                   <div className="text-xs font-semibold text-foreground">No Pinned Models Yet</div>
                   <div className="text-[11px] text-muted-foreground max-w-52 mt-1 leading-normal">
                     Click the pin icon next to any model to pin it to your pinned models list.
+                  </div>
+                </div>
+              ) : filteredModels.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center select-none">
+                  <SearchIcon className="size-6 text-muted-foreground/40 mb-2" />
+                  <div className="text-xs font-semibold text-foreground">No matching models found</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    No models match "{searchQuery}"
                   </div>
                 </div>
               ) : (
@@ -573,27 +698,6 @@ function isModelSourceBadgeEnabled(): boolean {
   }
 }
 
-function getCleanModelName(name: string, activeTab: ProviderPickerKind | "pinned" | null): string {
-  if (activeTab === "pinned" || activeTab === null) {
-    return name;
-  }
-  const prefixes: Record<string, ReadonlyArray<string>> = {
-    claudeAgent: ["Claude "],
-    opencode: ["OpenCode ", "opencode/"],
-    codex: ["Codex "],
-    cursor: ["Cursor "],
-    grok: ["Grok "],
-  };
-  const list = prefixes[activeTab];
-  if (!list) return name;
-  for (const prefix of list) {
-    if (name.startsWith(prefix)) {
-      return name.slice(prefix.length);
-    }
-  }
-  return name;
-}
-
 // ── ModelRow Component: aligned stops layout with compact dynamic heights
 const ModelRow = memo(function ModelRow(props: {
   model: ServerProviderModel;
@@ -652,7 +756,7 @@ const ModelRow = memo(function ModelRow(props: {
   const allowedOptionIds = useMemo(
     () =>
       primarySelect && primarySelect.type === "select"
-        ? primarySelect.options.map((o) => o.id)
+        ? primarySelect.options.map((o) => (o.id ?? (o as any).value)?.toString())
         : [],
     [primarySelect],
   );
@@ -663,7 +767,10 @@ const ModelRow = memo(function ModelRow(props: {
       let minDiff = Infinity;
       for (let i = 0; i < props.globalStops.length; i++) {
         const stop = props.globalStops[i];
-        if (stop && allowedOptionIds.includes(stop.id)) {
+        if (
+          stop &&
+          (allowedOptionIds.includes(stop.id) || allowedOptionIds.includes((stop as any).value))
+        ) {
           const diff = Math.abs(i - desiredIndex);
           if (diff < minDiff) {
             minDiff = diff;
@@ -778,7 +885,9 @@ const ModelRow = memo(function ModelRow(props: {
   };
 
   const currentPrimaryVal = primarySelect ? getProviderOptionCurrentValue(primarySelect) : null;
-  const currentStopIndex = props.globalStops.findIndex((o) => o.id === currentPrimaryVal);
+  const currentStopIndex = props.globalStops.findIndex(
+    (o) => o.id === currentPrimaryVal || (o as any).value === currentPrimaryVal,
+  );
 
   // Use local drag index if actively dragging, fallback to database state index
   const resolvedIndex = localStopIndex !== null ? localStopIndex : currentStopIndex;
@@ -978,7 +1087,9 @@ const ModelRow = memo(function ModelRow(props: {
           {/* Aligned stops: solid dots if supported, invisible if not (preserves layout) */}
           <div className="absolute top-1/2 -translate-y-1/2 left-5 right-5 flex justify-between pointer-events-none z-10">
             {props.globalStops.map((stop, oIdx) => {
-              const isSupported = allowedOptionIds.includes(stop.id);
+              const isSupported =
+                allowedOptionIds.includes(stop.id) ||
+                allowedOptionIds.includes((stop as any).value);
               const isDotActive = props.isActive && oIdx <= resolvedIndex;
               return (
                 <div
@@ -1010,7 +1121,7 @@ const ModelRow = memo(function ModelRow(props: {
           )}
         </div>
       ) : (
-        <div className="flex-1 text-[11px] text-muted-foreground/70 font-semibold pl-8 pointer-events-none select-none italic tracking-wider dark:text-zinc-500/70">
+        <div className="flex-1 text-[11px] text-muted-foreground/70 font-semibold pl-8 pr-8 pointer-events-none select-none italic tracking-wider dark:text-zinc-500/70 truncate">
           Reasoning effort not supported by this model
         </div>
       )}
