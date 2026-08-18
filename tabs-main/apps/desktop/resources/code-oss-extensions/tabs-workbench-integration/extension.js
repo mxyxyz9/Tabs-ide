@@ -337,7 +337,7 @@ function startCodeControlChannel(context) {
   const controlFile = process.env.TABS_CODE_CONTROL_FILE;
   const logFile = controlFile ? path.join(path.dirname(controlFile), "code-control-ext.log") : null;
   const log = (message) => {
-    console.error(`[tabs-control] ${message}`);
+    console.log(`[tabs-control] ${message}`);
     trace(`control: ${message}`);
     if (logFile) {
       try {

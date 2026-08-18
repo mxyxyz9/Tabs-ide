@@ -59,9 +59,9 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     const result = ipcRenderer.sendSync(GET_WS_URL_CHANNEL);
     return typeof result === "string" ? result : null;
   },
-  pickFolder: () => ipcRenderer.invoke(PICK_FOLDER_CHANNEL),
+  pickFolder: (options) => ipcRenderer.invoke(PICK_FOLDER_CHANNEL, options),
   cloneRepository: (input) => ipcRenderer.invoke(CLONE_REPOSITORY_CHANNEL, input),
-  pickFile: () => ipcRenderer.invoke(PICK_FILE_CHANNEL),
+  pickFile: (options) => ipcRenderer.invoke(PICK_FILE_CHANNEL, options),
   confirm: (message) => ipcRenderer.invoke(CONFIRM_CHANNEL, message),
   setTheme: (theme) => ipcRenderer.invoke(SET_THEME_CHANNEL, theme),
   setIconTheme: (theme) => ipcRenderer.invoke(SET_ICON_THEME_CHANNEL, theme),

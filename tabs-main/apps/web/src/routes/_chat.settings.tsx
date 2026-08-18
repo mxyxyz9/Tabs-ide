@@ -123,6 +123,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { SegmentedControl } from "../components/ui/segmented-control";
 import { SidebarTrigger } from "../components/ui/sidebar";
 import { Switch } from "../components/ui/switch";
 import { ProjectWorkspaceSettingsSection } from "../components/ProjectWorkspaceSettingsSection";
@@ -2819,27 +2820,15 @@ function SettingsRouteView() {
                             ) : null
                           }
                           control={
-                            <div className="flex gap-0.5 rounded-lg bg-muted p-1 border border-border/40">
-                              {DESKTOP_ICON_OPTIONS.map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => {
-                                    if (option.value !== "dark" && option.value !== "light" && option.value !== "system") return;
-                                    updateSettings({ desktopIconTheme: option.value as "dark" | "light" });
-                                  }}
-                                  aria-label={`Desktop icon: ${option.label}`}
-                                  className={cn(
-                                    "px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
-                                    settings.desktopIconTheme === option.value
-                                      ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
+                            <SegmentedControl
+                              value={settings.desktopIconTheme}
+                              onValueChange={(val) => {
+                                if (val !== "dark" && val !== "light" && val !== "system") return;
+                                updateSettings({ desktopIconTheme: val as "dark" | "light" });
+                              }}
+                              options={DESKTOP_ICON_OPTIONS}
+                              aria-label="Desktop icon theme"
+                            />
                           }
                         />
                       ) : null}
@@ -2860,24 +2849,16 @@ function SettingsRouteView() {
                           ) : null
                         }
                         control={
-                          <div className="flex gap-0.5 rounded-lg bg-muted p-1 border border-border/40">
-                            {(["locale", "12-hour", "24-hour"] as const).map((fmt) => (
-                              <button
-                                key={fmt}
-                                type="button"
-                                onClick={() => updateSettings({ timestampFormat: fmt })}
-                                aria-label={`Time format: ${TIMESTAMP_FORMAT_LABELS[fmt]}`}
-                                className={cn(
-                                  "px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
-                                  settings.timestampFormat === fmt
-                                    ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
-                                )}
-                              >
-                                {TIMESTAMP_FORMAT_LABELS[fmt]}
-                              </button>
-                            ))}
-                          </div>
+                          <SegmentedControl
+                            value={settings.timestampFormat}
+                            onValueChange={(fmt) => updateSettings({ timestampFormat: fmt })}
+                            options={(["locale", "12-hour", "24-hour"] as const).map((fmt) => ({
+                              value: fmt,
+                              label: TIMESTAMP_FORMAT_LABELS[fmt],
+                              ariaLabel: `Time format: ${TIMESTAMP_FORMAT_LABELS[fmt]}`,
+                            }))}
+                            aria-label="Time format"
+                          />
                         }
                       />
                     </SettingsSection>
@@ -2900,24 +2881,16 @@ function SettingsRouteView() {
                           ) : null
                         }
                         control={
-                          <div className="flex gap-0.5 rounded-lg bg-muted p-1 border border-border/40">
-                            {(["tabs", "copilot"] as const).map((provider) => (
-                              <button
-                                key={provider}
-                                type="button"
-                                onClick={() => updateSettings({ aiProvider: provider })}
-                                aria-label={`AI Provider: ${AI_PROVIDER_LABELS[provider]}`}
-                                className={cn(
-                                  "px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap cursor-pointer",
-                                  settings.aiProvider === provider
-                                    ? "bg-background text-foreground shadow-sm border border-foreground/30 ring-1 ring-foreground/20 dark:bg-accent dark:border-foreground/40 dark:shadow-[0_0_12px_rgba(255,255,255,0.15)]"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted/40",
-                                )}
-                              >
-                                {AI_PROVIDER_LABELS[provider]}
-                              </button>
-                            ))}
-                          </div>
+                          <SegmentedControl
+                            value={settings.aiProvider}
+                            onValueChange={(provider) => updateSettings({ aiProvider: provider })}
+                            options={(["tabs", "copilot"] as const).map((provider) => ({
+                              value: provider,
+                              label: AI_PROVIDER_LABELS[provider],
+                              ariaLabel: `AI Provider: ${AI_PROVIDER_LABELS[provider]}`,
+                            }))}
+                            aria-label="Code tool AI provider"
+                          />
                         }
                       />
 

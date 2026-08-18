@@ -34,6 +34,8 @@ import type {
   ContextMenuItem,
   DesktopCloneRepositoryInput,
   DesktopCloneRepositoryResult,
+  PickFileOptions,
+  PickFolderOptions,
 } from "@tabs/contracts";
 import { NetService, layer as netServiceLayer } from "@tabs/shared/Net";
 import { RotatingFileSink } from "@tabs/shared/logging";
@@ -1916,29 +1918,36 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeHandler(PICK_FOLDER_CHANNEL);
-  ipcMain.handle(PICK_FOLDER_CHANNEL, async () => {
+  ipcMain.handle(PICK_FOLDER_CHANNEL, async (_event, rawOptions?: unknown) => {
+    const options = (rawOptions ?? null) as Partial<PickFolderOptions> | null;
     const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    const openOptions: Electron.OpenDialogOptions = {
+      properties: ["openDirectory", "createDirectory"],
+      ...(options?.initialPath ? { defaultPath: options.initialPath } : {}),
+    };
     const result = owner
-      ? await dialog.showOpenDialog(owner, {
-          properties: ["openDirectory", "createDirectory"],
-        })
-      : await dialog.showOpenDialog({
-          properties: ["openDirectory", "createDirectory"],
-        });
+      ? await dialog.showOpenDialog(owner, openOptions)
+      : await dialog.showOpenDialog(openOptions);
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
   });
 
   ipcMain.removeHandler(PICK_FILE_CHANNEL);
-  ipcMain.handle(PICK_FILE_CHANNEL, async () => {
+  ipcMain.handle(PICK_FILE_CHANNEL, async (_event, rawOptions?: unknown) => {
+    const options = (rawOptions ?? null) as Partial<PickFileOptions> | null;
     const owner = BrowserWindow.getFocusedWindow() ?? mainWindow;
+    const openOptions: Electron.OpenDialogOptions = {
+      properties: ["openFile"],
+      ...(options?.title ? { title: options.title } : {}),
+      ...(options?.buttonLabel ? { buttonLabel: options.buttonLabel } : {}),
+      ...(options?.initialPath ? { defaultPath: options.initialPath } : {}),
+      ...(Array.isArray(options?.filters) && options.filters.length > 0
+        ? { filters: options.filters }
+        : {}),
+    };
     const result = owner
-      ? await dialog.showOpenDialog(owner, {
-          properties: ["openFile"],
-        })
-      : await dialog.showOpenDialog({
-          properties: ["openFile"],
-        });
+      ? await dialog.showOpenDialog(owner, openOptions)
+      : await dialog.showOpenDialog(openOptions);
     if (result.canceled) return null;
     return result.filePaths[0] ?? null;
   });

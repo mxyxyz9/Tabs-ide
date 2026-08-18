@@ -1,0 +1,1543 @@
+import React, { memo, useCallback, useState } from "react";
+import type { ModelSlug } from "@tabs/contracts";
+import {
+  ArrowDownIcon,
+  ArrowRightIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CompassIcon,
+  DownloadIcon,
+  FileSpreadsheetIcon,
+  FileTextIcon,
+  FolderOpenIcon,
+  InfoIcon,
+  LoaderIcon,
+  PencilIcon,
+  PlusIcon,
+  RefreshCwIcon,
+  SearchIcon,
+  SparklesIcon,
+  Trash2Icon,
+  UploadCloudIcon,
+  XIcon,
+} from "lucide-react";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
+import { SegmentedControl } from "~/components/ui/segmented-control";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
+import { FusedModelPicker } from "~/components/chat/FusedModelPicker";
+import { openInPreferredEditor } from "~/editorPreferences";
+import { ensureNativeApi } from "~/nativeApi";
+import { cn } from "~/lib/utils";
+import { useTestingData } from "./context";
+import { TestingCaseLocatorPicker } from "./TestingWidgets";
+import type { TestingCaseFilter, TestingCaseIntakeMode, TestingWorkspaceSection } from "./types";
+
+function basenameOfPath(input: string): string {
+  const parts = input.split(/[/\\]/g).filter(Boolean);
+  return parts[parts.length - 1] ?? input;
+}
+
+interface AutoResizeStepInputProps {
+  value: string;
+  onChange: (value: string) => void;
+  onEnterNext?: () => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+  className?: string;
+  minHeight?: number;
+  maxHeight?: number;
+}
+
+const AutoResizeStepInput = memo(function AutoResizeStepInput({
+  value,
+  onChange,
+  onEnterNext,
+  placeholder,
+  ariaLabel,
+  disabled,
+  className,
+  minHeight = 32,
+  maxHeight = 160,
+}: AutoResizeStepInputProps) {
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  React.useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const nextHeight = Math.min(Math.max(el.scrollHeight, minHeight), maxHeight);
+    el.style.height = `${nextHeight}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [value, minHeight, maxHeight]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      rows={1}
+      value={value}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          onEnterNext?.();
+        }
+      }}
+      className={cn(
+        "w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-snug shadow-none outline-none focus:ring-0 focus-visible:outline-none placeholder:text-muted-foreground/50",
+        className,
+      )}
+      style={{ minHeight: `${minHeight}px`, maxHeight: `${maxHeight}px` }}
+    />
+  );
+});
+
+interface TestingCasesProps {
+  projectPath: string;
+  onNavigate: (section: TestingWorkspaceSection) => void;
+}
+
+export const TestingCases = memo(function TestingCases({
+  projectPath,
+  onNavigate,
+}: TestingCasesProps) {
+  const [caseIntakeMode, setCaseIntakeMode] = useState<TestingCaseIntakeMode>("manual");
+  const [manualCaseId, setManualCaseId] = useState("");
+  const [manualCaseDescription, setManualCaseDescription] = useState("");
+  const [manualCaseSteps, setManualCaseSteps] = useState<ReadonlyArray<string>>([""]);
+  const [manualCaseExpected, setManualCaseExpected] = useState("");
+  const [manualCaseLocatorIds, setManualCaseLocatorIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [storyText, setStoryText] = useState("");
+  const [storyFilePath, setStoryFilePath] = useState("");
+
+  const {
+    projectId,
+    busyAction,
+    setBusyAction,
+    message_setter,
+    setWorkspaceCases,
+    caseIdPolicy,
+    chooseWorkbook,
+    setWorkbookPath,
+    importWorkbook,
+    workbookPath,
+    generationFusionProvider,
+    generationModelSelection,
+    fusionProviders,
+    updateTestingFusionModel,
+    updateTestingFusionOptions,
+    status,
+    generateScenarios,
+    implementedInventoryOpen,
+    setImplementedInventoryOpen,
+    testInventoryView,
+    setTestInventoryView,
+    refreshTestingWorkspace,
+    flattenedTestInventory,
+    expandedTestNodes,
+    selectedTestNodeId,
+    setSelectedTestNodeId,
+    testInventory,
+    cases,
+    reviewCaseCount,
+    acceptedCaseCount,
+    caseSearch,
+    setCaseSearch,
+    caseFilter,
+    setCaseFilter,
+    selectedGenerationCaseIds,
+    setSelectedGenerationCaseIds,
+    readyCases,
+    filteredCases,
+    selectedCase,
+    setSelectedCaseId,
+    editingCaseId,
+    setEditingCaseId,
+    editedExternalId,
+    setEditedExternalId,
+    editedDescription,
+    setEditedDescription,
+    editedSteps,
+    setEditedSteps,
+    updateEditedStep,
+    moveEditedStep,
+    editedCaseLocatorIds,
+    setEditedCaseLocatorIds,
+    editedExpectedResult,
+    setEditedExpectedResult,
+    reviewCase,
+    beginEditCase,
+    locatorLibrary,
+  } = useTestingData();
+
+  const chooseStoryFile = useCallback(async () => {
+    const selected = await ensureNativeApi().dialogs.pickFile({
+      title: "Choose User Story Document",
+      filters: [
+        {
+          name: "Story Documents (*.txt, *.md, *.docx, *.pdf)",
+          extensions: ["txt", "md", "docx", "pdf"],
+        },
+      ],
+    });
+    if (selected) setStoryFilePath(selected);
+  }, []);
+
+  const createManualCase = useCallback(async () => {
+    const steps = manualCaseSteps.map((step) => step.trim()).filter(Boolean);
+    if (!manualCaseDescription.trim() || steps.length === 0) {
+      message_setter("Add a description and at least one test step.");
+      return;
+    }
+    setBusyAction("review");
+    try {
+      const result = await ensureNativeApi().testing.createCase({
+        projectId,
+        ...(manualCaseId.trim() ? { externalId: manualCaseId.trim() } : {}),
+        description: manualCaseDescription.trim(),
+        steps,
+        expectedResult: manualCaseExpected.trim(),
+        locatorEntryIds: [...manualCaseLocatorIds],
+      });
+      setWorkspaceCases(result.cases);
+      const created = result.cases.find(
+        (testCase) =>
+          (manualCaseId.trim() && testCase.externalId === manualCaseId.trim()) ||
+          testCase.description === manualCaseDescription.trim(),
+      );
+      if (created) setSelectedCaseId(created.id);
+      setManualCaseId("");
+      setManualCaseDescription("");
+      setManualCaseSteps([""]);
+      setManualCaseExpected("");
+      setManualCaseLocatorIds(new Set());
+      message_setter(`Created ${created?.externalId ?? "the case"} in this project.`);
+    } catch (error) {
+      message_setter(error instanceof Error ? error.message : "Could not create the test case.");
+    } finally {
+      setBusyAction(null);
+    }
+  }, [
+    manualCaseDescription,
+    manualCaseExpected,
+    manualCaseId,
+    manualCaseLocatorIds,
+    manualCaseSteps,
+    message_setter,
+    projectId,
+    setBusyAction,
+    setSelectedCaseId,
+    setWorkspaceCases,
+  ]);
+
+  const updateManualCaseStep = useCallback((index: number, value: string) => {
+    setManualCaseSteps((current) =>
+      current.map((step, stepIndex) => (stepIndex === index ? value : step)),
+    );
+  }, []);
+
+  const importUserStory = useCallback(async () => {
+    if (!storyText.trim() && !storyFilePath) return;
+    setBusyAction("story-import");
+    message_setter("Generating reviewable cases from the sanitized user story...");
+    try {
+      const result = await ensureNativeApi().testing.importUserStory({
+        projectId,
+        projectPath,
+        sourceKind: storyFilePath ? "file" : "text",
+        ...(storyFilePath ? { filePath: storyFilePath } : { content: storyText.trim() }),
+        modelSelection: generationModelSelection,
+      });
+      setWorkspaceCases(result.cases);
+      message_setter(`Created ${result.generatedCount} reviewable cases from ${result.sourceName}.`);
+    } catch (error) {
+      message_setter(error instanceof Error ? error.message : "Could not import the user story.");
+    } finally {
+      setBusyAction(null);
+    }
+  }, [
+    generationModelSelection,
+    message_setter,
+    projectId,
+    projectPath,
+    setBusyAction,
+    setWorkspaceCases,
+    storyFilePath,
+    storyText,
+  ]);
+
+  return (
+    <section aria-labelledby="testing-cases-heading" className="space-y-4">
+      <div className="space-y-1">
+        <h2 id="testing-cases-heading" className="text-lg font-semibold text-foreground">
+          Test case workspace
+        </h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          Bring an existing QA plan or start from verified app paths. Case IDs, workbook rows,
+          findings, and review decisions stay together in one queue.
+        </p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add test cases</CardTitle>
+          <CardDescription>
+            Start one case yourself, bring a QA workbook, turn a story into candidates, or reuse
+            paths already captured from the application.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div
+            className="grid grid-cols-1 gap-1.5 rounded-2xl border border-border/50 bg-muted/40 p-1.5 shadow-inner backdrop-blur-sm sm:grid-cols-2 xl:grid-cols-4"
+            role="radiogroup"
+            aria-label="Choose how to add test cases"
+          >
+            {(
+              [
+                ["manual", "Write a case", "Create and map one case", FileTextIcon],
+                ["excel", "Import Excel", "Best for assigned QA batches", FileSpreadsheetIcon],
+                ["story", "Use a user story", "Generate reviewable candidates", SparklesIcon],
+                ["graph", "From captured app", "Reuse verified app paths", CompassIcon],
+              ] as const
+            ).map(([value, label, description, Icon]) => {
+              const isSelected = caseIntakeMode === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  onClick={() => setCaseIntakeMode(value)}
+                  className={cn(
+                    "group relative flex flex-col items-start gap-1.5 rounded-xl p-3 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring select-none",
+                    isSelected
+                      ? "border border-foreground/30 bg-background text-foreground shadow-sm ring-1 ring-foreground/20 dark:border-foreground/40 dark:bg-accent dark:shadow-[0_0_14px_rgba(255,255,255,0.12)]"
+                      : "border border-transparent text-muted-foreground hover:border-border/40 hover:bg-background/50 hover:text-foreground",
+                  )}
+                >
+                  <div className="flex w-full items-center gap-2.5">
+                    <div
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors",
+                        isSelected
+                          ? "border-primary/40 bg-primary/10 text-primary dark:border-primary/50 dark:bg-primary/20"
+                          : "border-border/60 bg-muted/60 text-muted-foreground group-hover:border-border group-hover:bg-muted group-hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="truncate text-sm font-semibold text-foreground">
+                      {label}
+                    </span>
+                  </div>
+                  <span className="block pl-0.5 text-xs leading-relaxed text-muted-foreground">
+                    {description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {caseIntakeMode === "manual" ? (
+            <div className="space-y-4.5 rounded-xl border border-border/60 bg-muted/10 p-4">
+              <div className="grid gap-3.5 sm:grid-cols-[14rem_minmax(0,1fr)]">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <label htmlFor="testing-manual-case-id" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Case ID
+                    </label>
+                    <span className="text-[11px] font-normal text-muted-foreground/75">
+                      Auto-assigned if blank
+                    </span>
+                  </div>
+                  <Input
+                    id="testing-manual-case-id"
+                    value={manualCaseId}
+                    onChange={(event) => setManualCaseId(event.target.value)}
+                    placeholder={caseIdPolicy?.example ?? "TC-00001"}
+                    disabled={busyAction !== null}
+                    className="font-mono text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <label htmlFor="testing-manual-description" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      What should this test prove?
+                    </label>
+                    <span className="text-[11px] font-normal text-muted-foreground/75">
+                      Test objective
+                    </span>
+                  </div>
+                  <Input
+                    id="testing-manual-description"
+                    value={manualCaseDescription}
+                    onChange={(event) => setManualCaseDescription(event.target.value)}
+                    placeholder="e.g. A workspace owner can update project settings"
+                    disabled={busyAction !== null}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Steps
+                    </span>
+                    <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
+                      {manualCaseSteps.length} {manualCaseSteps.length === 1 ? "step" : "steps"}
+                    </Badge>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => setManualCaseSteps([...manualCaseSteps, ""])}
+                  >
+                    <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    Add step
+                  </Button>
+                </div>
+                <ol className="space-y-2" aria-label="New test case steps">
+                  {manualCaseSteps.map((step, index) => (
+                    <li
+                      key={`manual-step-${index}`}
+                      className="flex items-start gap-2.5 rounded-xl border border-border/70 bg-background/80 px-3 py-1.5 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 dark:bg-background/40"
+                    >
+                      <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground border border-border/40">
+                        {index + 1}
+                      </div>
+                      <AutoResizeStepInput
+                        value={step}
+                        onChange={(val) => updateManualCaseStep(index, val)}
+                        onEnterNext={() =>
+                          setManualCaseSteps([
+                            ...manualCaseSteps.slice(0, index + 1),
+                            "",
+                            ...manualCaseSteps.slice(index + 1),
+                          ])
+                        }
+                        ariaLabel={`New case step ${index + 1}`}
+                        placeholder="Describe user action (Enter for new step, Shift+Enter for newline)"
+                      />
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Delete new case step ${index + 1}`}
+                        disabled={manualCaseSteps.length === 1}
+                        className="mt-0.5 size-7 shrink-0 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-30"
+                        onClick={() =>
+                          setManualCaseSteps(
+                            manualCaseSteps.filter((_, stepIndex) => stepIndex !== index),
+                          )
+                        }
+                      >
+                        <Trash2Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="testing-manual-expected" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Expected result
+                </label>
+                <div className="flex items-start rounded-xl border border-border/70 bg-background/80 px-3 py-1.5 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 dark:bg-background/40">
+                  <AutoResizeStepInput
+                    value={manualCaseExpected}
+                    onChange={setManualCaseExpected}
+                    placeholder="Describe the visible outcome (Shift+Enter for newline)"
+                    ariaLabel="Expected result"
+                    minHeight={32}
+                    maxHeight={140}
+                  />
+                </div>
+              </div>
+              <TestingCaseLocatorPicker
+                library={locatorLibrary}
+                selectedIds={manualCaseLocatorIds}
+                onChange={setManualCaseLocatorIds}
+                label="Locator context"
+              />
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="button"
+                  onClick={() => void createManualCase()}
+                  disabled={busyAction !== null}
+                >
+                  {busyAction === "review" ? (
+                    <LoaderIcon aria-hidden="true" className="animate-spin" />
+                  ) : null}
+                  Create test case
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {caseIntakeMode === "excel" ? (
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">
+                    Import Spreadsheet Test Cases
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Upload an Excel workbook to batch import structured test cases into your workspace queue.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 shrink-0 self-start gap-1.5 text-xs sm:self-auto"
+                  render={
+                    <a
+                      href="/testing/testing-cases-template.xlsx"
+                      download="Tabs-Testing-Test-Cases-Template.xlsx"
+                    />
+                  }
+                >
+                  <DownloadIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                  Download template (.xlsx)
+                </Button>
+              </div>
+
+              {!workbookPath ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void chooseWorkbook()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void chooseWorkbook();
+                    }
+                  }}
+                  className="group flex cursor-pointer flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-border/80 bg-background/60 px-4 py-7 text-center transition-all hover:border-primary/50 hover:bg-muted/20 focus:outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 dark:bg-background/30"
+                >
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary transition-transform group-hover:scale-105">
+                    <UploadCloudIcon className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      Choose an Excel workbook or browse files
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Supports <span className="font-mono font-medium text-foreground/80">.xlsx</span> sheets with Case ID, Description, Steps, and Expected Result columns
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="pointer-events-none mt-1 h-8 gap-1.5 text-xs"
+                    disabled={busyAction !== null}
+                  >
+                    <FolderOpenIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    Browse workbook
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 transition-all dark:bg-emerald-950/10">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <FileSpreadsheetIcon className="h-5 w-5" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-mono text-sm font-medium text-foreground">
+                            {basenameOfPath(workbookPath)}
+                          </span>
+                          <Badge variant="secondary" className="border-emerald-300 bg-emerald-100 px-1.5 py-0 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                            Ready to import
+                          </Badge>
+                        </div>
+                        <p className="truncate text-xs text-muted-foreground" title={workbookPath}>
+                          {workbookPath}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => void chooseWorkbook()}
+                        disabled={busyAction !== null}
+                      >
+                        Change
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Remove selected workbook"
+                        className="size-7 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => setWorkbookPath("")}
+                        disabled={busyAction !== null}
+                      >
+                        <XIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col-reverse gap-3 border-t border-border/40 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                  <span>
+                    Imported IDs are preserved and mapped steps remain fully reviewable before test code generation.
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => void importWorkbook()}
+                  disabled={!workbookPath || busyAction !== null}
+                  className="shrink-0 gap-2 sm:self-auto"
+                >
+                  {busyAction === "import" ? (
+                    <LoaderIcon aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheetIcon aria-hidden="true" className="h-4 w-4" />
+                  )}
+                  Import and verify
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {caseIntakeMode === "story" ? (
+            <div className="grid gap-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-1">
+                  <label htmlFor="testing-story-text" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    User story
+                  </label>
+                  <span className="text-[11px] text-muted-foreground/75">
+                    Feature spec or requirements
+                  </span>
+                </div>
+                <Textarea
+                  id="testing-story-text"
+                  rows={7}
+                  value={storyText}
+                  onChange={(event) => setStoryText(event.target.value)}
+                  placeholder="As a workspace owner, I want to update project settings..."
+                  disabled={Boolean(storyFilePath) || busyAction !== null}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => void chooseStoryFile()}
+                    disabled={busyAction !== null}
+                  >
+                    <FolderOpenIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    Choose story file
+                  </Button>
+                  {storyFilePath ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-muted-foreground hover:text-destructive"
+                      onClick={() => setStoryFilePath("")}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
+                  <span className="break-all text-xs text-muted-foreground">
+                    {storyFilePath || "TXT, Markdown, DOCX, or text-based PDF"}
+                  </span>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Fusion model
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Choose provider, model, and reasoning level in one matrix.
+                  </p>
+                </div>
+                <FusedModelPicker
+                  provider={generationFusionProvider}
+                  model={generationModelSelection.model as ModelSlug}
+                  lockedProvider={null}
+                  providers={fusionProviders as any}
+                  prompt={storyText}
+                  onPromptChange={setStoryText}
+                  modelOptions={generationModelSelection.options}
+                  onProviderModelChange={updateTestingFusionModel}
+                  onModelOptionsChange={updateTestingFusionOptions}
+                  triggerClassName="w-full justify-between"
+                />
+                <Button
+                  type="button"
+                  className="w-full gap-2"
+                  onClick={() => void importUserStory()}
+                  disabled={(!storyText.trim() && !storyFilePath) || busyAction !== null}
+                >
+                  {busyAction === "story-import" ? (
+                    <LoaderIcon className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <SparklesIcon className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Generate reviewable cases
+                </Button>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                  <span>Story and locator context are sanitized before provider dispatch.</span>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {caseIntakeMode === "graph" ? (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/10 p-4 sm:p-5">
+              <div className="max-w-2xl space-y-1">
+                <div className="text-sm font-semibold text-foreground">Create cases from captured paths</div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  Testing proposes cases only from reachable states and verified transitions recorded during discovery. Review them before building any code.
+                </p>
+              </div>
+              {(status?.nodeCount ?? 0) > 0 ? (
+                <Button
+                  type="button"
+                  onClick={() => void generateScenarios()}
+                  disabled={busyAction !== null}
+                  className="gap-2"
+                >
+                  {busyAction === "generate" ? (
+                    <LoaderIcon aria-hidden="true" className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SparklesIcon className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  Generate from captured app
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onNavigate("discover")}
+                  className="gap-1.5"
+                >
+                  Configure app connection
+                  <ArrowRightIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              )}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <TestingImplementedInventory
+        implementedInventoryOpen={implementedInventoryOpen}
+        setImplementedInventoryOpen={setImplementedInventoryOpen}
+        testInventoryView={testInventoryView}
+        setTestInventoryView={setTestInventoryView}
+        refreshTestingWorkspace={refreshTestingWorkspace}
+        flattenedTestInventory={flattenedTestInventory}
+        expandedTestNodes={expandedTestNodes}
+        selectedTestNodeId={selectedTestNodeId}
+        setSelectedTestNodeId={setSelectedTestNodeId}
+        testInventory={testInventory}
+      />
+
+      <TestingCaseQueue
+        cases={cases}
+        reviewCaseCount={reviewCaseCount}
+        acceptedCaseCount={acceptedCaseCount}
+        caseSearch={caseSearch}
+        setCaseSearch={setCaseSearch}
+        caseFilter={caseFilter}
+        setCaseFilter={setCaseFilter}
+        selectedGenerationCaseIds={selectedGenerationCaseIds}
+        setSelectedGenerationCaseIds={setSelectedGenerationCaseIds}
+        readyCases={readyCases}
+        filteredCases={filteredCases}
+        selectedCase={selectedCase}
+        setSelectedCaseId={setSelectedCaseId}
+        editingCaseId={editingCaseId}
+        setEditingCaseId={setEditingCaseId}
+        editedExternalId={editedExternalId}
+        setEditedExternalId={setEditedExternalId}
+        editedDescription={editedDescription}
+        setEditedDescription={setEditedDescription}
+        editedSteps={editedSteps}
+        setEditedSteps={setEditedSteps}
+        updateEditedStep={updateEditedStep}
+        moveEditedStep={moveEditedStep}
+        editedCaseLocatorIds={editedCaseLocatorIds}
+        setEditedCaseLocatorIds={setEditedCaseLocatorIds}
+        editedExpectedResult={editedExpectedResult}
+        setEditedExpectedResult={setEditedExpectedResult}
+        reviewCase={reviewCase}
+        beginEditCase={beginEditCase}
+        locatorLibrary={locatorLibrary}
+        projectPath={projectPath}
+        onNavigate={onNavigate}
+        busyAction={busyAction}
+      />
+    </section>
+  );
+});
+
+interface TestingImplementedInventoryProps {
+  implementedInventoryOpen: boolean;
+  setImplementedInventoryOpen: (v: boolean) => void;
+  testInventoryView: "tree" | "table";
+  setTestInventoryView: (v: "tree" | "table") => void;
+  refreshTestingWorkspace: () => Promise<void>;
+  flattenedTestInventory: ReadonlyArray<{ node: import("@tabs/contracts").TestingTestInventoryNode; depth: number }>;
+  expandedTestNodes: ReadonlySet<string>;
+  selectedTestNodeId: string | null;
+  setSelectedTestNodeId: (id: string | null) => void;
+  testInventory: import("@tabs/contracts").TestingTestInventoryResult | null;
+}
+
+const TestingImplementedInventory = memo(function TestingImplementedInventory({
+  implementedInventoryOpen,
+  setImplementedInventoryOpen,
+  testInventoryView,
+  setTestInventoryView,
+  refreshTestingWorkspace,
+  flattenedTestInventory,
+  expandedTestNodes,
+  selectedTestNodeId,
+  setSelectedTestNodeId,
+  testInventory,
+}: TestingImplementedInventoryProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Implemented tests</CardTitle>
+            <CardDescription>
+              Managed cases and statically discovered Playwright tests, grouped like a Test Explorer.
+            </CardDescription>
+          </div>
+          <div className="flex gap-1" role="group" aria-label="Test inventory view">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-expanded={implementedInventoryOpen}
+              onClick={() => setImplementedInventoryOpen(!implementedInventoryOpen)}
+            >
+              {implementedInventoryOpen ? "Hide inventory" : "Show inventory"}
+              <ChevronDownIcon
+                aria-hidden="true"
+                className={cn("transition-transform", implementedInventoryOpen && "rotate-180")}
+              />
+            </Button>
+            {implementedInventoryOpen ? (
+              <>
+                <SegmentedControl
+                  size="sm"
+                  value={testInventoryView}
+                  onValueChange={setTestInventoryView}
+                  options={[
+                    { value: "tree", label: "Tree" },
+                    { value: "table", label: "Table" },
+                  ]}
+                  aria-label="Test inventory view mode"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void refreshTestingWorkspace()}
+                >
+                  <RefreshCwIcon aria-hidden="true" />
+                  Refresh
+                </Button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className={cn(!implementedInventoryOpen && "hidden")}>
+        {testInventoryView === "tree" ? (
+          <div
+            role="tree"
+            aria-label="Implemented test inventory"
+            className="max-h-80 overflow-auto rounded-xl border border-border/60 p-2"
+          >
+            {flattenedTestInventory.map(({ node, depth }, index) => {
+              const expandable = node.children.length > 0;
+              const expanded = expandedTestNodes.has(node.id);
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  role="treeitem"
+                  aria-level={depth + 1}
+                  aria-expanded={expandable ? expanded : undefined}
+                  aria-selected={selectedTestNodeId === node.id}
+                  tabIndex={
+                    selectedTestNodeId === node.id || (!selectedTestNodeId && index === 0) ? 0 : -1
+                  }
+                  data-testing-tree-index={index}
+                  onClick={() => {
+                    setSelectedTestNodeId(node.id);
+                  }}
+                  onDoubleClick={() => {
+                    if (node.filePath) void openInPreferredEditor(ensureNativeApi(), node.filePath);
+                  }}
+                  onKeyDown={(event) => {
+                    const items = Array.from(
+                      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                        "[data-testing-tree-index]",
+                      ) ?? [],
+                    );
+                    const focusAt = (target: number) =>
+                      items[Math.max(0, Math.min(items.length - 1, target))]?.focus();
+                    if (event.key === "ArrowDown") {
+                      event.preventDefault();
+                      focusAt(index + 1);
+                    } else if (event.key === "ArrowUp") {
+                      event.preventDefault();
+                      focusAt(index - 1);
+                    } else if (event.key === "Home") {
+                      event.preventDefault();
+                      focusAt(0);
+                    } else if (event.key === "End") {
+                      event.preventDefault();
+                      focusAt(items.length - 1);
+                    } else if (event.key === "Enter") {
+                      event.preventDefault();
+                      setSelectedTestNodeId(node.id);
+                      if (node.filePath) {
+                        void openInPreferredEditor(ensureNativeApi(), node.filePath);
+                      }
+                    }
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    selectedTestNodeId === node.id && "bg-primary/10 text-foreground",
+                  )}
+                  style={{ paddingLeft: `${8 + depth * 18}px` }}
+                >
+                  {expandable ? (
+                    expanded ? (
+                      <ChevronDownIcon aria-hidden="true" className="size-4" />
+                    ) : (
+                      <ChevronRightIcon aria-hidden="true" className="size-4" />
+                    )
+                  ) : (
+                    <span className="size-4" aria-hidden="true" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{node.label}</span>
+                  <Badge variant="outline">{node.source}</Badge>
+                  {node.status !== "unknown" ? (
+                    <Badge variant={node.status === "passed" ? "success" : "secondary"}>
+                      {node.status}
+                    </Badge>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="max-h-80 overflow-auto rounded-xl border border-border/60">
+            <table className="w-full text-left text-sm">
+              <thead className="sticky top-0 bg-card text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Test</th>
+                  <th className="px-3 py-2">Source</th>
+                  <th className="px-3 py-2">Location</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {flattenedTestInventory
+                  .filter(({ node }) => node.kind === "test" || node.kind === "case")
+                  .map(({ node }) => (
+                    <tr key={node.id}>
+                      <td className="px-3 py-2">{node.label}</td>
+                      <td className="px-3 py-2">{node.source}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                        {node.filePath ? `${node.filePath}:${node.line ?? 1}` : node.externalCaseId}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          {testInventory?.repositoryFilesScanned ?? 0} repository test files scanned. VS Code
+          provider:{" "}
+          {testInventory?.editorProviderConnected
+            ? "connected"
+            : "unavailable; repository scan is active"}
+          .
+        </p>
+      </CardContent>
+    </Card>
+  );
+});
+
+interface TestingCaseQueueProps {
+  cases: ReadonlyArray<import("@tabs/contracts").TestingCaseSummary>;
+  reviewCaseCount: number;
+  acceptedCaseCount: number;
+  caseSearch: string;
+  setCaseSearch: (v: string) => void;
+  caseFilter: TestingCaseFilter;
+  setCaseFilter: (v: TestingCaseFilter) => void;
+  selectedGenerationCaseIds: ReadonlySet<string>;
+  setSelectedGenerationCaseIds: (ids: ReadonlySet<string>) => void;
+  readyCases: ReadonlyArray<import("@tabs/contracts").TestingCaseSummary>;
+  filteredCases: ReadonlyArray<import("@tabs/contracts").TestingCaseSummary>;
+  selectedCase: import("@tabs/contracts").TestingCaseSummary | null;
+  setSelectedCaseId: (id: string | null) => void;
+  editingCaseId: string | null;
+  setEditingCaseId: (id: string | null) => void;
+  editedExternalId: string;
+  setEditedExternalId: (v: string) => void;
+  editedDescription: string;
+  setEditedDescription: (v: string) => void;
+  editedSteps: ReadonlyArray<string>;
+  setEditedSteps: (steps: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => void;
+  updateEditedStep: (index: number, value: string) => void;
+  moveEditedStep: (index: number, direction: -1 | 1) => void;
+  editedCaseLocatorIds: ReadonlySet<string>;
+  setEditedCaseLocatorIds: (ids: ReadonlySet<string>) => void;
+  editedExpectedResult: string;
+  setEditedExpectedResult: (v: string) => void;
+  reviewCase: (testCase: import("@tabs/contracts").TestingCaseSummary, decision: "accepted" | "edited" | "rejected") => Promise<void>;
+  beginEditCase: (testCase: import("@tabs/contracts").TestingCaseSummary) => void;
+  locatorLibrary: import("@tabs/contracts").TestingLocatorLibraryResult | null;
+  projectPath: string;
+  onNavigate: (section: TestingWorkspaceSection) => void;
+  busyAction: import("./types").TestingBusyAction;
+}
+
+const TestingCaseQueue = memo(function TestingCaseQueue({
+  cases,
+  reviewCaseCount,
+  acceptedCaseCount,
+  caseSearch,
+  setCaseSearch,
+  caseFilter,
+  setCaseFilter,
+  selectedGenerationCaseIds,
+  setSelectedGenerationCaseIds,
+  readyCases,
+  filteredCases,
+  selectedCase,
+  setSelectedCaseId,
+  editingCaseId,
+  setEditingCaseId,
+  editedExternalId,
+  setEditedExternalId,
+  editedDescription,
+  setEditedDescription,
+  editedSteps,
+  setEditedSteps,
+  updateEditedStep,
+  moveEditedStep,
+  editedCaseLocatorIds,
+  setEditedCaseLocatorIds,
+  editedExpectedResult,
+  setEditedExpectedResult,
+  reviewCase,
+  beginEditCase,
+  locatorLibrary,
+  projectPath,
+  onNavigate,
+  busyAction,
+}: TestingCaseQueueProps) {
+  return (
+    <div className="space-y-4" aria-live="polite">
+      {cases.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            No reconciled cases yet. Import a workbook or generate scenarios from the graph.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ["Total cases", cases.length, "text-foreground"],
+              ["Need review", reviewCaseCount, "text-amber-600"],
+              ["Ready to automate", acceptedCaseCount, "text-emerald-600"],
+            ].map(([label, value, color]) => (
+              <Card key={label as string}>
+                <CardContent className="py-4">
+                  <div className={cn("text-xl font-semibold tabular-nums", color as string)}>
+                    {value}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+            <div className="relative">
+              <SearchIcon
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                value={caseSearch}
+                onChange={(event) => setCaseSearch(event.target.value)}
+                placeholder="Search test ID or description"
+                aria-label="Search test cases"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={caseFilter}
+              onValueChange={(value) => setCaseFilter(value as TestingCaseFilter)}
+            >
+              <SelectTrigger aria-label="Filter test cases">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="all">All cases</SelectItem>
+                <SelectItem value="needs-review">Needs review</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="blocked">Blocked</SelectItem>
+              </SelectPopup>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/10 px-3 py-2.5">
+            <div className="text-sm text-foreground">
+              <span className="font-medium">{selectedGenerationCaseIds.size}</span> ready case
+              {selectedGenerationCaseIds.size === 1 ? "" : "s"} selected for Build tests
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setSelectedGenerationCaseIds(new Set(readyCases.map((testCase) => testCase.id)))
+                }
+              >
+                Select all ready
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedGenerationCaseIds(new Set())}
+              >
+                Clear
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={selectedGenerationCaseIds.size === 0}
+                onClick={() => onNavigate("automate")}
+              >
+                Continue to Build tests
+                <ArrowRightIcon aria-hidden="true" />
+              </Button>
+            </div>
+          </div>
+          <div className="grid min-h-[30rem] overflow-hidden rounded-xl border border-border/70 bg-card lg:grid-cols-[19rem_minmax(0,1fr)]">
+            <div className="max-h-[40rem] overflow-auto border-b border-border/70 lg:border-b-0 lg:border-r">
+              <div
+                className="border-b border-border/70 px-4 py-3 text-xs text-muted-foreground"
+                role="status"
+              >
+                {filteredCases.length} of {cases.length} cases
+              </div>
+              <ul aria-label="Test case IDs">
+                {filteredCases.map((testCase) => {
+                  const ready =
+                    testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited";
+                  return (
+                    <li
+                      key={testCase.id}
+                      className="flex items-start gap-2 border-b border-border/60 px-3 py-3 last:border-b-0"
+                    >
+                      <Checkbox
+                        checked={selectedGenerationCaseIds.has(testCase.id)}
+                        disabled={!ready}
+                        onCheckedChange={(checked) => {
+                          setSelectedGenerationCaseIds(
+                            new Set(
+                              checked
+                                ? [...selectedGenerationCaseIds, testCase.id]
+                                : [...selectedGenerationCaseIds].filter((id) => id !== testCase.id),
+                            ),
+                          );
+                        }}
+                        aria-label={
+                          ready
+                            ? `Select ${testCase.externalId} for test generation`
+                            : `${testCase.externalId} must be reviewed before generation`
+                        }
+                        className="mt-1"
+                      />
+                      <button
+                        type="button"
+                        aria-current={selectedCase?.id === testCase.id ? "true" : undefined}
+                        onClick={() => {
+                          setSelectedCaseId(testCase.id);
+                          setEditingCaseId(null);
+                        }}
+                        className={cn(
+                          "min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          selectedCase?.id === testCase.id
+                            ? "bg-foreground/[0.06]"
+                            : "hover:bg-muted/50",
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {testCase.externalId}
+                          </span>
+                          <span
+                            className={cn(
+                              "size-2 shrink-0 rounded-full",
+                              testCase.status === "matches"
+                                ? "bg-emerald-500"
+                                : testCase.status === "blocked"
+                                  ? "bg-destructive"
+                                  : "bg-amber-500",
+                            )}
+                            aria-hidden="true"
+                          />
+                        </span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">
+                          {testCase.description}
+                        </span>
+                        <span className="mt-2 block text-[11px] capitalize text-muted-foreground">
+                          {testCase.status.replace("-", " ")} · {testCase.reviewDecision}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <div className="min-w-0 p-4 sm:p-5">
+              {selectedCase ? (
+                <Card key={selectedCase.id} className="border-0 shadow-none">
+                  <CardHeader>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <CardTitle className="text-base">
+                          {selectedCase.externalId}: {selectedCase.description}
+                        </CardTitle>
+                        <CardDescription>
+                          {selectedCase.creationMethod === "manual"
+                            ? "Created manually in this Testing project"
+                            : selectedCase.source === "excel"
+                              ? `${selectedCase.sourceSheet ?? "Workbook"}, row ${selectedCase.sourceRow ?? "unknown"}`
+                              : "Generated from a verified graph transition"}
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline">
+                          {selectedCase.creationMethod ?? selectedCase.source}
+                        </Badge>
+                        <Badge
+                          variant={selectedCase.status === "matches" ? "success" : "secondary"}
+                        >
+                          {selectedCase.status.replace("-", " ")}
+                        </Badge>
+                        <Badge variant="outline">{selectedCase.reviewDecision}</Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {editingCaseId === selectedCase.id ? (
+                      <div className="space-y-3">
+                        <div className="grid gap-3.5 sm:grid-cols-[14.5rem_minmax(0,1fr)]">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-1">
+                              <label
+                                htmlFor={`testing-case-id-${selectedCase.id}`}
+                                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                              >
+                                Case ID
+                              </label>
+                              <span className="text-[11px] font-normal text-muted-foreground/75">
+                                Unique ID
+                              </span>
+                            </div>
+                            <Input
+                              id={`testing-case-id-${selectedCase.id}`}
+                              value={editedExternalId}
+                              onChange={(event) => setEditedExternalId(event.target.value)}
+                              className="font-mono text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-1">
+                              <label
+                                htmlFor={`testing-case-description-${selectedCase.id}`}
+                                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                              >
+                                Reviewed description
+                              </label>
+                              <span className="text-[11px] font-normal text-muted-foreground/75">
+                                Test objective
+                              </span>
+                            </div>
+                            <Input
+                              id={`testing-case-description-${selectedCase.id}`}
+                              value={editedDescription}
+                              onChange={(event) => setEditedDescription(event.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                Test steps
+                              </span>
+                              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
+                                {editedSteps.length} {editedSteps.length === 1 ? "step" : "steps"}
+                              </Badge>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 gap-1 text-xs"
+                              onClick={() => setEditedSteps([...editedSteps, ""])}
+                            >
+                              <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                              Add step
+                            </Button>
+                          </div>
+                          <ol className="space-y-2" aria-label="Review test case steps">
+                            {editedSteps.map((step, index) => (
+                              <li
+                                key={`edit-step-${index}`}
+                                className="flex items-start gap-2 rounded-xl border border-border/70 bg-background/80 px-3 py-1.5 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 dark:bg-background/40"
+                              >
+                                <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground border border-border/40">
+                                  {index + 1}
+                                </div>
+                                <AutoResizeStepInput
+                                  value={step}
+                                  onChange={(val) => updateEditedStep(index, val)}
+                                  onEnterNext={() =>
+                                    setEditedSteps([
+                                      ...editedSteps.slice(0, index + 1),
+                                      "",
+                                      ...editedSteps.slice(index + 1),
+                                    ])
+                                  }
+                                  ariaLabel={`Step ${index + 1}`}
+                                  placeholder="Describe user action (Enter for new step, Shift+Enter for newline)"
+                                />
+                                <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
+                                  <Button
+                                    type="button"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={`Move step ${index + 1} up`}
+                                    disabled={index === 0}
+                                    className="size-7 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                    onClick={() => moveEditedStep(index, -1)}
+                                  >
+                                    <ArrowUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={`Move step ${index + 1} down`}
+                                    disabled={index === editedSteps.length - 1}
+                                    className="size-7 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+                                    onClick={() => moveEditedStep(index, 1)}
+                                  >
+                                    <ArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={`Insert step after ${index + 1}`}
+                                    className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
+                                    onClick={() =>
+                                      setEditedSteps([
+                                        ...editedSteps.slice(0, index + 1),
+                                        "",
+                                        ...editedSteps.slice(index + 1),
+                                      ])
+                                    }
+                                  >
+                                    <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="icon-sm"
+                                    variant="ghost"
+                                    aria-label={`Delete step ${index + 1}`}
+                                    disabled={editedSteps.length === 1}
+                                    className="size-7 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+                                    onClick={() =>
+                                      setEditedSteps(
+                                        editedSteps.filter((_, stepIndex) => stepIndex !== index),
+                                      )
+                                    }
+                                  >
+                                    <Trash2Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </Button>
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                        <TestingCaseLocatorPicker
+                          library={locatorLibrary}
+                          selectedIds={editedCaseLocatorIds}
+                          onChange={setEditedCaseLocatorIds}
+                          label="Locator context for this case"
+                        />
+                        <div className="space-y-1.5">
+                          <label
+                            htmlFor={`testing-case-expected-${selectedCase.id}`}
+                            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                          >
+                            Expected result
+                          </label>
+                          <div className="flex items-start rounded-xl border border-border/70 bg-background/80 px-3 py-1.5 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 dark:bg-background/40">
+                            <AutoResizeStepInput
+                              value={editedExpectedResult}
+                              onChange={setEditedExpectedResult}
+                              placeholder="Describe the visible outcome (Shift+Enter for newline)"
+                              ariaLabel="Expected result"
+                              minHeight={32}
+                              maxHeight={140}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void reviewCase(selectedCase, "edited")}
+                            disabled={busyAction !== null}
+                          >
+                            Save reviewed case
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingCaseId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <ol className="list-decimal space-y-1 pl-5 text-sm text-foreground">
+                          {selectedCase.steps.map((step) => (
+                            <li key={`${selectedCase.id}-${step}`}>{step}</li>
+                          ))}
+                        </ol>
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/10 p-3">
+                          <div>
+                            <div className="text-sm font-medium text-foreground">
+                              Locator context
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {(selectedCase.locatorEntryIds ?? []).length === 0
+                                ? "No explicit locators mapped; generation will use verified path context."
+                                : `${(selectedCase.locatorEntryIds ?? []).length} locator${(selectedCase.locatorEntryIds ?? []).length === 1 ? "" : "s"} mapped to this case.`}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => beginEditCase(selectedCase)}
+                          >
+                            Choose locators
+                          </Button>
+                        </div>
+                        {selectedCase.mismatches.length > 0 ? (
+                          <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                            <div className="text-sm font-medium text-foreground">
+                              Review findings
+                            </div>
+                            {selectedCase.mismatches.map((mismatch) => (
+                              <p
+                                key={`${selectedCase.id}-${mismatch.kind}-${mismatch.stepIndex ?? "case"}-${mismatch.expected}`}
+                                className="text-xs leading-5 text-muted-foreground"
+                              >
+                                Expected: {mismatch.expected}. Observed: {mismatch.actual}.
+                              </p>
+                            ))}
+                          </div>
+                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void reviewCase(selectedCase, "accepted")}
+                            disabled={busyAction !== null}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => beginEditCase(selectedCase)}
+                            disabled={busyAction !== null}
+                          >
+                            <PencilIcon aria-hidden="true" />
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void reviewCase(selectedCase, "rejected")}
+                            disabled={busyAction !== null}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="py-16 text-center text-sm text-muted-foreground">
+                  No cases match this search and filter.
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+});
+
+export default TestingCases;

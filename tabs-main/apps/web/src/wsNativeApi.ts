@@ -220,13 +220,13 @@ export function createWsNativeApi(): NativeApi {
         transport.request(WS_METHODS.testingTriageFailure, input, { timeoutMs: null }),
     },
     dialogs: {
-      pickFolder: async () => {
+      pickFolder: async (options) => {
         if (!window.desktopBridge) return null;
-        return window.desktopBridge.pickFolder();
+        return window.desktopBridge.pickFolder(options);
       },
-      pickFile: async () => {
+      pickFile: async (options) => {
         if (!window.desktopBridge) return null;
-        return window.desktopBridge.pickFile();
+        return window.desktopBridge.pickFile(options);
       },
       confirm: async (message) => {
         return showCustomConfirm(message);

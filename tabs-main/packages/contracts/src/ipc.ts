@@ -520,6 +520,32 @@ export const DesktopServerExposureStateSchema = Schema.Struct({
   tailscaleServePort: Schema.Number,
 });
 
+export interface DesktopFileFilter {
+  name: string;
+  extensions: string[];
+}
+
+export const DesktopFileFilterSchema = Schema.Struct({
+  name: Schema.String,
+  extensions: Schema.Array(Schema.String),
+});
+
+export interface PickFileOptions {
+  initialPath?: string | null;
+  filters?: DesktopFileFilter[];
+  title?: string;
+  buttonLabel?: string;
+  targetEnvironmentId?: string;
+}
+
+export const PickFileOptionsSchema = Schema.Struct({
+  initialPath: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  filters: Schema.optionalKey(Schema.Array(DesktopFileFilterSchema)),
+  title: Schema.optionalKey(Schema.String),
+  buttonLabel: Schema.optionalKey(Schema.String),
+  targetEnvironmentId: Schema.optionalKey(Schema.String),
+});
+
 export interface PickFolderOptions {
   initialPath?: string | null;
   // When set, the desktop dialog opens against the named backend's
@@ -1046,7 +1072,7 @@ export interface DesktopBridge {
   setPersistedItem: (key: string, value: string) => Promise<void>;
   removePersistedItem: (key: string) => Promise<void>;
   pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
-  pickFile: () => Promise<string | null>;
+  pickFile: (options?: PickFileOptions) => Promise<string | null>;
   confirm: (message: string) => Promise<boolean>;
   setTheme: (theme: DesktopTheme) => Promise<void>;
   setIconTheme: (theme: DesktopIconTheme) => Promise<void>;
@@ -1188,7 +1214,7 @@ export interface DesktopPreviewBridge {
 export interface LocalApi {
   dialogs: {
     pickFolder: (options?: PickFolderOptions) => Promise<string | null>;
-    pickFile: () => Promise<string | null>;
+    pickFile: (options?: PickFileOptions) => Promise<string | null>;
     confirm: (message: string) => Promise<boolean>;
   };
   shell: {

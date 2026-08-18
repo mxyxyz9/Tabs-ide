@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, Copy, Pipette, X } from "lucide-react";
 import { toHexColor } from "@tabs/shared/themeDerivation";
+import { SegmentedControl } from "./segmented-control";
 
 interface CustomColorPickerProps {
   label: string;
@@ -328,22 +329,19 @@ export const CustomColorPicker: React.FC<CustomColorPickerProps> = ({
               Color Studio
             </span>
 
-            <div className="flex rounded-lg bg-muted p-0.5 border border-border/60">
-              {(["hex", "rgb", "hsl"] as ColorMode[]).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setColorMode(m)}
-                  className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md transition-all cursor-pointer ${
-                    colorMode === m
-                      ? "bg-background text-foreground shadow-xs border border-border/50"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              size="sm"
+              value={colorMode}
+              onValueChange={setColorMode}
+              options={[
+                { value: "hex", label: "HEX" },
+                { value: "rgb", label: "RGB" },
+                { value: "hsl", label: "HSL" },
+              ]}
+              className="p-0.5"
+              itemClassName="px-2 py-0.5 text-[10px] uppercase"
+              aria-label="Color mode"
+            />
 
             <button
               type="button"
