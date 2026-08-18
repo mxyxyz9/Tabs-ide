@@ -14,6 +14,7 @@ import {
   type ProjectWorkspaceSettings as ProjectWorkspaceSettingsType,
 } from "@tabs/contracts/settings";
 import { ProjectId, ThreadId } from "@tabs/contracts";
+import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
 
 const WORKSPACE_SHELL_STORAGE_KEY = "tabs:workspace-shell:v1";
 
@@ -76,6 +77,7 @@ export interface WorkspaceShellPersistedState {
   // each tab (incl. custom tabs) reopens where the user left it.
   browserUrlBySessionKey: Record<string, string>;
   codeStateByProjectId: Record<ProjectId, ProjectCodeToolState>;
+  codeChromeStateByProjectId: Record<ProjectId, CodeChromeState>;
   gitStateByProjectId: Record<ProjectId, ProjectGitToolState>;
   serverStateByProjectId: Record<ProjectId, ProjectServerToolState>;
 }
@@ -106,6 +108,10 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
     },
   ) => void;
   setCodeFocusedPath: (projectId: ProjectId, path: string | null) => void;
+  setCodeChromeState: (
+    projectId: ProjectId,
+    updater: CodeChromeState | ((current: CodeChromeState) => CodeChromeState),
+  ) => void;
   setSideChatOpen: (projectId: ProjectId, open: boolean) => void;
   setSideChatThread: (projectId: ProjectId, threadId: ThreadId | null) => void;
   setGitSelectedPath: (projectId: ProjectId, path: string | null) => void;
@@ -317,6 +323,10 @@ function ensureProjectDefaults(
       ...state.codeStateByProjectId,
       [projectId]: state.codeStateByProjectId[projectId] ?? defaultCodeToolState(),
     },
+    codeChromeStateByProjectId: {
+      ...state.codeChromeStateByProjectId,
+      [projectId]: state.codeChromeStateByProjectId?.[projectId] ?? DEFAULT_CODE_CHROME_STATE,
+    },
     gitStateByProjectId: {
       ...state.gitStateByProjectId,
       [projectId]: state.gitStateByProjectId[projectId] ?? defaultGitToolState(),
@@ -345,6 +355,7 @@ export function createDefaultWorkspaceShellPersistedState(): WorkspaceShellPersi
     browserStateByProjectId: {},
     browserUrlBySessionKey: {},
     codeStateByProjectId: {},
+    codeChromeStateByProjectId: {},
     gitStateByProjectId: {},
     serverStateByProjectId: {},
   };
@@ -372,6 +383,10 @@ export function syncWorkspaceShellState(
     }
     if (input.codeStateByProjectId[project.id]) {
       nextState.codeStateByProjectId[project.id] = input.codeStateByProjectId[project.id]!;
+    }
+    if (input.codeChromeStateByProjectId?.[project.id]) {
+      nextState.codeChromeStateByProjectId[project.id] =
+        input.codeChromeStateByProjectId[project.id]!;
     }
     if (input.gitStateByProjectId[project.id]) {
       nextState.gitStateByProjectId[project.id] = input.gitStateByProjectId[project.id]!;
@@ -671,6 +686,20 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             },
           },
         })),
+      setCodeChromeState: (projectId, updater) =>
+        set((state) => {
+          const current =
+            state.codeChromeStateByProjectId[projectId] ?? DEFAULT_CODE_CHROME_STATE;
+          const nextChromeState =
+            typeof updater === "function" ? updater(current) : updater;
+          return {
+            ...state,
+            codeChromeStateByProjectId: {
+              ...state.codeChromeStateByProjectId,
+              [projectId]: nextChromeState,
+            },
+          };
+        }),
       setSideChatOpen: (projectId, open) =>
         set((state) => ({
           ...state,
@@ -828,6 +857,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
         browserStateByProjectId: state.browserStateByProjectId,
         browserUrlBySessionKey: state.browserUrlBySessionKey,
         codeStateByProjectId: state.codeStateByProjectId,
+        codeChromeStateByProjectId: state.codeChromeStateByProjectId,
         gitStateByProjectId: state.gitStateByProjectId,
         serverStateByProjectId: state.serverStateByProjectId,
       }),

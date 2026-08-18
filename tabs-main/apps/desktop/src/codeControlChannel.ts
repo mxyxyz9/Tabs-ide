@@ -54,6 +54,7 @@ export class CodeControlChannel {
   private readonly socketsByProject = new Map<string, Net.Socket>();
   private readonly projectBySocket = new Map<Net.Socket, string>();
   private readonly dynamicAllowedCommandsByProject = new Map<string, Set<string>>();
+  private readonly latestChromeStateByProject = new Map<string, CodeChromeState>();
   private token = "";
   private port = 0;
   private readonly chromeStateListeners: ((projectId: string, state: CodeChromeState) => void)[] = [];
@@ -126,6 +127,7 @@ export class CodeControlChannel {
           continue;
         }
         if (message.type === "chromeState") {
+          this.latestChromeStateByProject.set(message.projectId, message.state);
           const allowed = new Set<string>();
           if (message.state.activityBarItems) {
             for (const item of message.state.activityBarItems) {
@@ -254,6 +256,10 @@ export class CodeControlChannel {
         socket.write(payload);
       }
     }
+  }
+
+  getChromeState(projectId: string): CodeChromeState | null {
+    return this.latestChromeStateByProject.get(projectId) ?? null;
   }
 
   url(): string {

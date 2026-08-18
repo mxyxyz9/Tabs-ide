@@ -25,6 +25,7 @@ export function initializeWorkspaceShellState() {
       browserStateByProjectId: state.browserStateByProjectId,
       browserUrlBySessionKey: state.browserUrlBySessionKey,
       codeStateByProjectId: state.codeStateByProjectId,
+      codeChromeStateByProjectId: state.codeChromeStateByProjectId,
       gitStateByProjectId: state.gitStateByProjectId,
       serverStateByProjectId: state.serverStateByProjectId,
     });
@@ -85,6 +86,9 @@ export const workspaceShellActions = {
   setCodeFocusedPath: (
     ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setCodeFocusedPath"]>
   ) => useWorkspaceShellStore.getState().setCodeFocusedPath(...args),
+  setCodeChromeState: (
+    ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["setCodeChromeState"]>
+  ) => useWorkspaceShellStore.getState().setCodeChromeState(...args),
   rememberThread: (
     ...args: Parameters<ReturnType<typeof useWorkspaceShellStore.getState>["rememberThread"]>
   ) => useWorkspaceShellStore.getState().rememberThread(...args),

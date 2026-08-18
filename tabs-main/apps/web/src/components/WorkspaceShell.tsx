@@ -218,6 +218,7 @@ import { getCodeHostUnavailableMessage } from "./codeHost.logic";
 import { CodeActivityRail } from "./code/CodeActivityRail";
 import { CodeHeaderBar } from "./code/CodeHeaderBar";
 import {
+  CODE_ACTIVITY_ITEMS,
   CODE_CHROME_COMMANDS,
   DEFAULT_CODE_CHROME_STATE,
   type CodeChromeState,
@@ -1889,7 +1890,10 @@ function DesktopCodeTool(props: { project: Project }) {
   // Native-chrome state pushed from the embedded workbench through the desktop
   // bridge (the integration extension reports view/panel/scm state over the
   // loopback control channel). Clicks forward allowlisted workbench commands.
-  const [chromeState, setChromeState] = useState<CodeChromeState>(DEFAULT_CODE_CHROME_STATE);
+  const chromeState = useAtomValue(
+    workspaceShellAtom,
+    (state) => state.codeChromeStateByProjectId?.[props.project.id] ?? DEFAULT_CODE_CHROME_STATE,
+  );
   const projectId = props.project.id;
   // Native AI side chat (Antigravity-style): a compact embed of the project's
   // Agents chat docked to the right of the editor, toggled from the header. It
@@ -2036,9 +2040,20 @@ function DesktopCodeTool(props: { project: Project }) {
   }, [projectId, setSideChatThreadIdOverride]);
   const runCodeCommand = useCallback(
     (commandId: string) => {
+      const targetItem = CODE_ACTIVITY_ITEMS.find((item) => item.commandId === commandId);
+      const targetCustomItem = chromeState.activityBarItems?.find(
+        (item) => item.commandId === commandId,
+      );
+      const matchedViewId = targetItem?.id ?? targetCustomItem?.id ?? null;
+      if (matchedViewId) {
+        workspaceShellActions.setCodeChromeState(projectId, (curr: CodeChromeState) => ({
+          ...curr,
+          activeViewId: matchedViewId,
+        }));
+      }
       void window.desktopBridge?.runCodeCommand(projectId, commandId).catch(() => undefined);
     },
-    [projectId],
+    [projectId, chromeState.activityBarItems],
   );
 
   useEffect(() => {
@@ -2050,16 +2065,21 @@ function DesktopCodeTool(props: { project: Project }) {
   }, [aiProvider, setSideChatOpen, runCodeCommand]);
   useEffect(() => {
     const bridge = window.desktopBridge;
-    if (!bridge?.onCodeChromeState) {
+    if (!bridge?.getCodeChromeState) {
       return;
     }
-    // Only apply state tagged for this project — several editors share the one
-    // control channel.
-    return bridge.onCodeChromeState((update) => {
-      if (update.projectId === projectId) {
-        setChromeState(update.state);
-      }
-    });
+    let cancelled = false;
+    void bridge
+      .getCodeChromeState({ projectId })
+      .then((state) => {
+        if (!cancelled && state) {
+          workspaceShellActions.setCodeChromeState(projectId, state);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   const openProjectInEditor = useCallback(async () => {
@@ -9511,6 +9531,16 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       const { availableTools: tools, switchTool } = toolShortcutRef.current;
       const target = tools[Number(match[1]) - 1];
       if (target) void switchTool(target.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    const bridge = window.desktopBridge;
+    if (!bridge?.onCodeChromeState) return;
+    return bridge.onCodeChromeState((update) => {
+      if (update?.projectId && update?.state) {
+        workspaceShellActions.setCodeChromeState(update.projectId as ProjectId, update.state);
+      }
     });
   }, []);
 

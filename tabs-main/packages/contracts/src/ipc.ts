@@ -1098,6 +1098,8 @@ export interface DesktopBridge {
   recreateCodeSession: (input: { projectId: string }) => Promise<void>;
   /** Forward an allowlisted workbench command to a project's embedded editor. Resolves true when delivered. */
   runCodeCommand: (projectId: string, commandId: string) => Promise<boolean>;
+  /** Get the latest known chrome state for a project. */
+  getCodeChromeState: (input: { projectId: string }) => Promise<CodeChromeState>;
   /** Subscribe to chrome-state pushes from the embedded workbench (tagged by project). Returns an unsubscribe fn. */
   onCodeChromeState: (
     listener: (update: { projectId: string; state: CodeChromeState }) => void,

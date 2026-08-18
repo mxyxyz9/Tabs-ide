@@ -47,6 +47,8 @@ const MANAGED_SERVER_START_ATTEMPTS = 3;
 // Grace period after SIGTERM before escalating to SIGKILL when stopping a server.
 const PROCESS_KILL_GRACE_MS = 3_000;
 
+export const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
+
 export const CODE_OSS_WEB_LAUNCHER_RELATIVE_PATH = Path.join("scripts", "code-web.js");
 export const CODE_OSS_WEB_SERVER_RELATIVE_PATH = Path.join(
   "node_modules",
@@ -1886,6 +1888,14 @@ export class CodeHostManager {
       session.view.setBounds(session.bounds);
     }
     await this.loadSessionWhenVisible(session);
+
+    const cachedState = this.controlChannel?.getChromeState(session.projectId);
+    if (cachedState && !window.isDestroyed()) {
+      window.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, {
+        projectId: session.projectId,
+        state: cachedState,
+      });
+    }
   }
 
   hideActiveSession(): void {

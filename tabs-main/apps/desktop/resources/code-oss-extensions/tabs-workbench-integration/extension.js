@@ -399,7 +399,7 @@ function startCodeControlChannel(context) {
 
   /** @type {{ activeViewId: string | null, panelOpen: boolean, panelMaximized: boolean, dirtyCount: number, branch: string | null, activityBarItems: any[], autoSaveEnabled: boolean, openTabs: any[], testItems: any[] }} */
   const state = {
-    activeViewId: null,
+    activeViewId: "explorer",
     panelOpen: false,
     panelMaximized: false,
     dirtyCount: 0,

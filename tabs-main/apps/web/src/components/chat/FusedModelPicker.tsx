@@ -27,7 +27,7 @@ import {
   getModelScore,
   sortModelsByDefaultSequence,
 } from "../../modelOrdering";
-import { collectReasoningChoices } from "../../reasoningOrdering";
+import { collectReasoningChoices, formatThinkingHeaderWords } from "../../reasoningOrdering";
 
 // ─────────────────────────────────────────────────────────────────────────
 // FusedModelPicker — AI Cockpit Matrix design (Aligned Columns & Compact Rows)
@@ -272,12 +272,12 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const matrixMinWidthClass =
     globalStops.length >= 8
-      ? "min-w-[38rem]"
+      ? "min-w-[44rem]"
       : globalStops.length >= 7
-        ? "min-w-[36rem]"
+        ? "min-w-[41rem]"
         : globalStops.length >= 6
-          ? "min-w-[34rem]"
-          : "min-w-[32rem]";
+          ? "min-w-[37rem]"
+          : "min-w-[33rem]";
 
   // Group models hierarchically by subProvider or provider name
   const groupedModels = useMemo(() => {
@@ -456,23 +456,29 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
             <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
               {/* Header labels aligned absolutely to the global columns */}
               {globalStops.length > 0 && (
-                <div className="sticky top-0 z-30 h-14 mb-2 select-none w-full bg-popover border-b border-border/60 pt-2 pb-3">
+                <div className="sticky top-0 z-30 h-12 mb-2 select-none w-full bg-popover border-b border-border/60 pt-1.5 pb-2">
                   {globalStops.map((stop, idx) => {
-                    const displayLabel =
-                      stop.label ||
-                      stop.id
-                        .replace(/([a-z])([A-Z])/g, "$1 $2")
-                        .replace(/[-_]/g, " ")
-                        .replace(/\b\w/g, (l) => l.toUpperCase());
+                    const words = formatThinkingHeaderWords(stop);
+                    const fullLabel = words.join(" ");
                     return (
                       <div
                         key={stop.id}
-                        className="absolute top-2 -translate-x-1/2 w-20 text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors whitespace-nowrap leading-[1.1]"
+                        title={fullLabel}
+                        className="absolute top-1 -translate-x-1/2 flex flex-col items-center justify-start text-center text-[8px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-zinc-400/80 transition-colors leading-[1.05] pointer-events-none"
                         style={{
                           left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
+                          width: `calc((100% - 176px - 40px) / ${Math.max(1, globalStops.length - 1)})`,
+                          maxWidth: "72px",
                         }}
                       >
-                        {displayLabel}
+                        {words.map((word, wIdx) => (
+                          <span
+                            key={wIdx}
+                            className="block max-w-full truncate text-center leading-[1.05]"
+                          >
+                            {word}
+                          </span>
+                        ))}
                       </div>
                     );
                   })}

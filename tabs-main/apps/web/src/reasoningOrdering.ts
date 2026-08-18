@@ -93,3 +93,29 @@ export function collectReasoningChoices(
 
   return sortReasoningChoices(Array.from(choicesMap.values()));
 }
+
+/**
+ * Splits and formats thinking level labels for multi-line display to prevent header text overlap in matrix grids.
+ * Compound terms like `Ultrathink`, `Ultracode`, and `ExtraHigh` are split across multiple lines cleanly.
+ */
+export function formatThinkingHeaderWords(stop: { id: string; label?: string }): string[] {
+  const raw = (stop.label || stop.id).trim();
+  const normalized = raw
+    .replace(/^ultra[-_]?think$/i, "Ultra Think")
+    .replace(/^ultra[-_]?code(r?)$/i, "Ultra Code$1")
+    .replace(/^extra[-_]?high$/i, "Extra High")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[-_]/g, " ");
+
+  const words = normalized
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.toUpperCase());
+
+  if (words.length <= 2) {
+    return words;
+  }
+  const mid = Math.ceil(words.length / 2);
+  return [words.slice(0, mid).join(" "), words.slice(mid).join(" ")];
+}
+

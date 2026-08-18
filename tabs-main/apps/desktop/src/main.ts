@@ -74,7 +74,7 @@ import {
 } from "./codeOssRuntimeInstaller";
 import { CodeControlChannel } from "./codeControlChannel";
 import { getTailscaleStatus } from "./tailscale";
-import type { CodeChromeState } from "@tabs/shared/codeChrome";
+import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
 
 // Prevent EPIPE crashes when pipes are closed unexpectedly (e.g. parent process killed)
 process.stdout.on("error", () => {});
@@ -99,9 +99,9 @@ const QUIT_CONFIRMATION_RESPONSE_CHANNEL = "desktop:quit-confirmation-response";
 const GET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:get-confirm-before-quit";
 const SET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:set-confirm-before-quit";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
-const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
-const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
-const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
+const UPDATE_GET_STATE_CHANNEL = "desktop:update:get-state";
+const UPDATE_DOWNLOAD_CHANNEL = "desktop:update:download";
+const UPDATE_INSTALL_CHANNEL = "desktop:update:install";
 const GET_WS_URL_CHANNEL = "desktop:get-ws-url";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
@@ -114,6 +114,7 @@ const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
 // codeControlChannel.ts). The renderer invokes run-command; main pushes
 // chrome-state updates back to the renderer.
 const CODE_HOST_RUN_COMMAND_CHANNEL = "desktop:code-host:run-command";
+const CODE_HOST_GET_CHROME_STATE_CHANNEL = "desktop:code-host:get-chrome-state";
 const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
@@ -2297,6 +2298,21 @@ function registerIpcHandlers(): void {
     return codeControlChannel.runCommand(
       (input as { projectId: string }).projectId,
       (input as { commandId: string }).commandId,
+    );
+  });
+
+  ipcMain.removeHandler(CODE_HOST_GET_CHROME_STATE_CHANNEL);
+  ipcMain.handle(CODE_HOST_GET_CHROME_STATE_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      return DEFAULT_CODE_CHROME_STATE;
+    }
+    return (
+      codeControlChannel.getChromeState((input as { projectId: string }).projectId) ??
+      DEFAULT_CODE_CHROME_STATE
     );
   });
 

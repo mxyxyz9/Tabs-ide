@@ -2,11 +2,46 @@ import { describe, expect, it } from "vitest";
 import type { ProviderOptionDescriptor } from "@tabs/contracts";
 import {
   collectReasoningChoices,
+  formatThinkingHeaderWords,
   getReasoningChoiceRank,
   sortReasoningChoices,
 } from "./reasoningOrdering";
 
 describe("reasoningOrdering", () => {
+  describe("formatThinkingHeaderWords", () => {
+    it("splits compound terms into two lines", () => {
+      expect(formatThinkingHeaderWords({ id: "ultrathink", label: "Ultrathink" })).toEqual([
+        "ULTRA",
+        "THINK",
+      ]);
+      expect(formatThinkingHeaderWords({ id: "ultracode", label: "Ultracode" })).toEqual([
+        "ULTRA",
+        "CODE",
+      ]);
+      expect(formatThinkingHeaderWords({ id: "ultracoder", label: "Ultracoder" })).toEqual([
+        "ULTRA",
+        "CODER",
+      ]);
+      expect(formatThinkingHeaderWords({ id: "xhigh", label: "Extra High" })).toEqual([
+        "EXTRA",
+        "HIGH",
+      ]);
+    });
+
+    it("handles single-word terms without splitting unnecessarily", () => {
+      expect(formatThinkingHeaderWords({ id: "low", label: "Low" })).toEqual(["LOW"]);
+      expect(formatThinkingHeaderWords({ id: "medium", label: "Medium" })).toEqual(["MEDIUM"]);
+      expect(formatThinkingHeaderWords({ id: "high", label: "High" })).toEqual(["HIGH"]);
+      expect(formatThinkingHeaderWords({ id: "max", label: "Max" })).toEqual(["MAX"]);
+    });
+
+    it("splits multi-word strings cleanly", () => {
+      expect(formatThinkingHeaderWords({ id: "deep_thinking", label: "Deep Thinking" })).toEqual([
+        "DEEP",
+        "THINKING",
+      ]);
+    });
+  });
   describe("getReasoningChoiceRank", () => {
     it("assigns stable ranks to known reasoning level IDs", () => {
       expect(getReasoningChoiceRank("none")).toBe(0);

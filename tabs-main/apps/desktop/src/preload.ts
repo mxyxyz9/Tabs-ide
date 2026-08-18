@@ -32,6 +32,7 @@ const CODE_HOST_OPEN_FILE_CHANNEL = "desktop:code-host:open-file";
 const CODE_HOST_SET_BOUNDS_CHANNEL = "desktop:code-host:set-bounds";
 const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
 const CODE_HOST_RUN_COMMAND_CHANNEL = "desktop:code-host:run-command";
+const CODE_HOST_GET_CHROME_STATE_CHANNEL = "desktop:code-host:get-chrome-state";
 const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
 const BROWSER_HOST_GET_SESSION_STATE_CHANNEL = "desktop:browser-host:get-session-state";
@@ -93,6 +94,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   recreateCodeSession: (input) => ipcRenderer.invoke(CODE_HOST_RECREATE_SESSION_CHANNEL, input),
   runCodeCommand: (projectId: string, commandId: string) =>
     ipcRenderer.invoke(CODE_HOST_RUN_COMMAND_CHANNEL, { projectId, commandId }),
+  getCodeChromeState: (input: { projectId: string }) =>
+    ipcRenderer.invoke(CODE_HOST_GET_CHROME_STATE_CHANNEL, input),
   onCodeChromeState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;
