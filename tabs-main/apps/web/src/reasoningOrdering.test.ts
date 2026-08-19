@@ -263,13 +263,13 @@ describe("reasoningOrdering", () => {
 
       const gpt5Caps = inferModelCapabilitiesFromSlug("gpt-5.6-terra");
       expect(gpt5Caps.promptInjectedEffortLevels).toEqual([]);
-      const gpt5Effort = gpt5Caps.optionDescriptors.find(
+      const gpt5Effort = gpt5Caps.optionDescriptors?.find(
         (d) => d.id === "reasoningEffort" || d.id === "effort",
       );
       if (gpt5Effort && gpt5Effort.type === "select") {
         expect(gpt5Effort.options.map((o) => o.id)).not.toContain("ultrathink");
       }
-      expect(gpt5Caps.optionDescriptors.some((d) => d.id === "serviceTier")).toBe(true);
+      expect(gpt5Caps.optionDescriptors?.some((d) => d.id === "serviceTier")).toBe(true);
 
       const claudeCaps = inferModelCapabilitiesFromSlug("claude-opus-4-8");
       expect(claudeCaps.promptInjectedEffortLevels).toContain("ultrathink");

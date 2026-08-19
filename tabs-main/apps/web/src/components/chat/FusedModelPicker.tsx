@@ -73,6 +73,9 @@ const EMPTY_CAPABILITIES = {
   promptInjectedEffortLevels: [],
 };
 
+const MODEL_COLUMN_WIDTH_PX = 180;
+const TRACK_PADDING_PX = 20;
+
 const TRACK_PX = 128; // h-32
 const THUMB_PX = 32; // size-8
 const PAD_PX = 4;
@@ -383,12 +386,12 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const matrixMinWidthClass =
     globalStops.length >= 8
-      ? "min-w-[44rem]"
+      ? "min-w-[40rem]"
       : globalStops.length >= 7
-        ? "min-w-[41rem]"
+        ? "min-w-[37rem]"
         : globalStops.length >= 6
-          ? "min-w-[37rem]"
-          : "min-w-[33rem]";
+          ? "min-w-[34rem]"
+          : "min-w-[30rem]";
 
   // Filter models based on search query
   const filteredModels = useMemo(() => {
@@ -724,8 +727,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                           : "text-[8px] tracking-wider text-muted-foreground/80 dark:text-zinc-400/80",
                       )}
                       style={{
-                        left: `calc(240px + 20px + (100% - 240px - 40px) * ${idx / (globalStops.length - 1)})`,
-                        width: `calc((100% - 240px - 40px) / ${Math.max(1, globalStops.length - 1)})`,
+                        left: `calc(${MODEL_COLUMN_WIDTH_PX}px + ${TRACK_PADDING_PX}px + (100% - ${MODEL_COLUMN_WIDTH_PX}px - ${TRACK_PADDING_PX * 2}px) * ${idx / (globalStops.length - 1)})`,
+                        width: `calc((100% - ${MODEL_COLUMN_WIDTH_PX}px - ${TRACK_PADDING_PX * 2}px) / ${Math.max(1, globalStops.length - 1)})`,
                       }}
                     >
                       {words.map((word, wIdx) => (
@@ -1109,7 +1112,10 @@ const ModelRow = memo(function ModelRow(props: {
       )}
 
       {/* Model Name + inline Segmented Sub-controls */}
-      <div className="w-60 pl-3.5 pr-2 flex items-center gap-1.5 shrink-0 min-w-0">
+      <div
+        style={{ width: `${MODEL_COLUMN_WIDTH_PX}px` }}
+        className="pl-3.5 pr-2 flex items-center gap-1.5 shrink-0 min-w-0"
+      >
         {props.onToggleFavorite && (
           <button
             type="button"
@@ -1157,19 +1163,34 @@ const ModelRow = memo(function ModelRow(props: {
               (descriptor.options.findIndex((o) => o.id === currentVal) + 1) %
               descriptor.options.length;
             const nextOption = descriptor.options[nextIndex] ?? descriptor.options[0];
-            const displayVal = descriptor.options.find((o) => o.id === currentVal)?.label ?? currentVal;
+            const rawVal =
+              descriptor.options.find((o) => o.id === currentVal)?.label ?? currentVal ?? "";
+            const displayVal = String(rawVal);
+            const isHighTier =
+              displayVal.toLowerCase().includes("1m") ||
+              displayVal.toLowerCase().includes("large") ||
+              displayVal.toLowerCase().includes("max");
             return (
               <button
                 key={descriptor.id}
                 type="button"
-                title={`${descriptor.label}: ${displayVal} (Click to switch)`}
+                title={`${descriptor.label}: ${displayVal} (Click to cycle)`}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (nextOption) props.onSelectChange(descriptor, nextOption.id);
                 }}
-                className="shrink-0 px-1.5 py-0.5 rounded-full text-[8.5px] font-mono font-semibold tracking-tight bg-background/90 border border-border text-foreground hover:bg-accent hover:border-foreground/20 transition-all dark:bg-black/40 dark:border-white/10 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-white/10 shadow-2xs cursor-pointer"
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8.5px] font-mono font-medium tracking-wide transition-all duration-150 cursor-pointer select-none",
+                  isHighTier
+                    ? "bg-violet-500/15 border border-violet-500/30 text-violet-600 dark:text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.2)] hover:bg-violet-500/25"
+                    : "bg-foreground/[0.05] dark:bg-white/[0.07] border border-foreground/[0.08] dark:border-white/10 text-muted-foreground/85 dark:text-zinc-300 hover:text-foreground dark:hover:text-white hover:bg-foreground/[0.08] dark:hover:bg-white/[0.12]",
+                  "hover:scale-[1.04] active:scale-[0.96]",
+                )}
               >
-                {displayVal}
+                <span>{displayVal}</span>
+                {descriptor.options.length > 1 && (
+                  <span className="text-[7.5px] opacity-40 leading-none">⇄</span>
+                )}
               </button>
             );
           })}
@@ -1188,21 +1209,22 @@ const ModelRow = memo(function ModelRow(props: {
                   props.onBooleanChange(descriptor, !isTrue);
                 }}
                 className={cn(
-                  "shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-semibold tracking-tight transition-all cursor-pointer",
+                  "shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-semibold tracking-wider uppercase transition-all duration-150 cursor-pointer select-none",
                   isTrue
-                    ? "bg-foreground/10 border-foreground/20 text-foreground dark:bg-white/10 dark:border-white/15 dark:text-white"
-                    : "bg-background/80 border-border text-muted-foreground hover:text-foreground dark:bg-black/30 dark:border-white/5 dark:text-zinc-400 dark:hover:text-white",
+                    ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.2)] hover:bg-emerald-500/20"
+                    : "bg-foreground/[0.04] dark:bg-white/[0.05] border border-foreground/[0.08] dark:border-white/10 text-muted-foreground/70 dark:text-zinc-500 hover:text-foreground dark:hover:text-zinc-300 hover:bg-foreground/[0.07]",
+                  "hover:scale-[1.04] active:scale-[0.96]",
                 )}
               >
                 <span
                   className={cn(
-                    "size-1.5 rounded-full",
+                    "size-1.5 rounded-full transition-all",
                     isTrue
-                      ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#34d399]"
-                      : "bg-muted-foreground/40 dark:bg-zinc-600",
+                      ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#10b981]"
+                      : "bg-muted-foreground/30 dark:bg-zinc-600",
                   )}
                 />
-                {descriptor.id === "thinking" ? "THINK" : descriptor.label.toUpperCase()}
+                <span>{descriptor.id === "thinking" ? "THINK" : descriptor.label}</span>
               </button>
             );
           })}
