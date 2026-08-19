@@ -38,7 +38,6 @@ const DEFAULT_FALLBACK_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabi
         { id: "high", label: "High" },
         { id: "xhigh", label: "Extra High" },
         { id: "max", label: "Max" },
-        { id: "ultra", label: "Ultra" },
       ],
     },
     {

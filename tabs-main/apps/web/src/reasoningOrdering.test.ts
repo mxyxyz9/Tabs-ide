@@ -191,4 +191,88 @@ describe("reasoningOrdering", () => {
       ]);
     });
   });
+
+  describe("Ultrathink scoping & prompt/frame behavior", () => {
+    it("applyClaudePromptEffortPrefix adds prefix for ultrathink and strips it for other efforts", async () => {
+      const { applyClaudePromptEffortPrefix } = await import("@tabs/shared/model");
+
+      const baseText = "Help me optimize this algorithm";
+      const withPrefix = applyClaudePromptEffortPrefix(baseText, "ultrathink");
+      expect(withPrefix).toBe("Ultrathink:\nHelp me optimize this algorithm");
+
+      // Moving to max or high strips the prefix
+      const strippedToMax = applyClaudePromptEffortPrefix(withPrefix, "max");
+      expect(strippedToMax).toBe("Help me optimize this algorithm");
+
+      const strippedToNull = applyClaudePromptEffortPrefix(withPrefix, null);
+      expect(strippedToNull).toBe("Help me optimize this algorithm");
+    });
+
+    it("getComposerProviderState only activates ultrathink frame when promptEffort is ultrathink", async () => {
+      const { getComposerProviderState } = await import("./components/chat/composerProviderRegistry");
+      const { createModelCapabilities } = await import("@tabs/shared/model");
+
+      const claudeCaps = createModelCapabilities({
+        optionDescriptors: [
+          {
+            id: "effort",
+            type: "select",
+            label: "Reasoning",
+            options: [
+              { id: "high", label: "High" },
+              { id: "max", label: "Max" },
+              { id: "ultrathink", label: "Ultrathink" },
+            ],
+            promptInjectedValues: ["ultrathink"],
+          },
+        ],
+      });
+
+      const models = [
+        {
+          slug: "claude-opus-4-8",
+          name: "Claude Opus 4.8",
+          isCustom: false,
+          capabilities: claudeCaps,
+        },
+      ];
+
+      // Case 1: On Ultrathink with prefix -> frame active
+      const activeState = getComposerProviderState({
+        provider: "claudeAgent",
+        model: "claude-opus-4-8",
+        models,
+        prompt: "Ultrathink:\nHello world",
+        modelOptions: [{ id: "effort", value: "ultrathink" }],
+      });
+      expect(activeState.composerFrameClassName).toBe("ultrathink-frame");
+
+      // Case 2: On MAX even if prompt still contains prefix -> frame is NOT active!
+      const inactiveState = getComposerProviderState({
+        provider: "claudeAgent",
+        model: "claude-opus-4-8",
+        models,
+        prompt: "Ultrathink:\nHello world",
+        modelOptions: [{ id: "effort", value: "max" }],
+      });
+      expect(inactiveState.composerFrameClassName).toBeUndefined();
+    });
+
+    it("inferModelCapabilitiesFromSlug does NOT assign prompt-injected ultrathink to GPT/Codex models", async () => {
+      const { inferModelCapabilitiesFromSlug } = await import("@tabs/contracts");
+
+      const gpt5Caps = inferModelCapabilitiesFromSlug("gpt-5.6-terra");
+      expect(gpt5Caps.promptInjectedEffortLevels).toEqual([]);
+      const gpt5Effort = gpt5Caps.optionDescriptors.find(
+        (d) => d.id === "reasoningEffort" || d.id === "effort",
+      );
+      if (gpt5Effort && gpt5Effort.type === "select") {
+        expect(gpt5Effort.options.map((o) => o.id)).not.toContain("ultrathink");
+      }
+      expect(gpt5Caps.optionDescriptors.some((d) => d.id === "serviceTier")).toBe(true);
+
+      const claudeCaps = inferModelCapabilitiesFromSlug("claude-opus-4-8");
+      expect(claudeCaps.promptInjectedEffortLevels).toContain("ultrathink");
+    });
+  });
 });

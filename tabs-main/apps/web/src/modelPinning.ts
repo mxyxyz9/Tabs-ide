@@ -78,6 +78,31 @@ export function togglePinnedModel(
 }
 
 /**
+ * Reorders pinned models by moving an item from fromIndex to toIndex.
+ */
+export function reorderPinnedModels(
+  input: Partial<UnifiedSettings> | ReadonlyArray<PinnedModelEntry> | null | undefined,
+  fromIndex: number,
+  toIndex: number,
+): Array<PinnedModelEntry> {
+  const current = [...getPinnedModels(input)];
+  if (
+    fromIndex < 0 ||
+    fromIndex >= current.length ||
+    toIndex < 0 ||
+    toIndex >= current.length ||
+    fromIndex === toIndex
+  ) {
+    return current;
+  }
+  const [moved] = current.splice(fromIndex, 1);
+  if (moved) {
+    current.splice(toIndex, 0, moved);
+  }
+  return current;
+}
+
+/**
  * Sorts an array of models so that pinned models appear first.
  */
 export function sortModelsWithPinnedFirst<T extends { slug: string }>(

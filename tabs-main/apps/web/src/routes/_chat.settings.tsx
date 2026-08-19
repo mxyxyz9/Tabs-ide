@@ -9,6 +9,7 @@ import {
   CheckCircle2Icon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   DownloadIcon,
   FolderIcon,
   GripVerticalIcon,
@@ -43,7 +44,12 @@ import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifi
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { applyCustomModelOrdering, resetModelOrder, updateModelOrder } from "../modelOrdering";
-import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../modelPinning";
+import {
+  getPinnedModels,
+  isPinnedModel,
+  reorderPinnedModels,
+  togglePinnedModel,
+} from "../modelPinning";
 import { getProviderModels } from "../providerModels";
 import {
   type DesktopUpdateState,
@@ -4442,7 +4448,7 @@ function SettingsRouteView() {
                             </div>
                           ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                              {pinnedEntries.map((entry) => {
+                              {pinnedEntries.map((entry, index) => {
                                 const providerName =
                                   PROVIDER_DISPLAY_NAMES[
                                     entry.provider as keyof typeof PROVIDER_DISPLAY_NAMES
@@ -4479,29 +4485,79 @@ function SettingsRouteView() {
                                         </div>
                                       </div>
                                     </div>
-                                    <Tooltip>
-                                      <TooltipTrigger
-                                        render={
-                                          <Button
-                                            size="icon-xs"
-                                            variant="ghost"
-                                            className="size-6 shrink-0 rounded text-foreground/80 hover:text-muted-foreground hover:bg-muted/50 cursor-pointer"
-                                            onClick={() => {
-                                              const nextPinned = togglePinnedModel(
-                                                settings.pinnedModels,
-                                                entry.provider,
-                                                entry.model,
-                                              );
-                                              updateSettings({ pinnedModels: nextPinned as any });
-                                            }}
-                                            aria-label={`Unpin ${displayName}`}
-                                          >
-                                            <PinIcon className="size-3.5 fill-current" />
-                                          </Button>
-                                        }
-                                      />
-                                      <TooltipPopup side="top">Unpin model</TooltipPopup>
-                                    </Tooltip>
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <Button
+                                              size="icon-xs"
+                                              variant="ghost"
+                                              disabled={index === 0}
+                                              className="size-6 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
+                                              onClick={() => {
+                                                const nextPinned = reorderPinnedModels(
+                                                  settings.pinnedModels,
+                                                  index,
+                                                  index - 1,
+                                                );
+                                                updateSettings({ pinnedModels: nextPinned as any });
+                                              }}
+                                              aria-label={`Move ${displayName} up`}
+                                            >
+                                              <ChevronUpIcon className="size-3.5" />
+                                            </Button>
+                                          }
+                                        />
+                                        <TooltipPopup side="top">Move up</TooltipPopup>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <Button
+                                              size="icon-xs"
+                                              variant="ghost"
+                                              disabled={index === pinnedEntries.length - 1}
+                                              className="size-6 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
+                                              onClick={() => {
+                                                const nextPinned = reorderPinnedModels(
+                                                  settings.pinnedModels,
+                                                  index,
+                                                  index + 1,
+                                                );
+                                                updateSettings({ pinnedModels: nextPinned as any });
+                                              }}
+                                              aria-label={`Move ${displayName} down`}
+                                            >
+                                              <ChevronDownIcon className="size-3.5" />
+                                            </Button>
+                                          }
+                                        />
+                                        <TooltipPopup side="top">Move down</TooltipPopup>
+                                      </Tooltip>
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <Button
+                                              size="icon-xs"
+                                              variant="ghost"
+                                              className="size-6 shrink-0 rounded text-foreground/80 hover:text-muted-foreground hover:bg-muted/50 cursor-pointer"
+                                              onClick={() => {
+                                                const nextPinned = togglePinnedModel(
+                                                  settings.pinnedModels,
+                                                  entry.provider,
+                                                  entry.model,
+                                                );
+                                                updateSettings({ pinnedModels: nextPinned as any });
+                                              }}
+                                              aria-label={`Unpin ${displayName}`}
+                                            >
+                                              <PinIcon className="size-3.5 fill-current" />
+                                            </Button>
+                                          }
+                                        />
+                                        <TooltipPopup side="top">Unpin model</TooltipPopup>
+                                      </Tooltip>
+                                    </div>
                                   </div>
                                 );
                               })}

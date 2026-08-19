@@ -43,12 +43,12 @@ export function inferModelCapabilitiesFromSlug(
 ): ModelCapabilities {
   const lower = slug.toLowerCase();
 
-  // Pattern A: High reasoning models (Opus, Sonnet, GPT-5 / Codex 5, Gemini Ultra)
+  // Pattern A1: High reasoning Claude models (Opus, Sonnet, Fable, Claude)
   if (
     lower.includes("opus") ||
     lower.includes("sonnet") ||
-    lower.includes("gpt-5") ||
-    lower.includes("fable")
+    lower.includes("fable") ||
+    lower.includes("claude")
   ) {
     return {
       reasoningEffortLevels: [
@@ -92,6 +92,53 @@ export function inferModelCapabilitiesFromSlug(
             { id: "200k", label: "200k" },
             { id: "1m", label: "1M", isDefault: true },
           ],
+        },
+      ],
+    };
+  }
+
+  // Pattern A2: GPT-5 / Codex high reasoning models (standard reasoning, serviceTier, no prompt injection)
+  if (
+    lower.includes("gpt-5") ||
+    lower.includes("codex") ||
+    lower.includes("gpt-4") ||
+    lower.includes("o1") ||
+    lower.includes("o3") ||
+    lower.includes("o4")
+  ) {
+    return {
+      reasoningEffortLevels: [
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium" },
+        { value: "high", label: "High", isDefault: true },
+        { value: "xhigh", label: "Extra High" },
+        { value: "max", label: "Max" },
+      ],
+      supportsFastMode: true,
+      supportsThinkingToggle: false,
+      promptInjectedEffortLevels: [],
+      optionDescriptors: [
+        {
+          id: "reasoningEffort",
+          label: "Reasoning",
+          type: "select",
+          options: [
+            { id: "low", label: "Low" },
+            { id: "medium", label: "Medium" },
+            { id: "high", label: "High", isDefault: true },
+            { id: "xhigh", label: "Extra High" },
+            { id: "max", label: "Max" },
+          ],
+        },
+        {
+          id: "serviceTier",
+          label: "Service Tier",
+          type: "select",
+          options: [
+            { id: "default", label: "Standard", isDefault: true },
+            { id: "fast", label: "Fast" },
+          ],
+          currentValue: "default",
         },
       ],
     };

@@ -32,11 +32,13 @@ function emitChange() {
 }
 
 function getSystemDark(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
   return window.matchMedia(MEDIA_QUERY).matches;
 }
 
 export function getStoredFontPreferences(): FontPreferences {
   try {
+    if (typeof localStorage === "undefined") return DEFAULT_FONT_PREFERENCES;
     const raw = localStorage.getItem(FONT_PREFERENCES_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -64,6 +66,7 @@ export function getStoredFontPreferences(): FontPreferences {
 
 export function getStoredCustomThemeConfig(): CustomThemeConfig {
   try {
+    if (typeof localStorage === "undefined") return DEFAULT_CUSTOM_THEME;
     const raw = localStorage.getItem(CUSTOM_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
@@ -91,6 +94,7 @@ export function getStoredCustomThemeConfig(): CustomThemeConfig {
 }
 
 function getStoredPreference(): ThemePreference {
+  if (typeof localStorage === "undefined") return "system";
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return "system";
   if (raw === "system") return "system";
@@ -291,7 +295,9 @@ function syncDesktopTheme(
 }
 
 // Apply immediately on module load to prevent flash
-applyTheme(getStoredPreference());
+if (typeof window !== "undefined") {
+  applyTheme(getStoredPreference());
+}
 
 function getSnapshot(): ThemeSnapshot {
   const theme = getStoredPreference();
@@ -308,13 +314,19 @@ function getSnapshot(): ThemeSnapshot {
 function subscribe(listener: () => void): () => void {
   listeners.push(listener);
 
+  if (typeof window === "undefined") {
+    return () => {
+      listeners = listeners.filter((l) => l !== listener);
+    };
+  }
+
   // Listen for system preference changes
-  const mq = window.matchMedia(MEDIA_QUERY);
+  const mq = typeof window.matchMedia === "function" ? window.matchMedia(MEDIA_QUERY) : null;
   const handleChange = () => {
     if (getStoredPreference() === "system") applyTheme("system", true);
     emitChange();
   };
-  mq.addEventListener("change", handleChange);
+  mq?.addEventListener?.("change", handleChange);
 
   // Listen for storage changes from other tabs
   const handleStorage = (e: StorageEvent) => {
@@ -331,7 +343,7 @@ function subscribe(listener: () => void): () => void {
 
   return () => {
     listeners = listeners.filter((l) => l !== listener);
-    mq.removeEventListener("change", handleChange);
+    mq?.removeEventListener?.("change", handleChange);
     window.removeEventListener("storage", handleStorage);
   };
 }

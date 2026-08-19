@@ -162,7 +162,7 @@ export function mapCodexModelCapabilities(
         },
   );
   const defaultReasoning = reasoningOptions.find((option) => option.isDefault)?.id;
-  const serviceTiers =
+  const rawServiceTiers =
     model.serviceTiers && model.serviceTiers.length > 0
       ? model.serviceTiers
       : (model.additionalSpeedTiers ?? []).map((id) => ({
@@ -170,6 +170,22 @@ export function mapCodexModelCapabilities(
           name: id === "fast" ? "Fast" : id,
           description: "",
         }));
+  const hasFastTier = rawServiceTiers.some((tier) => tier.id === "fast");
+  const modelSlug = (model.model || "").toLowerCase();
+  const supportsFast =
+    hasFastTier ||
+    Boolean((model as any).supportsFastMode) ||
+    Boolean((model as any).supports_fast_mode) ||
+    Boolean((model as any).fastMode) ||
+    modelSlug.includes("gpt-5") ||
+    modelSlug.includes("codex") ||
+    modelSlug.includes("gpt-4");
+
+  const serviceTiers = hasFastTier
+    ? rawServiceTiers
+    : supportsFast
+      ? [{ id: "fast", name: "Fast", description: "" }, ...rawServiceTiers.filter((t) => t.id !== "fast")]
+      : rawServiceTiers;
   const defaultServiceTierFromModel = (model as any).defaultServiceTier;
   const catalogDefaultServiceTier =
     typeof defaultServiceTierFromModel === "string" &&

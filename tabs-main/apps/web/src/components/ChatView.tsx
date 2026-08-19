@@ -3194,10 +3194,6 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         resolvedModel,
         options,
       );
-      fetch("http://localhost:9999", {
-        method: "POST",
-        body: `[SLIDER-DEBUG-3] onProviderModelSelect provider=${provider} model=${model} hasOptions=${options !== undefined} options=${JSON.stringify(options)} selection=${JSON.stringify(nextModelSelection)} stack=${new Error().stack?.split("\n").slice(1, 4).join(" <- ")}`,
-      }).catch(() => {});
       setComposerDraftModelSelection(activeThread.id, nextModelSelection);
       setStickyComposerModelSelection(nextModelSelection);
       scheduleComposerFocus();
@@ -3230,11 +3226,6 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   );
   const onFusedModelOptionsChange = useCallback(
     (nextOptions: ReadonlyArray<import("@tabs/contracts").ProviderOptionSelection> | undefined) => {
-      fetch("http://localhost:9999", {
-        method: "POST",
-        body: `[SLIDER-DEBUG-3] onFusedModelOptionsChange options=${JSON.stringify(nextOptions)} threadId=${threadId} provider=${selectedProvider} model=${selectedModel} stack=${new Error().stack?.split("\n").slice(1, 4).join(" <- ")}`,
-      }).catch(() => {});
-
       const newMode = nextOptions?.find((o) => o.id === "mode")?.value;
       if (
         typeof newMode === "string" &&

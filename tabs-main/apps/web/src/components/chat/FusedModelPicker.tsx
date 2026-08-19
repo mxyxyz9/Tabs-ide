@@ -3,6 +3,7 @@ import {
   type ProviderOptionChoice,
   type ProviderOptionDescriptor,
   type ProviderOptionSelection,
+  PROVIDER_DISPLAY_NAMES,
   type ServerProvider,
   type ServerProviderModel,
 } from "@tabs/contracts";
@@ -11,9 +12,10 @@ import {
   buildProviderOptionSelectionsFromDescriptors,
   getProviderOptionCurrentValue,
   getProviderOptionDescriptors,
+  isClaudeUltrathinkPrompt,
 } from "@tabs/shared/model";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDownIcon, PinIcon, SearchIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, LayersIcon, PinIcon, SearchIcon, XIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { ClaudeAI, CursorIcon, GrokIcon, type Icon, KiloIcon, OpenAI, OpenCodeIcon } from "../Icons";
@@ -21,13 +23,19 @@ import { cn } from "~/lib/utils";
 import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
-import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../../modelPinning";
+import {
+  getPinnedModels,
+  isPinnedModel,
+  togglePinnedModel,
+} from "../../modelPinning";
 import {
   applyCustomModelOrdering,
   getModelScore,
   sortModelsByDefaultSequence,
 } from "../../modelOrdering";
 import { collectReasoningChoices, formatThinkingHeaderWords } from "../../reasoningOrdering";
+import { getActiveFontCombo } from "../../lib/themes";
+import { getStoredFontPreferences } from "../../hooks/useTheme";
 
 // ─────────────────────────────────────────────────────────────────────────
 // FusedModelPicker — AI Cockpit Matrix design (Aligned Columns & Compact Rows)
@@ -118,6 +126,26 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   const [isOpen, setIsOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<ProviderPickerKind | "pinned" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [groupPinnedByProvider, setGroupPinnedByProvider] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("tabs:group-pinned-by-provider") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleGroupPinnedByProvider = useCallback(() => {
+    setGroupPinnedByProvider((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("tabs:group-pinned-by-provider", String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   const activeTab = selectedTab ?? props.lockedProvider ?? props.provider;
   const activeProvider = props.lockedProvider ?? props.provider;
@@ -192,12 +220,24 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     return provModels.find((m) => m.slug === props.model) ?? provModels[0];
   }, [activeTab, pinnedModels, props.providers, props.provider, props.model]);
 
+  const fontCombo = useMemo(() => getActiveFontCombo(getStoredFontPreferences()), []);
+
   const setModelAndOptions = useCallback(
     (
       provider: ProviderPickerKind,
       slug: string,
       nextOptions?: ReadonlyArray<ProviderOptionSelection>,
     ) => {
+      const isTargetClaude = provider === "claudeAgent";
+      const targetEffort = nextOptions?.find(
+        (o) => o.id === "effort" || o.id === "reasoningEffort" || (o as any).name === "effort",
+      )?.value;
+      const isTargetUltrathink = isTargetClaude && targetEffort === "ultrathink";
+      if (isTargetUltrathink) {
+        props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, "ultrathink"));
+      } else if (isClaudeUltrathinkPrompt(props.prompt)) {
+        props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, null));
+      }
       props.onProviderModelChange(provider, slug, nextOptions);
     },
     [props],
@@ -221,8 +261,28 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     (d): d is Extract<ProviderOptionDescriptor, { type: "boolean" }> => d.type === "boolean",
   );
 
-  const leverDescriptor = booleanDescriptors.find((d) => d.id === "fastMode") ?? null;
-  const isUltra = leverDescriptor?.currentValue === true;
+  // Boolean fast mode (e.g. Claude fastMode) or Select fast tier (e.g. Codex serviceTier with "fast" option)
+  const booleanFastModeDescriptor =
+    booleanDescriptors.find((d) => d.id === "fastMode" || d.id === "fast") ?? null;
+  const selectFastModeDescriptor =
+    selectDescriptors.find(
+      (d) =>
+        (d.id === "serviceTier" || d.id === "service_tier" || d.id === "tier") &&
+        d.options.some((o) => (o.id ?? (o as any).value) === "fast"),
+    ) ?? null;
+
+  const leverDescriptor = booleanFastModeDescriptor ?? selectFastModeDescriptor ?? null;
+
+  const isUltra = useMemo(() => {
+    if (booleanFastModeDescriptor) {
+      return booleanFastModeDescriptor.currentValue === true;
+    }
+    if (selectFastModeDescriptor) {
+      const currentVal = getProviderOptionCurrentValue(selectFastModeDescriptor);
+      return currentVal === "fast";
+    }
+    return false;
+  }, [booleanFastModeDescriptor, selectFastModeDescriptor]);
 
   const commitDescriptors = useCallback(
     (next: ReadonlyArray<ProviderOptionDescriptor>) => {
@@ -234,8 +294,14 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const handleSelectChange = useCallback(
     (descriptor: Extract<ProviderOptionDescriptor, { type: "select" }>, optionId: string) => {
-      if (descriptor.id === "effort" || descriptor.id === "reasoningEffort") {
+      const isPromptInjected =
+        descriptor.promptInjectedValues && descriptor.promptInjectedValues.length > 0;
+      if (isPromptInjected && (descriptor.id === "effort" || descriptor.id === "reasoningEffort")) {
         props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, optionId));
+      } else if (descriptor.id === "effort" || descriptor.id === "reasoningEffort") {
+        if (isClaudeUltrathinkPrompt(props.prompt)) {
+          props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, null));
+        }
       }
       commitDescriptors(
         descriptors.map((d) =>
@@ -255,6 +321,29 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       );
     },
     [commitDescriptors, descriptors],
+  );
+
+  const handleFastModeChange = useCallback(
+    (value: boolean) => {
+      if (booleanFastModeDescriptor) {
+        handleBooleanChange(booleanFastModeDescriptor, value);
+      } else if (selectFastModeDescriptor) {
+        const defaultOpt =
+          selectFastModeDescriptor.options.find(
+            (o) => (o.id ?? (o as any).value) !== "fast" && o.isDefault,
+          ) ??
+          selectFastModeDescriptor.options.find(
+            (o) => (o.id ?? (o as any).value) !== "fast",
+          ) ??
+          selectFastModeDescriptor.options[0];
+        const defaultVal =
+          (defaultOpt ? (defaultOpt.id ?? (defaultOpt as any).value) : "default")?.toString() ??
+          "default";
+        const nextVal = value ? "fast" : defaultVal;
+        handleSelectChange(selectFastModeDescriptor, nextVal);
+      }
+    },
+    [booleanFastModeDescriptor, selectFastModeDescriptor, handleBooleanChange, handleSelectChange],
   );
 
   // Identify the primary select descriptor (reasoning effort)
@@ -281,34 +370,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         return [];
       }
       const caps = m.capabilities ?? EMPTY_CAPABILITIES;
-      let effectiveCaps = caps;
-      const optionDescriptors = (caps as any).optionDescriptors as ProviderOptionDescriptor[] | undefined;
-      const reasoningEffortLevels = (caps as any).reasoningEffortLevels as
-        | Array<{ value: string; label: string; isDefault?: boolean }>
-        | undefined;
-      if (
-        (!optionDescriptors || optionDescriptors.length === 0) &&
-        reasoningEffortLevels &&
-        reasoningEffortLevels.length > 0
-      ) {
-        effectiveCaps = {
-          ...caps,
-          optionDescriptors: [
-            {
-              id: "effort",
-              label: "Reasoning",
-              type: "select",
-              options: reasoningEffortLevels.map((lvl) => ({
-                id: lvl.value,
-                label: lvl.label,
-                isDefault: lvl.isDefault,
-              })),
-            },
-            ...(optionDescriptors ?? []),
-          ],
-        };
-      }
-      return getProviderOptionDescriptors({ caps: effectiveCaps, selections: undefined }).filter(
+      return getProviderOptionDescriptors({ caps, selections: undefined }).filter(
         (d) => d.id !== "agent",
       );
     });
@@ -320,17 +382,13 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   }, [modelDescriptorsList]);
 
   const matrixMinWidthClass =
-    globalStops.length >= 9
-      ? "min-w-[46rem]"
-      : globalStops.length === 8
-        ? "min-w-[42rem]"
-        : globalStops.length === 7
+    globalStops.length >= 8
+      ? "min-w-[44rem]"
+      : globalStops.length >= 7
+        ? "min-w-[41rem]"
+        : globalStops.length >= 6
           ? "min-w-[37rem]"
-          : globalStops.length === 6
-            ? "min-w-[33rem]"
-            : globalStops.length >= 4
-              ? "min-w-[28rem]"
-              : "min-w-[24rem]";
+          : "min-w-[33rem]";
 
   // Filter models based on search query
   const filteredModels = useMemo(() => {
@@ -360,11 +418,19 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     }> = [];
 
     if (activeTab === "pinned") {
+      if (!groupPinnedByProvider) {
+        return [{ name: null, items: filteredModels }];
+      }
       for (const model of filteredModels) {
-        const groupName = (model as any).providerName ?? model.subProvider ?? "Pinned";
-        let group = groups.find((g) => g.name === groupName);
+        const pId = (model as any).providerId;
+        const pName =
+          (model as any).providerName ??
+          PROVIDER_DISPLAY_NAMES[pId as keyof typeof PROVIDER_DISPLAY_NAMES] ??
+          pId ??
+          "Other";
+        let group = groups.find((g) => g.name === pName);
         if (!group) {
-          group = { name: groupName, items: [] };
+          group = { name: pName, items: [] };
           groups.push(group);
         }
         group.items.push(model);
@@ -382,7 +448,14 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       group.items.push(model);
     }
     return groups;
-  }, [activeTab, filteredModels]);
+  }, [activeTab, filteredModels, groupPinnedByProvider]);
+
+  const activeTabHeading = useMemo(() => {
+    if (activeTab === "pinned") return "pinned";
+    if (activeTab === "claudeAgent") return "claude";
+    const found = AVAILABLE_PROVIDER_OPTIONS.find((o) => o.value === activeTab)?.label;
+    return (found ?? activeTab).toLowerCase();
+  }, [activeTab]);
 
   const triggerLabel = useMemo(() => {
     if (!activeModel) return "Select model";
@@ -420,7 +493,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const isExpandedPicker = Boolean(leverDescriptor) || globalStops.length >= 8;
 
-  const showSearch = models.length > 15 || searchQuery.length > 0;
+  const showSearch = models.length > 6 || searchQuery.length > 0;
 
   return (
     <Menu
@@ -510,9 +583,6 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                     onClick={() => {
                       setSelectedTab(option.value);
                       setSearchQuery("");
-                      const nextModels = getProviderModels(props.providers, option.value);
-                      const fallback = nextModels.find((m) => !m.isCustom) ?? nextModels[0];
-                      if (fallback) setModelAndOptions(option.value, fallback.slug);
                     }}
                     className={cn(
                       "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all",
@@ -531,39 +601,111 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           <div
             className={cn("flex flex-col justify-center overflow-x-hidden", matrixMinWidthClass)}
           >
-            {showSearch && (
-              <div className="relative mb-2 mr-6">
-                <SearchIcon
-                  aria-hidden="true"
-                  className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground/60 pointer-events-none"
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search models..."
-                  className="w-full h-8 pl-8 pr-7 text-xs bg-muted/40 hover:bg-muted/60 focus:bg-background border border-border/60 focus:border-ring rounded-lg outline-none text-foreground placeholder:text-muted-foreground/50 transition-colors"
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") {
-                      if (searchQuery) {
-                        e.stopPropagation();
+            {/* Top Toolbar: Provider Info / Model count, Minimizable Search & View toggles */}
+            <div className="flex items-center justify-between h-11 mb-3 mr-6 shrink-0 select-none">
+              {isSearchOpen || searchQuery ? (
+                <div className="relative flex-1 flex items-center">
+                  <SearchIcon
+                    aria-hidden="true"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60 pointer-events-none"
+                  />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Escape") {
                         setSearchQuery("");
+                        setIsSearchOpen(false);
                       }
-                    }
-                  }}
-                />
-                {searchQuery && (
+                    }}
+                    onKeyUp={(e) => e.stopPropagation()}
+                    onKeyPress={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder="Search all models by name or slug..."
+                    autoFocus
+                    className="w-full h-9 pl-9 pr-8 text-xs bg-muted/40 hover:bg-muted/60 focus:bg-background border border-border/80 focus:border-ring rounded-xl outline-none text-foreground placeholder:text-muted-foreground/50 transition-all shadow-2xs font-sans"
+                  />
                   <button
                     type="button"
-                    aria-label="Clear search"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close search"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchQuery("");
+                      setIsSearchOpen(false);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 size-6 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
                   >
-                    <XIcon className="size-3" />
+                    <XIcon className="size-3.5" />
                   </button>
-                )}
-              </div>
-            )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "text-2xl sm:text-3xl font-normal lowercase tracking-tight text-foreground transition-all select-none",
+                        fontCombo.serifClass || "font-serif italic",
+                      )}
+                      style={{
+                        fontFamily: "var(--font-display, var(--font-sans))",
+                        fontStyle: "italic",
+                      }}
+                    >
+                      {activeTabHeading}
+                    </span>
+                    <span className="flex items-center justify-center min-w-6 h-6 px-2 text-xs font-semibold rounded-full bg-muted/70 border border-border/50 text-foreground/80 shadow-2xs">
+                      {models.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {activeTab === "pinned" && pinnedModels.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleGroupPinnedByProvider();
+                        }}
+                        title={
+                          groupPinnedByProvider
+                            ? "Switch to flat model list (hide provider headers)"
+                            : "Group models by provider headers"
+                        }
+                        className={cn(
+                          "flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer border",
+                          groupPinnedByProvider
+                            ? "bg-primary/10 text-primary hover:bg-primary/15 border-primary/25 shadow-2xs"
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50 border-border/40",
+                        )}
+                      >
+                        <LayersIcon className="size-3.5" />
+                        <span className="text-[11px]">
+                          {groupPinnedByProvider ? "Grouped" : "Flat"}
+                        </span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsSearchOpen(true);
+                      }}
+                      title="Search models"
+                      className="flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer border border-border/40 hover:border-border/80 shadow-2xs"
+                    >
+                      <SearchIcon className="size-3.5" />
+                      <span className="text-[11px]">Search</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Pinned header labels with border line strictly above the scrolling model rows */}
             {globalStops.length > 0 && (
@@ -582,8 +724,8 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                           : "text-[8px] tracking-wider text-muted-foreground/80 dark:text-zinc-400/80",
                       )}
                       style={{
-                        left: `calc(176px + 20px + (100% - 176px - 40px) * ${idx / (globalStops.length - 1)})`,
-                        width: `calc((100% - 176px - 40px) / ${Math.max(1, globalStops.length - 1)})`,
+                        left: `calc(240px + 20px + (100% - 240px - 40px) * ${idx / (globalStops.length - 1)})`,
+                        width: `calc((100% - 240px - 40px) / ${Math.max(1, globalStops.length - 1)})`,
                       }}
                     >
                       {words.map((word, wIdx) => (
@@ -601,7 +743,6 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
             )}
 
             <div className="flex flex-col max-h-[380px] overflow-y-auto pr-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-foreground/15 hover:[&::-webkit-scrollbar-thumb]:bg-foreground/30 [&::-webkit-scrollbar-thumb]:rounded-full">
-
               {activeTab === "pinned" && pinnedModels.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center select-none">
                   <PinIcon className="size-8 text-muted-foreground/40 mb-2.5" />
@@ -629,10 +770,14 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                       )}
                       {group.items.map((model) => {
                         const modelProvider =
-                          (model as { providerId?: string }).providerId ?? activeProvider;
+                          (model as { providerId?: string }).providerId ??
+                          (activeTab !== "pinned" ? activeTab : props.provider);
                         const isFav = checkIsPinned(modelProvider, model.slug);
                         const isCurrentActive =
-                          modelProvider === props.provider && model.slug === activeModel?.slug;
+                          modelProvider === props.provider && model.slug === props.model;
+                        const pinIndex = pinnedModels.findIndex(
+                          (m) => m.providerId === modelProvider && m.slug === model.slug,
+                        );
                         return (
                           <ModelRow
                             key={`${modelProvider}-${model.slug}`}
@@ -673,10 +818,16 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           {/* Ultra lever module on the Right */}
           {leverDescriptor && (
             <Lever
-              label={leverDescriptor.label}
+              label={
+                leverDescriptor.id === "serviceTier" ||
+                leverDescriptor.id === "service_tier" ||
+                leverDescriptor.id === "tier"
+                  ? "FAST MODE"
+                  : leverDescriptor.label
+              }
               engaged={isUltra}
               themeColor={activeColor}
-              onChange={(value) => handleBooleanChange(leverDescriptor, value)}
+              onChange={handleFastModeChange}
             />
           )}
         </div>
@@ -737,7 +888,7 @@ const ModelRow = memo(function ModelRow(props: {
     .filter(
       (d): d is Extract<ProviderOptionDescriptor, { type: "boolean" }> => d.type === "boolean",
     )
-    .filter((d) => d.id !== "fastMode");
+    .filter((d) => d.id !== "fastMode" && d.id !== "fast");
 
   const primarySelect = selects.find(
     (d) =>
@@ -749,45 +900,64 @@ const ModelRow = memo(function ModelRow(props: {
       d.id.toLowerCase().includes("reasoning") ||
       d.id.toLowerCase().includes("variant"),
   );
-  const secondarySelects = primarySelect
-    ? selects.filter((d) => d.id !== primarySelect.id)
-    : selects;
+  const secondarySelects = (
+    primarySelect ? selects.filter((d) => d.id !== primarySelect.id) : selects
+  ).filter(
+    (d) =>
+      d.id !== "serviceTier" &&
+      d.id !== "service_tier" &&
+      d.id !== "tier" &&
+      !d.options.some((o) => (o.id ?? (o as any).value) === "fast" && d.options.length <= 2),
+  );
 
   const allowedOptionIds = useMemo(
     () =>
       primarySelect && primarySelect.type === "select"
-        ? primarySelect.options.map((o) => (o.id ?? (o as any).value)?.toString())
+        ? primarySelect.options
+            .map((o) => (o.id ?? (o as any).value)?.toString())
+            .filter((id): id is string => Boolean(id))
         : [],
     [primarySelect],
   );
 
+  const currentStopId = useMemo(() => {
+    if (!primarySelect) return null;
+    return getProviderOptionCurrentValue(primarySelect);
+  }, [primarySelect]);
+
+  const currentStopIndex = useMemo(() => {
+    if (!currentStopId) return -1;
+    return props.globalStops.findIndex(
+      (s) => s.id === currentStopId || (s as any).value === currentStopId,
+    );
+  }, [currentStopId, props.globalStops]);
+
   const nearestAvailable = useCallback(
-    (desiredIndex: number) => {
-      let bestIndex = 0;
-      let minDiff = Infinity;
-      for (let i = 0; i < props.globalStops.length; i++) {
-        const stop = props.globalStops[i];
-        if (
-          stop &&
-          (allowedOptionIds.includes(stop.id) || allowedOptionIds.includes((stop as any).value))
-        ) {
-          const diff = Math.abs(i - desiredIndex);
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestIndex = i;
+    (targetIndex: number) => {
+      if (allowedOptionIds.length === 0 || props.globalStops.length === 0) {
+        return null;
+      }
+      let bestOptionId: string | null = null;
+      let minDistance = Infinity;
+
+      allowedOptionIds.forEach((optId) => {
+        const idxInGlobal = props.globalStops.findIndex((s) => s.id === optId);
+        if (idxInGlobal >= 0) {
+          const dist = Math.abs(idxInGlobal - targetIndex);
+          if (dist < minDistance) {
+            minDistance = dist;
+            bestOptionId = optId;
           }
         }
-      }
-      return props.globalStops[bestIndex]?.id;
+      });
+      return bestOptionId;
     },
     [allowedOptionIds, props.globalStops],
   );
 
-  // Local drag index mapping to prevent lag/choppiness
   const [localStopIndex, setLocalStopIndex] = useState<number | null>(null);
   const dragIndexRef = useRef<number | null>(null);
 
-  // High-performance reactive drag/click loop to prevent stale React closures
   const latestRef = useRef({
     isActive: props.isActive,
     onSelect: props.onSelect,
@@ -795,13 +965,15 @@ const ModelRow = memo(function ModelRow(props: {
     descriptors,
     primarySelect,
   });
-  latestRef.current = {
-    isActive: props.isActive,
-    onSelect: props.onSelect,
-    onSelectChange: props.onSelectChange,
-    descriptors,
-    primarySelect,
-  };
+  useEffect(() => {
+    latestRef.current = {
+      isActive: props.isActive,
+      onSelect: props.onSelect,
+      onSelectChange: props.onSelectChange,
+      descriptors,
+      primarySelect,
+    };
+  });
 
   const handleTrackMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -857,26 +1029,21 @@ const ModelRow = memo(function ModelRow(props: {
         return;
       }
 
-      // Read final stop computed during the mouseup step
-      const finalIndex = finalStopIdx !== null ? finalStopIdx : currentStopIndex;
-      const resolvedOptionId = props.globalStops[finalIndex]?.id;
+      const finalOptionId =
+        finalStopIdx !== null && finalStopIdx >= 0
+          ? (props.globalStops[finalStopIdx]?.id ?? null)
+          : null;
 
-      if (resolvedOptionId) {
-        if (curPrimary.id === "effort" || curPrimary.id === "reasoningEffort") {
-          props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, resolvedOptionId));
-        }
-
-        if (!curActive) {
-          const nextDescriptors = curDescriptors.map((d) =>
-            d.id === curPrimary.id && d.type === "select"
-              ? { ...d, currentValue: resolvedOptionId }
-              : d,
-          );
-          const selections = buildProviderOptionSelectionsFromDescriptors(nextDescriptors);
-          curSelect(selections);
-        } else {
-          curSelectChange(curPrimary, resolvedOptionId);
-        }
+      if (!curActive) {
+        const nextDescriptors = curDescriptors.map((d) =>
+          d.id === curPrimary.id && d.type === "select" && finalOptionId
+            ? { ...d, currentValue: finalOptionId }
+            : d,
+        );
+        const selections = buildProviderOptionSelectionsFromDescriptors(nextDescriptors);
+        curSelect(selections);
+      } else if (finalOptionId) {
+        curSelectChange(curPrimary, finalOptionId);
       }
     };
 
@@ -884,12 +1051,6 @@ const ModelRow = memo(function ModelRow(props: {
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const currentPrimaryVal = primarySelect ? getProviderOptionCurrentValue(primarySelect) : null;
-  const currentStopIndex = props.globalStops.findIndex(
-    (o) => o.id === currentPrimaryVal || (o as any).value === currentPrimaryVal,
-  );
-
-  // Use local drag index if actively dragging, fallback to database state index
   const resolvedIndex = localStopIndex !== null ? localStopIndex : currentStopIndex;
 
   const percentage =
@@ -927,10 +1088,10 @@ const ModelRow = memo(function ModelRow(props: {
         props.onSelect(undefined);
       }}
       className={cn(
-        "relative flex items-center rounded-full transition-all duration-200 select-none",
+        "group relative flex items-center rounded-full transition-all duration-200 select-none h-11",
         props.isActive
-          ? "bg-accent/80 border border-border/40 dark:bg-white/5 dark:border-transparent h-13"
-          : "hover:bg-accent/40 dark:hover:bg-white/[0.03] cursor-pointer h-9",
+          ? "bg-accent/80 border border-border/40 dark:bg-white/5 dark:border-transparent"
+          : "hover:bg-accent/40 dark:hover:bg-white/[0.03] cursor-pointer",
       )}
     >
       {props.ultra && (
@@ -948,110 +1109,109 @@ const ModelRow = memo(function ModelRow(props: {
       )}
 
       {/* Model Name + inline Segmented Sub-controls */}
-      <div className="w-44 pl-3 flex flex-col justify-center leading-none">
-        <div className="flex items-center gap-1 min-w-0">
-          {props.onToggleFavorite && (
-            <button
-              type="button"
-              title={props.isFavorite ? "Unpin model" : "Pin model"}
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onToggleFavorite?.();
-              }}
-              className="shrink-0 p-0.5 rounded-full hover:bg-muted transition-colors focus:outline-none dark:hover:bg-white/10"
-            >
-              <PinIcon
-                className={cn(
-                  "size-3.5 transition-all",
-                  props.isFavorite
-                    ? "fill-current text-amber-500 opacity-100 scale-100"
-                    : "text-muted-foreground opacity-40 hover:opacity-100 hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 scale-90",
-                )}
-              />
-            </button>
-          )}
-          <span
-            className="text-[13px] font-semibold transition-colors truncate"
-            style={{
-              color: props.isActive ? props.themeColor.hex : undefined,
-              textShadow: props.ultra ? `0 0 8px ${props.themeColor.hex}99` : undefined,
+      <div className="w-60 pl-3.5 pr-2 flex items-center gap-1.5 shrink-0 min-w-0">
+        {props.onToggleFavorite && (
+          <button
+            type="button"
+            title={props.isFavorite ? "Unpin model" : "Pin model"}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onToggleFavorite?.();
             }}
+            className="shrink-0 p-0.5 rounded-full hover:bg-muted transition-colors focus:outline-none dark:hover:bg-white/10"
           >
-            {getCleanModelName(props.model.name, props.activeTab ?? null)}
-          </span>
-          {isModelSourceBadgeEnabled() &&
-            (props.model.source === "inferred" || props.model.source === "remote-fallback") && (
-              <span
-                className="shrink-0 text-[8px] font-semibold tracking-wide uppercase px-1 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20"
-                title={`Model capability source: ${props.model.source}`}
-              >
-                auto-detected
-              </span>
-            )}
-        </div>
-
-        {props.isActive && (secondarySelects.length > 0 || booleans.length > 0) && (
-          <div className="flex gap-2 mt-1 select-none">
-            {secondarySelects.map((descriptor) => {
-              const currentVal = getProviderOptionCurrentValue(descriptor);
-              const nextIndex =
-                (descriptor.options.findIndex((o) => o.id === currentVal) + 1) %
-                descriptor.options.length;
-              const nextOption = descriptor.options[nextIndex] ?? descriptor.options[0];
-              const displayVal = descriptor.options.find((o) => o.id === currentVal)?.label ?? "";
-              return (
-                <button
-                  key={descriptor.id}
-                  type="button"
-                  title={`${descriptor.label}: ${displayVal}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (nextOption) props.onSelectChange(descriptor, nextOption.id);
-                  }}
-                  className="px-2 py-0.5 rounded-full text-[8px] font-semibold bg-background/80 border border-border text-foreground hover:bg-accent transition-all dark:bg-black/45 dark:border-white/5 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-white/8"
-                >
-                  {displayVal}
-                </button>
-              );
-            })}
-
-            {booleans.map((descriptor) => {
-              const isTrue = descriptor.currentValue === true;
-              return (
-                <button
-                  key={descriptor.id}
-                  type="button"
-                  title={`${descriptor.label}: ${isTrue ? "On" : "Off"}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.onBooleanChange(descriptor, !isTrue);
-                  }}
-                  className={cn(
-                    "flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[8px] font-semibold transition-all",
-                    isTrue
-                      ? "bg-foreground/10 border-foreground/20 text-foreground dark:bg-white/10 dark:border-white/10 dark:text-white"
-                      : "bg-background/80 border-border text-muted-foreground hover:text-foreground dark:bg-black/40 dark:border-white/5 dark:text-zinc-400 dark:hover:text-white",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      isTrue
-                        ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#34d399]"
-                        : "bg-muted-foreground/40 dark:bg-zinc-600",
-                    )}
-                  />
-                  {descriptor.id === "thinking" ? "THINK" : descriptor.label.toUpperCase()}
-                </button>
-              );
-            })}
-          </div>
+            <PinIcon
+              className={cn(
+                "size-3.5 transition-all",
+                props.isFavorite
+                  ? "fill-current text-amber-500 opacity-100 scale-100"
+                  : "text-muted-foreground opacity-40 hover:opacity-100 hover:text-foreground dark:text-zinc-500 dark:hover:text-zinc-300 scale-90",
+              )}
+            />
+          </button>
         )}
+        <span
+          className="text-[13px] font-semibold transition-colors truncate"
+          style={{
+            color: props.isActive ? props.themeColor.hex : undefined,
+            textShadow: props.ultra ? `0 0 8px ${props.themeColor.hex}99` : undefined,
+          }}
+        >
+          {props.model.name}
+        </span>
+        {isModelSourceBadgeEnabled() &&
+          (props.model.source === "inferred" || props.model.source === "remote-fallback") && (
+            <span
+              className="shrink-0 text-[8px] font-semibold tracking-wide uppercase px-1 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20"
+              title={`Model capability source: ${props.model.source}`}
+            >
+              auto
+            </span>
+          )}
+
+        {/* Inline Secondary Select badges (e.g. 200k, 1M context window) */}
+        {props.isActive &&
+          secondarySelects.map((descriptor) => {
+            const currentVal = getProviderOptionCurrentValue(descriptor);
+            const nextIndex =
+              (descriptor.options.findIndex((o) => o.id === currentVal) + 1) %
+              descriptor.options.length;
+            const nextOption = descriptor.options[nextIndex] ?? descriptor.options[0];
+            const displayVal = descriptor.options.find((o) => o.id === currentVal)?.label ?? currentVal;
+            return (
+              <button
+                key={descriptor.id}
+                type="button"
+                title={`${descriptor.label}: ${displayVal} (Click to switch)`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (nextOption) props.onSelectChange(descriptor, nextOption.id);
+                }}
+                className="shrink-0 px-1.5 py-0.5 rounded-full text-[8.5px] font-mono font-semibold tracking-tight bg-background/90 border border-border text-foreground hover:bg-accent hover:border-foreground/20 transition-all dark:bg-black/40 dark:border-white/10 dark:text-zinc-300 dark:hover:text-white dark:hover:bg-white/10 shadow-2xs cursor-pointer"
+              >
+                {displayVal}
+              </button>
+            );
+          })}
+
+        {/* Inline Boolean toggle badges (e.g. THINK) */}
+        {props.isActive &&
+          booleans.map((descriptor) => {
+            const isTrue = descriptor.currentValue === true;
+            return (
+              <button
+                key={descriptor.id}
+                type="button"
+                title={`${descriptor.label}: ${isTrue ? "On" : "Off"}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onBooleanChange(descriptor, !isTrue);
+                }}
+                className={cn(
+                  "shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-semibold tracking-tight transition-all cursor-pointer",
+                  isTrue
+                    ? "bg-foreground/10 border-foreground/20 text-foreground dark:bg-white/10 dark:border-white/15 dark:text-white"
+                    : "bg-background/80 border-border text-muted-foreground hover:text-foreground dark:bg-black/30 dark:border-white/5 dark:text-zinc-400 dark:hover:text-white",
+                )}
+              >
+                <span
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    isTrue
+                      ? "bg-emerald-500 dark:bg-emerald-400 shadow-[0_0_6px_#34d399]"
+                      : "bg-muted-foreground/40 dark:bg-zinc-600",
+                  )}
+                />
+                {descriptor.id === "thinking" ? "THINK" : descriptor.label.toUpperCase()}
+              </button>
+            );
+          })}
       </div>
 
       {/* Horizontal aligned track container */}
       {primarySelect ? (
         <div
+          onClick={(e) => e.stopPropagation()}
           onMouseDown={handleTrackMouseDown}
           className="flex-1 relative h-full flex items-center px-5 cursor-grab active:cursor-grabbing"
         >
@@ -1121,7 +1281,7 @@ const ModelRow = memo(function ModelRow(props: {
           )}
         </div>
       ) : (
-        <div className="flex-1 text-[11px] text-muted-foreground/70 font-semibold pl-8 pr-8 pointer-events-none select-none italic tracking-wider dark:text-zinc-500/70 truncate">
+        <div className="flex-1 text-[11px] text-muted-foreground/50 font-medium pl-6 pr-4 pointer-events-none select-none italic tracking-wider truncate">
           Reasoning effort not supported by this model
         </div>
       )}
@@ -1139,47 +1299,49 @@ const Lever = memo(function Lever(props: {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragProgress, setDragProgress] = useState<number | null>(null);
   const lastEngaged = useRef(props.engaged);
-
-  // Local engaged state to prevent drag lag
   const [localEngaged, setLocalEngaged] = useState<boolean | null>(null);
+  const dragDistanceRef = useRef(0);
 
-  const updateLever = useCallback((clientY: number) => {
+  const calculatePct = useCallback((clientY: number) => {
     const el = trackRef.current;
-    if (el == null) return;
+    if (el == null) return 0;
     const rect = el.getBoundingClientRect();
-    const padding = 4;
-    const range = rect.height - 32 - padding * 2;
-    const y = Math.max(0, Math.min(clientY - rect.top - 16, range));
-    const pct = range > 0 ? y / range : 0;
-    setDragProgress(pct);
-
-    if (pct > 0.65) {
-      setLocalEngaged(true);
-      lastEngaged.current = true;
-    } else if (pct < 0.35) {
-      setLocalEngaged(false);
-      lastEngaged.current = false;
-    }
+    const padding = PAD_PX;
+    const range = rect.height - THUMB_PX - padding * 2;
+    const y = Math.max(0, Math.min(clientY - rect.top - THUMB_PX / 2, range));
+    return range > 0 ? y / range : 0;
   }, []);
 
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
-    lastEngaged.current = props.engaged;
-    setLocalEngaged(props.engaged);
-    updateLever(e.clientY);
+    dragDistanceRef.current = 0;
+    const startY = e.clientY;
+    const startPct = calculatePct(e.clientY);
+    setDragProgress(startPct);
+    setLocalEngaged(startPct > 0.5);
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      updateLever(moveEvent.clientY);
+      dragDistanceRef.current += Math.abs(moveEvent.clientY - startY);
+      const pct = calculatePct(moveEvent.clientY);
+      setDragProgress(pct);
+      const nextEngaged = pct > 0.5;
+      setLocalEngaged(nextEngaged);
+      lastEngaged.current = nextEngaged;
     };
 
-    const onMouseUp = () => {
+    const onMouseUp = (upEvent: MouseEvent) => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
       setDragProgress(null);
-
-      const finalEngaged = lastEngaged.current;
       setLocalEngaged(null);
-      props.onChange(finalEngaged);
+
+      if (dragDistanceRef.current < 4) {
+        const clickPct = calculatePct(upEvent.clientY);
+        const next = clickPct > 0.5 ? true : !props.engaged;
+        props.onChange(next);
+      } else {
+        props.onChange(lastEngaged.current);
+      }
     };
 
     document.addEventListener("mousemove", onMouseMove);
@@ -1192,9 +1354,9 @@ const Lever = memo(function Lever(props: {
   const isEngaged = localEngaged !== null ? localEngaged : props.engaged;
 
   return (
-    <div className="flex w-20 flex-col items-center border-l border-border pl-6 dark:border-white/8">
+    <div className="flex w-24 flex-col items-center border-l border-border/60 pl-6 dark:border-white/8 select-none shrink-0">
       <div
-        className="mb-4 text-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground transition-colors leading-[1.2] dark:text-zinc-400"
+        className="mb-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 transition-colors leading-tight dark:text-zinc-400"
         style={{
           color: isEngaged ? props.themeColor.hex : undefined,
           textShadow: isEngaged ? `0 0 10px ${props.themeColor.hex}aa` : undefined,
@@ -1205,8 +1367,8 @@ const Lever = memo(function Lever(props: {
         ref={trackRef}
         onMouseDown={onMouseDown}
         className={cn(
-          "relative h-32 w-9 cursor-pointer overflow-hidden rounded-full bg-muted/80 border border-border shadow-inner transition-all duration-300 dark:bg-black/40 dark:border-white/5",
-          isEngaged && "shadow-[0_0_20px_-4px_var(--dynamic-ultra-hex)]",
+          "relative h-32 w-10 cursor-pointer overflow-hidden rounded-full bg-muted/40 border border-border/70 shadow-inner transition-all duration-300 dark:bg-black/40 dark:border-white/10",
+          isEngaged && "shadow-[0_0_20px_-4px_var(--dynamic-ultra-hex)] border-primary/40",
         )}
       >
         {isEngaged && (
@@ -1224,18 +1386,18 @@ const Lever = memo(function Lever(props: {
         )}
         {/* Chevron pulse indicators inside track */}
         <div
-          className="absolute inset-0 flex flex-col justify-around items-center pointer-events-none opacity-40 dark:opacity-30"
+          className="absolute inset-0 flex flex-col justify-end pb-4 gap-3 items-center pointer-events-none opacity-40 dark:opacity-30"
           style={{
             animation: isEngaged ? "fmp-pulse-chevron 1.5s infinite" : undefined,
           }}
         >
-          {[0, 1, 2].map((i) => (
+          {[0, 1].map((i) => (
             <svg
               key={i}
-              className="size-3 text-foreground dark:text-white"
+              className="size-3 text-muted-foreground/60 dark:text-white"
               fill="none"
               stroke="currentColor"
-              strokeWidth="3"
+              strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
               viewBox="0 0 24 24"
@@ -1247,15 +1409,17 @@ const Lever = memo(function Lever(props: {
 
         <div
           className={cn(
-            "absolute left-1/2 size-8 -translate-x-1/2 rounded-full shadow-lg",
-            !isDragging && "transition-all duration-300",
+            "absolute left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md",
+            !isDragging && "transition-all duration-300 ease-out",
           )}
           style={{
             top: `${thumbTopPx}px`,
             background: isEngaged
-              ? `radial-gradient(circle at 35% 35%, #fff, ${props.themeColor.hex})`
-              : "radial-gradient(circle at 35% 35%, #ff5b5b, #b90000)",
-            boxShadow: isEngaged ? `0 0 20px ${props.themeColor.hex}` : undefined,
+              ? `radial-gradient(circle at 35% 35%, #ffffff, ${props.themeColor.hex})`
+              : "radial-gradient(circle at 35% 35%, #ff4b4b, #b30000)",
+            boxShadow: isEngaged
+              ? `0 0 16px ${props.themeColor.hex}`
+              : "0 2px 6px rgba(185, 0, 0, 0.45)",
           }}
         />
       </div>

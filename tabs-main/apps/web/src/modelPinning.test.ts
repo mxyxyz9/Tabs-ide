@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getPinnedModels,
   isPinnedModel,
+  reorderPinnedModels,
   sortModelsWithPinnedFirst,
   togglePinnedModel,
 } from "./modelPinning";
@@ -72,5 +73,25 @@ describe("modelPinning", () => {
 
     const sorted = sortModelsWithPinnedFirst(models, pinned, "codex");
     expect(sorted[0]?.slug).toBe("gpt-5.4");
+  });
+
+  it("reorders pinned models correctly", () => {
+    const pinned = [
+      { provider: "codex" as ProviderInstanceId, model: "gpt-5.4" },
+      { provider: "claudeAgent" as ProviderInstanceId, model: "claude-sonnet-5" },
+      { provider: "kilo" as ProviderInstanceId, model: "solar-pro" },
+    ];
+
+    // Move item at index 2 to index 0
+    const reordered1 = reorderPinnedModels(pinned, 2, 0);
+    expect(reordered1.map((p) => p.model)).toEqual(["solar-pro", "gpt-5.4", "claude-sonnet-5"]);
+
+    // Move item at index 0 to index 1
+    const reordered2 = reorderPinnedModels(pinned, 0, 1);
+    expect(reordered2.map((p) => p.model)).toEqual(["claude-sonnet-5", "gpt-5.4", "solar-pro"]);
+
+    // Invalid index returns unchanged
+    const invalid = reorderPinnedModels(pinned, -1, 5);
+    expect(invalid).toEqual(pinned);
   });
 });

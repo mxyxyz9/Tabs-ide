@@ -56,6 +56,7 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   const primaryValue = getProviderOptionCurrentValue(primarySelectDescriptor ?? null);
   const promptEffort = typeof primaryValue === "string" ? primaryValue : null;
   const ultrathinkActive =
+    promptEffort === "ultrathink" &&
     (primarySelectDescriptor?.promptInjectedValues?.length ?? 0) > 0 &&
     isClaudeUltrathinkPrompt(prompt);
 
