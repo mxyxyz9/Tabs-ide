@@ -98,6 +98,8 @@ function TagCiStatus({ cwd, tagName }: { cwd: string; tagName: string }) {
   );
 }
 
+import { useProjectGitState } from "../../state/scopedStateStore";
+
 export function TagsPanel({
   cwd,
   commits,
@@ -111,10 +113,23 @@ export function TagsPanel({
   onOpenDraftRelease: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [form, setForm] = useState(false);
+  const [gitState, setGitState] = useProjectGitState(cwd);
+  const form = gitState.tagForm;
+  const setForm = useCallback(
+    (f: boolean) => {
+      setGitState({ tagForm: f });
+    },
+    [setGitState],
+  );
   const [realTags, setRealTags] = useState<string[]>([]);
   const [loadingTags, setLoadingTags] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const searchQuery = gitState.tagSearch;
+  const setSearchQuery = useCallback(
+    (q: string) => {
+      setGitState({ tagSearch: q });
+    },
+    [setGitState],
+  );
 
   const api = readNativeApi();
   const queryClient = useQueryClient();

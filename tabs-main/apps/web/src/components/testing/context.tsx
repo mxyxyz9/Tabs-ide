@@ -119,6 +119,24 @@ export interface TestingDataContextValue {
   flattenedTestInventory: ReadonlyArray<{ node: import("@tabs/contracts").TestingTestInventoryNode; depth: number }>;
   workbookPath: string;
 
+  // --- case intake & draft UI state -----------------------------------------
+  caseIntakeMode: TestingCaseIntakeMode;
+  setCaseIntakeMode: (v: TestingCaseIntakeMode) => void;
+  manualCaseId: string;
+  setManualCaseId: (v: string) => void;
+  manualCaseDescription: string;
+  setManualCaseDescription: (v: string) => void;
+  manualCaseSteps: ReadonlyArray<string>;
+  setManualCaseSteps: (v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => void;
+  manualCaseExpected: string;
+  setManualCaseExpected: (v: string) => void;
+  manualCaseLocatorIds: ReadonlySet<string>;
+  setManualCaseLocatorIds: (v: ReadonlySet<string>) => void;
+  storyText: string;
+  setStoryText: (v: string) => void;
+  storyFilePath: string;
+  setStoryFilePath: (v: string) => void;
+
   // --- case ID policy UI state ----------------------------------------------
   caseIdPrefix: string;
   setCaseIdPrefix: (v: string) => void;

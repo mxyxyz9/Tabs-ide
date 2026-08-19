@@ -1080,31 +1080,72 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   border: 1px solid var(--tabs-hairline-strong) !important;
   background: var(--tabs-input-bg) !important;
 }
+.monaco-workbench .settings-editor .settings-tabs-widget .monaco-action-bar {
+  display: inline-flex !important;
+  align-items: center !important;
+  background: var(--tabs-ov-04, rgba(255, 255, 255, 0.04)) !important;
+  padding: 3px !important;
+  border-radius: 9px !important;
+  border: 1px solid var(--tabs-hairline, rgba(255, 255, 255, 0.08)) !important;
+  gap: 2px !important;
+}
+.monaco-workbench.vs .settings-editor .settings-tabs-widget .monaco-action-bar {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
 .monaco-workbench .settings-editor .settings-tabs-widget .monaco-action-bar .action-item {
-  margin-right: 4px !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
 }
 .monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label {
   border-radius: 6px !important;
-  border: 1px solid var(--tabs-hairline) !important;
-  background: var(--tabs-ov-03) !important;
-  color: var(--tabs-text-muted) !important;
-  padding: 4px 10px !important;
-  font-size: 12px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--tabs-text-muted, #8a8a8a) !important;
+  padding: 4px 12px !important;
+  font-size: 12.5px !important;
   font-weight: 500 !important;
-  transition: all 120ms ease !important;
+  line-height: 1.4 !important;
+  transition: all 140ms ease !important;
   outline: none !important;
   box-shadow: none !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+.monaco-workbench.vs .settings-editor .settings-tabs-widget .action-item .action-label {
+  color: #71717a !important;
 }
 .monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label:hover {
-  background: var(--tabs-ov-06) !important;
-  color: var(--tabs-text) !important;
-  border-color: var(--tabs-hairline-strong) !important;
+  background: var(--tabs-ov-06, rgba(255, 255, 255, 0.06)) !important;
+  color: var(--tabs-text, #ffffff) !important;
+}
+.monaco-workbench.vs .settings-editor .settings-tabs-widget .action-item .action-label:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #09090b !important;
 }
 .monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label.checked {
-  background: var(--tabs-bg-elevated) !important;
-  color: var(--tabs-text) !important;
-  border-color: var(--tabs-hairline-strong) !important;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2) !important;
+  background: var(--tabs-bg-elevated, #242427) !important;
+  color: var(--tabs-text, #ffffff) !important;
+  font-weight: 600 !important;
+  border: 1px solid var(--tabs-hairline-strong, rgba(255, 255, 255, 0.14)) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35) !important;
+}
+.monaco-workbench.vs .settings-editor .settings-tabs-widget .action-item .action-label.checked {
+  background: #ffffff !important;
+  color: #09090b !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+.monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label .action-title {
+  font-weight: inherit !important;
+}
+.monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label .action-details {
+  font-size: 11px !important;
+  opacity: 0.8 !important;
 }
 .monaco-workbench .settings-editor .settings-tabs-widget .action-item .action-label:focus,
 .monaco-workbench .settings-editor .settings-tabs-widget .action-item:focus {
@@ -1328,12 +1369,17 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 .monaco-workbench .dialog-modal-block {
   position: fixed !important;
   inset: 0 !important;
-  background: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(0, 0, 0, 0.55) !important;
   backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   z-index: 10000 !important;
+}
+.monaco-workbench.vs .monaco-dialog-modal-block,
+.monaco-workbench.vs .dialog-modal-block {
+  background: rgba(0, 0, 0, 0.25) !important;
 }
 .monaco-workbench .dialog-shadow,
 .dialog-shadow {
@@ -1353,23 +1399,23 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   width: 480px !important;
   max-width: 92vw !important;
   box-sizing: border-box !important;
-  border-radius: 16px !important;
-  padding: 24px 24px 22px 24px !important;
+  border-radius: 14px !important;
+  padding: 22px 24px 20px 24px !important;
   margin: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
   background: var(--tabs-bg-popover, #18181b) !important;
   color: var(--tabs-text, #f4f4f5) !important;
-  border: 1px solid rgba(168, 85, 247, 0.4) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(168, 85, 247, 0.25), 0 8px 30px rgba(168, 85, 247, 0.12) !important;
+  border: 1px solid var(--tabs-hairline-strong, rgba(255, 255, 255, 0.12)) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--tabs-hairline, rgba(255, 255, 255, 0.05)) !important;
 }
 .monaco-workbench.vs .monaco-dialog-box,
 .monaco-workbench.vs .simple-dialog {
-  background: var(--tabs-bg-popover, #ffffff) !important;
-  color: var(--tabs-text, #09090b) !important;
-  border: 1px solid rgba(168, 85, 247, 0.3) !important;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.14), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  background: #ffffff !important;
+  color: #18181b !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
 }
 .monaco-workbench .monaco-dialog-box .dialog-toolbar-row,
 .monaco-workbench .dialog-toolbar-row,
@@ -1408,6 +1454,11 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   background: var(--tabs-ov-08, rgba(255, 255, 255, 0.08)) !important;
   color: var(--tabs-text, #ffffff) !important;
 }
+.monaco-workbench.vs .dialog-toolbar-row .action-label.codicon-dialog-close:hover,
+.monaco-workbench.vs .dialog-toolbar-row .codicon-close:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #09090b !important;
+}
 .monaco-workbench .monaco-dialog-box .dialog-message-row,
 .monaco-workbench .dialog-message-row,
 .dialog-message-row {
@@ -1425,9 +1476,9 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 }
 .monaco-workbench .dialog-message-row .dialog-icon,
 .dialog-message-row .dialog-icon {
-  font-size: 24px !important;
+  font-size: 22px !important;
   line-height: 1 !important;
-  margin-top: 0px !important;
+  margin-top: 1px !important;
   flex-shrink: 0 !important;
 }
 .dialog-icon.codicon-dialog-warning,
@@ -1455,7 +1506,7 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 .monaco-workbench .monaco-dialog-box .dialog-message,
 .monaco-workbench .dialog-message-text,
 .dialog-message-text {
-  font-size: 15px !important;
+  font-size: 14.5px !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;
   background: transparent !important;
@@ -1463,18 +1514,26 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   color: var(--tabs-text, #f4f4f5) !important;
   letter-spacing: -0.01em !important;
 }
+.monaco-workbench.vs .monaco-dialog-box .dialog-message,
+.monaco-workbench.vs .dialog-message-text {
+  color: #18181b !important;
+}
 .monaco-workbench .monaco-dialog-box .dialog-message-body,
 .monaco-workbench .monaco-dialog-box .dialog-message-detail,
 .monaco-workbench .dialog-message-body,
 .monaco-workbench .dialog-message-detail,
 .dialog-message-body,
 .dialog-message-detail {
-  font-size: 13.5px !important;
+  font-size: 13px !important;
   line-height: 1.55 !important;
   margin: 0 !important;
   background: transparent !important;
   border: none !important;
   color: var(--tabs-text-muted, #a1a1aa) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-message-detail,
+.monaco-workbench.vs .dialog-message-detail {
+  color: #52525b !important;
 }
 .monaco-workbench .dialog-message-body a,
 .dialog-message-body a {
@@ -1518,11 +1577,11 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  height: 34px !important;
+  height: 32px !important;
   padding: 0 16px !important;
-  border-radius: 8px !important;
+  border-radius: 9999px !important;
   font-size: 13px !important;
-  font-weight: 500 !important;
+  font-weight: 600 !important;
   cursor: pointer !important;
   text-decoration: none !important;
   transition: all 0.15s ease !important;
@@ -1531,29 +1590,71 @@ body[data-theme="tabs-monotone"] .monaco-workbench {
 .monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary,
 .monaco-workbench .dialog-buttons .monaco-button.secondary,
 .dialog-buttons .monaco-button.secondary {
-  background: #27272a !important;
-  color: #f4f4f5 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: var(--tabs-ov-06, rgba(255, 255, 255, 0.08)) !important;
+  color: var(--tabs-text, #f4f4f5) !important;
+  border: 1px solid var(--tabs-hairline-strong, rgba(255, 255, 255, 0.14)) !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary *,
+.monaco-workbench .dialog-buttons .monaco-button.secondary *,
+.dialog-buttons .monaco-button.secondary * {
+  color: var(--tabs-text, #f4f4f5) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary,
+.monaco-workbench.vs .dialog-buttons .monaco-button.secondary {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #18181b !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary *,
+.monaco-workbench.vs .dialog-buttons .monaco-button.secondary * {
+  color: #18181b !important;
 }
 .monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary:hover,
 .monaco-workbench .dialog-buttons .monaco-button.secondary:hover,
 .dialog-buttons .monaco-button.secondary:hover {
-  background: #3f3f46 !important;
+  background: var(--tabs-ov-10, rgba(255, 255, 255, 0.14)) !important;
   color: #ffffff !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button.secondary:hover,
+.monaco-workbench.vs .dialog-buttons .monaco-button.secondary:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #000000 !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
 }
 .monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary),
 .monaco-workbench .dialog-buttons .monaco-button:not(.secondary),
 .dialog-buttons .monaco-button:not(.secondary) {
-  background: #a855f7 !important;
+  background: #ffffff !important;
+  color: #09090b !important;
+  border: 1px solid rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
+}
+.monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary) *,
+.monaco-workbench .dialog-buttons .monaco-button:not(.secondary) *,
+.dialog-buttons .monaco-button:not(.secondary) * {
+  color: #09090b !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary),
+.monaco-workbench.vs .dialog-buttons .monaco-button:not(.secondary) {
+  background: #18181b !important;
   color: #ffffff !important;
-  border: 1px solid transparent !important;
-  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.25) !important;
+  border: 1px solid #18181b !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary) *,
+.monaco-workbench.vs .dialog-buttons .monaco-button:not(.secondary) * {
+  color: #ffffff !important;
 }
 .monaco-workbench .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary):hover,
 .monaco-workbench .dialog-buttons .monaco-button:not(.secondary):hover,
 .dialog-buttons .monaco-button:not(.secondary):hover {
-  background: #9333ea !important;
+  background: #e4e4e7 !important;
+  color: #000000 !important;
+}
+.monaco-workbench.vs .monaco-dialog-box .dialog-buttons-row .monaco-button:not(.secondary):hover,
+.monaco-workbench.vs .dialog-buttons .monaco-button:not(.secondary):hover {
+  background: #27272a !important;
   color: #ffffff !important;
 }
 

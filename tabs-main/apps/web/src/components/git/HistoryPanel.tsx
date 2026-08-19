@@ -10,7 +10,7 @@ import {
   Undo2,
   Wand2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { readNativeApi } from "../../nativeApi";
@@ -373,6 +373,8 @@ export function CommitDetailModal({
   );
 }
 
+import { useProjectGitState } from "../../state/scopedStateStore";
+
 export function HistoryPanel({
   cwd,
   commits,
@@ -390,7 +392,14 @@ export function HistoryPanel({
   onCherryPick: (c: GitHistoryCommit) => void;
   onLoadMoreHistory?: () => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [gitState, setGitState] = useProjectGitState(cwd);
+  const query = gitState.historySearch;
+  const setQuery = useCallback(
+    (q: string) => {
+      setGitState({ historySearch: q });
+    },
+    [setGitState],
+  );
   const [activeCommit, setActiveCommit] = useState<GitHistoryCommit | null>(null);
   const q = query.trim().toLowerCase();
   const filtered = q ? commits.filter((c) => c.subject.toLowerCase().includes(q) || c.authorName.toLowerCase().includes(q) || c.sha.includes(q)) : commits;

@@ -20,6 +20,8 @@ import {
 } from "../ui/dialog";
 import { Banner, Card, InlineForm, PanelToolbar } from "./gitPrimitives";
 
+import { useProjectGitState } from "../../state/scopedStateStore";
+
 export function BranchesPanel({
   cwd,
   activeBranch,
@@ -43,7 +45,14 @@ export function BranchesPanel({
   onOpenNewWorktree: () => void;
   onGoToChanges?: () => void;
 }) {
-  const [form, setForm] = useState<"new" | "rename" | null>(null);
+  const [gitState, setGitState] = useProjectGitState(cwd);
+  const form = gitState.branchForm;
+  const setForm = useCallback(
+    (f: "new" | "rename" | null) => {
+      setGitState({ branchForm: f });
+    },
+    [setGitState],
+  );
   const [confirmModal, setConfirmModal] = useState<{ type: "merge" | "rebase"; targetBranch: string } | null>(null);
   const [conflictState, setConflictState] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
   const [actionBranchMap, setActionBranchMap] = useState<Record<string, "checkout" | "delete">>({});

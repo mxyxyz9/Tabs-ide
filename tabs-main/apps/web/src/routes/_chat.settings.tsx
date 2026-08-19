@@ -1,4 +1,5 @@
 import { CustomThemeStudioModal } from "../components/CustomThemeStudioModal";
+import { useGlobalSettingsViewState } from "~/state/scopedStateStore";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -1784,8 +1785,8 @@ const TOOLBAR_STYLES = [
   { id: "ghost-mesh", label: "Ambient Mesh", description: "Soft radial gradient mesh fading elegantly from the bottom edge." },
   { id: "spotlight", label: "Edge Illumination", description: "Directional light emitting smoothly from the top boundary." },
   { id: "dot", label: "Minimal Indicator", description: "Ultra-minimal glowing indicator tracking below the active tab." },
-  { id: "refraction", label: "Frosted Lens", description: "Physical glass effect distorting a micro-dot matrix track." },
-  { id: "titanium", label: "Brushed Titanium", description: "Metallic machined finish with an animated sweeping glare." },
+  { id: "refraction", label: "Frosted Lens", description: "Physical glass lens distorting a micro-dot matrix track." },
+  { id: "titanium", label: "Brushed Aluminum", description: "Machined brushed metal aesthetic with an animated sweeping glare." },
 ] as const;
 
 function ToolbarPreview({ styleId }: { styleId: string }) {
@@ -1876,26 +1877,75 @@ function SettingsRouteView() {
       });
     },
   });
+
   const serverConfig = useServerConfig();
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>(() => {
-    const saved = sessionStorage.getItem("tabs_active_settings_tab");
-    return (saved as SettingsSectionId) || "general";
-  });
+  const [settingsViewState, updateSettingsViewState] = useGlobalSettingsViewState();
+  const activeSettingsSection = (settingsViewState.activeSection as SettingsSectionId) || "general";
+  const setActiveSettingsSection = useCallback(
+    (s: SettingsSectionId) => {
+      updateSettingsViewState({ activeSection: s });
+    },
+    [updateSettingsViewState],
+  );
 
-  useEffect(() => {
-    sessionStorage.setItem("tabs_active_settings_tab", activeSettingsSection);
-  }, [activeSettingsSection]);
-  const [openProviderDetails, setOpenProviderDetails] = useState<
-    Partial<Record<ProviderSettingsKey, boolean>>
-  >({});
-  const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
-    Partial<Record<ProviderSettingsKey, string>>
-  >({});
-  const [draftModelOrders, setDraftModelOrders] = useState<
-    Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>
-  >({});
+  const openProviderDetails = settingsViewState.openProviderDetails as Partial<Record<ProviderSettingsKey, boolean>>;
+  const setOpenProviderDetails = useCallback(
+    (
+      updater:
+        | Partial<Record<ProviderSettingsKey, boolean>>
+        | ((
+            prev: Partial<Record<ProviderSettingsKey, boolean>>,
+          ) => Partial<Record<ProviderSettingsKey, boolean>>),
+    ) => {
+      updateSettingsViewState((prev) => ({
+        openProviderDetails:
+          typeof updater === "function"
+            ? (updater(prev.openProviderDetails as any) as any)
+            : { ...prev.openProviderDetails, ...updater },
+      }));
+    },
+    [updateSettingsViewState],
+  );
+
+  const customModelInputByProvider = settingsViewState.customModelInputByProvider as Partial<Record<ProviderSettingsKey, string>>;
+  const setCustomModelInputByProvider = useCallback(
+    (
+      updater:
+        | Partial<Record<ProviderSettingsKey, string>>
+        | ((
+            prev: Partial<Record<ProviderSettingsKey, string>>,
+          ) => Partial<Record<ProviderSettingsKey, string>>),
+    ) => {
+      updateSettingsViewState((prev) => ({
+        customModelInputByProvider:
+          typeof updater === "function"
+            ? (updater(prev.customModelInputByProvider as any) as any)
+            : { ...prev.customModelInputByProvider, ...updater },
+      }));
+    },
+    [updateSettingsViewState],
+  );
+
+  const draftModelOrders = settingsViewState.draftModelOrders as Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>;
+  const setDraftModelOrders = useCallback(
+    (
+      updater:
+        | Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>
+        | ((
+            prev: Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>,
+          ) => Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>),
+    ) => {
+      updateSettingsViewState((prev) => ({
+        draftModelOrders:
+          typeof updater === "function"
+            ? (updater(prev.draftModelOrders as any) as any)
+            : { ...prev.draftModelOrders, ...updater },
+      }));
+    },
+    [updateSettingsViewState],
+  );
 
   const handleSaveModelOrder = useCallback(
     (provider: ProviderSettingsKey) => {
@@ -1914,7 +1964,7 @@ function SettingsRouteView() {
         });
       }
     },
-    [draftModelOrders, settings.providerModelPreferences, updateSettings],
+    [draftModelOrders, setDraftModelOrders, settings.providerModelPreferences, updateSettings],
   );
 
   const [previewStyle, setPreviewStyle] = useState(settings.splashLoaderStyle);

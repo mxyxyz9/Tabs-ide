@@ -93,90 +93,522 @@ function basenameOfPath(input: string): string {
   return parts[parts.length - 1] ?? input;
 }
 
+import { useProjectTestingState } from "~/state/scopedStateStore";
+
 export function TestingTool(props: {
   projectId: ProjectId;
   projectPath: string;
   defaultModelSelection: ModelSelection | null;
 }) {
   const serverConfig = useServerConfig();
-  const [targetUrl, setTargetUrl] = useState("");
-  const [cdpEndpoint, setCdpEndpoint] = useState("");
-  const [explorationScope, setExplorationScope] = useState<TestingExplorationScope>("path");
-  const [authenticationMode, setAuthenticationMode] = useState<TestingAuthenticationMode>("none");
-  const [activeTestingSection, setActiveTestingSection] =
-    useState<TestingWorkspaceSection>("overview");
-  const [caseSearch, setCaseSearch] = useState("");
-  const [caseFilter, setCaseFilter] = useState<TestingCaseFilter>("all");
-  const [implementedInventoryOpen, setImplementedInventoryOpen] = useState(false);
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [maxStates, setMaxStates] = useState(String(DEFAULT_TESTING_MAX_STATES));
-  const [maxDurationMinutes, setMaxDurationMinutes] = useState("30");
+  const [testingState, setTestingState] = useProjectTestingState(props.projectId);
+
+  const targetUrl = testingState.targetUrl;
+  const setTargetUrl = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ targetUrl: typeof v === "function" ? v(prev.targetUrl) : v }));
+    },
+    [setTestingState],
+  );
+
+  const cdpEndpoint = testingState.cdpEndpoint;
+  const setCdpEndpoint = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ cdpEndpoint: typeof v === "function" ? v(prev.cdpEndpoint) : v }));
+    },
+    [setTestingState],
+  );
+
+  const explorationScope = testingState.explorationScope;
+  const setExplorationScope = useCallback(
+    (
+      v:
+        | TestingExplorationScope
+        | ((prev: TestingExplorationScope) => TestingExplorationScope),
+    ) => {
+      setTestingState((prev) => ({
+        explorationScope: typeof v === "function" ? v(prev.explorationScope) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const authenticationMode = testingState.authenticationMode;
+  const setAuthenticationMode = useCallback(
+    (
+      v:
+        | TestingAuthenticationMode
+        | ((prev: TestingAuthenticationMode) => TestingAuthenticationMode),
+    ) => {
+      setTestingState((prev) => ({
+        authenticationMode: typeof v === "function" ? v(prev.authenticationMode) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const activeTestingSection = testingState.activeTestingSection;
+  const setActiveTestingSection = useCallback(
+    (
+      v:
+        | TestingWorkspaceSection
+        | ((prev: TestingWorkspaceSection) => TestingWorkspaceSection),
+    ) => {
+      setTestingState((prev) => ({
+        activeTestingSection: typeof v === "function" ? v(prev.activeTestingSection) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const caseSearch = testingState.caseSearch;
+  const setCaseSearch = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ caseSearch: typeof v === "function" ? v(prev.caseSearch) : v }));
+    },
+    [setTestingState],
+  );
+
+  const caseFilter = testingState.caseFilter;
+  const setCaseFilter = useCallback(
+    (v: TestingCaseFilter | ((prev: TestingCaseFilter) => TestingCaseFilter)) => {
+      setTestingState((prev) => ({ caseFilter: typeof v === "function" ? v(prev.caseFilter) : v }));
+    },
+    [setTestingState],
+  );
+
+  const implementedInventoryOpen = testingState.implementedInventoryOpen;
+  const setImplementedInventoryOpen = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setTestingState((prev) => ({
+        implementedInventoryOpen: typeof v === "function" ? v(prev.implementedInventoryOpen) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const selectedCaseId = testingState.selectedCaseId;
+  const setSelectedCaseId = useCallback(
+    (v: string | null | ((prev: string | null) => string | null)) => {
+      setTestingState((prev) => ({
+        selectedCaseId: typeof v === "function" ? v(prev.selectedCaseId) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const maxStates = testingState.maxStates;
+  const setMaxStates = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ maxStates: typeof v === "function" ? v(prev.maxStates) : v }));
+    },
+    [setTestingState],
+  );
+
+  const maxDurationMinutes = testingState.maxDurationMinutes;
+  const setMaxDurationMinutes = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        maxDurationMinutes: typeof v === "function" ? v(prev.maxDurationMinutes) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
   const [status, setStatus] = useState<TestingGraphSummary | null>(null);
   const [cases, setCases] = useState<ReadonlyArray<TestingCaseSummary>>([]);
   const [generationJobs, setGenerationJobs] = useState<ReadonlyArray<TestingGenerationJob>>([]);
   const [executionRuns, setExecutionRuns] = useState<ReadonlyArray<TestingExecutionRun>>([]);
   const [testingSchedules, setTestingSchedules] = useState<ReadonlyArray<TestingSchedule>>([]);
-  const [executionMode, setExecutionMode] = useState<"standalone" | "ci">("standalone");
-  const [visualComparison, setVisualComparison] = useState(false);
+
+  const executionMode = testingState.executionMode;
+  const setExecutionMode = useCallback(
+    (
+      v:
+        | "standalone"
+        | "ci"
+        | ((prev: "standalone" | "ci") => "standalone" | "ci"),
+    ) => {
+      setTestingState((prev) => ({
+        executionMode: typeof v === "function" ? v(prev.executionMode) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const visualComparison = testingState.visualComparison;
+  const setVisualComparison = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setTestingState((prev) => ({
+        visualComparison: typeof v === "function" ? v(prev.visualComparison) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
   const [scheduleTime, setScheduleTime] = useState("");
   const [testerName, setTesterName] = useState("");
-  const [traceCaseId, setTraceCaseId] = useState("");
+
+  const traceCaseId = testingState.traceCaseId;
+  const setTraceCaseId = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ traceCaseId: typeof v === "function" ? v(prev.traceCaseId) : v }));
+    },
+    [setTestingState],
+  );
+
   const [traceability, setTraceability] = useState<TestingTraceabilityResult | null>(null);
   const [graphExplorer, setGraphExplorer] = useState<TestingGraphExplorerResult | null>(null);
   const [reportPaths, setReportPaths] = useState<{ docxPath: string; pdfPath: string } | null>(
     null,
   );
-  const [bugDraft, setBugDraft] = useState("");
-  const [triageResult, setTriageResult] = useState("");
-  const [generationModelSelection, setGenerationModelSelection] = useState<ModelSelection>(
-    () => props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL),
+
+  const bugDraft = testingState.bugDraft;
+  const setBugDraft = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ bugDraft: typeof v === "function" ? v(prev.bugDraft) : v }));
+    },
+    [setTestingState],
   );
-  const [generationReasoning, setGenerationReasoning] = useState<"low" | "medium" | "high">(
-    "medium",
+
+  const triageResult = testingState.triageResult;
+  const setTriageResult = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ triageResult: typeof v === "function" ? v(prev.triageResult) : v }));
+    },
+    [setTestingState],
   );
-  const [generationOutputMode, setGenerationOutputMode] = useState<"managed" | "repository">(
-    "managed",
+
+  const generationModelSelection =
+    testingState.generationModelSelection ??
+    (props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL));
+  const setGenerationModelSelection = useCallback(
+    (v: ModelSelection | ((prev: ModelSelection) => ModelSelection)) => {
+      setTestingState((prev) => ({
+        generationModelSelection:
+          typeof v === "function"
+            ? v(
+                prev.generationModelSelection ??
+                  (props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL)),
+              )
+            : v,
+      }));
+    },
+    [props.defaultModelSelection, setTestingState],
   );
-  const [repositoryOutputPath, setRepositoryOutputPath] = useState("tests/e2e/generated");
-  const [templatePath, setTemplatePath] = useState("");
+
+  const generationReasoning = testingState.generationReasoning;
+  const setGenerationReasoning = useCallback(
+    (
+      v:
+        | "low"
+        | "medium"
+        | "high"
+        | ((prev: "low" | "medium" | "high") => "low" | "medium" | "high"),
+    ) => {
+      setTestingState((prev) => ({
+        generationReasoning: typeof v === "function" ? v(prev.generationReasoning) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const generationOutputMode = testingState.generationOutputMode;
+  const setGenerationOutputMode = useCallback(
+    (
+      v:
+        | "managed"
+        | "repository"
+        | ((prev: "managed" | "repository") => "managed" | "repository"),
+    ) => {
+      setTestingState((prev) => ({
+        generationOutputMode: typeof v === "function" ? v(prev.generationOutputMode) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const repositoryOutputPath = testingState.repositoryOutputPath;
+  const setRepositoryOutputPath = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        repositoryOutputPath: typeof v === "function" ? v(prev.repositoryOutputPath) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const templatePath = testingState.templatePath;
+  const setTemplatePath = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ templatePath: typeof v === "function" ? v(prev.templatePath) : v }));
+    },
+    [setTestingState],
+  );
+
   const [captureReplay, setCaptureReplay] = useState(false);
-  const [generationMaxCases, setGenerationMaxCases] = useState(
-    String(DEFAULT_TESTING_BATCH_MAX_CASES),
+
+  const generationMaxCases = testingState.generationMaxCases;
+  const setGenerationMaxCases = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        generationMaxCases: typeof v === "function" ? v(prev.generationMaxCases) : v,
+      }));
+    },
+    [setTestingState],
   );
-  const [generationMaxTokens, setGenerationMaxTokens] = useState(
-    String(DEFAULT_TESTING_BATCH_MAX_TOKENS),
+
+  const generationMaxTokens = testingState.generationMaxTokens;
+  const setGenerationMaxTokens = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        generationMaxTokens: typeof v === "function" ? v(prev.generationMaxTokens) : v,
+      }));
+    },
+    [setTestingState],
   );
-  const [generationMaxCost, setGenerationMaxCost] = useState(
-    String(DEFAULT_TESTING_BATCH_MAX_COST_USD),
+
+  const generationMaxCost = testingState.generationMaxCost;
+  const setGenerationMaxCost = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        generationMaxCost: typeof v === "function" ? v(prev.generationMaxCost) : v,
+      }));
+    },
+    [setTestingState],
   );
+
   const [workbookPath, setWorkbookPath] = useState("");
-  const [selectedGenerationCaseIds, setSelectedGenerationCaseIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
+
+  const selectedGenerationCaseIds = testingState.selectedGenerationCaseIds;
+  const setSelectedGenerationCaseIds = useCallback(
+    (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
+      setTestingState((prev) => ({
+        selectedGenerationCaseIds:
+          typeof v === "function" ? v(prev.selectedGenerationCaseIds) : v,
+      }));
+    },
+    [setTestingState],
   );
+
   const generationSelectionInitializedRef = useRef(false);
-  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
-  const [editedExternalId, setEditedExternalId] = useState("");
-  const [editedDescription, setEditedDescription] = useState("");
-  const [editedSteps, setEditedSteps] = useState<ReadonlyArray<string>>([]);
-  const [editedExpectedResult, setEditedExpectedResult] = useState("");
-  const [editedCaseLocatorIds, setEditedCaseLocatorIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
+
+  const editingCaseId = testingState.editingCaseId;
+  const setEditingCaseId = useCallback(
+    (v: string | null | ((prev: string | null) => string | null)) => {
+      setTestingState((prev) => ({
+        editingCaseId: typeof v === "function" ? v(prev.editingCaseId) : v,
+      }));
+    },
+    [setTestingState],
   );
+
+  const editedExternalId = testingState.editedExternalId;
+  const setEditedExternalId = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        editedExternalId: typeof v === "function" ? v(prev.editedExternalId) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editedDescription = testingState.editedDescription;
+  const setEditedDescription = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        editedDescription: typeof v === "function" ? v(prev.editedDescription) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editedSteps = testingState.editedSteps;
+  const setEditedSteps = useCallback(
+    (
+      v:
+        | ReadonlyArray<string>
+        | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+    ) => {
+      setTestingState((prev) => ({
+        editedSteps: typeof v === "function" ? v(prev.editedSteps) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editedExpectedResult = testingState.editedExpectedResult;
+  const setEditedExpectedResult = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        editedExpectedResult: typeof v === "function" ? v(prev.editedExpectedResult) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editedCaseLocatorIds = testingState.editedCaseLocatorIds;
+  const setEditedCaseLocatorIds = useCallback(
+    (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
+      setTestingState((prev) => ({
+        editedCaseLocatorIds:
+          typeof v === "function" ? v(prev.editedCaseLocatorIds) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const caseIntakeMode = testingState.caseIntakeMode;
+  const setCaseIntakeMode = useCallback(
+    (
+      v:
+        | TestingCaseIntakeMode
+        | ((prev: TestingCaseIntakeMode) => TestingCaseIntakeMode),
+    ) => {
+      setTestingState((prev) => ({
+        caseIntakeMode: typeof v === "function" ? v(prev.caseIntakeMode) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const manualCaseId = testingState.manualCaseId;
+  const setManualCaseId = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ manualCaseId: typeof v === "function" ? v(prev.manualCaseId) : v }));
+    },
+    [setTestingState],
+  );
+
+  const manualCaseDescription = testingState.manualCaseDescription;
+  const setManualCaseDescription = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        manualCaseDescription: typeof v === "function" ? v(prev.manualCaseDescription) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const manualCaseSteps = testingState.manualCaseSteps;
+  const setManualCaseSteps = useCallback(
+    (
+      v:
+        | ReadonlyArray<string>
+        | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+    ) => {
+      setTestingState((prev) => ({
+        manualCaseSteps: typeof v === "function" ? v(prev.manualCaseSteps) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const manualCaseExpected = testingState.manualCaseExpected;
+  const setManualCaseExpected = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        manualCaseExpected: typeof v === "function" ? v(prev.manualCaseExpected) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const manualCaseLocatorIds = testingState.manualCaseLocatorIds;
+  const setManualCaseLocatorIds = useCallback(
+    (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
+      setTestingState((prev) => ({
+        manualCaseLocatorIds:
+          typeof v === "function" ? v(prev.manualCaseLocatorIds) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const storyText = testingState.storyText;
+  const setStoryText = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ storyText: typeof v === "function" ? v(prev.storyText) : v }));
+    },
+    [setTestingState],
+  );
+
+  const storyFilePath = testingState.storyFilePath;
+  const setStoryFilePath = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        storyFilePath: typeof v === "function" ? v(prev.storyFilePath) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
   const [busyAction, setBusyAction] = useState<TestingBusyAction>(null);
   const [authCaptureOpen, setAuthCaptureOpen] = useState(false);
   const [message, setMessage] = useState("Ready to explore a UAT application.");
   const [locatorLibrary, setLocatorLibrary] = useState<TestingLocatorLibraryResult | null>(null);
   const [locatorSession, setLocatorSession] = useState<TestingLocatorDiscoverySession | null>(null);
-  const [locatorMode, setLocatorMode] = useState<TestingDiscoveryMode>("guided");
-  const [locatorCoverage, setLocatorCoverage] =
-    useState<TestingLocatorCoverageMode>("actions-assertions");
-  const [locatorSafety, setLocatorSafety] = useState<TestingDiscoverySafetyProfile>("supervised");
-  const [locatorMaxElements, setLocatorMaxElements] = useState(
-    String(DEFAULT_TESTING_MAX_ELEMENTS_PER_PAGE),
+
+  const locatorMode = testingState.locatorMode;
+  const setLocatorMode = useCallback(
+    (
+      v:
+        | TestingDiscoveryMode
+        | ((prev: TestingDiscoveryMode) => TestingDiscoveryMode),
+    ) => {
+      setTestingState((prev) => ({ locatorMode: typeof v === "function" ? v(prev.locatorMode) : v }));
+    },
+    [setTestingState],
   );
-  const [locatorMaxPages, setLocatorMaxPages] = useState(
-    String(DEFAULT_TESTING_MAX_PAGES_PER_SESSION),
+
+  const locatorCoverage = testingState.locatorCoverage;
+  const setLocatorCoverage = useCallback(
+    (
+      v:
+        | TestingLocatorCoverageMode
+        | ((prev: TestingLocatorCoverageMode) => TestingLocatorCoverageMode),
+    ) => {
+      setTestingState((prev) => ({
+        locatorCoverage: typeof v === "function" ? v(prev.locatorCoverage) : v,
+      }));
+    },
+    [setTestingState],
   );
+
+  const locatorSafety = testingState.locatorSafety;
+  const setLocatorSafety = useCallback(
+    (
+      v:
+        | TestingDiscoverySafetyProfile
+        | ((prev: TestingDiscoverySafetyProfile) => TestingDiscoverySafetyProfile),
+    ) => {
+      setTestingState((prev) => ({
+        locatorSafety: typeof v === "function" ? v(prev.locatorSafety) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const locatorMaxElements = testingState.locatorMaxElements;
+  const setLocatorMaxElements = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        locatorMaxElements: typeof v === "function" ? v(prev.locatorMaxElements) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const locatorMaxPages = testingState.locatorMaxPages;
+  const setLocatorMaxPages = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        locatorMaxPages: typeof v === "function" ? v(prev.locatorMaxPages) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
   const [locatorNavigateUrl, setLocatorNavigateUrl] = useState("");
   const [locatorStorageMode, setLocatorStorageMode] =
     useState<TestingLocatorStorageMode>("managed");
@@ -186,27 +618,146 @@ export function TestingTool(props: {
   const [locatorSyncPreview, setLocatorSyncPreview] = useState<TestingLocatorSyncPreview | null>(
     null,
   );
-  const [editingLocatorId, setEditingLocatorId] = useState<string | null>(null);
-  const [editingLocatorKey, setEditingLocatorKey] = useState("");
-  const [editingLocatorClassification, setEditingLocatorClassification] =
-    useState<TestingLocatorEntry["classification"]>("action");
-  const [editingLocatorStrategy, setEditingLocatorStrategy] =
-    useState<TestingLocatorEntry["strategy"]>("role");
-  const [editingLocatorArguments, setEditingLocatorArguments] = useState("{}");
-  const [editingLocatorContext, setEditingLocatorContext] = useState("");
-  const [locatorSearch, setLocatorSearch] = useState("");
-  const [locatorFilter, setLocatorFilter] = useState<TestingLocatorFilter>("all");
+
+  const editingLocatorId = testingState.editingLocatorId;
+  const setEditingLocatorId = useCallback(
+    (v: string | null | ((prev: string | null) => string | null)) => {
+      setTestingState((prev) => ({
+        editingLocatorId: typeof v === "function" ? v(prev.editingLocatorId) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editingLocatorKey = testingState.editingLocatorKey;
+  const setEditingLocatorKey = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        editingLocatorKey: typeof v === "function" ? v(prev.editingLocatorKey) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editingLocatorClassification = testingState.editingLocatorClassification;
+  const setEditingLocatorClassification = useCallback(
+    (
+      v:
+        | TestingLocatorEntry["classification"]
+        | ((
+            prev: TestingLocatorEntry["classification"],
+          ) => TestingLocatorEntry["classification"]),
+    ) => {
+      setTestingState((prev) => ({
+        editingLocatorClassification:
+          typeof v === "function" ? v(prev.editingLocatorClassification) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editingLocatorStrategy = testingState.editingLocatorStrategy;
+  const setEditingLocatorStrategy = useCallback(
+    (
+      v:
+        | TestingLocatorEntry["strategy"]
+        | ((prev: TestingLocatorEntry["strategy"]) => TestingLocatorEntry["strategy"]),
+    ) => {
+      setTestingState((prev) => ({
+        editingLocatorStrategy:
+          typeof v === "function" ? v(prev.editingLocatorStrategy) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editingLocatorArguments = testingState.editingLocatorArguments;
+  const setEditingLocatorArguments = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        editingLocatorArguments: typeof v === "function" ? v(prev.editingLocatorArguments) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const editingLocatorContext = testingState.editingLocatorContext;
+  const setEditingLocatorContext = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        editingLocatorContext: typeof v === "function" ? v(prev.editingLocatorContext) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const locatorSearch = testingState.locatorSearch;
+  const setLocatorSearch = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({ locatorSearch: typeof v === "function" ? v(prev.locatorSearch) : v }));
+    },
+    [setTestingState],
+  );
+
+  const locatorFilter = testingState.locatorFilter;
+  const setLocatorFilter = useCallback(
+    (v: TestingLocatorFilter | ((prev: TestingLocatorFilter) => TestingLocatorFilter)) => {
+      setTestingState((prev) => ({ locatorFilter: typeof v === "function" ? v(prev.locatorFilter) : v }));
+    },
+    [setTestingState],
+  );
+
   const [locatorPendingRemoveId, setLocatorPendingRemoveId] = useState<string | null>(null);
   const [locatorCaptureScope, setLocatorCaptureScope] = useState<TestingLocatorCaptureScope>("page");
   const [locatorTaskContext, setLocatorTaskContext] = useState("");
   const [locatorAdvancedOpen, setLocatorAdvancedOpen] = useState(false);
-  const [locatorViewport, setLocatorViewport] = useState<"desktop" | "tablet" | "mobile">(
-    "desktop",
+
+  const locatorViewport = testingState.locatorViewport;
+  const setLocatorViewport = useCallback(
+    (
+      v:
+        | "desktop"
+        | "tablet"
+        | "mobile"
+        | ((prev: "desktop" | "tablet" | "mobile") => "desktop" | "tablet" | "mobile"),
+    ) => {
+      setTestingState((prev) => ({
+        locatorViewport: typeof v === "function" ? v(prev.locatorViewport) : v,
+      }));
+    },
+    [setTestingState],
   );
-  const [locatorPreviewExpanded, setLocatorPreviewExpanded] = useState(false);
+
+  const locatorPreviewExpanded = testingState.locatorPreviewExpanded;
+  const setLocatorPreviewExpanded = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setTestingState((prev) => ({
+        locatorPreviewExpanded: typeof v === "function" ? v(prev.locatorPreviewExpanded) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
   const locatorPreviewFocusButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [selectedLocatorPageId, setSelectedLocatorPageId] = useState<string | null>(null);
-  const [locatorPageTab, setLocatorPageTab] = useState<TestingLocatorPageTab>("locators");
+
+  const selectedLocatorPageId = testingState.selectedLocatorPageId;
+  const setSelectedLocatorPageId = useCallback(
+    (v: string | null | ((prev: string | null) => string | null)) => {
+      setTestingState((prev) => ({
+        selectedLocatorPageId: typeof v === "function" ? v(prev.selectedLocatorPageId) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const locatorPageTab = testingState.locatorPageTab;
+  const setLocatorPageTab = useCallback(
+    (v: TestingLocatorPageTab | ((prev: TestingLocatorPageTab) => TestingLocatorPageTab)) => {
+      setTestingState((prev) => ({ locatorPageTab: typeof v === "function" ? v(prev.locatorPageTab) : v }));
+    },
+    [setTestingState],
+  );
+
   const [locatorPageName, setLocatorPageName] = useState("");
   const [locatorCodeEntryIds, setLocatorCodeEntryIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -216,8 +767,27 @@ export function TestingTool(props: {
   const [locatorRepositoryProposal, setLocatorRepositoryProposal] =
     useState<TestingLocatorRepositoryProposal | null>(null);
   const [locatorRepositoryConfirmOpen, setLocatorRepositoryConfirmOpen] = useState(false);
-  const [locatorCodeEditing, setLocatorCodeEditing] = useState(false);
-  const [locatorCodeDraft, setLocatorCodeDraft] = useState("");
+
+  const locatorCodeEditing = testingState.locatorCodeEditing;
+  const setLocatorCodeEditing = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setTestingState((prev) => ({
+        locatorCodeEditing: typeof v === "function" ? v(prev.locatorCodeEditing) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const locatorCodeDraft = testingState.locatorCodeDraft;
+  const setLocatorCodeDraft = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setTestingState((prev) => ({
+        locatorCodeDraft: typeof v === "function" ? v(prev.locatorCodeDraft) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
   const [selectedLocatorEntryIds, setSelectedLocatorEntryIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -226,11 +796,36 @@ export function TestingTool(props: {
   const [caseIdPadding, setCaseIdPadding] = useState("5");
   const [caseIdNext, setCaseIdNext] = useState("1");
   const [testInventory, setTestInventory] = useState<TestingTestInventoryResult | null>(null);
-  const [testInventoryView, setTestInventoryView] = useState<"tree" | "table">("tree");
-  const [expandedTestNodes, setExpandedTestNodes] = useState<ReadonlySet<string>>(
-    () => new Set(["managed", "repository"]),
+
+  const testInventoryView = testingState.testInventoryView;
+  const setTestInventoryView = useCallback(
+    (v: "tree" | "table" | ((prev: "tree" | "table") => "tree" | "table")) => {
+      setTestingState((prev) => ({
+        testInventoryView: typeof v === "function" ? v(prev.testInventoryView) : v,
+      }));
+    },
+    [setTestingState],
   );
-  const [selectedTestNodeId, setSelectedTestNodeId] = useState<string | null>(null);
+
+  const expandedTestNodes = testingState.expandedTestNodes;
+  const setExpandedTestNodes = useCallback(
+    (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
+      setTestingState((prev) => ({
+        expandedTestNodes: typeof v === "function" ? v(prev.expandedTestNodes) : v,
+      }));
+    },
+    [setTestingState],
+  );
+
+  const selectedTestNodeId = testingState.selectedTestNodeId;
+  const setSelectedTestNodeId = useCallback(
+    (v: string | null | ((prev: string | null) => string | null)) => {
+      setTestingState((prev) => ({
+        selectedTestNodeId: typeof v === "function" ? v(prev.selectedTestNodeId) : v,
+      }));
+    },
+    [setTestingState],
+  );
 
   useEffect(() => {
     if (!locatorPreviewExpanded) return;
@@ -1866,6 +2461,22 @@ export function TestingTool(props: {
       setSelectedTestNodeId,
       flattenedTestInventory,
       workbookPath,
+      caseIntakeMode,
+      setCaseIntakeMode,
+      manualCaseId,
+      setManualCaseId,
+      manualCaseDescription,
+      setManualCaseDescription,
+      manualCaseSteps,
+      setManualCaseSteps,
+      manualCaseExpected,
+      setManualCaseExpected,
+      manualCaseLocatorIds,
+      setManualCaseLocatorIds,
+      storyText,
+      setStoryText,
+      storyFilePath,
+      setStoryFilePath,
       caseIdPrefix,
       setCaseIdPrefix,
       caseIdPadding,
@@ -2057,6 +2668,14 @@ export function TestingTool(props: {
       caseIdPadding,
       caseIdPolicy,
       caseIdPrefix,
+      caseIntakeMode,
+      manualCaseId,
+      manualCaseDescription,
+      manualCaseSteps,
+      manualCaseExpected,
+      manualCaseLocatorIds,
+      storyText,
+      storyFilePath,
       caseSearch,
       cases,
       cdpEndpoint,
@@ -2394,7 +3013,10 @@ export function TestingTool(props: {
                   </div>
                 }
               >
-                {activeTestingSection === "overview" ? (
+                <div
+                  className={cn(activeTestingSection === "overview" ? "block" : "hidden")}
+                  aria-hidden={activeTestingSection !== "overview"}
+                >
                   <Profiler id="TestingOverview" onRender={onProfilerRender}>
                     <TestingOverview
                       onNavigate={setActiveTestingSection}
@@ -2402,30 +3024,50 @@ export function TestingTool(props: {
                       testingSections={testingSections}
                     />
                   </Profiler>
-                ) : activeTestingSection === "discover" ? (
+                </div>
+                <div
+                  className={cn(activeTestingSection === "discover" ? "block" : "hidden")}
+                  aria-hidden={activeTestingSection !== "discover"}
+                >
                   <Profiler id="TestingDiscover" onRender={onProfilerRender}>
                     <TestingDiscover projectId={props.projectId} />
                   </Profiler>
-                ) : activeTestingSection === "cases" ? (
+                </div>
+                <div
+                  className={cn(activeTestingSection === "cases" ? "block" : "hidden")}
+                  aria-hidden={activeTestingSection !== "cases"}
+                >
                   <Profiler id="TestingCases" onRender={onProfilerRender}>
                     <TestingCases
                       projectPath={props.projectPath}
                       onNavigate={setActiveTestingSection}
                     />
                   </Profiler>
-                ) : activeTestingSection === "automate" ? (
+                </div>
+                <div
+                  className={cn(activeTestingSection === "automate" ? "block" : "hidden")}
+                  aria-hidden={activeTestingSection !== "automate"}
+                >
                   <Profiler id="TestingAutomate" onRender={onProfilerRender}>
                     <TestingAutomate onNavigate={setActiveTestingSection} />
                   </Profiler>
-                ) : activeTestingSection === "runs" ? (
+                </div>
+                <div
+                  className={cn(activeTestingSection === "runs" ? "block" : "hidden")}
+                  aria-hidden={activeTestingSection !== "runs"}
+                >
                   <Profiler id="TestingRuns" onRender={onProfilerRender}>
                     <TestingRuns />
                   </Profiler>
-                ) : activeTestingSection === "reports" ? (
+                </div>
+                <div
+                  className={cn(activeTestingSection === "reports" ? "block" : "hidden")}
+                  aria-hidden={activeTestingSection !== "reports"}
+                >
                   <Profiler id="TestingReports" onRender={onProfilerRender}>
                     <TestingReports />
                   </Profiler>
-                ) : null}
+                </div>
               </Suspense>
             </div>
           </div>

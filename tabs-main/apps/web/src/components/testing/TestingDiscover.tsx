@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useState } from "react";
 import type { ProjectId, TestingExplorationScope, TestingLocatorCoverageMode, TestingLocatorEntry } from "@tabs/contracts";
 import {
   DEFAULT_TESTING_MAX_ELEMENTS_PER_PAGE,
@@ -15,6 +15,7 @@ import {
   ArrowRightIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   FolderSearchIcon,
   HelpCircleIcon,
@@ -26,6 +27,7 @@ import {
   PlayIcon,
   RefreshCwIcon,
   SearchIcon,
+  SlidersHorizontalIcon,
   SmartphoneIcon,
   TabletIcon,
   Trash2Icon,
@@ -182,6 +184,8 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
     resolveLocatorSync,
     disconnectLocatorFolder,
   } = useTestingData();
+
+  const [workflowStep, setWorkflowStep] = useState<1 | 2 | 3>(1);
 
   return (
     <div className="space-y-6">
@@ -602,7 +606,18 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
         <div className="space-y-5">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="space-y-1">
-              <Badge variant="outline">Locator-first</Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="font-mono text-[10px] tracking-wider uppercase">
+                  Locator-first
+                </Badge>
+                <span className="text-xs text-muted-foreground font-medium">
+                  {workflowStep === 1
+                    ? "Step 1 of 3: Scan & Preview"
+                    : workflowStep === 2
+                      ? "Step 2 of 3: Choose Locators"
+                      : "Step 3 of 3: Use in Code"}
+                </span>
+              </div>
               <h2 className="text-xl font-semibold text-foreground">
                 Capture locators from the page you need
               </h2>
@@ -623,40 +638,39 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                   ),
                 );
 
-              const step1Active = !step1Done;
-              const step2Active = step1Done && !step2Done;
-              const step3Active = step2Done && !step3Done;
-
               return (
                 <div
                   className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/60 p-1 text-xs shadow-xs"
+                  role="navigation"
                   aria-label="Locator workflow progression"
                 >
                   {/* Step 1: Open */}
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => setWorkflowStep(1)}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-all",
-                      step1Done
-                        ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : step1Active
-                          ? "border border-primary/30 bg-primary/10 font-semibold text-primary"
-                          : "border border-transparent text-muted-foreground",
+                      "flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      workflowStep === 1
+                        ? "border border-primary/30 bg-primary/10 font-semibold text-primary shadow-xs"
+                        : step1Done
+                          ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
+                          : "border border-transparent text-muted-foreground hover:text-foreground",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
-                        step1Done
-                          ? "bg-emerald-500 text-white"
-                          : step1Active
-                            ? "bg-primary text-primary-foreground"
+                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold shrink-0",
+                        workflowStep === 1
+                          ? "bg-primary text-primary-foreground"
+                          : step1Done
+                            ? "bg-emerald-500 text-white"
                             : "bg-muted text-muted-foreground",
                       )}
                     >
-                      {step1Done ? <CheckIcon className="size-2.5 stroke-[3]" /> : "1"}
+                      {step1Done && workflowStep !== 1 ? <CheckIcon className="size-2.5 stroke-[3]" /> : "1"}
                     </span>
                     <span>Open</span>
-                  </div>
+                  </button>
 
                   <ChevronRightIcon
                     aria-hidden="true"
@@ -664,30 +678,32 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                   />
 
                   {/* Step 2: Choose */}
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => setWorkflowStep(2)}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-all",
-                      step2Done
-                        ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : step2Active
-                          ? "border border-primary/30 bg-primary/10 font-semibold text-primary"
-                          : "border border-transparent text-muted-foreground/80",
+                      "flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      workflowStep === 2
+                        ? "border border-primary/30 bg-primary/10 font-semibold text-primary shadow-xs"
+                        : step2Done
+                          ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
+                          : "border border-transparent text-muted-foreground hover:text-foreground",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
-                        step2Done
-                          ? "bg-emerald-500 text-white"
-                          : step2Active
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted/80 text-muted-foreground",
+                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold shrink-0",
+                        workflowStep === 2
+                          ? "bg-primary text-primary-foreground"
+                          : step2Done
+                            ? "bg-emerald-500 text-white"
+                            : "bg-muted text-muted-foreground",
                       )}
                     >
-                      {step2Done ? <CheckIcon className="size-2.5 stroke-[3]" /> : "2"}
+                      {step2Done && workflowStep !== 2 ? <CheckIcon className="size-2.5 stroke-[3]" /> : "2"}
                     </span>
                     <span>Choose</span>
-                  </div>
+                  </button>
 
                   <ChevronRightIcon
                     aria-hidden="true"
@@ -695,854 +711,962 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                   />
 
                   {/* Step 3: Use in code */}
-                  <div
+                  <button
+                    type="button"
+                    onClick={() => setWorkflowStep(3)}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium transition-all",
-                      step3Done
-                        ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                        : step3Active
-                          ? "border border-primary/30 bg-primary/10 font-semibold text-primary"
-                          : "border border-transparent text-muted-foreground/80",
+                      "flex items-center gap-1.5 rounded-full px-3 py-1 font-medium transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      workflowStep === 3
+                        ? "border border-primary/30 bg-primary/10 font-semibold text-primary shadow-xs"
+                        : step3Done
+                          ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15 dark:text-emerald-300"
+                          : "border border-transparent text-muted-foreground hover:text-foreground",
                     )}
                   >
                     <span
                       className={cn(
-                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold",
-                        step3Done
-                          ? "bg-emerald-500 text-white"
-                          : step3Active
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted/80 text-muted-foreground",
+                        "flex size-4 items-center justify-center rounded-full text-[10px] font-bold shrink-0",
+                        workflowStep === 3
+                          ? "bg-primary text-primary-foreground"
+                          : step3Done
+                            ? "bg-emerald-500 text-white"
+                            : "bg-muted text-muted-foreground",
                       )}
                     >
-                      {step3Done ? <CheckIcon className="size-2.5 stroke-[3]" /> : "3"}
+                      {step3Done && workflowStep !== 3 ? <CheckIcon className="size-2.5 stroke-[3]" /> : "3"}
                     </span>
                     <span>Use in code</span>
-                  </div>
+                  </button>
                 </div>
               );
             })()}
           </div>
-          <section
-            className={cn(
-              "rounded-2xl border border-border/70 bg-card shadow-sm",
-              locatorPreviewExpanded ? "overflow-visible" : "overflow-hidden",
-            )}
-          >
-            <div className="divide-y divide-border/60">
-              <aside className="space-y-3 bg-muted/15 p-4 sm:p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
-                      Step 1
-                    </div>
-                    <h3 className="mt-1 text-base font-semibold">Choose the capture</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      One page is usually enough. Describe a task only when you want a smaller,
-                      relevant subset.
-                    </p>
-                  </div>
-                  <Badge variant="outline">Capture only - no code changes</Badge>
-                </div>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold" htmlFor="locator-scope">
-                      Capture scope
-                    </label>
-                    <Select
-                      value={locatorCaptureScope}
-                      onValueChange={(value) =>
-                        setLocatorCaptureScope(value as typeof locatorCaptureScope)
-                      }
-                    >
-                      <SelectTrigger id="locator-scope">
-                        <span className="flex-1 truncate">
-                          {
-                            {
-                              task: "A specific case or task",
-                              page: "The current page",
-                              path: "A page flow or section",
-                              origin: "The complete application",
-                            }[locatorCaptureScope]
-                          }
-                        </span>
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectItem value="task">A specific case or task</SelectItem>
-                        <SelectItem value="page">The current page</SelectItem>
-                        <SelectItem value="path">A page flow or section</SelectItem>
-                        <SelectItem value="origin">The complete application</SelectItem>
-                      </SelectPopup>
-                    </Select>
-                    {locatorCaptureScope === "task" ? (
-                      <Textarea
-                        value={locatorTaskContext}
-                        onChange={(event) => setLocatorTaskContext(event.target.value)}
-                        placeholder="Example: update account profile and verify success"
-                        aria-label="Case or task to capture locators for"
-                        className="min-h-20 text-xs"
-                      />
-                    ) : null}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-xs font-semibold">Application access</div>
-                    <Select
-                      value={authenticationMode}
-                      onValueChange={(value) =>
-                        setAuthenticationMode(value as TestingAuthenticationMode)
-                      }
-                    >
-                      <SelectTrigger aria-label="Application access method">
-                        <span className="flex-1 truncate">
-                          {
-                            {
-                              none: "No authentication",
-                              "local-profile": "Sign in manually",
-                              "connected-session": "Reuse Electron / Chromium",
-                            }[authenticationMode]
-                          }
-                        </span>
-                      </SelectTrigger>
-                      <SelectPopup>
-                        <SelectItem value="none">No authentication</SelectItem>
-                        <SelectItem value="local-profile">Sign in manually</SelectItem>
-                        <SelectItem value="connected-session">
-                          Reuse Electron / Chromium
-                        </SelectItem>
-                      </SelectPopup>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="text-xs font-semibold">How to explore</div>
-                    <SegmentedControl
-                      value={locatorMode}
-                      onValueChange={setLocatorMode}
-                      options={[
-                        { value: "manual", label: "Manual" },
-                        { value: "guided", label: "Guided" },
-                      ]}
-                      className="w-full flex"
-                      itemClassName="flex-1 justify-center"
-                      aria-label="Exploration mode"
-                    />
-                  </div>
-                </div>
-                <div
-                  className="flex gap-3 rounded-xl border border-border/60 bg-muted/20 p-3"
-                  role="note"
-                >
-                  <HelpCircleIcon
-                    aria-hidden="true"
-                    className="mt-0.5 size-4 shrink-0 text-primary"
-                  />
-                  <div className="text-xs leading-5">
-                    <span className="font-semibold text-foreground">
-                      What will be captured?{" "}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {locatorCoverage === "actions-only"
-                        ? "Interactive controls such as buttons, links, inputs, checkboxes, switches, menus, and tabs."
-                        : locatorCoverage === "everything-accessible"
-                          ? "All named accessible elements on the page, including controls, outcomes, and readable content."
-                          : "Interactive controls plus useful outcomes such as headings, dialogs, alerts, statuses, progress indicators, and tables. Decorative layout and hidden content are excluded."}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-start justify-between gap-3 border-t border-border/50 pt-3">
-                  <Collapsible
-                    open={locatorAdvancedOpen}
-                    onOpenChange={setLocatorAdvancedOpen}
-                    className="min-w-64 flex-1"
-                  >
-                    <CollapsibleTrigger className="flex w-full max-w-xs items-center justify-between rounded-lg px-2 py-2 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      Advanced options
-                      <ChevronDownIcon aria-hidden="true" className="size-4" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="grid max-w-2xl gap-3 pt-3 sm:grid-cols-2">
-                      <div className="space-y-2 sm:col-span-2">
-                        <label htmlFor="locator-coverage" className="text-xs font-semibold">
-                          What to capture
-                        </label>
-                        <Select
-                          value={locatorCoverage}
-                          onValueChange={(value) =>
-                            setLocatorCoverage(value as TestingLocatorCoverageMode)
-                          }
-                        >
-                          <SelectTrigger id="locator-coverage">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectPopup>
-                            <SelectItem value="actions-assertions">
-                              Controls + outcomes (recommended)
-                            </SelectItem>
-                            <SelectItem value="actions-only">Controls only</SelectItem>
-                            <SelectItem value="everything-accessible">
-                              Everything accessible
-                            </SelectItem>
-                          </SelectPopup>
-                        </Select>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={locatorMode === "automatic" ? "secondary" : "outline"}
-                        onClick={() => setLocatorMode("automatic")}
-                        className="w-full"
-                      >
-                        Automatic exploration
-                      </Button>
-                      {locatorMode === "automatic" ? (
-                        <div className="grid gap-3">
-                          <Input
-                            type="number"
-                            aria-label="Maximum elements per page"
-                            min={MIN_TESTING_MAX_ELEMENTS_PER_PAGE}
-                            max={MAX_TESTING_MAX_ELEMENTS_PER_PAGE}
-                            value={locatorMaxElements}
-                            onChange={(event) => setLocatorMaxElements(event.target.value)}
-                          />
-                          <Input
-                            type="number"
-                            aria-label="Maximum pages per session"
-                            min={1}
-                            max={MAX_TESTING_MAX_PAGES_PER_SESSION}
-                            value={locatorMaxPages}
-                            onChange={(event) => setLocatorMaxPages(event.target.value)}
-                          />
-                        </div>
-                      ) : null}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void setDiscoveryExperience("classic")}
-                        className="w-full"
-                      >
-                        Open Classic discovery
-                      </Button>
-                    </CollapsibleContent>
-                  </Collapsible>
-                  <Button
-                    type="button"
-                    onClick={() => void startLocatorDiscovery()}
-                    disabled={
-                      !normalizedTarget ||
-                      busyAction !== null ||
-                      locatorSession?.status === "running" ||
-                      (locatorCaptureScope === "task" && !locatorTaskContext.trim())
-                    }
-                    className="w-full sm:w-auto"
-                  >
-                    {busyAction === "locator-discovery" ? (
-                      <LoaderIcon className="animate-spin" aria-hidden="true" />
-                    ) : (
-                      <PlayIcon aria-hidden="true" />
-                    )}
-                    {locatorSession?.status === "running" ? "Discovery is active" : "Scan this page"}
-                  </Button>
-                </div>
-              </aside>
 
-              <div
-                className={cn(
-                  "min-w-0",
-                  locatorPreviewExpanded &&
-                    "fixed inset-3 z-[80] flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl",
-                )}
-                role={locatorPreviewExpanded ? "dialog" : undefined}
-                aria-modal={locatorPreviewExpanded ? true : undefined}
-                aria-label={locatorPreviewExpanded ? "Focused application preview" : undefined}
-              >
-                <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/10 p-3">
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Go back in preview"
-                    onClick={() =>
-                      void window.desktopBridge?.goBackBrowserSession({
-                        projectId,
-                        sessionId: `testing:${projectId}`,
-                      })
-                    }
-                  >
-                    <ArrowLeftIcon aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Go forward in preview"
-                    onClick={() =>
-                      void window.desktopBridge?.goForwardBrowserSession({
-                        projectId,
-                        sessionId: `testing:${projectId}`,
-                      })
-                    }
-                  >
-                    <ArrowRightIcon aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Refresh preview"
-                    onClick={() =>
-                      void window.desktopBridge?.reloadBrowserSession({
-                        projectId,
-                        sessionId: `testing:${projectId}`,
-                      })
-                    }
-                  >
-                    <RefreshCwIcon aria-hidden="true" />
-                  </Button>
-                  <Input
-                    id="locator-target-url"
-                    type="url"
-                    value={locatorNavigateUrl || targetUrl}
-                    onChange={(event) => {
-                      setLocatorNavigateUrl(event.target.value);
-                      if (!locatorSession) setTargetUrl(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && locatorSession) {
-                        void navigateLocatorDiscovery();
-                      }
-                    }}
-                    placeholder="https://uat.example.com/account"
-                    aria-label="Testing preview URL"
-                    className="min-w-56 flex-1"
-                  />
-                  <SegmentedControl
-                    size="sm"
-                    value={locatorViewport}
-                    onValueChange={setLocatorViewport}
-                    options={[
-                      {
-                        value: "desktop",
-                        label: <MonitorIcon aria-hidden="true" className="size-3.5" />,
-                        ariaLabel: "Desktop preview",
-                      },
-                      {
-                        value: "tablet",
-                        label: <TabletIcon aria-hidden="true" className="size-3.5" />,
-                        ariaLabel: "Tablet preview",
-                      },
-                      {
-                        value: "mobile",
-                        label: <SmartphoneIcon aria-hidden="true" className="size-3.5" />,
-                        ariaLabel: "Mobile preview",
-                      },
-                    ]}
-                    aria-label="Preview viewport"
-                  />
-                  <Badge variant="outline" className="tabular-nums">
-                    {locatorViewport === "desktop"
-                      ? "Desktop / 16:9"
-                      : locatorViewport === "tablet"
-                        ? "Tablet / 4:3"
-                        : "Mobile / 9:16"}
-                  </Badge>
-                  <Button
-                    ref={locatorPreviewFocusButtonRef}
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label={locatorPreviewExpanded ? "Exit focused preview" : "Focus preview"}
-                    aria-pressed={locatorPreviewExpanded}
-                    onClick={() => setLocatorPreviewExpanded(!locatorPreviewExpanded)}
-                  >
-                    {locatorPreviewExpanded ? (
-                      <Minimize2Icon aria-hidden="true" />
-                    ) : (
-                      <Maximize2Icon aria-hidden="true" />
-                    )}
-                  </Button>
-                </div>
-                <div
-                  className={cn(
-                    locatorPreviewExpanded &&
-                      "flex min-h-0 flex-1 items-center justify-center bg-black/20 p-3",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "relative aspect-video overflow-hidden bg-muted/20",
-                      locatorPreviewExpanded ? "h-full w-auto max-w-full" : "w-full",
-                    )}
-                  >
-                    {normalizedTarget ? (
-                      <TestingApplicationPreview
-                        projectId={projectId}
-                        targetUrl={locatorNavigateUrl || normalizedTarget}
-                        sessionId={`testing:${projectId}`}
-                        viewport={locatorViewport}
-                      />
-                    ) : (
-                      <div className="flex h-full min-h-80 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/40 p-8 text-center text-sm text-muted-foreground">
-                        Enter a starting URL above. The page stays contained here while you navigate
-                        and scroll.
+          <div className="space-y-6">
+            {/* STEP 1: CONFIGURE & SCAN PAGE */}
+            {workflowStep === 1 ? (
+            <section
+              className={cn(
+                "rounded-2xl border border-border/70 bg-card shadow-sm",
+                locatorPreviewExpanded ? "overflow-visible" : "overflow-hidden",
+              )}
+            >
+              <div className="divide-y divide-border/60">
+                <aside className="space-y-3 bg-muted/15 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                          Step 1 of 3
+                        </span>
+                        <span className="text-xs text-muted-foreground font-medium">Scan Target</span>
                       </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 p-3">
-                  <div className="text-xs text-muted-foreground" aria-live="polite">
-                    <span className="block">
-                      {locatorSession
-                        ? `${locatorSession.capturedPages} pages, ${locatorSession.storedElements} locators captured`
-                        : "Preview first, then start a focused discovery session."}
-                    </span>
-                    <span className="block text-[11px]">
-                      Navigate here so Testing sees the same session. A separate browser window is not
-                      connected to this capture.
-                    </span>
-                  </div>
-                  {locatorSession?.status === "running" ? (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void captureLocatorPage("relevant")}
-                        disabled={busyAction !== null}
-                      >
-                        Scan relevant controls
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void captureLocatorPage("page")}
-                        disabled={busyAction !== null}
-                      >
-                        Scan all on this page
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => void finishLocatorDiscovery(false)}
-                        disabled={busyAction !== null}
-                      >
-                        Finish
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => void finishLocatorDiscovery(true)}
-                        disabled={busyAction !== null}
-                      >
-                        Cancel
-                      </Button>
+                      <h3 className="mt-1.5 text-base font-semibold text-foreground">Configure & Scan Target Page</h3>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        Select your capture scope and application access mode, then click{" "}
+                        <span className="font-medium text-foreground">Scan this page</span> to launch the live inspector.
+                      </p>
                     </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <aside className="min-w-0 bg-muted/10">
-                <div className="border-b border-border/60 p-4">
-                  <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
-                    Step 2
+                    <Badge variant="outline" className="border-border/70 bg-background/50 text-[11px]">
+                      Safe · No repository changes
+                    </Badge>
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-2">
-                    <h3 className="text-sm font-semibold">Choose locators</h3>
-                    <Badge variant="secondary">{selectedLocatorEntryIds.size} selected</Badge>
-                  </div>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Review the Playwright locator before it becomes part of your page object.
-                  </p>
-                  {(selectedLocatorPage?.entries.length ?? 0) > 0 ? (
-                    <div className="mt-3 flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setSelectedLocatorEntryIds(
-                            new Set(
-                              selectedLocatorPage?.entries
-                                .filter((entry) => entry.lifecycleStatus === "draft")
-                                .map((entry) => entry.id) ?? [],
-                            ),
-                          )
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold" htmlFor="locator-scope">
+                        Capture scope
+                      </label>
+                      <Select
+                        value={locatorCaptureScope}
+                        onValueChange={(value) =>
+                          setLocatorCaptureScope(value as typeof locatorCaptureScope)
                         }
                       >
-                        Select proposed
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setSelectedLocatorEntryIds(new Set())}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-                <div
-                  className="grid max-h-[34rem] grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-4 md:grid-cols-2 xl:grid-cols-3"
-                  aria-label="Captured locator candidates"
-                >
-                  {(selectedLocatorPage?.entries ?? [])
-                    .filter((entry) => entry.lifecycleStatus !== "archived")
-                    .slice(0, 100)
-                    .map((entry) => {
-                      const approved = entry.lifecycleStatus === "accepted";
-                      const manualRequired =
-                        entry.lifecycleStatus === "manual-required" ||
-                        testingLocatorHasRedactedArgument(entry);
-                      const selected = selectedLocatorEntryIds.has(entry.id);
-                      return (
-                        <label
-                          key={entry.id}
-                          className={cn(
-                            "block rounded-xl border p-3 transition-colors",
-                            selected
-                              ? "border-primary/40 bg-primary/5"
-                              : "border-border/60 bg-background/70",
-                            approved || manualRequired ? "cursor-default" : "cursor-pointer",
-                          )}
-                        >
-                          <span className="flex items-start gap-2.5">
-                            {approved ? (
-                              <span className="mt-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                                <CheckIcon aria-hidden="true" className="size-3" />
-                              </span>
-                            ) : manualRequired ? (
-                              <span
-                                className="mt-0.5 flex size-4 items-center justify-center rounded-full border border-amber-500/50 text-amber-600"
-                                aria-label="Manual locator required"
-                              >
-                                <HelpCircleIcon aria-hidden="true" className="size-3" />
-                              </span>
-                            ) : (
-                              <Checkbox
-                                checked={selected}
-                                onCheckedChange={(checked) =>
-                                  setSelectedLocatorEntryIds(
-                                    new Set(
-                                      checked
-                                        ? [...selectedLocatorEntryIds, entry.id]
-                                        : [...selectedLocatorEntryIds].filter((id) => id !== entry.id),
-                                    ),
-                                  )
-                                }
-                                aria-label={`Include ${entry.locatorKey}`}
-                                className="mt-0.5"
-                              />
-                            )}
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center justify-between gap-2">
-                                <span className="truncate font-mono text-xs font-medium">
-                                  {entry.locatorKey}
-                                </span>
-                                {manualRequired ? (
-                                  <Badge variant="outline">Manual setup</Badge>
-                                ) : entry.fragile ? (
-                                  <Badge variant="destructive">Ambiguous</Badge>
-                                ) : approved ? (
-                                  <Badge variant="secondary">In page object</Badge>
-                                ) : null}
-                              </span>
-                              <code className="mt-2 block overflow-x-auto rounded-md bg-muted/70 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-                                {testingLocatorCode(entry)}
-                              </code>
-                            </span>
+                        <SelectTrigger id="locator-scope">
+                          <span className="flex-1 truncate">
+                            {
+                              {
+                                task: "A specific case or task",
+                                page: "The current page",
+                                path: "A page flow or section",
+                                origin: "The complete application",
+                              }[locatorCaptureScope]
+                            }
                           </span>
-                        </label>
-                      );
-                    })}
-                  {locatorLibrary.locatorCount === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border/70 p-5 text-center text-xs leading-5 text-muted-foreground">
-                      Scan the page to see named buttons, links, fields, headings, and outcomes
-                      here.
+                        </SelectTrigger>
+                        <SelectPopup>
+                          <SelectItem value="task">A specific case or task</SelectItem>
+                          <SelectItem value="page">The current page</SelectItem>
+                          <SelectItem value="path">A page flow or section</SelectItem>
+                          <SelectItem value="origin">The complete application</SelectItem>
+                        </SelectPopup>
+                      </Select>
+                      {locatorCaptureScope === "task" ? (
+                        <Textarea
+                          value={locatorTaskContext}
+                          onChange={(event) => setLocatorTaskContext(event.target.value)}
+                          placeholder="Example: update account profile and verify success"
+                          aria-label="Case or task to capture locators for"
+                          className="min-h-20 text-xs"
+                        />
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-background/50 p-4">
-                  <Button
-                    type="button"
-                    className="w-full whitespace-normal sm:w-auto"
-                    onClick={() => void approveSelectedLocators()}
-                    disabled={selectedLocatorEntryIds.size === 0 || busyAction !== null}
-                  >
-                    {busyAction === "locator-review" ? (
-                      <LoaderIcon aria-hidden="true" className="animate-spin" />
-                    ) : (
-                      <CheckIcon aria-hidden="true" />
-                    )}
-                    Add selected to page object
-                  </Button>
-                  <p className="max-w-2xl text-[11px] leading-4 text-muted-foreground">
-                    This updates the managed draft. Repository changes are prepared as a separate
-                    diff you must approve.
-                  </p>
-                </div>
-              </aside>
-            </div>
-          </section>
-
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-1.5">
-                  <CardTitle>Your locator code is ready</CardTitle>
-                  <CardDescription>
-                    Approved locators are saved as a versioned draft inside this Tabs project. Your
-                    repository has not been changed.
-                  </CardDescription>
-                </div>
-                <Badge variant="outline">Step 3</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-3 md:grid-cols-3" aria-label="Code status">
-                {[
-                  ["1", "Saved locally", "Safe managed draft with version history."],
-                  ["2", "Review by page", "Choose locators, preview code, or edit it."],
-                  ["3", "Apply only when ready", "Choose a file and confirm the diff."],
-                ].map(([number, label, description]) => (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold">Application access</div>
+                      <Select
+                        value={authenticationMode}
+                        onValueChange={(value) =>
+                          setAuthenticationMode(value as TestingAuthenticationMode)
+                        }
+                      >
+                        <SelectTrigger aria-label="Application access method">
+                          <span className="flex-1 truncate">
+                            {
+                              {
+                                none: "No authentication",
+                                "local-profile": "Sign in manually",
+                                "connected-session": "Reuse Electron / Chromium",
+                              }[authenticationMode]
+                            }
+                          </span>
+                        </SelectTrigger>
+                        <SelectPopup>
+                          <SelectItem value="none">No authentication</SelectItem>
+                          <SelectItem value="local-profile">Sign in manually</SelectItem>
+                          <SelectItem value="connected-session">
+                            Reuse Electron / Chromium
+                          </SelectItem>
+                        </SelectPopup>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold">How to explore</div>
+                      <SegmentedControl
+                        value={locatorMode}
+                        onValueChange={setLocatorMode}
+                        options={[
+                          { value: "manual", label: "Manual" },
+                          { value: "guided", label: "Guided" },
+                        ]}
+                        className="w-full flex"
+                        itemClassName="flex-1 justify-center"
+                        aria-label="Exploration mode"
+                      />
+                    </div>
+                  </div>
                   <div
-                    key={number}
-                    className="flex gap-3 rounded-xl border border-border/60 bg-muted/15 p-3"
+                    className="flex gap-3 rounded-xl border border-border/60 bg-muted/20 p-3"
+                    role="note"
                   >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                      {number}
-                    </span>
-                    <div>
-                      <div className="text-sm font-semibold">{label}</div>
-                      <div className="mt-1 text-xs leading-5 text-muted-foreground">
-                        {description}
-                      </div>
+                    <HelpCircleIcon
+                      aria-hidden="true"
+                      className="mt-0.5 size-4 shrink-0 text-primary"
+                    />
+                    <div className="text-xs leading-5">
+                      <span className="font-semibold text-foreground">
+                        What will be captured?{" "}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {locatorCoverage === "actions-only"
+                          ? "Interactive controls such as buttons, links, inputs, checkboxes, switches, menus, and tabs."
+                          : locatorCoverage === "everything-accessible"
+                            ? "All named accessible elements on the page, including controls, outcomes, and readable content."
+                            : "Interactive controls plus useful outcomes such as headings, dialogs, alerts, statuses, progress indicators, and tables. Decorative layout and hidden content are excluded."}
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 p-4">
-                <div className="max-w-2xl">
-                  <h4 className="text-sm font-semibold">
-                    {locatorFolderResult
-                      ? "Existing page-object folder connected"
-                      : "Already have company page objects?"}
-                  </h4>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    Optional: compare against a folder inside this project. Tabs reads TypeScript
-                    and JavaScript statically and never executes it.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={locatorFolderResult ? "outline" : "default"}
-                    disabled={busyAction !== null}
-                    onClick={() => {
-                      setLocatorStorageMode("connected-repository");
-                      void indexLocatorFolder("connected-repository");
-                    }}
-                  >
-                    <FolderSearchIcon aria-hidden="true" />
-                    {locatorFolderResult ? "Compare another folder" : "Compare a folder"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busyAction !== null}
-                    onClick={() => {
-                      setLocatorStorageMode("snapshot-export");
-                      void indexLocatorFolder("snapshot-export");
-                    }}
-                  >
-                    Import an independent copy
-                  </Button>
-                  {locatorFolderResult ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => void disconnectLocatorFolder()}
+                  <div className="space-y-3 border-t border-border/50 pt-3">
+                    <Collapsible
+                      open={locatorAdvancedOpen}
+                      onOpenChange={setLocatorAdvancedOpen}
+                      className="w-full"
                     >
-                      Disconnect
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-              {locatorFolderResult ? (
-                <div className="space-y-3" aria-live="polite">
-                  <div className="grid gap-2 sm:grid-cols-4">
-                    {[
-                      ["Recognized", locatorFolderResult.recognized],
-                      ["Warnings", locatorFolderResult.warnings],
-                      ["Unsupported / dynamic", locatorFolderResult.unsupportedDynamic],
-                      [
-                        "Files parsed",
-                        `${locatorFolderResult.filesParsed}/${locatorFolderResult.filesScanned}`,
-                      ],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-lg bg-muted/35 p-3">
-                        <div className="font-semibold">{value}</div>
-                        <div className="text-xs text-muted-foreground">{label}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Recognition rate:{" "}
-                    {locatorFolderResult.recognitionRate === null
-                      ? "Not applicable"
-                      : `${locatorFolderResult.recognitionRate.toFixed(1)}%`}
-                    . File parse coverage:{" "}
-                    {locatorFolderResult.fileParseCoverage === null
-                      ? "Not applicable"
-                      : `${locatorFolderResult.fileParseCoverage.toFixed(1)}%`}
-                    .
-                  </p>
-                </div>
-              ) : null}
-              {locatorSyncPreview?.items.some((item) => item.status === "pending") ? (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Synchronization review</h4>
-                  {locatorSyncPreview.items
-                    .filter((item) => item.status === "pending")
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
-                      >
-                        <div>
-                          <div className="font-mono text-sm">{item.locatorKey}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.kind} {item.sourceFile ? `· ${item.sourceFile}` : ""}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void resolveLocatorSync(item.id, "keep-managed")}
-                          >
-                            Keep managed
-                          </Button>
-                          {item.kind === "conflict" ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={() => void resolveLocatorSync(item.id, "accept-repository")}
-                            >
-                              Accept repository version
-                            </Button>
-                          ) : null}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => void resolveLocatorSync(item.id, "archive")}
-                          >
-                            Archive
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  <p className="text-xs text-muted-foreground">
-                    Decisions update Tabs metadata and version history. Repository files are changed
-                    only through a separately reviewed source diff.
-                  </p>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <CollapsibleTrigger className="inline-flex items-center gap-2 rounded-xl border border-border/70 bg-card/70 px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-all">
+                          <SlidersHorizontalIcon aria-hidden="true" className="size-3.5 text-primary" />
+                          <span>Advanced options</span>
+                          <ChevronDownIcon
+                            aria-hidden="true"
+                            className={cn(
+                              "size-3.5 transition-transform duration-200",
+                              locatorAdvancedOpen && "rotate-180",
+                            )}
+                          />
+                        </CollapsibleTrigger>
 
-          <section aria-labelledby="locator-library-heading" className="space-y-3">
-            <div>
-              <h3 id="locator-library-heading" className="text-lg font-semibold">
-                Locator Library
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {locatorLibrary.pageCount} pages · {locatorLibrary.locatorCount} locators ·{" "}
-                {locatorLibrary.verifiedCount} verified · {locatorLibrary.reviewCount} need review
-              </p>
-            </div>
-            {locatorLibrary.pages.length === 0 ? (
-              <Card>
-                <CardContent className="py-6 text-sm text-muted-foreground">
-                  Start a capture or connect an existing page-object folder. Nothing is shared with
-                  another Tabs project.
-                </CardContent>
-              </Card>
-            ) : selectedLocatorPage ? (
-              <Card className="overflow-hidden">
-                <div className="grid min-h-[30rem] lg:grid-cols-[15rem_minmax(0,1fr)]">
-                  <div className="border-b border-border/60 bg-muted/15 p-2 lg:border-b-0 lg:border-r">
-                    {locatorLibrary.pages.map((page) => (
-                      <button
-                        key={page.id}
-                        type="button"
-                        aria-current={selectedLocatorPage.id === page.id ? "page" : undefined}
-                        onClick={() => setSelectedLocatorPageId(page.id)}
-                        className={cn(
-                          "mb-1 w-full rounded-lg px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          selectedLocatorPage.id === page.id
-                            ? "bg-primary/10 text-foreground"
-                            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
-                        )}
-                      >
-                        <span className="block truncate text-sm font-medium">{page.name}</span>
-                        <span className="mt-0.5 block text-[11px]">
-                          {page.entries.length} locators
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="border-b border-border/60 p-4">
-                      <div className="flex flex-wrap items-end justify-between gap-3">
-                        <div className="min-w-0 flex-1 space-y-1.5">
-                          <label
-                            htmlFor="locator-page-name"
-                            className="text-xs font-medium text-muted-foreground"
-                          >
-                            Page name
-                          </label>
-                          <div className="flex max-w-xl gap-2">
-                            <Input
-                              id="locator-page-name"
-                              value={locatorPageName}
-                              onChange={(event) => setLocatorPageName(event.target.value)}
-                              placeholder="Landing page"
-                              className="text-base font-semibold"
-                            />
+                        <Button
+                          type="button"
+                          onClick={() => void startLocatorDiscovery()}
+                          disabled={
+                            !normalizedTarget ||
+                            busyAction !== null ||
+                            locatorSession?.status === "running" ||
+                            (locatorCaptureScope === "task" && !locatorTaskContext.trim())
+                          }
+                          className="w-full sm:w-auto shadow-xs"
+                        >
+                          {busyAction === "locator-discovery" ? (
+                            <LoaderIcon className="animate-spin" aria-hidden="true" />
+                          ) : (
+                            <PlayIcon aria-hidden="true" />
+                          )}
+                          {locatorSession?.status === "running" ? "Discovery is active" : "Scan this page"}
+                        </Button>
+                      </div>
+
+                      <CollapsibleContent className="mt-3">
+                        <div className="rounded-xl border border-border/70 bg-card/75 p-4 shadow-2xs space-y-4">
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            {/* What to capture */}
+                            <div className="space-y-1.5">
+                              <label htmlFor="locator-coverage" className="text-xs font-semibold text-foreground">
+                                What to capture
+                              </label>
+                              <Select
+                                value={locatorCoverage}
+                                onValueChange={(value) =>
+                                  setLocatorCoverage(value as TestingLocatorCoverageMode)
+                                }
+                              >
+                                <SelectTrigger id="locator-coverage" aria-label="What to capture">
+                                  <span className="flex-1 truncate">
+                                    {
+                                      {
+                                        "actions-assertions": "Controls + outcomes (recommended)",
+                                        "actions-only": "Controls only",
+                                        "everything-accessible": "Everything accessible",
+                                      }[locatorCoverage]
+                                    }
+                                  </span>
+                                </SelectTrigger>
+                                <SelectPopup>
+                                  <SelectItem value="actions-assertions">
+                                    Controls + outcomes (recommended)
+                                  </SelectItem>
+                                  <SelectItem value="actions-only">Controls only</SelectItem>
+                                  <SelectItem value="everything-accessible">
+                                    Everything accessible
+                                  </SelectItem>
+                                </SelectPopup>
+                              </Select>
+                              <p className="text-[11px] leading-4 text-muted-foreground">
+                                {locatorCoverage === "actions-only"
+                                  ? "Captures interactive controls like buttons, links, inputs, and dropdowns."
+                                  : locatorCoverage === "everything-accessible"
+                                    ? "Captures all accessible element names, headings, labels, and text."
+                                    : "Captures interactive controls plus assertion outcomes (dialogs, alerts, banners)."}
+                              </p>
+                            </div>
+
+                            {/* Multi-page exploration depth */}
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-foreground">
+                                Exploration crawl depth
+                              </label>
+                              <SegmentedControl
+                                value={locatorMode === "automatic" ? "automatic" : "single"}
+                                onValueChange={(v) => setLocatorMode(v === "automatic" ? "automatic" : "guided")}
+                                options={[
+                                  { value: "single", label: "Single page (Target)" },
+                                  { value: "automatic", label: "Automated crawl" },
+                                ]}
+                                className="w-full flex"
+                                itemClassName="flex-1 justify-center text-xs"
+                                aria-label="Exploration crawl mode"
+                              />
+                              <p className="text-[11px] leading-4 text-muted-foreground">
+                                {locatorMode === "automatic"
+                                  ? "Autonomous crawler will follow links and discover locators across pages."
+                                  : "Focuses specifically on the single specified target URL or flow."}
+                              </p>
+                            </div>
+                          </div>
+
+                          {locatorMode === "automatic" ? (
+                            <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/25 p-3 sm:grid-cols-2">
+                              <div className="space-y-1">
+                                <label htmlFor="locator-max-elements" className="text-xs font-medium text-muted-foreground">
+                                  Max elements per page
+                                </label>
+                                <Input
+                                  id="locator-max-elements"
+                                  type="number"
+                                  aria-label="Maximum elements per page"
+                                  min={MIN_TESTING_MAX_ELEMENTS_PER_PAGE}
+                                  max={MAX_TESTING_MAX_ELEMENTS_PER_PAGE}
+                                  value={locatorMaxElements}
+                                  onChange={(event) => setLocatorMaxElements(event.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label htmlFor="locator-max-pages" className="text-xs font-medium text-muted-foreground">
+                                  Max pages to crawl
+                                </label>
+                                <Input
+                                  id="locator-max-pages"
+                                  type="number"
+                                  aria-label="Maximum pages per session"
+                                  min={1}
+                                  max={MAX_TESTING_MAX_PAGES_PER_SESSION}
+                                  value={locatorMaxPages}
+                                  onChange={(event) => setLocatorMaxPages(event.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {/* Classic Discovery link */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-3">
+                            <div className="space-y-0.5">
+                              <span className="text-xs font-medium text-foreground">Need full graph transition mapping?</span>
+                              <p className="text-[11px] text-muted-foreground">
+                                Switch to Classic Discovery to model the entire app state graph.
+                              </p>
+                            </div>
                             <Button
                               type="button"
                               size="sm"
                               variant="outline"
-                              disabled={
-                                !locatorPageName.trim() ||
-                                locatorPageName.trim() === selectedLocatorPage.name ||
-                                busyAction !== null
-                              }
-                              onClick={() => void saveLocatorPageName()}
+                              onClick={() => void setDiscoveryExperience("classic")}
+                              className="text-xs gap-1.5"
                             >
-                              Save name
+                              <span>Open Classic discovery</span>
+                              <ArrowRightIcon className="size-3.5" aria-hidden="true" />
                             </Button>
                           </div>
-                          <CardDescription className="break-all">
-                            {selectedLocatorPage.urlPattern}
-                          </CardDescription>
                         </div>
-                        <div className="rounded-lg bg-muted/40 px-3 py-2 text-right">
-                          <div className="text-sm font-semibold">
-                            {
-                              selectedLocatorPage.entries.filter(
-                                (entry) => entry.lifecycleStatus === "accepted",
-                              ).length
-                            }{" "}
-                            in code
-                          </div>
-                          <div className="text-[11px] text-muted-foreground">
-                            {selectedLocatorPage.entries.length} discovered
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                </aside>
+
+                <div
+                  className={cn(
+                    "min-w-0",
+                    locatorPreviewExpanded &&
+                      "fixed inset-3 z-[80] flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl",
+                  )}
+                  role={locatorPreviewExpanded ? "dialog" : undefined}
+                  aria-modal={locatorPreviewExpanded ? true : undefined}
+                  aria-label={locatorPreviewExpanded ? "Focused application preview" : undefined}
+                >
+                  <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/10 p-3">
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label="Go back in preview"
+                      onClick={() =>
+                        void window.desktopBridge?.goBackBrowserSession({
+                          projectId,
+                          sessionId: `testing:${projectId}`,
+                        })
+                      }
+                    >
+                      <ArrowLeftIcon aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label="Go forward in preview"
+                      onClick={() =>
+                        void window.desktopBridge?.goForwardBrowserSession({
+                          projectId,
+                          sessionId: `testing:${projectId}`,
+                        })
+                      }
+                    >
+                      <ArrowRightIcon aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label="Refresh preview"
+                      onClick={() =>
+                        void window.desktopBridge?.reloadBrowserSession({
+                          projectId,
+                          sessionId: `testing:${projectId}`,
+                        })
+                      }
+                    >
+                      <RefreshCwIcon aria-hidden="true" />
+                    </Button>
+                    <Input
+                      id="locator-target-url"
+                      type="url"
+                      value={locatorNavigateUrl || targetUrl}
+                      onChange={(event) => {
+                        setLocatorNavigateUrl(event.target.value);
+                        if (!locatorSession) setTargetUrl(event.target.value);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && locatorSession) {
+                          void navigateLocatorDiscovery();
+                        }
+                      }}
+                      placeholder="https://uat.example.com/account"
+                      aria-label="Testing preview URL"
+                      className="min-w-56 flex-1"
+                    />
+                    <SegmentedControl
+                      size="sm"
+                      value={locatorViewport}
+                      onValueChange={setLocatorViewport}
+                      options={[
+                        {
+                          value: "desktop",
+                          label: <MonitorIcon aria-hidden="true" className="size-3.5" />,
+                          ariaLabel: "Desktop preview",
+                        },
+                        {
+                          value: "tablet",
+                          label: <TabletIcon aria-hidden="true" className="size-3.5" />,
+                          ariaLabel: "Tablet preview",
+                        },
+                        {
+                          value: "mobile",
+                          label: <SmartphoneIcon aria-hidden="true" className="size-3.5" />,
+                          ariaLabel: "Mobile preview",
+                        },
+                      ]}
+                      aria-label="Preview viewport"
+                    />
+                    <Badge variant="outline" className="tabular-nums">
+                      {locatorViewport === "desktop"
+                        ? "Desktop / 16:9"
+                        : locatorViewport === "tablet"
+                          ? "Tablet / 4:3"
+                          : "Mobile / 9:16"}
+                    </Badge>
+                    <Button
+                      ref={locatorPreviewFocusButtonRef}
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      aria-label={locatorPreviewExpanded ? "Exit focused preview" : "Focus preview"}
+                      aria-pressed={locatorPreviewExpanded}
+                      onClick={() => setLocatorPreviewExpanded(!locatorPreviewExpanded)}
+                    >
+                      {locatorPreviewExpanded ? (
+                        <Minimize2Icon aria-hidden="true" />
+                      ) : (
+                        <Maximize2Icon aria-hidden="true" />
+                      )}
+                    </Button>
+                  </div>
+                  <div
+                    className={cn(
+                      locatorPreviewExpanded &&
+                        "flex min-h-0 flex-1 items-center justify-center bg-black/20 p-3",
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "relative aspect-video overflow-hidden bg-muted/20",
+                        locatorPreviewExpanded ? "h-full w-auto max-w-full" : "w-full",
+                      )}
+                    >
+                      {normalizedTarget ? (
+                        <TestingApplicationPreview
+                          projectId={projectId}
+                          targetUrl={locatorNavigateUrl || normalizedTarget}
+                          sessionId={`testing:${projectId}`}
+                          viewport={locatorViewport}
+                        />
+                      ) : (
+                        <div className="flex h-full min-h-80 items-center justify-center rounded-lg border border-dashed border-border/70 bg-background/40 p-8 text-center text-sm text-muted-foreground">
+                          Enter a starting URL above. The page stays contained here while you navigate
+                          and scroll.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 p-3">
+                    <div className="text-xs text-muted-foreground" aria-live="polite">
+                      <span className="block">
+                        {locatorSession
+                          ? `${locatorSession.capturedPages} pages, ${locatorSession.storedElements} locators captured`
+                          : "Preview first, then start a focused discovery session."}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {locatorSession?.status === "running" ? (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void captureLocatorPage("relevant")}
+                            disabled={busyAction !== null}
+                          >
+                            Scan relevant controls
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void captureLocatorPage("page")}
+                            disabled={busyAction !== null}
+                          >
+                            Scan all on this page
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={async () => {
+                              await finishLocatorDiscovery(false);
+                              setWorkflowStep(2);
+                            }}
+                            disabled={busyAction !== null}
+                          >
+                            Finish
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void finishLocatorDiscovery(true)}
+                            disabled={busyAction !== null}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="default"
+                          size="sm"
+                          onClick={() => setWorkflowStep(2)}
+                          className="gap-1.5"
+                        >
+                          <span>Next: Choose Locators</span>
+                          <ChevronRightIcon className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {/* STEP 2: CHOOSE LOCATORS */}
+          {workflowStep === 2 ? (
+            <section className="rounded-2xl border border-border/70 bg-card shadow-sm overflow-hidden">
+              <div className="border-b border-border/60 bg-muted/15 p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                        Step 2 of 3
+                      </span>
+                      <span className="text-xs text-muted-foreground font-medium">Element Inspector</span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3">
+                      <h3 className="text-base font-semibold text-foreground">Choose Locators</h3>
+                      <Badge variant="secondary" className="font-mono text-xs">
+                        {selectedLocatorEntryIds.size} selected
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="grid max-h-[38rem] grid-cols-1 gap-3 overflow-y-auto overscroll-contain p-4 md:grid-cols-2 xl:grid-cols-3 bg-muted/5"
+                aria-label="Captured locator candidates"
+              >
+                {(selectedLocatorPage?.entries ?? [])
+                  .filter((entry) => entry.lifecycleStatus !== "archived")
+                  .slice(0, 100)
+                  .map((entry) => {
+                    const approved = entry.lifecycleStatus === "accepted";
+                    const manualRequired =
+                      entry.lifecycleStatus === "manual-required" ||
+                      testingLocatorHasRedactedArgument(entry);
+                    const selected = selectedLocatorEntryIds.has(entry.id);
+                    return (
+                      <label
+                        key={entry.id}
+                        className={cn(
+                          "block rounded-xl border p-3 transition-colors",
+                          selected
+                            ? "border-primary/40 bg-primary/5"
+                            : "border-border/60 bg-background/70",
+                          approved || manualRequired ? "cursor-default" : "cursor-pointer",
+                        )}
+                      >
+                        <span className="flex items-start gap-2.5">
+                          {approved ? (
+                            <span className="mt-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                              <CheckIcon aria-hidden="true" className="size-3" />
+                            </span>
+                          ) : manualRequired ? (
+                            <span
+                              className="mt-0.5 flex size-4 items-center justify-center rounded-full border border-amber-500/50 text-amber-600"
+                              aria-label="Manual locator required"
+                            >
+                              <HelpCircleIcon aria-hidden="true" className="size-3" />
+                            </span>
+                          ) : (
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={(checked) =>
+                                setSelectedLocatorEntryIds(
+                                  new Set(
+                                    checked
+                                      ? [...selectedLocatorEntryIds, entry.id]
+                                      : [...selectedLocatorEntryIds].filter((id) => id !== entry.id),
+                                  ),
+                                )
+                              }
+                              aria-label={`Include ${entry.locatorKey}`}
+                              className="mt-0.5"
+                            />
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="truncate font-mono text-xs font-medium">
+                                {entry.locatorKey}
+                              </span>
+                            </span>
+                            <code className="mt-2 block overflow-x-auto rounded-md bg-muted/70 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
+                              {testingLocatorCode(entry)}
+                            </code>
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+              </div>
+
+              {/* Step 2 Bottom Navigation */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-card p-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setWorkflowStep(1)}
+                  className="gap-1.5"
+                >
+                  <ChevronLeftIcon className="size-4" />
+                  <span>Back</span>
+                </Button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full whitespace-normal sm:w-auto gap-1.5"
+                    onClick={async () => {
+                      await approveSelectedLocators();
+                      setWorkflowStep(3);
+                    }}
+                    disabled={selectedLocatorEntryIds.size === 0 || busyAction !== null}
+                  >
+                    {busyAction === "locator-review" ? (
+                      <LoaderIcon aria-hidden="true" className="size-4 animate-spin" />
+                    ) : (
+                      <CheckIcon aria-hidden="true" className="size-4" />
+                    )}
+                    <span>Add to page object</span>
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setWorkflowStep(3)}
+                    className="gap-1.5"
+                  >
+                    <span>Next</span>
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {/* STEP 3: USE IN CODE & LOCATOR LIBRARY */}
+          {workflowStep === 3 ? (
+            <div className="space-y-5">
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                          Step 3 of 3
+                        </span>
+                        <span className="text-xs text-muted-foreground font-medium">Export Page Object</span>
+                      </div>
+                      <CardTitle>Your locator code is ready</CardTitle>
+                      <CardDescription>
+                        Approved locators are saved as a versioned draft inside this Tabs project. Your
+                        repository has not been changed.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setWorkflowStep(2)}
+                      className="gap-1.5"
+                    >
+                      <ChevronLeftIcon className="size-4" />
+                      <span>Back to Choose Locators</span>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-3 md:grid-cols-3" aria-label="Code status">
+                    {[
+                      ["1", "Saved locally", "Safe managed draft with version history."],
+                      ["2", "Review by page", "Choose locators, preview code, or edit it."],
+                      ["3", "Apply only when ready", "Choose a file and confirm the diff."],
+                    ].map(([number, label, description]) => (
+                      <div
+                        key={number}
+                        className="flex gap-3 rounded-xl border border-border/60 bg-muted/15 p-3"
+                      >
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          {number}
+                        </span>
+                        <div>
+                          <div className="text-sm font-semibold">{label}</div>
+                          <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {description}
                           </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 p-4">
+                    <div className="max-w-2xl">
+                      <h4 className="text-sm font-semibold">
+                        {locatorFolderResult
+                          ? "Existing page-object folder connected"
+                          : "Already have company page objects?"}
+                      </h4>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Optional: compare against a folder inside this project. Tabs reads TypeScript
+                        and JavaScript statically and never executes it.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant={locatorFolderResult ? "outline" : "default"}
+                        disabled={busyAction !== null}
+                        onClick={() => {
+                          setLocatorStorageMode("connected-repository");
+                          void indexLocatorFolder("connected-repository");
+                        }}
+                      >
+                        <FolderSearchIcon aria-hidden="true" />
+                        {locatorFolderResult ? "Compare another folder" : "Compare a folder"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={busyAction !== null}
+                        onClick={() => {
+                          setLocatorStorageMode("snapshot-export");
+                          void indexLocatorFolder("snapshot-export");
+                        }}
+                      >
+                        Import an independent copy
+                      </Button>
+                      {locatorFolderResult ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => void disconnectLocatorFolder()}
+                        >
+                          Disconnect
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                  {locatorFolderResult ? (
+                    <div className="space-y-3" aria-live="polite">
+                      <div className="grid gap-2 sm:grid-cols-4">
+                        {[
+                          ["Recognized", locatorFolderResult.recognized],
+                          ["Warnings", locatorFolderResult.warnings],
+                          ["Unsupported / dynamic", locatorFolderResult.unsupportedDynamic],
+                          [
+                            "Files parsed",
+                            `${locatorFolderResult.filesParsed}/${locatorFolderResult.filesScanned}`,
+                          ],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-lg bg-muted/35 p-3">
+                            <div className="font-semibold">{value}</div>
+                            <div className="text-xs text-muted-foreground">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Recognition rate:{" "}
+                        {locatorFolderResult.recognitionRate === null
+                          ? "Not applicable"
+                          : `${locatorFolderResult.recognitionRate.toFixed(1)}%`}
+                        . File parse coverage:{" "}
+                        {locatorFolderResult.fileParseCoverage === null
+                          ? "Not applicable"
+                          : `${locatorFolderResult.fileParseCoverage.toFixed(1)}%`}
+                        .
+                      </p>
+                    </div>
+                  ) : null}
+                  {locatorSyncPreview?.items.some((item) => item.status === "pending") ? (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">Synchronization review</h4>
+                      {locatorSyncPreview.items
+                        .filter((item) => item.status === "pending")
+                        .map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 p-3"
+                          >
+                            <div>
+                              <div className="font-mono text-sm">{item.locatorKey}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.kind} {item.sourceFile ? `· ${item.sourceFile}` : ""}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void resolveLocatorSync(item.id, "keep-managed")}
+                              >
+                                Keep managed
+                              </Button>
+                              {item.kind === "conflict" ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => void resolveLocatorSync(item.id, "accept-repository")}
+                                >
+                                  Accept repository version
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void resolveLocatorSync(item.id, "archive")}
+                              >
+                                Archive
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      <p className="text-xs text-muted-foreground">
+                        Decisions update Tabs metadata and version history. Repository files are changed
+                        only through a separately reviewed source diff.
+                      </p>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              <section aria-labelledby="locator-library-heading" className="space-y-3">
+                <div>
+                  <h3 id="locator-library-heading" className="text-lg font-semibold">
+                    Locator Library
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {locatorLibrary.pageCount} pages · {locatorLibrary.locatorCount} locators ·{" "}
+                    {locatorLibrary.verifiedCount} verified · {locatorLibrary.reviewCount} need review
+                  </p>
+                </div>
+                {locatorLibrary.pages.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-6 text-sm text-muted-foreground">
+                      Start a capture or connect an existing page-object folder. Nothing is shared with
+                      another Tabs project.
+                    </CardContent>
+                  </Card>
+                ) : selectedLocatorPage ? (
+                  <Card className="overflow-hidden">
+                    <div className="grid min-h-[30rem] lg:grid-cols-[15rem_minmax(0,1fr)]">
+                      <div className="border-b border-border/60 bg-muted/15 p-2 lg:border-b-0 lg:border-r">
+                        {locatorLibrary.pages.map((page) => (
+                          <button
+                            key={page.id}
+                            type="button"
+                            aria-current={selectedLocatorPage.id === page.id ? "page" : undefined}
+                            onClick={() => setSelectedLocatorPageId(page.id)}
+                            className={cn(
+                              "mb-1 w-full rounded-lg px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              selectedLocatorPage.id === page.id
+                                ? "bg-primary/10 text-foreground"
+                                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                            )}
+                          >
+                            <span className="block truncate text-sm font-medium">{page.name}</span>
+                            <span className="mt-0.5 block text-[11px]">
+                              {page.entries.length} locators
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="border-b border-border/60 p-4">
+                          <div className="flex flex-wrap items-end justify-between gap-3">
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <label
+                                htmlFor="locator-page-name"
+                                className="text-xs font-medium text-muted-foreground"
+                              >
+                                Page name
+                              </label>
+                              <div className="flex max-w-xl gap-2">
+                                <Input
+                                  id="locator-page-name"
+                                  value={locatorPageName}
+                                  onChange={(event) => setLocatorPageName(event.target.value)}
+                                  placeholder="Landing page"
+                                  className="text-base font-semibold"
+                                />
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={
+                                    !locatorPageName.trim() ||
+                                    locatorPageName.trim() === selectedLocatorPage.name ||
+                                    busyAction !== null
+                                  }
+                                  onClick={() => void saveLocatorPageName()}
+                                >
+                                  Save name
+                                </Button>
+                              </div>
+                              <CardDescription className="break-all">
+                                {selectedLocatorPage.urlPattern}
+                              </CardDescription>
+                            </div>
+                            <div className="rounded-lg bg-muted/40 px-3 py-2 text-right">
+                              <div className="text-sm font-semibold">
+                                {
+                                  selectedLocatorPage.entries.filter(
+                                    (entry) => entry.lifecycleStatus === "accepted",
+                                  ).length
+                                }{" "}
+                                in code
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                {selectedLocatorPage.entries.length} discovered
+                              </div>
+                            </div>
+                          </div>
                       <div
                         className="mt-4 flex flex-wrap gap-1"
                         role="tablist"
@@ -2093,8 +2217,35 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
               </Card>
             ) : null}
           </section>
-        </div>
-      )}
+
+          {/* Step 3 Footer Navigation */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-card p-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWorkflowStep(2)}
+              className="gap-1.5"
+            >
+              <ChevronLeftIcon className="size-4" />
+              <span>Back to Choose Locators</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setWorkflowStep(1)}
+              className="gap-1.5"
+            >
+              <span>Start a New Scan</span>
+              <ArrowRightIcon className="size-4" />
+            </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )}
 
       {/* Locator Edit Dialog */}
       <Dialog
@@ -2139,7 +2290,15 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                   }
                 >
                   <SelectTrigger id="locator-edit-classification">
-                    <SelectValue />
+                    <span className="flex-1 truncate">
+                      {
+                        {
+                          action: "Action",
+                          assertion: "Assertion",
+                          content: "Content",
+                        }[editingLocatorClassification]
+                      }
+                    </span>
                   </SelectTrigger>
                   <SelectPopup>
                     <SelectItem value="action">Action</SelectItem>
@@ -2159,7 +2318,21 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                   }
                 >
                   <SelectTrigger id="locator-edit-strategy">
-                    <SelectValue />
+                    <span className="flex-1 truncate">
+                      {
+                        {
+                          role: "Role and accessible name",
+                          label: "Label",
+                          "test-id": "Test ID",
+                          placeholder: "Placeholder",
+                          "alt-text": "Alternative text",
+                          title: "Title",
+                          text: "Visible text",
+                          css: "Scoped CSS (fragile)",
+                          xpath: "XPath selector",
+                        }[editingLocatorStrategy] ?? editingLocatorStrategy
+                      }
+                    </span>
                   </SelectTrigger>
                   <SelectPopup>
                     <SelectItem value="role">Role and accessible name</SelectItem>

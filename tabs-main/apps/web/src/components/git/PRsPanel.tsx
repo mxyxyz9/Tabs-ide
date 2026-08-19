@@ -1,6 +1,6 @@
 import { CheckCircle2, ChevronDown, ChevronRight, GitMerge, GitPullRequest, MessageSquare, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { gitAllPullRequestsQueryOptions, gitResolvePullRequestQueryOptions } from "../../lib/gitReactQuery";
 import { GitCheckingState } from "./GitCheckingState";
@@ -31,6 +31,8 @@ interface PRComment {
   createdAt?: string;
 }
 
+import { useProjectGitState } from "../../state/scopedStateStore";
+
 export function PRsPanel({
   cwd,
   branchName,
@@ -42,12 +44,36 @@ export function PRsPanel({
   onOpenCreatePR: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [viewMode, setViewMode] = useState<"branch" | "all">("branch");
-  const [filterState, setFilterState] = useState<"all" | "open" | "merged" | "closed">("all");
+  const [gitState, setGitState] = useProjectGitState(cwd);
+  const viewMode = gitState.prViewMode;
+  const setViewMode = useCallback(
+    (mode: "branch" | "all") => {
+      setGitState({ prViewMode: mode });
+    },
+    [setGitState],
+  );
+
+  const filterState = gitState.prFilter;
+  const setFilterState = useCallback(
+    (f: "all" | "open" | "merged" | "closed") => {
+      setGitState({ prFilter: f });
+    },
+    [setGitState],
+  );
+
   const [mergePr, setMergePr] = useState<MockPR | null>(null);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
-  const [expandedPrComments, setExpandedPrComments] = useState<number | null>(null);
+
+  const expandedPrComments = gitState.prExpandedComments;
+  const setExpandedPrComments = useCallback(
+    (n: number | null | ((prev: number | null) => number | null)) => {
+      setGitState((prev) => ({
+        prExpandedComments: typeof n === "function" ? n(prev.prExpandedComments) : n,
+      }));
+    },
+    [setGitState],
+  );
   const [prComments, setPrComments] = useState<Record<number, PRComment[]>>({});
   const [loadingComments, setLoadingComments] = useState<Record<number, boolean>>({});
 

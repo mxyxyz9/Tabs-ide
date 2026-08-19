@@ -118,16 +118,6 @@ export const TestingCases = memo(function TestingCases({
   projectPath,
   onNavigate,
 }: TestingCasesProps) {
-  const [caseIntakeMode, setCaseIntakeMode] = useState<TestingCaseIntakeMode>("manual");
-  const [manualCaseId, setManualCaseId] = useState("");
-  const [manualCaseDescription, setManualCaseDescription] = useState("");
-  const [manualCaseSteps, setManualCaseSteps] = useState<ReadonlyArray<string>>([""]);
-  const [manualCaseExpected, setManualCaseExpected] = useState("");
-  const [manualCaseLocatorIds, setManualCaseLocatorIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  const [storyText, setStoryText] = useState("");
-  const [storyFilePath, setStoryFilePath] = useState("");
   const [graphFeedback, setGraphFeedback] = useState<{
     type: "success" | "info" | "error";
     text: string;
@@ -144,6 +134,22 @@ export const TestingCases = memo(function TestingCases({
     setWorkbookPath,
     importWorkbook,
     workbookPath,
+    caseIntakeMode,
+    setCaseIntakeMode,
+    manualCaseId,
+    setManualCaseId,
+    manualCaseDescription,
+    setManualCaseDescription,
+    manualCaseSteps,
+    setManualCaseSteps,
+    manualCaseExpected,
+    setManualCaseExpected,
+    manualCaseLocatorIds,
+    setManualCaseLocatorIds,
+    storyText,
+    setStoryText,
+    storyFilePath,
+    setStoryFilePath,
     generationFusionProvider,
     generationModelSelection,
     fusionProviders,

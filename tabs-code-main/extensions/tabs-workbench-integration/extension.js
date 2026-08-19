@@ -672,7 +672,7 @@ function startCodeControlChannel(context) {
           } catch {
             return;
           }
-          if (data && typeof data.id === "string") {
+          if (data && typeof data.id === "string" && data.id.length > 0) {
             const newActiveId = data.id || null;
             let mappedId = newActiveId;
             if (newActiveId === "workbench.view.explorer") mappedId = "explorer";
@@ -683,6 +683,11 @@ function startCodeControlChannel(context) {
 
             if (state.activeViewId !== mappedId) {
               state.activeViewId = mappedId;
+              pushState();
+            }
+          } else if (data && (data.id === null || data.id === "")) {
+            if (state.activeViewId !== null) {
+              state.activeViewId = null;
               pushState();
             }
           }
@@ -696,7 +701,7 @@ function startCodeControlChannel(context) {
     vscode.commands
       .executeCommand("_tabs.getActiveViewContainer")
       .then((activeId) => {
-        if (activeId && typeof activeId === "string") {
+        if (activeId && typeof activeId === "string" && activeId.length > 0) {
           let mappedId = activeId;
           if (activeId === "workbench.view.explorer") mappedId = "explorer";
           else if (activeId === "workbench.view.search") mappedId = "search";
@@ -706,6 +711,11 @@ function startCodeControlChannel(context) {
 
           if (state.activeViewId !== mappedId) {
             state.activeViewId = mappedId;
+            pushState();
+          }
+        } else if (activeId === null || activeId === "") {
+          if (state.activeViewId !== null) {
+            state.activeViewId = null;
             pushState();
           }
         }

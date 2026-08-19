@@ -99,9 +99,9 @@ const QUIT_CONFIRMATION_RESPONSE_CHANNEL = "desktop:quit-confirmation-response";
 const GET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:get-confirm-before-quit";
 const SET_CONFIRM_BEFORE_QUIT_CHANNEL = "desktop:set-confirm-before-quit";
 const UPDATE_STATE_CHANNEL = "desktop:update-state";
-const UPDATE_GET_STATE_CHANNEL = "desktop:update:get-state";
-const UPDATE_DOWNLOAD_CHANNEL = "desktop:update:download";
-const UPDATE_INSTALL_CHANNEL = "desktop:update:install";
+const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
+const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
+const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
 const GET_WS_URL_CHANNEL = "desktop:get-ws-url";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
@@ -2295,10 +2295,10 @@ function registerIpcHandlers(): void {
     ) {
       return false;
     }
-    return codeControlChannel.runCommand(
-      (input as { projectId: string }).projectId,
-      (input as { commandId: string }).commandId,
-    );
+    const projectId = (input as { projectId: string }).projectId;
+    const commandId = (input as { commandId: string }).commandId;
+    codeHostManager.focusSession(projectId);
+    return codeControlChannel.runCommand(projectId, commandId);
   });
 
   ipcMain.removeHandler(CODE_HOST_GET_CHROME_STATE_CHANNEL);

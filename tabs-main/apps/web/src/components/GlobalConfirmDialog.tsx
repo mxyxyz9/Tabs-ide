@@ -9,7 +9,6 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { subscribeToConfirm, type ConfirmRequest } from "~/lib/customConfirm";
-
 export function GlobalConfirmDialog() {
   const [request, setRequest] = useState<ConfirmRequest | null>(null);
 

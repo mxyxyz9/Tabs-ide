@@ -19,6 +19,11 @@ import {
 import { makeAppModelSelection } from "../modelSelection";
 import { TestingTool } from "./testing/TestingTool";
 import { type ProjectToolKind, type ProjectWorkspaceSettings } from "@tabs/contracts/settings";
+import {
+  useProjectAgentsState,
+  useProjectServerState,
+  useProjectBrowserState,
+} from "~/state/scopedStateStore";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 
@@ -1142,8 +1147,16 @@ function AgentsThreadList(props: {
   children: ReactNode;
 }) {
   const [threadPendingDelete, setThreadPendingDelete] = useState<Thread | null>(null);
-  // 'current' | 'archived'
-  const [view, setView] = useState<"current" | "archived">("current");
+  const [agentsState, setAgentsState] = useProjectAgentsState(props.project.id);
+  const view = agentsState.threadListView;
+  const setView = useCallback(
+    (v: "current" | "archived" | ((prev: "current" | "archived") => "current" | "archived")) => {
+      setAgentsState((prev) => ({
+        threadListView: typeof v === "function" ? v(prev.threadListView) : v,
+      }));
+    },
+    [setAgentsState],
+  );
 
   const [alwaysMinAgents, setAlwaysMinAgents] = useState<boolean>(() => {
     try {
@@ -7168,7 +7181,16 @@ function DesktopCustomEmbedTool(props: {
   const [sessionState, setSessionState] = useState<DesktopBrowserSessionState>(
     createEmptyBrowserSessionState(props.project.id, props.sessionId),
   );
-  const [viewportSelectorOpen, setViewportSelectorOpen] = useState(false);
+  const [browserScopedState, setBrowserScopedState] = useProjectBrowserState(props.project.id);
+  const viewportSelectorOpen = browserScopedState.viewportSelectorOpen;
+  const setViewportSelectorOpen = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setBrowserScopedState((prev) => ({
+        viewportSelectorOpen: typeof v === "function" ? v(prev.viewportSelectorOpen) : v,
+      }));
+    },
+    [setBrowserScopedState],
+  );
   const isChromeExpanded = browserState.chromeExpanded ?? false;
   const setIsChromeExpanded = useCallback(
     (expanded: boolean) => {
@@ -7195,7 +7217,15 @@ function DesktopCustomEmbedTool(props: {
   // navigate effect below), which recomputes `normalizedUrl` and drives the
   // BrowserView. Lets the user recover a tab whose page broke by editing the
   // URL and reloading, without going back to Settings.
-  const [draftUrl, setDraftUrl] = useState(normalizedUrl);
+  const draftUrl = browserScopedState.draftUrl || normalizedUrl;
+  const setDraftUrl = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setBrowserScopedState((prev) => ({
+        draftUrl: typeof v === "function" ? v(prev.draftUrl) : v,
+      }));
+    },
+    [setBrowserScopedState],
+  );
   const submitDraftUrl = () => {
     const nextUrl = normalizeBrowserUrl(draftUrl);
     if (nextUrl.length === 0) {
@@ -7886,8 +7916,16 @@ function ServerTool(props: {
   }, [props.projectSettings.serverPresets]);
   const terminalIdSet = new Set(props.terminalIds);
   const runningProcessIdSet = new Set(props.runningProcessIds);
-  const dependencyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-  const [presetsExpanded, setPresetsExpanded] = useState(false);
+  const [serverState, setServerState] = useProjectServerState(props.project.id);
+  const presetsExpanded = serverState.presetsExpanded;
+  const setPresetsExpanded = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setServerState((prev) => ({
+        presetsExpanded: typeof v === "function" ? v(prev.presetsExpanded) : v,
+      }));
+    },
+    [setServerState],
+  );
   const hasRunnableCommands = useCallback(
     (commands: ReadonlyArray<string>) => commands.some((command) => command.trim().length > 0),
     [],
@@ -10003,7 +10041,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
             workspaceShellActions.setBrowserCurrentUrl(activeProject.id, process.previewUrl);
             window.desktopBridge?.reloadBrowserSession({ projectId: activeProject.id });
           }
-          if (process.autoOpenPreview && activeProject?.id && activeTool?.kind !== "server") {
+          if (process.autoOpenPreview && activeProject?.id) {
             workspaceShellActions.setActiveTool(activeProject.id, "browser");
           }
         }
@@ -10018,7 +10056,6 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       revealServerTerminal,
       serverThreadId,
       activeProject?.id,
-      activeTool?.kind,
     ],
   );
   const dependencyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());

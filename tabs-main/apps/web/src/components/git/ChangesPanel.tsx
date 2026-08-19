@@ -19,7 +19,7 @@ import {
   Upload,
   Wand2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { deriveRepoState } from "../../lib/deriveRepoState";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
@@ -368,6 +368,8 @@ export function ConflictResolver({
   );
 }
 
+import { useProjectGitState } from "../../state/scopedStateStore";
+
 export function ChangesPanel({
   cwd,
   statusData,
@@ -389,10 +391,42 @@ export function ChangesPanel({
   onOpenDiscardAll: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [msg, setMsg] = useState("");
+  const [gitState, setGitState] = useProjectGitState(cwd);
+
+  const msg = gitState.commitDraft;
+  const setMsg = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setGitState((prev) => ({ commitDraft: typeof v === "function" ? v(prev.commitDraft) : v }));
+    },
+    [setGitState],
+  );
+
   const [generating, setGenerating] = useState(false);
-  const [amend, setAmend] = useState(false);
-  const [conflictResolutions, setConflictResolutions] = useState<Record<string, { strategy: string; text?: string }>>({});
+
+  const amend = gitState.amend;
+  const setAmend = useCallback(
+    (v: boolean | ((prev: boolean) => boolean)) => {
+      setGitState((prev) => ({ amend: typeof v === "function" ? v(prev.amend) : v }));
+    },
+    [setGitState],
+  );
+
+  const conflictResolutions = gitState.conflictResolutions;
+  const setConflictResolutions = useCallback(
+    (
+      v:
+        | Record<string, { strategy: string; text?: string }>
+        | ((
+            prev: Record<string, { strategy: string; text?: string }>,
+          ) => Record<string, { strategy: string; text?: string }>),
+    ) => {
+      setGitState((prev) => ({
+        conflictResolutions: typeof v === "function" ? v(prev.conflictResolutions) : v,
+      }));
+    },
+    [setGitState],
+  );
+
   const [isStagingAll, setIsStagingAll] = useState(false);
   const [isUnstagingAll, setIsUnstagingAll] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
@@ -424,7 +458,21 @@ export function ChangesPanel({
   };
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState<ModelSelection | undefined>(undefined);
+
+  const selectedModel = gitState.selectedModel;
+  const setSelectedModel = useCallback(
+    (
+      v:
+        | ModelSelection
+        | undefined
+        | ((prev: ModelSelection | undefined) => ModelSelection | undefined),
+    ) => {
+      setGitState((prev) => ({
+        selectedModel: typeof v === "function" ? v(prev.selectedModel) : v,
+      }));
+    },
+    [setGitState],
+  );
 
   const api = readNativeApi();
   const queryClient = useQueryClient();

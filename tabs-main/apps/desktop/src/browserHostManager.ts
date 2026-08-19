@@ -378,7 +378,12 @@ export class BrowserHostManager {
     session.lastError = null;
     session.transientError = null;
     this.emitState(session);
-    await session.view.webContents.loadURL(url);
+    try {
+      await session.view.webContents.loadURL(url);
+    } catch {
+      // Electron's loadURL rejects when navigation fails (e.g. ERR_CONNECTION_REFUSED, ERR_ABORTED).
+      // The did-fail-load event listener captures the error and updates session state cleanly.
+    }
   }
 
   private snapshotSession(session: BrowserSession): DesktopBrowserSessionState {

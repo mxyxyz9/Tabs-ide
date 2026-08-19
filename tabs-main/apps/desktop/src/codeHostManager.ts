@@ -2580,6 +2580,12 @@ export class CodeHostManager {
     return fullPath;
   }
 
+  public focusSession(projectId: string): void {
+    const session = this.sessions.get(projectId);
+    if (!session || !session.view) return;
+    session.view.webContents.focus?.();
+  }
+
   private attachSession(session: CodeSession): void {
     const window = this.getWindow();
     if (!window || !session.view) return;

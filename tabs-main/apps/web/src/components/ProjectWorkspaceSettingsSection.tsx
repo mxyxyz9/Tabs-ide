@@ -68,6 +68,7 @@ import {
   useWorkspaceActiveProjectId,
   workspaceShellActions,
 } from "../state/workspaceShell";
+import { useGlobalSettingsViewState } from "~/state/scopedStateStore";
 import { SettingsHeaderPortal } from "../routes/_chat.settings";
 
 function createCustomEmbedId() {
@@ -396,9 +397,65 @@ export function ProjectWorkspaceSettingsSection() {
   ]);
 
   const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
-  const [activeCustomEmbedId, setActiveCustomEmbedId] = useState<string | null>(null);
-  const [activeServerProcessId, setActiveServerProcessId] = useState<string | null>(null);
-  const [activeServerPresetId, setActiveServerPresetId] = useState<string | null>(null);
+  const [settingsViewState, updateSettingsViewState] = useGlobalSettingsViewState();
+  const projectIdKey = activeProjectId ?? "default";
+  const projectMasterDetail = settingsViewState.projectWorkspaceMasterDetail[projectIdKey] ?? {
+    activeSection: "tools",
+    activeCustomEmbedId: null,
+    activeServerProcessId: null,
+    activeServerPresetId: null,
+  };
+  const activeCustomEmbedId = projectMasterDetail.activeCustomEmbedId;
+  const setActiveCustomEmbedId = (id: string | null) => {
+    updateSettingsViewState((prev) => ({
+      projectWorkspaceMasterDetail: {
+        ...prev.projectWorkspaceMasterDetail,
+        [projectIdKey]: {
+          ...(prev.projectWorkspaceMasterDetail[projectIdKey] ?? {
+            activeSection: "tools",
+            activeCustomEmbedId: null,
+            activeServerProcessId: null,
+            activeServerPresetId: null,
+          }),
+          activeCustomEmbedId: id,
+        },
+      },
+    }));
+  };
+  const activeServerProcessId = projectMasterDetail.activeServerProcessId;
+  const setActiveServerProcessId = (id: string | null) => {
+    updateSettingsViewState((prev) => ({
+      projectWorkspaceMasterDetail: {
+        ...prev.projectWorkspaceMasterDetail,
+        [projectIdKey]: {
+          ...(prev.projectWorkspaceMasterDetail[projectIdKey] ?? {
+            activeSection: "tools",
+            activeCustomEmbedId: null,
+            activeServerProcessId: null,
+            activeServerPresetId: null,
+          }),
+          activeServerProcessId: id,
+        },
+      },
+    }));
+  };
+  const activeServerPresetId = projectMasterDetail.activeServerPresetId;
+  const setActiveServerPresetId = (id: string | null) => {
+    updateSettingsViewState((prev) => ({
+      projectWorkspaceMasterDetail: {
+        ...prev.projectWorkspaceMasterDetail,
+        [projectIdKey]: {
+          ...(prev.projectWorkspaceMasterDetail[projectIdKey] ?? {
+            activeSection: "tools",
+            activeCustomEmbedId: null,
+            activeServerProcessId: null,
+            activeServerPresetId: null,
+          }),
+          activeServerPresetId: id,
+        },
+      },
+    }));
+  };
 
   const hasInternalBrowserOverride = serverPresetDrafts.some(
     (preset) =>

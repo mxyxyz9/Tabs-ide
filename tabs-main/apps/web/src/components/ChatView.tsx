@@ -38,6 +38,7 @@ import {
   type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useProjectAgentsState } from "~/state/scopedStateStore";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { gitBranchesQueryOptions, gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
@@ -417,13 +418,65 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const [respondingUserInputRequestIds, setRespondingUserInputRequestIds] = useState<
     ApprovalRequestId[]
   >([]);
-  const [pendingUserInputAnswersByRequestId, setPendingUserInputAnswersByRequestId] = useState<
-    Record<string, Record<string, PendingUserInputDraftAnswer>>
-  >({});
+  const activeProjectId =
+    threads.find((t) => t.id === threadId)?.projectId ??
+    draftThread?.projectId ??
+    projects[0]?.id ??
+    "";
+  const [agentsState, setAgentsState] = useProjectAgentsState(activeProjectId);
+  const pendingUserInputAnswersByRequestId =
+    (agentsState.pendingUserInputAnswersByRequestId as Record<
+      string,
+      Record<string, PendingUserInputDraftAnswer>
+    >) ?? {};
+  const setPendingUserInputAnswersByRequestId = useCallback(
+    (
+      updater:
+        | Record<string, Record<string, PendingUserInputDraftAnswer>>
+        | ((
+            prev: Record<string, Record<string, PendingUserInputDraftAnswer>>,
+          ) => Record<string, Record<string, PendingUserInputDraftAnswer>>),
+    ) => {
+      setAgentsState((prev) => ({
+        pendingUserInputAnswersByRequestId:
+          typeof updater === "function"
+            ? updater(
+                (prev.pendingUserInputAnswersByRequestId as Record<
+                  string,
+                  Record<string, PendingUserInputDraftAnswer>
+                >) ?? {},
+              )
+            : updater,
+      }));
+    },
+    [setAgentsState],
+  );
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
-  const [expandedWorkGroups, setExpandedWorkGroups] = useState<Record<string, boolean>>({});
-  const [planSidebarOpen, setPlanSidebarOpen] = useState(false);
+  const expandedWorkGroups = agentsState.expandedWorkGroups;
+  const setExpandedWorkGroups = useCallback(
+    (
+      updater:
+        | Record<string, boolean>
+        | ((prev: Record<string, boolean>) => Record<string, boolean>),
+    ) => {
+      setAgentsState((prev) => ({
+        expandedWorkGroups:
+          typeof updater === "function" ? updater(prev.expandedWorkGroups) : updater,
+      }));
+    },
+    [setAgentsState],
+  );
+  const planSidebarOpen = agentsState.planSidebarOpen;
+  const setPlanSidebarOpen = useCallback(
+    (updater: boolean | ((prev: boolean) => boolean)) => {
+      setAgentsState((prev) => ({
+        planSidebarOpen:
+          typeof updater === "function" ? updater(prev.planSidebarOpen) : updater,
+      }));
+    },
+    [setAgentsState],
+  );
   const [isComposerFooterCompact, setIsComposerFooterCompact] = useState(false);
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   const planSidebarDismissedForTurnRef = useRef<string | null>(null);

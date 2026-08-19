@@ -51,13 +51,14 @@ export const Route = createRootRouteWithContext<{
 function RootRouteView() {
   const isNativeApiReady = !!readNativeApi();
   const threadsHydrated = useAtomValue(threadsHydratedAtom);
-  const ready = isNativeApiReady && threadsHydrated;
+  const ready = useMinimumDuration(isNativeApiReady && threadsHydrated, 4000);
   const [mounted, setMounted] = useState(true);
   const settings = useSettings();
 
   useEffect(() => {
     if (ready) {
-      setMounted(false);
+      const timer = setTimeout(() => setMounted(false), 1200);
+      return () => clearTimeout(timer);
     } else {
       setMounted(true);
     }

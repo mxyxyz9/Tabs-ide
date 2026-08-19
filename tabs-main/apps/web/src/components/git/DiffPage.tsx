@@ -3,7 +3,7 @@ import type {
   GitStatusFile,
   GitStatusResult,
 } from "@tabs/contracts";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { readNativeApi } from "../../nativeApi";
 import {
@@ -174,6 +174,8 @@ export function DiffCard({ path, ins, del, lines }: { path: string; ins: number;
   );
 }
 
+import { useProjectGitState } from "../../state/scopedStateStore";
+
 export function DiffPage({
   cwd,
   statusData,
@@ -183,14 +185,44 @@ export function DiffPage({
   statusData: GitStatusResult | null;
   commits: ReadonlyArray<GitHistoryCommit>;
 }) {
-  const [diffMode, setDiffMode] = useState<"working" | "history">("working");
-  const [selectedFile, setSelectedFile] = useState<GitStatusFile | null>(null);
-  const [selectedCommit, setSelectedCommit] = useState<GitHistoryCommit | null>(null);
+  const [gitState, setGitState] = useProjectGitState(cwd);
+  const diffMode = gitState.diffMode;
+  const setDiffMode = useCallback(
+    (mode: "working" | "history") => {
+      setGitState({ diffMode: mode });
+    },
+    [setGitState],
+  );
 
   const api = readNativeApi();
   const stagedFiles = statusData?.staged?.files ?? [];
   const unstagedFiles = statusData?.unstaged?.files ?? [];
   const workingFiles = useMemo(() => [...stagedFiles, ...unstagedFiles], [stagedFiles, unstagedFiles]);
+
+  const selectedPath = gitState.selectedPath;
+  const selectedCommitSha = gitState.selectedCommit;
+
+  const selectedFile = useMemo(
+    () => (selectedPath ? (workingFiles.find((f) => f.path === selectedPath) ?? null) : null),
+    [workingFiles, selectedPath],
+  );
+  const setSelectedFile = useCallback(
+    (f: GitStatusFile | null) => {
+      setGitState({ selectedPath: f?.path ?? null });
+    },
+    [setGitState],
+  );
+
+  const selectedCommit = useMemo(
+    () => (selectedCommitSha ? (commits.find((c) => c.sha === selectedCommitSha) ?? null) : null),
+    [commits, selectedCommitSha],
+  );
+  const setSelectedCommit = useCallback(
+    (c: GitHistoryCommit | null) => {
+      setGitState({ selectedCommit: c?.sha ?? null });
+    },
+    [setGitState],
+  );
 
   const [diffContent, setDiffContent] = useState<Array<{ type: string; text: string }>>([]);
   const [commitStats, setCommitStats] = useState<{ ins: number; del: number }>({ ins: 0, del: 0 });
@@ -297,10 +329,10 @@ export function DiffPage({
                     type="button"
                     onClick={() => setSelectedFile(f)}
                     className={`relative w-full text-left px-2.5 py-2 rounded-lg mb-0.5 transition-colors cursor-pointer ${
-                      selectedFile === f ? "bg-muted" : "hover:bg-muted/50"
+                      selectedPath === f.path ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                   >
-                    {selectedFile === f && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
+                    {selectedPath === f.path && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -316,10 +348,10 @@ export function DiffPage({
                     type="button"
                     onClick={() => setSelectedCommit(c)}
                     className={`relative w-full text-left px-2.5 py-2 rounded-lg mb-0.5 transition-colors cursor-pointer ${
-                      selectedCommit === c ? "bg-muted" : "hover:bg-muted/50"
+                      selectedCommitSha === c.sha ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                   >
-                    {selectedCommit === c && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
+                    {selectedCommitSha === c.sha && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
                     <div className="text-xs text-foreground/90 truncate leading-snug">{c.subject}</div>
                     <div className="text-[10px] font-mono text-muted-foreground/70 mt-0.5">{c.shortSha}</div>
                   </button>
