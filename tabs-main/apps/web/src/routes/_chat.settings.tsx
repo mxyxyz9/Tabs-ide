@@ -4371,6 +4371,34 @@ function SettingsRouteView() {
                         />
 
                         <SettingsRow
+                          title="Nyan Cat slider"
+                          description="Always use the Nyan Cat animated rainbow slider across all models."
+                          resetAction={
+                            settings.nyanCatSliderMode !==
+                            DEFAULT_UNIFIED_SETTINGS.nyanCatSliderMode ? (
+                              <SettingResetButton
+                                label="Nyan Cat slider"
+                                onClick={() =>
+                                  updateSettings({
+                                    nyanCatSliderMode:
+                                      DEFAULT_UNIFIED_SETTINGS.nyanCatSliderMode,
+                                  })
+                                }
+                              />
+                            ) : null
+                          }
+                          control={
+                            <Switch
+                              checked={settings.nyanCatSliderMode}
+                              onCheckedChange={(checked) =>
+                                updateSettings({ nyanCatSliderMode: Boolean(checked) })
+                              }
+                              aria-label="Nyan Cat slider"
+                            />
+                          }
+                        />
+
+                        <SettingsRow
                           title="Always show Git loading animation"
                           description="Play Mercury Chrome loading animation every time Git tab is selected. When disabled, animation plays once on initial load and subsequent tab switches load instantly."
                           control={

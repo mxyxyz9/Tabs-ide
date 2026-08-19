@@ -144,6 +144,7 @@ export const ClientSettingsSchema = Schema.Struct({
   wordWrap: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sliderAnimationsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   animatedTrackFillEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  nyanCatSliderMode: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   colorizePermissions: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   splashLoaderStyle: SplashLoaderStyle.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_LOADER_STYLE)),
@@ -921,6 +922,10 @@ export const ClientSettingsPatch = Schema.Struct({
   sidebarThreadPreviewCount: Schema.optionalKey(SidebarThreadPreviewCount),
   timestampFormat: Schema.optionalKey(TimestampFormat),
   wordWrap: Schema.optionalKey(Schema.Boolean),
+  sliderAnimationsEnabled: Schema.optionalKey(Schema.Boolean),
+  animatedTrackFillEnabled: Schema.optionalKey(Schema.Boolean),
+  nyanCatSliderMode: Schema.optionalKey(Schema.Boolean),
+  colorizePermissions: Schema.optionalKey(Schema.Boolean),
   splashLoaderStyle: Schema.optionalKey(SplashLoaderStyle),
   splashLoaderPalette: Schema.optionalKey(SplashLoaderPalette),
   splashLoaderTheme: Schema.optionalKey(SplashLoaderTheme),

@@ -45,6 +45,41 @@ function MenuPopup({
     typeof className === "string" &&
     (className.includes("bg-transparent") || className.includes("p-0"));
 
+  if (isUnstyled) {
+    return (
+      <MenuPrimitive.Portal>
+        <MenuPrimitive.Positioner
+          align={align}
+          alignOffset={alignOffset}
+          anchor={anchor}
+          className="z-50"
+          collisionPadding={collisionPadding}
+          collisionBoundary={collisionBoundary}
+          data-slot="menu-positioner"
+          side={side}
+          sideOffset={sideOffset}
+        >
+          <MenuPrimitive.Popup
+            className={cn("outline-none", className)}
+            style={{
+              backgroundColor: "transparent",
+              background: "transparent",
+              border: "none",
+              boxShadow: "none",
+              backdropFilter: "none",
+              WebkitBackdropFilter: "none",
+              ...style,
+            }}
+            data-slot="menu-popup"
+            {...props}
+          >
+            {children}
+          </MenuPrimitive.Popup>
+        </MenuPrimitive.Positioner>
+      </MenuPrimitive.Portal>
+    );
+  }
+
   return (
     <MenuPrimitive.Portal>
       <MenuPrimitive.Positioner
@@ -61,34 +96,13 @@ function MenuPopup({
         <MenuPrimitive.Popup
           className={cn(
             "relative flex not-[class*='w-']:min-w-32 origin-(--transform-origin) rounded-lg border bg-popover not-dark:bg-clip-padding shadow-lg/5 outline-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] focus:outline-none dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
-            isUnstyled && "!bg-transparent !border-0 !shadow-none !rounded-none before:!hidden",
             className,
           )}
-          style={
-            isUnstyled
-              ? {
-                  backgroundColor: "transparent",
-                  background: "transparent",
-                  border: "none",
-                  boxShadow: "none",
-                  backdropFilter: "none",
-                  WebkitBackdropFilter: "none",
-                  ...style,
-                }
-              : style
-          }
+          style={style}
           data-slot="menu-popup"
           {...props}
         >
-          <div
-            className={cn(
-              "max-h-(--available-height) w-full overflow-y-auto p-1",
-              isUnstyled && "p-0 !bg-transparent",
-            )}
-            style={
-              isUnstyled ? { backgroundColor: "transparent", background: "transparent" } : undefined
-            }
-          >
+          <div className="max-h-(--available-height) w-full overflow-y-auto p-1">
             {children}
           </div>
         </MenuPrimitive.Popup>

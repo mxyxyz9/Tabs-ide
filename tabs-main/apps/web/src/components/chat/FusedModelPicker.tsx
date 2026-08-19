@@ -15,7 +15,8 @@ import {
   isClaudeUltrathinkPrompt,
 } from "@tabs/shared/model";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDownIcon, LayersIcon, PinIcon, SearchIcon, XIcon } from "lucide-react";
+import gsap from "gsap";
+import { ChevronDownIcon, LayersIcon, PinIcon, SearchIcon, XIcon, ZapIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -29,6 +30,7 @@ import {
   OpenAI,
   OpenCodeIcon,
 } from "../Icons";
+import nyanCatSliderWideGif from "~/assets/nyan-cat-slider-wide.gif";
 import { cn } from "~/lib/utils";
 import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
@@ -86,11 +88,6 @@ const EMPTY_CAPABILITIES = {
 
 const MODEL_COLUMN_WIDTH_PX = 180;
 const TRACK_PADDING_PX = 20;
-
-const TRACK_PX = 128; // h-32
-const THUMB_PX = 32; // size-8
-const PAD_PX = 4;
-const RANGE_PX = TRACK_PX - THUMB_PX - PAD_PX * 2;
 
 interface FusedModelPickerProps {
   provider: ProviderPickerKind;
@@ -283,7 +280,57 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
       } else if (isClaudeUltrathinkPrompt(props.prompt)) {
         props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, null));
       }
-      props.onProviderModelChange(provider, slug, nextOptions);
+      // Detect if fast mode is currently active from the current model options
+      const currentFastActive = props.modelOptions?.some(
+        (o) =>
+          (o.id === "fastMode" || o.id === "fast") && o.value === true ||
+          (o.id === "serviceTier" || o.id === "service_tier" || o.id === "tier") && o.value === "fast",
+      ) ?? false;
+      // Forward the current fast-mode state to the new model, so switching
+      // models doesn't silently reset Fast Mode to off.
+      let finalOptions = nextOptions;
+      if (currentFastActive && nextOptions !== undefined) {
+        const hasFastOption = nextOptions.some(
+          (o) =>
+            o.id === "fastMode" ||
+            o.id === "fast" ||
+            o.id === "serviceTier" ||
+            o.id === "service_tier" ||
+            o.id === "tier",
+        );
+        if (!hasFastOption) {
+          const targetModel = getProviderModels(props.providers, provider).find(
+            (m) => m.slug === slug,
+          );
+          if (targetModel) {
+            const targetDescs = getProviderOptionDescriptors({
+              caps: targetModel.capabilities ?? EMPTY_CAPABILITIES,
+              selections: nextOptions,
+            });
+            const targetFastBoolean = targetDescs.find(
+              (d) => d.type === "boolean" && (d.id === "fastMode" || d.id === "fast"),
+            );
+            const targetFastSelect = targetDescs.find(
+              (d) =>
+                d.type === "select" &&
+                (d.id === "serviceTier" || d.id === "service_tier" || d.id === "tier") &&
+                (d as any).options?.some((o: any) => (o.id ?? o.value) === "fast"),
+            );
+            if (targetFastBoolean) {
+              finalOptions = [
+                ...nextOptions.filter((o) => o.id !== targetFastBoolean.id),
+                { id: targetFastBoolean.id, value: true },
+              ];
+            } else if (targetFastSelect) {
+              finalOptions = [
+                ...nextOptions.filter((o) => o.id !== targetFastSelect.id),
+                { id: targetFastSelect.id, value: "fast" },
+              ];
+            }
+          }
+        }
+      }
+      props.onProviderModelChange(provider, slug, finalOptions);
     },
     [props],
   );
@@ -529,8 +576,6 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     ? ({
         "--dynamic-ultra-hex": activeColor.hex,
         "--dynamic-ultra-rgb": activeColor.rgb,
-        borderColor: `rgba(${activeColor.rgb}, 0.35)`,
-        boxShadow: `0 10px 40px rgba(0,0,0,0.5), 0 0 30px rgba(${activeColor.rgb}, 0.15), inset 0 0 20px rgba(${activeColor.rgb}, 0.08)`,
       } as React.CSSProperties)
     : undefined;
 
@@ -574,11 +619,11 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         alignOffset={props.alignOffset ?? 0}
         anchor={props.popupAnchorRef}
         collisionPadding={collisionPadding}
-        className="w-auto max-w-[calc(100vw-32px)] p-0 border-0 bg-transparent shadow-none before:hidden before:shadow-none dark:before:hidden [&>div]:p-0"
+        className="w-auto max-w-[calc(100vw-32px)] p-0 bg-transparent"
       >
         <style>{COSMIC_KEYFRAMES}</style>
         <div
-          className="relative flex max-w-[calc(100vw-32px)] gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-2xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150"
+          className="relative flex max-w-[calc(100vw-32px)] gap-6 rounded-[24px] overflow-hidden isolate border border-border bg-popover text-popover-foreground p-6 shadow-xl transition-all duration-300 select-none animate-in fade-in zoom-in-95 duration-150"
           style={panelStyle}
         >
           {/* Provider Sidebar navigation on Left */}
@@ -905,9 +950,9 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
             </div>
           </div>
 
-          {/* Ultra lever module on the Right */}
+          {/* Interactive GSAP Pull-Cord Lamp Toggle on the Right */}
           {leverDescriptor && (
-            <Lever
+            <PullCordToggle
               label={
                 leverDescriptor.id === "serviceTier" ||
                 leverDescriptor.id === "service_tier" ||
@@ -962,7 +1007,8 @@ const ModelRow = memo(function ModelRow(props: {
     value: boolean,
   ) => void;
 }) {
-  const { sliderAnimationsEnabled, animatedTrackFillEnabled } = useSettings();
+  const { sliderAnimationsEnabled, animatedTrackFillEnabled, nyanCatSliderMode } = useSettings();
+  const isNyanActive = Boolean(props.ultra || nyanCatSliderMode);
   const providerId = (props.model as { providerId?: string }).providerId;
   const isGrok = providerId === "grok" || props.model.slug.toLowerCase().startsWith("grok");
   const caps = isGrok ? EMPTY_CAPABILITIES : (props.model.capabilities ?? EMPTY_CAPABILITIES);
@@ -1325,32 +1371,59 @@ const ModelRow = memo(function ModelRow(props: {
           className="flex-1 relative h-full flex items-center px-5 cursor-grab active:cursor-grabbing"
         >
           {props.isActive && (
-            <div className="absolute top-1/2 -translate-y-1/2 h-5 left-2.5 right-2.5 bg-foreground/5 dark:bg-white/5 rounded-full overflow-hidden pointer-events-none">
-              <div
-                className={cn(
-                  "absolute inset-y-0 left-0 rounded-full overflow-hidden",
-                  !props.ultra &&
+            <>
+              {isNyanActive ? (
+                /* Nyan Cat Unified Animated Rainbow + Running Cat Sprite */
+                <div
+                  className={cn(
+                    "absolute top-1/2 -translate-y-1/2 left-1.5 h-[34px] pointer-events-none overflow-hidden z-20 select-none rounded-l-full",
                     sliderAnimationsEnabled &&
-                    localStopIndex === null &&
-                    "transition-all duration-200",
-                )}
-                style={fillStyle}
-              >
-                {!props.ultra && animatedTrackFillEnabled && (
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
-                    style={{
-                      backgroundImage:
-                        "radial-gradient(circle at center, #fff 1px, transparent 1.5px), radial-gradient(circle at center, rgba(255,255,255,0.8) 1.5px, transparent 2px)",
-                      backgroundSize: "40px 40px, 30px 30px",
-                      backgroundPosition: "0 0, 15px 15px",
-                      animation: "fmp-cosmic-flow 15s linear infinite",
-                    }}
+                      localStopIndex === null &&
+                      "transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+                  )}
+                  style={{
+                    width: `calc(44px + (100% - 40px) * ${percentage / 100})`,
+                    maskImage:
+                      "linear-gradient(to right, transparent 0px, black 12px, black 100%)",
+                    WebkitMaskImage:
+                      "linear-gradient(to right, transparent 0px, black 12px, black 100%)",
+                  }}
+                >
+                  <img
+                    src={nyanCatSliderWideGif}
+                    alt="Nyan Cat"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 h-[34px] max-w-none pointer-events-none select-none drop-shadow-[0_0_8px_rgba(255,105,180,0.5)]"
                   />
-                )}
-              </div>
-            </div>
+                </div>
+              ) : (
+                /* Standard Track Fill */
+                <div className="absolute top-1/2 -translate-y-1/2 h-5 left-2.5 right-2.5 bg-foreground/5 dark:bg-white/5 rounded-full overflow-hidden pointer-events-none">
+                  <div
+                    className={cn(
+                      "absolute inset-y-0 left-0 rounded-full overflow-hidden",
+                      sliderAnimationsEnabled &&
+                        localStopIndex === null &&
+                        "transition-all duration-200",
+                    )}
+                    style={fillStyle}
+                  >
+                    {animatedTrackFillEnabled && (
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 opacity-40 mix-blend-overlay"
+                        style={{
+                          backgroundImage:
+                            "radial-gradient(circle at center, #fff 1px, transparent 1.5px), radial-gradient(circle at center, rgba(255,255,255,0.8) 1.5px, transparent 2px)",
+                          backgroundSize: "40px 40px, 30px 30px",
+                          backgroundPosition: "0 0, 15px 15px",
+                          animation: "fmp-cosmic-flow 15s linear infinite",
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Aligned stops: solid dots if supported, invisible if not (preserves layout) */}
@@ -1360,21 +1433,27 @@ const ModelRow = memo(function ModelRow(props: {
                 allowedOptionIds.includes(stop.id) ||
                 allowedOptionIds.includes((stop as any).value);
               const isDotActive = props.isActive && oIdx <= resolvedIndex;
+              const isUnderRainbow = isNyanActive && props.isActive && oIdx <= resolvedIndex;
               return (
                 <div
                   key={stop.id}
                   className={cn(
                     "size-1.5 rounded-full transition-colors",
                     isSupported ? "bg-foreground/30 dark:bg-zinc-600" : "opacity-0",
-                    isDotActive && isSupported && "bg-foreground/60 dark:bg-white/30",
+                    isDotActive &&
+                      isSupported &&
+                      (props.ultra
+                        ? "bg-white/70 shadow-[0_0_6px_#fff]"
+                        : "bg-foreground/60 dark:bg-white/30"),
+                    isUnderRainbow && "opacity-0",
                   )}
                 />
               );
             })}
           </div>
 
-          {/* Draggable thumb */}
-          {props.isActive && (
+          {/* Draggable thumb (only in standard mode, since Nyan Cat is built into the unified sprite) */}
+          {props.isActive && !isNyanActive && (
             <div
               className={cn(
                 "absolute top-1/2 -translate-y-1/2 size-7 bg-popover text-popover-foreground border border-border/60 rounded-full shadow-md z-20 pointer-events-none dark:bg-white dark:border-0 dark:shadow-lg",
@@ -1398,58 +1477,107 @@ const ModelRow = memo(function ModelRow(props: {
   );
 });
 
-// ── Lever Component: Vertical switch that behaves exactly like the Ultra lever in the Cockpit design
-const Lever = memo(function Lever(props: {
+// ── PullCordToggle Component: Interactive GSAP Pull-Cord Lamp Toggle for Fast Mode
+const PullCordToggle = memo(function PullCordToggle(props: {
   label: string;
   engaged: boolean;
   themeColor: (typeof THEME_COLORS)[number];
   onChange: (value: boolean) => void;
 }) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [dragProgress, setDragProgress] = useState<number | null>(null);
-  const lastEngaged = useRef(props.engaged);
-  const [localEngaged, setLocalEngaged] = useState<boolean | null>(null);
-  const dragDistanceRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const bulbRef = useRef<HTMLDivElement>(null);
+  const cordRef = useRef<HTMLDivElement>(null);
+  const knobRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const currentPullYRef = useRef(0);
 
-  const calculatePct = useCallback((clientY: number) => {
-    const el = trackRef.current;
-    if (el == null) return 0;
-    const rect = el.getBoundingClientRect();
-    const padding = PAD_PX;
-    const range = rect.height - THUMB_PX - padding * 2;
-    const y = Math.max(0, Math.min(clientY - rect.top - THUMB_PX / 2, range));
-    return range > 0 ? y / range : 0;
-  }, []);
+  // Elastic pull animation on trigger
+  const triggerSnap = useCallback(
+    (nextState: boolean) => {
+      props.onChange(nextState);
+
+      // Squeeze and pop on the bulb
+      if (bulbRef.current) {
+        gsap.killTweensOf(bulbRef.current);
+        gsap
+          .timeline()
+          .to(bulbRef.current, { scale: 0.93, duration: 0.08, ease: "power1.in" })
+          .to(bulbRef.current, { scale: 1.08, duration: 0.18, ease: "power2.out" })
+          .to(bulbRef.current, { scale: 1, duration: 0.4, ease: "elastic.out(1.5, 0.4)" });
+      }
+
+      // Snap the cord and knob back with elastic spring
+      if (cordRef.current && knobRef.current) {
+        gsap.killTweensOf([cordRef.current, knobRef.current]);
+        gsap.to(cordRef.current, {
+          scaleY: 1,
+          duration: 0.8,
+          ease: "elastic.out(1.3, 0.3)",
+        });
+        gsap.to(knobRef.current, {
+          y: 0,
+          duration: 0.8,
+          ease: "elastic.out(1.3, 0.3)",
+        });
+      }
+    },
+    [props],
+  );
 
   const onMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
-    dragDistanceRef.current = 0;
-    const startY = e.clientY;
-    const startPct = calculatePct(e.clientY);
-    setDragProgress(startPct);
-    setLocalEngaged(startPct > 0.5);
+    isDraggingRef.current = true;
+    startYRef.current = e.clientY;
+    currentPullYRef.current = 0;
+
+    if (cordRef.current && knobRef.current) {
+      gsap.killTweensOf([cordRef.current, knobRef.current]);
+    }
 
     const onMouseMove = (moveEvent: MouseEvent) => {
-      dragDistanceRef.current += Math.abs(moveEvent.clientY - startY);
-      const pct = calculatePct(moveEvent.clientY);
-      setDragProgress(pct);
-      const nextEngaged = pct > 0.5;
-      setLocalEngaged(nextEngaged);
-      lastEngaged.current = nextEngaged;
+      if (!isDraggingRef.current) return;
+      const deltaY = Math.max(0, Math.min(36, moveEvent.clientY - startYRef.current));
+      currentPullYRef.current = deltaY;
+
+      if (cordRef.current && knobRef.current) {
+        const scaleFactor = 1 + deltaY / 48;
+        gsap.to(cordRef.current, { scaleY: scaleFactor, duration: 0.05, overwrite: "auto" });
+        gsap.to(knobRef.current, { y: deltaY, duration: 0.05, overwrite: "auto" });
+      }
     };
 
     const onMouseUp = (upEvent: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
-      setDragProgress(null);
-      setLocalEngaged(null);
 
-      if (dragDistanceRef.current < 4) {
-        const clickPct = calculatePct(upEvent.clientY);
-        const next = clickPct > 0.5 ? true : !props.engaged;
-        props.onChange(next);
+      const deltaY = Math.max(0, upEvent.clientY - startYRef.current);
+      const isClick = Math.abs(upEvent.clientY - startYRef.current) < 4;
+
+      if (isClick) {
+        // Quick click: quick pull down then elastic rebound
+        if (cordRef.current && knobRef.current) {
+          gsap
+            .timeline()
+            .to(cordRef.current, { scaleY: 1.45, duration: 0.1, ease: "power2.out" })
+            .to(cordRef.current, { scaleY: 1, duration: 0.75, ease: "elastic.out(1.3, 0.3)" }, 0.1);
+          gsap
+            .timeline()
+            .to(knobRef.current, { y: 22, duration: 0.1, ease: "power2.out" })
+            .to(knobRef.current, { y: 0, duration: 0.75, ease: "elastic.out(1.3, 0.3)" }, 0.1);
+        }
+        triggerSnap(!props.engaged);
+      } else if (deltaY > 10) {
+        // Dragged past threshold: toggle state
+        triggerSnap(!props.engaged);
       } else {
-        props.onChange(lastEngaged.current);
+        // Cancel drag without toggling
+        if (cordRef.current && knobRef.current) {
+          gsap.to(cordRef.current, { scaleY: 1, duration: 0.5, ease: "elastic.out(1.2, 0.3)" });
+          gsap.to(knobRef.current, { y: 0, duration: 0.5, ease: "elastic.out(1.2, 0.3)" });
+        }
       }
     };
 
@@ -1457,80 +1585,104 @@ const Lever = memo(function Lever(props: {
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const isDragging = dragProgress !== null;
-  const progress = dragProgress ?? (props.engaged ? 1 : 0);
-  const thumbTopPx = PAD_PX + progress * RANGE_PX;
-  const isEngaged = localEngaged !== null ? localEngaged : props.engaged;
+  const isLightOn = props.engaged;
 
   return (
-    <div className="flex w-24 flex-col items-center border-l border-border/60 pl-6 dark:border-white/8 select-none shrink-0">
-      <div
-        className="mb-3.5 text-center text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 transition-colors leading-tight dark:text-zinc-400"
-        style={{
-          color: isEngaged ? props.themeColor.hex : undefined,
-          textShadow: isEngaged ? `0 0 10px ${props.themeColor.hex}aa` : undefined,
-        }}
-        dangerouslySetInnerHTML={{ __html: props.label }}
-      />
-      <div
-        ref={trackRef}
-        onMouseDown={onMouseDown}
-        className={cn(
-          "relative h-32 w-10 cursor-pointer overflow-hidden rounded-full bg-muted/40 border border-border/70 shadow-inner transition-all duration-300 dark:bg-black/40 dark:border-white/10",
-          isEngaged && "shadow-[0_0_20px_-4px_var(--dynamic-ultra-hex)] border-primary/40",
-        )}
-      >
-        {isEngaged && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-40"
-            style={{
-              backgroundColor: props.themeColor.hex,
-              maskImage: "repeating-linear-gradient(180deg, transparent 0 6px, #000 6px 12px)",
-              WebkitMaskImage:
-                "repeating-linear-gradient(180deg, transparent 0 6px, #000 6px 12px)",
-              animation: "fmp-cosmic-flow 3s linear infinite",
-            }}
-          />
-        )}
-        {/* Chevron pulse indicators inside track */}
-        <div
-          className="absolute inset-0 flex flex-col justify-end pb-4 gap-3 items-center pointer-events-none opacity-40 dark:opacity-30"
-          style={{
-            animation: isEngaged ? "fmp-pulse-chevron 1.5s infinite" : undefined,
-          }}
-        >
-          {[0, 1].map((i) => (
-            <svg
-              key={i}
-              className="size-3 text-muted-foreground/60 dark:text-white"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              viewBox="0 0 24 24"
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          ))}
-        </div>
-
-        <div
+    <div className="flex w-[88px] flex-col items-center justify-center border-l border-border/50 pl-5 dark:border-white/8 select-none shrink-0">
+      {/* Top Header Badge */}
+      <div className="flex flex-col items-center gap-1 mb-2">
+        <span
           className={cn(
-            "absolute left-1/2 size-8 -translate-x-1/2 rounded-full shadow-md",
-            !isDragging && "transition-all duration-300 ease-out",
+            "text-[9.5px] font-mono font-bold tracking-widest uppercase transition-colors duration-300",
+            isLightOn
+              ? "text-amber-500 dark:text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]"
+              : "text-muted-foreground/50",
+          )}
+        >
+          {isLightOn ? "⚡ FAST" : "FAST MODE"}
+        </span>
+      </div>
+
+      {/* Pull-Cord Lamp Container */}
+      <div
+        ref={containerRef}
+        role="switch"
+        aria-checked={isLightOn}
+        aria-label="Fast mode pull cord toggle"
+        tabIndex={0}
+        onMouseDown={onMouseDown}
+        onKeyDown={(e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            if (cordRef.current && knobRef.current) {
+              gsap
+                .timeline()
+                .to(cordRef.current, { scaleY: 1.45, duration: 0.1, ease: "power2.out" })
+                .to(cordRef.current, { scaleY: 1, duration: 0.75, ease: "elastic.out(1.3, 0.3)" }, 0.1);
+              gsap
+                .timeline()
+                .to(knobRef.current, { y: 22, duration: 0.1, ease: "power2.out" })
+                .to(knobRef.current, { y: 0, duration: 0.75, ease: "elastic.out(1.3, 0.3)" }, 0.1);
+            }
+            triggerSnap(!props.engaged);
+          }
+        }}
+        className="relative flex flex-col items-center cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-xl p-2 select-none"
+      >
+        {/* Glowing Bulb without any top cap */}
+        <div
+          ref={bulbRef}
+          className={cn(
+            "relative size-12 rounded-full transition-all duration-500 ease-out border",
+            isLightOn
+              ? "border-amber-300/80 shadow-[0_0_35px_rgba(251,191,36,0.65),0_0_60px_rgba(245,158,11,0.35)]"
+              : "border-border/60 shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]",
           )}
           style={{
-            top: `${thumbTopPx}px`,
-            background: isEngaged
-              ? `radial-gradient(circle at 35% 35%, #ffffff, ${props.themeColor.hex})`
-              : "radial-gradient(circle at 35% 35%, #ff4b4b, #b30000)",
-            boxShadow: isEngaged
-              ? `0 0 16px ${props.themeColor.hex}`
-              : "0 2px 6px rgba(185, 0, 0, 0.45)",
+            background: isLightOn
+              ? "radial-gradient(circle at 35% 30%, #ffffff 0%, #fbbf24 55%, #d97706 100%)"
+              : "radial-gradient(circle at 35% 30%, #475569 0%, #1e293b 100%)",
           }}
+        >
+          {/* Bulb Filament / Reflection */}
+          <div
+            className={cn(
+              "absolute top-2.5 left-2.5 size-3 rounded-full transition-opacity duration-300 pointer-events-none",
+              isLightOn ? "bg-white/80 blur-[0.5px]" : "bg-white/15",
+            )}
+          />
+        </div>
+
+        {/* Hanging Pull Cord */}
+        <div
+          ref={cordRef}
+          className="w-0.5 h-12 bg-zinc-400 dark:bg-zinc-500 origin-top shadow-xs"
         />
+
+        {/* Pull Knob / Bead */}
+        <div
+          ref={knobRef}
+          className={cn(
+            "size-4.5 rounded-full border border-zinc-400 dark:border-zinc-500 shadow-md flex items-center justify-center -mt-0.5",
+            isLightOn
+              ? "bg-gradient-to-b from-amber-400 to-amber-600 border-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.6)]"
+              : "bg-gradient-to-b from-zinc-300 to-zinc-500 dark:from-zinc-600 dark:to-zinc-800",
+          )}
+        >
+          <div className="size-1.5 rounded-full bg-white/40 shadow-inner" />
+        </div>
+
+        {/* Bottom Status / Tag */}
+        <div
+          className={cn(
+            "mt-2.5 text-[8.5px] font-mono font-bold tracking-widest uppercase transition-all duration-300",
+            isLightOn
+              ? "text-amber-500 dark:text-amber-400 font-extrabold"
+              : "text-muted-foreground/60",
+          )}
+        >
+          {isLightOn ? "ON" : "PULL"}
+        </div>
       </div>
     </div>
   );
@@ -1545,8 +1697,16 @@ const COSMIC_KEYFRAMES = `
   0% { background-position: 0 0; }
   100% { background-position: 0 400px; }
 }
-@keyframes fmp-pulse-chevron {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; filter: drop-shadow(0 0 5px var(--dynamic-ultra-hex)); }
+@keyframes fmp-rainbow-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+@keyframes fmp-rainbow-glow {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 105, 180, 0.6)) drop-shadow(0 0 14px rgba(0, 220, 255, 0.4)); }
+  50% { filter: drop-shadow(0 0 14px rgba(255, 230, 0, 0.8)) drop-shadow(0 0 20px rgba(255, 105, 180, 0.6)); }
 }
 `;
+
+
+
+
