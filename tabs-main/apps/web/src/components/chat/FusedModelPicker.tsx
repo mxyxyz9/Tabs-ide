@@ -18,7 +18,17 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon, LayersIcon, PinIcon, SearchIcon, XIcon } from "lucide-react";
 import { Button } from "../ui/button";
 import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
-import { ClaudeAI, CursorIcon, GrokIcon, type Icon, KiloIcon, OpenAI, OpenCodeIcon } from "../Icons";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  ClaudeAI,
+  CopilotIcon,
+  CursorIcon,
+  GrokIcon,
+  type Icon,
+  KiloIcon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
@@ -49,6 +59,7 @@ const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
   claudeAgent: ClaudeAI,
   cursor: CursorIcon,
+  copilot: CopilotIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,
@@ -150,15 +161,46 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     });
   }, []);
 
-  const activeTab = selectedTab ?? props.lockedProvider ?? props.provider;
-  const activeProvider = props.lockedProvider ?? props.provider;
-  const providerOptions = props.lockedProvider
-    ? AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.lockedProvider)
-    : AVAILABLE_PROVIDER_OPTIONS;
-
   const settings = useSettings();
   const { updateSettings } = useUpdateSettings();
   const pinnedList = useMemo(() => getPinnedModels(settings), [settings]);
+
+  const isProviderEnabledInSettings = useCallback(
+    (provider: ProviderPickerKind) => {
+      const cfg = (settings.providers as any)?.[provider];
+      if (cfg && typeof cfg.enabled === "boolean") {
+        return cfg.enabled;
+      }
+      return true;
+    },
+    [settings.providers],
+  );
+
+  const providerOptions = useMemo(() => {
+    if (props.lockedProvider) {
+      return AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.lockedProvider);
+    }
+    const enabled = AVAILABLE_PROVIDER_OPTIONS.filter((o) =>
+      isProviderEnabledInSettings(o.value),
+    );
+    if (enabled.length === 0) {
+      return AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.provider);
+    }
+    return enabled;
+  }, [props.lockedProvider, props.provider, isProviderEnabledInSettings]);
+
+  const activeTab = useMemo(() => {
+    if (selectedTab === "pinned") return "pinned";
+    if (props.lockedProvider) return props.lockedProvider;
+    if (selectedTab && providerOptions.some((o) => o.value === selectedTab)) {
+      return selectedTab;
+    }
+    if (providerOptions.some((o) => o.value === props.provider)) {
+      return props.provider;
+    }
+    return providerOptions[0]?.value ?? props.provider;
+  }, [selectedTab, props.lockedProvider, props.provider, providerOptions]);
+  const activeProvider = props.lockedProvider ?? props.provider;
 
   const collisionPadding = useMemo(
     () => ({ top: 12, right: 16, bottom: 12, left: 16 }),
@@ -543,32 +585,38 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           {providerOptions.length > 1 && (
             <div className="flex flex-col gap-2.5 border-r border-border pr-6">
               {/* 📌 Pinned Models Tab */}
-              <button
-                key="pinned"
-                type="button"
-                title="Pinned"
-                onClick={() => {
-                  setSelectedTab("pinned");
-                  setSearchQuery("");
-                }}
-                className={cn(
-                  "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative",
-                  activeTab === "pinned" && "bg-accent border-border text-foreground shadow-xs",
-                )}
-              >
-                <PinIcon
-                  aria-hidden="true"
-                  className={cn(
-                    "size-5 transition-colors",
-                    activeTab === "pinned" ? "text-foreground" : "text-muted-foreground",
-                  )}
-                />
-                {pinnedModels.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground">
-                    {pinnedModels.length}
-                  </span>
-                )}
-              </button>
+              <Tooltip key="pinned">
+                <TooltipTrigger className="inline-flex">
+                  <button
+                    type="button"
+                    title="Pinned Models"
+                    onClick={() => {
+                      setSelectedTab("pinned");
+                      setSearchQuery("");
+                    }}
+                    className={cn(
+                      "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all relative",
+                      activeTab === "pinned" && "bg-accent border-border text-foreground shadow-xs",
+                    )}
+                  >
+                    <PinIcon
+                      aria-hidden="true"
+                      className={cn(
+                        "size-5 transition-colors",
+                        activeTab === "pinned" ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    />
+                    {pinnedModels.length > 0 && (
+                      <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-muted border border-border text-[9px] font-bold text-muted-foreground">
+                        {pinnedModels.length}
+                      </span>
+                    )}
+                  </button>
+                </TooltipTrigger>
+                <TooltipPopup side="right" className="text-xs">
+                  <span>Pinned Models</span>
+                </TooltipPopup>
+              </Tooltip>
 
               <div className="h-px w-full bg-border my-0.5" />
 
@@ -577,24 +625,63 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                 const snapshot = getProviderSnapshot(props.providers, option.value);
                 const disabled = snapshot ? snapshot.status !== "ready" : false;
                 const isActive = option.value === activeTab;
+
+                let disabledReason: string | null = null;
+                if (disabled) {
+                  if (snapshot) {
+                    if (!snapshot.installed) {
+                      disabledReason = snapshot.message ?? `${option.label} CLI not detected on PATH.`;
+                    } else if (snapshot.auth?.status === "authenticated_unentitled") {
+                      disabledReason =
+                        snapshot.message ?? "GitHub account connected, but no active Copilot seat was found.";
+                    } else if (snapshot.auth?.status === "unauthenticated") {
+                      disabledReason =
+                        snapshot.message ?? `${option.label} is not authenticated. Please log in in Settings → Providers.`;
+                    } else if (snapshot.message) {
+                      disabledReason = snapshot.message;
+                    } else {
+                      disabledReason = `${option.label} is currently unavailable (${snapshot.status}).`;
+                    }
+                  } else {
+                    disabledReason = `${option.label} is currently unavailable.`;
+                  }
+                }
+
                 return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    title={option.label}
-                    disabled={disabled}
-                    onClick={() => {
-                      setSelectedTab(option.value);
-                      setSearchQuery("");
-                    }}
-                    className={cn(
-                      "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all",
-                      isActive && "bg-accent border-border text-foreground shadow-xs",
-                      disabled && "cursor-not-allowed opacity-30",
-                    )}
-                  >
-                    <OptionIcon aria-hidden="true" className="size-5" />
-                  </button>
+                  <Tooltip key={option.value}>
+                    <TooltipTrigger className="inline-flex">
+                      <button
+                        type="button"
+                        title={
+                          disabled && disabledReason
+                            ? `${option.label}: ${disabledReason}`
+                            : option.label
+                        }
+                        disabled={disabled}
+                        onClick={() => {
+                          setSelectedTab(option.value);
+                          setSearchQuery("");
+                        }}
+                        className={cn(
+                          "flex size-11 items-center justify-center rounded-xl bg-muted/40 border border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all",
+                          isActive && "bg-accent border-border text-foreground shadow-xs",
+                          disabled && "cursor-not-allowed opacity-30",
+                        )}
+                      >
+                        <OptionIcon aria-hidden="true" className="size-5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipPopup side="right" className="max-w-xs text-xs">
+                      {disabled && disabledReason ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold text-foreground">{option.label}</span>
+                          <span className="text-muted-foreground">{disabledReason}</span>
+                        </div>
+                      ) : (
+                        <span>{option.label}</span>
+                      )}
+                    </TooltipPopup>
+                  </Tooltip>
                 );
               })}
             </div>
@@ -653,7 +740,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                   <div className="flex items-center gap-3">
                     <span
                       className={cn(
-                        "text-2xl sm:text-3xl font-normal lowercase tracking-tight text-foreground transition-all select-none",
+                        "text-2xl sm:text-3xl font-normal lowercase tracking-tight text-foreground transition-all select-none pl-1.5 overflow-visible",
                         fontCombo.serifClass || "font-serif italic",
                       )}
                       style={{

@@ -358,6 +358,74 @@ export const CursorSettings = makeProviderSettingsSchema(
 );
 export type CursorSettings = typeof CursorSettings.Type;
 
+export const CopilotSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+    binaryPath: makeBinaryPathSetting("copilot").pipe(
+      Schema.annotateKey({
+        title: "Binary path",
+        description: "Path to the GitHub Copilot CLI binary.",
+        providerSettingsForm: { placeholder: "copilot", clearWhenEmpty: "omit" },
+      }),
+    ),
+    gheHost: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "GitHub Enterprise host",
+        description: "Optional GitHub Enterprise hostname (e.g. https://example.ghe.com).",
+        providerSettingsForm: {
+          placeholder: "https://example.ghe.com",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    token: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "GitHub token",
+        description: "Optional personal access token (PAT v2 with Copilot Requests permission).",
+        providerSettingsForm: {
+          placeholder: "github_pat_...",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    byokProvider: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "BYOK provider",
+        description: "Optional BYOK provider name (e.g. anthropic, openai).",
+        providerSettingsForm: {
+          placeholder: "anthropic",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    byokApiKey: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "BYOK API key",
+        description: "Optional API key for the configured BYOK provider.",
+        providerSettingsForm: {
+          placeholder: "sk-...",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(
+      Schema.withDecodingDefault(Effect.succeed([])),
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
+  },
+  {
+    order: ["binaryPath", "gheHost", "token", "byokProvider", "byokApiKey"],
+  },
+);
+export type CopilotSettings = typeof CopilotSettings.Type;
+
 export const GrokSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
@@ -604,6 +672,7 @@ export const ServerSettings = Schema.Struct({
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     cursor: CursorSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     grok: GrokSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    copilot: CopilotSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     kilo: KiloSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     gemini: GeminiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
@@ -707,6 +776,16 @@ const GrokSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const CopilotSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  gheHost: Schema.optionalKey(TrimmedString),
+  token: Schema.optionalKey(TrimmedString),
+  byokProvider: Schema.optionalKey(TrimmedString),
+  byokApiKey: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const OpenCodeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
@@ -781,6 +860,7 @@ export const ServerSettingsPatch = Schema.Struct({
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
       cursor: Schema.optionalKey(CursorSettingsPatch),
       grok: Schema.optionalKey(GrokSettingsPatch),
+      copilot: Schema.optionalKey(CopilotSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       kilo: Schema.optionalKey(KiloSettingsPatch),
       gemini: Schema.optionalKey(GeminiSettingsPatch),

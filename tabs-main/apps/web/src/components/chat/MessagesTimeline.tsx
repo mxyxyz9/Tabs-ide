@@ -41,7 +41,7 @@ import {
   formatInlineTerminalContextLabel,
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
-import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, CursorIcon, type Icon } from "../Icons";
+import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, CursorIcon, CopilotIcon, type Icon } from "../Icons";
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
 
@@ -49,6 +49,7 @@ const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
 const TIMELINE_PROVIDER_ICON_MAP: Record<string, Icon> = {
   claudeAgent: ClaudeAI,
   codex: OpenAI,
+  copilot: CopilotIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   cursor: CursorIcon,

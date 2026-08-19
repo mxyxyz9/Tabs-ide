@@ -45,6 +45,7 @@ export type ServerProviderState = typeof ServerProviderState.Type;
 
 export const ServerProviderAuthStatus = Schema.Literals([
   "authenticated",
+  "authenticated_unentitled",
   "unauthenticated",
   "unknown",
 ]);

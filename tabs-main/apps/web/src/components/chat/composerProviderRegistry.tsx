@@ -55,10 +55,17 @@ export function getComposerProviderState(input: ComposerProviderStateInput): Com
   );
   const primaryValue = getProviderOptionCurrentValue(primarySelectDescriptor ?? null);
   const promptEffort = typeof primaryValue === "string" ? primaryValue : null;
+  const explicitEffort = modelOptions?.find(
+    (o) =>
+      o.id === "effort" ||
+      o.id === "reasoningEffort" ||
+      o.id === "reasoning" ||
+      (o as any).name === "effort",
+  )?.value;
+  const isPromptControlled = explicitEffort === undefined && isClaudeUltrathinkPrompt(prompt);
   const ultrathinkActive =
-    promptEffort === "ultrathink" &&
     (primarySelectDescriptor?.promptInjectedValues?.length ?? 0) > 0 &&
-    isClaudeUltrathinkPrompt(prompt);
+    (promptEffort === "ultrathink" || isPromptControlled);
 
   return {
     provider,

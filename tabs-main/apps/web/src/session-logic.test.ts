@@ -1142,6 +1142,7 @@ describe("PROVIDER_OPTIONS", () => {
       { value: "codex", label: "Codex", available: true },
       { value: "claudeAgent", label: "Claude", available: true },
       { value: "cursor", label: "Cursor", available: true },
+      { value: "copilot", label: "GitHub Copilot", available: true },
       { value: "grok", label: "Grok", available: true },
       { value: "opencode", label: "OpenCode", available: true },
       { value: "kilo", label: "Kilo", available: true },

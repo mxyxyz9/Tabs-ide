@@ -22,6 +22,7 @@
  */
 import { ClaudeDriver, type ClaudeDriverEnv } from "./Drivers/ClaudeDriver";
 import { CodexDriver, type CodexDriverEnv } from "./Drivers/CodexDriver";
+import { CopilotDriver, type CopilotDriverEnv } from "./Drivers/CopilotDriver";
 import { CursorDriver, type CursorDriverEnv } from "./Drivers/CursorDriver";
 import { GeminiDriver } from "./Drivers/GeminiDriver";
 import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver";
@@ -37,6 +38,7 @@ import type { AnyProviderDriver } from "./ProviderDriver";
 export type BuiltInDriversEnv =
   | ClaudeDriverEnv
   | CodexDriverEnv
+  | CopilotDriverEnv
   | CursorDriverEnv
   | GrokDriverEnv
   | KiloDriverEnv
@@ -51,6 +53,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   CodexDriver,
   ClaudeDriver,
   CursorDriver,
+  CopilotDriver,
   GrokDriver,
   OpenCodeDriver,
   KiloDriver,

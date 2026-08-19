@@ -20,7 +20,16 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import type { AppModelOption } from "../../modelSelection";
-import { ClaudeAI, CursorIcon, GrokIcon, type Icon, KiloIcon, OpenAI, OpenCodeIcon } from "../Icons";
+import {
+  ClaudeAI,
+  CopilotIcon,
+  CursorIcon,
+  GrokIcon,
+  type Icon,
+  KiloIcon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../Icons";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import {
   getPinnedModels,
@@ -34,6 +43,7 @@ const DRIVER_ICON: Record<string, Icon> = {
   codex: OpenAI,
   claudeAgent: ClaudeAI,
   cursor: CursorIcon,
+  copilot: CopilotIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,

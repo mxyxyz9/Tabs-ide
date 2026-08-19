@@ -131,7 +131,7 @@ const isWindowsDesktop =
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
-import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, KiloIcon, CursorIcon, type Icon } from "./Icons";
+import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, KiloIcon, CursorIcon, CopilotIcon, type Icon } from "./Icons";
 import GitCommitComposer from "./GitCommitComposer";
 import { FusedModelPicker } from "./chat/FusedModelPicker";
 import type { ProviderPickerKind } from "../session-logic";
@@ -1077,6 +1077,7 @@ const PROVIDER_ICON_MAP: Record<string, Icon> = {
   claude: ClaudeAI,
   codex: OpenAI,
   openai: OpenAI,
+  copilot: CopilotIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,
@@ -1090,17 +1091,19 @@ function ProviderIcon({ instanceId, className }: { instanceId: string; className
     PROVIDER_ICON_MAP[normalizedKey] ??
     (normalizedKey.includes("cursor")
       ? CursorIcon
-      : normalizedKey.includes("opencode")
-        ? OpenCodeIcon
-        : normalizedKey.includes("claude")
-          ? ClaudeAI
-          : normalizedKey.includes("codex") ||
-              normalizedKey.includes("openai") ||
-              normalizedKey.includes("gpt")
-            ? OpenAI
-            : normalizedKey.includes("grok")
-              ? GrokIcon
-              : BotIcon);
+      : normalizedKey.includes("copilot")
+        ? CopilotIcon
+        : normalizedKey.includes("opencode")
+          ? OpenCodeIcon
+          : normalizedKey.includes("claude")
+            ? ClaudeAI
+            : normalizedKey.includes("codex") ||
+                normalizedKey.includes("openai") ||
+                normalizedKey.includes("gpt")
+              ? OpenAI
+              : normalizedKey.includes("grok")
+                ? GrokIcon
+                : BotIcon);
 
   // Monotone icon style matching prototype design system
   return <IconComp className={className} />;

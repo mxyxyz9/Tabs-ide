@@ -18,7 +18,17 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
-import { ClaudeAI, CursorIcon, Gemini, GrokIcon, Icon, KiloIcon, OpenAI, OpenCodeIcon } from "../Icons";
+import {
+  ClaudeAI,
+  CopilotIcon,
+  CursorIcon,
+  Gemini,
+  GrokIcon,
+  Icon,
+  KiloIcon,
+  OpenAI,
+  OpenCodeIcon,
+} from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderSnapshot } from "../../providerModels";
 
@@ -34,6 +44,7 @@ const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
   claudeAgent: ClaudeAI,
   cursor: CursorIcon,
+  copilot: CopilotIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,

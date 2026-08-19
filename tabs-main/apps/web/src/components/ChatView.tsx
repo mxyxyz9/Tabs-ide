@@ -2505,6 +2505,36 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
       return;
     }
     if (!activeProject) return;
+
+    // Check provider entitlement & authentication before initiating turn dispatch
+    const activeProviderSnapshot = providerStatuses.find(
+      (p) => p.instanceId === selectedProvider || p.driver === selectedProvider,
+    );
+    if (
+      activeProviderSnapshot &&
+      activeProviderSnapshot.auth?.status === "authenticated_unentitled"
+    ) {
+      toastManager.add({
+        type: "warning",
+        title: "No active Copilot seat",
+        description:
+          "Your connected GitHub account does not have an active Copilot subscription. Configure authentication in Settings → Providers.",
+      });
+      return;
+    }
+    if (
+      activeProviderSnapshot &&
+      activeProviderSnapshot.installed &&
+      activeProviderSnapshot.auth?.status === "unauthenticated"
+    ) {
+      toastManager.add({
+        type: "warning",
+        title: `${activeProviderSnapshot.displayName ?? selectedProvider} not authenticated`,
+        description: `Please sign in to ${activeProviderSnapshot.displayName ?? selectedProvider} in Settings → Providers before sending a message.`,
+      });
+      return;
+    }
+
     const threadIdForSend = activeThread.id;
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =

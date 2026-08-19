@@ -83,6 +83,7 @@ import { SettingsProviderModelPicker } from "../components/chat/SettingsProvider
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import {
   ClaudeAI,
+  CopilotIcon,
   CursorIcon,
   GoogleGemini,
   GrokIcon,
@@ -96,6 +97,7 @@ const PROVIDER_ICONS_BY_KIND: Record<string, Icon> = {
   codex: OpenAI,
   claudeAgent: ClaudeAI,
   cursor: CursorIcon,
+  copilot: CopilotIcon,
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,
@@ -251,7 +253,7 @@ const TIMESTAMP_FORMAT_LABELS = {
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 
-type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "grok" | "opencode" | "kilo";
+type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "copilot" | "grok" | "opencode" | "kilo";
 
 const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   tabs: "Tabs Agent",
@@ -299,6 +301,14 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     installCommand: "curl https://cursor.com/install -fsS | bash",
   },
   {
+    provider: "copilot",
+    title: "GitHub Copilot",
+    icon: CopilotIcon,
+    binaryPlaceholder: "Copilot binary path",
+    binaryDescription: "Path to the GitHub Copilot CLI binary",
+    installCommand: "npm install -g @github/copilot",
+  },
+  {
     provider: "grok",
     title: "Grok",
     icon: GrokIcon,
@@ -330,6 +340,7 @@ const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
   codex: "codex login",
   claudeAgent: "claude login",
   cursor: "cursor-agent login",
+  copilot: "copilot login",
   grok: "grok login",
   opencode: "opencode auth login",
   kilo: "kilo auth login",
@@ -429,6 +440,12 @@ function getProviderSummary(provider: ServerProvider | undefined): {
     return {
       headline: "Authenticated",
       detail: provider.message ?? null,
+    };
+  }
+  if (provider.auth.status === "authenticated_unentitled") {
+    return {
+      headline: "No active seat",
+      detail: provider.message ?? "GitHub account connected, but no active Copilot seat was found.",
     };
   }
   if (provider.auth.status === "unauthenticated") {
@@ -2181,17 +2198,24 @@ function SettingsRouteView() {
       command: string;
       kind: ProviderActionKind;
     }) => {
-      if (input.command.trim().length === 0) return;
+      let command = input.command.trim();
+      if (command.length === 0) return;
+      if (input.provider === "copilot" && input.kind === "login") {
+        const gheHost = settings.providers.copilot?.gheHost?.trim();
+        if (gheHost && !command.includes("--host")) {
+          command = `${command} --host ${gheHost}`;
+        }
+      }
       providerActionCommandSentRef.current = null;
       setProviderActionSession({
         provider: input.provider,
         providerName: input.providerName,
-        command: input.command,
+        command,
         kind: input.kind,
         threadId: ThreadId.makeUnsafe(`settings-${input.kind}-${input.provider}-${Date.now()}`),
       });
     },
-    [],
+    [settings.providers.copilot?.gheHost],
   );
 
   const closeProviderAction = useCallback(() => {
@@ -2556,9 +2580,15 @@ function SettingsRouteView() {
       summary,
       versionLabel: getProviderVersionLabel(liveProvider?.version),
       updatePrompt: getProviderUpdatePrompt(liveProvider?.versionAdvisory),
-      needsInstall: liveProvider ? !liveProvider.installed : false,
+      needsInstall: Boolean(
+        providerConfig.enabled && liveProvider && !liveProvider.installed,
+      ),
       installCommand: providerSettings.installCommand,
-      needsAuth: liveProvider?.installed === true && liveProvider.auth.status === "unauthenticated",
+      needsAuth: Boolean(
+        providerConfig.enabled &&
+          liveProvider?.installed === true &&
+          liveProvider.auth.status === "unauthenticated",
+      ),
       loginCommand: PROVIDER_LOGIN_COMMAND[providerSettings.provider] ?? null,
     };
   });
@@ -4941,6 +4971,71 @@ function SettingsRouteView() {
                                     </div>
                                   ) : null}
 
+                                  {/* GitHub Enterprise Host & Token (Copilot only) */}
+                                  {providerCard.provider === "copilot" ? (
+                                    <>
+                                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                        <label htmlFor="provider-copilot-ghe-host" className="block">
+                                          <span className="text-xs font-medium text-foreground">
+                                            GitHub Enterprise Host (optional)
+                                          </span>
+                                          <Input
+                                            id="provider-copilot-ghe-host"
+                                            className="mt-1.5"
+                                            value={settings.providers.copilot?.gheHost ?? ""}
+                                            onChange={(event) =>
+                                              updateSettings({
+                                                providers: {
+                                                  ...settings.providers,
+                                                  copilot: {
+                                                    ...(settings.providers.copilot ??
+                                                      DEFAULT_UNIFIED_SETTINGS.providers.copilot),
+                                                    gheHost: event.target.value,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            placeholder="https://example.ghe.com"
+                                            spellCheck={false}
+                                          />
+                                          <span className="mt-1 block text-xs text-muted-foreground">
+                                            Leave blank for github.com. Appends --host to terminal sign-in automatically.
+                                          </span>
+                                        </label>
+                                      </div>
+                                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                        <label htmlFor="provider-copilot-token" className="block">
+                                          <span className="text-xs font-medium text-foreground">
+                                            GitHub Token (optional)
+                                          </span>
+                                          <Input
+                                            id="provider-copilot-token"
+                                            type="password"
+                                            className="mt-1.5"
+                                            value={settings.providers.copilot?.token ?? ""}
+                                            onChange={(event) =>
+                                              updateSettings({
+                                                providers: {
+                                                  ...settings.providers,
+                                                  copilot: {
+                                                    ...(settings.providers.copilot ??
+                                                      DEFAULT_UNIFIED_SETTINGS.providers.copilot),
+                                                    token: event.target.value,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            placeholder="ghp_... or gho_... token"
+                                            spellCheck={false}
+                                          />
+                                          <span className="mt-1 block text-xs text-muted-foreground">
+                                            For token-based authentication instead of interactive web login.
+                                          </span>
+                                        </label>
+                                      </div>
+                                    </>
+                                  ) : null}
+
                                   {/* Models Section */}
                                   <div className="border-t border-border/60 px-4 py-4 sm:px-5">
                                     <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
@@ -5003,6 +5098,15 @@ function SettingsRouteView() {
                                         }}
                                         className="divide-y divide-border/30 p-1"
                                       >
+                                        {providerCard.models.length === 0 ? (
+                                          <div className="py-4 px-3 text-center text-xs text-muted-foreground">
+                                            {providerCard.provider === "copilot" &&
+                                            providerCard.liveProvider?.auth?.status ===
+                                              "authenticated_unentitled"
+                                              ? "No models available for this account. Active Copilot seat required."
+                                              : "No models available."}
+                                          </div>
+                                        ) : null}
                                         <DndContext
                                           collisionDetection={closestCenter}
                                           modifiers={[restrictToVerticalAxis, restrictToParentElement]}
