@@ -2425,7 +2425,7 @@ export function TestingTool(props: {
           generationJobId: job.id,
           targetUrl: normalizedTarget,
           mode: executionMode,
-          caseIds: caseIds ? [...caseIds] : undefined,
+          ...(caseIds ? { caseIds: [...caseIds] } : {}),
           visualComparison,
         });
         await Promise.all([refreshExecution(), refreshCases()]);

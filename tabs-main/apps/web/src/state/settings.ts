@@ -29,12 +29,20 @@ export const serverConfigAtom = Atom.make<ServerConfig | null>(null).pipe(
 export const serverSettingsAtom = Atom.make((get): ServerSettings => {
   const loaded = get(serverConfigAtom)?.settings;
   if (!loaded) return DEFAULT_SERVER_SETTINGS;
+  const mergedProviders = {
+    ...DEFAULT_SERVER_SETTINGS.providers,
+    ...loaded.providers,
+  };
+  const anyEnabled = Object.values(mergedProviders).some((p) => p && p.enabled !== false);
+  if (!anyEnabled && mergedProviders.codex) {
+    mergedProviders.codex = {
+      ...mergedProviders.codex,
+      enabled: true,
+    };
+  }
   return {
     ...loaded,
-    providers: {
-      ...DEFAULT_SERVER_SETTINGS.providers,
-      ...loaded.providers,
-    },
+    providers: mergedProviders,
   };
 }).pipe(Atom.withLabel("tabs-server-settings"));
 

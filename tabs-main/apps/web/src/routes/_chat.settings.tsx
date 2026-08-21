@@ -2819,6 +2819,24 @@ function SettingsRouteView() {
     [settings, updateSettings],
   );
 
+  useEffect(() => {
+    const hasAnyEnabled = PROVIDER_SETTINGS.some((p) => {
+      const cfg = settings.providers[p.provider];
+      return cfg ? cfg.enabled : true;
+    });
+    if (!hasAnyEnabled) {
+      updateSettings({
+        providers: {
+          ...settings.providers,
+          codex: {
+            ...(settings.providers.codex ?? DEFAULT_UNIFIED_SETTINGS.providers.codex),
+            enabled: true,
+          },
+        },
+      });
+    }
+  }, [settings.providers, updateSettings]);
+
   const providerCards = PROVIDER_SETTINGS.map((providerSettings) => {
     const liveProvider = serverProviders.find(
       (candidate) => candidate.instanceId === providerSettings.provider,
@@ -5287,8 +5305,15 @@ function SettingsRouteView() {
                     </div>
 
                     <div className="space-y-4">
-                      {providerCards.map((providerCard) => {
-                        const customModelInput = customModelInputByProvider[providerCard.provider];
+                      {(() => {
+                        const enabledProvidersCount = providerCards.filter(
+                          (c) => c.providerConfig.enabled,
+                        ).length;
+                        return providerCards.map((providerCard) => {
+                          const isLastEnabledProvider =
+                            providerCard.providerConfig.enabled &&
+                            enabledProvidersCount <= 1;
+                          const customModelInput = customModelInputByProvider[providerCard.provider];
                         const customModelError =
                           customModelErrorByProvider[providerCard.provider] ?? null;
                         const providerDisplayName =
@@ -5557,36 +5582,59 @@ function SettingsRouteView() {
                                       )}
                                     />
                                   </Button>
-                                  <Switch
-                                    checked={providerCard.providerConfig.enabled}
-                                    onCheckedChange={(checked) => {
-                                      const isDisabling = !checked;
-                                      // When disabling the provider that's currently used for
-                                      // text generation, clear the selection so it falls back to
-                                      // the next available provider's default model.
-                                      const shouldClearModelSelection =
-                                        isDisabling && textGenInstanceId === providerCard.provider;
-                                      updateSettings({
-                                        providers: {
-                                          ...settings.providers,
-                                          [providerCard.provider]: {
-                                            ...(settings.providers[providerCard.provider] ??
-                                              DEFAULT_UNIFIED_SETTINGS.providers[
-                                                providerCard.provider
-                                              ]),
-                                            enabled: Boolean(checked),
+                                  {isLastEnabledProvider ? (
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        render={
+                                          <span className="inline-flex items-center cursor-not-allowed">
+                                            <Switch
+                                              checked={true}
+                                              disabled={true}
+                                              className="opacity-50 cursor-not-allowed"
+                                              aria-label={`Enable ${providerDisplayName}`}
+                                            />
+                                          </span>
+                                        }
+                                      />
+                                      <TooltipPopup side="left">
+                                        At least one provider must remain enabled.
+                                      </TooltipPopup>
+                                    </Tooltip>
+                                  ) : (
+                                    <Switch
+                                      checked={providerCard.providerConfig.enabled}
+                                      onCheckedChange={(checked) => {
+                                        if (!checked && enabledProvidersCount <= 1) {
+                                          return;
+                                        }
+                                        const isDisabling = !checked;
+                                        // When disabling the provider that's currently used for
+                                        // text generation, clear the selection so it falls back to
+                                        // the next available provider's default model.
+                                        const shouldClearModelSelection =
+                                          isDisabling && textGenInstanceId === providerCard.provider;
+                                        updateSettings({
+                                          providers: {
+                                            ...settings.providers,
+                                            [providerCard.provider]: {
+                                              ...(settings.providers[providerCard.provider] ??
+                                                DEFAULT_UNIFIED_SETTINGS.providers[
+                                                  providerCard.provider
+                                                ]),
+                                              enabled: Boolean(checked),
+                                            },
                                           },
-                                        },
-                                        ...(shouldClearModelSelection
-                                          ? {
-                                              textGenerationModelSelection:
-                                                DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                                            }
-                                          : {}),
-                                      });
-                                    }}
-                                    aria-label={`Enable ${providerDisplayName}`}
-                                  />
+                                          ...(shouldClearModelSelection
+                                            ? {
+                                                textGenerationModelSelection:
+                                                  DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+                                              }
+                                            : {}),
+                                        });
+                                      }}
+                                      aria-label={`Enable ${providerDisplayName}`}
+                                    />
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -6119,8 +6167,9 @@ function SettingsRouteView() {
                             </Collapsible>
                           </div>
                         );
-                      })}
-                    </div>
+                      });
+                    })()}
+                  </div>
                   </div>
                 ) : null}
                 {activeSettingsSection === "keybindings" ? (

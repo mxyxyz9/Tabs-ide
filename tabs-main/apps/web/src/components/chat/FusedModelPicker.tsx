@@ -166,6 +166,13 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
 
   const isProviderEnabledInSettings = useCallback(
     (provider: ProviderPickerKind) => {
+      const anyEnabled = AVAILABLE_PROVIDER_OPTIONS.some((o) => {
+        const cfg = (settings.providers as any)?.[o.value];
+        return cfg ? cfg.enabled !== false : true;
+      });
+      if (!anyEnabled) {
+        return true;
+      }
       const cfg = (settings.providers as any)?.[provider];
       if (cfg && typeof cfg.enabled === "boolean") {
         return cfg.enabled;
@@ -181,10 +188,10 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     }
     const enabled = AVAILABLE_PROVIDER_OPTIONS.filter((o) => isProviderEnabledInSettings(o.value));
     if (enabled.length === 0) {
-      return AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.provider);
+      return AVAILABLE_PROVIDER_OPTIONS;
     }
     return enabled;
-  }, [props.lockedProvider, props.provider, isProviderEnabledInSettings]);
+  }, [props.lockedProvider, isProviderEnabledInSettings]);
 
   const activeTab = useMemo(() => {
     if (selectedTab === "pinned") return "pinned";
@@ -637,7 +644,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           style={panelStyle}
         >
           {/* Provider Sidebar navigation on Left */}
-          {providerOptions.length > 1 && (
+          {(providerOptions.length > 1 || pinnedModels.length > 0 || AVAILABLE_PROVIDER_OPTIONS.length > 1) && (
             <div className="flex flex-col gap-2.5 border-r border-border pr-6">
               {/* 📌 Pinned Models Tab */}
               <Tooltip key="pinned">

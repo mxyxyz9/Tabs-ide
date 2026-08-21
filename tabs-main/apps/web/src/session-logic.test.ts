@@ -1146,6 +1146,9 @@ describe("PROVIDER_OPTIONS", () => {
       { value: "grok", label: "Grok", available: true },
       { value: "opencode", label: "OpenCode", available: true },
       { value: "kilo", label: "Kilo", available: true },
+      { value: "droid", label: "Factory Droid", available: true },
+      { value: "antigravity", label: "Antigravity", available: true },
+      { value: "openrouter", label: "OpenRouter", available: true },
     ]);
     expect(claude).toEqual({
       value: "claudeAgent",
