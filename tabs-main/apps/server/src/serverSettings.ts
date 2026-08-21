@@ -120,8 +120,13 @@ const PROVIDER_ORDER: readonly ProviderSettingsKey[] = [
   "codex",
   "claudeAgent",
   "cursor",
+  "copilot",
   "grok",
   "opencode",
+  "kilo",
+  "droid",
+  "antigravity",
+  "openrouter",
   "gemini",
 ];
 
@@ -231,6 +236,8 @@ function providerSecretsFromSettings(
     ["copilot.github-token", settings.providers.copilot.token],
     ["copilot.byok-api-key", settings.providers.copilot.byokApiKey],
     ["gemini.api-key", settings.providers.gemini.apiKey],
+    ["droid.api-key", settings.providers.droid.apiKey],
+    ["openrouter.api-key", settings.providers.openrouter.apiKey],
     ["opencode.server-password", settings.providers.opencode.serverPassword],
     ["kilo.server-password", settings.providers.kilo.serverPassword],
   ];
@@ -244,6 +251,8 @@ function withoutPlaintextProviderSecrets(settings: ServerSettings): ServerSettin
       ...settings.providers,
       copilot: { ...settings.providers.copilot, token: "", byokApiKey: "" },
       gemini: { ...settings.providers.gemini, apiKey: "" },
+      droid: { ...settings.providers.droid, apiKey: "" },
+      openrouter: { ...settings.providers.openrouter, apiKey: "" },
       opencode: { ...settings.providers.opencode, serverPassword: "" },
       kilo: { ...settings.providers.kilo, serverPassword: "" },
     },
@@ -258,6 +267,8 @@ function providerSecretsFromPatch(
     ["copilot.github-token", providers?.copilot?.token],
     ["copilot.byok-api-key", providers?.copilot?.byokApiKey],
     ["gemini.api-key", providers?.gemini?.apiKey],
+    ["droid.api-key", providers?.droid?.apiKey],
+    ["openrouter.api-key", providers?.openrouter?.apiKey],
     ["opencode.server-password", providers?.opencode?.serverPassword],
     ["kilo.server-password", providers?.kilo?.serverPassword],
   ];
@@ -276,6 +287,10 @@ function withoutPlaintextProviderSecretsPatch(patch: ServerSettingsPatch): Serve
         ? { copilot: { ...patch.providers.copilot, token: "", byokApiKey: "" } }
         : {}),
       ...(patch.providers.gemini ? { gemini: { ...patch.providers.gemini, apiKey: "" } } : {}),
+      ...(patch.providers.droid ? { droid: { ...patch.providers.droid, apiKey: "" } } : {}),
+      ...(patch.providers.openrouter
+        ? { openrouter: { ...patch.providers.openrouter, apiKey: "" } }
+        : {}),
       ...(patch.providers.opencode
         ? { opencode: { ...patch.providers.opencode, serverPassword: "" } }
         : {}),

@@ -28,6 +28,9 @@ import { GeminiDriver } from "./Drivers/GeminiDriver";
 import { GrokDriver, type GrokDriverEnv } from "./Drivers/GrokDriver";
 import { KiloDriver, type KiloDriverEnv } from "./Drivers/KiloDriver";
 import { OpenCodeDriver, type OpenCodeDriverEnv } from "./Drivers/OpenCodeDriver";
+import { DroidDriver, type DroidDriverEnv } from "./Drivers/DroidDriver";
+import { AntigravityDriver, type AntigravityDriverEnv } from "./Drivers/AntigravityDriver";
+import { OpenRouterDriver } from "./Drivers/OpenRouterDriver";
 import type { AnyProviderDriver } from "./ProviderDriver";
 
 /**
@@ -42,7 +45,9 @@ export type BuiltInDriversEnv =
   | CursorDriverEnv
   | GrokDriverEnv
   | KiloDriverEnv
-  | OpenCodeDriverEnv;
+  | OpenCodeDriverEnv
+  | DroidDriverEnv
+  | AntigravityDriverEnv;
 
 /**
  * Ordered list of built-in drivers. Order matters only for tie-breaking in
@@ -58,4 +63,7 @@ export const BUILT_IN_DRIVERS: ReadonlyArray<AnyProviderDriver<BuiltInDriversEnv
   OpenCodeDriver,
   KiloDriver,
   GeminiDriver,
+  DroidDriver,
+  AntigravityDriver,
+  OpenRouterDriver,
 ];

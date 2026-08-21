@@ -26,7 +26,10 @@ export type ProviderPickerKind =
   | "copilot"
   | "grok"
   | "opencode"
-  | "kilo";
+  | "kilo"
+  | "droid"
+  | "antigravity"
+  | "openrouter";
 
 export const PROVIDER_OPTIONS: Array<{
   value: ProviderPickerKind;
@@ -40,6 +43,9 @@ export const PROVIDER_OPTIONS: Array<{
   { value: "grok", label: "Grok", available: true },
   { value: "opencode", label: "OpenCode", available: true },
   { value: "kilo", label: "Kilo", available: true },
+  { value: "droid", label: "Factory Droid", available: true },
+  { value: "antigravity", label: "Antigravity", available: true },
+  { value: "openrouter", label: "OpenRouter", available: true },
 ];
 
 export interface WorkLogEntry {

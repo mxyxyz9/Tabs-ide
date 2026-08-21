@@ -109,6 +109,9 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
       capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
     },
   ],
+  droid: [],
+  antigravity: [],
+  openrouter: [],
   gemini: [
     {
       slug: "gemini-3.6-flash",

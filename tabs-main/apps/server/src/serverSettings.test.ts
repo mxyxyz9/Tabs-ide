@@ -266,11 +266,15 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     Effect.gen(function* () {
       keytarMock.setPassword.mockClear();
       const serverSettings = yield* ServerSettingsService;
+      const serverConfig = yield* ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
 
       const next = yield* serverSettings.updateSettings({
         providers: {
           copilot: { byokApiKey: "copilot-byok-secret" },
           gemini: { apiKey: "gemini-secret" },
+          droid: { apiKey: "droid-secret" },
+          openrouter: { apiKey: "openrouter-secret" },
           opencode: { serverPassword: "opencode-secret" },
           kilo: { serverPassword: "kilo-secret" },
         },
@@ -278,14 +282,21 @@ it.layer(NodeServices.layer)("server settings", (it) => {
 
       assert.equal(next.providers.copilot.byokApiKey, "");
       assert.equal(next.providers.gemini.apiKey, "");
+      assert.equal(next.providers.droid.apiKey, "");
+      assert.equal(next.providers.openrouter.apiKey, "");
       assert.equal(next.providers.opencode.serverPassword, "");
       assert.equal(next.providers.kilo.serverPassword, "");
       assert.deepEqual(keytarMock.setPassword.mock.calls, [
         ["Tabs Provider Credentials", "copilot.byok-api-key", "copilot-byok-secret"],
         ["Tabs Provider Credentials", "gemini.api-key", "gemini-secret"],
+        ["Tabs Provider Credentials", "droid.api-key", "droid-secret"],
+        ["Tabs Provider Credentials", "openrouter.api-key", "openrouter-secret"],
         ["Tabs Provider Credentials", "opencode.server-password", "opencode-secret"],
         ["Tabs Provider Credentials", "kilo.server-password", "kilo-secret"],
       ]);
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.equal(raw.includes("droid-secret"), false);
+      assert.equal(raw.includes("openrouter-secret"), false);
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 

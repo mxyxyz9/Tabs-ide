@@ -586,6 +586,63 @@ export const KiloSettings = makeProviderSettingsSchema(
 );
 export type KiloSettings = typeof KiloSettings.Type;
 
+export const DroidSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+    binaryPath: makeBinaryPathSetting("droid"),
+    apiKey: WriteOnlyProviderSecretString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "Factory API key",
+        description: "Stored securely in the operating system credential store.",
+        providerSettingsForm: {
+          control: "password",
+          placeholder: "fk-...",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  },
+  { order: ["binaryPath", "apiKey"] },
+);
+export type DroidSettings = typeof DroidSettings.Type;
+
+export const AntigravitySettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+    binaryPath: makeBinaryPathSetting("agy"),
+    customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  },
+  { order: ["binaryPath"] },
+);
+export type AntigravitySettings = typeof AntigravitySettings.Type;
+
+export const OpenRouterSettings = makeProviderSettingsSchema(
+  {
+    enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+    apiKey: WriteOnlyProviderSecretString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API key",
+        description:
+          "OpenRouter API key, stored securely in the operating system credential store.",
+        providerSettingsForm: {
+          control: "password",
+          placeholder: "sk-or-v1-...",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    baseUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("https://openrouter.ai/api/v1")),
+    ),
+    customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  },
+  { order: ["apiKey", "baseUrl"] },
+);
+export type OpenRouterSettings = typeof OpenRouterSettings.Type;
+
 export const GeminiSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
@@ -707,6 +764,9 @@ export const ServerSettings = Schema.Struct({
     copilot: CopilotSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     kilo: KiloSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    droid: DroidSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    antigravity: AntigravitySettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    openrouter: OpenRouterSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
     gemini: GeminiSettings.pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   // New driver-agnostic instance map. Keyed by `ProviderInstanceId`; values
@@ -842,6 +902,26 @@ const KiloSettingsPatch = Schema.Struct({
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
+const DroidSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  apiKey: Schema.optionalKey(WriteOnlyProviderSecretString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+const AntigravitySettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+const OpenRouterSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  apiKey: Schema.optionalKey(WriteOnlyProviderSecretString),
+  baseUrl: Schema.optionalKey(TrimmedString),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
 const GitAiStaticAnalysisSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   tools: Schema.optionalKey(Schema.Array(Schema.String)),
@@ -895,6 +975,9 @@ export const ServerSettingsPatch = Schema.Struct({
       copilot: Schema.optionalKey(CopilotSettingsPatch),
       opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       kilo: Schema.optionalKey(KiloSettingsPatch),
+      droid: Schema.optionalKey(DroidSettingsPatch),
+      antigravity: Schema.optionalKey(AntigravitySettingsPatch),
+      openrouter: Schema.optionalKey(OpenRouterSettingsPatch),
       gemini: Schema.optionalKey(GeminiSettingsPatch),
     }),
   ),

@@ -1329,14 +1329,17 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
               );
 
               assert.deepStrictEqual(providers.map((provider) => provider.instanceId).toSorted(), [
+                "antigravity",
                 "claudeAgent",
                 "codex",
                 "copilot",
                 "cursor",
+                "droid",
                 "gemini",
                 "grok",
                 "kilo",
                 "opencode",
+                "openrouter",
               ]);
               assert.strictEqual(cursorProvider?.enabled, false);
               assert.strictEqual(cursorProvider?.status, "disabled");
@@ -1564,6 +1567,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             mockSpawnerLayer((args) => {
               const joined = args.join(" ");
               if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+              if (joined === "auth status") {
+                return { stdout: '{"loggedIn":true}\n', stderr: "", code: 0 };
+              }
               throw new Error(`Unexpected args: ${joined}`);
             }),
           ),
@@ -1586,6 +1592,9 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             mockSpawnerLayer((args) => {
               const joined = args.join(" ");
               if (joined === "--version") return { stdout: "1.0.0\n", stderr: "", code: 0 };
+              if (joined === "auth status") {
+                return { stdout: '{"loggedIn":true}\n', stderr: "", code: 0 };
+              }
               throw new Error(`Unexpected args: ${joined}`);
             }),
           ),
@@ -1643,7 +1652,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
           assert.strictEqual(status.status, "ready");
           assert.deepStrictEqual(
             recorded.commands.map((command) => command.env?.HOME),
-            [claudeHome],
+            [claudeHome, claudeHome],
           );
         }).pipe(Effect.provide(recorded.layer));
       });

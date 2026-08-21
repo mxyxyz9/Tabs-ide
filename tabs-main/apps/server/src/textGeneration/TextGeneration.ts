@@ -24,7 +24,8 @@ export type TextGenerationProvider =
   | "grok"
   | "opencode"
   | "kilo"
-  | "gemini";
+  | "gemini"
+  | "openrouter";
 
 export interface CommitMessageGenerationInput {
   cwd: string;

@@ -22,13 +22,16 @@ import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   ClaudeAI,
+  AntigravityIcon,
   CopilotIcon,
   CursorIcon,
+  DroidIcon,
   GrokIcon,
   type Icon,
   KiloIcon,
   OpenAI,
   OpenCodeIcon,
+  OpenRouterIcon,
 } from "../Icons";
 import nyanCatSliderWideGif from "~/assets/nyan-cat-slider-wide.gif";
 import { cn } from "~/lib/utils";
@@ -61,6 +64,9 @@ const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,
+  droid: DroidIcon,
+  antigravity: AntigravityIcon,
+  openrouter: OpenRouterIcon,
 };
 
 const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(

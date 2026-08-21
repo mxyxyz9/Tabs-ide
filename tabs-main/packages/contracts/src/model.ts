@@ -146,6 +146,9 @@ const COPILOT_DRIVER_KIND = ProviderDriverKind.make("copilot");
 const GROK_DRIVER_KIND = ProviderDriverKind.make("grok");
 const OPENCODE_DRIVER_KIND = ProviderDriverKind.make("opencode");
 const GEMINI_DRIVER_KIND = ProviderDriverKind.make("gemini");
+const DROID_DRIVER_KIND = ProviderDriverKind.make("droid");
+const ANTIGRAVITY_DRIVER_KIND = ProviderDriverKind.make("antigravity");
+const OPENROUTER_DRIVER_KIND = ProviderDriverKind.make("openrouter");
 
 export const DEFAULT_MODEL = "gpt-5.4";
 export const DEFAULT_GIT_TEXT_GENERATION_MODEL = "gpt-5.4-mini";
@@ -157,6 +160,8 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [GROK_DRIVER_KIND]: "grok-build",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [GEMINI_DRIVER_KIND]: "gemini-3.6-flash",
+  [DROID_DRIVER_KIND]: "auto",
+  [ANTIGRAVITY_DRIVER_KIND]: "auto",
 };
 
 /** Per-provider text generation model defaults. */
@@ -234,6 +239,9 @@ export const PROVIDER_DISPLAY_NAMES: Partial<Record<ProviderDriverKind, string>>
   [GROK_DRIVER_KIND]: "Grok",
   [OPENCODE_DRIVER_KIND]: "OpenCode",
   [GEMINI_DRIVER_KIND]: "Google Gemini",
+  [DROID_DRIVER_KIND]: "Factory Droid",
+  [ANTIGRAVITY_DRIVER_KIND]: "Antigravity",
+  [OPENROUTER_DRIVER_KIND]: "OpenRouter",
 };
 
 export const CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"] as const;

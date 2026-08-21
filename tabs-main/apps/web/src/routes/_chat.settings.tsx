@@ -93,14 +93,17 @@ import { SettingsProviderModelPicker } from "../components/chat/SettingsProvider
 import { TraitsPicker } from "../components/chat/TraitsPicker";
 import {
   ClaudeAI,
+  AntigravityIcon,
   CopilotIcon,
   CursorIcon,
+  DroidIcon,
   GoogleGemini,
   GrokIcon,
   type Icon,
   KiloIcon,
   OpenAI,
   OpenCodeIcon,
+  OpenRouterIcon,
 } from "../components/Icons";
 
 const PROVIDER_ICONS_BY_KIND: Record<string, Icon> = {
@@ -112,6 +115,9 @@ const PROVIDER_ICONS_BY_KIND: Record<string, Icon> = {
   opencode: OpenCodeIcon,
   kilo: KiloIcon,
   gemini: GoogleGemini,
+  droid: DroidIcon,
+  antigravity: AntigravityIcon,
+  openrouter: OpenRouterIcon,
 };
 import { Badge } from "../components/ui/badge";
 import {
@@ -276,7 +282,10 @@ type ProviderSettingsKey =
   | "copilot"
   | "grok"
   | "opencode"
-  | "kilo";
+  | "kilo"
+  | "droid"
+  | "antigravity"
+  | "openrouter";
 
 const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   tabs: "Tabs Agent",
@@ -289,6 +298,8 @@ type InstallProviderSettings = {
   icon: Icon;
   binaryPlaceholder: string;
   binaryDescription: ReactNode;
+  hasBinaryPath?: boolean;
+  hasApiKey?: boolean;
   installCommand?: string;
   homePathKey?: "codexHomePath";
   homePlaceholder?: string;
@@ -342,7 +353,7 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
   {
     provider: "opencode",
     title: "OpenCode",
-    icon: OpenCodeIcon,
+    icon: DroidIcon,
     binaryPlaceholder: "OpenCode binary path",
     binaryDescription: "Path to the OpenCode binary",
     installCommand: "npm install -g opencode-ai",
@@ -355,18 +366,46 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     binaryDescription: "Path to the Kilo binary",
     installCommand: "npm install -g @kilocode/cli",
   },
+  {
+    provider: "droid",
+    title: "Factory Droid",
+    icon: OpenCodeIcon,
+    binaryPlaceholder: "droid",
+    binaryDescription: "Path to the Factory Droid binary",
+    installCommand: "curl -fsSL https://app.factory.ai/cli | sh",
+    hasApiKey: true,
+  },
+  {
+    provider: "antigravity",
+    title: "Antigravity",
+    icon: AntigravityIcon,
+    binaryPlaceholder: "agy",
+    binaryDescription: "Path to the Antigravity binary",
+    installCommand: "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+  },
+  {
+    provider: "openrouter",
+    title: "OpenRouter",
+    icon: OpenRouterIcon,
+    binaryPlaceholder: "",
+    binaryDescription: "OpenRouter uses HTTPS and does not require a CLI.",
+    hasBinaryPath: false,
+    hasApiKey: true,
+  },
 ];
 
 // Per-provider sign-in command. The server reports the auth *status* but not a
 // structured login command, so map the known CLI auth commands here.
 const PROVIDER_LOGIN_COMMAND: Partial<Record<ProviderSettingsKey, string>> = {
   codex: "codex login",
-  claudeAgent: "claude login",
+  claudeAgent: "claude auth login --claudeai",
   cursor: "cursor-agent login",
   copilot: "copilot login",
   grok: "grok login",
   opencode: "opencode auth login",
   kilo: "kilo auth login",
+  droid: "droid",
+  antigravity: "agy",
 };
 
 type SettingsSectionId =
@@ -2819,7 +2858,7 @@ function SettingsRouteView() {
         settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder ?? [],
       ),
     );
-    const binaryPathValue = providerConfig.binaryPath;
+    const binaryPathValue = "binaryPath" in providerConfig ? providerConfig.binaryPath : "";
     const isDirty = !Equal.equals(providerConfig, defaultProviderConfig);
 
     return {
@@ -2829,6 +2868,8 @@ function SettingsRouteView() {
       badgeLabel: liveProvider?.badgeLabel ?? null,
       binaryPlaceholder: providerSettings.binaryPlaceholder,
       binaryDescription: providerSettings.binaryDescription,
+      hasBinaryPath: providerSettings.hasBinaryPath !== false,
+      hasApiKey: providerSettings.hasApiKey === true,
       homePathKey: providerSettings.homePathKey,
       homePlaceholder: providerSettings.homePlaceholder,
       homeDescription: providerSettings.homeDescription,
@@ -5384,7 +5425,7 @@ function SettingsRouteView() {
                                     </Button>
                                   ) : null}
 
-                                  {providerCard.updatePrompt && providerCard.installCommand ? (
+                                  {providerCard.updatePrompt?.command ? (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -5394,7 +5435,7 @@ function SettingsRouteView() {
                                         startProviderAction({
                                           provider: providerCard.provider,
                                           providerName: providerDisplayName,
-                                          command: providerCard.installCommand!,
+                                          command: providerCard.updatePrompt!.command!,
                                           kind: "update",
                                         })
                                       }
@@ -5568,40 +5609,83 @@ function SettingsRouteView() {
                               <CollapsibleContent>
                                 <div className="space-y-0">
                                   {/* Binary path */}
-                                  <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                    <label
-                                      htmlFor={`provider-install-${providerCard.provider}-binary-path`}
-                                      className="block"
-                                    >
-                                      <span className="text-xs font-medium text-foreground">
-                                        {providerDisplayName} binary path
-                                      </span>
-                                      <Input
-                                        id={`provider-install-${providerCard.provider}-binary-path`}
-                                        className="mt-1.5"
-                                        value={providerCard.binaryPathValue}
-                                        onChange={(event) =>
-                                          updateSettings({
-                                            providers: {
-                                              ...settings.providers,
-                                              [providerCard.provider]: {
-                                                ...(settings.providers[providerCard.provider] ??
-                                                  DEFAULT_UNIFIED_SETTINGS.providers[
-                                                    providerCard.provider
-                                                  ]),
-                                                binaryPath: event.target.value,
+                                  {providerCard.hasBinaryPath ? (
+                                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                      <label
+                                        htmlFor={`provider-install-${providerCard.provider}-binary-path`}
+                                        className="block"
+                                      >
+                                        <span className="text-xs font-medium text-foreground">
+                                          {providerDisplayName} binary path
+                                        </span>
+                                        <Input
+                                          id={`provider-install-${providerCard.provider}-binary-path`}
+                                          className="mt-1.5"
+                                          value={providerCard.binaryPathValue}
+                                          onChange={(event) =>
+                                            updateSettings({
+                                              providers: {
+                                                ...settings.providers,
+                                                [providerCard.provider]: {
+                                                  ...(settings.providers[providerCard.provider] ??
+                                                    DEFAULT_UNIFIED_SETTINGS.providers[
+                                                      providerCard.provider
+                                                    ]),
+                                                  binaryPath: event.target.value,
+                                                },
                                               },
-                                            },
-                                          })
-                                        }
-                                        placeholder={providerCard.binaryPlaceholder}
-                                        spellCheck={false}
-                                      />
-                                      <span className="mt-1 block text-xs text-muted-foreground">
-                                        {providerCard.binaryDescription}
-                                      </span>
-                                    </label>
-                                  </div>
+                                            })
+                                          }
+                                          placeholder={providerCard.binaryPlaceholder}
+                                          spellCheck={false}
+                                        />
+                                        <span className="mt-1 block text-xs text-muted-foreground">
+                                          {providerCard.binaryDescription}
+                                        </span>
+                                      </label>
+                                    </div>
+                                  ) : null}
+
+                                  {providerCard.hasApiKey ? (
+                                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                      <label className="block">
+                                        <span className="text-xs font-medium text-foreground">
+                                          API key
+                                        </span>
+                                        <Input
+                                          aria-label={`${providerDisplayName} API key`}
+                                          className="mt-1.5"
+                                          type="password"
+                                          value={
+                                            "apiKey" in providerCard.providerConfig
+                                              ? providerCard.providerConfig.apiKey
+                                              : ""
+                                          }
+                                          onChange={(event) =>
+                                            updateSettings({
+                                              providers: {
+                                                ...settings.providers,
+                                                [providerCard.provider]: {
+                                                  ...providerCard.providerConfig,
+                                                  apiKey: event.target.value,
+                                                },
+                                              },
+                                            })
+                                          }
+                                          placeholder={
+                                            providerCard.provider === "openrouter"
+                                              ? "sk-or-v1-..."
+                                              : "FACTORY_API_KEY"
+                                          }
+                                          spellCheck={false}
+                                        />
+                                        <span className="mt-1 block text-xs text-muted-foreground">
+                                          Stored in the operating system credential store and never
+                                          written to settings.json.
+                                        </span>
+                                      </label>
+                                    </div>
+                                  ) : null}
 
                                   {/* Home path (Codex only) */}
                                   {providerCard.homePathKey ? (

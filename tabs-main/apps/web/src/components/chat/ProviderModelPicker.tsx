@@ -1,6 +1,7 @@
 import { type ModelSlug, type ProviderKind, type ServerProvider } from "@tabs/contracts";
 import { resolveSelectableModel } from "@tabs/shared/model";
 import { memo, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import type { VariantProps } from "class-variance-authority";
 import { type ProviderPickerKind, PROVIDER_OPTIONS } from "../../session-logic";
 import { ChevronDownIcon } from "lucide-react";
@@ -20,17 +21,21 @@ import {
 } from "../ui/menu";
 import {
   ClaudeAI,
+  AntigravityIcon,
   CopilotIcon,
   CursorIcon,
+  DroidIcon,
   Gemini,
   GrokIcon,
   Icon,
   KiloIcon,
   OpenAI,
   OpenCodeIcon,
+  OpenRouterIcon,
 } from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderSnapshot } from "../../providerModels";
+import { useGlobalSettingsViewState } from "~/state/scopedStateStore";
 
 function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): option is {
   value: ProviderPickerKind;
@@ -48,6 +53,9 @@ const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   grok: GrokIcon,
   opencode: OpenCodeIcon,
   kilo: KiloIcon,
+  droid: DroidIcon,
+  antigravity: AntigravityIcon,
+  openrouter: OpenRouterIcon,
 };
 
 export const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableProviderOption);
@@ -92,6 +100,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   triggerClassName?: string;
   onProviderModelChange: (provider: ProviderPickerKind, model: ModelSlug) => void;
 }) {
+  const navigate = useNavigate();
+  const [, updateSettingsViewState] = useGlobalSettingsViewState();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const activeProvider = props.lockedProvider ?? props.provider;
   const selectedProviderOptions = props.modelOptionsByProvider[activeProvider] ?? [];
@@ -199,8 +209,28 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                   : !liveProvider.installed
                     ? "Not installed"
                     : "Unavailable";
+                const isUnauthenticated = liveProvider.auth.status === "unauthenticated";
                 return (
-                  <MenuItem key={option.value} className="items-start" disabled>
+                  <MenuItem
+                    key={option.value}
+                    className="items-start"
+                    disabled={!isUnauthenticated}
+                    onClick={
+                      isUnauthenticated
+                        ? () => {
+                            setIsMenuOpen(false);
+                            updateSettingsViewState((current) => ({
+                              activeSection: "providers",
+                              openProviderDetails: {
+                                ...current.openProviderDetails,
+                                [option.value]: true,
+                              },
+                            }));
+                            void navigate({ to: "/settings" });
+                          }
+                        : undefined
+                    }
+                  >
                     <OptionIcon
                       aria-hidden="true"
                       className={cn(
@@ -210,16 +240,14 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                     />
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span>{option.label}</span>
-                      {liveProvider.auth.status === "unauthenticated" && liveProvider.message ? (
+                      {isUnauthenticated && liveProvider.message ? (
                         <span className="max-w-80 whitespace-normal text-[11px] leading-snug text-muted-foreground/80">
                           {liveProvider.message}
                         </span>
                       ) : null}
                     </span>
                     <span className="ms-auto shrink-0 text-[11px] text-muted-foreground/80 uppercase tracking-[0.08em]">
-                      {liveProvider.auth.status === "unauthenticated"
-                        ? "Sign in"
-                        : unavailableLabel}
+                      {isUnauthenticated ? "Sign in" : unavailableLabel}
                     </span>
                   </MenuItem>
                 );
