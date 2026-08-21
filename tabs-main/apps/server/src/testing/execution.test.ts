@@ -51,6 +51,7 @@ async function seedExecutableArtifact(root: string, targetUrl: string) {
         externalId: "QA-EXEC-1",
         description: "Open the application",
         steps: ["Open the application"],
+        expectedResults: [""],
         sourceSheet: "Cases",
         sourceRow: 2,
         expectedResult: "",

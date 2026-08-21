@@ -19,20 +19,20 @@ import { makeOpenCodeTextGeneration } from "../../textGeneration/OpenCodeTextGen
 import { ServerConfig } from "../../config";
 import { ProviderDriverError } from "../Errors";
 import { makeOpenCodeAdapter } from "../Layers/OpenCodeAdapter";
-import {
-  checkKiloProviderStatus,
-  makePendingKiloProvider,
-} from "../Layers/KiloProvider";
+import { checkKiloProviderStatus, makePendingKiloProvider } from "../Layers/KiloProvider";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import { OpenCodeRuntime } from "../opencodeRuntime";
 import {
   defaultProviderContinuationIdentity,
+  makeExternalCliLifecycle,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
 import type { ServerProviderDraft } from "../providerSnapshot";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment";
+import { getProviderSecret } from "../ProviderSecretStore";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
   makePackageManagedProviderMaintenanceResolver,
@@ -47,10 +47,7 @@ const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
 function isKiloNativeCommandPath(commandPath: string): boolean {
   const normalized = normalizeCommandPath(commandPath);
-  return (
-    normalized.endsWith("/.kilo/bin/kilo") ||
-    normalized.endsWith("/.kilo/bin/kilo.exe")
-  );
+  return normalized.endsWith("/.kilo/bin/kilo") || normalized.endsWith("/.kilo/bin/kilo.exe");
 }
 
 const UPDATE = makePackageManagedProviderMaintenanceResolver({
@@ -115,7 +112,14 @@ export const KiloDriver: ProviderDriver<KiloSettings, KiloDriverEnv> = {
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
-      const effectiveConfig = { ...config, enabled } satisfies KiloSettings;
+      const secureServerPassword = yield* Effect.tryPromise(() =>
+        getProviderSecret("kilo.server-password"),
+      ).pipe(Effect.orElseSucceed(() => null));
+      const effectiveConfig = {
+        ...config,
+        enabled,
+        serverPassword: secureServerPassword ?? config.serverPassword,
+      } satisfies KiloSettings;
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
@@ -170,6 +174,21 @@ export const KiloDriver: ProviderDriver<KiloSettings, KiloDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "external",
+          logout: "external",
+          accountSwitch: "external",
+          installation: "external",
+        }),
+        lifecycle: makeExternalCliLifecycle([
+          { kind: "login", command: "kilo auth login" },
+          { kind: "logout", command: "kilo auth logout" },
+          { kind: "switch-account", command: "kilo auth logout && kilo auth login" },
+        ]),
         snapshot,
         adapter,
         textGeneration,

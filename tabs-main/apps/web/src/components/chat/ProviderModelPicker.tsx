@@ -61,6 +61,22 @@ function providerIconClassName(
   return provider === "claudeAgent" ? "text-[#d97757]" : fallbackClassName;
 }
 
+function emptyCatalogLabel(provider: ServerProvider | undefined): string {
+  if (provider?.auth.status === "unauthenticated") {
+    return provider.message ?? "This provider is not authenticated.";
+  }
+  switch (provider?.catalogStatus) {
+    case "failed":
+      return "Model catalog failed to load";
+    case "loading":
+      return "Model catalog is loading";
+    case "stale":
+      return "Cached model catalog is unavailable";
+    default:
+      return "No models available";
+  }
+}
+
 export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   provider: ProviderPickerKind;
   model: ModelSlug;
@@ -145,15 +161,23 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               value={props.model}
               onValueChange={(value) => handleModelChange(props.lockedProvider!, value)}
             >
-              {(props.modelOptionsByProvider[props.lockedProvider] ?? []).map((modelOption) => (
-                <MenuRadioItem
-                  key={`${props.lockedProvider}:${modelOption.slug}`}
-                  value={modelOption.slug}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {modelOption.name}
-                </MenuRadioItem>
-              ))}
+              {(props.modelOptionsByProvider[props.lockedProvider] ?? []).length === 0 ? (
+                <MenuItem disabled>
+                  {emptyCatalogLabel(
+                    getProviderSnapshot(props.providers ?? [], props.lockedProvider),
+                  )}
+                </MenuItem>
+              ) : (
+                (props.modelOptionsByProvider[props.lockedProvider] ?? []).map((modelOption) => (
+                  <MenuRadioItem
+                    key={`${props.lockedProvider}:${modelOption.slug}`}
+                    value={modelOption.slug}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {modelOption.name}
+                  </MenuRadioItem>
+                ))
+              )}
             </MenuRadioGroup>
             <MenuDivider />
             <div className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground/80">
@@ -176,7 +200,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                     ? "Not installed"
                     : "Unavailable";
                 return (
-                  <MenuItem key={option.value} disabled>
+                  <MenuItem key={option.value} className="items-start" disabled>
                     <OptionIcon
                       aria-hidden="true"
                       className={cn(
@@ -184,9 +208,18 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                         providerIconClassName(option.value, "text-muted-foreground/85"),
                       )}
                     />
-                    <span>{option.label}</span>
-                    <span className="ms-auto text-[11px] text-muted-foreground/80 uppercase tracking-[0.08em]">
-                      {unavailableLabel}
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span>{option.label}</span>
+                      {liveProvider.auth.status === "unauthenticated" && liveProvider.message ? (
+                        <span className="max-w-80 whitespace-normal text-[11px] leading-snug text-muted-foreground/80">
+                          {liveProvider.message}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="ms-auto shrink-0 text-[11px] text-muted-foreground/80 uppercase tracking-[0.08em]">
+                      {liveProvider.auth.status === "unauthenticated"
+                        ? "Sign in"
+                        : unavailableLabel}
                     </span>
                   </MenuItem>
                 );
@@ -209,15 +242,19 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                         value={props.provider === option.value ? props.model : ""}
                         onValueChange={(value) => handleModelChange(option.value, value)}
                       >
-                        {(props.modelOptionsByProvider[option.value] ?? []).map((modelOption) => (
-                          <MenuRadioItem
-                            key={`${option.value}:${modelOption.slug}`}
-                            value={modelOption.slug}
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            {modelOption.name}
-                          </MenuRadioItem>
-                        ))}
+                        {(props.modelOptionsByProvider[option.value] ?? []).length === 0 ? (
+                          <MenuItem disabled>{emptyCatalogLabel(liveProvider)}</MenuItem>
+                        ) : (
+                          (props.modelOptionsByProvider[option.value] ?? []).map((modelOption) => (
+                            <MenuRadioItem
+                              key={`${option.value}:${modelOption.slug}`}
+                              value={modelOption.slug}
+                              onClick={() => setIsMenuOpen(false)}
+                            >
+                              {modelOption.name}
+                            </MenuRadioItem>
+                          ))
+                        )}
                       </MenuRadioGroup>
                     </MenuGroup>
                   </MenuSubPopup>

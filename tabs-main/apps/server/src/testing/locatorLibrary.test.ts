@@ -110,6 +110,60 @@ describe("LocatorLibraryStore", () => {
     }
   });
 
+  it("keeps locator entries and page-object selections scoped to each captured page", async () => {
+    const { graph, library } = await stores();
+    try {
+      for (const [path, name] of [
+        ["/landing", "Get started"],
+        ["/login", "Sign in"],
+      ] as const) {
+        library.saveCapturedPage({
+          projectId: "project-a",
+          sessionId: null,
+          rawUrl: `https://example.test${path}`,
+          environmentLabel: "uat",
+          fingerprint: path,
+          captureSource: "manual",
+          observedElements: 1,
+          truncatedElements: 0,
+          candidates: [
+            {
+              locatorKey: "primary-action",
+              classification: "action",
+              strategy: "role",
+              arguments: { role: "button", name },
+              semanticContext: name,
+              source: "manual",
+            },
+          ],
+        });
+      }
+
+      const captured = library.library("project-a");
+      expect(captured.pages).toHaveLength(2);
+      const landing = captured.pages.find((page) => page.urlPattern.includes("/landing"))!;
+      const login = captured.pages.find((page) => page.urlPattern.includes("/login"))!;
+      expect(landing.id).not.toBe(login.id);
+      expect(landing.entries[0]?.id).not.toBe(login.entries[0]?.id);
+
+      library.setPageSelection({
+        projectId: "project-a",
+        pageId: landing.id,
+        entryIds: [landing.entries[0]!.id],
+      });
+      const selected = library.library("project-a");
+      expect(
+        selected.pages.find((page) => page.id === landing.id)?.entries[0]?.lifecycleStatus,
+      ).toBe("accepted");
+      expect(selected.pages.find((page) => page.id === login.id)?.entries[0]?.lifecycleStatus).toBe(
+        "draft",
+      );
+    } finally {
+      library.close();
+      graph.close();
+    }
+  });
+
   it("preserves managed-only entries during repository reconciliation", async () => {
     const { graph, library } = await stores();
     try {
@@ -320,6 +374,53 @@ describe("LocatorLibraryStore", () => {
       expect(renamed.pages[0]?.pageObject?.className).toBe("AuthenticationPage");
       expect(renamed.pages[0]?.pageObject?.versionNumber).toBeGreaterThan(
         selected.pages[0]?.pageObject?.versionNumber ?? 0,
+      );
+    } finally {
+      library.close();
+      graph.close();
+    }
+  });
+
+  it("deletes only the selected page and all of its locator records", async () => {
+    const { graph, library } = await stores();
+    try {
+      for (const [path, key] of [
+        ["/login", "sign-in"],
+        ["/settings", "save-settings"],
+      ] as const) {
+        library.saveCapturedPage({
+          projectId: "project-a",
+          sessionId: null,
+          rawUrl: `https://example.test${path}`,
+          environmentLabel: "uat",
+          fingerprint: path,
+          captureSource: "manual",
+          observedElements: 1,
+          truncatedElements: 0,
+          candidates: [
+            {
+              locatorKey: key,
+              classification: "action",
+              strategy: "role",
+              arguments: { role: "button", name: key },
+              semanticContext: key,
+              source: "manual",
+            },
+          ],
+        });
+      }
+
+      const loginPage = library
+        .library("project-a")
+        .pages.find((page) => page.urlPattern === "https://example.test/login");
+      expect(loginPage).toBeDefined();
+
+      const result = library.deletePage({ projectId: "project-a", pageId: loginPage!.id });
+      expect(result.pages).toHaveLength(1);
+      expect(result.pages[0]?.urlPattern).toBe("https://example.test/settings");
+      expect(result.pages[0]?.entries.map((entry) => entry.locatorKey)).toEqual(["save-settings"]);
+      expect(() => library.deletePage({ projectId: "project-a", pageId: loginPage!.id })).toThrow(
+        /not found/,
       );
     } finally {
       library.close();

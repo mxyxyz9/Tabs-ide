@@ -80,6 +80,13 @@ function isOpenCodeManagedProvider(provider: OpenCodeInventoryProvider) {
   );
 }
 
+function hasInlineConfiguredApiKey(provider: OpenCodeInventoryProvider): boolean {
+  return (
+    trimNonEmptyString(provider.options?.apiKey) !== undefined ||
+    trimNonEmptyString(provider.options?.api_key) !== undefined
+  );
+}
+
 export function resolvePreferredOpenCodeModelProviders(input: {
   readonly inventory: OpenCodeModelInventory;
   readonly credentialProviderIDs?: ReadonlyArray<string>;
@@ -94,8 +101,8 @@ export function resolvePreferredOpenCodeModelProviders(input: {
   }
 
   const credentialProviders = new Set(input.credentialProviderIDs ?? []);
-  const authenticatedConnectedProviders = connectedProviders.filter((provider) =>
-    credentialProviders.has(provider.id),
+  const authenticatedConnectedProviders = connectedProviders.filter(
+    (provider) => credentialProviders.has(provider.id) || hasInlineConfiguredApiKey(provider),
   );
 
   const consoleManagedProviders = new Set(inventory.consoleState?.consoleManagedProviders ?? []);

@@ -154,7 +154,6 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,
   [CLAUDE_DRIVER_KIND]: "claude-sonnet-5",
   [CURSOR_DRIVER_KIND]: "auto",
-  [COPILOT_DRIVER_KIND]: "claude-sonnet-4.6",
   [GROK_DRIVER_KIND]: "grok-build",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [GEMINI_DRIVER_KIND]: "gemini-3.6-flash",
@@ -167,7 +166,6 @@ export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER: Partial<
   [CODEX_DRIVER_KIND]: DEFAULT_GIT_TEXT_GENERATION_MODEL,
   [CLAUDE_DRIVER_KIND]: "claude-haiku-4-5",
   [CURSOR_DRIVER_KIND]: "composer-2",
-  [COPILOT_DRIVER_KIND]: "claude-sonnet-4.6",
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [GEMINI_DRIVER_KIND]: "gemini-3.6-flash",
 };
@@ -222,7 +220,7 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Partial<
   [GEMINI_DRIVER_KIND]: {
     "gemini-2.5-flash": "gemini-3.6-flash",
     "2.5-flash": "gemini-3.6-flash",
-    "flash": "gemini-3.6-flash",
+    flash: "gemini-3.6-flash",
   },
 };
 

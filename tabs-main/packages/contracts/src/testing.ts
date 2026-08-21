@@ -178,6 +178,12 @@ export const TestingLocatorPageSelectionInput = Schema.Struct({
 });
 export type TestingLocatorPageSelectionInput = typeof TestingLocatorPageSelectionInput.Type;
 
+export const TestingLocatorPageDeleteInput = Schema.Struct({
+  projectId: Schema.String,
+  pageId: Schema.String,
+});
+export type TestingLocatorPageDeleteInput = typeof TestingLocatorPageDeleteInput.Type;
+
 export const TestingPageObjectCodeUpdateInput = Schema.Struct({
   projectId: Schema.String,
   pageId: Schema.String,
@@ -235,6 +241,7 @@ export type TestingStoryImportInput = typeof TestingStoryImportInput.Type;
 export const TestingWorkbookImportInput = Schema.Struct({
   projectId: Schema.String,
   workbookPath: Schema.String,
+  groupName: Schema.optionalKey(Schema.String),
   targetUrl: Schema.optionalKey(Schema.String),
   cdpEndpoint: Schema.optionalKey(Schema.String),
 });
@@ -247,17 +254,44 @@ export const TestingCaseReviewInput = Schema.Struct({
   externalId: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
   steps: Schema.optionalKey(Schema.Array(Schema.String)),
+  expectedResults: Schema.optionalKey(Schema.Array(Schema.String)),
   expectedResult: Schema.optionalKey(Schema.String),
   notes: Schema.optionalKey(Schema.String),
   locatorEntryIds: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 export type TestingCaseReviewInput = typeof TestingCaseReviewInput.Type;
 
+export const TestingCaseDeleteInput = Schema.Struct({
+  projectId: Schema.String,
+  caseId: Schema.String,
+});
+export type TestingCaseDeleteInput = typeof TestingCaseDeleteInput.Type;
+
+export const TestingCaseGroupUpdateInput = Schema.Struct({
+  projectId: Schema.String,
+  caseId: Schema.String,
+  groupName: Schema.String,
+});
+export type TestingCaseGroupUpdateInput = typeof TestingCaseGroupUpdateInput.Type;
+
+export const TestingCaseGroupCreateInput = Schema.Struct({
+  projectId: Schema.String,
+  groupName: Schema.String,
+});
+export type TestingCaseGroupCreateInput = typeof TestingCaseGroupCreateInput.Type;
+
+export const TestingCaseGroupDeleteInput = Schema.Struct({
+  projectId: Schema.String,
+  groupName: Schema.String,
+});
+export type TestingCaseGroupDeleteInput = typeof TestingCaseGroupDeleteInput.Type;
+
 export const TestingCaseCreateInput = Schema.Struct({
   projectId: Schema.String,
   externalId: Schema.optionalKey(Schema.String),
   description: Schema.String,
   steps: Schema.Array(Schema.String),
+  expectedResults: Schema.optionalKey(Schema.Array(Schema.String)),
   expectedResult: Schema.String,
   locatorEntryIds: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -379,7 +413,9 @@ export interface TestingCaseSummary {
   readonly source: TestingCaseSource;
   readonly creationMethod?: "manual" | "imported" | "generated";
   readonly description: string;
+  readonly groupName: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResults: ReadonlyArray<string>;
   readonly expectedResult: string;
   readonly sourceSheet: string | null;
   readonly sourceRow: number | null;
@@ -395,6 +431,7 @@ export interface TestingCaseSummary {
 
 export interface TestingCaseListResult {
   readonly cases: ReadonlyArray<TestingCaseSummary>;
+  readonly groups: ReadonlyArray<string>;
 }
 
 export interface TestingWorkbookImportResult extends TestingCaseListResult {
@@ -846,6 +883,9 @@ export interface TestingApi {
   readonly setLocatorPageSelection: (
     input: TestingLocatorPageSelectionInput,
   ) => Promise<TestingLocatorLibraryResult>;
+  readonly deleteLocatorPage: (
+    input: TestingLocatorPageDeleteInput,
+  ) => Promise<TestingLocatorLibraryResult>;
   readonly updatePageObjectCode: (
     input: TestingPageObjectCodeUpdateInput,
   ) => Promise<TestingLocatorLibraryResult>;
@@ -878,6 +918,10 @@ export interface TestingApi {
   readonly listCases: (input: TestingProjectInput) => Promise<TestingCaseListResult>;
   readonly createCase: (input: TestingCaseCreateInput) => Promise<TestingCaseListResult>;
   readonly reviewCase: (input: TestingCaseReviewInput) => Promise<TestingCaseListResult>;
+  readonly deleteCase: (input: TestingCaseDeleteInput) => Promise<TestingCaseListResult>;
+  readonly updateCaseGroup: (input: TestingCaseGroupUpdateInput) => Promise<TestingCaseListResult>;
+  readonly createCaseGroup: (input: TestingCaseGroupCreateInput) => Promise<TestingCaseListResult>;
+  readonly deleteCaseGroup: (input: TestingCaseGroupDeleteInput) => Promise<TestingCaseListResult>;
   readonly generateScenarios: (input: TestingProjectInput) => Promise<TestingCaseListResult>;
   readonly clearGraph: (input: TestingProjectInput) => Promise<TestingClearGraphResult>;
   readonly generateTests: (input: TestingGenerationInput) => Promise<TestingGenerationJob>;

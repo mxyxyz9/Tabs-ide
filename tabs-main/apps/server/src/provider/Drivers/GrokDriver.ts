@@ -21,6 +21,8 @@ import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
   defaultProviderContinuationIdentity,
+  makeExternalCliLifecycle,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
@@ -143,6 +145,20 @@ export const GrokDriver: ProviderDriver<GrokSettings, GrokDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "external",
+          logout: "external",
+          accountSwitch: "external",
+        }),
+        lifecycle: makeExternalCliLifecycle([
+          { kind: "login", command: "grok login" },
+          { kind: "logout", command: "grok logout" },
+          { kind: "switch-account", command: "grok logout && grok login" },
+        ]),
         snapshot,
         adapter,
         textGeneration,

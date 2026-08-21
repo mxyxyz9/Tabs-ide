@@ -35,11 +35,7 @@ import { cn } from "~/lib/utils";
 import { getProviderModels, getProviderSnapshot } from "../../providerModels";
 import { PROVIDER_OPTIONS, type ProviderPickerKind } from "../../session-logic";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
-import {
-  getPinnedModels,
-  isPinnedModel,
-  togglePinnedModel,
-} from "../../modelPinning";
+import { getPinnedModels, isPinnedModel, togglePinnedModel } from "../../modelPinning";
 import {
   applyCustomModelOrdering,
   getModelScore,
@@ -177,9 +173,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     if (props.lockedProvider) {
       return AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.lockedProvider);
     }
-    const enabled = AVAILABLE_PROVIDER_OPTIONS.filter((o) =>
-      isProviderEnabledInSettings(o.value),
-    );
+    const enabled = AVAILABLE_PROVIDER_OPTIONS.filter((o) => isProviderEnabledInSettings(o.value));
     if (enabled.length === 0) {
       return AVAILABLE_PROVIDER_OPTIONS.filter((o) => o.value === props.provider);
     }
@@ -199,10 +193,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
   }, [selectedTab, props.lockedProvider, props.provider, providerOptions]);
   const activeProvider = props.lockedProvider ?? props.provider;
 
-  const collisionPadding = useMemo(
-    () => ({ top: 12, right: 16, bottom: 12, left: 16 }),
-    [],
-  );
+  const collisionPadding = useMemo(() => ({ top: 12, right: 16, bottom: 12, left: 16 }), []);
 
   const checkIsPinned = useCallback(
     (providerId: string, modelSlug: string) => {
@@ -250,6 +241,19 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
     return applyCustomModelOrdering(raw, customOrder, activeTab);
   }, [activeTab, pinnedModels, props.providers, settings.providerModelPreferences]);
 
+  const activeCatalogStatus =
+    activeTab === "pinned"
+      ? undefined
+      : getProviderSnapshot(props.providers, activeTab)?.catalogStatus;
+  const emptyCatalogMessage =
+    activeCatalogStatus === "failed"
+      ? "Model catalog refresh failed. Retry from Settings."
+      : activeCatalogStatus === "stale"
+        ? "The cached model catalog is unavailable. Retry from Settings."
+        : activeCatalogStatus === "loading"
+          ? "The model catalog is loading."
+          : "No models are available for this provider account.";
+
   const activeModel = useMemo(() => {
     if (activeTab === "pinned") {
       return (
@@ -281,11 +285,13 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
         props.onPromptChange(applyClaudePromptEffortPrefix(props.prompt, null));
       }
       // Detect if fast mode is currently active from the current model options
-      const currentFastActive = props.modelOptions?.some(
-        (o) =>
-          (o.id === "fastMode" || o.id === "fast") && o.value === true ||
-          (o.id === "serviceTier" || o.id === "service_tier" || o.id === "tier") && o.value === "fast",
-      ) ?? false;
+      const currentFastActive =
+        props.modelOptions?.some(
+          (o) =>
+            ((o.id === "fastMode" || o.id === "fast") && o.value === true) ||
+            ((o.id === "serviceTier" || o.id === "service_tier" || o.id === "tier") &&
+              o.value === "fast"),
+        ) ?? false;
       // Forward the current fast-mode state to the new model, so switching
       // models doesn't silently reset Fast Mode to off.
       let finalOptions = nextOptions;
@@ -424,9 +430,7 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
           selectFastModeDescriptor.options.find(
             (o) => (o.id ?? (o as any).value) !== "fast" && o.isDefault,
           ) ??
-          selectFastModeDescriptor.options.find(
-            (o) => (o.id ?? (o as any).value) !== "fast",
-          ) ??
+          selectFastModeDescriptor.options.find((o) => (o.id ?? (o as any).value) !== "fast") ??
           selectFastModeDescriptor.options[0];
         const defaultVal =
           (defaultOpt ? (defaultOpt.id ?? (defaultOpt as any).value) : "default")?.toString() ??
@@ -675,13 +679,16 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                 if (disabled) {
                   if (snapshot) {
                     if (!snapshot.installed) {
-                      disabledReason = snapshot.message ?? `${option.label} CLI not detected on PATH.`;
+                      disabledReason =
+                        snapshot.message ?? `${option.label} CLI not detected on PATH.`;
                     } else if (snapshot.auth?.status === "authenticated_unentitled") {
                       disabledReason =
-                        snapshot.message ?? "GitHub account connected, but no active Copilot seat was found.";
+                        snapshot.message ??
+                        "GitHub account connected, but no active Copilot seat was found.";
                     } else if (snapshot.auth?.status === "unauthenticated") {
                       disabledReason =
-                        snapshot.message ?? `${option.label} is not authenticated. Please log in in Settings → Providers.`;
+                        snapshot.message ??
+                        `${option.label} is not authenticated. Please log in in Settings → Providers.`;
                     } else if (snapshot.message) {
                       disabledReason = snapshot.message;
                     } else {
@@ -887,11 +894,17 @@ export const FusedModelPicker = memo(function FusedModelPicker(props: FusedModel
                   </div>
                 </div>
               ) : filteredModels.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 px-4 text-center select-none">
+                <div
+                  aria-live="polite"
+                  className="flex flex-col items-center justify-center py-10 px-4 text-center select-none"
+                  role="status"
+                >
                   <SearchIcon className="size-6 text-muted-foreground/40 mb-2" />
-                  <div className="text-xs font-semibold text-foreground">No matching models found</div>
+                  <div className="text-xs font-semibold text-foreground">
+                    {models.length === 0 ? "No models available" : "No matching models found"}
+                  </div>
                   <div className="text-[11px] text-muted-foreground mt-0.5">
-                    No models match "{searchQuery}"
+                    {models.length === 0 ? emptyCatalogMessage : `No models match "${searchQuery}"`}
                   </div>
                 </div>
               ) : (
@@ -1383,8 +1396,7 @@ const ModelRow = memo(function ModelRow(props: {
                   )}
                   style={{
                     width: `calc(44px + (100% - 40px) * ${percentage / 100})`,
-                    maskImage:
-                      "linear-gradient(to right, transparent 0px, black 12px, black 100%)",
+                    maskImage: "linear-gradient(to right, transparent 0px, black 12px, black 100%)",
                     WebkitMaskImage:
                       "linear-gradient(to right, transparent 0px, black 12px, black 100%)",
                   }}
@@ -1618,7 +1630,11 @@ const PullCordToggle = memo(function PullCordToggle(props: {
               gsap
                 .timeline()
                 .to(cordRef.current, { scaleY: 1.45, duration: 0.1, ease: "power2.out" })
-                .to(cordRef.current, { scaleY: 1, duration: 0.75, ease: "elastic.out(1.3, 0.3)" }, 0.1);
+                .to(
+                  cordRef.current,
+                  { scaleY: 1, duration: 0.75, ease: "elastic.out(1.3, 0.3)" },
+                  0.1,
+                );
               gsap
                 .timeline()
                 .to(knobRef.current, { y: 22, duration: 0.1, ease: "power2.out" })
@@ -1706,7 +1722,3 @@ const COSMIC_KEYFRAMES = `
   50% { filter: drop-shadow(0 0 14px rgba(255, 230, 0, 0.8)) drop-shadow(0 0 20px rgba(255, 105, 180, 0.6)); }
 }
 `;
-
-
-
-

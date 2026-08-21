@@ -1,5 +1,7 @@
 import React, { memo } from "react";
-import { LoaderIcon } from "lucide-react";
+import { ExternalLinkIcon, FileCheck2Icon, LoaderIcon, SearchIcon } from "lucide-react";
+import { openInPreferredEditor } from "~/editorPreferences";
+import { ensureNativeApi } from "~/nativeApi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -26,18 +28,38 @@ export const TestingReports = memo(function TestingReports() {
     <section aria-labelledby="testing-reporting-heading" className="space-y-4">
       <div className="space-y-1">
         <h2 id="testing-reporting-heading" className="text-lg font-semibold text-foreground">
-          Reports and traceability
+          Reports
         </h2>
         <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-          Export a sign-off packet, resolve a case ID through its full evidence chain, and inspect the
-          stored model of the application without reading source code.
+          Export a shareable result or look up everything recorded for one test case.
         </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2" aria-label="Available report actions">
+        <div className="flex gap-3 rounded-xl border border-border/70 bg-card p-4">
+          <FileCheck2Icon aria-hidden="true" className="mt-0.5 size-5 text-primary" />
+          <div>
+            <p className="text-sm font-semibold">Share the latest run</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Generate Word and PDF files after a standalone test run completes.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-3 rounded-xl border border-border/70 bg-card p-4">
+          <SearchIcon aria-hidden="true" className="mt-0.5 size-5 text-primary" />
+          <div>
+            <p className="text-sm font-semibold">Investigate one test</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Enter its exact ID to see its source, generated files, runs, and locator decisions.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>UAT sign-off report</CardTitle>
+            <CardTitle>1. Export the latest results</CardTitle>
             <CardDescription>
               Creates matching Word and PDF reports from the latest completed Standalone round.
             </CardDescription>
@@ -69,9 +91,27 @@ export const TestingReports = memo(function TestingReports() {
               Generate Word and PDF
             </Button>
             {reportPaths ? (
-              <div className="space-y-1 text-xs text-muted-foreground" role="status">
-                <p className="break-all">Word: {reportPaths.docxPath}</p>
-                <p className="break-all">PDF: {reportPaths.pdfPath}</p>
+              <div className="flex flex-wrap gap-2" role="status">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    void openInPreferredEditor(ensureNativeApi(), reportPaths.docxPath)
+                  }
+                >
+                  <ExternalLinkIcon aria-hidden="true" />
+                  Open Word report
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void openInPreferredEditor(ensureNativeApi(), reportPaths.pdfPath)}
+                >
+                  <ExternalLinkIcon aria-hidden="true" />
+                  Open PDF report
+                </Button>
               </div>
             ) : null}
           </CardContent>
@@ -79,7 +119,7 @@ export const TestingReports = memo(function TestingReports() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Exact case lookup</CardTitle>
+            <CardTitle>2. Trace one test case</CardTitle>
             <CardDescription>
               Use the original Excel ID or generated scenario ID; partial matches are not guessed.
             </CardDescription>
@@ -103,7 +143,7 @@ export const TestingReports = memo(function TestingReports() {
               onClick={() => void resolveTraceability()}
               disabled={busyAction !== null || !traceCaseId.trim()}
             >
-              Resolve evidence chain
+              Show test history
             </Button>
             {traceability ? (
               <div className="space-y-2 rounded-lg border border-border/70 p-4 text-sm">
@@ -118,7 +158,8 @@ export const TestingReports = memo(function TestingReports() {
                 </p>
                 {traceability.import ? (
                   <p className="break-all text-xs text-muted-foreground">
-                    Workbook: {traceability.import.workbookName} ({traceability.import.workbookPath})
+                    Workbook: {traceability.import.workbookName} ({traceability.import.workbookPath}
+                    )
                   </p>
                 ) : null}
               </div>
@@ -159,57 +200,62 @@ export const TestingReports = memo(function TestingReports() {
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>State graph explorer</CardTitle>
-          <CardDescription>
-            Accessible list alternative showing URLs, stored accessibility snapshots, linked cases,
-            and transitions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-h-96 overflow-auto rounded-lg border border-border/70">
-            <table className="w-full text-left text-xs">
-              <caption className="sr-only">Stored application states and linked cases</caption>
-              <thead className="sticky top-0 bg-muted">
-                <tr>
-                  <th scope="col" className="p-3">
-                    State
-                  </th>
-                  <th scope="col" className="p-3">
-                    URL and snapshot
-                  </th>
-                  <th scope="col" className="p-3">
-                    Linked cases
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(graphExplorer?.nodes ?? []).map((node) => (
-                  <tr key={node.stateId} className="border-t border-border/70 align-top">
-                    <th scope="row" className="p-3 font-medium">
-                      {node.pageTitle || node.stateId}
+      <details className="rounded-xl border border-border bg-card">
+        <summary className="cursor-pointer px-6 py-5 text-base font-semibold">
+          Advanced: discovered application states
+        </summary>
+        <Card className="rounded-none border-x-0 border-b-0 shadow-none">
+          <CardHeader>
+            <CardTitle>State graph explorer</CardTitle>
+            <CardDescription>
+              Accessible list alternative showing URLs, stored accessibility snapshots, linked
+              cases, and transitions.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="max-h-96 overflow-auto rounded-lg border border-border/70">
+              <table className="w-full text-left text-xs">
+                <caption className="sr-only">Stored application states and linked cases</caption>
+                <thead className="sticky top-0 bg-muted">
+                  <tr>
+                    <th scope="col" className="p-3">
+                      State
                     </th>
-                    <td className="p-3">
-                      <div className="break-all text-muted-foreground">{node.pageUrl}</div>
-                      <pre className="mt-2 max-w-xl whitespace-pre-wrap">
-                        {node.snapshot.slice(0, 500)}
-                      </pre>
-                    </td>
-                    <td className="p-3 text-muted-foreground">
-                      {node.linkedCaseIds.join(", ") || "None"}
-                    </td>
+                    <th scope="col" className="p-3">
+                      URL and snapshot
+                    </th>
+                    <th scope="col" className="p-3">
+                      Linked cases
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-xs text-muted-foreground" role="status">
-            {graphExplorer?.nodes.length ?? 0} states and {graphExplorer?.edges.length ?? 0}{" "}
-            transitions loaded.
-          </p>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {(graphExplorer?.nodes ?? []).map((node) => (
+                    <tr key={node.stateId} className="border-t border-border/70 align-top">
+                      <th scope="row" className="p-3 font-medium">
+                        {node.pageTitle || node.stateId}
+                      </th>
+                      <td className="p-3">
+                        <div className="break-all text-muted-foreground">{node.pageUrl}</div>
+                        <pre className="mt-2 max-w-xl whitespace-pre-wrap">
+                          {node.snapshot.slice(0, 500)}
+                        </pre>
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {node.linkedCaseIds.join(", ") || "None"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-muted-foreground" role="status">
+              {graphExplorer?.nodes.length ?? 0} states and {graphExplorer?.edges.length ?? 0}{" "}
+              transitions loaded.
+            </p>
+          </CardContent>
+        </Card>
+      </details>
     </section>
   );
 });

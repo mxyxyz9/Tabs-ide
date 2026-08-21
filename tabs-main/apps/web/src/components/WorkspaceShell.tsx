@@ -18,7 +18,12 @@ import {
 } from "@tabs/contracts";
 import { makeAppModelSelection } from "../modelSelection";
 import { TestingTool } from "./testing/TestingTool";
-import { type ProjectToolKind, type ProjectWorkspaceSettings } from "@tabs/contracts/settings";
+import {
+  type ProjectToolKind,
+  type ProjectWorkspaceSettings,
+  type BrowserPartitionMode,
+  resolveBrowserPartition,
+} from "@tabs/contracts/settings";
 import {
   useProjectAgentsState,
   useProjectServerState,
@@ -262,16 +267,18 @@ function formatBrowserViewportLabel(browserState: ProjectBrowserToolState): stri
 function BrowserViewportSelector(props: {
   browserState: ProjectBrowserToolState;
   projectId: ProjectId;
+  sessionId?: string | undefined;
   setBrowserViewport: (
     projectId: ProjectId,
     input: {
       devicePreset: ProjectBrowserToolState["devicePreset"];
-      customWidth?: number | null;
-      customHeight?: number | null;
-      landscape?: boolean;
+      customWidth?: number | null | undefined;
+      customHeight?: number | null | undefined;
+      landscape?: boolean | undefined;
     },
+    sessionId?: string | undefined,
   ) => void;
-  onOpenChange?: (open: boolean) => void;
+  onOpenChange?: ((open: boolean) => void) | undefined;
 }) {
   const selectedPreset =
     BROWSER_DEVICE_PRESETS.find((preset) => preset.id === props.browserState.devicePreset) ??
@@ -296,19 +303,27 @@ function BrowserViewportSelector(props: {
   const updateCustomWidth = (value: string) => {
     setCustomWidthDraft(value);
     const parsedWidth = Number.parseInt(value, 10);
-    props.setBrowserViewport(props.projectId, {
-      devicePreset: "custom",
-      customWidth: value.trim().length === 0 || Number.isNaN(parsedWidth) ? null : parsedWidth,
-    });
+    props.setBrowserViewport(
+      props.projectId,
+      {
+        devicePreset: "custom",
+        customWidth: value.trim().length === 0 || Number.isNaN(parsedWidth) ? null : parsedWidth,
+      },
+      props.sessionId,
+    );
   };
 
   const updateCustomHeight = (value: string) => {
     setCustomHeightDraft(value);
     const parsedHeight = Number.parseInt(value, 10);
-    props.setBrowserViewport(props.projectId, {
-      devicePreset: "custom",
-      customHeight: value.trim().length === 0 || Number.isNaN(parsedHeight) ? null : parsedHeight,
-    });
+    props.setBrowserViewport(
+      props.projectId,
+      {
+        devicePreset: "custom",
+        customHeight: value.trim().length === 0 || Number.isNaN(parsedHeight) ? null : parsedHeight,
+      },
+      props.sessionId,
+    );
   };
 
   return (
@@ -316,9 +331,13 @@ function BrowserViewportSelector(props: {
       <Select
         value={props.browserState.devicePreset}
         onValueChange={(devicePreset) =>
-          props.setBrowserViewport(props.projectId, {
-            devicePreset: devicePreset as ProjectBrowserToolState["devicePreset"],
-          })
+          props.setBrowserViewport(
+            props.projectId,
+            {
+              devicePreset: devicePreset as ProjectBrowserToolState["devicePreset"],
+            },
+            props.sessionId,
+          )
         }
         onOpenChange={props.onOpenChange}
       >
@@ -6088,7 +6107,7 @@ function GitConflictTextPane(props: {
 
 function DesktopBrowserChrome(props: {
   projectId: ProjectId;
-  sessionId?: string;
+  sessionId?: string | undefined;
   title: string;
   isChromeExpanded: boolean;
   setIsChromeExpanded: (expanded: boolean) => void;
@@ -6200,10 +6219,14 @@ function DesktopBrowserChrome(props: {
                   size="xs"
                   variant="outline"
                   onClick={() =>
-                    props.setBrowserViewport(props.projectId, {
-                      devicePreset: props.browserState.devicePreset,
-                      landscape: !props.browserState.landscape,
-                    })
+                    props.setBrowserViewport(
+                      props.projectId,
+                      {
+                        devicePreset: props.browserState.devicePreset,
+                        landscape: !props.browserState.landscape,
+                      },
+                      props.sessionId,
+                    )
                   }
                 >
                   <RotateCwIcon className="size-3.5" />
@@ -6212,6 +6235,7 @@ function DesktopBrowserChrome(props: {
                 <BrowserViewportSelector
                   browserState={props.browserState}
                   projectId={props.projectId}
+                  sessionId={props.sessionId}
                   setBrowserViewport={props.setBrowserViewport}
                   onOpenChange={props.setViewportSelectorOpen}
                 />
@@ -6238,50 +6262,116 @@ function DesktopBrowserChrome(props: {
         </Card>
       ) : props.toolbarTarget ? (
         createPortal(
-          <div className="flex items-center">
-            <div className="flex items-center gap-1 pr-2">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      className="rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground hover:shadow-xs transition-all duration-150 active:scale-95"
-                      onClick={() => props.setIsChromeExpanded(true)}
-                      aria-label={`Show ${props.title} controls`}
-                    >
-                      <PanelTopOpenIcon className="size-4" />
-                    </Button>
-                  }
-                />
-                <TooltipPopup side="left" align="center" sideOffset={6}>
-                  Show browser controls
-                </TooltipPopup>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      className="rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground hover:shadow-xs transition-all duration-150 active:scale-95"
-                      onClick={() =>
-                        void api?.shell.openExternal(
-                          props.sessionState.currentUrl ?? props.normalizedUrl,
-                        )
-                      }
-                      aria-label={`Open ${props.title} externally`}
-                    >
-                      <ExternalLinkIcon className="size-4" />
-                    </Button>
-                  }
-                />
-                <TooltipPopup side="left" align="center" sideOffset={6}>
-                  Open in external browser
-                </TooltipPopup>
-              </Tooltip>
+          <div className="flex items-center gap-1.5 pr-1">
+            <div className="flex items-center rounded-lg border border-border/70 bg-card/60 p-0.5 shadow-2xs backdrop-blur-xs">
+              <div className="flex items-center">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
+                        disabled={!props.sessionState.canGoBack}
+                        onClick={() => void bridge?.goBackBrowserSession(sessionArg)}
+                        aria-label="Back"
+                      >
+                        <ArrowLeftIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="bottom" align="center" sideOffset={6}>
+                    Back
+                  </TooltipPopup>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95 disabled:opacity-30 disabled:pointer-events-none"
+                        disabled={!props.sessionState.canGoForward}
+                        onClick={() => void bridge?.goForwardBrowserSession(sessionArg)}
+                        aria-label="Forward"
+                      >
+                        <ArrowRightIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="bottom" align="center" sideOffset={6}>
+                    Forward
+                  </TooltipPopup>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
+                        onClick={() => void bridge?.reloadBrowserSession(sessionArg)}
+                        aria-label={`Reload ${props.title}`}
+                      >
+                        <RefreshCwIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="bottom" align="center" sideOffset={6}>
+                    Refresh
+                  </TooltipPopup>
+                </Tooltip>
+              </div>
+
+              <div className="mx-0.5 h-3.5 w-px bg-border/70" />
+
+              <div className="flex items-center">
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
+                        onClick={() => props.setIsChromeExpanded(true)}
+                        aria-label={`Show ${props.title} controls`}
+                      >
+                        <PanelTopOpenIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="bottom" align="center" sideOffset={6}>
+                    Show browser controls
+                  </TooltipPopup>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        type="button"
+                        size="icon-xs"
+                        variant="ghost"
+                        className="h-6 w-6 rounded-md text-muted-foreground hover:bg-accent/80 hover:text-foreground transition-all duration-150 active:scale-95"
+                        onClick={() =>
+                          void api?.shell.openExternal(
+                            props.sessionState.currentUrl ?? props.normalizedUrl,
+                          )
+                        }
+                        aria-label={`Open ${props.title} externally`}
+                      >
+                        <ExternalLinkIcon className="size-3.5" />
+                      </Button>
+                    }
+                  />
+                  <TooltipPopup side="bottom" align="center" sideOffset={6}>
+                    Open in external browser
+                  </TooltipPopup>
+                </Tooltip>
+              </div>
             </div>
             <div className="h-4 w-px bg-border/60" />
           </div>,
@@ -6308,10 +6398,15 @@ function DesktopBrowserTool(props: {
 }) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
+  const sessionKey = `${props.project.id}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
-    const existing = state.browserStateByProjectId[props.project.id];
-    if (existing) {
-      return existing;
+    const sessionExisting = state.browserStateBySessionKey?.[sessionKey];
+    if (sessionExisting) {
+      return sessionExisting;
+    }
+    const projectExisting = state.browserStateByProjectId[props.project.id];
+    if (projectExisting) {
+      return projectExisting;
     }
     return {
       currentUrl: resolveProjectDefaultBrowserUrl(props.project, props.projectSettings),
@@ -6322,8 +6417,18 @@ function DesktopBrowserTool(props: {
       chromeExpanded: false,
     } as const;
   });
-  const setBrowserCurrentUrl = workspaceShellActions.setBrowserCurrentUrl;
-  const setBrowserViewport = workspaceShellActions.setBrowserViewport;
+  const setBrowserCurrentUrl = useCallback(
+    (projectId: ProjectId, url: string) => {
+      workspaceShellActions.setBrowserCurrentUrl(projectId, url, "browser");
+    },
+    [],
+  );
+  const setBrowserViewport: typeof workspaceShellActions.setBrowserViewport = useCallback(
+    (projectId, input, sessionId) => {
+      workspaceShellActions.setBrowserViewport(projectId, input, sessionId ?? "browser");
+    },
+    [],
+  );
   const [draftUrl, setDraftUrl] = useState(browserState.currentUrl);
   const [hostState, setHostState] = useState<DesktopBrowserHostState>(
     DEFAULT_DESKTOP_BROWSER_HOST_STATE,
@@ -6335,7 +6440,7 @@ function DesktopBrowserTool(props: {
   const isChromeExpanded = browserState.chromeExpanded ?? false;
   const setIsChromeExpanded = useCallback(
     (expanded: boolean) => {
-      workspaceShellActions.setBrowserChromeExpanded(props.project.id, expanded);
+      workspaceShellActions.setBrowserChromeExpanded(props.project.id, expanded, "browser");
     },
     [props.project.id],
   );
@@ -6430,6 +6535,12 @@ function DesktopBrowserTool(props: {
     }
 
     let disposed = false;
+    const partition = resolveBrowserPartition({
+      projectId: props.project.id,
+      sessionId: "browser",
+      partitionMode: props.projectSettings.browser?.partitionMode,
+      partitionProfile: props.projectSettings.browser?.partitionProfile,
+    });
     void bridge
       .getBrowserHostState()
       .then((nextState) => {
@@ -6438,7 +6549,7 @@ function DesktopBrowserTool(props: {
       })
       .catch(() => undefined);
     void bridge
-      .getBrowserSessionState({ projectId: props.project.id })
+      .getBrowserSessionState({ projectId: props.project.id, sessionId: "browser" })
       .then((nextState) => {
         if (disposed || !nextState) return;
         setSessionState(nextState);
@@ -6447,11 +6558,14 @@ function DesktopBrowserTool(props: {
     void bridge
       .ensureBrowserSession({
         projectId: props.project.id,
+        sessionId: "browser",
         initialUrl: normalizedUrl,
+        partition,
       })
       .then(() =>
         bridge.activateBrowserSession({
           projectId: props.project.id,
+          sessionId: "browser",
         }),
       )
       .catch(() => undefined);
@@ -6469,7 +6583,13 @@ function DesktopBrowserTool(props: {
       lastRequestedUrlRef.current = null;
       void bridge.hideBrowserSession().catch(() => undefined);
     };
-  }, [bridge, props.project.id]);
+  }, [
+    bridge,
+    normalizedUrl,
+    props.project.id,
+    props.projectSettings.browser?.partitionMode,
+    props.projectSettings.browser?.partitionProfile,
+  ]);
 
   useEffect(() => {
     if (!bridge || !hostState.available || normalizedUrl.length === 0) {
@@ -6695,6 +6815,7 @@ function DesktopBrowserTool(props: {
   return (
     <DesktopBrowserChrome
       projectId={props.project.id}
+      sessionId="browser"
       title="Browser"
       isChromeExpanded={isChromeExpanded}
       setIsChromeExpanded={setIsChromeExpanded}
@@ -6816,10 +6937,15 @@ function EmbeddedBrowserTool(props: {
   onRunProcess?: ((processId: string) => void) | undefined;
 }) {
   const api = readNativeApi();
+  const sessionKey = `${props.project.id}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
-    const existing = state.browserStateByProjectId[props.project.id];
-    if (existing) {
-      return existing;
+    const sessionExisting = state.browserStateBySessionKey?.[sessionKey];
+    if (sessionExisting) {
+      return sessionExisting;
+    }
+    const projectExisting = state.browserStateByProjectId[props.project.id];
+    if (projectExisting) {
+      return projectExisting;
     }
     return {
       currentUrl: resolveProjectDefaultBrowserUrl(props.project, props.projectSettings),
@@ -6827,10 +6953,21 @@ function EmbeddedBrowserTool(props: {
       customWidth: null,
       customHeight: null,
       landscape: false,
+      chromeExpanded: false,
     } as const;
   });
-  const setBrowserCurrentUrl = workspaceShellActions.setBrowserCurrentUrl;
-  const setBrowserViewport = workspaceShellActions.setBrowserViewport;
+  const setBrowserCurrentUrl = useCallback(
+    (projectId: ProjectId, url: string) => {
+      workspaceShellActions.setBrowserCurrentUrl(projectId, url, "browser");
+    },
+    [],
+  );
+  const setBrowserViewport: typeof workspaceShellActions.setBrowserViewport = useCallback(
+    (projectId, input, sessionId) => {
+      workspaceShellActions.setBrowserViewport(projectId, input, sessionId ?? "browser");
+    },
+    [],
+  );
   const [draftUrl, setDraftUrl] = useState(browserState.currentUrl);
   const [embedBlocked, setEmbedBlocked] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -6925,10 +7062,14 @@ function EmbeddedBrowserTool(props: {
                 size="xs"
                 variant="outline"
                 onClick={() =>
-                  setBrowserViewport(props.project.id, {
-                    devicePreset: browserState.devicePreset,
-                    landscape: !browserState.landscape,
-                  })
+                  setBrowserViewport(
+                    props.project.id,
+                    {
+                      devicePreset: browserState.devicePreset,
+                      landscape: !browserState.landscape,
+                    },
+                    "browser",
+                  )
                 }
               >
                 <RotateCwIcon className="size-3.5" />
@@ -6937,6 +7078,7 @@ function EmbeddedBrowserTool(props: {
               <BrowserViewportSelector
                 browserState={browserState}
                 projectId={props.project.id}
+                sessionId="browser"
                 setBrowserViewport={setBrowserViewport}
                 onOpenChange={setViewportSelectorOpen}
               />
@@ -7155,13 +7297,16 @@ function DesktopCustomEmbedTool(props: {
   url: string;
   resumeLastVisitedPage?: boolean | undefined;
   lastVisitedUrl?: string | undefined;
+  partitionMode?: BrowserPartitionMode | undefined;
+  partitionProfile?: string | undefined;
   sessionId: string;
 }) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
   const projectSettings = useProjectWorkspaceSettings(props.project.id);
+  const sessionKey = `${props.project.id}:${props.sessionId}`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
-    const existing = state.browserStateByProjectId[props.project.id];
+    const existing = state.browserStateBySessionKey?.[sessionKey];
     if (existing) {
       return existing;
     }
@@ -7174,14 +7319,19 @@ function DesktopCustomEmbedTool(props: {
       chromeExpanded: false,
     } as const;
   });
-  const setBrowserViewport = workspaceShellActions.setBrowserViewport;
+  const setBrowserViewport: typeof workspaceShellActions.setBrowserViewport = useCallback(
+    (projectId, input, sessionId) => {
+      workspaceShellActions.setBrowserViewport(projectId, input, sessionId ?? props.sessionId);
+    },
+    [props.sessionId],
+  );
   const [hostState, setHostState] = useState<DesktopBrowserHostState>(
     DEFAULT_DESKTOP_BROWSER_HOST_STATE,
   );
   const [sessionState, setSessionState] = useState<DesktopBrowserSessionState>(
     createEmptyBrowserSessionState(props.project.id, props.sessionId),
   );
-  const [browserScopedState, setBrowserScopedState] = useProjectBrowserState(props.project.id);
+  const [browserScopedState, setBrowserScopedState] = useProjectBrowserState(sessionKey);
   const viewportSelectorOpen = browserScopedState.viewportSelectorOpen;
   const setViewportSelectorOpen = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) => {
@@ -7194,13 +7344,12 @@ function DesktopCustomEmbedTool(props: {
   const isChromeExpanded = browserState.chromeExpanded ?? false;
   const setIsChromeExpanded = useCallback(
     (expanded: boolean) => {
-      workspaceShellActions.setBrowserChromeExpanded(props.project.id, expanded);
+      workspaceShellActions.setBrowserChromeExpanded(props.project.id, expanded, props.sessionId);
     },
-    [props.project.id],
+    [props.project.id, props.sessionId],
   );
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lastRequestedUrlRef = useRef<string | null>(null);
-  const sessionKey = `${props.project.id}:${props.sessionId}`;
   const storedUrl = useAtomValue(
     workspaceShellAtom,
     (state) => state.browserUrlBySessionKey[sessionKey],
@@ -7228,10 +7377,17 @@ function DesktopCustomEmbedTool(props: {
   );
   const submitDraftUrl = () => {
     const nextUrl = normalizeBrowserUrl(draftUrl);
-    if (nextUrl.length === 0) {
-      return;
-    }
+    if (!nextUrl || nextUrl.length === 0) return;
     setBrowserSessionUrl(props.project.id, props.sessionId, nextUrl);
+    if (bridge && hostState.available) {
+      void bridge
+        .navigateBrowserSession({
+          projectId: props.project.id,
+          sessionId: props.sessionId,
+          url: nextUrl,
+        })
+        .catch(() => undefined);
+    }
   };
   const prevConfiguredUrlRef = useRef(configuredUrl);
   useEffect(() => {
@@ -7290,6 +7446,12 @@ function DesktopCustomEmbedTool(props: {
     }
 
     let disposed = false;
+    const partition = resolveBrowserPartition({
+      projectId: props.project.id,
+      sessionId: props.sessionId,
+      partitionMode: props.partitionMode,
+      partitionProfile: props.partitionProfile,
+    });
     void bridge
       .getBrowserHostState()
       .then((nextState) => {
@@ -7309,6 +7471,7 @@ function DesktopCustomEmbedTool(props: {
         projectId: props.project.id,
         sessionId: props.sessionId,
         initialUrl: normalizedUrl,
+        partition,
       })
       .then(() =>
         bridge.activateBrowserSession({
@@ -7331,7 +7494,7 @@ function DesktopCustomEmbedTool(props: {
       lastRequestedUrlRef.current = null;
       void bridge.hideBrowserSession().catch(() => undefined);
     };
-  }, [bridge, normalizedUrl, props.project.id, props.sessionId]);
+  }, [bridge, normalizedUrl, props.project.id, props.sessionId, props.partitionMode, props.partitionProfile]);
 
   useEffect(() => {
     if (!bridge || !hostState.available || normalizedUrl.length === 0) {
@@ -7628,6 +7791,8 @@ function CustomEmbedTool(props: {
   url: string;
   resumeLastVisitedPage?: boolean | undefined;
   lastVisitedUrl?: string | undefined;
+  partitionMode?: BrowserPartitionMode | undefined;
+  partitionProfile?: string | undefined;
   sessionId: string;
 }) {
   if (window.desktopBridge) {
@@ -7638,6 +7803,8 @@ function CustomEmbedTool(props: {
         url={props.url}
         resumeLastVisitedPage={props.resumeLastVisitedPage}
         lastVisitedUrl={props.lastVisitedUrl}
+        partitionMode={props.partitionMode}
+        partitionProfile={props.partitionProfile}
         sessionId={props.sessionId}
       />
     );
@@ -10312,6 +10479,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
               title={embed.label}
               url={embed.url}
               resumeLastVisitedPage={embed.resumeLastVisitedPage}
+              partitionMode={embed.partitionMode}
+              partitionProfile={embed.partitionProfile}
               sessionId={`custom-${embed.id}`}
             />
           ) : null;

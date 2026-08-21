@@ -12,6 +12,7 @@ import type {
   TestingLocatorEntryReviewInput,
   TestingLocatorLibraryResult,
   TestingLocatorPage,
+  TestingLocatorPageDeleteInput,
   TestingLocatorPageSelectionInput,
   TestingLocatorPageUpdateInput,
   TestingLocatorRepositoryTarget,
@@ -565,6 +566,44 @@ export class LocatorLibraryStore {
             input.pageId,
           );
       }
+    })();
+    return this.library(input.projectId);
+  }
+
+  deletePage(input: TestingLocatorPageDeleteInput): TestingLocatorLibraryResult {
+    const exists = this.#database
+      .query<{ id: string }, [string, string]>(
+        "SELECT id FROM locator_pages WHERE id = ? AND project_id = ?",
+      )
+      .get(input.pageId, input.projectId);
+    if (!exists) throw new Error("Locator page was not found in this project");
+    const entries = this.#database
+      .query<{ id: string }, [string, string]>(
+        "SELECT id FROM locator_entries WHERE project_id = ? AND page_id = ?",
+      )
+      .all(input.projectId, input.pageId)
+      .map((entry) => entry.id);
+    this.#database.transaction(() => {
+      for (const entryId of entries) {
+        this.#database
+          .query("DELETE FROM case_locator_mappings WHERE locator_entry_id = ?")
+          .run(entryId);
+        this.#database.query("DELETE FROM locator_sync_conflicts WHERE entry_id = ?").run(entryId);
+        this.#database.query("DELETE FROM locator_verifications WHERE entry_id = ?").run(entryId);
+        this.#database.query("DELETE FROM locator_entry_versions WHERE entry_id = ?").run(entryId);
+      }
+      this.#database
+        .query("DELETE FROM locator_entries WHERE project_id = ? AND page_id = ?")
+        .run(input.projectId, input.pageId);
+      this.#database
+        .query("DELETE FROM locator_page_artifacts WHERE page_id = ?")
+        .run(input.pageId);
+      this.#database
+        .query("DELETE FROM locator_repository_targets WHERE project_id = ? AND page_id = ?")
+        .run(input.projectId, input.pageId);
+      this.#database
+        .query("DELETE FROM locator_pages WHERE id = ? AND project_id = ?")
+        .run(input.pageId, input.projectId);
     })();
     return this.library(input.projectId);
   }

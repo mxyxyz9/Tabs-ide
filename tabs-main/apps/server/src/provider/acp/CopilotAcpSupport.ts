@@ -5,7 +5,6 @@ import * as Scope from "effect/Scope";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/schema";
-import { normalizeModelSlug } from "@tabs/shared/model";
 
 import {
   AcpSessionRuntime,
@@ -13,13 +12,13 @@ import {
   type AcpSessionRuntimeShape,
   type AcpSpawnInput,
 } from "./AcpSessionRuntime";
+import { getCopilotToken } from "../CopilotCredentialStore";
 
 export const COPILOT_DEFAULT_AUTH_METHOD_ID = "copilot-login";
 export const COPILOT_DRIVER_KIND = "copilot" as ProviderDriverKind;
 
-export type CopilotAcpRuntimeCopilotSettings = Pick<
-  CopilotSettings,
-  "binaryPath" | "gheHost" | "token" | "byokProvider" | "byokApiKey"
+export type CopilotAcpRuntimeCopilotSettings = Partial<
+  Pick<CopilotSettings, "binaryPath" | "gheHost" | "byokProvider" | "byokApiKey">
 >;
 
 export interface CopilotAcpRuntimeInput extends Omit<
@@ -34,11 +33,12 @@ export interface CopilotAcpRuntimeInput extends Omit<
 export function buildCopilotEnvironment(
   copilotSettings: CopilotAcpRuntimeCopilotSettings | null | undefined,
   baseEnv?: NodeJS.ProcessEnv,
+  secureToken?: string | null,
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...(baseEnv ?? process.env) };
 
-  // Explicit token injection from settings (no implicit parent token leakage)
-  const configuredToken = copilotSettings?.token?.trim();
+  // Explicit token injection from the OS credential store (no settings-file or parent leakage).
+  const configuredToken = secureToken?.trim();
   if (configuredToken) {
     env.COPILOT_GITHUB_TOKEN = configuredToken;
     env.GH_TOKEN = configuredToken;
@@ -68,12 +68,13 @@ export function buildCopilotAcpSpawnInput(
   copilotSettings: CopilotAcpRuntimeCopilotSettings | null | undefined,
   cwd: string,
   environment?: NodeJS.ProcessEnv,
+  secureToken?: string | null,
 ): AcpSpawnInput {
   return {
     command: copilotSettings?.binaryPath || "copilot",
     args: ["--acp", "--stdio"],
     cwd,
-    env: buildCopilotEnvironment(copilotSettings, environment),
+    env: buildCopilotEnvironment(copilotSettings, environment, secureToken),
   };
 }
 
@@ -87,12 +88,15 @@ export function resolveCopilotTerminalAuthCommand(
   advertisedMeta: unknown,
   gheHost?: string | null | undefined,
 ): CopilotTerminalAuthMetadata {
-  const meta = advertisedMeta as { "terminal-auth"?: { command?: string; args?: string[]; label?: string } } | undefined;
+  const meta = advertisedMeta as
+    | { "terminal-auth"?: { command?: string; args?: string[]; label?: string } }
+    | undefined;
   const terminalAuth = meta?.["terminal-auth"];
   const baseCommand = terminalAuth?.command || "copilot";
-  const baseArgs = Array.isArray(terminalAuth?.args) && terminalAuth.args.length > 0
-    ? [...terminalAuth.args]
-    : ["login"];
+  const baseArgs =
+    Array.isArray(terminalAuth?.args) && terminalAuth.args.length > 0
+      ? [...terminalAuth.args]
+      : ["login"];
   const label = terminalAuth?.label || "Copilot Login";
 
   // If a GitHub Enterprise host is specified, append --host to the login command
@@ -132,10 +136,24 @@ export const makeCopilotAcpRuntime = (
   input: CopilotAcpRuntimeInput,
 ): Effect.Effect<AcpSessionRuntimeShape, EffectAcpErrors.AcpError, Scope.Scope> =>
   Effect.gen(function* () {
+    const secureToken = yield* Effect.tryPromise(() => getCopilotToken()).pipe(
+      Effect.mapError(
+        (cause) =>
+          new EffectAcpErrors.AcpTransportError({
+            detail: "Failed to read the GitHub Copilot token from secure storage.",
+            cause,
+          }),
+      ),
+    );
     const acpContext = yield* Layer.build(
       AcpSessionRuntime.layer({
         ...input,
-        spawn: buildCopilotAcpSpawnInput(input.copilotSettings, input.cwd, input.environment),
+        spawn: buildCopilotAcpSpawnInput(
+          input.copilotSettings,
+          input.cwd,
+          input.environment,
+          secureToken,
+        ),
         authMethodId: resolveCopilotAuthMethodId(undefined, input.copilotSettings),
       }).pipe(
         Layer.provide(
@@ -146,10 +164,9 @@ export const makeCopilotAcpRuntime = (
     return yield* Effect.service(AcpSessionRuntime).pipe(Effect.provide(acpContext));
   });
 
-export function resolveCopilotAcpBaseModelId(model: string | null | undefined): string {
+export function resolveCopilotAcpBaseModelId(model: string | null | undefined): string | undefined {
   const trimmed = model?.trim();
-  const base = trimmed && trimmed.length > 0 ? trimmed : "claude-sonnet-4.6";
-  return normalizeModelSlug(base, COPILOT_DRIVER_KIND) ?? "claude-sonnet-4.6";
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 export function currentCopilotModelIdFromSessionSetup(

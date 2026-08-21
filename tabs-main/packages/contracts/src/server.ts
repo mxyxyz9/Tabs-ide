@@ -43,6 +43,15 @@ const ServerConfigIssues = Schema.Array(ServerConfigIssue);
 export const ServerProviderState = Schema.Literals(["ready", "warning", "error", "disabled"]);
 export type ServerProviderState = typeof ServerProviderState.Type;
 
+export const ServerProviderCatalogStatus = Schema.Literals([
+  "loading",
+  "ready",
+  "stale",
+  "empty",
+  "failed",
+]);
+export type ServerProviderCatalogStatus = typeof ServerProviderCatalogStatus.Type;
+
 export const ServerProviderAuthStatus = Schema.Literals([
   "authenticated",
   "authenticated_unentitled",
@@ -158,6 +167,33 @@ export const ServerProviderUpdateState = Schema.Struct({
 });
 export type ServerProviderUpdateState = typeof ServerProviderUpdateState.Type;
 
+export const ServerProviderCapabilitySupport = Schema.Literals([
+  "supported",
+  "external",
+  "unsupported",
+]);
+export type ServerProviderCapabilitySupport = typeof ServerProviderCapabilitySupport.Type;
+
+export const ServerProviderCapabilities = Schema.Struct({
+  modelDiscovery: Schema.Literals(["runtime", "curated", "configured", "unsupported"]),
+  agentSessions: ServerProviderCapabilitySupport,
+  textGeneration: ServerProviderCapabilitySupport,
+  structuredGeneration: ServerProviderCapabilitySupport,
+  nativeReview: ServerProviderCapabilitySupport,
+  login: ServerProviderCapabilitySupport,
+  logout: ServerProviderCapabilitySupport,
+  accountSwitch: ServerProviderCapabilitySupport,
+  installation: ServerProviderCapabilitySupport,
+});
+export type ServerProviderCapabilities = typeof ServerProviderCapabilities.Type;
+
+export const ServerProviderLifecycleAction = Schema.Struct({
+  kind: Schema.Literals(["login", "logout", "install", "switch-account"]),
+  command: TrimmedNonEmptyString,
+  external: Schema.Boolean,
+});
+export type ServerProviderLifecycleAction = typeof ServerProviderLifecycleAction.Type;
+
 export const ServerProvider = Schema.Struct({
   // Routing key for the configured instance this snapshot represents. This
   // is the only stable identity consumers may use for provider routing.
@@ -177,6 +213,11 @@ export const ServerProvider = Schema.Struct({
   status: ServerProviderState,
   auth: ServerProviderAuth,
   checkedAt: IsoDateTime,
+  catalogStatus: Schema.optional(ServerProviderCatalogStatus),
+  catalogSource: Schema.optional(TrimmedNonEmptyString),
+  catalogCheckedAt: Schema.optional(IsoDateTime),
+  capabilities: Schema.optional(ServerProviderCapabilities),
+  lifecycleActions: Schema.optional(Schema.Array(ServerProviderLifecycleAction)),
   message: Schema.optional(TrimmedNonEmptyString),
   // Optional for back-compat: every legacy producer omits this field and
   // an absent value is interpreted as `"available"` by consumers (see

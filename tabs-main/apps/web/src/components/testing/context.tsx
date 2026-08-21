@@ -14,13 +14,7 @@
  *   in `TestingTool` and passed as a direct prop only to the sidebar nav.
  */
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import type {
   TestingCaseSummary,
   TestingLocatorLibraryResult,
@@ -56,6 +50,7 @@ import type { ProviderPickerKind } from "~/session-logic";
 export interface TestingDataContextValue {
   // --- core data ------------------------------------------------------------
   cases: ReadonlyArray<TestingCaseSummary>;
+  caseGroups: ReadonlyArray<string>;
   locatorLibrary: TestingLocatorLibraryResult | null;
   generationJobs: ReadonlyArray<TestingGenerationJob>;
   executionRuns: ReadonlyArray<TestingExecutionRun>;
@@ -86,6 +81,7 @@ export interface TestingDataContextValue {
 
   // --- ui state that multiple views share -----------------------------------
   projectId: import("@tabs/contracts").ProjectId;
+  projectPath: string;
   busyAction: TestingBusyAction;
   setBusyAction: (action: TestingBusyAction) => void;
   message_setter: (msg: string) => void;
@@ -104,9 +100,13 @@ export interface TestingDataContextValue {
   editedDescription: string;
   setEditedDescription: (v: string) => void;
   editedSteps: ReadonlyArray<string>;
-  setEditedSteps: (steps: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => void;
-  editedExpectedResult: string;
-  setEditedExpectedResult: (v: string) => void;
+  setEditedSteps: (
+    steps: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+  ) => void;
+  editedExpectedResults: ReadonlyArray<string>;
+  setEditedExpectedResults: (
+    results: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+  ) => void;
   editedCaseLocatorIds: ReadonlySet<string>;
   setEditedCaseLocatorIds: (ids: ReadonlySet<string>) => void;
   implementedInventoryOpen: boolean;
@@ -116,7 +116,10 @@ export interface TestingDataContextValue {
   expandedTestNodes: ReadonlySet<string>;
   selectedTestNodeId: string | null;
   setSelectedTestNodeId: (id: string | null) => void;
-  flattenedTestInventory: ReadonlyArray<{ node: import("@tabs/contracts").TestingTestInventoryNode; depth: number }>;
+  flattenedTestInventory: ReadonlyArray<{
+    node: import("@tabs/contracts").TestingTestInventoryNode;
+    depth: number;
+  }>;
   workbookPath: string;
 
   // --- case intake & draft UI state -----------------------------------------
@@ -127,9 +130,13 @@ export interface TestingDataContextValue {
   manualCaseDescription: string;
   setManualCaseDescription: (v: string) => void;
   manualCaseSteps: ReadonlyArray<string>;
-  setManualCaseSteps: (v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => void;
-  manualCaseExpected: string;
-  setManualCaseExpected: (v: string) => void;
+  setManualCaseSteps: (
+    v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+  ) => void;
+  manualCaseExpectedResults: ReadonlyArray<string>;
+  setManualCaseExpectedResults: (
+    v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+  ) => void;
   manualCaseLocatorIds: ReadonlySet<string>;
   setManualCaseLocatorIds: (v: ReadonlySet<string>) => void;
   storyText: string;
@@ -154,10 +161,14 @@ export interface TestingDataContextValue {
   locatorFilter: TestingLocatorFilter;
   setLocatorFilter: (v: TestingLocatorFilter) => void;
   locatorCodeEntryIds: ReadonlySet<string>;
-  setLocatorCodeEntryIds: (ids: ReadonlySet<string>) => void;
+  setLocatorCodeEntryIds: (
+    ids: ReadonlySet<string> | ((previous: ReadonlySet<string>) => ReadonlySet<string>),
+  ) => void;
   filteredLocatorEntries: ReadonlyArray<TestingLocatorEntry>;
   selectedLocatorEntryIds: ReadonlySet<string>;
-  setSelectedLocatorEntryIds: (ids: ReadonlySet<string>) => void;
+  setSelectedLocatorEntryIds: (
+    ids: ReadonlySet<string> | ((previous: ReadonlySet<string>) => ReadonlySet<string>),
+  ) => void;
   editingLocatorEntry: TestingLocatorEntry | null;
   pendingRemoveLocator: TestingLocatorEntry | null;
   editingLocatorKey: string;
@@ -285,13 +296,21 @@ export interface TestingDataContextValue {
   setDiscoveryExperience: (experience: "classic" | "locator-first") => Promise<void>;
   clearGraph: () => Promise<void>;
 
-  startLocatorDiscovery: () => Promise<void>;
+  startLocatorDiscovery: () => Promise<boolean>;
   navigateLocatorDiscovery: () => Promise<void>;
-  captureLocatorPage: (captureMode?: "relevant" | "page") => Promise<void>;
+  captureLocatorPage: (captureMode?: "relevant" | "page") => Promise<boolean>;
   finishLocatorDiscovery: (cancel: boolean) => Promise<void>;
-  indexLocatorFolder: (storageMode?: import("@tabs/contracts").TestingLocatorStorageMode) => Promise<void>;
+  rescanLocatorPage: (pageId?: string) => Promise<void>;
+  deleteLocatorPage: (pageId?: string) => Promise<void>;
+  indexLocatorFolder: (
+    storageMode?: import("@tabs/contracts").TestingLocatorStorageMode,
+  ) => Promise<void>;
   approveSelectedLocators: () => Promise<void>;
-  reviewLocator: (entryId: string, decision: "accept" | "archive" | "keep-managed" | "restore", locatorKey?: string) => Promise<void>;
+  reviewLocator: (
+    entryId: string,
+    decision: "accept" | "archive" | "keep-managed" | "restore",
+    locatorKey?: string,
+  ) => Promise<void>;
   startEditingLocator: (entry: TestingLocatorEntry) => void;
   saveLocatorChanges: () => Promise<void>;
   saveLocatorPageName: () => Promise<void>;
@@ -300,14 +319,24 @@ export interface TestingDataContextValue {
   chooseLocatorRepositoryFolder: () => Promise<void>;
   previewLocatorRepositoryChange: () => Promise<void>;
   applyLocatorRepositoryChange: () => Promise<void>;
-  resolveLocatorSync: (conflictId: string, decision: "keep-managed" | "accept-repository" | "archive") => Promise<void>;
+  resolveLocatorSync: (
+    conflictId: string,
+    decision: "keep-managed" | "accept-repository" | "archive",
+  ) => Promise<void>;
   disconnectLocatorFolder: () => Promise<void>;
 
   chooseWorkbook: () => Promise<void>;
   setWorkbookPath: (path: string) => void;
-  importWorkbook: () => Promise<void>;
+  importWorkbook: (groupName?: string) => Promise<void>;
   generateScenarios: () => Promise<void>;
-  reviewCase: (testCase: TestingCaseSummary, decision: "accepted" | "edited" | "rejected") => Promise<void>;
+  reviewCase: (
+    testCase: TestingCaseSummary,
+    decision: "accepted" | "edited" | "rejected",
+  ) => Promise<void>;
+  deleteCase: (testCase: TestingCaseSummary) => Promise<void>;
+  updateCaseGroup: (testCase: TestingCaseSummary, groupName: string) => Promise<void>;
+  createCaseGroup: (groupName: string) => Promise<void>;
+  deleteCaseGroup: (groupName: string) => Promise<void>;
   beginEditCase: (testCase: TestingCaseSummary) => void;
   updateEditedStep: (index: number, value: string) => void;
   moveEditedStep: (index: number, direction: -1 | 1) => void;
@@ -316,7 +345,7 @@ export interface TestingDataContextValue {
   generateTests: () => Promise<void>;
   cancelGeneration: (jobId: string) => Promise<void>;
 
-  runGeneratedTests: () => Promise<void>;
+  runGeneratedTests: (caseIds?: ReadonlyArray<string>) => Promise<void>;
   decideHealing: (proposalId: string, decision: "accepted" | "rejected") => Promise<void>;
   createTestingSchedule: () => Promise<void>;
 
@@ -325,7 +354,11 @@ export interface TestingDataContextValue {
   draftFailedCaseBug: (run: TestingExecutionRun, caseId: string) => Promise<void>;
   triageFailedCase: (run: TestingExecutionRun, caseId: string) => Promise<void>;
 
-  updateTestingFusionModel: (provider: ProviderPickerKind, model: import("@tabs/contracts").ModelSlug, options?: ModelSelection["options"]) => void;
+  updateTestingFusionModel: (
+    provider: ProviderPickerKind,
+    model: import("@tabs/contracts").ModelSlug,
+    options?: ModelSelection["options"],
+  ) => void;
   updateTestingFusionOptions: (options: ModelSelection["options"] | undefined) => void;
   fusionProviders: ReadonlyArray<unknown>;
   serverConfig: import("@tabs/contracts").ServerConfig | null;

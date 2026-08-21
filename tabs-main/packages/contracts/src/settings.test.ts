@@ -3,10 +3,15 @@ import * as Schema from "effect/Schema";
 
 import { ProviderInstanceId } from "./providerInstance.ts";
 import {
+  BrowserProfileDefinition,
   ClientSettingsSchema,
+  DEFAULT_BROWSER_PROFILES,
   DEFAULT_SERVER_SETTINGS,
+  ProjectBrowserSettings,
+  ProjectCustomEmbedDefinition,
   ServerSettings,
   ServerSettingsPatch,
+  resolveBrowserPartition,
 } from "./settings.ts";
 
 const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
@@ -182,5 +187,136 @@ describe("ServerSettingsPatch string normalization", () => {
 
     expect(encoded.addProjectBaseDirectory).toBe("~/Development");
     expect(encoded.providers?.codex?.binaryPath).toBe("/opt/homebrew/bin/codex");
+  });
+
+  it("encodes provider secrets as empty write-only values", () => {
+    const settings = decodeServerSettings({
+      providers: {
+        copilot: { token: "copilot-token", byokApiKey: "copilot-byok-key" },
+        gemini: { apiKey: "gemini-key" },
+        opencode: { serverPassword: "opencode-password" },
+        kilo: { serverPassword: "kilo-password" },
+      },
+    });
+    const encoded = encodeServerSettings(settings);
+
+    expect(encoded.providers?.copilot?.token).toBe("");
+    expect(encoded.providers?.copilot?.byokApiKey).toBe("");
+    expect(encoded.providers?.gemini?.apiKey).toBe("");
+    expect(encoded.providers?.opencode?.serverPassword).toBe("");
+    expect(encoded.providers?.kilo?.serverPassword).toBe("");
+  });
+});
+
+describe("Browser Session Partitioning", () => {
+  it("resolves default shared partition per project", () => {
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-123",
+      }),
+    ).toBe("persist:tabs-browser:proj-123");
+
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-123",
+        partitionMode: "shared",
+      }),
+    ).toBe("persist:tabs-browser:proj-123");
+  });
+
+  it("resolves isolated partition per tab/embed session", () => {
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-123",
+        sessionId: "custom-figma",
+        partitionMode: "isolated",
+      }),
+    ).toBe("persist:tabs-browser:proj-123:custom-figma");
+
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-123",
+        partitionMode: "isolated",
+      }),
+    ).toBe("persist:tabs-browser:proj-123:browser");
+  });
+
+  it("resolves named profile partition across tabs/projects", () => {
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-123",
+        sessionId: "custom-figma",
+        partitionMode: "profile",
+        partitionProfile: "work",
+      }),
+    ).toBe("persist:tabs-browser:profile:work");
+
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-456",
+        partitionMode: "profile",
+        partitionProfile: "personal",
+      }),
+    ).toBe("persist:tabs-browser:profile:personal");
+
+    expect(
+      resolveBrowserPartition({
+        projectId: "proj-123",
+        partitionMode: "profile",
+        partitionProfile: "   ",
+      }),
+    ).toBe("persist:tabs-browser:profile:default");
+  });
+
+  it("decodes ProjectBrowserSettings and ProjectCustomEmbedDefinition with partition defaults", () => {
+    const decodeBrowser = Schema.decodeUnknownSync(ProjectBrowserSettings);
+    const decodeEmbed = Schema.decodeUnknownSync(ProjectCustomEmbedDefinition);
+
+    const defaultBrowser = decodeBrowser({});
+    expect(defaultBrowser.partitionMode).toBe("shared");
+    expect(defaultBrowser.partitionProfile).toBeUndefined();
+
+    const customBrowser = decodeBrowser({
+      partitionMode: "profile",
+      partitionProfile: "work-profile",
+    });
+    expect(customBrowser.partitionMode).toBe("profile");
+    expect(customBrowser.partitionProfile).toBe("work-profile");
+
+    const defaultEmbed = decodeEmbed({
+      id: "embed-1",
+      label: "Figma",
+      url: "https://figma.com",
+    });
+    expect(defaultEmbed.partitionMode).toBe("shared");
+
+    const isolatedEmbed = decodeEmbed({
+      id: "embed-2",
+      label: "ChatGPT",
+      url: "https://chatgpt.com",
+      partitionMode: "isolated",
+    });
+    expect(isolatedEmbed.partitionMode).toBe("isolated");
+  });
+
+  it("decodes ClientSettings with default and custom browserProfiles", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.browserProfiles).toEqual(DEFAULT_BROWSER_PROFILES);
+
+    const customSettings = decodeClientSettings({
+      browserProfiles: [
+        {
+          id: "client-a",
+          label: "Client Alpha",
+          color: "#8b5cf6",
+          description: "Staging and linear accounts",
+          createdAt: 123456789,
+        },
+      ],
+    });
+    expect(customSettings.browserProfiles).toHaveLength(1);
+    expect(customSettings.browserProfiles[0]?.id).toBe("client-a");
+    expect(customSettings.browserProfiles[0]?.label).toBe("Client Alpha");
+    expect(customSettings.browserProfiles[0]?.color).toBe("#8b5cf6");
   });
 });

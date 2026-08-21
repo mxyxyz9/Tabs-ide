@@ -3,6 +3,7 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/unstable/http";
@@ -21,11 +22,13 @@ import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
   defaultProviderContinuationIdentity,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
 import type { ServerProviderDraft } from "../providerSnapshot";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment";
+import { getProviderSecret } from "../ProviderSecretStore";
 import {
   makeManualOnlyProviderMaintenanceCapabilities,
   makeStaticProviderMaintenanceResolver,
@@ -91,22 +94,38 @@ export const CopilotDriver: ProviderDriver<CopilotSettings, CopilotDriverEnv> = 
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
-      const effectiveConfig = { ...config, enabled } satisfies CopilotSettings;
+      const secureByokApiKey = yield* Effect.tryPromise(() =>
+        getProviderSecret("copilot.byok-api-key"),
+      ).pipe(Effect.orElseSucceed(() => null));
+      const effectiveConfig = {
+        ...config,
+        enabled,
+        byokApiKey: secureByokApiKey ?? config.byokApiKey,
+      } satisfies CopilotSettings;
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
       });
 
+      const advertisedModelsRef = yield* Ref.make<ReadonlySet<string>>(new Set());
+      const checkProvider = checkCopilotProviderStatus(effectiveConfig, processEnv).pipe(
+        Effect.map(stampIdentity),
+        Effect.tap((provider) =>
+          Ref.set(advertisedModelsRef, new Set(provider.models.map((model) => model.slug))),
+        ),
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      );
       const adapter = yield* makeCopilotAdapter(effectiveConfig, {
         environment: processEnv,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
         instanceId,
+        isModelAdvertised: (modelId) =>
+          Ref.get(advertisedModelsRef).pipe(Effect.map((models) => models.has(modelId))),
       });
-      const textGeneration = yield* makeCopilotTextGeneration(effectiveConfig, processEnv);
-
-      const checkProvider = checkCopilotProviderStatus(effectiveConfig, processEnv).pipe(
-        Effect.map(stampIdentity),
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+      const textGeneration = yield* makeCopilotTextGeneration(
+        effectiveConfig,
+        processEnv,
+        (modelId) => Ref.get(advertisedModelsRef).pipe(Effect.map((models) => models.has(modelId))),
       );
 
       const snapshot = yield* makeManagedServerProvider<CopilotSettings>({
@@ -144,6 +163,24 @@ export const CopilotDriver: ProviderDriver<CopilotSettings, CopilotDriverEnv> = 
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "supported",
+          logout: "supported",
+          accountSwitch: "supported",
+          installation: "supported",
+        }),
+        lifecycle: {
+          actions: [
+            { kind: "login", command: "copilot login", external: false },
+            { kind: "logout", command: "copilot /logout", external: false },
+            { kind: "switch-account", command: "copilot /logout", external: false },
+            { kind: "install", command: "npm install -g @github/copilot", external: false },
+          ],
+        },
         snapshot,
         adapter,
         textGeneration,

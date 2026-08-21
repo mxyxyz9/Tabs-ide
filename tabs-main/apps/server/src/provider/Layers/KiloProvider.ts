@@ -145,7 +145,11 @@ function inferDefaultVariant(
 }
 
 function inferDefaultAgent(agents: ReadonlyArray<Agent>): string | undefined {
-  return agents.find((agent) => agent.name === "code" || agent.name === "build")?.name ?? agents[0]?.name ?? undefined;
+  return (
+    agents.find((agent) => agent.name === "code" || agent.name === "build")?.name ??
+    agents[0]?.name ??
+    undefined
+  );
 }
 
 const DEFAULT_KILO_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
@@ -367,6 +371,7 @@ export const checkKiloProviderStatus = Effect.fn("checkKiloProviderStatus")(func
           binaryPath: kiloSettings.binaryPath,
           serverUrl: kiloSettings.serverUrl,
           environment,
+          retryKiloCredentialStartup: true,
         });
         return yield* openCodeRuntime.loadOpenCodeInventory(
           openCodeRuntime.createOpenCodeSdkClient({

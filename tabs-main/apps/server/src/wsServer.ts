@@ -25,6 +25,10 @@ import {
   ProviderInstanceId,
   ThreadId,
   type TestingCaseCreateInput,
+  type TestingCaseDeleteInput,
+  type TestingCaseGroupUpdateInput,
+  type TestingCaseGroupCreateInput,
+  type TestingCaseGroupDeleteInput,
   type TestingCaseReviewInput,
   type TestingCaseIdPolicyInput,
   type TestingBugDraftInput,
@@ -38,6 +42,7 @@ import {
   type TestingLocatorDiscoveryNavigateInput,
   type TestingLocatorDiscoverySessionInput,
   type TestingLocatorEntryReviewInput,
+  type TestingLocatorPageDeleteInput,
   type TestingLocatorPageSelectionInput,
   type TestingLocatorPageUpdateInput,
   type TestingPageObjectCodeUpdateInput,
@@ -895,6 +900,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return testingService.setLocatorPageSelection(body);
       }
 
+      case WS_METHODS.testingDeleteLocatorPage: {
+        const body = stripRequestTag(request.body) as TestingLocatorPageDeleteInput;
+        return testingService.deleteLocatorPage(body);
+      }
+
       case WS_METHODS.testingUpdatePageObjectCode: {
         const body = stripRequestTag(request.body) as TestingPageObjectCodeUpdateInput;
         return testingService.updatePageObjectCode(body);
@@ -1000,6 +1010,26 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.testingReviewCase: {
         const body = stripRequestTag(request.body) as TestingCaseReviewInput;
         return testingService.reviewCase(body);
+      }
+
+      case WS_METHODS.testingDeleteCase: {
+        const body = stripRequestTag(request.body) as TestingCaseDeleteInput;
+        return testingService.deleteCase(body);
+      }
+
+      case WS_METHODS.testingUpdateCaseGroup: {
+        const body = stripRequestTag(request.body) as TestingCaseGroupUpdateInput;
+        return testingService.updateCaseGroup(body);
+      }
+
+      case WS_METHODS.testingCreateCaseGroup: {
+        const body = stripRequestTag(request.body) as TestingCaseGroupCreateInput;
+        return testingService.createCaseGroup(body);
+      }
+
+      case WS_METHODS.testingDeleteCaseGroup: {
+        const body = stripRequestTag(request.body) as TestingCaseGroupDeleteInput;
+        return testingService.deleteCaseGroup(body);
       }
 
       case WS_METHODS.testingGenerateScenarios: {

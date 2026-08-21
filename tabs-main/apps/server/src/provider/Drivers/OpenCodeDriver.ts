@@ -35,11 +35,14 @@ import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import { OpenCodeRuntime } from "../opencodeRuntime";
 import {
   defaultProviderContinuationIdentity,
+  makeExternalCliLifecycle,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
 import type { ServerProviderDraft } from "../providerSnapshot";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment";
+import { getProviderSecret } from "../ProviderSecretStore";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
   makePackageManagedProviderMaintenanceResolver,
@@ -121,7 +124,14 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
-      const effectiveConfig = { ...config, enabled } satisfies OpenCodeSettings;
+      const secureServerPassword = yield* Effect.tryPromise(() =>
+        getProviderSecret("opencode.server-password"),
+      ).pipe(Effect.orElseSucceed(() => null));
+      const effectiveConfig = {
+        ...config,
+        enabled,
+        serverPassword: secureServerPassword ?? config.serverPassword,
+      } satisfies OpenCodeSettings;
       const maintenanceCapabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
         binaryPath: effectiveConfig.binaryPath,
         env: processEnv,
@@ -173,6 +183,21 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "external",
+          logout: "external",
+          accountSwitch: "external",
+          installation: "external",
+        }),
+        lifecycle: makeExternalCliLifecycle([
+          { kind: "login", command: "opencode auth login" },
+          { kind: "logout", command: "opencode auth logout" },
+          { kind: "switch-account", command: "opencode auth logout && opencode auth login" },
+        ]),
         snapshot,
         adapter,
         textGeneration,

@@ -39,6 +39,7 @@ import * as Semaphore from "effect/Semaphore";
 import { ServerConfig } from "./config";
 import { type DeepPartial, deepMerge } from "@tabs/shared/Struct";
 import { fromLenientJson } from "@tabs/shared/schemaJson";
+import { setProviderSecret, type ProviderSecretName } from "./provider/ProviderSecretStore";
 
 export class ServerSettingsError extends Schema.TaggedErrorClass<ServerSettingsError>()(
   "ServerSettingsError",
@@ -223,6 +224,66 @@ function stripDefaultServerSettings(current: unknown, defaults: unknown): unknow
   return Object.is(current, defaults) ? undefined : current;
 }
 
+function providerSecretsFromSettings(
+  settings: ServerSettings,
+): ReadonlyArray<readonly [ProviderSecretName, string]> {
+  const entries: Array<readonly [ProviderSecretName, string]> = [
+    ["copilot.github-token", settings.providers.copilot.token],
+    ["copilot.byok-api-key", settings.providers.copilot.byokApiKey],
+    ["gemini.api-key", settings.providers.gemini.apiKey],
+    ["opencode.server-password", settings.providers.opencode.serverPassword],
+    ["kilo.server-password", settings.providers.kilo.serverPassword],
+  ];
+  return entries.filter((entry) => entry[1].trim().length > 0);
+}
+
+function withoutPlaintextProviderSecrets(settings: ServerSettings): ServerSettings {
+  return {
+    ...settings,
+    providers: {
+      ...settings.providers,
+      copilot: { ...settings.providers.copilot, token: "", byokApiKey: "" },
+      gemini: { ...settings.providers.gemini, apiKey: "" },
+      opencode: { ...settings.providers.opencode, serverPassword: "" },
+      kilo: { ...settings.providers.kilo, serverPassword: "" },
+    },
+  };
+}
+
+function providerSecretsFromPatch(
+  patch: ServerSettingsPatch,
+): ReadonlyArray<readonly [ProviderSecretName, string]> {
+  const providers = patch.providers;
+  const entries: Array<readonly [ProviderSecretName, string | undefined]> = [
+    ["copilot.github-token", providers?.copilot?.token],
+    ["copilot.byok-api-key", providers?.copilot?.byokApiKey],
+    ["gemini.api-key", providers?.gemini?.apiKey],
+    ["opencode.server-password", providers?.opencode?.serverPassword],
+    ["kilo.server-password", providers?.kilo?.serverPassword],
+  ];
+  return entries.filter(
+    (entry): entry is readonly [ProviderSecretName, string] => typeof entry[1] === "string",
+  );
+}
+
+function withoutPlaintextProviderSecretsPatch(patch: ServerSettingsPatch): ServerSettingsPatch {
+  if (!patch.providers) return patch;
+  return {
+    ...patch,
+    providers: {
+      ...patch.providers,
+      ...(patch.providers.copilot
+        ? { copilot: { ...patch.providers.copilot, token: "", byokApiKey: "" } }
+        : {}),
+      ...(patch.providers.gemini ? { gemini: { ...patch.providers.gemini, apiKey: "" } } : {}),
+      ...(patch.providers.opencode
+        ? { opencode: { ...patch.providers.opencode, serverPassword: "" } }
+        : {}),
+      ...(patch.providers.kilo ? { kilo: { ...patch.providers.kilo, serverPassword: "" } } : {}),
+    },
+  };
+}
+
 const makeServerSettings = Effect.gen(function* () {
   const { settingsPath } = yield* ServerConfig;
   const fs = yield* FileSystem.FileSystem;
@@ -359,7 +420,25 @@ const makeServerSettings = Effect.gen(function* () {
     const startup = Effect.gen(function* () {
       yield* startWatcher;
       yield* Cache.invalidate(settingsCache, cacheKey);
-      yield* getSettingsFromCache;
+      const settings = yield* getSettingsFromCache;
+      const legacySecrets = providerSecretsFromSettings(settings);
+      if (legacySecrets.length > 0) {
+        yield* Effect.forEach(legacySecrets, ([name, value]) =>
+          Effect.tryPromise(() => setProviderSecret(name, value)).pipe(
+            Effect.mapError(
+              (cause) =>
+                new ServerSettingsError({
+                  settingsPath,
+                  detail: `failed to migrate '${name}' to secure storage`,
+                  cause,
+                }),
+            ),
+          ),
+        );
+        const migrated = withoutPlaintextProviderSecrets(settings);
+        yield* writeSettingsAtomically(migrated);
+        yield* Cache.set(settingsCache, cacheKey, migrated);
+      }
     });
 
     const startupExit = yield* Effect.exit(startup);
@@ -378,8 +457,23 @@ const makeServerSettings = Effect.gen(function* () {
     updateSettings: (patch) =>
       writeSemaphore.withPermits(1)(
         Effect.gen(function* () {
+          yield* Effect.forEach(providerSecretsFromPatch(patch), ([name, value]) =>
+            Effect.tryPromise(() => setProviderSecret(name, value)).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ServerSettingsError({
+                    settingsPath,
+                    detail: `failed to update '${name}' in secure storage`,
+                    cause,
+                  }),
+              ),
+            ),
+          );
           const current = yield* getSettingsFromCache;
-          const merged = mergeServerSettingsPatch(current, patch);
+          const merged = mergeServerSettingsPatch(
+            current,
+            withoutPlaintextProviderSecretsPatch(patch),
+          );
           const mergedRaw = Schema.encodeSync(ServerSettings)(merged);
           const next = yield* Schema.decodeUnknownEffect(ServerSettings)(mergedRaw).pipe(
             Effect.mapError(

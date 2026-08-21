@@ -18,6 +18,13 @@ import { deriveProviderInstanceEntries } from "./providerInstances";
 const MAX_CUSTOM_MODEL_COUNT = 32;
 export const MAX_CUSTOM_MODEL_LENGTH = 256;
 
+const AUTHORITATIVE_RUNTIME_CATALOG_PROVIDERS = new Set([
+  "claudeAgent",
+  "cursor",
+  "copilot",
+  "grok",
+]);
+
 // ── Model-selection / option-shape bridges (web ↔ wire) ────────────────
 // The wire `ModelSelection` routes on `instanceId` and carries options as the
 // canonical `{ id, value }[]` array. The web composer still works with a
@@ -158,9 +165,10 @@ export function getAppModelOptions(
       .map((model) => model.slug),
   );
 
-  const customModels =
-    (settings.providers as Record<string, { customModels?: ReadonlyArray<string> }>)?.[provider]
-      ?.customModels ?? [];
+  const customModels = AUTHORITATIVE_RUNTIME_CATALOG_PROVIDERS.has(provider)
+    ? []
+    : ((settings.providers as Record<string, { customModels?: ReadonlyArray<string> }>)?.[provider]
+        ?.customModels ?? []);
   for (const slug of normalizeCustomModelSlugs(customModels, builtInModelSlugs, provider)) {
     if (seen.has(slug)) {
       continue;
@@ -179,6 +187,7 @@ export function getAppModelOptions(
     typeof trimmedSelectedModel === "string" &&
     options.some((option) => option.name.toLowerCase() === trimmedSelectedModel);
   if (
+    !AUTHORITATIVE_RUNTIME_CATALOG_PROVIDERS.has(provider) &&
     normalizedSelectedModel &&
     !seen.has(normalizedSelectedModel) &&
     !selectedModelMatchesExistingName
@@ -217,6 +226,7 @@ const TEXT_GEN_PROVIDER_KEYS = [
   "codex",
   "claudeAgent",
   "cursor",
+  "copilot",
   "grok",
   "opencode",
   "kilo",

@@ -135,6 +135,7 @@ describe("workspaceShellStore", () => {
               defaultUrl: "",
               openExternalByDefault: false,
               resumeLastVisitedPage: true,
+              partitionMode: "shared",
             },
             terminalProcesses: [],
             serverPresets: [],
@@ -144,6 +145,7 @@ describe("workspaceShellStore", () => {
                 label: "Figma",
                 url: "https://figma.com",
                 resumeLastVisitedPage: false,
+                partitionMode: "shared",
               },
             ],
           },
@@ -212,6 +214,7 @@ describe("workspaceShellStore", () => {
             defaultUrl: "http://localhost:3000",
             openExternalByDefault: false,
             resumeLastVisitedPage: true,
+            partitionMode: "shared",
           },
           terminalProcesses: [],
           serverPresets: [],
@@ -269,6 +272,7 @@ describe("workspaceShellStore", () => {
               defaultUrl: "",
               openExternalByDefault: false,
               resumeLastVisitedPage: true,
+              partitionMode: "shared",
             },
             terminalProcesses: [],
             serverPresets: [],
@@ -345,7 +349,12 @@ describe("workspaceShellStore", () => {
               customEmbedId: "figma",
             },
           ],
-          browser: { defaultUrl: "", openExternalByDefault: false, resumeLastVisitedPage: true },
+          browser: {
+            defaultUrl: "",
+            openExternalByDefault: false,
+            resumeLastVisitedPage: true,
+            partitionMode: "shared",
+          },
           terminalProcesses: [
             {
               id: "frontend",
@@ -358,7 +367,13 @@ describe("workspaceShellStore", () => {
           ],
           serverPresets: [],
           customEmbeds: [
-            { id: "figma", label: "Figma", url: "https://figma.com", resumeLastVisitedPage: false },
+            {
+              id: "figma",
+              label: "Figma",
+              url: "https://figma.com",
+              resumeLastVisitedPage: false,
+              partitionMode: "shared",
+            },
           ],
         },
       },
@@ -375,5 +390,144 @@ describe("workspaceShellStore", () => {
     expect(next.session.activeToolIdByProjectId[project.id]).toBe("terminal-frontend");
     // The per-tab browser URL is preserved so the tab reopens where it was.
     expect(next.browserUrlBySessionKey[browserSessionKey]).toBe("https://figma.com/file/abc");
+  });
+
+  it("isolates viewport device presets and custom dimensions per browser tab/session in the same project", () => {
+    const project = makeProject("project-viewports");
+    const store = useWorkspaceShellStore.getState();
+    store.openProject(project.id);
+
+    // Set default browser tab to iPhone 14 Pro
+    store.setBrowserViewport(
+      project.id,
+      {
+        devicePreset: "mobile-s",
+        landscape: false,
+      },
+      "browser",
+    );
+
+    // Set custom embed Figma to Large Desktop
+    store.setBrowserViewport(
+      project.id,
+      {
+        devicePreset: "wide",
+        landscape: false,
+      },
+      "custom-figma",
+    );
+
+    // Set custom embed ChatGPT to Laptop 13 in Landscape
+    store.setBrowserViewport(
+      project.id,
+      {
+        devicePreset: "desktop",
+        landscape: true,
+      },
+      "custom-chatgpt",
+    );
+
+    // Set a custom dimension tab
+    store.setBrowserViewport(
+      project.id,
+      {
+        devicePreset: "custom",
+        customWidth: 500,
+        customHeight: 600,
+        landscape: false,
+      },
+      "custom-preview",
+    );
+
+    const state = useWorkspaceShellStore.getState();
+
+    // Verify each session key in the store has its own independent viewport state
+    expect(state.browserStateBySessionKey[`${project.id}:browser`]?.devicePreset).toBe("mobile-s");
+    expect(state.browserStateBySessionKey[`${project.id}:browser`]?.landscape).toBe(false);
+
+    expect(state.browserStateBySessionKey[`${project.id}:custom-figma`]?.devicePreset).toBe("wide");
+    expect(state.browserStateBySessionKey[`${project.id}:custom-figma`]?.landscape).toBe(false);
+
+    expect(state.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.devicePreset).toBe("desktop");
+    expect(state.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.landscape).toBe(true);
+
+    expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.devicePreset).toBe("custom");
+    expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.customWidth).toBe(500);
+    expect(state.browserStateBySessionKey[`${project.id}:custom-preview`]?.customHeight).toBe(600);
+
+    // Modifying one session's viewport must not change the others
+    store.setBrowserViewport(
+      project.id,
+      {
+        devicePreset: "tablet",
+        landscape: true,
+      },
+      "custom-figma",
+    );
+
+    const nextState = useWorkspaceShellStore.getState();
+    expect(nextState.browserStateBySessionKey[`${project.id}:browser`]?.devicePreset).toBe("mobile-s");
+    expect(nextState.browserStateBySessionKey[`${project.id}:custom-figma`]?.devicePreset).toBe("tablet");
+    expect(nextState.browserStateBySessionKey[`${project.id}:custom-figma`]?.landscape).toBe(true);
+    expect(nextState.browserStateBySessionKey[`${project.id}:custom-chatgpt`]?.devicePreset).toBe("desktop");
+  });
+
+  it("preserves per-session browser viewport state across syncWorkspaceShellState", () => {
+    const project = makeProject("project-sync-viewports");
+    const baseState = createDefaultWorkspaceShellPersistedState();
+    const browserKey = `${project.id}:browser`;
+    const figmaKey = `${project.id}:custom-figma`;
+
+    const input: WorkspaceShellPersistedState = {
+      ...baseState,
+      session: {
+        ...baseState.session,
+        openProjectIds: [project.id],
+        activeProjectId: project.id,
+      },
+      browserStateBySessionKey: {
+        [browserKey]: {
+          currentUrl: "http://localhost:3000",
+          devicePreset: "mobile-s",
+          customWidth: null,
+          customHeight: null,
+          landscape: false,
+        },
+        [figmaKey]: {
+          currentUrl: "https://figma.com",
+          devicePreset: "desktop",
+          customWidth: null,
+          customHeight: null,
+          landscape: true,
+        },
+      },
+      projectSettingsByProjectId: {
+        [project.id]: {
+          tools: [],
+          browser: {
+            defaultUrl: "",
+            openExternalByDefault: false,
+            resumeLastVisitedPage: true,
+            partitionMode: "shared",
+          },
+          terminalProcesses: [],
+          serverPresets: [],
+          customEmbeds: [
+            {
+              id: "figma",
+              label: "Figma",
+              url: "https://figma.com",
+              resumeLastVisitedPage: false,
+              partitionMode: "shared",
+            },
+          ],
+        },
+      },
+    };
+
+    const next = syncWorkspaceShellState(input, [project], []);
+    expect(next.browserStateBySessionKey[browserKey]?.devicePreset).toBe("mobile-s");
+    expect(next.browserStateBySessionKey[figmaKey]?.devicePreset).toBe("desktop");
+    expect(next.browserStateBySessionKey[figmaKey]?.landscape).toBe(true);
   });
 });

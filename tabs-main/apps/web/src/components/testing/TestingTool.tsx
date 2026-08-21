@@ -57,8 +57,10 @@ import {
   FolderIcon,
   LoaderIcon,
   NetworkIcon,
+  TerminalIcon,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { useServerConfig } from "~/state/settings";
 import { makeAppModelSelection } from "~/modelSelection";
 import type { ProviderPickerKind } from "~/session-logic";
@@ -66,6 +68,7 @@ import { ensureNativeApi, readNativeApi } from "~/nativeApi";
 import { cn } from "~/lib/utils";
 import { TestingDataContext, type TestingDataContextValue } from "./context";
 import {
+  isSameWebUrl,
   TESTING_FUSION_PROVIDER_IDS,
   testingReasoningTierFromOptions,
 } from "./TestingWidgets";
@@ -80,6 +83,7 @@ import type {
   TestingLocatorPageTab,
   TestingWorkspaceSection,
 } from "./types";
+import { TestingTerminalDock } from "./TestingTerminalDock";
 
 const TestingOverview = lazy(() => import("./TestingOverview"));
 const TestingDiscover = lazy(() => import("./TestingDiscover"));
@@ -101,7 +105,14 @@ export function TestingTool(props: {
   defaultModelSelection: ModelSelection | null;
 }) {
   const serverConfig = useServerConfig();
+  const [testingTerminalOpen, setTestingTerminalOpen] = useState(false);
+  const testingTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const [testingState, setTestingState] = useProjectTestingState(props.projectId);
+
+  const closeTestingTerminal = useCallback(() => {
+    setTestingTerminalOpen(false);
+    window.requestAnimationFrame(() => testingTerminalButtonRef.current?.focus());
+  }, []);
 
   const targetUrl = testingState.targetUrl;
   const setTargetUrl = useCallback(
@@ -114,18 +125,16 @@ export function TestingTool(props: {
   const cdpEndpoint = testingState.cdpEndpoint;
   const setCdpEndpoint = useCallback(
     (v: string | ((prev: string) => string)) => {
-      setTestingState((prev) => ({ cdpEndpoint: typeof v === "function" ? v(prev.cdpEndpoint) : v }));
+      setTestingState((prev) => ({
+        cdpEndpoint: typeof v === "function" ? v(prev.cdpEndpoint) : v,
+      }));
     },
     [setTestingState],
   );
 
   const explorationScope = testingState.explorationScope;
   const setExplorationScope = useCallback(
-    (
-      v:
-        | TestingExplorationScope
-        | ((prev: TestingExplorationScope) => TestingExplorationScope),
-    ) => {
+    (v: TestingExplorationScope | ((prev: TestingExplorationScope) => TestingExplorationScope)) => {
       setTestingState((prev) => ({
         explorationScope: typeof v === "function" ? v(prev.explorationScope) : v,
       }));
@@ -149,11 +158,7 @@ export function TestingTool(props: {
 
   const activeTestingSection = testingState.activeTestingSection;
   const setActiveTestingSection = useCallback(
-    (
-      v:
-        | TestingWorkspaceSection
-        | ((prev: TestingWorkspaceSection) => TestingWorkspaceSection),
-    ) => {
+    (v: TestingWorkspaceSection | ((prev: TestingWorkspaceSection) => TestingWorkspaceSection)) => {
       setTestingState((prev) => ({
         activeTestingSection: typeof v === "function" ? v(prev.activeTestingSection) : v,
       }));
@@ -217,18 +222,14 @@ export function TestingTool(props: {
 
   const [status, setStatus] = useState<TestingGraphSummary | null>(null);
   const [cases, setCases] = useState<ReadonlyArray<TestingCaseSummary>>([]);
+  const [caseGroups, setCaseGroups] = useState<ReadonlyArray<string>>(["Ungrouped"]);
   const [generationJobs, setGenerationJobs] = useState<ReadonlyArray<TestingGenerationJob>>([]);
   const [executionRuns, setExecutionRuns] = useState<ReadonlyArray<TestingExecutionRun>>([]);
   const [testingSchedules, setTestingSchedules] = useState<ReadonlyArray<TestingSchedule>>([]);
 
   const executionMode = testingState.executionMode;
   const setExecutionMode = useCallback(
-    (
-      v:
-        | "standalone"
-        | "ci"
-        | ((prev: "standalone" | "ci") => "standalone" | "ci"),
-    ) => {
+    (v: "standalone" | "ci" | ((prev: "standalone" | "ci") => "standalone" | "ci")) => {
       setTestingState((prev) => ({
         executionMode: typeof v === "function" ? v(prev.executionMode) : v,
       }));
@@ -252,7 +253,9 @@ export function TestingTool(props: {
   const traceCaseId = testingState.traceCaseId;
   const setTraceCaseId = useCallback(
     (v: string | ((prev: string) => string)) => {
-      setTestingState((prev) => ({ traceCaseId: typeof v === "function" ? v(prev.traceCaseId) : v }));
+      setTestingState((prev) => ({
+        traceCaseId: typeof v === "function" ? v(prev.traceCaseId) : v,
+      }));
     },
     [setTestingState],
   );
@@ -274,14 +277,17 @@ export function TestingTool(props: {
   const triageResult = testingState.triageResult;
   const setTriageResult = useCallback(
     (v: string | ((prev: string) => string)) => {
-      setTestingState((prev) => ({ triageResult: typeof v === "function" ? v(prev.triageResult) : v }));
+      setTestingState((prev) => ({
+        triageResult: typeof v === "function" ? v(prev.triageResult) : v,
+      }));
     },
     [setTestingState],
   );
 
   const generationModelSelection =
     testingState.generationModelSelection ??
-    (props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL));
+    props.defaultModelSelection ??
+    makeAppModelSelection("codex", DEFAULT_MODEL);
   const setGenerationModelSelection = useCallback(
     (v: ModelSelection | ((prev: ModelSelection) => ModelSelection)) => {
       setTestingState((prev) => ({
@@ -289,7 +295,8 @@ export function TestingTool(props: {
           typeof v === "function"
             ? v(
                 prev.generationModelSelection ??
-                  (props.defaultModelSelection ?? makeAppModelSelection("codex", DEFAULT_MODEL)),
+                  props.defaultModelSelection ??
+                  makeAppModelSelection("codex", DEFAULT_MODEL),
               )
             : v,
       }));
@@ -316,10 +323,7 @@ export function TestingTool(props: {
   const generationOutputMode = testingState.generationOutputMode;
   const setGenerationOutputMode = useCallback(
     (
-      v:
-        | "managed"
-        | "repository"
-        | ((prev: "managed" | "repository") => "managed" | "repository"),
+      v: "managed" | "repository" | ((prev: "managed" | "repository") => "managed" | "repository"),
     ) => {
       setTestingState((prev) => ({
         generationOutputMode: typeof v === "function" ? v(prev.generationOutputMode) : v,
@@ -341,7 +345,9 @@ export function TestingTool(props: {
   const templatePath = testingState.templatePath;
   const setTemplatePath = useCallback(
     (v: string | ((prev: string) => string)) => {
-      setTestingState((prev) => ({ templatePath: typeof v === "function" ? v(prev.templatePath) : v }));
+      setTestingState((prev) => ({
+        templatePath: typeof v === "function" ? v(prev.templatePath) : v,
+      }));
     },
     [setTestingState],
   );
@@ -384,8 +390,7 @@ export function TestingTool(props: {
   const setSelectedGenerationCaseIds = useCallback(
     (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
       setTestingState((prev) => ({
-        selectedGenerationCaseIds:
-          typeof v === "function" ? v(prev.selectedGenerationCaseIds) : v,
+        selectedGenerationCaseIds: typeof v === "function" ? v(prev.selectedGenerationCaseIds) : v,
       }));
     },
     [setTestingState],
@@ -425,11 +430,7 @@ export function TestingTool(props: {
 
   const editedSteps = testingState.editedSteps;
   const setEditedSteps = useCallback(
-    (
-      v:
-        | ReadonlyArray<string>
-        | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
-    ) => {
+    (v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => {
       setTestingState((prev) => ({
         editedSteps: typeof v === "function" ? v(prev.editedSteps) : v,
       }));
@@ -437,11 +438,11 @@ export function TestingTool(props: {
     [setTestingState],
   );
 
-  const editedExpectedResult = testingState.editedExpectedResult;
-  const setEditedExpectedResult = useCallback(
-    (v: string | ((prev: string) => string)) => {
+  const editedExpectedResults = testingState.editedExpectedResults;
+  const setEditedExpectedResults = useCallback(
+    (v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => {
       setTestingState((prev) => ({
-        editedExpectedResult: typeof v === "function" ? v(prev.editedExpectedResult) : v,
+        editedExpectedResults: typeof v === "function" ? v(prev.editedExpectedResults) : v,
       }));
     },
     [setTestingState],
@@ -451,8 +452,7 @@ export function TestingTool(props: {
   const setEditedCaseLocatorIds = useCallback(
     (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
       setTestingState((prev) => ({
-        editedCaseLocatorIds:
-          typeof v === "function" ? v(prev.editedCaseLocatorIds) : v,
+        editedCaseLocatorIds: typeof v === "function" ? v(prev.editedCaseLocatorIds) : v,
       }));
     },
     [setTestingState],
@@ -460,11 +460,7 @@ export function TestingTool(props: {
 
   const caseIntakeMode = testingState.caseIntakeMode;
   const setCaseIntakeMode = useCallback(
-    (
-      v:
-        | TestingCaseIntakeMode
-        | ((prev: TestingCaseIntakeMode) => TestingCaseIntakeMode),
-    ) => {
+    (v: TestingCaseIntakeMode | ((prev: TestingCaseIntakeMode) => TestingCaseIntakeMode)) => {
       setTestingState((prev) => ({
         caseIntakeMode: typeof v === "function" ? v(prev.caseIntakeMode) : v,
       }));
@@ -475,7 +471,9 @@ export function TestingTool(props: {
   const manualCaseId = testingState.manualCaseId;
   const setManualCaseId = useCallback(
     (v: string | ((prev: string) => string)) => {
-      setTestingState((prev) => ({ manualCaseId: typeof v === "function" ? v(prev.manualCaseId) : v }));
+      setTestingState((prev) => ({
+        manualCaseId: typeof v === "function" ? v(prev.manualCaseId) : v,
+      }));
     },
     [setTestingState],
   );
@@ -492,11 +490,7 @@ export function TestingTool(props: {
 
   const manualCaseSteps = testingState.manualCaseSteps;
   const setManualCaseSteps = useCallback(
-    (
-      v:
-        | ReadonlyArray<string>
-        | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
-    ) => {
+    (v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => {
       setTestingState((prev) => ({
         manualCaseSteps: typeof v === "function" ? v(prev.manualCaseSteps) : v,
       }));
@@ -504,11 +498,11 @@ export function TestingTool(props: {
     [setTestingState],
   );
 
-  const manualCaseExpected = testingState.manualCaseExpected;
-  const setManualCaseExpected = useCallback(
-    (v: string | ((prev: string) => string)) => {
+  const manualCaseExpectedResults = testingState.manualCaseExpectedResults;
+  const setManualCaseExpectedResults = useCallback(
+    (v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => {
       setTestingState((prev) => ({
-        manualCaseExpected: typeof v === "function" ? v(prev.manualCaseExpected) : v,
+        manualCaseExpectedResults: typeof v === "function" ? v(prev.manualCaseExpectedResults) : v,
       }));
     },
     [setTestingState],
@@ -518,8 +512,7 @@ export function TestingTool(props: {
   const setManualCaseLocatorIds = useCallback(
     (v: ReadonlySet<string> | ((prev: ReadonlySet<string>) => ReadonlySet<string>)) => {
       setTestingState((prev) => ({
-        manualCaseLocatorIds:
-          typeof v === "function" ? v(prev.manualCaseLocatorIds) : v,
+        manualCaseLocatorIds: typeof v === "function" ? v(prev.manualCaseLocatorIds) : v,
       }));
     },
     [setTestingState],
@@ -551,12 +544,10 @@ export function TestingTool(props: {
 
   const locatorMode = testingState.locatorMode;
   const setLocatorMode = useCallback(
-    (
-      v:
-        | TestingDiscoveryMode
-        | ((prev: TestingDiscoveryMode) => TestingDiscoveryMode),
-    ) => {
-      setTestingState((prev) => ({ locatorMode: typeof v === "function" ? v(prev.locatorMode) : v }));
+    (v: TestingDiscoveryMode | ((prev: TestingDiscoveryMode) => TestingDiscoveryMode)) => {
+      setTestingState((prev) => ({
+        locatorMode: typeof v === "function" ? v(prev.locatorMode) : v,
+      }));
     },
     [setTestingState],
   );
@@ -644,9 +635,7 @@ export function TestingTool(props: {
     (
       v:
         | TestingLocatorEntry["classification"]
-        | ((
-            prev: TestingLocatorEntry["classification"],
-          ) => TestingLocatorEntry["classification"]),
+        | ((prev: TestingLocatorEntry["classification"]) => TestingLocatorEntry["classification"]),
     ) => {
       setTestingState((prev) => ({
         editingLocatorClassification:
@@ -664,8 +653,7 @@ export function TestingTool(props: {
         | ((prev: TestingLocatorEntry["strategy"]) => TestingLocatorEntry["strategy"]),
     ) => {
       setTestingState((prev) => ({
-        editingLocatorStrategy:
-          typeof v === "function" ? v(prev.editingLocatorStrategy) : v,
+        editingLocatorStrategy: typeof v === "function" ? v(prev.editingLocatorStrategy) : v,
       }));
     },
     [setTestingState],
@@ -694,7 +682,9 @@ export function TestingTool(props: {
   const locatorSearch = testingState.locatorSearch;
   const setLocatorSearch = useCallback(
     (v: string | ((prev: string) => string)) => {
-      setTestingState((prev) => ({ locatorSearch: typeof v === "function" ? v(prev.locatorSearch) : v }));
+      setTestingState((prev) => ({
+        locatorSearch: typeof v === "function" ? v(prev.locatorSearch) : v,
+      }));
     },
     [setTestingState],
   );
@@ -702,13 +692,16 @@ export function TestingTool(props: {
   const locatorFilter = testingState.locatorFilter;
   const setLocatorFilter = useCallback(
     (v: TestingLocatorFilter | ((prev: TestingLocatorFilter) => TestingLocatorFilter)) => {
-      setTestingState((prev) => ({ locatorFilter: typeof v === "function" ? v(prev.locatorFilter) : v }));
+      setTestingState((prev) => ({
+        locatorFilter: typeof v === "function" ? v(prev.locatorFilter) : v,
+      }));
     },
     [setTestingState],
   );
 
   const [locatorPendingRemoveId, setLocatorPendingRemoveId] = useState<string | null>(null);
-  const [locatorCaptureScope, setLocatorCaptureScope] = useState<TestingLocatorCaptureScope>("page");
+  const [locatorCaptureScope, setLocatorCaptureScope] =
+    useState<TestingLocatorCaptureScope>("page");
   const [locatorTaskContext, setLocatorTaskContext] = useState("");
   const [locatorAdvancedOpen, setLocatorAdvancedOpen] = useState(false);
 
@@ -753,7 +746,9 @@ export function TestingTool(props: {
   const locatorPageTab = testingState.locatorPageTab;
   const setLocatorPageTab = useCallback(
     (v: TestingLocatorPageTab | ((prev: TestingLocatorPageTab) => TestingLocatorPageTab)) => {
-      setTestingState((prev) => ({ locatorPageTab: typeof v === "function" ? v(prev.locatorPageTab) : v }));
+      setTestingState((prev) => ({
+        locatorPageTab: typeof v === "function" ? v(prev.locatorPageTab) : v,
+      }));
     },
     [setTestingState],
   );
@@ -905,6 +900,7 @@ export function TestingTool(props: {
       projectId: props.projectId,
     });
     setWorkspaceCases(result.cases);
+    setCaseGroups(result.groups);
   }, [props.projectId, setWorkspaceCases]);
 
   const refreshTestingWorkspace = useCallback(async () => {
@@ -1116,9 +1112,7 @@ export function TestingTool(props: {
 
   const selectedCase = useMemo(
     () =>
-      filteredCases.find((testCase) => testCase.id === selectedCaseId) ??
-      filteredCases[0] ??
-      null,
+      filteredCases.find((testCase) => testCase.id === selectedCaseId) ?? filteredCases[0] ?? null,
     [filteredCases, selectedCaseId],
   );
 
@@ -1130,11 +1124,7 @@ export function TestingTool(props: {
     : "codex";
 
   const updateTestingFusionModel = useCallback(
-    (
-      provider: ProviderPickerKind,
-      model: ModelSlug,
-      options?: ModelSelection["options"],
-    ) => {
+    (provider: ProviderPickerKind, model: ModelSlug, options?: ModelSelection["options"]) => {
       const selection = makeAppModelSelection(provider, model, options);
       setGenerationModelSelection(selection);
       setGenerationReasoning(testingReasoningTierFromOptions(selection.options));
@@ -1193,8 +1183,7 @@ export function TestingTool(props: {
     [editingLocatorId, selectedLocatorPage?.entries],
   );
   const pendingRemoveLocator = useMemo(
-    () =>
-      selectedLocatorPage?.entries.find((entry) => entry.id === locatorPendingRemoveId) ?? null,
+    () => selectedLocatorPage?.entries.find((entry) => entry.id === locatorPendingRemoveId) ?? null,
     [locatorPendingRemoveId, selectedLocatorPage?.entries],
   );
 
@@ -1304,6 +1293,17 @@ export function TestingTool(props: {
     return () => clearInterval(interval);
   }, [busyAction, props.projectId]);
 
+  useEffect(() => {
+    const hasActiveGeneration = generationJobs.some(
+      (job) => job.status === "queued" || job.status === "running",
+    );
+    if (!hasActiveGeneration) return;
+    const interval = setInterval(() => {
+      void refreshGenerationJobs();
+    }, 1_000);
+    return () => clearInterval(interval);
+  }, [generationJobs, refreshGenerationJobs]);
+
   const startExploration = useCallback(async () => {
     if (!normalizedTarget || normalizedMaxStates === null || normalizedMaxDurationSeconds === null)
       return;
@@ -1386,100 +1386,194 @@ export function TestingTool(props: {
     [props.projectId],
   );
 
-  const startLocatorDiscovery = useCallback(async () => {
-    if (!normalizedTarget) return;
-    const maxElementsPerPage = Number(locatorMaxElements);
-    const maxPagesPerSession = Number(locatorMaxPages);
-    if (
-      !Number.isSafeInteger(maxElementsPerPage) ||
-      maxElementsPerPage < MIN_TESTING_MAX_ELEMENTS_PER_PAGE ||
-      maxElementsPerPage > MAX_TESTING_MAX_ELEMENTS_PER_PAGE ||
-      !Number.isSafeInteger(maxPagesPerSession) ||
-      maxPagesPerSession < 1 ||
-      maxPagesPerSession > MAX_TESTING_MAX_PAGES_PER_SESSION
-    ) {
-      setMessage("Choose valid page and element limits before discovery.");
-      return;
-    }
-    setBusyAction("locator-discovery");
-    setMessage("Opening the locator discovery workspace...");
-    try {
-      const api = ensureNativeApi().testing;
-      let result = await api.startLocatorDiscovery({
-        projectId: props.projectId,
-        targetUrl: normalizedTarget,
-        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
-          ? { cdpEndpoint: normalizedCdpEndpoint }
-          : {}),
-        mode: locatorMode,
-        scope:
-          locatorCaptureScope === "origin"
-            ? "origin"
-            : locatorCaptureScope === "path"
-              ? "path"
-              : "page",
-        coverage: locatorCoverage,
-        safetyProfile: locatorSafety,
-        captureScope: locatorCaptureScope,
-        ...(locatorCaptureScope === "task" && locatorTaskContext.trim()
-          ? { taskContext: locatorTaskContext.trim() }
-          : {}),
-        maxElementsPerPage,
-        maxPagesPerSession,
-        environmentLabel: "default",
-        ...(locatorMode === "automatic" && normalizedMaxStates !== null
-          ? { maxStates: normalizedMaxStates }
-          : {}),
-        ...(locatorMode === "automatic" && normalizedMaxDurationSeconds
-          ? { maxDurationSeconds: normalizedMaxDurationSeconds }
-          : {}),
-      });
-      if (locatorMode === "manual" && result.status === "running") {
-        result = await api.captureLocatorPage({
+  const startLocatorDiscovery = useCallback(
+    async (targetUrlOverride?: string): Promise<boolean> => {
+      const discoveryTarget = targetUrlOverride ?? normalizedTarget;
+      if (!discoveryTarget) return false;
+      const maxElementsPerPage = Number(locatorMaxElements);
+      const maxPagesPerSession = Number(locatorMaxPages);
+      if (
+        !Number.isSafeInteger(maxElementsPerPage) ||
+        maxElementsPerPage < MIN_TESTING_MAX_ELEMENTS_PER_PAGE ||
+        maxElementsPerPage > MAX_TESTING_MAX_ELEMENTS_PER_PAGE ||
+        !Number.isSafeInteger(maxPagesPerSession) ||
+        maxPagesPerSession < 1 ||
+        maxPagesPerSession > MAX_TESTING_MAX_PAGES_PER_SESSION
+      ) {
+        setMessage("Choose valid page and element limits before discovery.");
+        return false;
+      }
+      setBusyAction("locator-discovery");
+      setMessage("Opening the locator discovery workspace...");
+      try {
+        const api = ensureNativeApi().testing;
+        let result = await api.startLocatorDiscovery({
           projectId: props.projectId,
-          sessionId: result.id,
-          captureMode: locatorCaptureScope === "task" ? "relevant" : "page",
+          targetUrl: discoveryTarget,
+          ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+            ? { cdpEndpoint: normalizedCdpEndpoint }
+            : {}),
+          mode: locatorMode,
+          scope:
+            locatorCaptureScope === "origin"
+              ? "origin"
+              : locatorCaptureScope === "path"
+                ? "path"
+                : "page",
+          coverage: locatorCoverage,
+          safetyProfile: locatorSafety,
+          captureScope: locatorCaptureScope,
+          ...(locatorCaptureScope === "task" && locatorTaskContext.trim()
+            ? { taskContext: locatorTaskContext.trim() }
+            : {}),
+          maxElementsPerPage,
+          maxPagesPerSession,
+          environmentLabel: "default",
+          ...(locatorMode === "automatic" && normalizedMaxStates !== null
+            ? { maxStates: normalizedMaxStates }
+            : {}),
+          ...(locatorMode === "automatic" && normalizedMaxDurationSeconds
+            ? { maxDurationSeconds: normalizedMaxDurationSeconds }
+            : {}),
         });
-      }
-      setLocatorSession(result);
-      setLocatorLibrary(result.library);
-      setLocatorNavigateUrl(result.currentUrl ?? normalizedTarget);
-      const capturedPage = result.library.pages[0];
-      if (capturedPage) {
-        setSelectedLocatorPageId(capturedPage.id);
-        setSelectedLocatorEntryIds(
-          new Set(
-            capturedPage.entries
-              .filter((entry) => entry.lifecycleStatus === "draft")
-              .map((entry) => entry.id),
-          ),
+        if (locatorMode === "manual" && result.status === "running") {
+          result = await api.captureLocatorPage({
+            projectId: props.projectId,
+            sessionId: result.id,
+            captureMode: locatorCaptureScope === "task" ? "relevant" : "page",
+          });
+        }
+        setLocatorSession(result);
+        setLocatorLibrary(result.library);
+        setLocatorNavigateUrl(result.currentUrl ?? discoveryTarget);
+        const capturedPage = result.library.pages[0];
+        if (capturedPage) {
+          setSelectedLocatorPageId(capturedPage.id);
+          setSelectedLocatorEntryIds(
+            new Set(
+              capturedPage.entries
+                .filter(
+                  (entry) =>
+                    entry.lifecycleStatus !== "archived" &&
+                    entry.lifecycleStatus !== "manual-required",
+                )
+                .map((entry) => entry.id),
+            ),
+          );
+        }
+        setMessage(
+          capturedPage
+            ? `Found ${capturedPage.entries.length} locator candidates. Choose which ones belong in the page object.`
+            : result.message,
         );
+        return Boolean(capturedPage);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Locator discovery could not start.");
+        return false;
+      } finally {
+        setBusyAction(null);
       }
-      setMessage(
-        capturedPage
-          ? `Found ${capturedPage.entries.length} locator candidates. Choose which ones belong in the page object.`
-          : result.message,
+    },
+    [
+      authenticationMode,
+      locatorCaptureScope,
+      locatorCoverage,
+      locatorMaxElements,
+      locatorMaxPages,
+      locatorMode,
+      locatorSafety,
+      locatorTaskContext,
+      normalizedCdpEndpoint,
+      normalizedMaxDurationSeconds,
+      normalizedMaxStates,
+      normalizedTarget,
+      props.projectId,
+    ],
+  );
+
+  const deleteLocatorPage = useCallback(
+    async (pageId?: string) => {
+      const page =
+        locatorLibrary?.pages.find((candidate) => candidate.id === pageId) ?? selectedLocatorPage;
+      if (!page) return;
+      const confirmed = await ensureNativeApi().dialogs.confirm(
+        `Delete the ${page.name} page and its ${page.entries.length} saved locator${page.entries.length === 1 ? "" : "s"}? This does not delete any repository files.`,
       );
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Locator discovery could not start.");
-    } finally {
+      if (!confirmed) return;
+      setBusyAction("locator-page");
+      try {
+        const library = await ensureNativeApi().testing.deleteLocatorPage({
+          projectId: props.projectId,
+          pageId: page.id,
+        });
+        setLocatorLibrary(library);
+        setSelectedLocatorPageId(library.pages[0]?.id ?? null);
+        setSelectedLocatorEntryIds(new Set());
+        setLocatorRepositoryProposal(null);
+        setMessage(`Deleted ${page.name} and its saved locators.`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not delete this locator page.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [locatorLibrary?.pages, locatorSession?.status, props.projectId, selectedLocatorPage],
+  );
+
+  const rescanLocatorPage = useCallback(
+    async (pageId?: string) => {
+      const page =
+        locatorLibrary?.pages.find((candidate) => candidate.id === pageId) ?? selectedLocatorPage;
+      if (!page) return;
+      const rescanUrl = (locatorNavigateUrl.trim() || page.urlPattern).trim();
+      if (!rescanUrl || rescanUrl.includes("<")) {
+        setMessage("Open the saved page in the preview before rescanning it.");
+        return;
+      }
+      const confirmed = await ensureNativeApi().dialogs.confirm(
+        `Rescan ${page.name}? Its current saved locators will be replaced with a fresh capture. Repository files will not be changed.`,
+      );
+      if (!confirmed) return;
+      setBusyAction("locator-page");
+      try {
+        const api = ensureNativeApi().testing;
+        if (locatorSession?.status === "running") {
+          setLocatorSession(
+            await api.finishLocatorDiscovery({
+              projectId: props.projectId,
+              sessionId: locatorSession.id,
+            }),
+          );
+        }
+        const library = await api.deleteLocatorPage({
+          projectId: props.projectId,
+          pageId: page.id,
+        });
+        setLocatorLibrary(library);
+        setSelectedLocatorPageId(null);
+        setSelectedLocatorEntryIds(new Set());
+        setLocatorRepositoryProposal(null);
+        setTargetUrl(rescanUrl);
+        setLocatorNavigateUrl(rescanUrl);
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Could not prepare this page for a fresh scan.",
+        );
+        setBusyAction(null);
+        return;
+      }
       setBusyAction(null);
-    }
-  }, [
-    authenticationMode,
-    locatorCaptureScope,
-    locatorCoverage,
-    locatorMaxElements,
-    locatorMaxPages,
-    locatorMode,
-    locatorSafety,
-    locatorTaskContext,
-    normalizedCdpEndpoint,
-    normalizedMaxDurationSeconds,
-    normalizedMaxStates,
-    normalizedTarget,
-    props.projectId,
-  ]);
+      await startLocatorDiscovery(rescanUrl);
+    },
+    [
+      locatorLibrary?.pages,
+      locatorNavigateUrl,
+      locatorSession,
+      props.projectId,
+      selectedLocatorPage,
+      startLocatorDiscovery,
+    ],
+  );
 
   const navigateLocatorDiscovery = useCallback(async () => {
     if (!locatorSession || !locatorNavigateUrl.trim()) return;
@@ -1501,24 +1595,45 @@ export function TestingTool(props: {
   }, [locatorNavigateUrl, locatorSession, props.projectId]);
 
   const captureLocatorPage = useCallback(
-    async (captureMode: "relevant" | "page" = "relevant") => {
-      if (!locatorSession) return;
+    async (captureMode: "relevant" | "page" = "relevant"): Promise<boolean> => {
+      if (!locatorSession) return false;
       setBusyAction("locator-capture");
       try {
-        const result = await ensureNativeApi().testing.captureLocatorPage({
-          projectId: props.projectId,
-          sessionId: locatorSession.id,
-          captureMode,
-        });
+        const api = ensureNativeApi().testing;
+        let result = locatorSession;
+        const previewUrl = locatorNavigateUrl.trim();
+        if (previewUrl && !isSameWebUrl(previewUrl, locatorSession.currentUrl)) {
+          result = await api.navigateLocatorDiscovery({
+            projectId: props.projectId,
+            sessionId: locatorSession.id,
+            targetUrl: previewUrl,
+          });
+        }
+        if (
+          result.mode !== "guided" ||
+          isSameWebUrl(result.currentUrl, locatorSession.currentUrl)
+        ) {
+          result = await api.captureLocatorPage({
+            projectId: props.projectId,
+            sessionId: locatorSession.id,
+            captureMode,
+          });
+        }
         setLocatorSession(result);
         setLocatorLibrary(result.library);
-        const capturedPage = result.library.pages[0];
+        const capturedPage =
+          result.library.pages.find((page) => isSameWebUrl(page.urlPattern, result.currentUrl)) ??
+          result.library.pages[0];
         if (capturedPage) {
           setSelectedLocatorPageId(capturedPage.id);
           setSelectedLocatorEntryIds(
             new Set(
               capturedPage.entries
-                .filter((entry) => entry.lifecycleStatus === "draft")
+                .filter(
+                  (entry) =>
+                    entry.lifecycleStatus !== "archived" &&
+                    entry.lifecycleStatus !== "manual-required",
+                )
                 .map((entry) => entry.id),
             ),
           );
@@ -1528,13 +1643,15 @@ export function TestingTool(props: {
             ? `Found ${capturedPage.entries.length} locator candidates. Review the selection before adding them to code.`
             : result.message,
         );
+        return Boolean(capturedPage);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not capture this page.");
+        return false;
       } finally {
         setBusyAction(null);
       }
     },
-    [locatorSession, props.projectId],
+    [locatorNavigateUrl, locatorSession, props.projectId],
   );
 
   const finishLocatorDiscovery = useCallback(
@@ -1819,28 +1936,39 @@ export function TestingTool(props: {
   ]);
 
   const approveSelectedLocators = useCallback(async () => {
-    const entries = locatorLibrary?.pages
-      .flatMap((page) => page.entries)
+    if (!selectedLocatorPage) return;
+    const selectedEntryIds = selectedLocatorPage.entries
       .filter(
-        (entry) => selectedLocatorEntryIds.has(entry.id) && entry.lifecycleStatus !== "accepted",
-      );
-    if (!entries?.length) {
-      setMessage("Select at least one unapproved locator candidate.");
+        (entry) =>
+          selectedLocatorEntryIds.has(entry.id) &&
+          entry.lifecycleStatus !== "archived" &&
+          entry.lifecycleStatus !== "manual-required",
+      )
+      .map((entry) => entry.id);
+    if (selectedEntryIds.length === 0) {
+      setMessage("Select at least one locator to include in this page object.");
       return;
     }
+    const entriesToApprove = selectedLocatorPage.entries.filter(
+      (entry) => selectedEntryIds.includes(entry.id) && entry.lifecycleStatus !== "accepted",
+    );
     setBusyAction("locator-review");
     try {
       const api = ensureNativeApi().testing;
       const prepareRepositoryProposal =
         locatorStorageMode === "connected-repository" || locatorFolderResult !== null;
-      for (const entry of entries) {
+      for (const entry of entriesToApprove) {
         await api.reviewLocatorEntry({
           projectId: props.projectId,
           entryId: entry.id,
           decision: prepareRepositoryProposal ? "keep-managed" : "accept",
         });
       }
-      const library = await api.getLocatorLibrary({ projectId: props.projectId });
+      const library = await api.setLocatorPageSelection({
+        projectId: props.projectId,
+        pageId: selectedLocatorPage.id,
+        entryIds: selectedEntryIds,
+      });
       setLocatorLibrary(library);
       setSelectedLocatorEntryIds(new Set());
       setLocatorPageTab("code");
@@ -1848,7 +1976,7 @@ export function TestingTool(props: {
         setLocatorSyncPreview(await api.previewLocatorSync({ projectId: props.projectId }));
       }
       setMessage(
-        `${entries.length} locator${entries.length === 1 ? "" : "s"} approved. The managed page object was regenerated${prepareRepositoryProposal ? " and a repository proposal is ready for review" : ""}.`,
+        `${selectedEntryIds.length} locator${selectedEntryIds.length === 1 ? "" : "s"} selected for the page object${entriesToApprove.length ? " and newly approved" : ""}.`,
       );
     } catch (error) {
       setMessage(
@@ -1862,14 +1990,12 @@ export function TestingTool(props: {
     locatorLibrary?.pages,
     locatorStorageMode,
     props.projectId,
+    selectedLocatorPage,
     selectedLocatorEntryIds,
   ]);
 
   const resolveLocatorSync = useCallback(
-    async (
-      conflictId: string,
-      decision: "keep-managed" | "accept-repository" | "archive",
-    ) => {
+    async (conflictId: string, decision: "keep-managed" | "accept-repository" | "archive") => {
       try {
         const result = await ensureNativeApi().testing.resolveLocatorSync({
           projectId: props.projectId,
@@ -1925,36 +2051,41 @@ export function TestingTool(props: {
     setMessage("Workbook selected. Import it to reconcile its cases against the live graph.");
   }, []);
 
-  const importWorkbook = useCallback(async () => {
-    if (!workbookPath) return;
-    setBusyAction("import");
-    setMessage("Parsing the workbook and verifying graph paths against the live target...");
-    try {
-      const result = await ensureNativeApi().testing.importWorkbook({
-        projectId: props.projectId,
-        workbookPath,
-        ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
-        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
-          ? { cdpEndpoint: normalizedCdpEndpoint }
-          : {}),
-      });
-      setWorkspaceCases(result.cases);
-      setMessage(
-        `Imported ${result.importedCount} cases: ${result.matchesCount} match, ${result.needsReviewCount} need review, and ${result.blockedCount} are blocked.`,
-      );
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Workbook import failed.");
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    authenticationMode,
-    normalizedCdpEndpoint,
-    normalizedTarget,
-    props.projectId,
-    setWorkspaceCases,
-    workbookPath,
-  ]);
+  const importWorkbook = useCallback(
+    async (groupName?: string) => {
+      if (!workbookPath) return;
+      setBusyAction("import");
+      setMessage("Parsing the workbook and verifying graph paths against the live target...");
+      try {
+        const result = await ensureNativeApi().testing.importWorkbook({
+          projectId: props.projectId,
+          workbookPath,
+          ...(groupName?.trim() ? { groupName: groupName.trim() } : {}),
+          ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
+          ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+            ? { cdpEndpoint: normalizedCdpEndpoint }
+            : {}),
+        });
+        setWorkspaceCases(result.cases);
+        setCaseGroups(result.groups);
+        setMessage(
+          `Imported ${result.importedCount} cases: ${result.matchesCount} match, ${result.needsReviewCount} need review, and ${result.blockedCount} are blocked.`,
+        );
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Workbook import failed.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [
+      authenticationMode,
+      normalizedCdpEndpoint,
+      normalizedTarget,
+      props.projectId,
+      setWorkspaceCases,
+      workbookPath,
+    ],
+  );
 
   const generateScenarios = useCallback(async () => {
     setBusyAction("generate");
@@ -1983,10 +2114,7 @@ export function TestingTool(props: {
   }, [cases.length, props.projectId, refreshTestingWorkspace, setWorkspaceCases]);
 
   const reviewCase = useCallback(
-    async (
-      testCase: TestingCaseSummary,
-      decision: "accepted" | "edited" | "rejected",
-    ) => {
+    async (testCase: TestingCaseSummary, decision: "accepted" | "edited" | "rejected") => {
       setBusyAction("review");
       try {
         const result = await ensureNativeApi().testing.reviewCase({
@@ -1998,7 +2126,8 @@ export function TestingTool(props: {
                 externalId: editedExternalId,
                 description: editedDescription,
                 steps: editedSteps.map((step) => step.trim()),
-                expectedResult: editedExpectedResult,
+                expectedResults: editedExpectedResults,
+                expectedResult: editedExpectedResults.filter(Boolean).join("\n"),
                 locatorEntryIds: [...editedCaseLocatorIds],
               }
             : {}),
@@ -2015,7 +2144,7 @@ export function TestingTool(props: {
     [
       editedCaseLocatorIds,
       editedDescription,
-      editedExpectedResult,
+      editedExpectedResults,
       editedExternalId,
       editedSteps,
       props.projectId,
@@ -2023,12 +2152,107 @@ export function TestingTool(props: {
     ],
   );
 
+  const deleteCase = useCallback(
+    async (testCase: TestingCaseSummary) => {
+      const confirmed = await ensureNativeApi().dialogs.confirm(
+        `Delete ${testCase.externalId}? This permanently removes the test case and its locator mappings.`,
+      );
+      if (!confirmed) return;
+      setBusyAction("review");
+      try {
+        const result = await ensureNativeApi().testing.deleteCase({
+          projectId: props.projectId,
+          caseId: testCase.id,
+        });
+        setWorkspaceCases(result.cases);
+        setSelectedCaseId(result.cases[0]?.id ?? null);
+        setEditingCaseId(null);
+        setMessage(`Deleted ${testCase.externalId}.`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not delete this test case.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [props.projectId, setWorkspaceCases],
+  );
+
+  const updateCaseGroup = useCallback(
+    async (testCase: TestingCaseSummary, groupName: string) => {
+      setBusyAction("review");
+      try {
+        const result = await ensureNativeApi().testing.updateCaseGroup({
+          projectId: props.projectId,
+          caseId: testCase.id,
+          groupName,
+        });
+        setWorkspaceCases(result.cases);
+        setCaseGroups(result.groups);
+        setMessage(`${testCase.externalId} moved to ${groupName.trim() || "Ungrouped"}.`);
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Could not update the test case group.",
+        );
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [props.projectId, setWorkspaceCases],
+  );
+
+  const createCaseGroup = useCallback(
+    async (groupName: string) => {
+      setBusyAction("review");
+      try {
+        const result = await ensureNativeApi().testing.createCaseGroup({
+          projectId: props.projectId,
+          groupName,
+        });
+        setWorkspaceCases(result.cases);
+        setCaseGroups(result.groups);
+        setMessage(`${groupName.trim()} folder created.`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not create the test group.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [props.projectId, setWorkspaceCases],
+  );
+
+  const deleteCaseGroup = useCallback(
+    async (groupName: string) => {
+      const groupedCaseCount = cases.filter((testCase) => testCase.groupName === groupName).length;
+      const confirmed = await ensureNativeApi().dialogs.confirm(
+        groupedCaseCount > 0
+          ? `Delete the “${groupName}” folder? Its ${groupedCaseCount} test case${groupedCaseCount === 1 ? "" : "s"} will move to Ungrouped.`
+          : `Delete the empty “${groupName}” folder?`,
+      );
+      if (!confirmed) return;
+      setBusyAction("review");
+      try {
+        const result = await ensureNativeApi().testing.deleteCaseGroup({
+          projectId: props.projectId,
+          groupName,
+        });
+        setWorkspaceCases(result.cases);
+        setCaseGroups(result.groups);
+        setMessage(`${groupName} folder deleted.`);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not delete the test group.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [cases, props.projectId, setWorkspaceCases],
+  );
+
   const beginEditCase = useCallback((testCase: TestingCaseSummary) => {
     setEditingCaseId(testCase.id);
     setEditedExternalId(testCase.externalId);
     setEditedDescription(testCase.description);
     setEditedSteps(testCase.steps);
-    setEditedExpectedResult(testCase.expectedResult);
+    setEditedExpectedResults(testCase.expectedResults);
     setEditedCaseLocatorIds(new Set(testCase.locatorEntryIds ?? []));
   }, []);
 
@@ -2139,9 +2363,11 @@ export function TestingTool(props: {
       });
       await refreshGenerationJobs();
       setMessage(
-        job.status === "completed"
-          ? `Generated ${job.completedCases} Playwright test case${job.completedCases === 1 ? "" : "s"} in ${job.outputDirectory}.`
-          : `Generation stopped with status ${job.status}${job.error ? `: ${job.error}` : "."}`,
+        job.status === "queued" || job.status === "running"
+          ? `Playwright generation started. Output will be written to ${job.outputDirectory}.`
+          : job.status === "completed"
+            ? `Generated ${job.completedCases} Playwright test case${job.completedCases === 1 ? "" : "s"} in ${job.outputDirectory}.`
+            : `Generation stopped with status ${job.status}${job.error ? `: ${job.error}` : "."}`,
       );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Test generation failed.");
@@ -2184,38 +2410,45 @@ export function TestingTool(props: {
     [props.projectId, refreshGenerationJobs],
   );
 
-  const runGeneratedTests = useCallback(async () => {
-    const job = generationJobs.find((candidate) => candidate.status === "completed");
-    if (!job || !normalizedTarget) return;
-    setBusyAction("run-tests");
-    setMessage(`Running ${job.totalCases} generated cases in ${executionMode} mode...`);
-    try {
-      const run = await ensureNativeApi().testing.runTests({
-        projectId: props.projectId,
-        generationJobId: job.id,
-        targetUrl: normalizedTarget,
-        mode: executionMode,
-        visualComparison,
-      });
-      await Promise.all([refreshExecution(), refreshCases()]);
+  const runGeneratedTests = useCallback(
+    async (caseIds?: ReadonlyArray<string>) => {
+      const job = generationJobs.find((candidate) => candidate.status === "completed");
+      if (!job || !normalizedTarget) return;
+      setBusyAction("run-tests");
+      const runCount = caseIds?.length ?? job.totalCases;
       setMessage(
-        `Run ${run.status}: ${run.results.filter((result) => result.status === "passed").length} passed, ${run.results.filter((result) => result.status === "failed").length} failed in ${(run.durationMs / 1000).toFixed(1)} seconds.`,
+        `Running ${runCount} generated ${runCount === 1 ? "case" : "cases"} in ${executionMode} mode...`,
       );
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Generated test execution failed.");
-      await refreshExecution().catch(() => undefined);
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    executionMode,
-    generationJobs,
-    normalizedTarget,
-    props.projectId,
-    refreshCases,
-    refreshExecution,
-    visualComparison,
-  ]);
+      try {
+        const run = await ensureNativeApi().testing.runTests({
+          projectId: props.projectId,
+          generationJobId: job.id,
+          targetUrl: normalizedTarget,
+          mode: executionMode,
+          caseIds: caseIds ? [...caseIds] : undefined,
+          visualComparison,
+        });
+        await Promise.all([refreshExecution(), refreshCases()]);
+        setMessage(
+          `Run ${run.status}: ${run.results.filter((result) => result.status === "passed").length} passed, ${run.results.filter((result) => result.status === "failed").length} failed in ${(run.durationMs / 1000).toFixed(1)} seconds.`,
+        );
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Generated test execution failed.");
+        await refreshExecution().catch(() => undefined);
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [
+      executionMode,
+      generationJobs,
+      normalizedTarget,
+      props.projectId,
+      refreshCases,
+      refreshExecution,
+      visualComparison,
+    ],
+  );
 
   const decideHealing = useCallback(
     async (proposalId: string, decision: "accepted" | "rejected") => {
@@ -2233,7 +2466,9 @@ export function TestingTool(props: {
             : "Healing proposal rejected and retained in the audit trail.",
         );
       } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Could not record the healing decision.");
+        setMessage(
+          error instanceof Error ? error.message : "Could not record the healing decision.",
+        );
       } finally {
         setBusyAction(null);
       }
@@ -2362,7 +2597,13 @@ export function TestingTool(props: {
           : executionRuns.length === 0
             ? "runs"
             : "reports";
-  }, [cases.length, completedGenerationJob, executionRuns.length, reviewCaseCount, status?.nodeCount]);
+  }, [
+    cases.length,
+    completedGenerationJob,
+    executionRuns.length,
+    reviewCaseCount,
+    status?.nodeCount,
+  ]);
 
   const testingSections: ReadonlyArray<{
     id: TestingWorkspaceSection;
@@ -2396,14 +2637,20 @@ export function TestingTool(props: {
         description: "Run tests and inspect failures",
         count: executionRuns.length,
       },
-      { id: "reports", label: "Evidence", description: "Reports and traceability" },
+      { id: "reports", label: "Reports", description: "Export results and trace a test" },
     ],
-    [cases.length, completedGenerationJob?.artifacts.length, executionRuns.length, status?.nodeCount],
+    [
+      cases.length,
+      completedGenerationJob?.artifacts.length,
+      executionRuns.length,
+      status?.nodeCount,
+    ],
   );
 
   const contextValue: TestingDataContextValue = useMemo(
     () => ({
       cases,
+      caseGroups,
       locatorLibrary,
       generationJobs,
       executionRuns,
@@ -2430,6 +2677,7 @@ export function TestingTool(props: {
       completedGenerationJob,
       latestExecutionRun,
       projectId: props.projectId,
+      projectPath: props.projectPath,
       busyAction,
       setBusyAction,
       message_setter: setMessage,
@@ -2447,8 +2695,8 @@ export function TestingTool(props: {
       setEditedDescription,
       editedSteps,
       setEditedSteps,
-      editedExpectedResult,
-      setEditedExpectedResult,
+      editedExpectedResults,
+      setEditedExpectedResults,
       editedCaseLocatorIds,
       setEditedCaseLocatorIds,
       implementedInventoryOpen,
@@ -2469,8 +2717,8 @@ export function TestingTool(props: {
       setManualCaseDescription,
       manualCaseSteps,
       setManualCaseSteps,
-      manualCaseExpected,
-      setManualCaseExpected,
+      manualCaseExpectedResults,
+      setManualCaseExpectedResults,
       manualCaseLocatorIds,
       setManualCaseLocatorIds,
       storyText,
@@ -2613,6 +2861,8 @@ export function TestingTool(props: {
       navigateLocatorDiscovery,
       captureLocatorPage,
       finishLocatorDiscovery,
+      rescanLocatorPage,
+      deleteLocatorPage,
       indexLocatorFolder,
       approveSelectedLocators,
       reviewLocator,
@@ -2631,6 +2881,10 @@ export function TestingTool(props: {
       importWorkbook,
       generateScenarios,
       reviewCase,
+      deleteCase,
+      updateCaseGroup,
+      createCaseGroup,
+      deleteCaseGroup,
       beginEditCase,
       updateEditedStep,
       moveEditedStep,
@@ -2672,12 +2926,13 @@ export function TestingTool(props: {
       manualCaseId,
       manualCaseDescription,
       manualCaseSteps,
-      manualCaseExpected,
+      manualCaseExpectedResults,
       manualCaseLocatorIds,
       storyText,
       storyFilePath,
       caseSearch,
       cases,
+      caseGroups,
       cdpEndpoint,
       chooseLocatorRepositoryFolder,
       chooseWorkbook,
@@ -2687,9 +2942,10 @@ export function TestingTool(props: {
       decideHealing,
       disconnectLocatorFolder,
       draftFailedCaseBug,
+      deleteLocatorPage,
       editedCaseLocatorIds,
       editedDescription,
-      editedExpectedResult,
+      editedExpectedResults,
       editedExternalId,
       editedSteps,
       editingCaseId,
@@ -2766,6 +3022,7 @@ export function TestingTool(props: {
       pendingRemoveLocator,
       previewLocatorRepositoryChange,
       props.projectId,
+      props.projectPath,
       readyCases,
       refreshCases,
       refreshExecution,
@@ -2774,6 +3031,7 @@ export function TestingTool(props: {
       refreshLocatorLibrary,
       refreshStatus,
       refreshTestingWorkspace,
+      rescanLocatorPage,
       reportPaths,
       repositoryOutputPath,
       resolveLocatorSync,
@@ -2815,6 +3073,9 @@ export function TestingTool(props: {
       triageFailedCase,
       triageResult,
       updateEditedStep,
+      updateCaseGroup,
+      createCaseGroup,
+      deleteCaseGroup,
       updateTestingFusionModel,
       updateTestingFusionOptions,
       visualComparison,
@@ -2822,256 +3083,278 @@ export function TestingTool(props: {
     ],
   );
 
-  const onProfilerRender: ProfilerOnRenderCallback = useCallback(
-    (id, phase, actualDuration) => {
-      console.log(
-        `[React Profiler] id="${id}" phase="${phase}" actualDuration=${actualDuration.toFixed(2)}ms`,
-      );
-    },
-    [],
-  );
+  const onProfilerRender: ProfilerOnRenderCallback = useCallback((id, phase, actualDuration) => {
+    console.log(
+      `[React Profiler] id="${id}" phase="${phase}" actualDuration=${actualDuration.toFixed(2)}ms`,
+    );
+  }, []);
 
   return (
     <TestingDataContext.Provider value={contextValue}>
-      <main className="h-full overflow-auto bg-background" aria-labelledby="testing-heading">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-          <header
-            className={cn(
-              "border-b border-border/70",
-              activeTestingSection === "overview"
-                ? "flex flex-col gap-3 pb-5"
-                : "flex flex-wrap items-center justify-between gap-4 pb-3.5",
-            )}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <h1
-                  id="testing-heading"
-                  className={cn(
-                    "font-semibold tracking-tight text-foreground leading-snug pb-0.5",
-                    activeTestingSection === "overview" ? "text-3xl" : "text-xl",
-                  )}
-                >
-                  Testing
-                </h1>
-                {activeTestingSection === "overview" ? (
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-                    <FlaskConicalIcon aria-hidden="true" className="size-3 text-primary" />
-                    <span>Private Workspace</span>
-                  </div>
-                ) : null}
-              </div>
-
-              <div
-                className="flex flex-wrap items-center gap-2"
-                role="group"
-                aria-label="Workspace testing summary"
-              >
-                <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                  <FolderIcon className="size-3.5 text-muted-foreground/80" aria-hidden="true" />
-                  <span>Project:</span>
-                  <span className="font-semibold text-foreground">
-                    {basenameOfPath(props.projectPath)}
-                  </span>
-                </div>
-
-                <div className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-2.5 py-1 text-xs font-medium text-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <NetworkIcon className="size-3.5 text-sky-500" aria-hidden="true" />
-                    <span className="font-semibold">{status?.nodeCount ?? 0}</span>
-                    <span className="text-muted-foreground text-[11px]">states</span>
-                  </span>
-                  <span className="h-3 w-px bg-border/80" aria-hidden="true" />
-                  <span className="inline-flex items-center gap-1">
-                    <FileTextIcon className="size-3.5 text-violet-500" aria-hidden="true" />
-                    <span className="font-semibold">{cases.length}</span>
-                    <span className="text-muted-foreground text-[11px]">cases</span>
-                  </span>
+      <main
+        className="relative flex h-full min-h-0 overflow-hidden bg-background"
+        aria-labelledby="testing-heading"
+      >
+        <div className="min-w-0 flex-1 overflow-auto">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+            <header
+              className={cn(
+                "border-b border-border/70",
+                activeTestingSection === "overview"
+                  ? "flex flex-col gap-3 pb-5"
+                  : "flex flex-wrap items-center justify-between gap-4 pb-3.5",
+              )}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <h1
+                    id="testing-heading"
+                    className={cn(
+                      "font-semibold tracking-tight text-foreground leading-snug pb-0.5",
+                      activeTestingSection === "overview" ? "text-3xl" : "text-xl",
+                    )}
+                  >
+                    Testing
+                  </h1>
+                  {activeTestingSection === "overview" ? (
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                      <FlaskConicalIcon aria-hidden="true" className="size-3 text-primary" />
+                      <span>Private Workspace</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium",
-                    latestExecutionRun
-                      ? latestExecutionRun.status === "passed"
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        : "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                      : "border-border/60 bg-muted/20 text-muted-foreground",
-                  )}
+                  className="flex flex-wrap items-center gap-2"
+                  role="group"
+                  aria-label="Workspace testing summary"
                 >
-                  <CircleDotIcon
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    <FolderIcon className="size-3.5 text-muted-foreground/80" aria-hidden="true" />
+                    <span>Project:</span>
+                    <span className="font-semibold text-foreground">
+                      {basenameOfPath(props.projectPath)}
+                    </span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 px-2.5 py-1 text-xs font-medium text-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <NetworkIcon className="size-3.5 text-sky-500" aria-hidden="true" />
+                      <span className="font-semibold">{status?.nodeCount ?? 0}</span>
+                      <span className="text-muted-foreground text-[11px]">states</span>
+                    </span>
+                    <span className="h-3 w-px bg-border/80" aria-hidden="true" />
+                    <span className="inline-flex items-center gap-1">
+                      <FileTextIcon className="size-3.5 text-violet-500" aria-hidden="true" />
+                      <span className="font-semibold">{cases.length}</span>
+                      <span className="text-muted-foreground text-[11px]">cases</span>
+                    </span>
+                  </div>
+
+                  <div
                     className={cn(
-                      "size-3",
+                      "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium",
                       latestExecutionRun
                         ? latestExecutionRun.status === "passed"
-                          ? "text-emerald-500 fill-emerald-500/20"
-                          : "text-rose-500 fill-rose-500/20"
-                        : "text-muted-foreground/60",
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                        : "border-border/60 bg-muted/20 text-muted-foreground",
                     )}
-                    aria-hidden="true"
-                  />
-                  <span>
-                    {latestExecutionRun
-                      ? `Latest run: ${latestExecutionRun.status}`
-                      : "No runs yet"}
-                  </span>
+                  >
+                    <CircleDotIcon
+                      className={cn(
+                        "size-3",
+                        latestExecutionRun
+                          ? latestExecutionRun.status === "passed"
+                            ? "text-emerald-500 fill-emerald-500/20"
+                            : "text-rose-500 fill-rose-500/20"
+                          : "text-muted-foreground/60",
+                      )}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {latestExecutionRun
+                        ? `Latest run: ${latestExecutionRun.status}`
+                        : "No runs yet"}
+                    </span>
+                  </div>
+                  <Button
+                    ref={testingTerminalButtonRef}
+                    type="button"
+                    size="sm"
+                    variant={testingTerminalOpen ? "secondary" : "outline"}
+                    onClick={() => setTestingTerminalOpen((open) => !open)}
+                    aria-expanded={testingTerminalOpen}
+                    aria-controls="testing-terminal-dock"
+                  >
+                    <TerminalIcon aria-hidden="true" className="size-3.5" />
+                    Terminal
+                  </Button>
                 </div>
               </div>
-            </div>
 
-            {activeTestingSection === "overview" ? (
-              <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
-                <span className="font-medium text-foreground/90">
-                  Turn test plans and live applications into reviewed, repeatable evidence
-                </span>
-                <span className="text-muted-foreground/80">
-                  {" "}— guided step-by-step with reviewed diffs and automated code.
-                </span>
-              </p>
-            ) : null}
-          </header>
+              {activeTestingSection === "overview" ? (
+                <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
+                  <span className="font-medium text-foreground/90">
+                    Turn test plans and live applications into reviewed, repeatable evidence
+                  </span>
+                  <span className="text-muted-foreground/80">
+                    {" "}
+                    — guided step-by-step with reviewed diffs and automated code.
+                  </span>
+                </p>
+              ) : null}
+            </header>
 
-          <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-            <nav aria-label="Testing workflow" className="lg:sticky lg:top-4 lg:self-start">
-              <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:border-border/50 lg:bg-card/30 lg:p-1.5">
-                {testingSections.map((section) => {
-                  const active = activeTestingSection === section.id;
-                  const recommended = recommendedTestingSection === section.id;
-                  return (
-                    <button
-                      key={section.id}
-                      type="button"
-                      aria-current={active ? "page" : undefined}
-                      onClick={() => setActiveTestingSection(section.id)}
-                      className={cn(
-                        "group relative min-w-40 rounded-lg px-3 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-w-0",
-                        active
-                          ? "bg-background/80 text-foreground shadow-sm ring-1 ring-border/60"
-                          : "text-muted-foreground hover:bg-background/50 hover:text-foreground/80",
-                      )}
-                    >
-                      {active && (
-                        <span
-                          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-foreground/40"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span
+            <div className="grid min-w-0 gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
+              <nav aria-label="Testing workflow" className="lg:sticky lg:top-4 lg:self-start">
+                <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:rounded-xl lg:border lg:border-border/50 lg:bg-card/30 lg:p-1.5">
+                  {testingSections.map((section) => {
+                    const active = activeTestingSection === section.id;
+                    const recommended = recommendedTestingSection === section.id;
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => setActiveTestingSection(section.id)}
                         className={cn(
-                          "flex items-center justify-between gap-2 text-sm font-medium",
-                          active ? "pl-2.5" : "",
+                          "group relative min-w-40 rounded-lg px-3 py-2.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-w-0",
+                          active
+                            ? "bg-background/80 text-foreground shadow-sm ring-1 ring-border/60"
+                            : "text-muted-foreground hover:bg-background/50 hover:text-foreground/80",
                         )}
                       >
-                        {section.label}
-                        {typeof section.count === "number" ? (
+                        {active && (
                           <span
-                            className={cn(
-                              "rounded-full px-2 py-0.5 text-xs font-semibold",
-                              active
-                                ? "bg-primary/15 text-primary"
-                                : "bg-muted text-muted-foreground group-hover:text-foreground",
-                            )}
-                          >
-                            {section.count}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span
-                        className={cn(
-                          "mt-1 block text-xs leading-normal text-muted-foreground",
-                          active ? "pl-2.5" : "",
+                            className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-foreground/40"
+                            aria-hidden="true"
+                          />
                         )}
-                      >
-                        {section.description}
-                      </span>
-                      {recommended && (
                         <span
                           className={cn(
-                            "mt-1.5 inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary",
-                            active ? "ml-2.5" : "",
+                            "flex items-center justify-between gap-2 text-sm font-medium",
+                            active ? "pl-2.5" : "",
                           )}
                         >
-                          Recommended next
+                          {section.label}
+                          {typeof section.count === "number" ? (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-xs font-semibold",
+                                active
+                                  ? "bg-primary/15 text-primary"
+                                  : "bg-muted text-muted-foreground group-hover:text-foreground",
+                              )}
+                            >
+                              {section.count}
+                            </span>
+                          ) : null}
                         </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </nav>
+                        <span
+                          className={cn(
+                            "mt-1 block text-xs leading-normal text-muted-foreground",
+                            active ? "pl-2.5" : "",
+                          )}
+                        >
+                          {section.description}
+                        </span>
+                        {recommended && (
+                          <span
+                            className={cn(
+                              "mt-1.5 inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary",
+                              active ? "ml-2.5" : "",
+                            )}
+                          >
+                            Recommended next
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
 
-            <div className="min-w-0 space-y-6">
-              <p className="sr-only" aria-live="polite">
-                {testingSections.find((section) => section.id === activeTestingSection)?.label}{" "}
-                workspace opened.
-              </p>
+              <div className="min-w-0 space-y-6">
+                <p className="sr-only" aria-live="polite">
+                  {testingSections.find((section) => section.id === activeTestingSection)?.label}{" "}
+                  workspace opened.
+                </p>
 
-              <Suspense
-                fallback={
-                  <div className="flex h-64 items-center justify-center">
-                    <LoaderIcon className="size-6 animate-spin text-muted-foreground" />
+                <Suspense
+                  fallback={
+                    <div className="flex h-64 items-center justify-center">
+                      <LoaderIcon className="size-6 animate-spin text-muted-foreground" />
+                    </div>
+                  }
+                >
+                  <div
+                    className={cn(activeTestingSection === "overview" ? "block" : "hidden")}
+                    aria-hidden={activeTestingSection !== "overview"}
+                  >
+                    <Profiler id="TestingOverview" onRender={onProfilerRender}>
+                      <TestingOverview
+                        onNavigate={setActiveTestingSection}
+                        recommendedTestingSection={recommendedTestingSection}
+                        testingSections={testingSections}
+                      />
+                    </Profiler>
                   </div>
-                }
-              >
-                <div
-                  className={cn(activeTestingSection === "overview" ? "block" : "hidden")}
-                  aria-hidden={activeTestingSection !== "overview"}
-                >
-                  <Profiler id="TestingOverview" onRender={onProfilerRender}>
-                    <TestingOverview
-                      onNavigate={setActiveTestingSection}
-                      recommendedTestingSection={recommendedTestingSection}
-                      testingSections={testingSections}
-                    />
-                  </Profiler>
-                </div>
-                <div
-                  className={cn(activeTestingSection === "discover" ? "block" : "hidden")}
-                  aria-hidden={activeTestingSection !== "discover"}
-                >
-                  <Profiler id="TestingDiscover" onRender={onProfilerRender}>
-                    <TestingDiscover projectId={props.projectId} />
-                  </Profiler>
-                </div>
-                <div
-                  className={cn(activeTestingSection === "cases" ? "block" : "hidden")}
-                  aria-hidden={activeTestingSection !== "cases"}
-                >
-                  <Profiler id="TestingCases" onRender={onProfilerRender}>
-                    <TestingCases
-                      projectPath={props.projectPath}
-                      onNavigate={setActiveTestingSection}
-                    />
-                  </Profiler>
-                </div>
-                <div
-                  className={cn(activeTestingSection === "automate" ? "block" : "hidden")}
-                  aria-hidden={activeTestingSection !== "automate"}
-                >
-                  <Profiler id="TestingAutomate" onRender={onProfilerRender}>
-                    <TestingAutomate onNavigate={setActiveTestingSection} />
-                  </Profiler>
-                </div>
-                <div
-                  className={cn(activeTestingSection === "runs" ? "block" : "hidden")}
-                  aria-hidden={activeTestingSection !== "runs"}
-                >
-                  <Profiler id="TestingRuns" onRender={onProfilerRender}>
-                    <TestingRuns />
-                  </Profiler>
-                </div>
-                <div
-                  className={cn(activeTestingSection === "reports" ? "block" : "hidden")}
-                  aria-hidden={activeTestingSection !== "reports"}
-                >
-                  <Profiler id="TestingReports" onRender={onProfilerRender}>
-                    <TestingReports />
-                  </Profiler>
-                </div>
-              </Suspense>
+                  <div
+                    className={cn(activeTestingSection === "discover" ? "block" : "hidden")}
+                    aria-hidden={activeTestingSection !== "discover"}
+                  >
+                    <Profiler id="TestingDiscover" onRender={onProfilerRender}>
+                      <TestingDiscover projectId={props.projectId} />
+                    </Profiler>
+                  </div>
+                  <div
+                    className={cn(activeTestingSection === "cases" ? "block" : "hidden")}
+                    aria-hidden={activeTestingSection !== "cases"}
+                  >
+                    <Profiler id="TestingCases" onRender={onProfilerRender}>
+                      <TestingCases
+                        projectPath={props.projectPath}
+                        onNavigate={setActiveTestingSection}
+                      />
+                    </Profiler>
+                  </div>
+                  <div
+                    className={cn(activeTestingSection === "automate" ? "block" : "hidden")}
+                    aria-hidden={activeTestingSection !== "automate"}
+                  >
+                    <Profiler id="TestingAutomate" onRender={onProfilerRender}>
+                      <TestingAutomate onNavigate={setActiveTestingSection} />
+                    </Profiler>
+                  </div>
+                  <div
+                    className={cn(activeTestingSection === "runs" ? "block" : "hidden")}
+                    aria-hidden={activeTestingSection !== "runs"}
+                  >
+                    <Profiler id="TestingRuns" onRender={onProfilerRender}>
+                      <TestingRuns />
+                    </Profiler>
+                  </div>
+                  <div
+                    className={cn(activeTestingSection === "reports" ? "block" : "hidden")}
+                    aria-hidden={activeTestingSection !== "reports"}
+                  >
+                    <Profiler id="TestingReports" onRender={onProfilerRender}>
+                      <TestingReports />
+                    </Profiler>
+                  </div>
+                </Suspense>
+              </div>
             </div>
           </div>
         </div>
+        {testingTerminalOpen ? (
+          <TestingTerminalDock
+            projectId={props.projectId}
+            projectPath={props.projectPath}
+            onClose={closeTestingTerminal}
+          />
+        ) : null}
       </main>
     </TestingDataContext.Provider>
   );

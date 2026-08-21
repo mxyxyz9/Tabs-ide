@@ -18,6 +18,8 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { HttpClient } from "effect/unstable/http";
@@ -29,6 +31,7 @@ import { ProviderDriverError } from "../Errors";
 import { makeClaudeAdapter } from "../Layers/ClaudeAdapter";
 import {
   checkClaudeProviderStatus,
+  getClaudeModelCapabilities,
   makePendingClaudeProvider,
   probeClaudeCapabilities,
 } from "../Layers/ClaudeProvider";
@@ -36,6 +39,8 @@ import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
   defaultProviderContinuationIdentity,
+  makeExternalCliLifecycle,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
@@ -151,7 +156,7 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
       });
       const capabilitiesCacheKey = yield* makeClaudeCapabilitiesCacheKey(effectiveConfig);
 
-      const checkProvider = checkClaudeProviderStatus(
+      const checkProviderHealth = checkClaudeProviderStatus(
         effectiveConfig,
         () => Cache.get(capabilitiesProbeCache, capabilitiesCacheKey),
         processEnv,
@@ -159,6 +164,56 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         Effect.provideService(Path.Path, path),
+      );
+      const checkProvider = checkProviderHealth.pipe(
+        Effect.flatMap((healthSnapshot) =>
+          Effect.gen(function* () {
+            if (
+              !effectiveConfig.enabled ||
+              !healthSnapshot.installed ||
+              healthSnapshot.auth.status === "unauthenticated" ||
+              !adapter.listModels
+            ) {
+              return { ...healthSnapshot, models: [] };
+            }
+            const discovery = yield* Effect.result(
+              adapter.listModels({ binaryPath: effectiveConfig.binaryPath }),
+            ).pipe(Effect.timeoutOption(Duration.seconds(15)));
+            if (Option.isNone(discovery)) {
+              return {
+                ...healthSnapshot,
+                catalogStatus: "failed" as const,
+                catalogSource: "claude-sdk",
+                catalogCheckedAt: new Date().toISOString(),
+                models: [],
+                message: "Claude model discovery timed out. Retry to refresh the catalog.",
+              };
+            }
+            if (Result.isFailure(discovery.value)) {
+              return {
+                ...healthSnapshot,
+                catalogStatus: "failed" as const,
+                catalogSource: "claude-sdk",
+                catalogCheckedAt: new Date().toISOString(),
+                models: [],
+                message: "Claude model discovery failed. Retry to refresh the catalog.",
+              };
+            }
+            const result = discovery.value.success;
+            return {
+              ...healthSnapshot,
+              catalogStatus: result.models.length > 0 ? ("ready" as const) : ("empty" as const),
+              catalogSource: result.source ?? "claude-sdk",
+              catalogCheckedAt: new Date().toISOString(),
+              models: result.models.map((model) => ({
+                slug: model.slug,
+                name: model.name,
+                isCustom: false,
+                capabilities: getClaudeModelCapabilities(model.slug),
+              })),
+            };
+          }),
+        ),
       );
 
       const snapshot = yield* makeManagedServerProvider<ClaudeSettings>({
@@ -197,6 +252,22 @@ export const ClaudeDriver: ProviderDriver<ClaudeSettings, ClaudeDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          nativeReview: "supported",
+          login: "external",
+          logout: "external",
+          accountSwitch: "external",
+          installation: "external",
+        }),
+        lifecycle: makeExternalCliLifecycle([
+          { kind: "login", command: "claude auth login" },
+          { kind: "logout", command: "claude auth logout" },
+          { kind: "switch-account", command: "claude auth logout && claude auth login" },
+        ]),
         snapshot,
         adapter,
         textGeneration,

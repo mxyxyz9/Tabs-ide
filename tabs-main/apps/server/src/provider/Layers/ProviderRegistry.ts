@@ -111,10 +111,19 @@ export const mergeProviderSnapshot = (
 ): ServerProvider =>
   !previousProvider
     ? nextProvider
-    : {
-        ...nextProvider,
-        models: mergeProviderModels(previousProvider.models, nextProvider.models),
-      };
+    : nextProvider.catalogStatus === "failed" && previousProvider.models.length > 0
+      ? {
+          ...nextProvider,
+          catalogStatus: "stale",
+          models: previousProvider.models,
+        }
+      : {
+          ...nextProvider,
+          models:
+            nextProvider.catalogStatus === "empty"
+              ? []
+              : mergeProviderModels(previousProvider.models, nextProvider.models),
+        };
 
 export const mergeProviderSnapshots = (
   previousProviders: ReadonlyArray<ServerProvider>,
@@ -183,9 +192,27 @@ const snapshotInstanceKey = (provider: ServerProvider): ProviderInstanceId => {
 const buildSnapshotSource = (instance: ProviderInstance): ProviderSnapshotSource => ({
   instanceId: instance.instanceId,
   driverKind: instance.driverKind,
-  getSnapshot: instance.snapshot.getSnapshot,
-  refresh: instance.snapshot.refresh,
-  streamChanges: instance.snapshot.streamChanges,
+  getSnapshot: instance.snapshot.getSnapshot.pipe(
+    Effect.map((snapshot) => ({
+      ...snapshot,
+      capabilities: instance.capabilities,
+      lifecycleActions: instance.lifecycle.actions,
+    })),
+  ),
+  refresh: instance.snapshot.refresh.pipe(
+    Effect.map((snapshot) => ({
+      ...snapshot,
+      capabilities: instance.capabilities,
+      lifecycleActions: instance.lifecycle.actions,
+    })),
+  ),
+  streamChanges: instance.snapshot.streamChanges.pipe(
+    Stream.map((snapshot) => ({
+      ...snapshot,
+      capabilities: instance.capabilities,
+      lifecycleActions: instance.lifecycle.actions,
+    })),
+  ),
 });
 
 export const ProviderRegistryLive = Layer.effect(

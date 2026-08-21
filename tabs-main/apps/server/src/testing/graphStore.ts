@@ -29,6 +29,11 @@ import type {
 
 import { sanitizePersistedUrl, type PiiToken } from "./security";
 import { RuntimeSqliteDatabase } from "./sqlite";
+import {
+  alignExpectedResults,
+  normalizeStepExpectedResults,
+  summarizeExpectedResults,
+} from "./expectedResults";
 
 type RunStatus = TestingGraphSummary["lastRunStatus"];
 
@@ -76,7 +81,9 @@ interface StoredCaseRow {
   readonly external_id: string;
   readonly source: TestingCaseSummary["source"];
   readonly description: string;
+  readonly group_name: string;
   readonly steps_json: string;
+  readonly expected_results_json: string;
   readonly expected_result: string;
   readonly source_sheet: string | null;
   readonly source_row: number | null;
@@ -285,7 +292,9 @@ export class TestingGraphStore {
         external_id TEXT NOT NULL,
         source TEXT NOT NULL CHECK (source IN ('excel', 'generated')),
         description TEXT NOT NULL,
+        group_name TEXT NOT NULL DEFAULT '',
         steps_json TEXT NOT NULL,
+        expected_results_json TEXT NOT NULL DEFAULT '[]',
         expected_result TEXT NOT NULL DEFAULT '',
         source_sheet TEXT,
         source_row INTEGER,
@@ -304,6 +313,13 @@ export class TestingGraphStore {
         notes TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS test_case_groups (
+        project_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (project_id, name)
       );
       CREATE INDEX IF NOT EXISTS test_cases_project_created
         ON test_cases(project_id, created_at DESC);
@@ -484,6 +500,13 @@ export class TestingGraphStore {
       "TEXT NOT NULL DEFAULT '[]'",
     );
     ensureTableColumn(this.#database, "test_cases", "expected_result", "TEXT NOT NULL DEFAULT ''");
+    ensureTableColumn(
+      this.#database,
+      "test_cases",
+      "expected_results_json",
+      "TEXT NOT NULL DEFAULT '[]'",
+    );
+    ensureTableColumn(this.#database, "test_cases", "group_name", "TEXT NOT NULL DEFAULT ''");
     this.#database.exec(`
       DELETE FROM test_cases
       WHERE id NOT IN (
@@ -722,10 +745,11 @@ export class TestingGraphStore {
     readonly projectId: string;
     readonly workbookName: string;
     readonly workbookPath: string;
+    readonly groupName?: string;
     readonly cases: ReadonlyArray<
       Omit<
         TestingCaseSummary,
-        "id" | "source" | "reviewDecision" | "standaloneStatus" | "ciStatus" | "notes"
+        "id" | "source" | "groupName" | "reviewDecision" | "standaloneStatus" | "ciStatus" | "notes"
       >
     >;
   }): TestingWorkbookImportResult {
@@ -734,10 +758,11 @@ export class TestingGraphStore {
     const importedCaseIds: string[] = [];
     const insertCase = this.#database.query(
       `INSERT INTO test_cases
-        (id, project_id, import_id, external_id, source, description, steps_json, expected_result,
+        (id, project_id, import_id, external_id, source, description, group_name, steps_json,
+         expected_results_json, expected_result,
          source_sheet, source_row, reconciliation_status, mismatches_json, matched_state_ids_json,
          created_at, updated_at)
-       VALUES (?, ?, ?, ?, 'excel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, 'excel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.#database.transaction(() => {
       this.#database
@@ -755,8 +780,10 @@ export class TestingGraphStore {
           importId,
           testCase.externalId,
           testCase.description,
+          input.groupName?.trim() || testCase.sourceSheet || "Ungrouped",
           JSON.stringify(testCase.steps),
-          testCase.expectedResult,
+          JSON.stringify(testCase.expectedResults),
+          summarizeExpectedResults(testCase.expectedResults),
           testCase.sourceSheet,
           testCase.sourceRow,
           testCase.status,
@@ -771,6 +798,7 @@ export class TestingGraphStore {
       importedCaseIds.includes(testCase.id),
     );
     return {
+      groups: this.listCases(input.projectId).groups,
       importId,
       workbookName: input.workbookName,
       cases,
@@ -787,6 +815,7 @@ export class TestingGraphStore {
       readonly externalId: string;
       readonly description: string;
       readonly steps: ReadonlyArray<string>;
+      readonly expectedResults?: ReadonlyArray<string>;
       readonly expectedResult: string;
       readonly matchedStateIds: ReadonlyArray<string>;
     }>,
@@ -794,19 +823,26 @@ export class TestingGraphStore {
     const now = new Date().toISOString();
     const statement = this.#database.query(
       `INSERT OR IGNORE INTO test_cases
-        (id, project_id, external_id, source, description, steps_json, expected_result,
+        (id, project_id, external_id, source, description, steps_json,
+         expected_results_json, expected_result,
          reconciliation_status, mismatches_json, matched_state_ids_json, created_at, updated_at)
-       VALUES (?, ?, ?, 'generated', ?, ?, ?, 'matches', '[]', ?, ?, ?)`,
+       VALUES (?, ?, ?, 'generated', ?, ?, ?, ?, 'matches', '[]', ?, ?, ?)`,
     );
     this.#database.transaction(() => {
       for (const testCase of cases) {
+        const expectedResults = alignExpectedResults(
+          testCase.steps,
+          testCase.expectedResults,
+          testCase.expectedResult,
+        );
         statement.run(
           crypto.randomUUID(),
           projectId,
           testCase.externalId,
           testCase.description,
           JSON.stringify(testCase.steps),
-          testCase.expectedResult,
+          JSON.stringify(expectedResults),
+          summarizeExpectedResults(expectedResults),
           JSON.stringify(testCase.matchedStateIds),
           now,
           now,
@@ -819,36 +855,68 @@ export class TestingGraphStore {
   listCases(projectId: string): TestingCaseListResult {
     const rows = this.#database
       .query<StoredCaseRow, [string]>(
-        `SELECT id, external_id, source, description, steps_json, expected_result,
+        `SELECT id, external_id, source, description, group_name, steps_json, expected_results_json,
+          expected_result,
           source_sheet, source_row, reconciliation_status, review_decision, mismatches_json,
           matched_state_ids_json, standalone_status, ci_status, notes
          FROM test_cases WHERE project_id = ? ORDER BY created_at DESC, source_row`,
       )
       .all(projectId);
+    const storedGroups = this.#database
+      .query<{ name: string }, [string]>(
+        "SELECT name FROM test_case_groups WHERE project_id = ? ORDER BY name COLLATE NOCASE",
+      )
+      .all(projectId)
+      .map((row) => row.name);
+    const caseGroups = rows.map(
+      (row) => row.group_name.trim() || row.source_sheet?.trim() || "Ungrouped",
+    );
     return {
-      cases: rows.map((row) => ({
-        id: row.id,
-        externalId: row.external_id,
-        source: row.source,
-        creationMethod:
-          row.source === "excel"
-            ? "imported"
-            : row.notes === "Created manually in Testing"
-              ? "manual"
-              : "generated",
-        description: row.description,
-        steps: JSON.parse(row.steps_json) as string[],
-        expectedResult: row.expected_result,
-        sourceSheet: row.source_sheet,
-        sourceRow: row.source_row,
-        status: row.reconciliation_status,
-        reviewDecision: row.review_decision,
-        mismatches: JSON.parse(row.mismatches_json) as TestingMismatch[],
-        matchedStateIds: JSON.parse(row.matched_state_ids_json) as string[],
-        standaloneStatus: row.standalone_status,
-        ciStatus: row.ci_status,
-        notes: row.notes,
-      })),
+      groups: [...new Set(["Ungrouped", ...storedGroups, ...caseGroups])].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+      cases: rows.map((row) => {
+        const steps = JSON.parse(row.steps_json) as string[];
+        let storedExpectedResults: string[] | undefined;
+        try {
+          const parsed = JSON.parse(row.expected_results_json) as unknown;
+          if (Array.isArray(parsed) && parsed.every((value) => typeof value === "string")) {
+            storedExpectedResults = parsed;
+          }
+        } catch {
+          storedExpectedResults = undefined;
+        }
+        const expectedResults = alignExpectedResults(
+          steps,
+          storedExpectedResults?.length ? storedExpectedResults : undefined,
+          row.expected_result,
+        );
+        return {
+          id: row.id,
+          externalId: row.external_id,
+          source: row.source,
+          creationMethod:
+            row.source === "excel"
+              ? "imported"
+              : row.notes === "Created manually in Testing"
+                ? "manual"
+                : "generated",
+          description: row.description,
+          groupName: row.group_name.trim() || row.source_sheet?.trim() || "Ungrouped",
+          steps,
+          expectedResults,
+          expectedResult: summarizeExpectedResults(expectedResults),
+          sourceSheet: row.source_sheet,
+          sourceRow: row.source_row,
+          status: row.reconciliation_status,
+          reviewDecision: row.review_decision,
+          mismatches: JSON.parse(row.mismatches_json) as TestingMismatch[],
+          matchedStateIds: JSON.parse(row.matched_state_ids_json) as string[],
+          standaloneStatus: row.standalone_status,
+          ciStatus: row.ci_status,
+          notes: row.notes,
+        };
+      }),
     };
   }
 
@@ -856,7 +924,12 @@ export class TestingGraphStore {
     input: TestingCaseCreateInput & { readonly externalId: string },
   ): TestingCaseListResult {
     const description = input.description.trim();
-    const steps = input.steps.map((step) => step.trim()).filter(Boolean);
+    const normalized = normalizeStepExpectedResults(
+      input.steps,
+      input.expectedResults,
+      input.expectedResult,
+    );
+    const { steps, expectedResults } = normalized;
     const externalId = input.externalId.trim();
     if (!externalId || !description || steps.length === 0) {
       throw new Error("Manual cases require a Case ID, description, and at least one step");
@@ -869,10 +942,11 @@ export class TestingGraphStore {
     this.#database
       .query(
         `INSERT INTO test_cases
-          (id, project_id, external_id, source, description, steps_json, expected_result,
+          (id, project_id, external_id, source, description, steps_json,
+           expected_results_json, expected_result,
            reconciliation_status, review_decision, mismatches_json, matched_state_ids_json,
            notes, created_at, updated_at)
-         VALUES (?, ?, ?, 'generated', ?, ?, ?, 'matches', 'edited', '[]', '[]', ?, ?, ?)`,
+         VALUES (?, ?, ?, 'generated', ?, ?, ?, ?, 'matches', 'edited', '[]', '[]', ?, ?, ?)`,
       )
       .run(
         crypto.randomUUID(),
@@ -880,7 +954,8 @@ export class TestingGraphStore {
         externalId,
         description,
         JSON.stringify(steps),
-        input.expectedResult.trim(),
+        JSON.stringify(expectedResults),
+        summarizeExpectedResults(expectedResults),
         "Created manually in Testing",
         now,
         now,
@@ -893,9 +968,14 @@ export class TestingGraphStore {
     if (!existing) throw new Error("Testing case was not found in this project");
     const externalId = input.externalId?.trim() || existing.externalId;
     const description = input.description?.trim() || existing.description;
-    const steps = input.steps?.map((step) => step.trim()).filter(Boolean) ?? existing.steps;
-    const expectedResult =
-      input.expectedResult !== undefined ? input.expectedResult : existing.expectedResult;
+    const normalized = normalizeStepExpectedResults(
+      input.steps ?? existing.steps,
+      input.expectedResults ??
+        (input.expectedResult === undefined ? existing.expectedResults : undefined),
+      input.expectedResult !== undefined ? input.expectedResult : existing.expectedResult,
+    );
+    const { steps, expectedResults } = normalized;
+    const expectedResult = summarizeExpectedResults(expectedResults);
     if (input.decision === "edited" && (!externalId || !description || steps.length === 0)) {
       throw new Error("Edited cases require a Case ID, description, and at least one step");
     }
@@ -910,6 +990,7 @@ export class TestingGraphStore {
       externalId,
       description,
       steps,
+      expectedResults,
       expectedResult,
       reviewDecision: input.decision,
     };
@@ -918,13 +999,14 @@ export class TestingGraphStore {
       this.#database
         .query(
           `UPDATE test_cases SET external_id = ?, description = ?, steps_json = ?,
-           expected_result = ?, review_decision = ?, notes = ?,
+           expected_results_json = ?, expected_result = ?, review_decision = ?, notes = ?,
            updated_at = ? WHERE id = ? AND project_id = ?`,
         )
         .run(
           externalId,
           description,
           JSON.stringify(steps),
+          JSON.stringify(expectedResults),
           expectedResult,
           input.decision,
           input.notes ?? existing.notes,
@@ -949,6 +1031,69 @@ export class TestingGraphStore {
         );
     })();
     return this.listCases(input.projectId);
+  }
+
+  deleteCase(projectId: string, caseId: string): TestingCaseListResult {
+    const existing = this.listCases(projectId).cases.find((item) => item.id === caseId);
+    if (!existing) throw new Error("Testing case was not found in this project");
+    this.#database.transaction(() => {
+      this.#database.query("DELETE FROM test_case_reviews WHERE case_id = ?").run(caseId);
+      this.#database
+        .query("DELETE FROM test_cases WHERE id = ? AND project_id = ?")
+        .run(caseId, projectId);
+    })();
+    return this.listCases(projectId);
+  }
+
+  updateCaseGroup(input: {
+    readonly projectId: string;
+    readonly caseId: string;
+    readonly groupName: string;
+  }): TestingCaseListResult {
+    const existing = this.listCases(input.projectId).cases.find((item) => item.id === input.caseId);
+    if (!existing) throw new Error("Testing case was not found in this project");
+    const groupName = input.groupName.trim() || "Ungrouped";
+    this.#database.transaction(() => {
+      this.#database
+        .query(
+          "INSERT OR IGNORE INTO test_case_groups (project_id, name, created_at) VALUES (?, ?, ?)",
+        )
+        .run(input.projectId, groupName, new Date().toISOString());
+      this.#database
+        .query(
+          "UPDATE test_cases SET group_name = ?, updated_at = ? WHERE id = ? AND project_id = ?",
+        )
+        .run(groupName, new Date().toISOString(), input.caseId, input.projectId);
+    })();
+    return this.listCases(input.projectId);
+  }
+
+  createCaseGroup(projectId: string, groupName: string): TestingCaseListResult {
+    const name = groupName.trim();
+    if (!name) throw new Error("Enter a test group name");
+    this.#database
+      .query(
+        "INSERT OR IGNORE INTO test_case_groups (project_id, name, created_at) VALUES (?, ?, ?)",
+      )
+      .run(projectId, name, new Date().toISOString());
+    return this.listCases(projectId);
+  }
+
+  deleteCaseGroup(projectId: string, groupName: string): TestingCaseListResult {
+    const name = groupName.trim();
+    if (!name || name === "Ungrouped") throw new Error("The Ungrouped folder cannot be deleted");
+    const now = new Date().toISOString();
+    this.#database.transaction(() => {
+      this.#database
+        .query(
+          "UPDATE test_cases SET group_name = 'Ungrouped', updated_at = ? WHERE project_id = ? AND group_name = ?",
+        )
+        .run(now, projectId, name);
+      this.#database
+        .query("DELETE FROM test_case_groups WHERE project_id = ? AND name = ?")
+        .run(projectId, name);
+    })();
+    return this.listCases(projectId);
   }
 
   clearGraph(projectId: string): TestingClearGraphResult {

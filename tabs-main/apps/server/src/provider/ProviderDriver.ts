@@ -35,6 +35,55 @@ import type { ProviderAdapterError, ProviderDriverError } from "./Errors";
 import type { ProviderAdapterShape } from "./Services/ProviderAdapter";
 import type { ServerProviderShape } from "./Services/ServerProvider";
 
+export type ProviderCapabilitySupport = "supported" | "external" | "unsupported";
+
+export interface ProviderInstanceCapabilities {
+  readonly modelDiscovery: "runtime" | "curated" | "configured" | "unsupported";
+  readonly agentSessions: ProviderCapabilitySupport;
+  readonly textGeneration: ProviderCapabilitySupport;
+  readonly structuredGeneration: ProviderCapabilitySupport;
+  readonly nativeReview: ProviderCapabilitySupport;
+  readonly login: ProviderCapabilitySupport;
+  readonly logout: ProviderCapabilitySupport;
+  readonly accountSwitch: ProviderCapabilitySupport;
+  readonly installation: ProviderCapabilitySupport;
+}
+
+export type ProviderLifecycleActionKind = "login" | "logout" | "install" | "switch-account";
+
+export interface ProviderLifecycleAction {
+  readonly kind: ProviderLifecycleActionKind;
+  readonly command: string;
+  readonly external: boolean;
+}
+
+export interface ProviderLifecycleShape {
+  readonly actions: ReadonlyArray<ProviderLifecycleAction>;
+}
+
+export function makeProviderInstanceCapabilities(
+  overrides: Partial<ProviderInstanceCapabilities>,
+): ProviderInstanceCapabilities {
+  return {
+    modelDiscovery: "unsupported",
+    agentSessions: "unsupported",
+    textGeneration: "unsupported",
+    structuredGeneration: "unsupported",
+    nativeReview: "unsupported",
+    login: "unsupported",
+    logout: "unsupported",
+    accountSwitch: "unsupported",
+    installation: "unsupported",
+    ...overrides,
+  };
+}
+
+export function makeExternalCliLifecycle(
+  actions: ReadonlyArray<Omit<ProviderLifecycleAction, "external">>,
+): ProviderLifecycleShape {
+  return { actions: actions.map((action) => ({ ...action, external: true })) };
+}
+
 /**
  * Static metadata advertised by a driver. Used for default presentation
  * and (later) settings UI. Doesn't need to be Effect-typed because nothing
@@ -68,6 +117,8 @@ export interface ProviderInstance {
   readonly displayName: string | undefined;
   readonly accentColor?: string | undefined;
   readonly enabled: boolean;
+  readonly capabilities: ProviderInstanceCapabilities;
+  readonly lifecycle: ProviderLifecycleShape;
   readonly snapshot: ServerProviderShape;
   readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
   readonly textGeneration: TextGenerationShape;

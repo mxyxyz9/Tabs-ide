@@ -212,7 +212,9 @@ export function getProviderOptionCurrentLabel(
   if (typeof currentValue !== "string") {
     return undefined;
   }
-  return descriptor.options.find((option) => option.id === currentValue || (option as any).value === currentValue)?.label;
+  return descriptor.options.find(
+    (option) => option.id === currentValue || (option as any).value === currentValue,
+  )?.label;
 }
 
 export function buildProviderOptionSelectionsFromDescriptors(
@@ -313,6 +315,7 @@ export function resolveSelectableModel(
 function resolveModelSlug(model: string | null | undefined, provider: string): string {
   const normalized = normalizeModelSlug(model, provider);
   if (!normalized) {
+    if (provider === "copilot") return "";
     return DEFAULT_MODEL_BY_PROVIDER[provider as ProviderDriverKind] ?? DEFAULT_MODEL;
   }
   return normalized;
@@ -409,6 +412,7 @@ const selectOptionDescriptors = (caps: ModelCapabilities) =>
   );
 
 export function getDefaultModel(provider: string = "codex"): string {
+  if (provider === "copilot") return "";
   return DEFAULT_MODEL_BY_PROVIDER[provider as ProviderDriverKind] ?? DEFAULT_MODEL;
 }
 

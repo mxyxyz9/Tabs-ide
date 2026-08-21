@@ -101,7 +101,8 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
 
       expect(snapshot.status).toBe("error");
       expect(snapshot.installed).toBe(true);
-      expect(snapshot.models.map((model) => model.slug)).toEqual(["grok-build"]);
+      expect(snapshot.models).toEqual([]);
+      expect(snapshot.catalogStatus).toBe("failed");
       expect(snapshot.message).toContain("couldn't start an ACP session");
     }),
   );

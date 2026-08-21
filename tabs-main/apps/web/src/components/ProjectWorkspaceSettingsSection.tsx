@@ -1,4 +1,7 @@
-import { type ProjectWorkspaceSettings } from "@tabs/contracts/settings";
+import {
+  type ProjectWorkspaceSettings,
+  type BrowserPartitionMode,
+} from "@tabs/contracts/settings";
 import {
   DndContext,
   type DragEndEvent,
@@ -27,6 +30,9 @@ import {
   Trash2Icon,
   InfoIcon,
   LockIcon,
+  CheckIcon,
+  GlobeIcon,
+  LayersIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -42,6 +48,8 @@ import { ServerPresetFormFields } from "./ServerPresetFormFields";
 import { projectsAtom } from "../state/threads";
 import { useAtomValue } from "@effect/atom-react";
 import { useTheme } from "../hooks/useTheme";
+import { useSettings, useUpdateSettings } from "../hooks/useSettings";
+import type { BrowserProfileDefinition } from "@tabs/contracts/settings";
 import { getActiveFontCombo } from "../lib/themes";
 import {
   AlertDialog,
@@ -52,6 +60,15 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { Menu, MenuTrigger, MenuPopup, MenuItem, MenuSeparator } from "./ui/menu";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Tooltip, TooltipTrigger, TooltipPopup } from "./ui/tooltip";
@@ -112,6 +129,176 @@ function reorderItems<T>(items: readonly T[], index: number, direction: -1 | 1):
   reordered[index] = target;
   reordered[nextIndex] = current;
   return reordered;
+}
+
+function BrowserProfileSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) {
+  const settings = useSettings();
+  const { updateSettings } = useUpdateSettings();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newColor, setNewColor] = useState("#3b82f6");
+
+  const profiles: readonly BrowserProfileDefinition[] = useMemo(() => {
+    const list = [
+      ...(settings.browserProfiles ?? [
+        { id: "personal", label: "Personal", color: "#3b82f6", createdAt: 0 },
+        { id: "work", label: "Work", color: "#10b981", createdAt: 0 },
+      ]),
+    ];
+    if (value && !list.some((p) => p.id === value)) {
+      list.push({ id: value, label: value, color: "#6366f1", createdAt: 0 });
+    }
+    return list;
+  }, [settings.browserProfiles, value]);
+
+  const selectedProfile = profiles.find((p) => p.id === value) ?? profiles[0];
+
+  const handleCreateNew = () => {
+    const trimmed = newLabel.trim();
+    if (!trimmed) return;
+    const slug = trimmed
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!slug) return;
+    const newProfile: BrowserProfileDefinition = {
+      id: slug,
+      label: trimmed,
+      color: newColor,
+      createdAt: Date.now(),
+    };
+    updateSettings({ browserProfiles: [...profiles, newProfile] });
+    onChange(slug);
+    setModalOpen(false);
+    setNewLabel("");
+  };
+
+  return (
+    <div className="space-y-1.5 pt-1">
+      <div className="flex items-center gap-2">
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-[0.12em] shrink-0">
+          Profile:
+        </div>
+        <Menu>
+          <MenuTrigger className="flex items-center justify-between gap-2 h-8 px-2.5 min-w-[200px] max-w-xs rounded-md border border-input bg-background hover:bg-accent/40 text-foreground text-xs shadow-xs transition-colors cursor-pointer outline-none focus:ring-1 focus:ring-ring">
+            <div className="flex items-center gap-2 truncate">
+              <div
+                className="size-3 rounded-full shrink-0 ring-1 ring-border"
+                style={{ backgroundColor: selectedProfile?.color || "#3b82f6" }}
+              />
+              <span className="font-medium truncate">{selectedProfile?.label || "Select profile"}</span>
+              <span className="text-[11px] text-muted-foreground font-mono truncate">
+                ({selectedProfile?.id})
+              </span>
+            </div>
+            <ChevronDownIcon className="size-3.5 opacity-60 shrink-0" />
+          </MenuTrigger>
+          <MenuPopup align="start" className="w-[240px]">
+            {profiles.map((p) => {
+              const isSelected = (value || selectedProfile?.id) === p.id;
+              return (
+                <MenuItem
+                  key={p.id}
+                  onClick={() => onChange(p.id)}
+                  className="flex items-center justify-between text-xs py-1.5 px-2 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <div
+                      className="size-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: p.color || "#3b82f6" }}
+                    />
+                    <span className="font-medium truncate">{p.label}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">
+                      ({p.id})
+                    </span>
+                  </div>
+                  {isSelected && <CheckIcon className="size-3.5 text-primary shrink-0" />}
+                </MenuItem>
+              );
+            })}
+            <MenuSeparator />
+            <MenuItem
+              onClick={() => {
+                setNewLabel("");
+                setModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 text-xs text-primary font-medium py-1.5 px-2 cursor-pointer"
+            >
+              <PlusIcon className="size-3.5" />
+              <span>Create new profile...</span>
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
+      </div>
+
+      {/* Clean Create Profile Dialog */}
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2">
+              <PlusIcon className="size-4 text-primary" />
+              Create Browser Profile
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Create a new isolated session profile to share logins across projects and tabs.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
+                Profile Name
+              </label>
+              <Input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="e.g. Client Alpha, Personal Work"
+                className="text-xs"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground block mb-1.5">
+                Color Accent
+              </label>
+              <div className="flex items-center gap-2 pt-0.5">
+                {["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ec4899", "#06b6d4"].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setNewColor(c)}
+                    className={cn(
+                      "size-7 rounded-full transition-all cursor-pointer flex items-center justify-center ring-offset-2 ring-offset-background",
+                      newColor === c ? "ring-2 ring-primary scale-105" : "hover:scale-105 opacity-80 hover:opacity-100",
+                    )}
+                    style={{ backgroundColor: c }}
+                  >
+                    {newColor === c && <CheckIcon className="size-4 text-white drop-shadow-xs" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateNew} disabled={!newLabel.trim()}>
+              Create Profile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
 
 /**
@@ -189,11 +376,15 @@ interface CustomEmbedDraft {
   url: string;
   visible: boolean;
   resumeLastVisitedPage: boolean;
+  partitionMode: BrowserPartitionMode;
+  partitionProfile: string;
   isNew: boolean;
   originalLabel: string;
   originalUrl: string;
   originalVisible: boolean;
   originalResumeLastVisitedPage: boolean;
+  originalPartitionMode: BrowserPartitionMode;
+  originalPartitionProfile: string;
 }
 
 export interface ServerProcessDraft {
@@ -231,11 +422,15 @@ function createCustomEmbedDrafts(settings: ProjectWorkspaceSettings): CustomEmbe
       label: embed.label,
       url: embed.url,
       resumeLastVisitedPage: embed.resumeLastVisitedPage ?? false,
+      partitionMode: embed.partitionMode ?? "shared",
+      partitionProfile: embed.partitionProfile ?? "",
       visible: tool?.visible ?? true,
       isNew: false,
       originalLabel: embed.label,
       originalUrl: embed.url,
       originalResumeLastVisitedPage: embed.resumeLastVisitedPage ?? false,
+      originalPartitionMode: embed.partitionMode ?? "shared",
+      originalPartitionProfile: embed.partitionProfile ?? "",
       originalVisible: tool?.visible ?? true,
     };
   });
@@ -298,7 +493,9 @@ function isCustomEmbedDraftDirty(draft: CustomEmbedDraft) {
     draft.label !== draft.originalLabel ||
     draft.url !== draft.originalUrl ||
     draft.visible !== draft.originalVisible ||
-    draft.resumeLastVisitedPage !== draft.originalResumeLastVisitedPage
+    draft.resumeLastVisitedPage !== draft.originalResumeLastVisitedPage ||
+    draft.partitionMode !== draft.originalPartitionMode ||
+    draft.partitionProfile !== draft.originalPartitionProfile
   );
 }
 
@@ -319,7 +516,13 @@ function isServerProcessDraftDirty(draft: ServerProcessDraft) {
   );
 }
 
-export function ProjectWorkspaceSettingsSection() {
+export function ProjectWorkspaceSettingsSection({
+  scope,
+  onScopeChange,
+}: {
+  scope?: "project" | "global";
+  onScopeChange?: (scope: "project" | "global") => void;
+} = {}) {
   const { fontPreferences } = useTheme();
   const activeFontCombo = getActiveFontCombo(fontPreferences);
   const { confirm, confirmDialog } = useConfirm();
@@ -330,11 +533,20 @@ export function ProjectWorkspaceSettingsSection() {
   const projectSettings = useProjectWorkspaceSettings(activeProjectId);
   const upsertProjectSettings = workspaceShellActions.upsertProjectSettings;
   const [customEmbedDrafts, setCustomEmbedDrafts] = useState<CustomEmbedDraft[]>([]);
+  const [internalScope, setInternalScope] = useState<"project" | "global">("project");
+  const workspaceScope = scope ?? internalScope;
+  const setWorkspaceScope = (next: "project" | "global") => {
+    setInternalScope(next);
+    onScopeChange?.(next);
+  };
   const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>([]);
   const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});
 
   const [browserDefaultUrlDraft, setBrowserDefaultUrlDraft] = useState<string>("");
   const [resumeLastVisitedPageDraft, setResumeLastVisitedPageDraft] = useState<boolean>(true);
+  const [browserPartitionModeDraft, setBrowserPartitionModeDraft] =
+    useState<BrowserPartitionMode>("shared");
+  const [browserPartitionProfileDraft, setBrowserPartitionProfileDraft] = useState<string>("");
 
   const [alwaysMinAgents, setAlwaysMinAgents] = useState<boolean>(() => {
     try {
@@ -386,13 +598,29 @@ export function ProjectWorkspaceSettingsSection() {
   const isResumeLastVisitedPageDirty = projectSettings
     ? resumeLastVisitedPageDraft !== projectSettings.browser.resumeLastVisitedPage
     : false;
+  const isBrowserPartitionModeDirty = projectSettings
+    ? browserPartitionModeDraft !== (projectSettings.browser.partitionMode ?? "shared")
+    : false;
+  const isBrowserPartitionProfileDirty = projectSettings
+    ? browserPartitionProfileDraft !== (projectSettings.browser.partitionProfile ?? "")
+    : false;
+
+  const isBrowserSettingsDirty =
+    isBrowserDefaultUrlDirty ||
+    isResumeLastVisitedPageDirty ||
+    isBrowserPartitionModeDirty ||
+    isBrowserPartitionProfileDirty;
 
   useEffect(() => {
     setBrowserDefaultUrlDraft(projectSettings?.browser?.defaultUrl ?? "");
     setResumeLastVisitedPageDraft(projectSettings?.browser?.resumeLastVisitedPage ?? true);
+    setBrowserPartitionModeDraft(projectSettings?.browser?.partitionMode ?? "shared");
+    setBrowserPartitionProfileDraft(projectSettings?.browser?.partitionProfile ?? "");
   }, [
     projectSettings?.browser?.defaultUrl,
     projectSettings?.browser?.resumeLastVisitedPage,
+    projectSettings?.browser?.partitionMode,
+    projectSettings?.browser?.partitionProfile,
     activeProjectId,
   ]);
 
@@ -693,6 +921,10 @@ export function ProjectWorkspaceSettingsSection() {
           label: draft.label.trim().length > 0 ? draft.label.trim() : "Untitled tab",
           url: draft.url.trim(),
           resumeLastVisitedPage: draft.resumeLastVisitedPage,
+          partitionMode: draft.partitionMode,
+          ...(draft.partitionMode === "profile" && draft.partitionProfile.trim().length > 0
+            ? { partitionProfile: draft.partitionProfile.trim() }
+            : {}),
           ...(existingEmbed?.lastVisitedUrl
             ? { lastVisitedUrl: existingEmbed.lastVisitedUrl }
             : {}),
@@ -811,39 +1043,113 @@ export function ProjectWorkspaceSettingsSection() {
                 </h2>
               </div>
               <p className="text-sm text-muted-foreground">
-                Configure tools, browser tabs, terminals, and workspace settings for this project.
+                {workspaceScope === "project"
+                  ? `Configure tools, browser tabs, terminals, and workspace settings for ${activeProject?.name || "this project"}.`
+                  : "Configure application-wide default browser tabs, custom embeds, terminals, and tools template."}
               </p>
             </div>
-
-            <SettingsHeaderPortal>
-              <Button
-                size="xs"
-                variant="outline"
-                className="no-drag"
-                onClick={async () => {
-                  const confirmed = await confirm(
-                    "Restore default settings?\n\nThis will reset: Terminal shell and Editor preferences.",
-                  );
-                  if (confirmed) {
-                    workspaceShellActions.upsertProjectSettings(activeProjectId, {
-                      // Reset to defaults
-                    });
-                  }
-                }}
-              >
-                <RotateCcwIcon className="size-3.5 mr-1" />
-                Restore defaults
-              </Button>
-            </SettingsHeaderPortal>
           </div>
-          <div
-            className="h-[5px] w-full my-5 rounded-full dark:block hidden"
-            style={{ background: "linear-gradient(to right, rgba(255,255,255,0.25), transparent)" }}
-          />
-          <div
-            className="h-[5px] w-full my-5 rounded-full dark:hidden block"
-            style={{ background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)" }}
-          />
+
+          {/* Scope Segmented Control */}
+          <div className="flex items-center justify-between gap-3 p-1.5 bg-muted/40 border border-border/60 rounded-xl my-4">
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setWorkspaceScope("project")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2",
+                  workspaceScope === "project"
+                    ? "bg-background text-foreground shadow-xs border border-border/80"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <LayersIcon className="size-3.5" />
+                <span>Project: {activeProject?.name || "Active Project"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWorkspaceScope("global")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2",
+                  workspaceScope === "global"
+                    ? "bg-background text-foreground shadow-xs border border-border/80"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <GlobeIcon className="size-3.5 text-primary" />
+                <span>Global Workspace Defaults</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {workspaceScope === "project" ? (
+                <Button
+                  size="xs"
+                  variant="outline"
+                  className="cursor-pointer gap-1.5 text-xs h-7"
+                  onClick={async () => {
+                    if (!activeProjectId) return;
+                    const confirmed = await confirm(
+                      "Apply Global Workspace Defaults to this project?\n\nThis will replace custom browser embeds, server presets, terminal processes, and tool arrangements with your global template.",
+                    );
+                    if (confirmed) {
+                      try {
+                        const raw = localStorage.getItem("tabs:global-workspace-defaults:v1");
+                        const parsed = raw ? JSON.parse(raw) : null;
+                        if (parsed) {
+                          workspaceShellActions.upsertProjectSettings(activeProjectId, parsed);
+                          toastManager.add({
+                            type: "success",
+                            title: "Applied Global Defaults",
+                            description: "Workspace configuration updated from global template.",
+                          });
+                        } else {
+                          toastManager.add({
+                            type: "info",
+                            title: "No custom global template found",
+                            description:
+                              "Switch to 'Global Workspace Defaults' to configure and save a template.",
+                          });
+                        }
+                      } catch {
+                        toastManager.add({
+                          type: "error",
+                          title: "Failed to apply defaults",
+                          description: "Could not parse global defaults.",
+                        });
+                      }
+                    }
+                  }}
+                  title="Import and apply global workspace defaults into this project"
+                >
+                  <RotateCcwIcon className="size-3" />
+                  Apply Global Defaults
+                </Button>
+              ) : (
+                <Button
+                  size="xs"
+                  variant="default"
+                  className="cursor-pointer gap-1.5 text-xs h-7"
+                  onClick={() => {
+                    if (projectSettings) {
+                      localStorage.setItem(
+                        "tabs:global-workspace-defaults:v1",
+                        JSON.stringify(projectSettings),
+                      );
+                      toastManager.add({
+                        type: "success",
+                        title: "Global Defaults Saved",
+                        description: "Current workspace layout saved as application-wide template.",
+                      });
+                    }
+                  }}
+                >
+                  <SaveIcon className="size-3" />
+                  Save as Global Defaults
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         <Card>
@@ -1002,11 +1308,16 @@ export function ProjectWorkspaceSettingsSection() {
                             ...current.browser,
                             defaultUrl: browserDefaultUrlDraft,
                             resumeLastVisitedPage: resumeLastVisitedPageDraft,
+                            partitionMode: browserPartitionModeDraft,
+                            ...(browserPartitionModeDraft === "profile" &&
+                            browserPartitionProfileDraft.trim().length > 0
+                              ? { partitionProfile: browserPartitionProfileDraft.trim() }
+                              : {}),
                           },
                         }));
                       }
                     }}
-                    disabled={!isBrowserDefaultUrlDirty && !isResumeLastVisitedPageDirty}
+                    disabled={!isBrowserSettingsDirty}
                   >
                     Save
                   </Button>
@@ -1036,6 +1347,63 @@ export function ProjectWorkspaceSettingsSection() {
                   checked={resumeLastVisitedPageDraft}
                   onCheckedChange={(checked) => setResumeLastVisitedPageDraft(checked)}
                 />
+              </div>
+
+              <Separator />
+
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="text-sm font-medium">Session & Account Isolation</div>
+                    <div className="text-xs text-muted-foreground">
+                      Choose whether the browser shares cookies and logins across this project, runs in an isolated sandbox, or connects to a named profile.
+                    </div>
+                  </div>
+                  <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1 shrink-0 self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setBrowserPartitionModeDraft("shared")}
+                      className={cn(
+                        "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
+                        browserPartitionModeDraft === "shared"
+                          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Shared (Project)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrowserPartitionModeDraft("isolated")}
+                      className={cn(
+                        "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
+                        browserPartitionModeDraft === "isolated"
+                          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Isolated
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrowserPartitionModeDraft("profile")}
+                      className={cn(
+                        "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
+                        browserPartitionModeDraft === "profile"
+                          ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      Named Profile
+                    </button>
+                  </div>
+                </div>
+                {browserPartitionModeDraft === "profile" && (
+                  <BrowserProfileSelector
+                    value={browserPartitionProfileDraft}
+                    onChange={setBrowserPartitionProfileDraft}
+                  />
+                )}
               </div>
             </div>
           </CardContent>
@@ -1116,11 +1484,15 @@ export function ProjectWorkspaceSettingsSection() {
                               url: "",
                               visible: true,
                               resumeLastVisitedPage: false,
+                              partitionMode: "shared",
+                              partitionProfile: "",
                               isNew: true,
                               originalLabel: "",
                               originalUrl: "",
                               originalVisible: true,
                               originalResumeLastVisitedPage: false,
+                              originalPartitionMode: "shared",
+                              originalPartitionProfile: "",
                             },
                             ...current,
                           ]);
@@ -1247,6 +1619,94 @@ export function ProjectWorkspaceSettingsSection() {
                                       )
                                     }
                                   />
+                                </div>
+                                <div className="flex flex-col gap-3 pt-4 border-t border-border/40">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex flex-col gap-0.5">
+                                      <div className="text-xs font-medium text-foreground">
+                                        Session & Account Isolation
+                                      </div>
+                                      <div className="text-xs text-muted-foreground">
+                                        Choose whether this tab shares cookies and logins with this project, stays isolated, or links to a named profile.
+                                      </div>
+                                    </div>
+                                    <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1 shrink-0 self-start sm:self-auto">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setCustomEmbedDrafts((current) =>
+                                            current.map((entry) =>
+                                              entry.id === activeDraft.id
+                                                ? { ...entry, partitionMode: "shared" }
+                                                : entry,
+                                            ),
+                                          )
+                                        }
+                                        className={cn(
+                                          "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
+                                          (activeDraft.partitionMode ?? "shared") === "shared"
+                                            ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                                            : "text-muted-foreground hover:text-foreground",
+                                        )}
+                                      >
+                                        Shared (Project)
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setCustomEmbedDrafts((current) =>
+                                            current.map((entry) =>
+                                              entry.id === activeDraft.id
+                                                ? { ...entry, partitionMode: "isolated" }
+                                                : entry,
+                                            ),
+                                          )
+                                        }
+                                        className={cn(
+                                          "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
+                                          activeDraft.partitionMode === "isolated"
+                                            ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                                            : "text-muted-foreground hover:text-foreground",
+                                        )}
+                                      >
+                                        Isolated
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setCustomEmbedDrafts((current) =>
+                                            current.map((entry) =>
+                                              entry.id === activeDraft.id
+                                                ? { ...entry, partitionMode: "profile" }
+                                                : entry,
+                                            ),
+                                          )
+                                        }
+                                        className={cn(
+                                          "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
+                                          activeDraft.partitionMode === "profile"
+                                            ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                                            : "text-muted-foreground hover:text-foreground",
+                                        )}
+                                      >
+                                        Named Profile
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {activeDraft.partitionMode === "profile" && (
+                                    <BrowserProfileSelector
+                                      value={activeDraft.partitionProfile}
+                                      onChange={(val) =>
+                                        setCustomEmbedDrafts((current) =>
+                                          current.map((entry) =>
+                                            entry.id === activeDraft.id
+                                              ? { ...entry, partitionProfile: val }
+                                              : entry,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                  )}
                                 </div>
                               </div>
                             </div>

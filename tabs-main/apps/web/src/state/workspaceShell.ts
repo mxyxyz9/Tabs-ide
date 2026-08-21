@@ -23,6 +23,7 @@ export function initializeWorkspaceShellState() {
       session: state.session,
       projectSettingsByProjectId: state.projectSettingsByProjectId,
       browserStateByProjectId: state.browserStateByProjectId,
+      browserStateBySessionKey: state.browserStateBySessionKey,
       browserUrlBySessionKey: state.browserUrlBySessionKey,
       codeStateByProjectId: state.codeStateByProjectId,
       codeChromeStateByProjectId: state.codeChromeStateByProjectId,

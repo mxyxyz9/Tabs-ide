@@ -75,6 +75,7 @@ export interface CopilotAdapterLiveOptions {
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
   readonly instanceId?: ProviderInstanceId;
+  readonly isModelAdvertised?: (modelId: string) => Effect.Effect<boolean, never, never>;
 }
 
 interface PendingApproval {
@@ -162,7 +163,15 @@ function selectAutoApprovedPermissionOption(
 export function makeCopilotAdapter(
   copilotSettings: CopilotSettings,
   options?: CopilotAdapterLiveOptions,
-): Effect.Effect<CopilotAdapterShape, never, Scope.Scope | ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path | ServerConfig> {
+): Effect.Effect<
+  CopilotAdapterShape,
+  never,
+  | Scope.Scope
+  | ChildProcessSpawner.ChildProcessSpawner
+  | FileSystem.FileSystem
+  | Path.Path
+  | ServerConfig
+> {
   return Effect.gen(function* () {
     const boundInstanceId = options?.instanceId ?? ("copilot" as ProviderInstanceId);
     const fileSystem = yield* FileSystem.FileSystem;
@@ -179,6 +188,26 @@ export function makeCopilotAdapter(
     const sessions = new Map<ThreadId, CopilotSessionContext>();
     const threadLocksRef = yield* SynchronizedRef.make(new Map<string, Semaphore.Semaphore>());
     const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+
+    const validateAdvertisedModel = (
+      modelId: string | undefined,
+      operation: string,
+    ): Effect.Effect<void, ProviderAdapterValidationError> =>
+      !modelId || !options?.isModelAdvertised
+        ? Effect.void
+        : options.isModelAdvertised(modelId).pipe(
+            Effect.flatMap((advertised) =>
+              advertised
+                ? Effect.void
+                : Effect.fail(
+                    new ProviderAdapterValidationError({
+                      provider: PROVIDER,
+                      operation,
+                      issue: `Copilot model '${modelId}' is not in the current account catalog. Refresh providers and select an advertised model.`,
+                    }),
+                  ),
+            ),
+          );
 
     const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
     const randomUUIDv4 = Effect.sync(() => nodeRandomUUID()).pipe(
@@ -498,6 +527,7 @@ export function makeCopilotAdapter(
           let currentModelId = currentCopilotModelIdFromSessionSetup(started.sessionSetupResult);
           if (copilotModelSelection?.model) {
             const requestedModelId = resolveCopilotAcpBaseModelId(copilotModelSelection.model);
+            yield* validateAdvertisedModel(requestedModelId, "session/start");
             currentModelId = yield* applyCopilotAcpModelSelection({
               runtime: acp,
               currentModelId,
@@ -618,6 +648,7 @@ export function makeCopilotAdapter(
             input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
           if (copilotModelSelection?.model) {
             const requestedModelId = resolveCopilotAcpBaseModelId(copilotModelSelection.model);
+            yield* validateAdvertisedModel(requestedModelId, "turn/send");
             ctx.currentModelId = yield* applyCopilotAcpModelSelection({
               runtime: ctx.acp,
               currentModelId: ctx.currentModelId,
@@ -644,7 +675,11 @@ export function makeCopilotAdapter(
                 Effect.orElseSucceed(() => undefined),
               ),
             { concurrency: "unbounded" },
-          ).pipe(Effect.map((items) => items.filter((item): item is NonNullable<typeof item> => item !== undefined)));
+          ).pipe(
+            Effect.map((items) =>
+              items.filter((item): item is NonNullable<typeof item> => item !== undefined),
+            ),
+          );
 
           // Send turn via ACP prompt
           yield* Effect.fork(
@@ -668,7 +703,7 @@ export function makeCopilotAdapter(
               Effect.catchAll((err) =>
                 offerRuntimeEvent({
                   type: "turn.failed",
-                  ...(Effect.runSync(makeEventStamp())),
+                  ...Effect.runSync(makeEventStamp()),
                   provider: PROVIDER,
                   threadId: input.threadId,
                   turnId,
@@ -691,14 +726,12 @@ export function makeCopilotAdapter(
         threadId,
         Effect.gen(function* () {
           const ctx = yield* requireSession(threadId);
-          yield* ctx.acp
-            .cancel
-            .pipe(
-              Effect.mapError((cause) =>
-                mapAcpToAdapterError(PROVIDER, threadId, "session/cancel", cause),
-              ),
-              Effect.catchAll(() => Effect.void),
-            );
+          yield* ctx.acp.cancel.pipe(
+            Effect.mapError((cause) =>
+              mapAcpToAdapterError(PROVIDER, threadId, "session/cancel", cause),
+            ),
+            Effect.catchAll(() => Effect.void),
+          );
         }),
       );
 

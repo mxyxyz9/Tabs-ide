@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { reconcileWorkbookCase, scenariosFromGraph } from "./reconciliation";
-import { parseSteps, parseTestingWorkbook } from "./workbookParser";
+import { parseExpectedResults, parseSteps, parseTestingWorkbook } from "./workbookParser";
 
 const graph = {
   nodes: [
@@ -47,6 +47,14 @@ describe("Testing workbook ingestion and reconciliation", () => {
     ]);
   });
 
+  it("aligns numbered expected results with their individual steps", () => {
+    expect(parseExpectedResults("1. Profile is visible\n2. Changes are saved", 2)).toEqual([
+      "Profile is visible",
+      "Changes are saved",
+    ]);
+    expect(parseExpectedResults("Changes are saved", 2)).toEqual(["", "Changes are saved"]);
+  });
+
   it("imports the controlled workbook with provenance and row-level errors", async () => {
     const fixturePath = resolve(
       import.meta.dirname,
@@ -62,8 +70,12 @@ describe("Testing workbook ingestion and reconciliation", () => {
       sourceRow: 5,
       steps: ['Activate link "Profile"', 'Activate button "Save changes"'],
     });
-    // expectedResult defaults to empty string for workbooks without the column.
+    // A legacy single expected result is attached to the final imported step.
     expect(typeof parsed.cases[0]?.expectedResult).toBe("string");
+    expect(parsed.cases[0]?.expectedResults).toEqual([
+      "",
+      "Profile changes are saved and confirmed",
+    ]);
     expect(parsed.cases[0]?.errors).toContain("Duplicate Case ID");
     expect(parsed.cases[2]?.errors).toContain("Duplicate Case ID");
     expect(parsed.cases[3]?.errors).toContain("Case ID is blank");
@@ -106,8 +118,9 @@ describe("Testing workbook ingestion and reconciliation", () => {
       externalId: "DISCOVERED-002",
       matchedStateIds: ["root", "profile", "saved"],
     });
-    // Each auto-generated scenario should carry an expectedResult string.
+    // Each auto-generated scenario should carry one expected result per step.
     expect(typeof scenarios[0]?.expectedResult).toBe("string");
+    expect(scenarios[1]?.expectedResults).toHaveLength(scenarios[1]?.steps.length ?? 0);
     expect(scenarios[1]?.expectedResult).toContain("Saved");
   });
 
@@ -116,6 +129,7 @@ describe("Testing workbook ingestion and reconciliation", () => {
       externalId: "QA-ER-001",
       description: "Submit the checkout form",
       steps: ['Activate link "Profile"'],
+      expectedResults: ["Order confirmation screen appears with invoice number"],
       expectedResult: "Order confirmation screen appears with invoice number",
       sourceSheet: "QA Cases",
       sourceRow: 2,

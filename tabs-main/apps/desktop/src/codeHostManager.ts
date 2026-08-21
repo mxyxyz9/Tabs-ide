@@ -955,16 +955,20 @@ export function resolveCodeHostConfigWithFs(
   const fallbackRoots = process.resourcesPath
     ? [
         // First try Resources/tabs-code-main (packaged app location)
+        Path.join(process.resourcesPath, "vscode-main"),
         Path.join(process.resourcesPath, "tabs-code-main"),
         // Then try sibling directories (development)
+        Path.join(input.rootDir, "..", "vscode-main"),
         Path.join(input.rootDir, "..", "tabs-code-main"),
         Path.join(input.rootDir, "..", "vscode"),
       ]
     : [
         // Development mode fallbacks
+        Path.join(input.rootDir, "..", "vscode-main"),
         Path.join(input.rootDir, "..", "tabs-code-main"),
         Path.join(input.rootDir, "..", "vscode"),
       ];
+
 
   for (const fallbackRoot of fallbackRoots) {
     if (!isDirectory(fallbackRoot, fs)) {

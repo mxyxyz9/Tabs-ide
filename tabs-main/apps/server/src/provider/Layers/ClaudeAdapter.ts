@@ -61,6 +61,7 @@ import {
   type ProviderListAgentsResult,
 } from "@tabs/contracts";
 import { getModelSelectionStringOptionValue } from "@tabs/shared/model";
+import type { ProviderListModelsResult } from "../Services/ProviderAdapter";
 import {
   getClaudeModelCapabilities,
   isClaudeUltracodeEffort,
@@ -6320,6 +6321,7 @@ export function makeClaudeAdapter(
       capabilities: {
         sessionModelSwitch: "in-session",
       },
+      listModels,
       startSession,
       sendTurn,
       interruptTurn,

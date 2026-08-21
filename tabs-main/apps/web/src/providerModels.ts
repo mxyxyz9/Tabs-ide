@@ -77,91 +77,10 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
       capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
     },
   ],
-  claudeAgent: [
-    {
-      slug: "claude-opus-5",
-      name: "Claude Opus 5",
-      isCustom: false,
-      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "claude-fable-5",
-      name: "Claude Fable 5",
-      isCustom: false,
-      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "claude-sonnet-5",
-      name: "Claude Sonnet 5",
-      isCustom: false,
-      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "claude-opus-4-8",
-      name: "Claude Opus 4.8",
-      isCustom: false,
-      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "claude-opus-4-7",
-      name: "Claude Opus 4.7",
-      isCustom: false,
-      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "claude-haiku-4-5",
-      name: "Claude Haiku 4.5",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-  ],
-  cursor: [
-    {
-      slug: "auto",
-      name: "Auto (Recommended)",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "composer-2",
-      name: "Composer 2",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "composer-1.5",
-      name: "Composer 1.5",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "claude-sonnet-4-6",
-      name: "Claude Sonnet 4.6",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-  ],
+  claudeAgent: [],
+  cursor: [],
   copilot: [],
-  grok: [
-    {
-      slug: "grok-build",
-      name: "Grok Build",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "grok-code",
-      name: "Grok Code",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-    {
-      slug: "grok-3",
-      name: "Grok 3",
-      isCustom: false,
-      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
-    },
-  ],
+  grok: [],
   opencode: [
     {
       slug: "openai/gpt-5",
@@ -183,24 +102,12 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
     },
   ],
   kilo: [
-    { slug: "deepseek/deepseek-r1", name: "DeepSeek R1", subProvider: "DeepSeek", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "deepseek/deepseek-chat", name: "DeepSeek V3", subProvider: "DeepSeek", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "anthropic/claude-3-7-sonnet", name: "Claude 3.7 Sonnet", subProvider: "Anthropic", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "anthropic/claude-3-5-sonnet", name: "Claude 3.5 Sonnet", subProvider: "Anthropic", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "anthropic/claude-3-5-haiku", name: "Claude 3.5 Haiku", subProvider: "Anthropic", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "openai/gpt-4o", name: "GPT-4o", subProvider: "OpenAI", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "openai/gpt-4o-mini", name: "GPT-4o Mini", subProvider: "OpenAI", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "openai/o3-mini", name: "o3-mini", subProvider: "OpenAI", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "openai/o1", name: "o1", subProvider: "OpenAI", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "google/gemini-2.0-flash-exp", name: "Gemini 2.0 Flash", subProvider: "Google", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "google/gemini-1.5-pro", name: "Gemini 1.5 Pro", subProvider: "Google", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "qwen/qwen-2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B", subProvider: "Qwen", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", subProvider: "Qwen", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B", subProvider: "Meta", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "meta-llama/llama-3.1-405b-instruct", name: "Llama 3.1 405B", subProvider: "Meta", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "mistralai/mistral-large-2411", name: "Mistral Large 2", subProvider: "Mistral", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "mistralai/codestral-2501", name: "Codestral 2501", subProvider: "Mistral", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
-    { slug: "minimax/minimax-01", name: "MiniMax-01", subProvider: "MiniMax", isCustom: false, capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES },
+    {
+      slug: "kilo/kilo-auto/free",
+      name: "Kilo Auto Free",
+      isCustom: false,
+      capabilities: EMPTY_FALLBACK_MODEL_CAPABILITIES,
+    },
   ],
   gemini: [
     {
@@ -228,9 +135,9 @@ export function getProviderModels(
   providers: ReadonlyArray<ServerProvider>,
   provider: string,
 ): ReadonlyArray<ServerProviderModel> {
-  const liveModels = providers.find((candidate) => candidate.instanceId === provider)?.models;
-  if (liveModels && liveModels.length > 0) {
-    return liveModels;
+  const snapshot = providers.find((candidate) => candidate.instanceId === provider);
+  if (snapshot) {
+    return snapshot.models;
   }
   return FALLBACK_BUILTIN_MODELS_BY_PROVIDER[provider] ?? [];
 }
@@ -283,6 +190,9 @@ export function getDefaultServerModel(
   provider: string,
 ): string {
   const models = getProviderModels(providers, provider);
+  if (getProviderSnapshot(providers, provider) && models.length === 0) {
+    return "";
+  }
   return (
     models.find((model) => !model.isCustom)?.slug ??
     models[0]?.slug ??

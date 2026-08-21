@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import type { ModelSlug } from "@tabs/contracts";
 import {
   ActivityIcon,
@@ -36,7 +36,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/com
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { SegmentedControl } from "~/components/ui/segmented-control";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "~/components/ui/select";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { FusedModelPicker } from "~/components/chat/FusedModelPicker";
 import { openInPreferredEditor } from "~/editorPreferences";
@@ -122,6 +128,7 @@ export const TestingCases = memo(function TestingCases({
     type: "success" | "info" | "error";
     text: string;
   } | null>(null);
+  const [workbookTargetGroup, setWorkbookTargetGroup] = useState("__sheet__");
 
   const {
     projectId,
@@ -142,8 +149,8 @@ export const TestingCases = memo(function TestingCases({
     setManualCaseDescription,
     manualCaseSteps,
     setManualCaseSteps,
-    manualCaseExpected,
-    setManualCaseExpected,
+    manualCaseExpectedResults,
+    setManualCaseExpectedResults,
     manualCaseLocatorIds,
     setManualCaseLocatorIds,
     storyText,
@@ -168,6 +175,7 @@ export const TestingCases = memo(function TestingCases({
     setSelectedTestNodeId,
     testInventory,
     cases,
+    caseGroups,
     reviewCaseCount,
     acceptedCaseCount,
     caseSearch,
@@ -192,9 +200,13 @@ export const TestingCases = memo(function TestingCases({
     moveEditedStep,
     editedCaseLocatorIds,
     setEditedCaseLocatorIds,
-    editedExpectedResult,
-    setEditedExpectedResult,
+    editedExpectedResults,
+    setEditedExpectedResults,
     reviewCase,
+    deleteCase,
+    updateCaseGroup,
+    createCaseGroup,
+    deleteCaseGroup,
     beginEditCase,
     locatorLibrary,
   } = useTestingData();
@@ -213,7 +225,14 @@ export const TestingCases = memo(function TestingCases({
   }, []);
 
   const createManualCase = useCallback(async () => {
-    const steps = manualCaseSteps.map((step) => step.trim()).filter(Boolean);
+    const populatedSteps = manualCaseSteps
+      .map((step, index) => ({
+        step: step.trim(),
+        expectedResult: manualCaseExpectedResults[index]?.trim() ?? "",
+      }))
+      .filter((item) => item.step);
+    const steps = populatedSteps.map((item) => item.step);
+    const expectedResults = populatedSteps.map((item) => item.expectedResult);
     if (!manualCaseDescription.trim() || steps.length === 0) {
       message_setter("Add a description and at least one test step.");
       return;
@@ -225,7 +244,8 @@ export const TestingCases = memo(function TestingCases({
         ...(manualCaseId.trim() ? { externalId: manualCaseId.trim() } : {}),
         description: manualCaseDescription.trim(),
         steps,
-        expectedResult: manualCaseExpected.trim(),
+        expectedResults,
+        expectedResult: expectedResults.filter(Boolean).join("\n"),
         locatorEntryIds: [...manualCaseLocatorIds],
       });
       setWorkspaceCases(result.cases);
@@ -238,7 +258,7 @@ export const TestingCases = memo(function TestingCases({
       setManualCaseId("");
       setManualCaseDescription("");
       setManualCaseSteps([""]);
-      setManualCaseExpected("");
+      setManualCaseExpectedResults([""]);
       setManualCaseLocatorIds(new Set());
       message_setter(`Created ${created?.externalId ?? "the case"} in this project.`);
     } catch (error) {
@@ -248,7 +268,7 @@ export const TestingCases = memo(function TestingCases({
     }
   }, [
     manualCaseDescription,
-    manualCaseExpected,
+    manualCaseExpectedResults,
     manualCaseId,
     manualCaseLocatorIds,
     manualCaseSteps,
@@ -268,16 +288,14 @@ export const TestingCases = memo(function TestingCases({
   const generatedCases = useMemo(() => cases.filter((c) => c.source === "generated"), [cases]);
   const reviewGeneratedCount = useMemo(
     () =>
-      generatedCases.filter(
-        (c) => c.reviewDecision === "pending" || c.status === "needs-review",
-      ).length,
+      generatedCases.filter((c) => c.reviewDecision === "pending" || c.status === "needs-review")
+        .length,
     [generatedCases],
   );
   const acceptedGeneratedCount = useMemo(
     () =>
-      generatedCases.filter(
-        (c) => c.reviewDecision === "accepted" || c.status === "matches",
-      ).length,
+      generatedCases.filter((c) => c.reviewDecision === "accepted" || c.status === "matches")
+        .length,
     [generatedCases],
   );
 
@@ -305,13 +323,21 @@ export const TestingCases = memo(function TestingCases({
         setGraphFeedback({ type: "info", text: msg });
       }
     } catch (error) {
-      const errText = error instanceof Error ? error.message : "Could not generate graph scenarios.";
+      const errText =
+        error instanceof Error ? error.message : "Could not generate graph scenarios.";
       message_setter(errText);
       setGraphFeedback({ type: "error", text: errText });
     } finally {
       setBusyAction(null);
     }
-  }, [cases.length, message_setter, projectId, refreshTestingWorkspace, setBusyAction, setWorkspaceCases]);
+  }, [
+    cases.length,
+    message_setter,
+    projectId,
+    refreshTestingWorkspace,
+    setBusyAction,
+    setWorkspaceCases,
+  ]);
 
   const importUserStory = useCallback(async () => {
     if (!storyText.trim() && !storyFilePath) return;
@@ -326,7 +352,9 @@ export const TestingCases = memo(function TestingCases({
         modelSelection: generationModelSelection,
       });
       setWorkspaceCases(result.cases);
-      message_setter(`Created ${result.generatedCount} reviewable cases from ${result.sourceName}.`);
+      message_setter(
+        `Created ${result.generatedCount} reviewable cases from ${result.sourceName}.`,
+      );
     } catch (error) {
       message_setter(error instanceof Error ? error.message : "Could not import the user story.");
     } finally {
@@ -402,9 +430,7 @@ export const TestingCases = memo(function TestingCases({
                       )}
                       aria-hidden="true"
                     />
-                    <span className="truncate text-sm font-semibold text-foreground">
-                      {label}
-                    </span>
+                    <span className="truncate text-sm font-semibold text-foreground">{label}</span>
                   </div>
                   <span className="block text-xs leading-relaxed text-muted-foreground">
                     {description}
@@ -419,7 +445,10 @@ export const TestingCases = memo(function TestingCases({
               <div className="grid gap-3.5 sm:grid-cols-[14rem_minmax(0,1fr)]">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-1">
-                    <label htmlFor="testing-manual-case-id" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <label
+                      htmlFor="testing-manual-case-id"
+                      className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    >
                       Case ID
                     </label>
                     <span className="text-[11px] font-normal text-muted-foreground/75">
@@ -437,7 +466,10 @@ export const TestingCases = memo(function TestingCases({
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-1">
-                    <label htmlFor="testing-manual-description" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <label
+                      htmlFor="testing-manual-description"
+                      className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                    >
                       What should this test prove?
                     </label>
                     <span className="text-[11px] font-normal text-muted-foreground/75">
@@ -468,7 +500,10 @@ export const TestingCases = memo(function TestingCases({
                     size="sm"
                     variant="outline"
                     className="h-7 gap-1 text-xs"
-                    onClick={() => setManualCaseSteps([...manualCaseSteps, ""])}
+                    onClick={() => {
+                      setManualCaseSteps([...manualCaseSteps, ""]);
+                      setManualCaseExpectedResults([...manualCaseExpectedResults, ""]);
+                    }}
                   >
                     <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
                     Add step
@@ -483,19 +518,40 @@ export const TestingCases = memo(function TestingCases({
                       <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground border border-border/40">
                         {index + 1}
                       </div>
-                      <AutoResizeStepInput
-                        value={step}
-                        onChange={(val) => updateManualCaseStep(index, val)}
-                        onEnterNext={() =>
-                          setManualCaseSteps([
-                            ...manualCaseSteps.slice(0, index + 1),
-                            "",
-                            ...manualCaseSteps.slice(index + 1),
-                          ])
-                        }
-                        ariaLabel={`New case step ${index + 1}`}
-                        placeholder="Describe user action (Enter for new step, Shift+Enter for newline)"
-                      />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <AutoResizeStepInput
+                          value={step}
+                          onChange={(val) => updateManualCaseStep(index, val)}
+                          onEnterNext={() => {
+                            setManualCaseSteps([
+                              ...manualCaseSteps.slice(0, index + 1),
+                              "",
+                              ...manualCaseSteps.slice(index + 1),
+                            ]);
+                            setManualCaseExpectedResults([
+                              ...manualCaseExpectedResults.slice(0, index + 1),
+                              "",
+                              ...manualCaseExpectedResults.slice(index + 1),
+                            ]);
+                          }}
+                          ariaLabel={`New case step ${index + 1}`}
+                          placeholder="Describe user action (Enter for new step, Shift+Enter for newline)"
+                        />
+                        <AutoResizeStepInput
+                          value={manualCaseExpectedResults[index] ?? ""}
+                          onChange={(value) =>
+                            setManualCaseExpectedResults((current) =>
+                              current.map((result, resultIndex) =>
+                                resultIndex === index ? value : result,
+                              ),
+                            )
+                          }
+                          ariaLabel={`Expected result for new case step ${index + 1}`}
+                          placeholder={`Expected result after step ${index + 1}`}
+                          minHeight={28}
+                          maxHeight={100}
+                        />
+                      </div>
                       <Button
                         type="button"
                         size="icon-sm"
@@ -503,32 +559,22 @@ export const TestingCases = memo(function TestingCases({
                         aria-label={`Delete new case step ${index + 1}`}
                         disabled={manualCaseSteps.length === 1}
                         className="mt-0.5 size-7 shrink-0 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-30"
-                        onClick={() =>
+                        onClick={() => {
                           setManualCaseSteps(
                             manualCaseSteps.filter((_, stepIndex) => stepIndex !== index),
-                          )
-                        }
+                          );
+                          setManualCaseExpectedResults(
+                            manualCaseExpectedResults.filter(
+                              (_, resultIndex) => resultIndex !== index,
+                            ),
+                          );
+                        }}
                       >
                         <Trash2Icon className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                     </li>
                   ))}
                 </ol>
-              </div>
-              <div className="space-y-1.5">
-                <label htmlFor="testing-manual-expected" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Expected result
-                </label>
-                <div className="flex items-start rounded-xl border border-border/70 bg-background/80 px-3 py-1.5 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 dark:bg-background/40">
-                  <AutoResizeStepInput
-                    value={manualCaseExpected}
-                    onChange={setManualCaseExpected}
-                    placeholder="Describe the visible outcome (Shift+Enter for newline)"
-                    ariaLabel="Expected result"
-                    minHeight={32}
-                    maxHeight={140}
-                  />
-                </div>
               </div>
               <TestingCaseLocatorPicker
                 library={locatorLibrary}
@@ -559,7 +605,8 @@ export const TestingCases = memo(function TestingCases({
                     Import Spreadsheet Test Cases
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Upload an Excel workbook to batch import structured test cases into your workspace queue.
+                    Upload an Excel workbook to batch import structured test cases into your
+                    workspace queue.
                   </p>
                 </div>
                 <Button
@@ -600,7 +647,9 @@ export const TestingCases = memo(function TestingCases({
                       Choose an Excel workbook or browse files
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Supports <span className="font-mono font-medium text-foreground/80">.xlsx</span> sheets with Case ID, Description, Steps, and Expected Result columns
+                      Supports{" "}
+                      <span className="font-mono font-medium text-foreground/80">.xlsx</span> sheets
+                      with Case ID, Description, Steps, and Expected Result columns
                     </p>
                   </div>
                   <Button
@@ -626,7 +675,10 @@ export const TestingCases = memo(function TestingCases({
                           <span className="truncate font-mono text-sm font-medium text-foreground">
                             {basenameOfPath(workbookPath)}
                           </span>
-                          <Badge variant="secondary" className="border-emerald-300 bg-emerald-100 px-1.5 py-0 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          <Badge
+                            variant="secondary"
+                            className="border-emerald-300 bg-emerald-100 px-1.5 py-0 text-[10px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          >
                             Ready to import
                           </Badge>
                         </div>
@@ -662,16 +714,54 @@ export const TestingCases = memo(function TestingCases({
                 </div>
               )}
 
+              {workbookPath ? (
+                <div className="space-y-2 rounded-lg border border-border/60 bg-background/60 p-3">
+                  <label
+                    htmlFor="testing-workbook-group"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Import test cases into
+                  </label>
+                  <Select
+                    value={workbookTargetGroup}
+                    onValueChange={(value) => setWorkbookTargetGroup(value ?? "__sheet__")}
+                  >
+                    <SelectTrigger id="testing-workbook-group" className="w-full sm:max-w-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectPopup>
+                      <SelectItem value="__sheet__">Folders matching Excel sheet names</SelectItem>
+                      {caseGroups.map((groupName) => (
+                        <SelectItem key={groupName} value={groupName}>
+                          {groupName}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose an existing folder, or keep the workbook’s sheet-based organization.
+                  </p>
+                </div>
+              ) : null}
+
               <div className="flex flex-col-reverse gap-3 border-t border-border/40 pt-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                  <InfoIcon
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                    aria-hidden="true"
+                  />
                   <span>
-                    Imported IDs are preserved and mapped steps remain fully reviewable before test code generation.
+                    Imported IDs are preserved and mapped steps remain fully reviewable before test
+                    code generation.
                   </span>
                 </div>
                 <Button
                   type="button"
-                  onClick={() => void importWorkbook()}
+                  onClick={() =>
+                    void importWorkbook(
+                      workbookTargetGroup === "__sheet__" ? undefined : workbookTargetGroup,
+                    )
+                  }
                   disabled={!workbookPath || busyAction !== null}
                   className="shrink-0 gap-2 sm:self-auto"
                 >
@@ -694,7 +784,8 @@ export const TestingCases = memo(function TestingCases({
                     Draft Cases from User Story or Spec
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Paste acceptance criteria or attach a document (.txt, .md, .docx, .pdf) to draft structured test cases.
+                    Paste acceptance criteria or attach a document (.txt, .md, .docx, .pdf) to draft
+                    structured test cases.
                   </p>
                 </div>
                 <Button
@@ -722,7 +813,10 @@ export const TestingCases = memo(function TestingCases({
                           <span className="truncate font-mono text-sm font-medium text-foreground">
                             {basenameOfPath(storyFilePath)}
                           </span>
-                          <Badge variant="secondary" className="border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
+                          <Badge
+                            variant="secondary"
+                            className="border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary"
+                          >
                             Document attached
                           </Badge>
                         </div>
@@ -772,7 +866,9 @@ export const TestingCases = memo(function TestingCases({
 
               <div className="flex flex-col-reverse gap-3 border-t border-border/40 pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Fusion model:</span>
+                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    Fusion model:
+                  </span>
                   <div className="w-64 max-w-full">
                     <FusedModelPicker
                       provider={generationFusionProvider}
@@ -811,7 +907,10 @@ export const TestingCases = memo(function TestingCases({
               </div>
 
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
+                <InfoIcon
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                  aria-hidden="true"
+                />
                 <span>Story and locator context are sanitized before provider dispatch.</span>
               </div>
             </div>
@@ -836,13 +935,20 @@ export const TestingCases = memo(function TestingCases({
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Proposes reviewable test cases directly from verified DOM states and interactive transition paths recorded during exploration.
+                        Proposes reviewable test cases directly from verified DOM states and
+                        interactive transition paths recorded during exploration.
                       </p>
                     </div>
                     {status?.targetUrl ? (
                       <div className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/20 px-2.5 py-1 text-xs text-muted-foreground">
-                        <GlobeIcon className="h-3.5 w-3.5 text-muted-foreground/70" aria-hidden="true" />
-                        <span className="font-mono text-[11px] text-foreground max-w-[240px] truncate" title={status.targetUrl}>
+                        <GlobeIcon
+                          className="h-3.5 w-3.5 text-muted-foreground/70"
+                          aria-hidden="true"
+                        />
+                        <span
+                          className="font-mono text-[11px] text-foreground max-w-[240px] truncate"
+                          title={status.targetUrl}
+                        >
                           {status.targetUrl}
                         </span>
                       </div>
@@ -858,24 +964,34 @@ export const TestingCases = memo(function TestingCases({
                       <div className="text-xl font-bold text-foreground">
                         {status?.nodeCount ?? 0}
                       </div>
-                      <span className="text-[11px] text-muted-foreground/80">DOM state snapshots</span>
+                      <span className="text-[11px] text-muted-foreground/80">
+                        DOM state snapshots
+                      </span>
                     </div>
 
                     <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-xs font-medium">Observed Transitions</span>
-                        <GitBranchIcon className="h-3.5 w-3.5 text-blue-500/70" aria-hidden="true" />
+                        <GitBranchIcon
+                          className="h-3.5 w-3.5 text-blue-500/70"
+                          aria-hidden="true"
+                        />
                       </div>
                       <div className="text-xl font-bold text-foreground">
                         {status?.edgeCount ?? 0}
                       </div>
-                      <span className="text-[11px] text-muted-foreground/80">Interactive paths mapped</span>
+                      <span className="text-[11px] text-muted-foreground/80">
+                        Interactive paths mapped
+                      </span>
                     </div>
 
                     <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-xs font-medium">Generated Cases</span>
-                        <ListChecksIcon className="h-3.5 w-3.5 text-violet-500/70" aria-hidden="true" />
+                        <ListChecksIcon
+                          className="h-3.5 w-3.5 text-violet-500/70"
+                          aria-hidden="true"
+                        />
                       </div>
                       <div className="text-xl font-bold text-foreground">
                         {generatedCases.length}
@@ -890,12 +1006,17 @@ export const TestingCases = memo(function TestingCases({
                     <div className="flex flex-col gap-1 rounded-lg border border-border/50 bg-background/50 p-3.5">
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span className="text-xs font-medium">Graph Sync</span>
-                        <ActivityIcon className="h-3.5 w-3.5 text-emerald-500/70" aria-hidden="true" />
+                        <ActivityIcon
+                          className="h-3.5 w-3.5 text-emerald-500/70"
+                          aria-hidden="true"
+                        />
                       </div>
                       <div className="text-xl font-bold text-emerald-500">
                         {status?.lastRunStatus === "completed" ? "Synchronized" : "Ready"}
                       </div>
-                      <span className="text-[11px] text-muted-foreground/80">Discovery graph ready</span>
+                      <span className="text-[11px] text-muted-foreground/80">
+                        Discovery graph ready
+                      </span>
                     </div>
                   </div>
 
@@ -903,14 +1024,20 @@ export const TestingCases = memo(function TestingCases({
                     <div
                       className={cn(
                         "flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-xs animate-in fade-in duration-200",
-                        graphFeedback.type === "success" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-                        graphFeedback.type === "info" && "border-blue-500/30 bg-blue-500/10 text-blue-300",
-                        graphFeedback.type === "error" && "border-rose-500/30 bg-rose-500/10 text-rose-300",
+                        graphFeedback.type === "success" &&
+                          "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                        graphFeedback.type === "info" &&
+                          "border-blue-500/30 bg-blue-500/10 text-blue-300",
+                        graphFeedback.type === "error" &&
+                          "border-rose-500/30 bg-rose-500/10 text-rose-300",
                       )}
                     >
                       <div className="flex items-center gap-2">
                         {graphFeedback.type === "success" ? (
-                          <CheckCircle2Icon className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                          <CheckCircle2Icon
+                            className="h-4 w-4 shrink-0 text-emerald-400"
+                            aria-hidden="true"
+                          />
                         ) : graphFeedback.type === "info" ? (
                           <InfoIcon className="h-4 w-4 shrink-0 text-blue-400" aria-hidden="true" />
                         ) : (
@@ -931,8 +1058,14 @@ export const TestingCases = memo(function TestingCases({
 
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <InfoIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden="true" />
-                      <span>Scenarios are extracted deterministically from reachable graph trajectories without hallucinations.</span>
+                      <InfoIcon
+                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70"
+                        aria-hidden="true"
+                      />
+                      <span>
+                        Scenarios are extracted deterministically from reachable graph trajectories
+                        without hallucinations.
+                      </span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -970,9 +1103,13 @@ export const TestingCases = memo(function TestingCases({
                     <CompassIcon className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <div className="max-w-md space-y-1">
-                    <div className="text-sm font-semibold text-foreground">No captured application paths found</div>
+                    <div className="text-sm font-semibold text-foreground">
+                      No captured application paths found
+                    </div>
                     <p className="text-xs leading-5 text-muted-foreground">
-                      Explore your web application to map interactive elements, navigation flows, and form actions. Testing will automatically generate reviewable test cases from reachable paths.
+                      Explore your web application to map interactive elements, navigation flows,
+                      and form actions. Testing will automatically generate reviewable test cases
+                      from reachable paths.
                     </p>
                   </div>
                   <Button
@@ -1005,6 +1142,7 @@ export const TestingCases = memo(function TestingCases({
 
       <TestingCaseQueue
         cases={cases}
+        caseGroups={caseGroups}
         reviewCaseCount={reviewCaseCount}
         acceptedCaseCount={acceptedCaseCount}
         caseSearch={caseSearch}
@@ -1029,9 +1167,13 @@ export const TestingCases = memo(function TestingCases({
         moveEditedStep={moveEditedStep}
         editedCaseLocatorIds={editedCaseLocatorIds}
         setEditedCaseLocatorIds={setEditedCaseLocatorIds}
-        editedExpectedResult={editedExpectedResult}
-        setEditedExpectedResult={setEditedExpectedResult}
+        editedExpectedResults={editedExpectedResults}
+        setEditedExpectedResults={setEditedExpectedResults}
         reviewCase={reviewCase}
+        deleteCase={deleteCase}
+        updateCaseGroup={updateCaseGroup}
+        createCaseGroup={createCaseGroup}
+        deleteCaseGroup={deleteCaseGroup}
         beginEditCase={beginEditCase}
         locatorLibrary={locatorLibrary}
         projectPath={projectPath}
@@ -1048,7 +1190,10 @@ interface TestingImplementedInventoryProps {
   testInventoryView: "tree" | "table";
   setTestInventoryView: (v: "tree" | "table") => void;
   refreshTestingWorkspace: () => Promise<void>;
-  flattenedTestInventory: ReadonlyArray<{ node: import("@tabs/contracts").TestingTestInventoryNode; depth: number }>;
+  flattenedTestInventory: ReadonlyArray<{
+    node: import("@tabs/contracts").TestingTestInventoryNode;
+    depth: number;
+  }>;
   expandedTestNodes: ReadonlySet<string>;
   selectedTestNodeId: string | null;
   setSelectedTestNodeId: (id: string | null) => void;
@@ -1074,10 +1219,15 @@ const TestingImplementedInventory = memo(function TestingImplementedInventory({
           <div className="space-y-0.5">
             <CardTitle className="text-base font-semibold">Implemented tests</CardTitle>
             <CardDescription className="text-xs">
-              Managed cases and statically discovered Playwright tests, grouped like a Test Explorer.
+              Managed cases and statically discovered Playwright tests, grouped like a Test
+              Explorer.
             </CardDescription>
           </div>
-          <div className="flex items-center gap-2" role="group" aria-label="Test inventory view controls">
+          <div
+            className="flex items-center gap-2"
+            role="group"
+            aria-label="Test inventory view controls"
+          >
             {implementedInventoryOpen ? (
               <>
                 <SegmentedControl
@@ -1247,6 +1397,7 @@ const TestingImplementedInventory = memo(function TestingImplementedInventory({
 
 interface TestingCaseQueueProps {
   cases: ReadonlyArray<import("@tabs/contracts").TestingCaseSummary>;
+  caseGroups: ReadonlyArray<string>;
   reviewCaseCount: number;
   acceptedCaseCount: number;
   caseSearch: string;
@@ -1266,14 +1417,28 @@ interface TestingCaseQueueProps {
   editedDescription: string;
   setEditedDescription: (v: string) => void;
   editedSteps: ReadonlyArray<string>;
-  setEditedSteps: (steps: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>)) => void;
+  setEditedSteps: (
+    steps: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+  ) => void;
   updateEditedStep: (index: number, value: string) => void;
   moveEditedStep: (index: number, direction: -1 | 1) => void;
   editedCaseLocatorIds: ReadonlySet<string>;
   setEditedCaseLocatorIds: (ids: ReadonlySet<string>) => void;
-  editedExpectedResult: string;
-  setEditedExpectedResult: (v: string) => void;
-  reviewCase: (testCase: import("@tabs/contracts").TestingCaseSummary, decision: "accepted" | "edited" | "rejected") => Promise<void>;
+  editedExpectedResults: ReadonlyArray<string>;
+  setEditedExpectedResults: (
+    v: ReadonlyArray<string> | ((prev: ReadonlyArray<string>) => ReadonlyArray<string>),
+  ) => void;
+  reviewCase: (
+    testCase: import("@tabs/contracts").TestingCaseSummary,
+    decision: "accepted" | "edited" | "rejected",
+  ) => Promise<void>;
+  deleteCase: (testCase: import("@tabs/contracts").TestingCaseSummary) => Promise<void>;
+  updateCaseGroup: (
+    testCase: import("@tabs/contracts").TestingCaseSummary,
+    groupName: string,
+  ) => Promise<void>;
+  createCaseGroup: (groupName: string) => Promise<void>;
+  deleteCaseGroup: (groupName: string) => Promise<void>;
   beginEditCase: (testCase: import("@tabs/contracts").TestingCaseSummary) => void;
   locatorLibrary: import("@tabs/contracts").TestingLocatorLibraryResult | null;
   projectPath: string;
@@ -1283,6 +1448,7 @@ interface TestingCaseQueueProps {
 
 const TestingCaseQueue = memo(function TestingCaseQueue({
   cases,
+  caseGroups,
   reviewCaseCount,
   acceptedCaseCount,
   caseSearch,
@@ -1307,15 +1473,42 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
   moveEditedStep,
   editedCaseLocatorIds,
   setEditedCaseLocatorIds,
-  editedExpectedResult,
-  setEditedExpectedResult,
+  editedExpectedResults,
+  setEditedExpectedResults,
   reviewCase,
+  deleteCase,
+  updateCaseGroup,
+  createCaseGroup,
+  deleteCaseGroup,
   beginEditCase,
   locatorLibrary,
   projectPath,
   onNavigate,
   busyAction,
 }: TestingCaseQueueProps) {
+  const [groupDraft, setGroupDraft] = useState(selectedCase?.groupName ?? "Ungrouped");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [groupManagerOpen, setGroupManagerOpen] = useState(false);
+  const [bulkGroupDraft, setBulkGroupDraft] = useState("Ungrouped");
+  const [selectedGroupCaseIds, setSelectedGroupCaseIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(() => new Set());
+  const groupNames = caseGroups;
+  useEffect(() => {
+    setGroupDraft(selectedCase?.groupName ?? "Ungrouped");
+    setNewGroupName("");
+  }, [selectedCase?.id, selectedCase?.groupName]);
+  const moveSelectedCases = useCallback(
+    async (groupName: string) => {
+      const targetCases = cases.filter((testCase) => selectedGroupCaseIds.has(testCase.id));
+      for (const testCase of targetCases) {
+        await updateCaseGroup(testCase, groupName);
+      }
+      setNewGroupName("");
+    },
+    [cases, selectedGroupCaseIds, updateCaseGroup],
+  );
   return (
     <div className="space-y-4" aria-live="polite">
       {cases.length === 0 ? (
@@ -1372,7 +1565,10 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                 value={caseFilter}
                 onValueChange={(value) => setCaseFilter(value as TestingCaseFilter)}
               >
-                <SelectTrigger aria-label="Filter test cases" className="h-8 w-[130px] text-xs bg-background/80 shrink-0">
+                <SelectTrigger
+                  aria-label="Filter test cases"
+                  className="h-8 w-[130px] text-xs bg-background/80 shrink-0"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectPopup>
@@ -1405,9 +1601,7 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                   size="sm"
                   variant="ghost"
                   onClick={() =>
-                    setSelectedGenerationCaseIds(
-                      new Set(readyCases.map((testCase) => testCase.id)),
-                    )
+                    setSelectedGenerationCaseIds(new Set(readyCases.map((testCase) => testCase.id)))
                   }
                   className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground"
                   disabled={readyCases.length === 0}
@@ -1440,87 +1634,333 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
               </Button>
             </div>
           </div>
+          {groupManagerOpen ? (
+            <Card id="testing-group-manager" className="border-primary/25 bg-primary/[0.03]">
+              <CardContent className="space-y-3 py-4">
+                <div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-semibold text-foreground">Test groups</div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      aria-label="Collapse test groups organizer"
+                      aria-expanded="true"
+                      aria-controls="testing-group-manager"
+                      onClick={() => setGroupManagerOpen(false)}
+                    >
+                      <ChevronDownIcon aria-hidden="true" />
+                      Collapse
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Create an empty folder now, or select cases from the filtered list and move them
+                    together later. Groups from Excel are created from the source sheet
+                    automatically.
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setSelectedGroupCaseIds(
+                          new Set(filteredCases.map((testCase) => testCase.id)),
+                        )
+                      }
+                    >
+                      Select all filtered ({filteredCases.length})
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={selectedGroupCaseIds.size === 0}
+                      onClick={() => setSelectedGroupCaseIds(new Set())}
+                    >
+                      Clear folder selection
+                    </Button>
+                    <span className="text-xs text-muted-foreground" role="status">
+                      {selectedGroupCaseIds.size} selected for moving
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="testing-new-group"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      New folder name
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="testing-new-group"
+                        value={newGroupName}
+                        onChange={(event) => setNewGroupName(event.target.value)}
+                        placeholder="For example: Login page"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busyAction !== null || newGroupName.trim().length === 0}
+                        onClick={() => {
+                          void createCaseGroup(newGroupName.trim());
+                          setNewGroupName("");
+                        }}
+                      >
+                        Create folder
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="testing-bulk-group"
+                      className="text-xs font-medium text-muted-foreground"
+                    >
+                      Move selected to
+                    </label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={bulkGroupDraft}
+                        onValueChange={(value) => setBulkGroupDraft(value ?? "Ungrouped")}
+                      >
+                        <SelectTrigger id="testing-bulk-group" className="min-w-0 flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectPopup>
+                          {groupNames.map((groupName) => (
+                            <SelectItem key={groupName} value={groupName}>
+                              {groupName}
+                            </SelectItem>
+                          ))}
+                        </SelectPopup>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busyAction !== null || selectedGroupCaseIds.size === 0}
+                        onClick={() => void moveSelectedCases(bulkGroupDraft)}
+                      >
+                        Move {selectedGroupCaseIds.size || ""} selected
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
           <div className="grid min-h-[30rem] overflow-hidden rounded-xl border border-border/70 bg-card lg:grid-cols-[19rem_minmax(0,1fr)]">
             <div className="max-h-[40rem] overflow-auto border-b border-border/70 lg:border-b-0 lg:border-r">
               <div
-                className="border-b border-border/70 px-4 py-2.5 text-xs text-muted-foreground flex items-center justify-between"
+                className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-2.5 text-xs text-muted-foreground"
                 role="status"
               >
-                <span>{filteredCases.length} of {cases.length} cases</span>
-                {caseFilter !== "all" || caseSearch ? (
-                  <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                    Filtered
-                  </span>
-                ) : null}
+                <span>
+                  {filteredCases.length} of {cases.length} cases
+                </span>
+                <span className="flex items-center gap-2">
+                  {caseFilter !== "all" || caseSearch ? (
+                    <span className="rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                      Filtered
+                    </span>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Create or organize test groups"
+                    aria-expanded={groupManagerOpen}
+                    aria-controls="testing-group-manager"
+                    onClick={() => setGroupManagerOpen((open) => !open)}
+                  >
+                    <PlusIcon aria-hidden="true" />
+                  </Button>
+                </span>
               </div>
-              <ul aria-label="Test case IDs">
-                {filteredCases.map((testCase) => {
-                  const ready =
-                    testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited";
-                  return (
-                    <li
-                      key={testCase.id}
-                      className="flex items-start gap-2 border-b border-border/60 px-3 py-3 last:border-b-0"
-                    >
-                      <Checkbox
-                        checked={selectedGenerationCaseIds.has(testCase.id)}
-                        disabled={!ready}
-                        onCheckedChange={(checked) => {
-                          setSelectedGenerationCaseIds(
-                            new Set(
-                              checked
-                                ? [...selectedGenerationCaseIds, testCase.id]
-                                : [...selectedGenerationCaseIds].filter((id) => id !== testCase.id),
-                            ),
-                          );
-                        }}
-                        aria-label={
-                          ready
-                            ? `Select ${testCase.externalId} for test generation`
-                            : `${testCase.externalId} must be reviewed before generation`
-                        }
-                        className="mt-1"
-                      />
-                      <button
-                        type="button"
-                        aria-current={selectedCase?.id === testCase.id ? "true" : undefined}
-                        onClick={() => {
-                          setSelectedCaseId(testCase.id);
-                          setEditingCaseId(null);
-                        }}
-                        className={cn(
-                          "min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          selectedCase?.id === testCase.id
-                            ? "bg-foreground/[0.06]"
-                            : "hover:bg-muted/50",
-                        )}
-                      >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">
-                            {testCase.externalId}
-                          </span>
-                          <span
-                            className={cn(
-                              "size-2 shrink-0 rounded-full",
-                              testCase.status === "matches"
-                                ? "bg-emerald-500"
-                                : testCase.status === "blocked"
-                                  ? "bg-destructive"
-                                  : "bg-amber-500",
-                            )}
+              <ul aria-label="Test cases grouped by page or feature">
+                {groupNames
+                  .filter(
+                    (groupName) => !cases.some((testCase) => testCase.groupName === groupName),
+                  )
+                  .map((groupName) => (
+                    <React.Fragment key={`empty-${groupName}`}>
+                      <li className="flex items-center border-b border-border/60 bg-muted/40">
+                        <button
+                          type="button"
+                          aria-expanded={!collapsedGroups.has(groupName)}
+                          onClick={() =>
+                            setCollapsedGroups((current) => {
+                              const next = new Set(current);
+                              if (next.has(groupName)) next.delete(groupName);
+                              else next.add(groupName);
+                              return next;
+                            })
+                          }
+                          className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-muted-foreground hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <span>{groupName}</span>
+                          <ChevronDownIcon
                             aria-hidden="true"
+                            className={cn(
+                              "size-3.5 transition-transform",
+                              collapsedGroups.has(groupName) && "-rotate-90",
+                            )}
                           />
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">
-                          {testCase.description}
-                        </span>
-                        <span className="mt-2 block text-[11px] capitalize text-muted-foreground">
-                          {testCase.status.replace("-", " ")} · {testCase.reviewDecision}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
+                        </button>
+                        {groupName !== "Ungrouped" ? (
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Delete ${groupName} folder`}
+                            disabled={busyAction !== null}
+                            onClick={() => void deleteCaseGroup(groupName)}
+                            className="mr-2 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2Icon aria-hidden="true" />
+                          </Button>
+                        ) : null}
+                      </li>
+                      {!collapsedGroups.has(groupName) ? (
+                        <li className="border-b border-border/60 px-4 py-3 text-xs text-muted-foreground">
+                          Empty folder
+                        </li>
+                      ) : null}
+                    </React.Fragment>
+                  ))}
+                {[...filteredCases]
+                  .sort((left, right) => left.groupName.localeCompare(right.groupName))
+                  .map((testCase, index, groupedCases) => {
+                    const ready =
+                      testCase.reviewDecision === "accepted" ||
+                      testCase.reviewDecision === "edited";
+                    return (
+                      <React.Fragment key={testCase.id}>
+                        {index === 0 ||
+                        groupedCases[index - 1]?.groupName !== testCase.groupName ? (
+                          <li className="flex items-center border-b border-border/60 bg-muted/40">
+                            <button
+                              type="button"
+                              aria-expanded={!collapsedGroups.has(testCase.groupName)}
+                              onClick={() =>
+                                setCollapsedGroups((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(testCase.groupName)) next.delete(testCase.groupName);
+                                  else next.add(testCase.groupName);
+                                  return next;
+                                })
+                              }
+                              className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-left text-xs font-semibold text-muted-foreground hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <span>{testCase.groupName}</span>
+                              <ChevronDownIcon
+                                aria-hidden="true"
+                                className={cn(
+                                  "size-3.5 transition-transform",
+                                  collapsedGroups.has(testCase.groupName) && "-rotate-90",
+                                )}
+                              />
+                            </button>
+                            {testCase.groupName !== "Ungrouped" ? (
+                              <Button
+                                type="button"
+                                size="icon-sm"
+                                variant="ghost"
+                                aria-label={`Delete ${testCase.groupName} folder`}
+                                disabled={busyAction !== null}
+                                onClick={() => void deleteCaseGroup(testCase.groupName)}
+                                className="mr-2 text-muted-foreground hover:text-destructive"
+                              >
+                                <Trash2Icon aria-hidden="true" />
+                              </Button>
+                            ) : null}
+                          </li>
+                        ) : null}
+                        {!collapsedGroups.has(testCase.groupName) ? (
+                          <li className="flex items-start gap-2 border-b border-border/60 px-3 py-3 last:border-b-0">
+                            <Checkbox
+                              checked={
+                                groupManagerOpen
+                                  ? selectedGroupCaseIds.has(testCase.id)
+                                  : selectedGenerationCaseIds.has(testCase.id)
+                              }
+                              disabled={!groupManagerOpen && !ready}
+                              onCheckedChange={(checked) => {
+                                if (groupManagerOpen) {
+                                  setSelectedGroupCaseIds(
+                                    new Set(
+                                      checked
+                                        ? [...selectedGroupCaseIds, testCase.id]
+                                        : [...selectedGroupCaseIds].filter(
+                                            (id) => id !== testCase.id,
+                                          ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                setSelectedGenerationCaseIds(
+                                  new Set(
+                                    checked
+                                      ? [...selectedGenerationCaseIds, testCase.id]
+                                      : [...selectedGenerationCaseIds].filter(
+                                          (id) => id !== testCase.id,
+                                        ),
+                                  ),
+                                );
+                              }}
+                              aria-label={
+                                groupManagerOpen
+                                  ? `Select ${testCase.externalId} for moving to a test group`
+                                  : ready
+                                    ? `Select ${testCase.externalId} for test generation`
+                                    : `${testCase.externalId} must be reviewed before generation`
+                              }
+                              className="mt-1"
+                            />
+                            <button
+                              type="button"
+                              aria-current={selectedCase?.id === testCase.id ? "true" : undefined}
+                              onClick={() => {
+                                setSelectedCaseId(testCase.id);
+                                setEditingCaseId(null);
+                              }}
+                              className={cn(
+                                "min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                selectedCase?.id === testCase.id
+                                  ? "bg-foreground/[0.06]"
+                                  : "hover:bg-muted/50",
+                              )}
+                            >
+                              <span className="flex items-center justify-between gap-2">
+                                <span className="truncate text-sm font-medium text-foreground">
+                                  {testCase.externalId}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "size-2 shrink-0 rounded-full",
+                                    testCase.status === "matches"
+                                      ? "bg-emerald-500"
+                                      : testCase.status === "blocked"
+                                        ? "bg-destructive"
+                                        : "bg-amber-500",
+                                  )}
+                                  aria-hidden="true"
+                                />
+                              </span>
+                              <span className="mt-1 block truncate text-xs text-muted-foreground">
+                                {testCase.description}
+                              </span>
+                              <span className="mt-2 block text-[11px] capitalize text-muted-foreground">
+                                {testCase.status.replace("-", " ")} · {testCase.reviewDecision}
+                              </span>
+                            </button>
+                          </li>
+                        ) : null}
+                      </React.Fragment>
+                    );
+                  })}
               </ul>
             </div>
             <div className="min-w-0 p-4 sm:p-5">
@@ -1554,6 +1994,81 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {selectedCase.reviewDecision === "pending" ? (
+                      <div
+                        className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-3"
+                        role="status"
+                      >
+                        <div className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                          Review required
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Accept or edit this case before it can be selected for test generation.
+                        </p>
+                      </div>
+                    ) : (
+                      <div
+                        className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3"
+                        role="status"
+                      >
+                        <div className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                          Accepted — ready to automate
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          This case is eligible for selection and test generation.
+                        </p>
+                      </div>
+                    )}
+                    <div className="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-3">
+                      <div>
+                        <div className="text-sm font-medium text-foreground">
+                          Organize this case
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Move it to an existing group, or create a new group and place this case in
+                          it.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-52 flex-1 space-y-1">
+                          <label
+                            htmlFor={`testing-case-group-${selectedCase.id}`}
+                            className="text-xs font-medium text-muted-foreground"
+                          >
+                            Test group
+                          </label>
+                          <Select
+                            value={groupDraft}
+                            onValueChange={(value) => setGroupDraft(value ?? "Ungrouped")}
+                          >
+                            <SelectTrigger
+                              id={`testing-case-group-${selectedCase.id}`}
+                              aria-label="Test group"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectPopup>
+                              {groupNames.map((groupName) => (
+                                <SelectItem key={groupName} value={groupName}>
+                                  {groupName}
+                                </SelectItem>
+                              ))}
+                            </SelectPopup>
+                          </Select>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            busyAction !== null || groupDraft.trim() === selectedCase.groupName
+                          }
+                          onClick={() => void updateCaseGroup(selectedCase, groupDraft)}
+                        >
+                          Move to group
+                        </Button>
+                      </div>
+                    </div>
                     {editingCaseId === selectedCase.id ? (
                       <div className="space-y-3">
                         <div className="grid gap-3.5 sm:grid-cols-[14.5rem_minmax(0,1fr)]">
@@ -1601,7 +2116,10 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 Test steps
                               </span>
-                              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-medium">
+                              <Badge
+                                variant="secondary"
+                                className="px-1.5 py-0 text-[10px] font-medium"
+                              >
                                 {editedSteps.length} {editedSteps.length === 1 ? "step" : "steps"}
                               </Badge>
                             </div>
@@ -1610,7 +2128,10 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                               size="sm"
                               variant="outline"
                               className="h-7 gap-1 text-xs"
-                              onClick={() => setEditedSteps([...editedSteps, ""])}
+                              onClick={() => {
+                                setEditedSteps([...editedSteps, ""]);
+                                setEditedExpectedResults([...editedExpectedResults, ""]);
+                              }}
                             >
                               <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
                               Add step
@@ -1625,19 +2146,40 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                                 <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground border border-border/40">
                                   {index + 1}
                                 </div>
-                                <AutoResizeStepInput
-                                  value={step}
-                                  onChange={(val) => updateEditedStep(index, val)}
-                                  onEnterNext={() =>
-                                    setEditedSteps([
-                                      ...editedSteps.slice(0, index + 1),
-                                      "",
-                                      ...editedSteps.slice(index + 1),
-                                    ])
-                                  }
-                                  ariaLabel={`Step ${index + 1}`}
-                                  placeholder="Describe user action (Enter for new step, Shift+Enter for newline)"
-                                />
+                                <div className="min-w-0 flex-1 space-y-2">
+                                  <AutoResizeStepInput
+                                    value={step}
+                                    onChange={(val) => updateEditedStep(index, val)}
+                                    onEnterNext={() => {
+                                      setEditedSteps([
+                                        ...editedSteps.slice(0, index + 1),
+                                        "",
+                                        ...editedSteps.slice(index + 1),
+                                      ]);
+                                      setEditedExpectedResults([
+                                        ...editedExpectedResults.slice(0, index + 1),
+                                        "",
+                                        ...editedExpectedResults.slice(index + 1),
+                                      ]);
+                                    }}
+                                    ariaLabel={`Step ${index + 1}`}
+                                    placeholder="Describe user action (Enter for new step, Shift+Enter for newline)"
+                                  />
+                                  <AutoResizeStepInput
+                                    value={editedExpectedResults[index] ?? ""}
+                                    onChange={(value) =>
+                                      setEditedExpectedResults((current) =>
+                                        current.map((result, resultIndex) =>
+                                          resultIndex === index ? value : result,
+                                        ),
+                                      )
+                                    }
+                                    ariaLabel={`Expected result for step ${index + 1}`}
+                                    placeholder={`Expected result after step ${index + 1}`}
+                                    minHeight={28}
+                                    maxHeight={100}
+                                  />
+                                </div>
                                 <div className="mt-0.5 flex shrink-0 items-center gap-0.5">
                                   <Button
                                     type="button"
@@ -1646,7 +2188,17 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                                     aria-label={`Move step ${index + 1} up`}
                                     disabled={index === 0}
                                     className="size-7 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
-                                    onClick={() => moveEditedStep(index, -1)}
+                                    onClick={() => {
+                                      moveEditedStep(index, -1);
+                                      setEditedExpectedResults((current) => {
+                                        const next = [...current];
+                                        [next[index], next[index - 1]] = [
+                                          next[index - 1]!,
+                                          next[index]!,
+                                        ];
+                                        return next;
+                                      });
+                                    }}
                                   >
                                     <ArrowUpIcon className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
@@ -1657,7 +2209,17 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                                     aria-label={`Move step ${index + 1} down`}
                                     disabled={index === editedSteps.length - 1}
                                     className="size-7 rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
-                                    onClick={() => moveEditedStep(index, 1)}
+                                    onClick={() => {
+                                      moveEditedStep(index, 1);
+                                      setEditedExpectedResults((current) => {
+                                        const next = [...current];
+                                        [next[index], next[index + 1]] = [
+                                          next[index + 1]!,
+                                          next[index]!,
+                                        ];
+                                        return next;
+                                      });
+                                    }}
                                   >
                                     <ArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
@@ -1667,13 +2229,18 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                                     variant="ghost"
                                     aria-label={`Insert step after ${index + 1}`}
                                     className="size-7 rounded-lg text-muted-foreground hover:text-foreground"
-                                    onClick={() =>
+                                    onClick={() => {
+                                      setEditedExpectedResults([
+                                        ...editedExpectedResults.slice(0, index + 1),
+                                        "",
+                                        ...editedExpectedResults.slice(index + 1),
+                                      ]);
                                       setEditedSteps([
                                         ...editedSteps.slice(0, index + 1),
                                         "",
                                         ...editedSteps.slice(index + 1),
-                                      ])
-                                    }
+                                      ]);
+                                    }}
                                   >
                                     <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
@@ -1684,11 +2251,16 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                                     aria-label={`Delete step ${index + 1}`}
                                     disabled={editedSteps.length === 1}
                                     className="size-7 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
-                                    onClick={() =>
+                                    onClick={() => {
+                                      setEditedExpectedResults(
+                                        editedExpectedResults.filter(
+                                          (_, resultIndex) => resultIndex !== index,
+                                        ),
+                                      );
                                       setEditedSteps(
                                         editedSteps.filter((_, stepIndex) => stepIndex !== index),
-                                      )
-                                    }
+                                      );
+                                    }}
                                   >
                                     <Trash2Icon className="h-3.5 w-3.5" aria-hidden="true" />
                                   </Button>
@@ -1703,24 +2275,6 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                           onChange={setEditedCaseLocatorIds}
                           label="Locator context for this case"
                         />
-                        <div className="space-y-1.5">
-                          <label
-                            htmlFor={`testing-case-expected-${selectedCase.id}`}
-                            className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                          >
-                            Expected result
-                          </label>
-                          <div className="flex items-start rounded-xl border border-border/70 bg-background/80 px-3 py-1.5 shadow-sm transition-all focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 dark:bg-background/40">
-                            <AutoResizeStepInput
-                              value={editedExpectedResult}
-                              onChange={setEditedExpectedResult}
-                              placeholder="Describe the visible outcome (Shift+Enter for newline)"
-                              ariaLabel="Expected result"
-                              minHeight={32}
-                              maxHeight={140}
-                            />
-                          </div>
-                        </div>
                         <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
@@ -1743,8 +2297,15 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                     ) : (
                       <>
                         <ol className="list-decimal space-y-1 pl-5 text-sm text-foreground">
-                          {selectedCase.steps.map((step) => (
-                            <li key={`${selectedCase.id}-${step}`}>{step}</li>
+                          {selectedCase.steps.map((step, index) => (
+                            <li key={`${selectedCase.id}-${index}`}>
+                              <div>{step}</div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground/80">Expected:</span>{" "}
+                                {selectedCase.expectedResults[index] ||
+                                  "No expected result recorded"}
+                              </div>
+                            </li>
                           ))}
                         </ol>
                         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/10 p-3">
@@ -1783,14 +2344,22 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                           </div>
                         ) : null}
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => void reviewCase(selectedCase, "accepted")}
-                            disabled={busyAction !== null}
-                          >
-                            Accept
-                          </Button>
+                          {selectedCase.reviewDecision === "pending" ||
+                          selectedCase.reviewDecision === "rejected" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void reviewCase(selectedCase, "accepted")}
+                              disabled={busyAction !== null}
+                            >
+                              <CheckCircle2Icon aria-hidden="true" />
+                              Accept case
+                            </Button>
+                          ) : (
+                            <Badge variant="success" className="self-center">
+                              Accepted
+                            </Badge>
+                          )}
                           <Button
                             type="button"
                             size="sm"
@@ -1804,11 +2373,12 @@ const TestingCaseQueue = memo(function TestingCaseQueue({
                           <Button
                             type="button"
                             size="sm"
-                            variant="ghost"
-                            onClick={() => void reviewCase(selectedCase, "rejected")}
+                            variant="destructive"
+                            onClick={() => void deleteCase(selectedCase)}
                             disabled={busyAction !== null}
                           >
-                            Reject
+                            <Trash2Icon aria-hidden="true" />
+                            Delete
                           </Button>
                         </div>
                       </>

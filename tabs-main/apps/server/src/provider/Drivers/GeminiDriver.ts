@@ -1,4 +1,9 @@
-import { GeminiSettings, ProviderDriverKind, validateServerProviderModelList, type ServerProvider } from "@tabs/contracts";
+import {
+  GeminiSettings,
+  ProviderDriverKind,
+  validateServerProviderModelList,
+  type ServerProvider,
+} from "@tabs/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -10,11 +15,13 @@ import type { ProviderAdapterShape } from "../Services/ProviderAdapter";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
   defaultProviderContinuationIdentity,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
 import { buildServerProvider } from "../providerSnapshot";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "../providerMaintenance";
+import { getProviderSecret } from "../ProviderSecretStore";
 
 const decodeGeminiSettings = Schema.decodeSync(GeminiSettings);
 
@@ -75,7 +82,14 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
-      const effectiveConfig = { ...config, enabled } satisfies GeminiSettings;
+      const secureApiKey = yield* Effect.tryPromise(() => getProviderSecret("gemini.api-key")).pipe(
+        Effect.orElseSucceed(() => null),
+      );
+      const effectiveConfig = {
+        ...config,
+        enabled,
+        apiKey: secureApiKey ?? config.apiKey,
+      } satisfies GeminiSettings;
       const maintenanceCapabilities = makeManualOnlyProviderMaintenanceCapabilities({
         provider: DRIVER_KIND,
         packageName: null,
@@ -91,6 +105,9 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
             presentation: { displayName: displayName || "Google Gemini" },
             enabled: effectiveConfig.enabled,
             checkedAt: new Date().toISOString(),
+            catalogStatus: "ready",
+            catalogSource: "curated",
+            catalogCheckedAt: new Date().toISOString(),
             models: GEMINI_BUILT_IN_MODELS,
             probe: {
               installed: true,
@@ -168,6 +185,15 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "curated",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "supported",
+          logout: "supported",
+          accountSwitch: "supported",
+        }),
+        lifecycle: { actions: [] },
         snapshot,
         adapter: geminiAdapter,
         textGeneration,

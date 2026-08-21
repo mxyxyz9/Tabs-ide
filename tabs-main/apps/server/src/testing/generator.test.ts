@@ -78,6 +78,7 @@ function seedAcceptedCase(store: TestingGraphStore): TestingCaseSummary {
         externalId: "QA-101",
         description: "Open account settings",
         steps: ["Open Settings", "Choose Account"],
+        expectedResults: ["Settings are visible", "Account Settings page is visible"],
         expectedResult: "Account Settings page is visible",
         sourceSheet: "Cases",
         sourceRow: 2,
@@ -263,6 +264,40 @@ describe("TestingGenerator", () => {
 
       expect(job).toMatchObject({ status: "budget-stopped", completedCases: 0 });
       expect(generate).not.toHaveBeenCalled();
+    } finally {
+      locatorStore.close();
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("persists and returns a background job before preflight finishes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tabs-testing-background-job-"));
+    const databasePath = join(root, "state.sqlite");
+    const store = new TestingGraphStore(databasePath);
+    const locatorStore = new LocatorLibraryStore(databasePath);
+    try {
+      seedAcceptedCase(store);
+      const generator = new TestingGenerator(
+        store,
+        locatorStore,
+        join(root, "state"),
+        textGeneration(),
+      );
+      const job = await generator.generate(generationInput(root), {
+        background: true,
+        beforeRun: async () => {
+          throw new Error("Locator preflight failed");
+        },
+      });
+
+      expect(["queued", "running"]).toContain(job.status);
+      await vi.waitFor(() => {
+        expect(store.generationJob("project", job.id)).toMatchObject({
+          status: "failed",
+          error: "Locator preflight failed",
+        });
+      });
     } finally {
       locatorStore.close();
       store.close();

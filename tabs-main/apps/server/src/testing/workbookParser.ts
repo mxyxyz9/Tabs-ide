@@ -6,6 +6,7 @@ export interface ParsedWorkbookCase {
   readonly externalId: string;
   readonly description: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResults: ReadonlyArray<string>;
   readonly expectedResult: string;
   readonly sourceSheet: string;
   readonly sourceRow: number;
@@ -62,9 +63,18 @@ export function parseSteps(value: string): ReadonlyArray<string> {
   return numbered.length > 0 ? numbered : [normalized];
 }
 
-function findHeaderRow(
-  worksheet: ExcelJS.Worksheet,
-): {
+export function parseExpectedResults(value: string, stepCount: number): ReadonlyArray<string> {
+  if (stepCount === 0) return [];
+  const parsed = parseSteps(value);
+  if (parsed.length > 1) {
+    return Array.from({ length: stepCount }, (_, index) => parsed[index] ?? "");
+  }
+  return Array.from({ length: stepCount }, (_, index) =>
+    index === stepCount - 1 ? (parsed[0] ?? "") : "",
+  );
+}
+
+function findHeaderRow(worksheet: ExcelJS.Worksheet): {
   rowNumber: number;
   columns: Record<keyof typeof HEADER_ALIASES, number> & { readonly expectedResult?: number };
 } | null {
@@ -92,7 +102,9 @@ function findHeaderRow(
           caseId: columns.caseId,
           description: columns.description,
           steps: columns.steps,
-          ...(columns.expectedResult !== undefined ? { expectedResult: columns.expectedResult } : {}),
+          ...(columns.expectedResult !== undefined
+            ? { expectedResult: columns.expectedResult }
+            : {}),
         },
       };
     }
@@ -126,11 +138,13 @@ export async function parseTestingWorkbook(workbookPath: string): Promise<Parsed
       if (!externalId) errors.push("Case ID is blank");
       if (!description) errors.push("Description is blank");
       const steps = parseSteps(rawSteps);
+      const expectedResults = parseExpectedResults(expectedResult, steps.length);
       if (steps.length === 0) errors.push("Steps are blank or malformed");
       parsedCases.push({
         externalId: externalId || `ROW-${rowNumber}`,
         description,
         steps,
+        expectedResults,
         expectedResult,
         sourceSheet: worksheet.name,
         sourceRow: rowNumber,

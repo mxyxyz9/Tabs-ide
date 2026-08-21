@@ -23,6 +23,20 @@ import type {
 import type * as Effect from "effect/Effect";
 import type * as Stream from "effect/Stream";
 
+export interface ProviderModelDescriptor {
+  readonly slug: string;
+  readonly name: string;
+  readonly resolvedModel?: string;
+  readonly optionDescriptors?: ReadonlyArray<unknown>;
+  readonly supportsAutoMode?: boolean;
+}
+
+export interface ProviderListModelsResult {
+  readonly models: ReadonlyArray<ProviderModelDescriptor>;
+  readonly source?: string;
+  readonly cached?: boolean;
+}
+
 export type ProviderSessionModelSwitchMode = "in-session" | "unsupported";
 
 export interface ProviderAdapterCapabilities {
@@ -38,7 +52,6 @@ export interface ProviderAdapterCapabilities {
    */
   readonly agentChat?: "unsupported";
 }
-
 
 export interface ProviderThreadTurnSnapshot {
   readonly id: TurnId;
@@ -56,6 +69,11 @@ export interface ProviderAdapterShape<TError> {
    */
   readonly provider: ProviderDriverKind;
   readonly capabilities: ProviderAdapterCapabilities;
+
+  readonly listModels?: (input: {
+    readonly cwd?: string;
+    readonly binaryPath?: string;
+  }) => Effect.Effect<ProviderListModelsResult, TError>;
 
   /**
    * Start a provider-backed session.

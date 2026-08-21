@@ -18,6 +18,7 @@ import {
   KeyboardIcon,
   LoaderIcon,
   LogInIcon,
+  LogOutIcon,
   MinusIcon,
   PaletteIcon,
   PencilIcon,
@@ -37,12 +38,20 @@ import {
   SearchIcon,
   ShuffleIcon,
   Trash2Icon,
+  FingerprintIcon,
+  GlobeIcon,
 } from "lucide-react";
+import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesSettings";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { applyCustomModelOrdering, resetModelOrder, updateModelOrder } from "../modelOrdering";
 import {
@@ -119,9 +128,11 @@ import { Collapsible, CollapsibleContent } from "../components/ui/collapsible";
 import {
   Dialog,
   DialogBackdrop,
+  DialogDescription,
   DialogPopup,
   DialogPortal,
   DialogViewport,
+  DialogTitle,
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../components/ui/menu";
@@ -164,7 +175,11 @@ import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQue
 import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../timestampFormat";
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
-import { type AiProvider, DEFAULT_DESKTOP_ICON_THEME, DEFAULT_UNIFIED_SETTINGS } from "@tabs/contracts/settings";
+import {
+  type AiProvider,
+  DEFAULT_DESKTOP_ICON_THEME,
+  DEFAULT_UNIFIED_SETTINGS,
+} from "@tabs/contracts/settings";
 import { SourceControlSettingsPanel } from "../components/settings/SourceControlSettings";
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
@@ -175,6 +190,8 @@ import { useConfirm } from "~/hooks/useConfirm";
 import { createPortal } from "react-dom";
 import { useZoomFactor, ZOOM_SNAP_POINTS } from "../state/zoom";
 import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
+import { useAtomValue } from "@effect/atom-react";
+import { projectsAtom } from "../state/threads";
 
 export function SettingsHeaderPortal({ children }: { children: React.ReactNode }) {
   const [target, setTarget] = useState<Element | null>(null);
@@ -186,8 +203,6 @@ export function SettingsHeaderPortal({ children }: { children: React.ReactNode }
 }
 
 const TABS_RELEASES_URL = "https://github.com/mxyxyz9/Tabs-ide/releases";
-
-
 
 const ZOOM_PRESETS = [
   { value: "0.5", label: "50%" },
@@ -254,7 +269,14 @@ const TIMESTAMP_FORMAT_LABELS = {
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 
-type ProviderSettingsKey = "codex" | "claudeAgent" | "cursor" | "copilot" | "grok" | "opencode" | "kilo";
+type ProviderSettingsKey =
+  | "codex"
+  | "claudeAgent"
+  | "cursor"
+  | "copilot"
+  | "grok"
+  | "opencode"
+  | "kilo";
 
 const AI_PROVIDER_LABELS: Record<AiProvider, string> = {
   tabs: "Tabs Agent",
@@ -351,6 +373,7 @@ type SettingsSectionId =
   | "general"
   | "themes"
   | "workspace"
+  | "profiles"
   | "providers"
   | "source-control"
   | "connections"
@@ -370,6 +393,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   { id: "source-control", label: "Source Control", icon: GitBranchIcon },
   { id: "connections", label: "Connections", icon: Link2Icon },
   { id: "workspace", label: "Workspace", icon: FolderIcon },
+  { id: "profiles", label: "Browser Profiles", icon: FingerprintIcon },
   { id: "keybindings", label: "Keybindings", icon: KeyboardIcon },
   { id: "about", label: "About", icon: InfoIcon },
 ];
@@ -519,18 +543,20 @@ function PinModelCommandPalette({
   }, [providerCards, serverProviders]);
 
   const filteredModels = useMemo(() => {
-    return allModels.filter((item: { provider: string; providerName: string; model: ServerProviderModel }) => {
-      if (activeProviderFilter && item.provider !== activeProviderFilter) {
-        return false;
-      }
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase().trim();
-      return (
-        item.model.name.toLowerCase().includes(q) ||
-        item.model.slug.toLowerCase().includes(q) ||
-        item.providerName.toLowerCase().includes(q)
-      );
-    });
+    return allModels.filter(
+      (item: { provider: string; providerName: string; model: ServerProviderModel }) => {
+        if (activeProviderFilter && item.provider !== activeProviderFilter) {
+          return false;
+        }
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase().trim();
+        return (
+          item.model.name.toLowerCase().includes(q) ||
+          item.model.slug.toLowerCase().includes(q) ||
+          item.providerName.toLowerCase().includes(q)
+        );
+      },
+    );
   }, [allModels, activeProviderFilter, searchQuery]);
 
   if (allModels.length === 0) return null;
@@ -628,81 +654,87 @@ function PinModelCommandPalette({
                     </div>
                   </div>
                 ) : (
-                  filteredModels.map((item: { provider: string; providerName: string; model: ServerProviderModel }) => {
-                    const IconComponent = PROVIDER_ICONS_BY_KIND[item.provider] ?? BotIcon;
-                    const caps = item.model.capabilities;
-                    const capLabels: string[] = [];
-                    if (caps?.supportsFastMode) capLabels.push("Fast");
-                    if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
-                    if (caps?.reasoningEffortLevels && caps.reasoningEffortLevels.length > 0)
-                      capLabels.push("Reasoning");
+                  filteredModels.map(
+                    (item: {
+                      provider: string;
+                      providerName: string;
+                      model: ServerProviderModel;
+                    }) => {
+                      const IconComponent = PROVIDER_ICONS_BY_KIND[item.provider] ?? BotIcon;
+                      const caps = item.model.capabilities;
+                      const capLabels: string[] = [];
+                      if (caps?.supportsFastMode) capLabels.push("Fast");
+                      if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
+                      if (caps?.reasoningEffortLevels && caps.reasoningEffortLevels.length > 0)
+                        capLabels.push("Reasoning");
 
-                    const isPinned = isPinnedModel(pinnedEntries, item.provider, item.model.slug);
+                      const isPinned = isPinnedModel(pinnedEntries, item.provider, item.model.slug);
 
-                    return (
-                      <div
-                        key={`${item.provider}:${item.model.slug}`}
-                        className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-accent/50 transition-all group cursor-pointer"
-                        onClick={() => {
-                          const nextPinned = togglePinnedModel(
-                            settings,
-                            item.provider,
-                            item.model.slug,
-                          );
-                          updateSettings({ pinnedModels: nextPinned as any });
-                        }}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground group-hover:bg-muted">
-                            <IconComponent className="size-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 truncate">
-                              <span className="text-sm font-medium text-foreground truncate">
-                                {item.model.name}
-                              </span>
-                              <span className="text-xs font-mono text-muted-foreground/60 shrink-0">
-                                ({item.providerName})
-                              </span>
+                      return (
+                        <div
+                          key={`${item.provider}:${item.model.slug}`}
+                          className="flex items-center justify-between gap-3 p-2.5 rounded-xl hover:bg-accent/50 transition-all group cursor-pointer"
+                          onClick={() => {
+                            const nextPinned = togglePinnedModel(
+                              settings,
+                              item.provider,
+                              item.model.slug,
+                            );
+                            updateSettings({ pinnedModels: nextPinned as any });
+                          }}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground group-hover:text-foreground group-hover:bg-muted">
+                              <IconComponent className="size-4" />
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-xs font-mono text-muted-foreground/50 truncate">
-                                {item.model.slug}
-                              </span>
-                              {capLabels.map((label) => (
-                                <span
-                                  key={label}
-                                  className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/50 text-muted-foreground/70 shrink-0 border border-border/30"
-                                >
-                                  {label}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 truncate">
+                                <span className="text-sm font-medium text-foreground truncate">
+                                  {item.model.name}
                                 </span>
-                              ))}
+                                <span className="text-xs font-mono text-muted-foreground/60 shrink-0">
+                                  ({item.providerName})
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-xs font-mono text-muted-foreground/50 truncate">
+                                  {item.model.slug}
+                                </span>
+                                {capLabels.map((label) => (
+                                  <span
+                                    key={label}
+                                    className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted/50 text-muted-foreground/70 shrink-0 border border-border/30"
+                                  >
+                                    {label}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {isPinned ? (
-                          <Button
-                            size="xs"
-                            variant="secondary"
-                            className="h-7 gap-1 px-2.5 text-xs font-medium text-foreground bg-muted/80 hover:bg-muted cursor-pointer shrink-0"
-                          >
-                            <PinIcon className="size-3.5 fill-current" />
-                            Pinned
-                          </Button>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            className="h-7 gap-1 px-2.5 text-xs font-medium text-muted-foreground group-hover:text-foreground group-hover:bg-accent cursor-pointer shrink-0"
-                          >
-                            <PlusIcon className="size-3.5" />
-                            Pin
-                          </Button>
-                        )}
-                      </div>
-                    );
-                  })
+                          {isPinned ? (
+                            <Button
+                              size="xs"
+                              variant="secondary"
+                              className="h-7 gap-1 px-2.5 text-xs font-medium text-foreground bg-muted/80 hover:bg-muted cursor-pointer shrink-0"
+                            >
+                              <PinIcon className="size-3.5 fill-current" />
+                              Pinned
+                            </Button>
+                          ) : (
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              className="h-7 gap-1 px-2.5 text-xs font-medium text-muted-foreground group-hover:text-foreground group-hover:bg-accent cursor-pointer shrink-0"
+                            >
+                              <PlusIcon className="size-3.5" />
+                              Pin
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    },
+                  )
                 )}
               </div>
             </DialogPopup>
@@ -757,10 +789,7 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   const { fontPreferences } = useTheme();
-  const activeFontCombo = useMemo(
-    () => getActiveFontCombo(fontPreferences),
-    [fontPreferences],
-  );
+  const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
 
   return (
     <section className={cn("space-y-3", activeFontCombo.isNeutral ? "pt-2" : "pt-0 -mt-2")}>
@@ -771,7 +800,10 @@ export function SettingsSection({
           </h3>
         ) : (
           <h2
-            className={cn("text-[18px] leading-relaxed text-foreground/80", activeFontCombo.serifClass)}
+            className={cn(
+              "text-[18px] leading-relaxed text-foreground/80",
+              activeFontCombo.serifClass,
+            )}
             style={{ fontFamily: "var(--font-display)" }}
           >
             {title}
@@ -802,10 +834,7 @@ function SettingsRow({
   children?: ReactNode;
 }) {
   const { fontPreferences } = useTheme();
-  const activeFontCombo = useMemo(
-    () => getActiveFontCombo(fontPreferences),
-    [fontPreferences],
-  );
+  const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
 
   return (
     <div
@@ -877,16 +906,61 @@ export const RANDOM_STYLE_OPTIONS: { id: RandomStyleMode; label: string }[] = [
 ];
 
 const AESTHETIC_PREFIXES = [
-  "Tokyo", "Cyber", "Aesthetic", "Midnight", "Matcha", "Sakura", "Velvet",
-  "Obsidian", "Pixel", "Lunar", "Vibe", "Neon", "Ghost", "Solar", "Chai",
-  "Cosmic", "Electric", "Retro", "Emerald", "Twilight", "Solstice", "Oasis",
-  "Zenith", "Nebula", "Monaco", "Kyoto", "Mochi", "Indigo", "Lumina"
+  "Tokyo",
+  "Cyber",
+  "Aesthetic",
+  "Midnight",
+  "Matcha",
+  "Sakura",
+  "Velvet",
+  "Obsidian",
+  "Pixel",
+  "Lunar",
+  "Vibe",
+  "Neon",
+  "Ghost",
+  "Solar",
+  "Chai",
+  "Cosmic",
+  "Electric",
+  "Retro",
+  "Emerald",
+  "Twilight",
+  "Solstice",
+  "Oasis",
+  "Zenith",
+  "Nebula",
+  "Monaco",
+  "Kyoto",
+  "Mochi",
+  "Indigo",
+  "Lumina",
 ];
 
 const AESTHETIC_SUFFIXES = [
-  "Drift", "Haze", "Glow", "Pulse", "Check", "Bloom", "Latte", "Signal",
-  "Wave", "Dust", "Aura", "Flare", "Syntax", "Shift", "Echo", "Mirage",
-  "Vibes", "Mist", "Realm", "Matrix", "Chroma", "Radiance", "Spark"
+  "Drift",
+  "Haze",
+  "Glow",
+  "Pulse",
+  "Check",
+  "Bloom",
+  "Latte",
+  "Signal",
+  "Wave",
+  "Dust",
+  "Aura",
+  "Flare",
+  "Syntax",
+  "Shift",
+  "Echo",
+  "Mirage",
+  "Vibes",
+  "Mist",
+  "Realm",
+  "Matrix",
+  "Chroma",
+  "Radiance",
+  "Spark",
 ];
 
 export function generateAestheticThemeName(): string {
@@ -966,9 +1040,10 @@ function generateHarmonizedPalette(
     return baseVariant === "dark" ? isDarkBg : !isDarkBg;
   });
 
-  const selected = matched.length > 0
-    ? matched[Math.floor(Math.random() * matched.length)]!
-    : pool[Math.floor(Math.random() * pool.length)]!;
+  const selected =
+    matched.length > 0
+      ? matched[Math.floor(Math.random() * matched.length)]!
+      : pool[Math.floor(Math.random() * pool.length)]!;
 
   let fg = selected.fg;
   let bg = selected.bg;
@@ -1071,8 +1146,14 @@ function ThemePickerGrid({
                 >
                   <div className="flex items-center gap-1.5">
                     <div className="size-2 rounded-full" style={{ backgroundColor: t.accent }} />
-                    <div className="size-1.5 rounded-full opacity-40" style={{ backgroundColor: t.accent }} />
-                    <div className="size-1.5 rounded-full opacity-20" style={{ backgroundColor: t.accent }} />
+                    <div
+                      className="size-1.5 rounded-full opacity-40"
+                      style={{ backgroundColor: t.accent }}
+                    />
+                    <div
+                      className="size-1.5 rounded-full opacity-20"
+                      style={{ backgroundColor: t.accent }}
+                    />
                   </div>
                   <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
                 </div>
@@ -1089,14 +1170,23 @@ function ThemePickerGrid({
 
                   <div className="flex-1 p-2 flex flex-col gap-1.5">
                     <div className="flex items-center gap-1">
-                      <div className="h-1 w-6 rounded-full opacity-80" style={{ backgroundColor: t.codeKeyword }} />
+                      <div
+                        className="h-1 w-6 rounded-full opacity-80"
+                        style={{ backgroundColor: t.codeKeyword }}
+                      />
                       <div className="h-1 w-10 rounded-full opacity-50 bg-foreground" />
                     </div>
                     <div className="flex items-center gap-1">
                       <div className="h-1 w-4 rounded-full opacity-30 bg-foreground" />
-                      <div className="h-1 w-12 rounded-full opacity-70" style={{ backgroundColor: t.codeString }} />
+                      <div
+                        className="h-1 w-12 rounded-full opacity-70"
+                        style={{ backgroundColor: t.codeString }}
+                      />
                     </div>
-                    <div className="h-1 w-8 rounded-full opacity-90" style={{ backgroundColor: t.accent }} />
+                    <div
+                      className="h-1 w-8 rounded-full opacity-90"
+                      style={{ backgroundColor: t.accent }}
+                    />
                   </div>
                 </div>
               </div>
@@ -1197,19 +1287,31 @@ function ThemePickerGrid({
                     style={{ backgroundColor: preset.config.colors.card }}
                   >
                     <div className="flex items-center gap-1.5">
-                      <div className="size-2 rounded-full" style={{ backgroundColor: preset.config.colors.primary }} />
+                      <div
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: preset.config.colors.primary }}
+                      />
                     </div>
                     <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
                   </div>
 
                   <div className="flex h-full p-2 flex-col gap-1.5">
-                    <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: preset.config.colors.primary }} />
-                    <div className="h-1.5 w-20 rounded-full opacity-70" style={{ backgroundColor: preset.config.colors.foreground }} />
+                    <div
+                      className="h-1.5 w-12 rounded-full"
+                      style={{ backgroundColor: preset.config.colors.primary }}
+                    />
+                    <div
+                      className="h-1.5 w-20 rounded-full opacity-70"
+                      style={{ backgroundColor: preset.config.colors.foreground }}
+                    />
                   </div>
                 </div>
 
                 {isEditing ? (
-                  <div className="mt-3 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="mt-3 flex items-center gap-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Input
                       autoFocus
                       value={editingNameInput}
@@ -1290,9 +1392,16 @@ function ThemePickerGrid({
 // CustomThemeStudioModal imported from components/CustomThemeStudioModal.tsx
 
 const CURATED_STUDIO_SWATCHES = [
-  "#6366F1", "#06B6D4", "#10B981", "#F43F5E",
-  "#F59E0B", "#A855F7", "#EC4899", "#3B82F6",
-  "#1E293B", "#F8FAFC"
+  "#6366F1",
+  "#06B6D4",
+  "#10B981",
+  "#F43F5E",
+  "#F59E0B",
+  "#A855F7",
+  "#EC4899",
+  "#3B82F6",
+  "#1E293B",
+  "#F8FAFC",
 ];
 
 function StudioColorPickerPopover({
@@ -1403,7 +1512,10 @@ function StudioColorPickerPopover({
             <PipetteIcon className="size-4" />
           </button>
         ) : (
-          <div className="size-8 shrink-0 rounded-xl border border-border shadow-xs" style={{ backgroundColor: value }} />
+          <div
+            className="size-8 shrink-0 rounded-xl border border-border shadow-xs"
+            style={{ backgroundColor: value }}
+          />
         )}
 
         {/* Custom Hue Track */}
@@ -1437,7 +1549,9 @@ function StudioColorPickerPopover({
               onClick={() => setFormat("hex")}
               className={cn(
                 "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
-                format === "hex" ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0" : "text-muted-foreground hover:text-foreground"
+                format === "hex"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               HEX
@@ -1447,7 +1561,9 @@ function StudioColorPickerPopover({
               onClick={() => setFormat("rgb")}
               className={cn(
                 "px-2 py-0.5 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
-                format === "rgb" ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0" : "text-muted-foreground hover:text-foreground"
+                format === "rgb"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
               RGB
@@ -1460,7 +1576,7 @@ function StudioColorPickerPopover({
                 "text-[10px] font-mono px-1.5 py-0.5 rounded-full border",
                 contrastInfo.isLowContrast
                   ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
-                  : "border-border/80 bg-muted/60 text-muted-foreground"
+                  : "border-border/80 bg-muted/60 text-muted-foreground",
               )}
             >
               {contrastInfo.ratio}:1
@@ -1471,7 +1587,11 @@ function StudioColorPickerPopover({
               title="Copy hex code"
               className="p-1 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
             >
-              {copied ? <CheckIcon className="size-3.5 text-primary" /> : <CopyIcon className="size-3.5" />}
+              {copied ? (
+                <CheckIcon className="size-3.5 text-primary" />
+              ) : (
+                <CopyIcon className="size-3.5" />
+              )}
             </button>
           </div>
         </div>
@@ -1488,35 +1608,47 @@ function StudioColorPickerPopover({
         ) : (
           <div className="grid grid-cols-3 gap-1.5">
             <div>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">R</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">
+                R
+              </span>
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={currentRgb.r}
-                onChange={(e) => onChange(rgbToHex(Number(e.target.value), currentRgb.g, currentRgb.b))}
+                onChange={(e) =>
+                  onChange(rgbToHex(Number(e.target.value), currentRgb.g, currentRgb.b))
+                }
                 className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
             </div>
             <div>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">G</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">
+                G
+              </span>
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={currentRgb.g}
-                onChange={(e) => onChange(rgbToHex(currentRgb.r, Number(e.target.value), currentRgb.b))}
+                onChange={(e) =>
+                  onChange(rgbToHex(currentRgb.r, Number(e.target.value), currentRgb.b))
+                }
                 className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
             </div>
             <div>
-              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">B</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase block text-center">
+                B
+              </span>
               <input
                 type="number"
                 min={0}
                 max={255}
                 value={currentRgb.b}
-                onChange={(e) => onChange(rgbToHex(currentRgb.r, currentRgb.g, Number(e.target.value)))}
+                onChange={(e) =>
+                  onChange(rgbToHex(currentRgb.r, currentRgb.g, Number(e.target.value)))
+                }
                 className="w-full rounded-lg border border-border/80 bg-background py-1 text-center text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
               />
             </div>
@@ -1533,7 +1665,8 @@ function StudioColorPickerPopover({
             onClick={() => onChange(swatch)}
             className={cn(
               "size-4.5 rounded-full border border-black/20 shadow-xs transition-transform hover:scale-125 cursor-pointer",
-              value.toLowerCase() === swatch.toLowerCase() && "ring-2 ring-primary ring-offset-1 ring-offset-card"
+              value.toLowerCase() === swatch.toLowerCase() &&
+                "ring-2 ring-primary ring-offset-1 ring-offset-card",
             )}
             style={{ backgroundColor: swatch }}
           />
@@ -1570,7 +1703,10 @@ function ColorPickerRow({
   }, [isOpen]);
 
   return (
-    <div ref={popoverRef} className="relative flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/50 p-3 transition-all hover:border-border">
+    <div
+      ref={popoverRef}
+      className="relative flex items-center justify-between gap-3 rounded-2xl border border-border/80 bg-background/50 p-3 transition-all hover:border-border"
+    >
       <div className="min-w-0 flex-1">
         <span className="text-xs font-semibold text-foreground block truncate">{label}</span>
         <p className="text-[11px] text-muted-foreground truncate">{description}</p>
@@ -1781,12 +1917,36 @@ function ClosePreviewOverlay({ loader, palette, theme, fontComboId, customFont, 
 }
 
 const TOOLBAR_STYLES = [
-  { id: "solid", label: "Elevated Solid", description: "Pure high-contrast accent block with a soft elastic slide." },
-  { id: "ghost-mesh", label: "Ambient Mesh", description: "Soft radial gradient mesh fading elegantly from the bottom edge." },
-  { id: "spotlight", label: "Edge Illumination", description: "Directional light emitting smoothly from the top boundary." },
-  { id: "dot", label: "Minimal Indicator", description: "Ultra-minimal glowing indicator tracking below the active tab." },
-  { id: "refraction", label: "Frosted Lens", description: "Physical glass lens distorting a micro-dot matrix track." },
-  { id: "titanium", label: "Brushed Aluminum", description: "Machined brushed metal aesthetic with an animated sweeping glare." },
+  {
+    id: "solid",
+    label: "Elevated Solid",
+    description: "Pure high-contrast accent block with a soft elastic slide.",
+  },
+  {
+    id: "ghost-mesh",
+    label: "Ambient Mesh",
+    description: "Soft radial gradient mesh fading elegantly from the bottom edge.",
+  },
+  {
+    id: "spotlight",
+    label: "Edge Illumination",
+    description: "Directional light emitting smoothly from the top boundary.",
+  },
+  {
+    id: "dot",
+    label: "Minimal Indicator",
+    description: "Ultra-minimal glowing indicator tracking below the active tab.",
+  },
+  {
+    id: "refraction",
+    label: "Frosted Lens",
+    description: "Physical glass lens distorting a micro-dot matrix track.",
+  },
+  {
+    id: "titanium",
+    label: "Brushed Aluminum",
+    description: "Machined brushed metal aesthetic with an animated sweeping glare.",
+  },
 ] as const;
 
 function ToolbarPreview({ styleId }: { styleId: string }) {
@@ -1797,7 +1957,7 @@ function ToolbarPreview({ styleId }: { styleId: string }) {
   useEffect(() => {
     if (!trackRef.current || !pillRef.current) return;
     const timeoutId = setTimeout(() => {
-      const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>('.nav-tab');
+      const tabs = trackRef.current?.querySelectorAll<HTMLButtonElement>(".nav-tab");
       if (!tabs) return;
       const targetTab = tabs[activeTab];
       if (!targetTab) return;
@@ -1814,7 +1974,7 @@ function ToolbarPreview({ styleId }: { styleId: string }) {
   }, [activeTab]);
 
   return (
-    <div 
+    <div
       className="flex items-center justify-center p-4 bg-background/50 rounded-xl border border-border/40 my-2"
       onClick={(e) => {
         // prevent clicks from bubbling
@@ -1823,10 +1983,10 @@ function ToolbarPreview({ styleId }: { styleId: string }) {
     >
       <div ref={trackRef} className={cn("nav-track", `design-${styleId}`)}>
         <div ref={pillRef} className="active-pill" />
-        {['Code', 'Agents', 'Browser'].map((label, i) => (
-          <button 
+        {["Code", "Agents", "Browser"].map((label, i) => (
+          <button
             key={label}
-            type="button" 
+            type="button"
             className={cn("nav-tab", activeTab === i && "active")}
             onClick={() => setActiveTab(i)}
           >
@@ -1850,12 +2010,15 @@ function SettingsRouteView() {
     setFontPreferences,
   } = useTheme();
 
-  const activeFontCombo = useMemo(
-    () => getActiveFontCombo(fontPreferences),
-    [fontPreferences],
-  );
+  const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
   const [zoomFactor, updateZoom] = useZoomFactor();
   const activeProjectId = useWorkspaceActiveProjectId();
+  const [settingsScope, setSettingsScope] = useState<"project" | "global">("project");
+  const projects = useAtomValue(projectsAtom);
+  const activeProject = useMemo(
+    () => (activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null),
+    [projects, activeProjectId],
+  );
   const settings = useSettings();
   const { updateSettings, resetSettings } = useUpdateSettings();
   const [confirmBeforeQuit, setConfirmBeforeQuit] = useState(true);
@@ -1890,7 +2053,9 @@ function SettingsRouteView() {
     [updateSettingsViewState],
   );
 
-  const openProviderDetails = settingsViewState.openProviderDetails as Partial<Record<ProviderSettingsKey, boolean>>;
+  const openProviderDetails = settingsViewState.openProviderDetails as Partial<
+    Record<ProviderSettingsKey, boolean>
+  >;
   const setOpenProviderDetails = useCallback(
     (
       updater:
@@ -1909,7 +2074,9 @@ function SettingsRouteView() {
     [updateSettingsViewState],
   );
 
-  const customModelInputByProvider = settingsViewState.customModelInputByProvider as Partial<Record<ProviderSettingsKey, string>>;
+  const customModelInputByProvider = settingsViewState.customModelInputByProvider as Partial<
+    Record<ProviderSettingsKey, string>
+  >;
   const setCustomModelInputByProvider = useCallback(
     (
       updater:
@@ -1928,7 +2095,9 @@ function SettingsRouteView() {
     [updateSettingsViewState],
   );
 
-  const draftModelOrders = settingsViewState.draftModelOrders as Partial<Record<ProviderSettingsKey, ReadonlyArray<string>>>;
+  const draftModelOrders = settingsViewState.draftModelOrders as Partial<
+    Record<ProviderSettingsKey, ReadonlyArray<string>>
+  >;
   const setDraftModelOrders = useCallback(
     (
       updater:
@@ -1951,11 +2120,9 @@ function SettingsRouteView() {
     (provider: ProviderSettingsKey) => {
       const pendingOrder = draftModelOrders[provider];
       if (pendingOrder) {
-        const nextPrefs = updateModelOrder(
-          settings.providerModelPreferences,
-          provider,
-          [...pendingOrder],
-        );
+        const nextPrefs = updateModelOrder(settings.providerModelPreferences, provider, [
+          ...pendingOrder,
+        ]);
         updateSettings({ providerModelPreferences: nextPrefs as any });
         setDraftModelOrders((existing) => {
           const next = { ...existing };
@@ -1983,28 +2150,32 @@ function SettingsRouteView() {
 
   const [animationTab, setAnimationTab] = useState<"startup" | "close">("startup");
   /* Startup Animation Font State */
-  const [savedStartupAnimationFontComboId, setSavedStartupAnimationFontComboId] = useState<string>(() => {
-    try {
-      return (
-        window.localStorage?.getItem("tabs.startupAnimationFontComboId") ??
-        window.localStorage?.getItem("tabs.animationFontComboId") ??
-        "app-default"
-      );
-    } catch {
-      return "app-default";
-    }
-  });
-  const [savedStartupCustomAnimationFont, setSavedStartupCustomAnimationFont] = useState<string>(() => {
-    try {
-      return (
-        window.localStorage?.getItem("tabs.startupCustomAnimationFont") ??
-        window.localStorage?.getItem("tabs.customAnimationFont") ??
-        "'Inter', sans-serif"
-      );
-    } catch {
-      return "'Inter', sans-serif";
-    }
-  });
+  const [savedStartupAnimationFontComboId, setSavedStartupAnimationFontComboId] = useState<string>(
+    () => {
+      try {
+        return (
+          window.localStorage?.getItem("tabs.startupAnimationFontComboId") ??
+          window.localStorage?.getItem("tabs.animationFontComboId") ??
+          "app-default"
+        );
+      } catch {
+        return "app-default";
+      }
+    },
+  );
+  const [savedStartupCustomAnimationFont, setSavedStartupCustomAnimationFont] = useState<string>(
+    () => {
+      try {
+        return (
+          window.localStorage?.getItem("tabs.startupCustomAnimationFont") ??
+          window.localStorage?.getItem("tabs.customAnimationFont") ??
+          "'Inter', sans-serif"
+        );
+      } catch {
+        return "'Inter', sans-serif";
+      }
+    },
+  );
 
   const [previewStartupAnimationFontComboId, setPreviewStartupAnimationFontComboId] =
     useState<string>(savedStartupAnimationFontComboId);
@@ -2012,17 +2183,19 @@ function SettingsRouteView() {
     useState<string>(savedStartupCustomAnimationFont);
 
   /* Close Animation Font State */
-  const [savedCloseAnimationFontComboId, setSavedCloseAnimationFontComboId] = useState<string>(() => {
-    try {
-      return (
-        window.localStorage?.getItem("tabs.closeAnimationFontComboId") ??
-        window.localStorage?.getItem("tabs.animationFontComboId") ??
-        "app-default"
-      );
-    } catch {
-      return "app-default";
-    }
-  });
+  const [savedCloseAnimationFontComboId, setSavedCloseAnimationFontComboId] = useState<string>(
+    () => {
+      try {
+        return (
+          window.localStorage?.getItem("tabs.closeAnimationFontComboId") ??
+          window.localStorage?.getItem("tabs.animationFontComboId") ??
+          "app-default"
+        );
+      } catch {
+        return "app-default";
+      }
+    },
+  );
   const [savedCloseCustomAnimationFont, setSavedCloseCustomAnimationFont] = useState<string>(() => {
     try {
       return (
@@ -2035,20 +2208,30 @@ function SettingsRouteView() {
     }
   });
 
-  const [previewCloseAnimationFontComboId, setPreviewCloseAnimationFontComboId] =
-    useState<string>(savedCloseAnimationFontComboId);
-  const [previewCloseCustomAnimationFont, setPreviewCloseCustomAnimationFont] =
-    useState<string>(savedCloseCustomAnimationFont);
+  const [previewCloseAnimationFontComboId, setPreviewCloseAnimationFontComboId] = useState<string>(
+    savedCloseAnimationFontComboId,
+  );
+  const [previewCloseCustomAnimationFont, setPreviewCloseCustomAnimationFont] = useState<string>(
+    savedCloseCustomAnimationFont,
+  );
 
   const activeFontComboId =
-    animationTab === "startup" ? previewStartupAnimationFontComboId : previewCloseAnimationFontComboId;
+    animationTab === "startup"
+      ? previewStartupAnimationFontComboId
+      : previewCloseAnimationFontComboId;
   const setActiveFontComboId =
-    animationTab === "startup" ? setPreviewStartupAnimationFontComboId : setPreviewCloseAnimationFontComboId;
+    animationTab === "startup"
+      ? setPreviewStartupAnimationFontComboId
+      : setPreviewCloseAnimationFontComboId;
 
   const activeCustomFont =
-    animationTab === "startup" ? previewStartupCustomAnimationFont : previewCloseCustomAnimationFont;
+    animationTab === "startup"
+      ? previewStartupCustomAnimationFont
+      : previewCloseCustomAnimationFont;
   const setActiveCustomFont =
-    animationTab === "startup" ? setPreviewStartupCustomAnimationFont : setPreviewCloseCustomAnimationFont;
+    animationTab === "startup"
+      ? setPreviewStartupCustomAnimationFont
+      : setPreviewCloseCustomAnimationFont;
 
   const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
     try {
@@ -2062,45 +2245,53 @@ function SettingsRouteView() {
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isCustomFontMode, setIsCustomFontMode] = useState(false);
   const [editingStudioPresetName, setEditingStudioPresetName] = useState("");
-  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() => getStoredSavedPresets());
+  const [savedPresets, setSavedPresets] = useState<SavedCustomPreset[]>(() =>
+    getStoredSavedPresets(),
+  );
 
-  const handleSavePreset = useCallback((name: string, config: CustomThemeConfig) => {
-    const newPreset: SavedCustomPreset = {
-      id: `custom-saved-${Date.now()}`,
-      name,
-      config,
-      createdAt: Date.now(),
-    };
-    setSavedPresets((prev) => {
-      const next = [newPreset, ...prev];
-      saveSavedPresetsToStorage(next);
-      return next;
-    });
-    setCustomThemeConfig(config);
-    setTheme("custom");
-    setIsStudioOpen(false);
-    toastManager.add({
-      type: "success",
-      title: "Preset Saved",
-      description: `Preset "${name}" saved cleanly.`,
-    });
-  }, [setCustomThemeConfig, setTheme]);
+  const handleSavePreset = useCallback(
+    (name: string, config: CustomThemeConfig) => {
+      const newPreset: SavedCustomPreset = {
+        id: `custom-saved-${Date.now()}`,
+        name,
+        config,
+        createdAt: Date.now(),
+      };
+      setSavedPresets((prev) => {
+        const next = [newPreset, ...prev];
+        saveSavedPresetsToStorage(next);
+        return next;
+      });
+      setCustomThemeConfig(config);
+      setTheme("custom");
+      setIsStudioOpen(false);
+      toastManager.add({
+        type: "success",
+        title: "Preset Saved",
+        description: `Preset "${name}" saved cleanly.`,
+      });
+    },
+    [setCustomThemeConfig, setTheme],
+  );
 
-  const handleDeletePreset = useCallback((presetId: string) => {
-    const confirmed = confirm("Are you sure you want to delete this custom preset?");
-    if (!confirmed) return;
+  const handleDeletePreset = useCallback(
+    (presetId: string) => {
+      const confirmed = confirm("Are you sure you want to delete this custom preset?");
+      if (!confirmed) return;
 
-    setSavedPresets((prev) => {
-      const next = prev.filter((p) => p.id !== presetId);
-      saveSavedPresetsToStorage(next);
-      return next;
-    });
-    toastManager.add({
-      type: "info",
-      title: "Preset Deleted",
-      description: "Custom theme preset removed.",
-    });
-  }, [confirm]);
+      setSavedPresets((prev) => {
+        const next = prev.filter((p) => p.id !== presetId);
+        saveSavedPresetsToStorage(next);
+        return next;
+      });
+      toastManager.add({
+        type: "info",
+        title: "Preset Deleted",
+        description: "Custom theme preset removed.",
+      });
+    },
+    [confirm],
+  );
 
   const handleRenamePreset = useCallback((presetId: string, newName: string) => {
     if (!newName.trim()) return;
@@ -2186,7 +2377,10 @@ function SettingsRouteView() {
           ).length;
           const failedProviders = providersList
             .filter((p) => p.status === "error")
-            .map((p) => PROVIDER_DISPLAY_NAMES[p.driver as keyof typeof PROVIDER_DISPLAY_NAMES] ?? p.driver);
+            .map(
+              (p) =>
+                PROVIDER_DISPLAY_NAMES[p.driver as keyof typeof PROVIDER_DISPLAY_NAMES] ?? p.driver,
+            );
 
           if (failedProviders.length > 0) {
             toastManager.add({
@@ -2214,7 +2408,8 @@ function SettingsRouteView() {
         toastManager.add({
           type: "error",
           title: "Refresh failed",
-          description: error instanceof Error ? error.message : "Failed to query provider model endpoints.",
+          description:
+            error instanceof Error ? error.message : "Failed to query provider model endpoints.",
         });
       })
       .finally(() => {
@@ -2223,17 +2418,18 @@ function SettingsRouteView() {
       });
   }, [queryClient]);
 
-  // Provider Install / Update / Sign in all run in an embedded PTY terminal
-  // docked at the bottom of the settings page, rather than as a headless server
+  // Provider Install / Update / Sign in all run in a focused PTY dialog rather
+  // than as a headless server
   // child process. The PTY spawns the user's real login shell, so it inherits a
   // full PATH (npm / brew / curl resolve) and the CLI's OAuth browser redirect
   // works. The session is keyed by a synthetic, settings-scoped thread id (the
   // server treats threadId as an opaque session key).
-  type ProviderActionKind = "login" | "install" | "update";
+  type ProviderActionKind = "login" | "logout" | "install" | "update";
   const [providerActionSession, setProviderActionSession] = useState<{
     provider: ProviderSettingsKey;
     providerName: string;
     command: string;
+    followUpCommand?: string;
     kind: ProviderActionKind;
     threadId: ThreadId;
   } | null>(null);
@@ -2246,6 +2442,7 @@ function SettingsRouteView() {
       provider: ProviderSettingsKey;
       providerName: string;
       command: string;
+      followUpCommand?: string;
       kind: ProviderActionKind;
     }) => {
       let command = input.command.trim();
@@ -2261,6 +2458,7 @@ function SettingsRouteView() {
         provider: input.provider,
         providerName: input.providerName,
         command,
+        ...(input.followUpCommand ? { followUpCommand: input.followUpCommand } : {}),
         kind: input.kind,
         threadId: ThreadId.makeUnsafe(`settings-${input.kind}-${input.provider}-${Date.now()}`),
       });
@@ -2289,7 +2487,7 @@ function SettingsRouteView() {
     if (!providerActionSession) return;
     const api = readNativeApi();
     if (!api) return;
-    const { threadId, command } = providerActionSession;
+    const { threadId, command, followUpCommand, kind } = providerActionSession;
     const sendOnce = () => {
       if (providerActionCommandSentRef.current === threadId) return;
       providerActionCommandSentRef.current = threadId;
@@ -2299,6 +2497,22 @@ function SettingsRouteView() {
         void api.terminal
           .write({ threadId, terminalId: DEFAULT_THREAD_TERMINAL_ID, data: `${command}\r` })
           .catch(() => undefined);
+        if (followUpCommand) {
+          setTimeout(() => {
+            void api.terminal
+              .write({
+                threadId,
+                terminalId: DEFAULT_THREAD_TERMINAL_ID,
+                data: `${followUpCommand}\r`,
+              })
+              .then(() => {
+                if (kind === "logout") {
+                  setTimeout(() => refreshProviders(), 1_500);
+                }
+              })
+              .catch(() => undefined);
+          }, 1_250);
+        }
       }, 750);
     };
     const unsubscribe = api.terminal.onEvent((event) => {
@@ -2310,7 +2524,7 @@ function SettingsRouteView() {
     return () => {
       unsubscribe();
     };
-  }, [providerActionSession]);
+  }, [providerActionSession, refreshProviders]);
 
   const modelListRefs = useRef<Partial<Record<ProviderSettingsKey, HTMLDivElement | null>>>({});
 
@@ -2386,9 +2600,7 @@ function SettingsRouteView() {
   );
   const changedSettingLabels = [
     ...(theme !== "system" ? ["Theme"] : []),
-    ...(settings.aiProvider !== DEFAULT_UNIFIED_SETTINGS.aiProvider
-      ? ["AI Provider"]
-      : []),
+    ...(settings.aiProvider !== DEFAULT_UNIFIED_SETTINGS.aiProvider ? ["AI Provider"] : []),
     ...(settings.timestampFormat !== DEFAULT_UNIFIED_SETTINGS.timestampFormat
       ? ["Time format"]
       : []),
@@ -2573,8 +2785,7 @@ function SettingsRouteView() {
       (candidate) => candidate.instanceId === providerSettings.provider,
     );
     const defaultProviderConfig = DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
-    const providerConfig =
-      settings.providers[providerSettings.provider] ?? defaultProviderConfig;
+    const providerConfig = settings.providers[providerSettings.provider] ?? defaultProviderConfig;
     const statusKey = liveProvider?.status ?? (providerConfig?.enabled ? "warning" : "disabled");
     const statusStyle = PROVIDER_STATUS_STYLES[statusKey];
     const summary = getProviderSummary(liveProvider);
@@ -2584,7 +2795,9 @@ function SettingsRouteView() {
         : getProviderModels(serverProviders, providerSettings.provider);
     const seenSlugs = new Set(baseModels.map((m: ServerProviderModel) => m.slug));
     const mergedModels: ServerProviderModel[] = [...baseModels];
-    for (const customSlug of providerConfig.customModels ?? []) {
+    for (const customSlug of providerSettings.provider === "copilot"
+      ? []
+      : (providerConfig.customModels ?? [])) {
       if (!seenSlugs.has(customSlug)) {
         seenSlugs.add(customSlug);
         mergedModels.push({
@@ -2601,10 +2814,10 @@ function SettingsRouteView() {
     const models = applyCustomModelOrdering(mergedModels, customOrder, providerSettings.provider);
     const hasPendingOrderChanges = Boolean(
       draftModelOrders[providerSettings.provider] &&
-        !Equal.equals(
-          draftModelOrders[providerSettings.provider],
-          settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder ?? [],
-        ),
+      !Equal.equals(
+        draftModelOrders[providerSettings.provider],
+        settings.providerModelPreferences?.[providerSettings.provider as any]?.modelOrder ?? [],
+      ),
     );
     const binaryPathValue = providerConfig.binaryPath;
     const isDirty = !Equal.equals(providerConfig, defaultProviderConfig);
@@ -2630,16 +2843,20 @@ function SettingsRouteView() {
       summary,
       versionLabel: getProviderVersionLabel(liveProvider?.version),
       updatePrompt: getProviderUpdatePrompt(liveProvider?.versionAdvisory),
-      needsInstall: Boolean(
-        providerConfig.enabled && liveProvider && !liveProvider.installed,
-      ),
+      needsInstall: Boolean(providerConfig.enabled && liveProvider && !liveProvider.installed),
       installCommand: providerSettings.installCommand,
       needsAuth: Boolean(
         providerConfig.enabled &&
-          liveProvider?.installed === true &&
-          liveProvider.auth.status === "unauthenticated",
+        liveProvider?.installed === true &&
+        liveProvider.auth.status === "unauthenticated",
       ),
-      loginCommand: PROVIDER_LOGIN_COMMAND[providerSettings.provider] ?? null,
+      isAuthenticated: liveProvider?.auth.status === "authenticated",
+      loginCommand:
+        liveProvider?.lifecycleActions?.find((action) => action.kind === "login")?.command ??
+        PROVIDER_LOGIN_COMMAND[providerSettings.provider] ??
+        null,
+      logoutCommand:
+        liveProvider?.lifecycleActions?.find((action) => action.kind === "logout")?.command ?? null,
     };
   });
 
@@ -2698,6 +2915,36 @@ function SettingsRouteView() {
                 Back
               </Button>
               <span className="text-sm font-medium text-foreground">Settings</span>
+              {activeProject ? (
+                <div className="ml-3 flex items-center p-0.5 bg-muted/60 border border-border/60 rounded-lg text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setSettingsScope("project")}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
+                      settingsScope === "project"
+                        ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <span className="size-2 rounded-full bg-primary" />
+                    <span>{activeProject.name}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsScope("global")}
+                    className={cn(
+                      "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
+                      settingsScope === "global"
+                        ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <GlobeIcon className="size-3.5 text-primary" />
+                    <span>Global Settings</span>
+                  </button>
+                </div>
+              ) : null}
               <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
             </div>
           </header>
@@ -2717,13 +2964,43 @@ function SettingsRouteView() {
             <span className="ml-2 text-xs font-medium tracking-wide text-muted-foreground/70">
               Settings
             </span>
+            {activeProject ? (
+              <div className="ml-3 flex items-center p-0.5 bg-muted/60 border border-border/60 rounded-lg no-drag text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSettingsScope("project")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
+                    settingsScope === "project"
+                      ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <span className="size-2 rounded-full bg-primary" />
+                  <span>{activeProject.name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsScope("global")}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
+                    settingsScope === "global"
+                      ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <GlobeIcon className="size-3.5 text-primary" />
+                  <span>Global Settings</span>
+                </button>
+              </div>
+            ) : null}
             <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
           </div>
         )}
 
         <div className="min-h-0 flex-1 overflow-hidden">
           <div className="flex h-full w-full gap-6 px-6 sm:px-10 lg:px-16">
-            <nav className="w-44 shrink-0 space-y-0.5 py-6">
+            <nav className="w-48 shrink-0 space-y-0.5 py-4">
               {SETTINGS_NAV.map((item) => {
                 const NavIcon = item.icon;
                 const active = activeSettingsSection === item.id;
@@ -2733,16 +3010,14 @@ function SettingsRouteView() {
                     type="button"
                     onClick={() => setActiveSettingsSection(item.id)}
                     className={cn(
-                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm leading-normal pb-0.5 transition-colors",
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs font-medium transition-colors cursor-pointer",
                       active
-                        ? "bg-accent font-medium text-foreground"
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                        ? "bg-accent font-semibold text-foreground shadow-2xs"
+                        : "text-muted-foreground hover:bg-accent/40 hover:text-foreground",
                     )}
                   >
-                    <NavIcon className="size-4 shrink-0" />
-                    <span className="capitalize">
-                      {item.label}
-                    </span>
+                    <NavIcon className="size-3.5 shrink-0" />
+                    <span className="capitalize">{item.label}</span>
                   </button>
                 );
               })}
@@ -2755,13 +3030,17 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn(
+                              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                              activeFontCombo.sansClass,
+                            )}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             General
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Customize appearance, assistant behavior, display settings, and workspace preferences.
+                            Customize appearance, assistant behavior, display settings, and
+                            workspace preferences.
                           </p>
                         </div>
                         <SettingsHeaderPortal>
@@ -2781,7 +3060,8 @@ function SettingsRouteView() {
                                   diffWordWrap: DEFAULT_UNIFIED_SETTINGS.diffWordWrap,
                                   enableAssistantStreaming:
                                     DEFAULT_UNIFIED_SETTINGS.enableAssistantStreaming,
-                                  defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+                                  defaultThreadEnvMode:
+                                    DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
                                   confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
                                   confirmTabClose: DEFAULT_UNIFIED_SETTINGS.confirmTabClose,
                                 });
@@ -2793,13 +3073,23 @@ function SettingsRouteView() {
                           </Button>
                         </SettingsHeaderPortal>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     {/* Group 1: Appearance & Interface */}
                     <SettingsSection title="Appearance & Interface">
-
                       <SettingsRow
                         title="Zoom & Scale"
                         description="Adjust interface zoom level. Drag slider or use Cmd + / Cmd -."
@@ -2808,85 +3098,93 @@ function SettingsRouteView() {
                             <SettingResetButton label="zoom" onClick={() => updateZoom(1.0)} />
                           ) : null
                         }
-                        control={
-                          (() => {
-                            const currentIndex = Math.max(
-                              0,
-                              ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01)
-                            );
-                            return (
-                              <div className="flex flex-col gap-2 w-full sm:w-72">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground/70 font-medium">Scale Range</span>
-                                  <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
-                                    {Math.round(zoomFactor * 100)}%
-                                  </span>
-                                </div>
+                        control={(() => {
+                          const currentIndex = Math.max(
+                            0,
+                            ZOOM_SNAP_POINTS.findIndex((pt) => Math.abs(zoomFactor - pt) < 0.01),
+                          );
+                          return (
+                            <div className="flex flex-col gap-2 w-full sm:w-72">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground/70 font-medium">
+                                  Scale Range
+                                </span>
+                                <span className="font-mono font-bold text-foreground bg-accent/60 px-2.5 py-0.5 rounded-md text-xs shadow-xs border border-border/50">
+                                  {Math.round(zoomFactor * 100)}%
+                                </span>
+                              </div>
 
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-                                    onClick={() => updateZoom(ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)] ?? 1.0)}
-                                    title="Zoom Out (Cmd -)"
-                                    aria-label="Zoom Out"
-                                  >
-                                    <MinusIcon className="h-3.5 w-3.5" />
-                                  </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                  onClick={() =>
+                                    updateZoom(
+                                      ZOOM_SNAP_POINTS[Math.max(0, currentIndex - 1)] ?? 1.0,
+                                    )
+                                  }
+                                  title="Zoom Out (Cmd -)"
+                                  aria-label="Zoom Out"
+                                >
+                                  <MinusIcon className="h-3.5 w-3.5" />
+                                </Button>
 
-                                  <div className="relative flex-1 flex items-center px-1">
-                                    <input
-                                      type="range"
-                                      min="0"
-                                      max={ZOOM_SNAP_POINTS.length - 1}
-                                      step="1"
-                                      value={currentIndex}
-                                      onChange={(e) =>
-                                        updateZoom(ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)] ?? 1.0)
-                                      }
-                                      aria-label="Zoom level slider"
-                                      className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
-                                    />
-                                  </div>
-
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
-                                    onClick={() =>
+                                <div className="relative flex-1 flex items-center px-1">
+                                  <input
+                                    type="range"
+                                    min="0"
+                                    max={ZOOM_SNAP_POINTS.length - 1}
+                                    step="1"
+                                    value={currentIndex}
+                                    onChange={(e) =>
                                       updateZoom(
-                                        ZOOM_SNAP_POINTS[
-                                          Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
-                                        ] ?? 1.0
+                                        ZOOM_SNAP_POINTS[parseInt(e.target.value, 10)] ?? 1.0,
                                       )
                                     }
-                                    title="Zoom In (Cmd +)"
-                                    aria-label="Zoom In"
-                                  >
-                                    <PlusIcon className="h-3.5 w-3.5" />
-                                  </Button>
+                                    aria-label="Zoom level slider"
+                                    className="w-full accent-primary h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer focus:outline-none relative z-10"
+                                  />
                                 </div>
 
-                                <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
-                                  {ZOOM_SNAP_POINTS.map((pt) => (
-                                    <button
-                                      key={pt}
-                                      type="button"
-                                      onClick={() => updateZoom(pt)}
-                                      className={cn(
-                                        "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
-                                        Math.abs(zoomFactor - pt) < 0.01 ? "text-primary font-bold" : ""
-                                      )}
-                                    >
-                                      {Math.round(pt * 100)}%
-                                    </button>
-                                  ))}
-                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                  onClick={() =>
+                                    updateZoom(
+                                      ZOOM_SNAP_POINTS[
+                                        Math.min(ZOOM_SNAP_POINTS.length - 1, currentIndex + 1)
+                                      ] ?? 1.0,
+                                    )
+                                  }
+                                  title="Zoom In (Cmd +)"
+                                  aria-label="Zoom In"
+                                >
+                                  <PlusIcon className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
-                            );
-                          })()
-                        }
+
+                              <div className="flex justify-between px-8 text-[10px] font-mono text-muted-foreground/60 select-none">
+                                {ZOOM_SNAP_POINTS.map((pt) => (
+                                  <button
+                                    key={pt}
+                                    type="button"
+                                    onClick={() => updateZoom(pt)}
+                                    className={cn(
+                                      "hover:text-foreground transition-colors cursor-pointer text-center w-8 -mx-1",
+                                      Math.abs(zoomFactor - pt) < 0.01
+                                        ? "text-primary font-bold"
+                                        : "",
+                                    )}
+                                  >
+                                    {Math.round(pt * 100)}%
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       />
 
                       {isElectron ? (
@@ -3182,7 +3480,8 @@ function SettingsRouteView() {
                               label="new threads"
                               onClick={() =>
                                 updateSettings({
-                                  defaultThreadEnvMode: DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
+                                  defaultThreadEnvMode:
+                                    DEFAULT_UNIFIED_SETTINGS.defaultThreadEnvMode,
                                 })
                               }
                             />
@@ -3312,7 +3611,8 @@ function SettingsRouteView() {
                                   toastManager.add({
                                     type: "success",
                                     title: "Code OSS reloaded",
-                                    description: "Re-created the Code OSS BrowserView successfully.",
+                                    description:
+                                      "Re-created the Code OSS BrowserView successfully.",
                                   });
                                 }
                               } catch (e) {
@@ -3328,7 +3628,7 @@ function SettingsRouteView() {
                           </Button>
                         }
                       />
-                      
+
                       <SettingsRow
                         title="Reload Embedded Browser Previews"
                         description="If browser previews or custom embeds fail to synchronize, click reload to recreate the browser preview view."
@@ -3342,11 +3642,14 @@ function SettingsRouteView() {
                               try {
                                 const bridge = window.desktopBridge;
                                 if (bridge) {
-                                  await bridge.recreateBrowserSession({ projectId: activeProjectId });
+                                  await bridge.recreateBrowserSession({
+                                    projectId: activeProjectId,
+                                  });
                                   toastManager.add({
                                     type: "success",
                                     title: "Browser Preview reloaded",
-                                    description: "Re-created the Browser Preview BrowserView successfully.",
+                                    description:
+                                      "Re-created the Browser Preview BrowserView successfully.",
                                   });
                                 }
                               } catch (e) {
@@ -3371,13 +3674,17 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn(
+                              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                              activeFontCombo.sansClass,
+                            )}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             Themes
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Choose from curated palettes or build a fully personalized custom color and typography theme.
+                            Choose from curated palettes or build a fully personalized custom color
+                            and typography theme.
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -3408,8 +3715,19 @@ function SettingsRouteView() {
                           </Button>
                         </div>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     <SettingsSection title="App Themes & Styling">
@@ -3474,7 +3792,9 @@ function SettingsRouteView() {
                         return (
                           <>
                             <div className="px-4 pt-4 pb-2 flex items-center gap-2 flex-wrap">
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mr-1">Defaults</span>
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mr-1">
+                                Defaults
+                              </span>
                               {FONT_COMBOS.filter((c) => c.isNeutral).map((combo) => {
                                 const isCustomCombo = combo.id === "custom";
                                 const isActive = isCustomCombo
@@ -3505,18 +3825,33 @@ function SettingsRouteView() {
                                         ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
                                         : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
                                     )}
-                                    style={{ fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined }}
+                                    style={{
+                                      fontFamily:
+                                        combo.uiFont !== "custom" ? combo.uiFont : undefined,
+                                    }}
                                   >
                                     {isActive && (
-                                      <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                      <svg
+                                        className="size-2.5 shrink-0"
+                                        viewBox="0 0 12 12"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2.5}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
                                         <path d="M2 6l3 3 5-5" />
                                       </svg>
                                     )}
                                     {combo.name}
-                                    <span className={cn(
-                                      "text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border",
-                                      isActive ? "border-primary/30 text-primary/70 bg-primary/5" : "border-border/50 text-muted-foreground/50",
-                                    )}>
+                                    <span
+                                      className={cn(
+                                        "text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border",
+                                        isActive
+                                          ? "border-primary/30 text-primary/70 bg-primary/5"
+                                          : "border-border/50 text-muted-foreground/50",
+                                      )}
+                                    >
                                       {combo.tag}
                                     </span>
                                   </button>
@@ -3557,7 +3892,15 @@ function SettingsRouteView() {
                                     {/* Selected checkmark dot */}
                                     {isActive && (
                                       <div className="absolute top-2.5 right-2.5 size-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_hsl(var(--primary)/0.6)]">
-                                        <svg className="size-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                                        <svg
+                                          className="size-2.5 text-primary-foreground"
+                                          viewBox="0 0 12 12"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={2.5}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        >
                                           <path d="M2 6l3 3 5-5" />
                                         </svg>
                                       </div>
@@ -3588,7 +3931,10 @@ function SettingsRouteView() {
                                       {/* sansText2 — back to heavy UI font */}
                                       {combo.sansText2 && (
                                         <span
-                                          className={cn("text-[28px] leading-none", combo.sansClass)}
+                                          className={cn(
+                                            "text-[28px] leading-none",
+                                            combo.sansClass,
+                                          )}
                                           style={{
                                             fontFamily: combo.uiFont,
                                             color: "inherit",
@@ -3654,7 +4000,8 @@ function SettingsRouteView() {
                                     <Select
                                       value={fontPreferences.uiFont}
                                       onValueChange={(val) =>
-                                        val && setFontPreferences((prev) => ({ ...prev, uiFont: val }))
+                                        val &&
+                                        setFontPreferences((prev) => ({ ...prev, uiFont: val }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
@@ -3662,7 +4009,11 @@ function SettingsRouteView() {
                                       </SelectTrigger>
                                       <SelectPopup align="start">
                                         {UI_FONT_OPTIONS.map((f) => (
-                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                          <SelectItem
+                                            key={f.value}
+                                            value={f.value}
+                                            className="text-xs"
+                                          >
                                             {f.label}
                                           </SelectItem>
                                         ))}
@@ -3681,7 +4032,11 @@ function SettingsRouteView() {
                                     <Select
                                       value={fontPreferences.headingFont}
                                       onValueChange={(val) =>
-                                        val && setFontPreferences((prev) => ({ ...prev, headingFont: val }))
+                                        val &&
+                                        setFontPreferences((prev) => ({
+                                          ...prev,
+                                          headingFont: val,
+                                        }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
@@ -3689,7 +4044,11 @@ function SettingsRouteView() {
                                       </SelectTrigger>
                                       <SelectPopup align="start">
                                         {HEADING_FONT_OPTIONS.map((f) => (
-                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                          <SelectItem
+                                            key={f.value}
+                                            value={f.value}
+                                            className="text-xs"
+                                          >
                                             {f.label}
                                           </SelectItem>
                                         ))}
@@ -3708,7 +4067,8 @@ function SettingsRouteView() {
                                     <Select
                                       value={fontPreferences.editorFont}
                                       onValueChange={(val) =>
-                                        val && setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                                        val &&
+                                        setFontPreferences((prev) => ({ ...prev, editorFont: val }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
@@ -3716,7 +4076,11 @@ function SettingsRouteView() {
                                       </SelectTrigger>
                                       <SelectPopup align="start">
                                         {EDITOR_FONT_OPTIONS.map((f) => (
-                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                          <SelectItem
+                                            key={f.value}
+                                            value={f.value}
+                                            className="text-xs"
+                                          >
                                             {f.label}
                                           </SelectItem>
                                         ))}
@@ -3732,14 +4096,19 @@ function SettingsRouteView() {
                               <div className="border-t border-border/60 px-4 py-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                   <div className="min-w-0 flex-1">
-                                    <h4 className="text-sm font-medium text-foreground">Editor Font</h4>
-                                    <p className="text-xs text-muted-foreground mt-0.5">Monospace font for code, terminals, and diff views.</p>
+                                    <h4 className="text-sm font-medium text-foreground">
+                                      Editor Font
+                                    </h4>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      Monospace font for code, terminals, and diff views.
+                                    </p>
                                   </div>
                                   <div className="shrink-0 w-full sm:w-52">
                                     <Select
                                       value={fontPreferences.editorFont}
                                       onValueChange={(val) =>
-                                        val && setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                                        val &&
+                                        setFontPreferences((prev) => ({ ...prev, editorFont: val }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
@@ -3747,7 +4116,11 @@ function SettingsRouteView() {
                                       </SelectTrigger>
                                       <SelectPopup align="end">
                                         {EDITOR_FONT_OPTIONS.map((f) => (
-                                          <SelectItem key={f.value} value={f.value} className="text-xs">
+                                          <SelectItem
+                                            key={f.value}
+                                            value={f.value}
+                                            className="text-xs"
+                                          >
                                             {f.label}
                                           </SelectItem>
                                         ))}
@@ -3775,9 +4148,11 @@ function SettingsRouteView() {
                             <div className="flex-1 flex items-center justify-center">
                               <ToolbarPreview styleId={settings.toolbarStyle} />
                             </div>
-                            
+
                             {(() => {
-                              const activeStyle = TOOLBAR_STYLES.find((s) => s.id === settings.toolbarStyle) ?? TOOLBAR_STYLES[0];
+                              const activeStyle =
+                                TOOLBAR_STYLES.find((s) => s.id === settings.toolbarStyle) ??
+                                TOOLBAR_STYLES[0];
                               return (
                                 <div className="flex flex-col items-center text-center animate-in fade-in slide-in-from-bottom-2 duration-500">
                                   <div className="flex items-center gap-2 mb-1.5">
@@ -3810,7 +4185,7 @@ function SettingsRouteView() {
                                   "group relative flex flex-col items-start p-4 rounded-xl border transition-all duration-300 text-left overflow-hidden",
                                   isSelected
                                     ? "bg-card border-foreground/30 shadow-xs"
-                                    : "bg-transparent border-border/40 hover:bg-card/50 hover:border-border/80"
+                                    : "bg-transparent border-border/40 hover:bg-card/50 hover:border-border/80",
                                 )}
                               >
                                 <div className="relative flex items-center justify-between w-full mb-1.5">
@@ -3853,7 +4228,10 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn(
+                              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                              activeFontCombo.sansClass,
+                            )}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             Animations
@@ -3886,591 +4264,711 @@ function SettingsRouteView() {
                           </Button>
                         </SettingsHeaderPortal>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     <SettingsSection title="Animation Controls">
-                    <div className="flex flex-col gap-10">
-                      {/* ANIMATION CONTROLS (Toggled) */}
-                      <div className="flex flex-col gap-5">
-                        <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex items-center justify-between">
-                          {activeFontCombo.isNeutral ? (
-                            <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                              {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
-                            </h2>
-                          ) : (
-                            <h2
-                              className={cn("text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
-                              style={{ fontFamily: "var(--font-display)" }}
-                            >
-                              {animationTab === "startup" ? "Startup Animation" : "Close Animation"}
-                            </h2>
-                          )}
-                          <div className="flex bg-muted p-1 rounded-lg gap-1">
-                            <button
-                              onClick={() => setAnimationTab("startup")}
-                              className={cn(
-                                "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
-                                animationTab === "startup"
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                              )}
-                            >
-                              Startup
-                            </button>
-                            <button
-                              onClick={() => setAnimationTab("close")}
-                              className={cn(
-                                "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
-                                animationTab === "close"
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                              )}
-                            >
-                              Close
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Live Preview Container */}
-                        <div className="px-4 sm:px-5">
-                          <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
-                            <div
-                              className={cn(
-                                "aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300",
-                                activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white",
-                              )}
-                            >
-                              {/* Wrap in fixed 1280x720 scaled to 50% */}
-                              <div
-                                className="absolute"
-                                style={{
-                                  width: "1280px",
-                                  height: "720px",
-                                  transform: "scale(0.5)",
-                                }}
-                              >
-                                {animationTab === "startup" ? (
-                                  <SplashScreen
-                                    key={startupReplayKey}
-                                    loader={activeStyle}
-                                    palette={activePalette}
-                                    theme={activeTheme}
-                                  />
-                                ) : (
-                                  <CloseScreen
-                                    key={closeReplayKey}
-                                    loader={activeStyle}
-                                    palette={activePalette}
-                                    theme={activeTheme}
-                                    phase="closing"
-                                    onIntroEnd={() => {}}
-                                  />
+                      <div className="flex flex-col gap-10">
+                        {/* ANIMATION CONTROLS (Toggled) */}
+                        <div className="flex flex-col gap-5">
+                          <div className="px-4 sm:px-5 pt-4 sm:pt-5 flex items-center justify-between">
+                            {activeFontCombo.isNeutral ? (
+                              <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                {animationTab === "startup"
+                                  ? "Startup Animation"
+                                  : "Close Animation"}
+                              </h2>
+                            ) : (
+                              <h2
+                                className={cn(
+                                  "text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3",
+                                  activeFontCombo.serifClass,
                                 )}
-                              </div>
-                            </div>
-                            <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground mr-2">
-                                  Preview Theme:
-                                </span>
-                                <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
-                                  {["system", "dark", "light"].map((t) => (
-                                    <button
-                                      key={t}
-                                      onClick={() => setActiveTheme(t as any)}
-                                      className={cn(
-                                        "px-3 py-1 text-xs font-medium rounded transition-colors capitalize",
-                                        activeTheme === t
-                                          ? "bg-background text-foreground shadow-sm"
-                                          : "text-muted-foreground hover:text-foreground",
-                                      )}
-                                    >
-                                      {t === "system" ? "Auto" : t}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs"
-                                onClick={() => {
-                                  updateSettings({
-                                    splashLoaderStyle: previewStyle,
-                                    splashLoaderPalette: previewPalette,
-                                    splashLoaderTheme: previewTheme,
-                                    closeLoaderStyle: closePreviewStyle,
-                                    closeLoaderPalette: closePreviewPalette,
-                                    closeLoaderTheme: closePreviewTheme,
-                                  });
-                                  if (animationTab === "startup") {
-                                    setStartupReplayKey((k) => k + 1);
-                                    setFullscreenStartupPreview(true);
-                                  } else {
-                                    setCloseReplayKey((k) => k + 1);
-                                    setFullscreenClosePreview(true);
-                                  }
-                                }}
+                                style={{ fontFamily: "var(--font-display)" }}
                               >
-                                <MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen
-                              </Button>
+                                {animationTab === "startup"
+                                  ? "Startup Animation"
+                                  : "Close Animation"}
+                              </h2>
+                            )}
+                            <div className="flex bg-muted p-1 rounded-lg gap-1">
+                              <button
+                                onClick={() => setAnimationTab("startup")}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  animationTab === "startup"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                )}
+                              >
+                                Startup
+                              </button>
+                              <button
+                                onClick={() => setAnimationTab("close")}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
+                                  animationTab === "close"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                )}
+                              >
+                                Close
+                              </button>
                             </div>
                           </div>
-                        </div>
 
-                        <SettingsRow
-                          title="Style"
-                          description={`Choose the visual aesthetic for the ${animationTab} animation.`}
-                          control={
-                            <div className="flex bg-muted p-1 rounded-lg gap-1">
-                              {[
-                                { value: "glass", label: "Molten Glass" },
-                                { value: "solari", label: "Solari Grid" },
-                              ].map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => setActiveStyle(option.value as any)}
-                                  className={cn(
-                                    "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
-                                    activeStyle === option.value
-                                      ? "bg-background text-foreground shadow-sm"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          }
-                        />
-
-                        <SettingsRow
-                          title="Color palette"
-                          description={`Choose the color palette for the ${animationTab} animation.`}
-                          control={
-                            <div className="flex bg-muted p-1 rounded-lg gap-1">
-                              {[
-                                { value: "block", label: "Solid Block" },
-                                { value: "mono", label: "Monochrome" },
-                              ].map((option) => (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => setActivePalette(option.value as any)}
-                                  className={cn(
-                                    "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
-                                    activePalette === option.value
-                                      ? "bg-background text-foreground shadow-sm"
-                                      : "text-muted-foreground hover:text-foreground hover:bg-background/50",
-                                  )}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          }
-                        />
-
-                        {/* ── Animation Font Combos ── */}
-                        <div className="pt-2">
-                          <div className="px-4 py-2 border-t border-border/40">
-                            <h4 className="text-sm font-semibold text-foreground">Animation Typography & Font</h4>
-                            <p className="text-xs text-muted-foreground">
-                              Select a dedicated font combo for startup and close loader animations.
-                            </p>
-                          </div>
-
-                          {/* Default Pills */}
-                          <div className="px-4 py-2 flex items-center gap-2 flex-wrap bg-muted/20">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mr-1">Defaults</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveFontComboId("app-default");
-                              }}
-                              className={cn(
-                                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
-                                activeFontComboId === "app-default"
-                                  ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
-                                  : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
-                              )}
-                            >
-                              {activeFontComboId === "app-default" && (
-                                <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M2 6l3 3 5-5" />
-                                </svg>
-                              )}
-                              App Theme Font
-                              <span className="text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border border-primary/30 text-primary/70 bg-primary/5">
-                                DEFAULT
-                              </span>
-                            </button>
-
-                            {FONT_COMBOS.filter((c) => c.isNeutral).map((combo) => {
-                              const isActive = activeFontComboId === combo.id;
-                              return (
-                                <button
-                                  key={combo.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveFontComboId(combo.id);
+                          {/* Live Preview Container */}
+                          <div className="px-4 sm:px-5">
+                            <div className="relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-border shadow-sm">
+                              <div
+                                className={cn(
+                                  "aspect-video w-full relative overflow-hidden flex items-center justify-center transition-colors duration-300",
+                                  activeEffectiveTheme === "dark" ? "bg-[#09090b]" : "bg-white",
+                                )}
+                              >
+                                {/* Wrap in fixed 1280x720 scaled to 50% */}
+                                <div
+                                  className="absolute"
+                                  style={{
+                                    width: "1280px",
+                                    height: "720px",
+                                    transform: "scale(0.5)",
                                   }}
-                                  className={cn(
-                                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
-                                    isActive
-                                      ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
-                                      : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
-                                  )}
-                                  style={{ fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined }}
                                 >
-                                  {isActive && (
-                                    <svg className="size-2.5 shrink-0" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                                      <path d="M2 6l3 3 5-5" />
-                                    </svg>
+                                  {animationTab === "startup" ? (
+                                    <SplashScreen
+                                      key={startupReplayKey}
+                                      loader={activeStyle}
+                                      palette={activePalette}
+                                      theme={activeTheme}
+                                    />
+                                  ) : (
+                                    <CloseScreen
+                                      key={closeReplayKey}
+                                      loader={activeStyle}
+                                      palette={activePalette}
+                                      theme={activeTheme}
+                                      phase="closing"
+                                      onIntroEnd={() => {}}
+                                    />
                                   )}
-                                  {combo.name}
-                                  <span className={cn(
-                                    "text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border",
-                                    isActive ? "border-primary/30 text-primary/70 bg-primary/5" : "border-border/50 text-muted-foreground/50",
-                                  )}>
-                                    {combo.tag}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {/* Custom Pick Config UI Panel */}
-                          {activeFontComboId === "custom" && (
-                            <div className="px-4 py-3.5 bg-muted/30 border-y border-border/60 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <h5 className="text-xs font-semibold text-foreground">Custom Animation Display Font</h5>
-                                  <p className="text-[10px] text-muted-foreground">Select a custom typography font for startup and close loader animations.</p>
                                 </div>
-                                <span className="text-[9px] font-bold tracking-widest px-2 py-0.5 rounded border border-primary/30 text-primary bg-primary/5 uppercase">
-                                  CUSTOM
-                                </span>
                               </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-3">
-                                  <label className="text-xs font-semibold text-foreground block">
-                                    Animation Display Font
-                                  </label>
-                                  <p className="text-[10px] text-muted-foreground line-clamp-1">
-                                    Main title, Solari cards & status messages
-                                  </p>
-                                  <Select
-                                    value={activeCustomFont}
-                                    onValueChange={(val) => {
-                                      if (!val) return;
-                                      setActiveCustomFont(val);
-                                    }}
-                                  >
-                                    <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
-                                      <SelectValue placeholder="Select Display Font" />
-                                    </SelectTrigger>
-                                    <SelectPopup align="start">
-                                      {UI_FONT_OPTIONS.map((f) => (
-                                        <SelectItem key={f.value} value={f.value} className="text-xs">
-                                          {f.label}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectPopup>
-                                  </Select>
-                                </div>
-
-                                <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-3">
-                                  <label className="text-xs font-semibold text-foreground block">
-                                    Quick Display Picks
-                                  </label>
-                                  <p className="text-[10px] text-muted-foreground line-clamp-1">
-                                    One-click font presets for splash loader
-                                  </p>
-                                  <div className="flex flex-wrap gap-1 pt-0.5">
-                                    {[
-                                      { name: "Syne", font: "'Syne', sans-serif" },
-                                      { name: "Unbounded", font: "'Unbounded', sans-serif" },
-                                      { name: "Outfit", font: "'Outfit', sans-serif" },
-                                      { name: "Space Grotesk", font: "'Space Grotesk', sans-serif" },
-                                      { name: "JetBrains Mono", font: "'JetBrains Mono', monospace" },
-                                    ].map((preset) => (
+                              <div className="bg-muted px-4 py-3 flex items-center justify-between border-t border-border">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-muted-foreground mr-2">
+                                    Preview Theme:
+                                  </span>
+                                  <div className="flex bg-background/80 rounded-md p-1 gap-0.5 shadow-inner border border-black/5 dark:border-white/5">
+                                    {["system", "dark", "light"].map((t) => (
                                       <button
-                                        key={preset.name}
-                                        type="button"
-                                        onClick={() => {
-                                          setActiveCustomFont(preset.font);
-                                        }}
+                                        key={t}
+                                        onClick={() => setActiveTheme(t as any)}
                                         className={cn(
-                                          "px-2 py-1 text-[10px] font-semibold rounded border transition-all cursor-pointer",
-                                          activeCustomFont === preset.font
-                                            ? "border-primary bg-primary text-primary-foreground shadow-xs"
-                                            : "border-border/60 bg-background text-muted-foreground hover:text-foreground hover:border-border",
+                                          "px-3 py-1 text-xs font-medium rounded transition-colors capitalize",
+                                          activeTheme === t
+                                            ? "bg-background text-foreground shadow-sm"
+                                            : "text-muted-foreground hover:text-foreground",
                                         )}
-                                        style={{ fontFamily: preset.font }}
                                       >
-                                        {preset.name}
+                                        {t === "system" ? "Auto" : t}
                                       </button>
                                     ))}
                                   </div>
                                 </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => {
+                                    updateSettings({
+                                      splashLoaderStyle: previewStyle,
+                                      splashLoaderPalette: previewPalette,
+                                      splashLoaderTheme: previewTheme,
+                                      closeLoaderStyle: closePreviewStyle,
+                                      closeLoaderPalette: closePreviewPalette,
+                                      closeLoaderTheme: closePreviewTheme,
+                                    });
+                                    if (animationTab === "startup") {
+                                      setStartupReplayKey((k) => k + 1);
+                                      setFullscreenStartupPreview(true);
+                                    } else {
+                                      setCloseReplayKey((k) => k + 1);
+                                      setFullscreenClosePreview(true);
+                                    }
+                                  }}
+                                >
+                                  <MonitorPlayIcon className="mr-1.5 size-3" /> Preview Fullscreen
+                                </Button>
                               </div>
                             </div>
-                          )}
+                          </div>
 
-                          {/* 10 Personality Specimen Cards */}
-                          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 border-t border-border/40">
-                            {FONT_COMBOS.filter((c) => !c.isNeutral).map((combo) => {
-                              const isActive = activeFontComboId === combo.id;
-                              return (
-                                <button
-                                  key={combo.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveFontComboId(combo.id);
-                                  }}
-                                  className={cn(
-                                    "group relative flex flex-col items-start rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer overflow-hidden",
-                                    isActive
-                                      ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3),0_4px_20px_hsl(var(--primary)/0.15)]"
-                                      : "border-border/70 bg-card hover:border-border hover:shadow-md hover:scale-[1.02]",
-                                  )}
-                                >
-                                  {isActive && (
-                                    <div className="absolute top-2.5 right-2.5 size-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_hsl(var(--primary)/0.6)]">
-                                      <svg className="size-2.5 text-primary-foreground" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                          <SettingsRow
+                            title="Style"
+                            description={`Choose the visual aesthetic for the ${animationTab} animation.`}
+                            control={
+                              <div className="flex bg-muted p-1 rounded-lg gap-1">
+                                {[
+                                  { value: "glass", label: "Molten Glass" },
+                                  { value: "solari", label: "Solari Grid" },
+                                ].map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setActiveStyle(option.value as any)}
+                                    className={cn(
+                                      "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
+                                      activeStyle === option.value
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                    )}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            }
+                          />
+
+                          <SettingsRow
+                            title="Color palette"
+                            description={`Choose the color palette for the ${animationTab} animation.`}
+                            control={
+                              <div className="flex bg-muted p-1 rounded-lg gap-1">
+                                {[
+                                  { value: "block", label: "Solid Block" },
+                                  { value: "mono", label: "Monochrome" },
+                                ].map((option) => (
+                                  <button
+                                    key={option.value}
+                                    type="button"
+                                    onClick={() => setActivePalette(option.value as any)}
+                                    className={cn(
+                                      "px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap",
+                                      activePalette === option.value
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-background/50",
+                                    )}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            }
+                          />
+
+                          {/* ── Animation Font Combos ── */}
+                          <div className="pt-2">
+                            <div className="px-4 py-2 border-t border-border/40">
+                              <h4 className="text-sm font-semibold text-foreground">
+                                Animation Typography & Font
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                Select a dedicated font combo for startup and close loader
+                                animations.
+                              </p>
+                            </div>
+
+                            {/* Default Pills */}
+                            <div className="px-4 py-2 flex items-center gap-2 flex-wrap bg-muted/20">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mr-1">
+                                Defaults
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveFontComboId("app-default");
+                                }}
+                                className={cn(
+                                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
+                                  activeFontComboId === "app-default"
+                                    ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
+                                    : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                                )}
+                              >
+                                {activeFontComboId === "app-default" && (
+                                  <svg
+                                    className="size-2.5 shrink-0"
+                                    viewBox="0 0 12 12"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2.5}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <path d="M2 6l3 3 5-5" />
+                                  </svg>
+                                )}
+                                App Theme Font
+                                <span className="text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border border-primary/30 text-primary/70 bg-primary/5">
+                                  DEFAULT
+                                </span>
+                              </button>
+
+                              {FONT_COMBOS.filter((c) => c.isNeutral).map((combo) => {
+                                const isActive = activeFontComboId === combo.id;
+                                return (
+                                  <button
+                                    key={combo.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveFontComboId(combo.id);
+                                    }}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-all duration-200 cursor-pointer",
+                                      isActive
+                                        ? "border-primary bg-primary/10 text-primary shadow-[0_0_10px_hsl(var(--primary)/0.2)]"
+                                        : "border-border/70 bg-card text-muted-foreground hover:border-border hover:text-foreground",
+                                    )}
+                                    style={{
+                                      fontFamily:
+                                        combo.uiFont !== "custom" ? combo.uiFont : undefined,
+                                    }}
+                                  >
+                                    {isActive && (
+                                      <svg
+                                        className="size-2.5 shrink-0"
+                                        viewBox="0 0 12 12"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={2.5}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
                                         <path d="M2 6l3 3 5-5" />
                                       </svg>
-                                    </div>
-                                  )}
-
-                                  <div className="mb-3 leading-none">
+                                    )}
+                                    {combo.name}
                                     <span
-                                      className={cn("text-[26px] leading-none", combo.sansClass)}
-                                      style={{
-                                        fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined,
-                                      }}
+                                      className={cn(
+                                        "text-[8px] font-bold tracking-widest px-1 py-0.5 rounded border",
+                                        isActive
+                                          ? "border-primary/30 text-primary/70 bg-primary/5"
+                                          : "border-border/50 text-muted-foreground/50",
+                                      )}
                                     >
-                                      {combo.sansText}
-                                    </span>
-                                    <span
-                                      className={cn("text-[26px] leading-none", combo.serifClass)}
-                                      style={{
-                                        fontFamily: combo.headingFont !== "custom" ? combo.headingFont : undefined,
-                                      }}
-                                    >
-                                      {combo.serifText}
-                                    </span>
-                                    {"sansText2" in combo && combo.sansText2 ? (
-                                      <span
-                                        className={cn("text-[26px] leading-none block", combo.sansClass)}
-                                        style={{
-                                          fontFamily: combo.uiFont !== "custom" ? combo.uiFont : undefined,
-                                        }}
-                                      >
-                                        {combo.sansText2}
-                                      </span>
-                                    ) : null}
-                                  </div>
-
-                                  <div className="mt-auto w-full pt-1 border-t border-border/30 flex items-center justify-between">
-                                    <div>
-                                      <div className={cn("text-xs font-bold leading-tight", isActive ? "text-primary" : "text-foreground")}>
-                                        {combo.name}
-                                      </div>
-                                      <div className="text-[10px] text-muted-foreground/70 leading-tight">
-                                        {combo.desc}
-                                      </div>
-                                    </div>
-                                    <span className={cn(
-                                      "text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ml-1",
-                                      isActive ? "border-primary/40 bg-primary/10 text-primary" : "border-border/60 bg-muted/40 text-muted-foreground",
-                                    )}>
                                       {combo.tag}
                                     </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Custom Pick Config UI Panel */}
+                            {activeFontComboId === "custom" && (
+                              <div className="px-4 py-3.5 bg-muted/30 border-y border-border/60 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <h5 className="text-xs font-semibold text-foreground">
+                                      Custom Animation Display Font
+                                    </h5>
+                                    <p className="text-[10px] text-muted-foreground">
+                                      Select a custom typography font for startup and close loader
+                                      animations.
+                                    </p>
                                   </div>
-                                </button>
-                              );
-                            })}
+                                  <span className="text-[9px] font-bold tracking-widest px-2 py-0.5 rounded border border-primary/30 text-primary bg-primary/5 uppercase">
+                                    CUSTOM
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-3">
+                                    <label className="text-xs font-semibold text-foreground block">
+                                      Animation Display Font
+                                    </label>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                      Main title, Solari cards & status messages
+                                    </p>
+                                    <Select
+                                      value={activeCustomFont}
+                                      onValueChange={(val) => {
+                                        if (!val) return;
+                                        setActiveCustomFont(val);
+                                      }}
+                                    >
+                                      <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
+                                        <SelectValue placeholder="Select Display Font" />
+                                      </SelectTrigger>
+                                      <SelectPopup align="start">
+                                        {UI_FONT_OPTIONS.map((f) => (
+                                          <SelectItem
+                                            key={f.value}
+                                            value={f.value}
+                                            className="text-xs"
+                                          >
+                                            {f.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectPopup>
+                                    </Select>
+                                  </div>
+
+                                  <div className="space-y-1.5 rounded-lg border border-border/60 bg-card p-3">
+                                    <label className="text-xs font-semibold text-foreground block">
+                                      Quick Display Picks
+                                    </label>
+                                    <p className="text-[10px] text-muted-foreground line-clamp-1">
+                                      One-click font presets for splash loader
+                                    </p>
+                                    <div className="flex flex-wrap gap-1 pt-0.5">
+                                      {[
+                                        { name: "Syne", font: "'Syne', sans-serif" },
+                                        { name: "Unbounded", font: "'Unbounded', sans-serif" },
+                                        { name: "Outfit", font: "'Outfit', sans-serif" },
+                                        {
+                                          name: "Space Grotesk",
+                                          font: "'Space Grotesk', sans-serif",
+                                        },
+                                        {
+                                          name: "JetBrains Mono",
+                                          font: "'JetBrains Mono', monospace",
+                                        },
+                                      ].map((preset) => (
+                                        <button
+                                          key={preset.name}
+                                          type="button"
+                                          onClick={() => {
+                                            setActiveCustomFont(preset.font);
+                                          }}
+                                          className={cn(
+                                            "px-2 py-1 text-[10px] font-semibold rounded border transition-all cursor-pointer",
+                                            activeCustomFont === preset.font
+                                              ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                                              : "border-border/60 bg-background text-muted-foreground hover:text-foreground hover:border-border",
+                                          )}
+                                          style={{ fontFamily: preset.font }}
+                                        >
+                                          {preset.name}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 10 Personality Specimen Cards */}
+                            <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 border-t border-border/40">
+                              {FONT_COMBOS.filter((c) => !c.isNeutral).map((combo) => {
+                                const isActive = activeFontComboId === combo.id;
+                                return (
+                                  <button
+                                    key={combo.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveFontComboId(combo.id);
+                                    }}
+                                    className={cn(
+                                      "group relative flex flex-col items-start rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer overflow-hidden",
+                                      isActive
+                                        ? "border-primary bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.3),0_4px_20px_hsl(var(--primary)/0.15)]"
+                                        : "border-border/70 bg-card hover:border-border hover:shadow-md hover:scale-[1.02]",
+                                    )}
+                                  >
+                                    {isActive && (
+                                      <div className="absolute top-2.5 right-2.5 size-4 rounded-full bg-primary flex items-center justify-center shadow-[0_0_8px_hsl(var(--primary)/0.6)]">
+                                        <svg
+                                          className="size-2.5 text-primary-foreground"
+                                          viewBox="0 0 12 12"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth={2.5}
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        >
+                                          <path d="M2 6l3 3 5-5" />
+                                        </svg>
+                                      </div>
+                                    )}
+
+                                    <div className="mb-3 leading-none">
+                                      <span
+                                        className={cn("text-[26px] leading-none", combo.sansClass)}
+                                        style={{
+                                          fontFamily:
+                                            combo.uiFont !== "custom" ? combo.uiFont : undefined,
+                                        }}
+                                      >
+                                        {combo.sansText}
+                                      </span>
+                                      <span
+                                        className={cn("text-[26px] leading-none", combo.serifClass)}
+                                        style={{
+                                          fontFamily:
+                                            combo.headingFont !== "custom"
+                                              ? combo.headingFont
+                                              : undefined,
+                                        }}
+                                      >
+                                        {combo.serifText}
+                                      </span>
+                                      {"sansText2" in combo && combo.sansText2 ? (
+                                        <span
+                                          className={cn(
+                                            "text-[26px] leading-none block",
+                                            combo.sansClass,
+                                          )}
+                                          style={{
+                                            fontFamily:
+                                              combo.uiFont !== "custom" ? combo.uiFont : undefined,
+                                          }}
+                                        >
+                                          {combo.sansText2}
+                                        </span>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="mt-auto w-full pt-1 border-t border-border/30 flex items-center justify-between">
+                                      <div>
+                                        <div
+                                          className={cn(
+                                            "text-xs font-bold leading-tight",
+                                            isActive ? "text-primary" : "text-foreground",
+                                          )}
+                                        >
+                                          {combo.name}
+                                        </div>
+                                        <div className="text-[10px] text-muted-foreground/70 leading-tight">
+                                          {combo.desc}
+                                        </div>
+                                      </div>
+                                      <span
+                                        className={cn(
+                                          "text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ml-1",
+                                          isActive
+                                            ? "border-primary/40 bg-primary/10 text-primary"
+                                            : "border-border/60 bg-muted/40 text-muted-foreground",
+                                        )}
+                                      >
+                                        {combo.tag}
+                                      </span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {(previewStyle !== settings.splashLoaderStyle ||
-                        previewPalette !== settings.splashLoaderPalette ||
-                        previewTheme !== settings.splashLoaderTheme ||
-                        closePreviewStyle !== settings.closeLoaderStyle ||
-                        closePreviewPalette !== settings.closeLoaderPalette ||
-                        closePreviewTheme !== settings.closeLoaderTheme ||
-                        previewStartupAnimationFontComboId !== savedStartupAnimationFontComboId ||
-                        (previewStartupAnimationFontComboId === "custom" &&
-                          previewStartupCustomAnimationFont !== savedStartupCustomAnimationFont) ||
-                        previewCloseAnimationFontComboId !== savedCloseAnimationFontComboId ||
-                        (previewCloseAnimationFontComboId === "custom" &&
-                          previewCloseCustomAnimationFont !== savedCloseCustomAnimationFont)) && (
-                        <div className="flex justify-end p-4 sm:p-5 border-t border-border">
-                          <Button
-                            onClick={() => {
-                              updateSettings({
-                                splashLoaderStyle: previewStyle,
-                                splashLoaderPalette: previewPalette,
-                                splashLoaderTheme: previewTheme,
-                                closeLoaderStyle: closePreviewStyle,
-                                closeLoaderPalette: closePreviewPalette,
-                                closeLoaderTheme: closePreviewTheme,
-                              });
-                              try {
-                                window.localStorage?.setItem("tabs.startupAnimationFontComboId", previewStartupAnimationFontComboId);
-                                window.localStorage?.setItem("tabs.startupCustomAnimationFont", previewStartupCustomAnimationFont);
-                                window.localStorage?.setItem("tabs.closeAnimationFontComboId", previewCloseAnimationFontComboId);
-                                window.localStorage?.setItem("tabs.closeCustomAnimationFont", previewCloseCustomAnimationFont);
-                                window.localStorage?.setItem("tabs.animationFontComboId", previewStartupAnimationFontComboId);
-                                window.localStorage?.setItem("tabs.customAnimationFont", previewStartupCustomAnimationFont);
-                              } catch {}
-                              setSavedStartupAnimationFontComboId(previewStartupAnimationFontComboId);
-                              setSavedStartupCustomAnimationFont(previewStartupCustomAnimationFont);
-                              setSavedCloseAnimationFontComboId(previewCloseAnimationFontComboId);
-                              setSavedCloseCustomAnimationFont(previewCloseCustomAnimationFont);
-                              toastManager.add({
-                                type: "success",
-                                title: "Settings Saved",
-                                description: "Animation settings and font preferences updated.",
-                              });
-                            }}
-                            className="gap-2"
-                          >
-                            <SaveIcon className="size-4" />
-                            Save Settings
-                          </Button>
-                        </div>
-                      )}
-
-                      {/* INTERFACE GROUP */}
-                      <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
-                        {activeFontCombo.isNeutral ? (
-                          <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                            Interface
-                          </h2>
-                        ) : (
-                          <h2
-                            className={cn("px-4 sm:px-5 text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
-                            style={{ fontFamily: "var(--font-display)" }}
-                          >
-                            Interface
-                          </h2>
-                        )}
-                        <SettingsRow
-                          title="Slider animations"
-                          description="Smoothly animate the model picker's reasoning-effort slider."
-                          resetAction={
-                            settings.sliderAnimationsEnabled !==
-                            DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
-                              <SettingResetButton
-                                label="slider animations"
-                                onClick={() =>
-                                  updateSettings({
-                                    sliderAnimationsEnabled:
-                                      DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <Switch
-                              checked={settings.sliderAnimationsEnabled}
-                              onCheckedChange={(checked) =>
+                        {(previewStyle !== settings.splashLoaderStyle ||
+                          previewPalette !== settings.splashLoaderPalette ||
+                          previewTheme !== settings.splashLoaderTheme ||
+                          closePreviewStyle !== settings.closeLoaderStyle ||
+                          closePreviewPalette !== settings.closeLoaderPalette ||
+                          closePreviewTheme !== settings.closeLoaderTheme ||
+                          previewStartupAnimationFontComboId !== savedStartupAnimationFontComboId ||
+                          (previewStartupAnimationFontComboId === "custom" &&
+                            previewStartupCustomAnimationFont !==
+                              savedStartupCustomAnimationFont) ||
+                          previewCloseAnimationFontComboId !== savedCloseAnimationFontComboId ||
+                          (previewCloseAnimationFontComboId === "custom" &&
+                            previewCloseCustomAnimationFont !== savedCloseCustomAnimationFont)) && (
+                          <div className="flex justify-end p-4 sm:p-5 border-t border-border">
+                            <Button
+                              onClick={() => {
                                 updateSettings({
-                                  sliderAnimationsEnabled: Boolean(checked),
-                                })
-                              }
-                              aria-label="Slider animations"
-                            />
-                          }
-                        />
-
-                        <SettingsRow
-                          title="Animated slider fill"
-                          description="Smoothly animate the fill color of sliders when value changes."
-                          resetAction={
-                            settings.animatedTrackFillEnabled !==
-                            DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
-                              <SettingResetButton
-                                label="animated slider fill"
-                                onClick={() =>
-                                  updateSettings({
-                                    animatedTrackFillEnabled:
-                                      DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <Switch
-                              checked={settings.animatedTrackFillEnabled}
-                              onCheckedChange={(checked) =>
-                                updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
-                              }
-                              aria-label="Animated slider fill"
-                            />
-                          }
-                        />
-
-                        <SettingsRow
-                          title="Nyan Cat slider"
-                          description="Always use the Nyan Cat animated rainbow slider across all models."
-                          resetAction={
-                            settings.nyanCatSliderMode !==
-                            DEFAULT_UNIFIED_SETTINGS.nyanCatSliderMode ? (
-                              <SettingResetButton
-                                label="Nyan Cat slider"
-                                onClick={() =>
-                                  updateSettings({
-                                    nyanCatSliderMode:
-                                      DEFAULT_UNIFIED_SETTINGS.nyanCatSliderMode,
-                                  })
-                                }
-                              />
-                            ) : null
-                          }
-                          control={
-                            <Switch
-                              checked={settings.nyanCatSliderMode}
-                              onCheckedChange={(checked) =>
-                                updateSettings({ nyanCatSliderMode: Boolean(checked) })
-                              }
-                              aria-label="Nyan Cat slider"
-                            />
-                          }
-                        />
-
-                        <SettingsRow
-                          title="Always show Git loading animation"
-                          description="Play Mercury Chrome loading animation every time Git tab is selected. When disabled, animation plays once on initial load and subsequent tab switches load instantly."
-                          control={
-                            <Switch
-                              checked={alwaysAnimateGitLoader}
-                              onCheckedChange={(checked) => {
-                                const val = Boolean(checked);
-                                setAlwaysAnimateGitLoader(val);
+                                  splashLoaderStyle: previewStyle,
+                                  splashLoaderPalette: previewPalette,
+                                  splashLoaderTheme: previewTheme,
+                                  closeLoaderStyle: closePreviewStyle,
+                                  closeLoaderPalette: closePreviewPalette,
+                                  closeLoaderTheme: closePreviewTheme,
+                                });
                                 try {
-                                  window.localStorage?.setItem("tabs.alwaysAnimateGitLoader", String(val));
+                                  window.localStorage?.setItem(
+                                    "tabs.startupAnimationFontComboId",
+                                    previewStartupAnimationFontComboId,
+                                  );
+                                  window.localStorage?.setItem(
+                                    "tabs.startupCustomAnimationFont",
+                                    previewStartupCustomAnimationFont,
+                                  );
+                                  window.localStorage?.setItem(
+                                    "tabs.closeAnimationFontComboId",
+                                    previewCloseAnimationFontComboId,
+                                  );
+                                  window.localStorage?.setItem(
+                                    "tabs.closeCustomAnimationFont",
+                                    previewCloseCustomAnimationFont,
+                                  );
+                                  window.localStorage?.setItem(
+                                    "tabs.animationFontComboId",
+                                    previewStartupAnimationFontComboId,
+                                  );
+                                  window.localStorage?.setItem(
+                                    "tabs.customAnimationFont",
+                                    previewStartupCustomAnimationFont,
+                                  );
                                 } catch {}
+                                setSavedStartupAnimationFontComboId(
+                                  previewStartupAnimationFontComboId,
+                                );
+                                setSavedStartupCustomAnimationFont(
+                                  previewStartupCustomAnimationFont,
+                                );
+                                setSavedCloseAnimationFontComboId(previewCloseAnimationFontComboId);
+                                setSavedCloseCustomAnimationFont(previewCloseCustomAnimationFont);
+                                toastManager.add({
+                                  type: "success",
+                                  title: "Settings Saved",
+                                  description: "Animation settings and font preferences updated.",
+                                });
                               }}
-                              aria-label="Always show Git loading animation"
-                            />
-                          }
-                        />
+                              className="gap-2"
+                            >
+                              <SaveIcon className="size-4" />
+                              Save Settings
+                            </Button>
+                          </div>
+                        )}
+
+                        {/* INTERFACE GROUP */}
+                        <div className="flex flex-col gap-5 pt-4 sm:pt-5 border-t border-border">
+                          {activeFontCombo.isNeutral ? (
+                            <h2 className="px-4 sm:px-5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              Interface
+                            </h2>
+                          ) : (
+                            <h2
+                              className={cn(
+                                "px-4 sm:px-5 text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3",
+                                activeFontCombo.serifClass,
+                              )}
+                              style={{ fontFamily: "var(--font-display)" }}
+                            >
+                              Interface
+                            </h2>
+                          )}
+                          <SettingsRow
+                            title="Slider animations"
+                            description="Smoothly animate the model picker's reasoning-effort slider."
+                            resetAction={
+                              settings.sliderAnimationsEnabled !==
+                              DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled ? (
+                                <SettingResetButton
+                                  label="slider animations"
+                                  onClick={() =>
+                                    updateSettings({
+                                      sliderAnimationsEnabled:
+                                        DEFAULT_UNIFIED_SETTINGS.sliderAnimationsEnabled,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <Switch
+                                checked={settings.sliderAnimationsEnabled}
+                                onCheckedChange={(checked) =>
+                                  updateSettings({
+                                    sliderAnimationsEnabled: Boolean(checked),
+                                  })
+                                }
+                                aria-label="Slider animations"
+                              />
+                            }
+                          />
+
+                          <SettingsRow
+                            title="Animated slider fill"
+                            description="Smoothly animate the fill color of sliders when value changes."
+                            resetAction={
+                              settings.animatedTrackFillEnabled !==
+                              DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled ? (
+                                <SettingResetButton
+                                  label="animated slider fill"
+                                  onClick={() =>
+                                    updateSettings({
+                                      animatedTrackFillEnabled:
+                                        DEFAULT_UNIFIED_SETTINGS.animatedTrackFillEnabled,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <Switch
+                                checked={settings.animatedTrackFillEnabled}
+                                onCheckedChange={(checked) =>
+                                  updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
+                                }
+                                aria-label="Animated slider fill"
+                              />
+                            }
+                          />
+
+                          <SettingsRow
+                            title="Nyan Cat slider"
+                            description="Always use the Nyan Cat animated rainbow slider across all models."
+                            resetAction={
+                              settings.nyanCatSliderMode !==
+                              DEFAULT_UNIFIED_SETTINGS.nyanCatSliderMode ? (
+                                <SettingResetButton
+                                  label="Nyan Cat slider"
+                                  onClick={() =>
+                                    updateSettings({
+                                      nyanCatSliderMode: DEFAULT_UNIFIED_SETTINGS.nyanCatSliderMode,
+                                    })
+                                  }
+                                />
+                              ) : null
+                            }
+                            control={
+                              <Switch
+                                checked={settings.nyanCatSliderMode}
+                                onCheckedChange={(checked) =>
+                                  updateSettings({ nyanCatSliderMode: Boolean(checked) })
+                                }
+                                aria-label="Nyan Cat slider"
+                              />
+                            }
+                          />
+
+                          <SettingsRow
+                            title="Always show Git loading animation"
+                            description="Play Mercury Chrome loading animation every time Git tab is selected. When disabled, animation plays once on initial load and subsequent tab switches load instantly."
+                            control={
+                              <Switch
+                                checked={alwaysAnimateGitLoader}
+                                onCheckedChange={(checked) => {
+                                  const val = Boolean(checked);
+                                  setAlwaysAnimateGitLoader(val);
+                                  try {
+                                    window.localStorage?.setItem(
+                                      "tabs.alwaysAnimateGitLoader",
+                                      String(val),
+                                    );
+                                  } catch {}
+                                }}
+                                aria-label="Always show Git loading animation"
+                              />
+                            }
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </SettingsSection>
-                </div>
+                    </SettingsSection>
+                  </div>
                 ) : null}
-                {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
+                {activeSettingsSection === "workspace" ? (
+                  <ProjectWorkspaceSettingsSection
+                    scope={settingsScope}
+                    onScopeChange={setSettingsScope}
+                  />
+                ) : null}
+                {activeSettingsSection === "profiles" ? <BrowserProfilesSettings /> : null}
                 {activeSettingsSection === "source-control" ? (
                   <SourceControlSettingsPanel
                     startProviderAction={startProviderAction}
@@ -4484,13 +4982,17 @@ function SettingsRouteView() {
                       <div className="flex items-start justify-between">
                         <div className="space-y-1.5">
                           <h2
-                            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                            className={cn(
+                              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                              activeFontCombo.sansClass,
+                            )}
                             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                           >
                             Providers
                           </h2>
                           <p className="text-sm text-muted-foreground">
-                            Manage AI providers, API keys, custom model endpoints, and status checks.
+                            Manage AI providers, API keys, custom model endpoints, and status
+                            checks.
                           </p>
                         </div>
                         <SettingsHeaderPortal>
@@ -4510,8 +5012,19 @@ function SettingsRouteView() {
                           </Button>
                         </SettingsHeaderPortal>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     {/* 📌 Pinned Models Section */}
@@ -4526,13 +5039,16 @@ function SettingsRouteView() {
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <h3 className="text-sm font-semibold text-foreground">Pinned Models</h3>
+                                  <h3 className="text-sm font-semibold text-foreground">
+                                    Pinned Models
+                                  </h3>
                                   <span className="rounded-full bg-muted/80 px-2 py-0.5 text-[10px] font-bold tabular-nums text-muted-foreground">
                                     {pinnedEntries.length}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  Quick access models pinned across all providers. Appears at the top of FusedModelPicker.
+                                  Quick access models pinned across all providers. Appears at the
+                                  top of FusedModelPicker.
                                 </p>
                               </div>
                             </div>
@@ -4549,9 +5065,12 @@ function SettingsRouteView() {
                           {pinnedEntries.length === 0 ? (
                             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 py-6 px-4 text-center">
                               <PinIcon className="size-6 text-muted-foreground/40 mb-1.5" />
-                              <div className="text-xs font-medium text-foreground">No Pinned Models Yet</div>
+                              <div className="text-xs font-medium text-foreground">
+                                No Pinned Models Yet
+                              </div>
                               <div className="text-[11px] text-muted-foreground max-w-sm mt-0.5">
-                                Click "+ Pin Model" above or the pin icon next to any model in your provider lists below to pin it.
+                                Click "+ Pin Model" above or the pin icon next to any model in your
+                                provider lists below to pin it.
                               </div>
                             </div>
                           ) : (
@@ -4905,13 +5424,81 @@ function SettingsRouteView() {
                                     </Button>
                                   ) : null}
 
+                                  {providerCard.isAuthenticated && providerCard.logoutCommand ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                      disabled={providerActionBusy}
+                                      onClick={() => {
+                                        const api = readNativeApi();
+                                        if (!api) return;
+                                        const secretPatch =
+                                          providerCard.provider === "copilot"
+                                            ? {
+                                                providers: {
+                                                  copilot: { token: "", byokApiKey: "" },
+                                                },
+                                              }
+                                            : providerCard.provider === "opencode"
+                                              ? {
+                                                  providers: {
+                                                    opencode: { serverPassword: "" },
+                                                  },
+                                                }
+                                              : providerCard.provider === "kilo"
+                                                ? {
+                                                    providers: {
+                                                      kilo: { serverPassword: "" },
+                                                    },
+                                                  }
+                                                : {};
+                                        void api.server
+                                          .updateSettings(secretPatch)
+                                          .then(() => {
+                                            const isCopilot = providerCard.provider === "copilot";
+                                            startProviderAction(
+                                              isCopilot
+                                                ? {
+                                                    provider: "copilot",
+                                                    providerName: providerDisplayName,
+                                                    command: "copilot",
+                                                    followUpCommand: "/logout",
+                                                    kind: "logout",
+                                                  }
+                                                : {
+                                                    provider: providerCard.provider,
+                                                    providerName: providerDisplayName,
+                                                    command: providerCard.logoutCommand!,
+                                                    kind: "logout",
+                                                  },
+                                            );
+                                          })
+                                          .catch(() => {
+                                            toastManager.add({
+                                              type: "error",
+                                              title: `Could not log out of ${providerDisplayName}`,
+                                              description:
+                                                "Tabs could not clear the provider credentials. The logout command was not started.",
+                                            });
+                                          });
+                                      }}
+                                      aria-label={`Log out of ${providerDisplayName}`}
+                                    >
+                                      <LogOutIcon className="size-3.5" />
+                                      Log out
+                                    </Button>
+                                  ) : null}
+
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                                     onClick={() =>
                                       setOpenProviderDetails((existing) => {
-                                        const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
+                                        const isCurrentlyOpen = Boolean(
+                                          existing[providerCard.provider],
+                                        );
                                         if (isCurrentlyOpen) {
                                           return {};
                                         }
@@ -4943,7 +5530,9 @@ function SettingsRouteView() {
                                           ...settings.providers,
                                           [providerCard.provider]: {
                                             ...(settings.providers[providerCard.provider] ??
-                                              DEFAULT_UNIFIED_SETTINGS.providers[providerCard.provider]),
+                                              DEFAULT_UNIFIED_SETTINGS.providers[
+                                                providerCard.provider
+                                              ]),
                                             enabled: Boolean(checked),
                                           },
                                         },
@@ -4997,7 +5586,9 @@ function SettingsRouteView() {
                                               ...settings.providers,
                                               [providerCard.provider]: {
                                                 ...(settings.providers[providerCard.provider] ??
-                                                  DEFAULT_UNIFIED_SETTINGS.providers[providerCard.provider]),
+                                                  DEFAULT_UNIFIED_SETTINGS.providers[
+                                                    providerCard.provider
+                                                  ]),
                                                 binaryPath: event.target.value,
                                               },
                                             },
@@ -5053,7 +5644,10 @@ function SettingsRouteView() {
                                   {providerCard.provider === "copilot" ? (
                                     <>
                                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                        <label htmlFor="provider-copilot-ghe-host" className="block">
+                                        <label
+                                          htmlFor="provider-copilot-ghe-host"
+                                          className="block"
+                                        >
                                           <span className="text-xs font-medium text-foreground">
                                             GitHub Enterprise Host (optional)
                                           </span>
@@ -5077,7 +5671,8 @@ function SettingsRouteView() {
                                             spellCheck={false}
                                           />
                                           <span className="mt-1 block text-xs text-muted-foreground">
-                                            Leave blank for github.com. Appends --host to terminal sign-in automatically.
+                                            Leave blank for github.com. Appends --host to terminal
+                                            sign-in automatically.
                                           </span>
                                         </label>
                                       </div>
@@ -5107,7 +5702,8 @@ function SettingsRouteView() {
                                             spellCheck={false}
                                           />
                                           <span className="mt-1 block text-xs text-muted-foreground">
-                                            For token-based authentication instead of interactive web login.
+                                            For token-based authentication instead of interactive
+                                            web login.
                                           </span>
                                         </label>
                                       </div>
@@ -5122,12 +5718,26 @@ function SettingsRouteView() {
                                         <div>
                                           <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                                             Models
-                                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[10px] px-1.5 py-0 font-mono"
+                                            >
                                               {providerCard.models.length}
                                             </Badge>
+                                            {providerCard.liveProvider?.catalogStatus ===
+                                            "stale" ? (
+                                              <Badge
+                                                variant="secondary"
+                                                className="text-[10px] px-1.5 py-0"
+                                              >
+                                                Stale
+                                              </Badge>
+                                            ) : null}
                                           </div>
                                           <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                            Drag handles to reorder model preference.
+                                            {providerCard.liveProvider?.catalogStatus === "stale"
+                                              ? "Showing the last successful catalog. Refresh to retry discovery."
+                                              : "Drag handles to reorder model preference."}
                                           </div>
                                         </div>
                                         <div className="flex items-center gap-2">
@@ -5136,14 +5746,18 @@ function SettingsRouteView() {
                                               size="xs"
                                               variant="default"
                                               className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
-                                              onClick={() => handleSaveModelOrder(providerCard.provider)}
+                                              onClick={() =>
+                                                handleSaveModelOrder(providerCard.provider)
+                                              }
                                               title="Save model order changes"
                                             >
                                               <SaveIcon className="size-3" />
                                               Save Order
                                             </Button>
                                           ) : null}
-                                          {settings.providerModelPreferences?.[providerCard.provider as any]?.modelOrder?.length ? (
+                                          {settings.providerModelPreferences?.[
+                                            providerCard.provider as any
+                                          ]?.modelOrder?.length ? (
                                             <Button
                                               size="xs"
                                               variant="ghost"
@@ -5158,7 +5772,9 @@ function SettingsRouteView() {
                                                   settings.providerModelPreferences,
                                                   providerCard.provider,
                                                 );
-                                                updateSettings({ providerModelPreferences: nextPrefs as any });
+                                                updateSettings({
+                                                  providerModelPreferences: nextPrefs as any,
+                                                });
                                               }}
                                               title="Restore default model order"
                                             >
@@ -5178,16 +5794,17 @@ function SettingsRouteView() {
                                       >
                                         {providerCard.models.length === 0 ? (
                                           <div className="py-4 px-3 text-center text-xs text-muted-foreground">
-                                            {providerCard.provider === "copilot" &&
-                                            providerCard.liveProvider?.auth?.status ===
-                                              "authenticated_unentitled"
-                                              ? "No models available for this account. Active Copilot seat required."
+                                            {providerCard.provider === "copilot"
+                                              ? "Copilot is not currently advertising any selectable models."
                                               : "No models available."}
                                           </div>
                                         ) : null}
                                         <DndContext
                                           collisionDetection={closestCenter}
-                                          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                                          modifiers={[
+                                            restrictToVerticalAxis,
+                                            restrictToParentElement,
+                                          ]}
                                           onDragEnd={(event: DragEndEvent) => {
                                             const { active, over } = event;
                                             if (!over || active.id === over.id) return;
@@ -5203,7 +5820,9 @@ function SettingsRouteView() {
                                                 oldIndex,
                                                 newIndex,
                                               );
-                                              const newOrder = reordered.map((m: ServerProviderModel) => m.slug);
+                                              const newOrder = reordered.map(
+                                                (m: ServerProviderModel) => m.slug,
+                                              );
                                               setDraftModelOrders((existing) => ({
                                                 ...existing,
                                                 [providerCard.provider]: newOrder,
@@ -5212,168 +5831,183 @@ function SettingsRouteView() {
                                           }}
                                         >
                                           <SortableContext
-                                            items={providerCard.models.map((m: ServerProviderModel) => m.slug)}
+                                            items={providerCard.models.map(
+                                              (m: ServerProviderModel) => m.slug,
+                                            )}
                                             strategy={verticalListSortingStrategy}
                                           >
-                                            {providerCard.models.map((model: ServerProviderModel) => {
-                                              const caps = model.capabilities;
-                                              const capLabels: string[] = [];
-                                              if (caps?.supportsFastMode) capLabels.push("Fast");
-                                              if (caps?.supportsThinkingToggle) capLabels.push("Thinking");
-                                              if (
-                                                caps?.reasoningEffortLevels &&
-                                                caps.reasoningEffortLevels.length > 0
-                                              )
-                                                capLabels.push("Reasoning");
-                                              const isPinned = isPinnedModel(
-                                                getPinnedModels(settings),
-                                                providerCard.provider,
-                                                model.slug,
-                                              );
+                                            {providerCard.models.map(
+                                              (model: ServerProviderModel) => {
+                                                const caps = model.capabilities;
+                                                const capLabels: string[] = [];
+                                                if (caps?.supportsFastMode) capLabels.push("Fast");
+                                                if (caps?.supportsThinkingToggle)
+                                                  capLabels.push("Thinking");
+                                                if (
+                                                  caps?.reasoningEffortLevels &&
+                                                  caps.reasoningEffortLevels.length > 0
+                                                )
+                                                  capLabels.push("Reasoning");
+                                                const isPinned = isPinnedModel(
+                                                  getPinnedModels(settings),
+                                                  providerCard.provider,
+                                                  model.slug,
+                                                );
 
-                                              return (
-                                                <SortableModelRowItem
-                                                  key={`${providerCard.provider}:${model.slug}`}
-                                                  id={model.slug}
-                                                >
-                                                  {(handle) => (
-                                                    <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
-                                                      <div className="flex items-center gap-2 min-w-0">
-                                                        <button
-                                                          type="button"
-                                                          className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
-                                                          aria-label={`Reorder ${model.name}`}
-                                                          {...handle.attributes}
-                                                          {...handle.listeners}
-                                                        >
-                                                          <GripVerticalIcon className="size-3.5" />
-                                                        </button>
-                                                        <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
-                                                          {model.name}
-                                                        </span>
-                                                        {capLabels.map((label) => (
-                                                          <span
-                                                            key={label}
-                                                            className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                return (
+                                                  <SortableModelRowItem
+                                                    key={`${providerCard.provider}:${model.slug}`}
+                                                    id={model.slug}
+                                                  >
+                                                    {(handle) => (
+                                                      <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                          <button
+                                                            type="button"
+                                                            className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
+                                                            aria-label={`Reorder ${model.name}`}
+                                                            {...handle.attributes}
+                                                            {...handle.listeners}
                                                           >
-                                                            {label}
+                                                            <GripVerticalIcon className="size-3.5" />
+                                                          </button>
+                                                          <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
+                                                            {model.name}
                                                           </span>
-                                                        ))}
-                                                      </div>
-
-                                                      <div className="flex items-center gap-1 shrink-0">
-                                                        <button
-                                                          type="button"
-                                                          aria-label={
-                                                            isPinned
-                                                              ? `Unpin ${model.name}`
-                                                              : `Pin ${model.name}`
-                                                          }
-                                                          className={cn(
-                                                            "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
-                                                            isPinned
-                                                              ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
-                                                              : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
-                                                          )}
-                                                          onClick={() => {
-                                                            const nextPinned = togglePinnedModel(
-                                                              settings,
-                                                              providerCard.provider,
-                                                              model.slug,
-                                                            );
-                                                            updateSettings({ pinnedModels: nextPinned as any });
-                                                          }}
-                                                        >
-                                                          <PinIcon className="size-3.5 fill-current" />
-                                                        </button>
-
-                                                        {model.name !== model.slug ? (
-                                                          <Tooltip>
-                                                            <TooltipTrigger
-                                                              render={
-                                                                <button
-                                                                  type="button"
-                                                                  className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
-                                                                  aria-label={`Details for ${model.name}`}
-                                                                >
-                                                                  <InfoIcon className="size-3.5" />
-                                                                </button>
-                                                              }
-                                                            />
-                                                            <TooltipPopup side="top" className="max-w-56">
-                                                              <code className="text-[11px] text-foreground">
-                                                                {model.slug}
-                                                              </code>
-                                                            </TooltipPopup>
-                                                          </Tooltip>
-                                                        ) : null}
-
-                                                        {model.isCustom ? (
-                                                          <div className="flex items-center gap-1 pl-1">
-                                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">
-                                                              custom
-                                                            </Badge>
-                                                            <button
-                                                              type="button"
-                                                              className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                                                              aria-label={`Remove ${model.slug}`}
-                                                              onClick={() =>
-                                                                removeCustomModel(
-                                                                  providerCard.provider,
-                                                                  model.slug,
-                                                                )
-                                                              }
+                                                          {capLabels.map((label) => (
+                                                            <span
+                                                              key={label}
+                                                              className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
                                                             >
-                                                              <XIcon className="size-3" />
-                                                            </button>
-                                                          </div>
-                                                        ) : null}
+                                                              {label}
+                                                            </span>
+                                                          ))}
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                          <button
+                                                            type="button"
+                                                            aria-label={
+                                                              isPinned
+                                                                ? `Unpin ${model.name}`
+                                                                : `Pin ${model.name}`
+                                                            }
+                                                            className={cn(
+                                                              "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
+                                                              isPinned
+                                                                ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
+                                                                : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
+                                                            )}
+                                                            onClick={() => {
+                                                              const nextPinned = togglePinnedModel(
+                                                                settings,
+                                                                providerCard.provider,
+                                                                model.slug,
+                                                              );
+                                                              updateSettings({
+                                                                pinnedModels: nextPinned as any,
+                                                              });
+                                                            }}
+                                                          >
+                                                            <PinIcon className="size-3.5 fill-current" />
+                                                          </button>
+
+                                                          {model.name !== model.slug ? (
+                                                            <Tooltip>
+                                                              <TooltipTrigger
+                                                                render={
+                                                                  <button
+                                                                    type="button"
+                                                                    className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
+                                                                    aria-label={`Details for ${model.name}`}
+                                                                  >
+                                                                    <InfoIcon className="size-3.5" />
+                                                                  </button>
+                                                                }
+                                                              />
+                                                              <TooltipPopup
+                                                                side="top"
+                                                                className="max-w-56"
+                                                              >
+                                                                <code className="text-[11px] text-foreground">
+                                                                  {model.slug}
+                                                                </code>
+                                                              </TooltipPopup>
+                                                            </Tooltip>
+                                                          ) : null}
+
+                                                          {model.isCustom ? (
+                                                            <div className="flex items-center gap-1 pl-1">
+                                                              <Badge
+                                                                variant="secondary"
+                                                                className="text-[9px] px-1 py-0 font-normal"
+                                                              >
+                                                                custom
+                                                              </Badge>
+                                                              <button
+                                                                type="button"
+                                                                className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                                                                aria-label={`Remove ${model.slug}`}
+                                                                onClick={() =>
+                                                                  removeCustomModel(
+                                                                    providerCard.provider,
+                                                                    model.slug,
+                                                                  )
+                                                                }
+                                                              >
+                                                                <XIcon className="size-3" />
+                                                              </button>
+                                                            </div>
+                                                          ) : null}
+                                                        </div>
                                                       </div>
-                                                    </div>
-                                                  )}
-                                                </SortableModelRowItem>
-                                              );
-                                            })}
+                                                    )}
+                                                  </SortableModelRowItem>
+                                                );
+                                              },
+                                            )}
                                           </SortableContext>
                                         </DndContext>
                                       </div>
 
-                                      {/* Custom Model Input Footer */}
-                                      <div className="p-2.5 bg-muted/20 border-t border-border/40">
-                                        <div className="flex items-center gap-2">
-                                          <Input
-                                            value={customModelInput ?? ""}
-                                            onChange={(event) =>
-                                              setCustomModelInputByProvider((existing) => ({
-                                                ...existing,
-                                                [providerCard.provider]: event.target.value,
-                                              }))
-                                            }
-                                            placeholder="gpt-6.7-codex-ultra-preview"
-                                            className="h-8 text-xs font-mono bg-background"
-                                            onKeyDown={(event) => {
-                                              if (event.key === "Enter") {
-                                                event.preventDefault();
-                                                addCustomModel(providerCard.provider);
+                                      {/* Copilot model identifiers are authoritative and account-scoped. */}
+                                      {providerCard.provider !== "copilot" ? (
+                                        <div className="p-2.5 bg-muted/20 border-t border-border/40">
+                                          <div className="flex items-center gap-2">
+                                            <Input
+                                              value={customModelInput ?? ""}
+                                              onChange={(event) =>
+                                                setCustomModelInputByProvider((existing) => ({
+                                                  ...existing,
+                                                  [providerCard.provider]: event.target.value,
+                                                }))
                                               }
-                                            }}
-                                          />
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-8 gap-1 text-xs shrink-0 cursor-pointer"
-                                            onClick={() => addCustomModel(providerCard.provider)}
-                                          >
-                                            <PlusIcon className="size-3.5" />
-                                            Add
-                                          </Button>
-                                        </div>
-                                        {customModelError ? (
-                                          <div className="mt-1.5 text-[11px] font-medium text-destructive">
-                                            {customModelError}
+                                              placeholder="gpt-6.7-codex-ultra-preview"
+                                              className="h-8 text-xs font-mono bg-background"
+                                              onKeyDown={(event) => {
+                                                if (event.key === "Enter") {
+                                                  event.preventDefault();
+                                                  addCustomModel(providerCard.provider);
+                                                }
+                                              }}
+                                            />
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="h-8 gap-1 text-xs shrink-0 cursor-pointer"
+                                              onClick={() => addCustomModel(providerCard.provider)}
+                                            >
+                                              <PlusIcon className="size-3.5" />
+                                              Add
+                                            </Button>
                                           </div>
-                                        ) : null}
-                                      </div>
+                                          {customModelError ? (
+                                            <div className="mt-1.5 text-[11px] font-medium text-destructive">
+                                              {customModelError}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
 
                                       {/* Save Order Footer Bar */}
                                       {providerCard.hasPendingOrderChanges ? (
@@ -5385,7 +6019,9 @@ function SettingsRouteView() {
                                             size="sm"
                                             variant="default"
                                             className="h-7 gap-1.5 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
-                                            onClick={() => handleSaveModelOrder(providerCard.provider)}
+                                            onClick={() =>
+                                              handleSaveModelOrder(providerCard.provider)
+                                            }
                                           >
                                             <SaveIcon className="size-3.5" />
                                             Save Order
@@ -5417,7 +6053,10 @@ function SettingsRouteView() {
                     <div>
                       <div className="space-y-1.5">
                         <h2
-                          className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                          className={cn(
+                            "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                            activeFontCombo.sansClass,
+                          )}
                           style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                         >
                           About
@@ -5426,8 +6065,19 @@ function SettingsRouteView() {
                           Application build details, software updates, and diagnostic information.
                         </p>
                       </div>
-                      <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-                      <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+                        style={{
+                          background:
+                            "linear-gradient(to right, rgba(255,255,255,0.25), transparent)",
+                        }}
+                      />
+                      <div
+                        className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+                        style={{
+                          background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)",
+                        }}
+                      />
                     </div>
 
                     <SettingsSection title="Application Details">
@@ -5519,59 +6169,82 @@ function SettingsRouteView() {
           </div>
         </div>
 
-        {providerActionSession && loginCwd ? (
-          <div className="flex shrink-0 flex-col border-t border-border bg-background">
-            <div className="flex items-center gap-2 px-4 py-1.5 sm:px-5">
-              {providerActionSession.kind === "install" ? (
-                <DownloadIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              ) : providerActionSession.kind === "update" ? (
-                <ArrowUpCircleIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              ) : (
-                <LogInIcon className="size-3.5 shrink-0 text-muted-foreground" />
-              )}
-              <span className="shrink-0 text-xs font-medium text-foreground">
-                {providerActionSession.kind === "install"
-                  ? `Installing ${providerActionSession.providerName}`
-                  : providerActionSession.kind === "update"
-                    ? `Updating ${providerActionSession.providerName}`
-                    : `Signing in to ${providerActionSession.providerName}`}
-              </span>
-              <code className="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                {providerActionSession.command}
-              </code>
-              <Button
-                size="xs"
-                variant="ghost"
-                className="ms-auto h-6 shrink-0 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
-                onClick={closeProviderAction}
-              >
-                <XIcon className="size-3.5" />
-                Close
-              </Button>
-            </div>
-            <ThreadTerminalDrawer
-              variant="drawer"
-              showControls={false}
-              threadId={providerActionSession.threadId}
-              cwd={loginCwd}
-              height={DEFAULT_THREAD_TERMINAL_HEIGHT}
-              terminalIds={[DEFAULT_THREAD_TERMINAL_ID]}
-              activeTerminalId={DEFAULT_THREAD_TERMINAL_ID}
-              terminalGroups={[{ id: "action", terminalIds: [DEFAULT_THREAD_TERMINAL_ID] }]}
-              activeTerminalGroupId="action"
-              focusRequestId={0}
-              terminalLabels={{
-                [DEFAULT_THREAD_TERMINAL_ID]: providerActionSession.providerName,
-              }}
-              onSplitTerminal={() => {}}
-              onNewTerminal={() => {}}
-              onActiveTerminalChange={() => {}}
-              onCloseTerminal={closeProviderAction}
-              onHeightChange={() => {}}
-              onAddTerminalContext={() => {}}
-            />
-          </div>
-        ) : null}
+        <Dialog
+          open={providerActionSession !== null && Boolean(loginCwd)}
+          onOpenChange={(open) => {
+            if (!open) closeProviderAction();
+          }}
+        >
+          {providerActionSession && loginCwd ? (
+            <DialogPopup showCloseButton={false} className="w-full max-w-3xl overflow-hidden p-0">
+              <div className="flex items-center gap-2 border-b border-border px-4 py-3 sm:px-5">
+                {providerActionSession.kind === "install" ? (
+                  <DownloadIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : providerActionSession.kind === "update" ? (
+                  <ArrowUpCircleIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : providerActionSession.kind === "logout" ? (
+                  <LogOutIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : (
+                  <LogInIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                )}
+                <DialogTitle className="shrink-0 text-sm font-semibold text-foreground">
+                  {providerActionSession.kind === "install"
+                    ? `Installing ${providerActionSession.providerName}`
+                    : providerActionSession.kind === "update"
+                      ? `Updating ${providerActionSession.providerName}`
+                      : providerActionSession.kind === "logout"
+                        ? `Logging out of ${providerActionSession.providerName}`
+                        : `Signing in to ${providerActionSession.providerName}`}
+                </DialogTitle>
+                <code className="min-w-0 truncate rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                  {providerActionSession.command}
+                </code>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="ms-auto h-6 shrink-0 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={closeProviderAction}
+                  aria-label="Close provider action terminal"
+                >
+                  <XIcon className="size-3.5" />
+                  Close
+                </Button>
+              </div>
+              <DialogDescription className="sr-only">
+                Interactive terminal for installing, updating, signing in to, or logging out of a
+                provider.
+              </DialogDescription>
+              <div role="status" aria-live="polite" className="sr-only">
+                {providerActionSession.kind === "login"
+                  ? "Sign-in terminal opened"
+                  : providerActionSession.kind === "logout"
+                    ? "Log-out terminal opened"
+                    : "Provider command terminal opened"}
+              </div>
+              <ThreadTerminalDrawer
+                variant="drawer"
+                showControls={false}
+                threadId={providerActionSession.threadId}
+                cwd={loginCwd}
+                height={Math.max(DEFAULT_THREAD_TERMINAL_HEIGHT, 360)}
+                terminalIds={[DEFAULT_THREAD_TERMINAL_ID]}
+                activeTerminalId={DEFAULT_THREAD_TERMINAL_ID}
+                terminalGroups={[{ id: "action", terminalIds: [DEFAULT_THREAD_TERMINAL_ID] }]}
+                activeTerminalGroupId="action"
+                focusRequestId={0}
+                terminalLabels={{
+                  [DEFAULT_THREAD_TERMINAL_ID]: providerActionSession.providerName,
+                }}
+                onSplitTerminal={() => {}}
+                onNewTerminal={() => {}}
+                onActiveTerminalChange={() => {}}
+                onCloseTerminal={closeProviderAction}
+                onHeightChange={() => {}}
+                onAddTerminalContext={() => {}}
+              />
+            </DialogPopup>
+          ) : null}
+        </Dialog>
       </div>
       {confirmDialog}
     </div>

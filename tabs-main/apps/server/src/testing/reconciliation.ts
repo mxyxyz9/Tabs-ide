@@ -85,6 +85,7 @@ export interface ReconciledWorkbookCase {
   readonly externalId: string;
   readonly description: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResults: ReadonlyArray<string>;
   readonly expectedResult: string;
   readonly sourceSheet: string;
   readonly sourceRow: number;
@@ -158,27 +159,26 @@ export function reconcileWorkbookCase(
     currentStateId = selected.edge.toStateId;
   });
 
-  // Check whether the expected result is grounded in a reachable graph state.
-  if (parsedCase.expectedResult && start) {
-    const maxScore = Math.max(
-      0,
-      ...graph.nodes.map((node) =>
-        Math.max(
-          semanticScore(parsedCase.expectedResult, node.pageTitle),
-          semanticScore(parsedCase.expectedResult, node.pageUrl),
-          semanticScore(parsedCase.expectedResult, node.snapshot),
-        ),
-      ),
-    );
+  parsedCase.expectedResults.forEach((expectedResult, stepIndex) => {
+    if (!expectedResult || !start) return;
+    const matchedStateId = matchedStateIds[Math.min(stepIndex + 1, matchedStateIds.length - 1)];
+    const matchedNode = graph.nodes.find((node) => node.stateId === matchedStateId);
+    const maxScore = matchedNode
+      ? Math.max(
+          semanticScore(expectedResult, matchedNode.pageTitle),
+          semanticScore(expectedResult, matchedNode.pageUrl),
+          semanticScore(expectedResult, matchedNode.snapshot),
+        )
+      : 0;
     if (maxScore < 0.2) {
       mismatches.push({
-        stepIndex: null,
-        expected: parsedCase.expectedResult,
-        actual: "No state in the discovered graph matches the described expected result",
+        stepIndex,
+        expected: expectedResult,
+        actual: "The state reached by this step does not match its expected result",
         kind: "expected-result",
       });
     }
-  }
+  });
 
   const status =
     parsedCase.errors.length > 0 || !start
@@ -259,6 +259,7 @@ export function scenariosFromGraph(graph: {
   readonly externalId: string;
   readonly description: string;
   readonly steps: ReadonlyArray<string>;
+  readonly expectedResults: ReadonlyArray<string>;
   readonly expectedResult: string;
   readonly matchedStateIds: ReadonlyArray<string>;
 }> {
@@ -268,11 +269,18 @@ export function scenariosFromGraph(graph: {
     const target = graph.nodes.find((node) => node.stateId === edge.toStateId);
     const path = shortestPath(start.stateId, edge.toStateId, graph.edges) ?? [edge];
     const targetLabel = target?.pageTitle || target?.pageUrl || edge.toStateId;
+    const expectedResults = path.map((item) => {
+      const stepTarget = graph.nodes.find((node) => node.stateId === item.toStateId);
+      return stepTarget?.pageTitle
+        ? `${stepTarget.pageTitle} page is displayed`
+        : `Application reaches ${stepTarget?.pageUrl ?? item.toStateId}`;
+    });
     return {
       externalId: `DISCOVERED-${String(index + 1).padStart(3, "0")}`,
       description: `Reach ${targetLabel}`,
       steps: path.map((item) => `Activate ${item.role} "${item.name}"`),
-      expectedResult: target?.pageTitle ? `${target.pageTitle} page is displayed` : "",
+      expectedResults,
+      expectedResult: expectedResults.filter(Boolean).join("\n"),
       matchedStateIds: [start.stateId, ...path.map((item) => item.toStateId)],
     };
   });

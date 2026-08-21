@@ -169,6 +169,7 @@ export function createWsNativeApi(): NativeApi {
       updateLocatorPage: (input) => transport.request(WS_METHODS.testingUpdateLocatorPage, input),
       setLocatorPageSelection: (input) =>
         transport.request(WS_METHODS.testingSetLocatorPageSelection, input),
+      deleteLocatorPage: (input) => transport.request(WS_METHODS.testingDeleteLocatorPage, input),
       updatePageObjectCode: (input) =>
         transport.request(WS_METHODS.testingUpdatePageObjectCode, input),
       previewLocatorRepositoryWrite: (input) =>
@@ -196,6 +197,10 @@ export function createWsNativeApi(): NativeApi {
       listCases: (input) => transport.request(WS_METHODS.testingListCases, input),
       createCase: (input) => transport.request(WS_METHODS.testingCreateCase, input),
       reviewCase: (input) => transport.request(WS_METHODS.testingReviewCase, input),
+      deleteCase: (input) => transport.request(WS_METHODS.testingDeleteCase, input),
+      updateCaseGroup: (input) => transport.request(WS_METHODS.testingUpdateCaseGroup, input),
+      createCaseGroup: (input) => transport.request(WS_METHODS.testingCreateCaseGroup, input),
+      deleteCaseGroup: (input) => transport.request(WS_METHODS.testingDeleteCaseGroup, input),
       generateScenarios: (input) =>
         transport.request(WS_METHODS.testingGenerateScenarios, input, { timeoutMs: null }),
       clearGraph: (input) => transport.request(WS_METHODS.testingClearGraph, input),

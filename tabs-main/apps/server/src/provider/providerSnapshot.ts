@@ -197,6 +197,9 @@ export function buildServerProvider(input: {
   presentation: ServerProviderPresentation;
   enabled: boolean;
   checkedAt: string;
+  catalogStatus?: ServerProviderDraft["catalogStatus"];
+  catalogSource?: string;
+  catalogCheckedAt?: string;
   models: ReadonlyArray<ServerProviderModel>;
   slashCommands?: ReadonlyArray<ServerProviderSlashCommand>;
   skills?: ReadonlyArray<ServerProviderSkill>;
@@ -224,6 +227,9 @@ export function buildServerProvider(input: {
     status: input.enabled ? input.probe.status : "disabled",
     auth: input.probe.auth,
     checkedAt: input.checkedAt,
+    catalogStatus: input.catalogStatus ?? (input.models.length > 0 ? "ready" : "empty"),
+    catalogSource: input.catalogSource ?? "provider-snapshot",
+    catalogCheckedAt: input.catalogCheckedAt ?? input.checkedAt,
     ...(input.probe.message ? { message: input.probe.message } : {}),
     models: input.models,
     slashCommands: [...(input.slashCommands ?? [])],

@@ -339,7 +339,13 @@ export class TestingGenerator {
     private readonly textGeneration: TextGenerationShape,
   ) {}
 
-  generate(input: TestingGenerationInput): Promise<TestingGenerationJob> {
+  generate(
+    input: TestingGenerationInput,
+    options?: {
+      readonly beforeRun?: () => Promise<void>;
+      readonly background?: boolean;
+    },
+  ): Promise<TestingGenerationJob> {
     const allCases = this.store.listCases(input.projectId).cases;
     const requested = input.caseIds
       ? allCases.filter((testCase) => input.caseIds?.includes(testCase.id))
@@ -371,12 +377,16 @@ export class TestingGenerator {
       modelSelection: input.modelSelection,
     });
 
-    const run = this.#queueTail.then(() => this.#run(jobId, input, cases, outputDirectory));
+    const run = this.#queueTail.then(() =>
+      this.#run(jobId, input, cases, outputDirectory, options?.beforeRun),
+    );
     this.#queueTail = run.then(
       () => undefined,
       () => undefined,
     );
-    return run;
+    return options?.background
+      ? Promise.resolve(this.store.generationJob(input.projectId, jobId)!)
+      : run;
   }
 
   cancel(projectId: string, jobId: string): TestingGenerationJob {
@@ -394,6 +404,7 @@ export class TestingGenerator {
     input: TestingGenerationInput,
     cases: ReadonlyArray<TestingCaseSummary>,
     outputDirectory: string,
+    beforeRun?: () => Promise<void>,
   ): Promise<TestingGenerationJob> {
     const maxTokens = input.maxEstimatedTokens ?? DEFAULT_TESTING_BATCH_MAX_TOKENS;
     const maxCost = input.maxEstimatedCostUsd ?? DEFAULT_TESTING_BATCH_MAX_COST_USD;
@@ -403,6 +414,7 @@ export class TestingGenerator {
     const blockedCases: string[] = [];
     this.store.updateGenerationJob(jobId, { status: "running" });
     try {
+      await beforeRun?.();
       const template = await loadTemplate(input.projectPath, input.templatePath);
       await Promise.all(
         Object.values(template.directories).map((directory) =>

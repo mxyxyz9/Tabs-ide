@@ -6,6 +6,10 @@ import type {
   TestingBugDraftInput,
   TestingCaseListResult,
   TestingCaseCreateInput,
+  TestingCaseDeleteInput,
+  TestingCaseGroupUpdateInput,
+  TestingCaseGroupCreateInput,
+  TestingCaseGroupDeleteInput,
   TestingCaseIdPolicy,
   TestingCaseIdPolicyInput,
   TestingCaseReviewInput,
@@ -28,6 +32,7 @@ import type {
   TestingLocatorDiscoverySession,
   TestingLocatorDiscoverySessionInput,
   TestingLocatorEntryReviewInput,
+  TestingLocatorPageDeleteInput,
   TestingLocatorPageSelectionInput,
   TestingLocatorPageUpdateInput,
   TestingPageObjectCodeUpdateInput,
@@ -177,7 +182,7 @@ const StoryCases = Schema.Struct({
       description: Schema.String,
       preconditions: Schema.Array(Schema.String),
       steps: Schema.Array(Schema.String),
-      expectedResult: Schema.String,
+      expectedResults: Schema.Array(Schema.String),
       locatorKeys: Schema.Array(Schema.String),
     }),
   ),
@@ -212,6 +217,7 @@ export class TestingService {
     result: TestingCaseListResult,
   ): TestingCaseListResult {
     return {
+      groups: result.groups,
       cases: result.cases.map((testCase) => ({
         ...testCase,
         locatorEntryIds: this.#locatorStore.caseLocatorIds(projectId, testCase.id),
@@ -452,6 +458,10 @@ export class TestingService {
     return this.#locatorStore.setPageSelection(input);
   }
 
+  deleteLocatorPage(input: TestingLocatorPageDeleteInput): TestingLocatorLibraryResult {
+    return this.#locatorStore.deletePage(input);
+  }
+
   updatePageObjectCode(input: TestingPageObjectCodeUpdateInput): TestingLocatorLibraryResult {
     return this.#locatorStore.updatePageObjectCode(input);
   }
@@ -576,6 +586,7 @@ export class TestingService {
         taskKind: "story-to-cases",
         sanitizedPrompt: [
           "Convert the following user story into concise, reviewable QA cases.",
+          "Return exactly one expectedResults item for every step, in the same order.",
           "Reference only locator keys from the supplied Locator Library when they apply.",
           "User story:",
           sanitized.tokenized,
@@ -598,7 +609,11 @@ export class TestingService {
           ...testCase.preconditions.map((item) => `Precondition: ${item}`),
           ...testCase.steps,
         ],
-        expectedResult: testCase.expectedResult,
+        expectedResults: [
+          ...testCase.preconditions.map((item) => `Precondition is satisfied: ${item}`),
+          ...testCase.expectedResults,
+        ],
+        expectedResult: testCase.expectedResults.filter(Boolean).join("\n"),
         matchedStateIds: [],
       })),
     ).cases;
@@ -630,11 +645,15 @@ export class TestingService {
       storyImportId,
       created.map((item) => item.id),
     );
+    const groupedCases = this.#store.listCases(input.projectId);
     return {
       storyImportId,
       sourceName: parsed.sourceName,
       generatedCount: created.length,
-      cases: this.#withCaseLocatorMappings(input.projectId, { cases }).cases,
+      ...this.#withCaseLocatorMappings(input.projectId, {
+        cases,
+        groups: groupedCases.groups,
+      }),
     };
   }
 
@@ -756,6 +775,7 @@ export class TestingService {
           externalId: parsedCase.externalId,
           description: parsedCase.description,
           steps: parsedCase.steps,
+          expectedResults: parsedCase.expectedResults,
           expectedResult: parsedCase.expectedResult,
           sourceSheet: parsedCase.sourceSheet,
           sourceRow: parsedCase.sourceRow,
@@ -774,6 +794,7 @@ export class TestingService {
       projectId: input.projectId,
       workbookName: parsed.workbookName,
       workbookPath: input.workbookPath,
+      ...(input.groupName ? { groupName: input.groupName } : {}),
       cases: reconciled,
     });
     for (const testCase of result.cases) {
@@ -795,7 +816,10 @@ export class TestingService {
     }
     return {
       ...result,
-      cases: this.#withCaseLocatorMappings(input.projectId, { cases: result.cases }).cases,
+      cases: this.#withCaseLocatorMappings(input.projectId, {
+        cases: result.cases,
+        groups: result.groups,
+      }).cases,
     };
   }
 
@@ -825,6 +849,32 @@ export class TestingService {
     return this.#withCaseLocatorMappings(input.projectId, result);
   }
 
+  deleteCase(input: TestingCaseDeleteInput): TestingCaseListResult {
+    this.#locatorStore.replaceCaseLocators(input.projectId, input.caseId, []);
+    return this.#withCaseLocatorMappings(
+      input.projectId,
+      this.#store.deleteCase(input.projectId, input.caseId),
+    );
+  }
+
+  updateCaseGroup(input: TestingCaseGroupUpdateInput): TestingCaseListResult {
+    return this.#withCaseLocatorMappings(input.projectId, this.#store.updateCaseGroup(input));
+  }
+
+  createCaseGroup(input: TestingCaseGroupCreateInput): TestingCaseListResult {
+    return this.#withCaseLocatorMappings(
+      input.projectId,
+      this.#store.createCaseGroup(input.projectId, input.groupName),
+    );
+  }
+
+  deleteCaseGroup(input: TestingCaseGroupDeleteInput): TestingCaseListResult {
+    return this.#withCaseLocatorMappings(
+      input.projectId,
+      this.#store.deleteCaseGroup(input.projectId, input.groupName),
+    );
+  }
+
   generateScenarios(input: TestingProjectInput): TestingCaseListResult {
     const graph = this.#store.graph(input.projectId);
     const scenarios = scenariosFromGraph(graph);
@@ -832,7 +882,8 @@ export class TestingService {
       throw new Error("Explore the target application before generating discovered scenarios");
     }
 
-    const existingCases = this.#store.listCases(input.projectId).cases;
+    const existingResult = this.#store.listCases(input.projectId);
+    const existingCases = existingResult.cases;
     const existingGenerated = existingCases.filter((c) => c.source === "generated");
 
     const newScenarios = scenarios.filter((scenario) => {
@@ -841,7 +892,7 @@ export class TestingService {
     });
 
     if (newScenarios.length === 0) {
-      return this.#withCaseLocatorMappings(input.projectId, { cases: existingCases });
+      return this.#withCaseLocatorMappings(input.projectId, existingResult);
     }
 
     const allocatedIds = this.#locatorStore.allocateCaseIds(input.projectId, newScenarios.length);
@@ -881,21 +932,27 @@ export class TestingService {
         ),
       ),
     ];
-    if (entryIds.length > 0) {
-      if (!input.targetUrl) {
-        throw new Error(
-          "A live target URL is required to reverify selected Locator Library entries",
-        );
-      }
-      await this.verifyLocators({
-        projectId: input.projectId,
-        targetUrl: input.targetUrl,
-        ...(input.cdpEndpoint ? { cdpEndpoint: input.cdpEndpoint } : {}),
-        entryIds,
-        environmentLabel: "default",
-      });
-    }
-    return this.#generator.generate(input);
+    return this.#generator.generate(input, {
+      background: true,
+      ...(entryIds.length > 0
+        ? {
+            beforeRun: async () => {
+              if (!input.targetUrl) {
+                throw new Error(
+                  "A live target URL is required to reverify selected Locator Library entries",
+                );
+              }
+              await this.verifyLocators({
+                projectId: input.projectId,
+                targetUrl: input.targetUrl,
+                ...(input.cdpEndpoint ? { cdpEndpoint: input.cdpEndpoint } : {}),
+                entryIds,
+                environmentLabel: "default",
+              });
+            },
+          }
+        : {}),
+    });
   }
 
   listGenerationJobs(input: TestingProjectInput): TestingGenerationJobListResult {

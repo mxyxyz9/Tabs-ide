@@ -92,6 +92,20 @@ export const AiProvider = Schema.Literals(["tabs", "copilot"]);
 export type AiProvider = typeof AiProvider.Type;
 export const DEFAULT_AI_PROVIDER: AiProvider = "tabs";
 
+export const BrowserProfileDefinition = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  description: Schema.optionalKey(TrimmedString),
+  color: Schema.optionalKey(TrimmedString),
+  createdAt: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(0))),
+});
+export type BrowserProfileDefinition = typeof BrowserProfileDefinition.Type;
+
+export const DEFAULT_BROWSER_PROFILES: readonly BrowserProfileDefinition[] = [
+  { id: "personal", label: "Personal", color: "#3b82f6", createdAt: 0 },
+  { id: "work", label: "Work", color: "#10b981", createdAt: 0 },
+];
+
 export const ClientSettingsSchema = Schema.Struct({
   aiProvider: AiProvider.pipe(Schema.withDecodingDefault(Effect.succeed(DEFAULT_AI_PROVIDER))),
   toolbarStyle: ToolbarStyle.pipe(
@@ -99,6 +113,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   desktopIconTheme: DesktopIconTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_DESKTOP_ICON_THEME)),
+  ),
+  browserProfiles: Schema.Array(BrowserProfileDefinition).pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_PROFILES)),
   ),
   autoOpenPlanSidebar: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   confirmThreadArchive: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -191,6 +208,20 @@ const makeBinaryPathSetting = (fallback: string) =>
     ),
     Schema.withDecodingDefault(Effect.succeed(fallback)),
   );
+
+/**
+ * Accepts a provider secret as write-only input while encoding it as empty.
+ * The server moves decoded values into secure storage before persisting settings.
+ */
+const WriteOnlyProviderSecretString = TrimmedString.pipe(
+  Schema.decodeTo(
+    Schema.String,
+    SchemaTransformation.transformOrFail({
+      decode: (value) => Effect.succeed(value),
+      encode: () => Effect.succeed(""),
+    }),
+  ),
+);
 
 export type ProviderSettingsFormControl = "text" | "password" | "textarea" | "switch";
 
@@ -383,7 +414,7 @@ export const CopilotSettings = makeProviderSettingsSchema(
         },
       }),
     ),
-    token: TrimmedString.pipe(
+    token: WriteOnlyProviderSecretString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "GitHub token",
@@ -405,7 +436,7 @@ export const CopilotSettings = makeProviderSettingsSchema(
         },
       }),
     ),
-    byokApiKey: TrimmedString.pipe(
+    byokApiKey: WriteOnlyProviderSecretString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "BYOK API key",
@@ -478,11 +509,11 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
-    serverPassword: TrimmedString.pipe(
+    serverPassword: WriteOnlyProviderSecretString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server password",
-        description: "Stored in plain text on disk.",
+        description: "Stored securely in the operating system credential store.",
         providerSettingsForm: {
           control: "password",
           placeholder: "Optional",
@@ -532,11 +563,11 @@ export const KiloSettings = makeProviderSettingsSchema(
         },
       }),
     ),
-    serverPassword: TrimmedString.pipe(
+    serverPassword: WriteOnlyProviderSecretString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server password",
-        description: "Stored in plain text on disk.",
+        description: "Stored securely in the operating system credential store.",
         providerSettingsForm: {
           control: "password",
           placeholder: "Optional",
@@ -561,7 +592,7 @@ export const GeminiSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    apiKey: TrimmedString.pipe(
+    apiKey: WriteOnlyProviderSecretString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "API key",
@@ -781,9 +812,9 @@ const CopilotSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
   gheHost: Schema.optionalKey(TrimmedString),
-  token: Schema.optionalKey(TrimmedString),
+  token: Schema.optionalKey(WriteOnlyProviderSecretString),
   byokProvider: Schema.optionalKey(TrimmedString),
-  byokApiKey: Schema.optionalKey(TrimmedString),
+  byokApiKey: Schema.optionalKey(WriteOnlyProviderSecretString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
@@ -791,14 +822,14 @@ const OpenCodeSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
   serverUrl: Schema.optionalKey(TrimmedString),
-  serverPassword: Schema.optionalKey(TrimmedString),
+  serverPassword: Schema.optionalKey(WriteOnlyProviderSecretString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
   experimentalWebSockets: Schema.optionalKey(Schema.Boolean),
 });
 
 const GeminiSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
-  apiKey: Schema.optionalKey(TrimmedString),
+  apiKey: Schema.optionalKey(WriteOnlyProviderSecretString),
   baseUrl: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -807,7 +838,7 @@ const KiloSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(TrimmedString),
   serverUrl: Schema.optionalKey(TrimmedString),
-  serverPassword: Schema.optionalKey(TrimmedString),
+  serverPassword: Schema.optionalKey(WriteOnlyProviderSecretString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
@@ -978,12 +1009,38 @@ export const DEFAULT_PROJECT_TOOL_KIND: ProjectToolKind = "agents";
 
 const ProjectSettingId = TrimmedNonEmptyString;
 
+export const BrowserPartitionMode = Schema.Literals(["shared", "isolated", "profile"]);
+export type BrowserPartitionMode = typeof BrowserPartitionMode.Type;
+export const DEFAULT_BROWSER_PARTITION_MODE: BrowserPartitionMode = "shared";
+
+export function resolveBrowserPartition(input: {
+  projectId: string;
+  sessionId?: string | undefined;
+  partitionMode?: BrowserPartitionMode | undefined;
+  partitionProfile?: string | undefined;
+}): string {
+  const mode = input.partitionMode ?? DEFAULT_BROWSER_PARTITION_MODE;
+  if (mode === "isolated") {
+    const effectiveSessionId = input.sessionId ?? "browser";
+    return `persist:tabs-browser:${input.projectId}:${effectiveSessionId}`;
+  }
+  if (mode === "profile") {
+    const profile = (input.partitionProfile ?? "").trim() || "default";
+    return `persist:tabs-browser:profile:${profile}`;
+  }
+  return `persist:tabs-browser:${input.projectId}`;
+}
+
 export const ProjectCustomEmbedDefinition = Schema.Struct({
   id: ProjectSettingId,
   label: TrimmedNonEmptyString,
   url: TrimmedString,
   resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   lastVisitedUrl: Schema.optionalKey(TrimmedString),
+  partitionMode: BrowserPartitionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_PARTITION_MODE)),
+  ),
+  partitionProfile: Schema.optionalKey(TrimmedString),
 });
 export type ProjectCustomEmbedDefinition = typeof ProjectCustomEmbedDefinition.Type;
 
@@ -1002,6 +1059,10 @@ export const ProjectBrowserSettings = Schema.Struct({
   defaultUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   openExternalByDefault: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   resumeLastVisitedPage: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  partitionMode: BrowserPartitionMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_BROWSER_PARTITION_MODE)),
+  ),
+  partitionProfile: Schema.optionalKey(TrimmedString),
 });
 export type ProjectBrowserSettings = typeof ProjectBrowserSettings.Type;
 
@@ -1072,6 +1133,10 @@ export const ProjectWorkspaceSettings = Schema.Struct({
   ),
 });
 export type ProjectWorkspaceSettings = typeof ProjectWorkspaceSettings.Type;
+
+export const DEFAULT_PROJECT_WORKSPACE_SETTINGS: ProjectWorkspaceSettings = Schema.decodeSync(
+  ProjectWorkspaceSettings,
+)({});
 
 export const ProjectWorkspaceSessionState = Schema.Struct({
   openProjectIds: Schema.Array(ProjectId).pipe(Schema.withDecodingDefault(Effect.succeed([]))),

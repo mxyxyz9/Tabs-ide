@@ -37,7 +37,7 @@ export interface ProjectTestingState {
   manualCaseId: string;
   manualCaseDescription: string;
   manualCaseSteps: ReadonlyArray<string>;
-  manualCaseExpected: string;
+  manualCaseExpectedResults: ReadonlyArray<string>;
   manualCaseLocatorIds: ReadonlySet<string>;
   storyText: string;
   storyFilePath: string;
@@ -47,7 +47,7 @@ export interface ProjectTestingState {
   editedExternalId: string;
   editedDescription: string;
   editedSteps: ReadonlyArray<string>;
-  editedExpectedResult: string;
+  editedExpectedResults: ReadonlyArray<string>;
   editedCaseLocatorIds: ReadonlySet<string>;
 
   // Discovery / Exploration
@@ -121,7 +121,7 @@ export function createDefaultTestingState(projectId?: string): ProjectTestingSta
     manualCaseId: "",
     manualCaseDescription: "",
     manualCaseSteps: [""],
-    manualCaseExpected: "",
+    manualCaseExpectedResults: [""],
     manualCaseLocatorIds: new Set<string>(),
     storyText: "",
     storyFilePath: "",
@@ -130,7 +130,7 @@ export function createDefaultTestingState(projectId?: string): ProjectTestingSta
     editedExternalId: "",
     editedDescription: "",
     editedSteps: [],
-    editedExpectedResult: "",
+    editedExpectedResults: [],
     editedCaseLocatorIds: new Set<string>(),
 
     targetUrl: "",
@@ -184,6 +184,7 @@ export function createDefaultTestingState(projectId?: string): ProjectTestingSta
       manualCaseDescription?: string;
       manualCaseSteps?: string[];
       manualCaseExpected?: string;
+      manualCaseExpectedResults?: string[];
       manualCaseLocatorIds?: string[];
       storyText?: string;
       storyFilePath?: string;
@@ -196,7 +197,11 @@ export function createDefaultTestingState(projectId?: string): ProjectTestingSta
       if (persisted.manualCaseId !== undefined) base.manualCaseId = persisted.manualCaseId;
       if (persisted.manualCaseDescription !== undefined) base.manualCaseDescription = persisted.manualCaseDescription;
       if (persisted.manualCaseSteps !== undefined) base.manualCaseSteps = persisted.manualCaseSteps;
-      if (persisted.manualCaseExpected !== undefined) base.manualCaseExpected = persisted.manualCaseExpected;
+      if (persisted.manualCaseExpectedResults !== undefined) {
+        base.manualCaseExpectedResults = persisted.manualCaseExpectedResults;
+      } else if (persisted.manualCaseExpected !== undefined) {
+        base.manualCaseExpectedResults = [persisted.manualCaseExpected];
+      }
       if (persisted.manualCaseLocatorIds !== undefined) base.manualCaseLocatorIds = deserializeSet(persisted.manualCaseLocatorIds);
       if (persisted.storyText !== undefined) base.storyText = persisted.storyText;
       if (persisted.storyFilePath !== undefined) base.storyFilePath = persisted.storyFilePath;
@@ -406,7 +411,7 @@ export const useScopedStateStore = create<ScopedStateStore>((set) => ({
           manualCaseId: next.manualCaseId,
           manualCaseDescription: next.manualCaseDescription,
           manualCaseSteps: [...next.manualCaseSteps],
-          manualCaseExpected: next.manualCaseExpected,
+          manualCaseExpectedResults: [...next.manualCaseExpectedResults],
           manualCaseLocatorIds: serializeSet(next.manualCaseLocatorIds),
           storyText: next.storyText,
           storyFilePath: next.storyFilePath,

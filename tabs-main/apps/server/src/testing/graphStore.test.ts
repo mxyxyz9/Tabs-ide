@@ -151,6 +151,7 @@ describe("TestingGraphStore", () => {
             externalId: "QA-001",
             description: "Open home",
             steps: ["Open home"],
+            expectedResults: ["Home page is visible"],
             expectedResult: "Home page is visible",
             sourceSheet: "Cases",
             sourceRow: 2,
@@ -203,7 +204,8 @@ describe("TestingGraphStore", () => {
         projectId: "project-a",
         externalId: "TC-00042",
         description: "Save workspace settings",
-        steps: ["Open Settings", "Save the workspace"],
+        steps: ["Open Settings", "", "Save the workspace"],
+        expectedResults: ["Settings are visible", "Ignored", "The workspace is saved"],
         expectedResult: "The workspace is saved",
       });
 
@@ -213,6 +215,7 @@ describe("TestingGraphStore", () => {
         creationMethod: "manual",
         reviewDecision: "edited",
         notes: "Created manually in Testing",
+        expectedResults: ["Settings are visible", "The workspace is saved"],
       });
       expect(store.listCases("project-b").cases).toHaveLength(0);
       expect(() =>
@@ -224,6 +227,39 @@ describe("TestingGraphStore", () => {
           expectedResult: "Rejected",
         }),
       ).toThrow(/already exists/);
+    } finally {
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("persists empty test groups independently of their cases", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tabs-testing-groups-"));
+    const store = new TestingGraphStore(join(root, "testing.sqlite"));
+    try {
+      const created = store.createCaseGroup("project-a", "Login page");
+      expect(created.groups).toContain("Login page");
+      expect(created.cases).toHaveLength(0);
+
+      const reopened = store.listCases("project-a");
+      expect(reopened.groups).toContain("Login page");
+      expect(store.listCases("project-b").groups).not.toContain("Login page");
+
+      const testCase = store.createCase({
+        projectId: "project-a",
+        externalId: "TC-GROUP-001",
+        description: "Log in",
+        steps: ["Submit credentials"],
+        expectedResult: "Dashboard opens",
+      }).cases[0]!;
+      store.updateCaseGroup({
+        projectId: "project-a",
+        caseId: testCase.id,
+        groupName: "Login page",
+      });
+      const deleted = store.deleteCaseGroup("project-a", "Login page");
+      expect(deleted.groups).not.toContain("Login page");
+      expect(deleted.cases[0]?.groupName).toBe("Ungrouped");
     } finally {
       store.close();
       await rm(root, { recursive: true, force: true });

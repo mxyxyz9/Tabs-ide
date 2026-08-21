@@ -60,15 +60,6 @@ const EMPTY_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [],
 });
 
-const CURSOR_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
-  {
-    slug: "composer-2",
-    name: "Composer 2",
-    isCustom: false,
-    capabilities: EMPTY_CAPABILITIES,
-  },
-];
-
 const CURSOR_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 15_000;
 const CURSOR_PARAMETERIZED_MODEL_PICKER_MIN_VERSION_DATE = 2026_04_08;
 export const CURSOR_PARAMETERIZED_MODEL_PICKER_CAPABILITIES = {
@@ -89,6 +80,9 @@ export function buildInitialCursorProviderSnapshot(
         presentation: CURSOR_PRESENTATION,
         enabled: false,
         checkedAt,
+        catalogStatus: "empty",
+        catalogSource: "cursor-acp",
+        catalogCheckedAt: checkedAt,
         models,
         probe: {
           installed: false,
@@ -578,12 +572,7 @@ export const discoverCursorModelsViaAcp = (
 export function getCursorFallbackModels(
   cursorSettings: Pick<CursorSettings, "customModels">,
 ): ReadonlyArray<ServerProviderModel> {
-  return providerModelsFromSettings(
-    CURSOR_BUILT_IN_MODELS,
-    PROVIDER,
-    cursorSettings.customModels,
-    EMPTY_CAPABILITIES,
-  );
+  return providerModelsFromSettings([], PROVIDER, cursorSettings.customModels, EMPTY_CAPABILITIES);
 }
 
 /** Timeout for `agent about` — it's slower than a simple `--version` probe. */
@@ -631,12 +620,20 @@ export function buildCursorProviderSnapshot(input: {
   readonly discoveryWarning?: string;
 }): ServerProviderDraft {
   const message = joinProviderMessages(input.parsed.message, input.discoveryWarning);
+  const discoveredModels = input.discoveredModels ?? [];
   return buildServerProvider({
     presentation: CURSOR_PRESENTATION,
     enabled: input.cursorSettings.enabled,
     checkedAt: input.checkedAt,
+    catalogStatus: input.discoveryWarning
+      ? "failed"
+      : discoveredModels.length > 0
+        ? "ready"
+        : "empty",
+    catalogSource: "cursor-acp",
+    catalogCheckedAt: input.checkedAt,
     models: providerModelsFromSettings(
-      input.discoveredModels ?? [],
+      discoveredModels,
       PROVIDER,
       input.cursorSettings.customModels,
       EMPTY_CAPABILITIES,

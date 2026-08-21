@@ -73,6 +73,7 @@ export interface WorkspaceShellPersistedState {
   session: ProjectWorkspaceSessionStateType;
   projectSettingsByProjectId: Record<ProjectId, ProjectWorkspaceSettingsType>;
   browserStateByProjectId: Record<ProjectId, ProjectBrowserToolState>;
+  browserStateBySessionKey: Record<string, ProjectBrowserToolState>;
   // Last-navigated URL per browser tab, keyed by `${projectId}:${sessionId}`, so
   // each tab (incl. custom tabs) reopens where the user left it.
   browserUrlBySessionKey: Record<string, string>;
@@ -95,17 +96,18 @@ export interface WorkspaceShellStore extends WorkspaceShellPersistedState {
       | Partial<ProjectWorkspaceSettingsType>
       | ((current: ProjectWorkspaceSettingsType) => ProjectWorkspaceSettingsType),
   ) => void;
-  setBrowserCurrentUrl: (projectId: ProjectId, url: string) => void;
-  setBrowserChromeExpanded: (projectId: ProjectId, expanded: boolean) => void;
+  setBrowserCurrentUrl: (projectId: ProjectId, url: string, sessionId?: string | undefined) => void;
+  setBrowserChromeExpanded: (projectId: ProjectId, expanded: boolean, sessionId?: string | undefined) => void;
   setBrowserSessionUrl: (projectId: ProjectId, sessionId: string, url: string) => void;
   setBrowserViewport: (
     projectId: ProjectId,
     input: {
       devicePreset: BrowserDevicePresetType;
-      customWidth?: number | null;
-      customHeight?: number | null;
-      landscape?: boolean;
+      customWidth?: number | null | undefined;
+      customHeight?: number | null | undefined;
+      landscape?: boolean | undefined;
     },
+    sessionId?: string | undefined,
   ) => void;
   setCodeFocusedPath: (projectId: ProjectId, path: string | null) => void;
   setCodeChromeState: (
@@ -308,6 +310,9 @@ function ensureProjectDefaults(
 ): WorkspaceShellPersistedState {
   const nextSettings =
     state.projectSettingsByProjectId[projectId] ?? createDefaultProjectWorkspaceSettings();
+  const defaultBrowser =
+    state.browserStateByProjectId[projectId] ?? defaultBrowserToolState(nextSettings);
+  const defaultBrowserKey = `${projectId}:browser`;
   return {
     ...state,
     projectSettingsByProjectId: {
@@ -316,8 +321,12 @@ function ensureProjectDefaults(
     },
     browserStateByProjectId: {
       ...state.browserStateByProjectId,
-      [projectId]:
-        state.browserStateByProjectId[projectId] ?? defaultBrowserToolState(nextSettings),
+      [projectId]: defaultBrowser,
+    },
+    browserStateBySessionKey: {
+      ...state.browserStateBySessionKey,
+      [defaultBrowserKey]:
+        state.browserStateBySessionKey?.[defaultBrowserKey] ?? defaultBrowser,
     },
     codeStateByProjectId: {
       ...state.codeStateByProjectId,
@@ -353,6 +362,7 @@ export function createDefaultWorkspaceShellPersistedState(): WorkspaceShellPersi
     session: decodeProjectWorkspaceSessionState({}),
     projectSettingsByProjectId: {},
     browserStateByProjectId: {},
+    browserStateBySessionKey: {},
     browserUrlBySessionKey: {},
     codeStateByProjectId: {},
     codeChromeStateByProjectId: {},
@@ -368,18 +378,24 @@ export function syncWorkspaceShellState(
 ): WorkspaceShellPersistedState {
   const projectIds = new Set(projects.map((project) => project.id));
   let nextState = createDefaultWorkspaceShellPersistedState();
-  // Preserve per-tab navigated URLs (keyed by `${projectId}:${sessionId}`) across
+  // Preserve per-tab navigated URLs and per-session browser states (keyed by `${projectId}:${sessionId}`) across
   // the project sync so tabs reopen where the user left them.
   nextState.browserUrlBySessionKey = { ...input.browserUrlBySessionKey };
+  nextState.browserStateBySessionKey = { ...(input.browserStateBySessionKey ?? {}) };
 
   for (const project of projects) {
     nextState = ensureProjectDefaults(nextState, project.id);
     const settings = input.projectSettingsByProjectId[project.id];
     if (settings) {
       nextState.projectSettingsByProjectId[project.id] = decodeProjectWorkspaceSettings(settings);
+      const defaultState = defaultBrowserToolState(nextState.projectSettingsByProjectId[project.id]!);
       nextState.browserStateByProjectId[project.id] =
-        input.browserStateByProjectId[project.id] ??
-        defaultBrowserToolState(nextState.projectSettingsByProjectId[project.id]!);
+        input.browserStateByProjectId[project.id] ?? defaultState;
+      const defaultBrowserKey = `${project.id}:browser`;
+      if (!nextState.browserStateBySessionKey[defaultBrowserKey]) {
+        nextState.browserStateBySessionKey[defaultBrowserKey] =
+          input.browserStateByProjectId[project.id] ?? defaultState;
+      }
     }
     if (input.codeStateByProjectId[project.id]) {
       nextState.codeStateByProjectId[project.id] = input.codeStateByProjectId[project.id]!;
@@ -561,6 +577,9 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
           const nextSettings = decodeProjectWorkspaceSettings(
             typeof updater === "function" ? updater(current) : { ...current, ...updater },
           );
+          const defaultBrowser =
+            state.browserStateByProjectId[projectId] ?? defaultBrowserToolState(nextSettings);
+          const defaultBrowserKey = `${projectId}:browser`;
           return {
             ...state,
             projectSettingsByProjectId: {
@@ -575,7 +594,13 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
               ? state.browserStateByProjectId
               : {
                   ...state.browserStateByProjectId,
-                  [projectId]: defaultBrowserToolState(nextSettings),
+                  [projectId]: defaultBrowser,
+                },
+            browserStateBySessionKey: state.browserStateBySessionKey?.[defaultBrowserKey]
+              ? state.browserStateBySessionKey
+              : {
+                  ...state.browserStateBySessionKey,
+                  [defaultBrowserKey]: defaultBrowser,
                 },
             session: {
               ...state.session,
@@ -589,91 +614,151 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
             },
           };
         }),
-      setBrowserCurrentUrl: (projectId, url) =>
+      setBrowserCurrentUrl: (projectId, url, sessionId) =>
         set((state) => {
-          const currentState =
-            state.browserStateByProjectId[projectId] ??
+          const effectiveSessionId = sessionId ?? "browser";
+          const sessionKey = `${projectId}:${effectiveSessionId}`;
+          const currentSessionState =
+            state.browserStateBySessionKey[sessionKey] ??
+            (effectiveSessionId === "browser" ? state.browserStateByProjectId[projectId] : undefined) ??
             defaultBrowserToolState(
               state.projectSettingsByProjectId[projectId] ??
                 createDefaultProjectWorkspaceSettings(),
             );
-          if (currentState.currentUrl === url) {
+          if (currentSessionState.currentUrl === url) {
             return state;
           }
+          const nextBrowserState: ProjectBrowserToolState = {
+            ...currentSessionState,
+            currentUrl: url,
+          };
+          const nextSessionMap = {
+            ...state.browserStateBySessionKey,
+            [sessionKey]: nextBrowserState,
+          };
+          const nextUrlMap = {
+            ...state.browserUrlBySessionKey,
+            [sessionKey]: url,
+          };
+          const nextProjectMap =
+            effectiveSessionId === "browser"
+              ? {
+                  ...state.browserStateByProjectId,
+                  [projectId]: nextBrowserState,
+                }
+              : state.browserStateByProjectId;
           return {
             ...state,
-            browserStateByProjectId: {
-              ...state.browserStateByProjectId,
-              [projectId]: {
-                ...currentState,
-                currentUrl: url,
-              },
-            },
+            browserStateBySessionKey: nextSessionMap,
+            browserUrlBySessionKey: nextUrlMap,
+            browserStateByProjectId: nextProjectMap,
           };
         }),
-      setBrowserChromeExpanded: (projectId, expanded) =>
+      setBrowserChromeExpanded: (projectId, expanded, sessionId) =>
         set((state) => {
-          const currentState =
-            state.browserStateByProjectId[projectId] ??
+          const effectiveSessionId = sessionId ?? "browser";
+          const sessionKey = `${projectId}:${effectiveSessionId}`;
+          const currentSessionState =
+            state.browserStateBySessionKey[sessionKey] ??
+            (effectiveSessionId === "browser" ? state.browserStateByProjectId[projectId] : undefined) ??
             defaultBrowserToolState(
               state.projectSettingsByProjectId[projectId] ??
                 createDefaultProjectWorkspaceSettings(),
             );
-          if (currentState.chromeExpanded === expanded) {
+          if (currentSessionState.chromeExpanded === expanded) {
             return state;
           }
+          const nextBrowserState: ProjectBrowserToolState = {
+            ...currentSessionState,
+            chromeExpanded: expanded,
+          };
+          const nextSessionMap = {
+            ...state.browserStateBySessionKey,
+            [sessionKey]: nextBrowserState,
+          };
+          const nextProjectMap =
+            effectiveSessionId === "browser"
+              ? {
+                  ...state.browserStateByProjectId,
+                  [projectId]: nextBrowserState,
+                }
+              : state.browserStateByProjectId;
           return {
             ...state,
-            browserStateByProjectId: {
-              ...state.browserStateByProjectId,
-              [projectId]: {
-                ...currentState,
-                chromeExpanded: expanded,
-              },
-            },
+            browserStateBySessionKey: nextSessionMap,
+            browserStateByProjectId: nextProjectMap,
           };
         }),
       setBrowserSessionUrl: (projectId, sessionId, url) =>
         set((state) => {
           const key = `${projectId}:${sessionId}`;
-          if (state.browserUrlBySessionKey[key] === url) {
+          const existingUrl = state.browserUrlBySessionKey[key];
+          const existingSessionState = state.browserStateBySessionKey[key];
+          if (existingUrl === url && existingSessionState?.currentUrl === url) {
             return state;
           }
+          const nextSessionMap = existingSessionState
+            ? {
+                ...state.browserStateBySessionKey,
+                [key]: {
+                  ...existingSessionState,
+                  currentUrl: url,
+                },
+              }
+            : state.browserStateBySessionKey;
           return {
             ...state,
             browserUrlBySessionKey: {
               ...state.browserUrlBySessionKey,
               [key]: url,
             },
+            browserStateBySessionKey: nextSessionMap,
           };
         }),
-      setBrowserViewport: (projectId, input) =>
-        set((state) => ({
-          ...state,
-          browserStateByProjectId: {
-            ...state.browserStateByProjectId,
-            [projectId]: {
-              ...(state.browserStateByProjectId[projectId] ??
-                defaultBrowserToolState(
-                  state.projectSettingsByProjectId[projectId] ??
-                    createDefaultProjectWorkspaceSettings(),
-                )),
-              devicePreset: input.devicePreset,
-              customWidth:
-                input.customWidth !== undefined
-                  ? input.customWidth
-                  : (state.browserStateByProjectId[projectId]?.customWidth ?? null),
-              customHeight:
-                input.customHeight !== undefined
-                  ? input.customHeight
-                  : (state.browserStateByProjectId[projectId]?.customHeight ?? null),
-              landscape:
-                input.landscape !== undefined
-                  ? input.landscape
-                  : (state.browserStateByProjectId[projectId]?.landscape ?? false),
-            },
-          },
-        })),
+      setBrowserViewport: (projectId, input, sessionId) =>
+        set((state) => {
+          const effectiveSessionId = sessionId ?? "browser";
+          const sessionKey = `${projectId}:${effectiveSessionId}`;
+          const currentSessionState =
+            state.browserStateBySessionKey[sessionKey] ??
+            (effectiveSessionId === "browser" ? state.browserStateByProjectId[projectId] : undefined) ??
+            defaultBrowserToolState(
+              state.projectSettingsByProjectId[projectId] ??
+                createDefaultProjectWorkspaceSettings(),
+            );
+          const nextBrowserState: ProjectBrowserToolState = {
+            ...currentSessionState,
+            devicePreset: input.devicePreset,
+            customWidth:
+              input.customWidth !== undefined
+                ? input.customWidth
+                : (currentSessionState.customWidth ?? null),
+            customHeight:
+              input.customHeight !== undefined
+                ? input.customHeight
+                : (currentSessionState.customHeight ?? null),
+            landscape:
+              input.landscape !== undefined
+                ? input.landscape
+                : (currentSessionState.landscape ?? false),
+          };
+          const nextSessionMap = {
+            ...state.browserStateBySessionKey,
+            [sessionKey]: nextBrowserState,
+          };
+          const nextProjectMap =
+            effectiveSessionId === "browser"
+              ? {
+                  ...state.browserStateByProjectId,
+                  [projectId]: nextBrowserState,
+                }
+              : state.browserStateByProjectId;
+          return {
+            ...state,
+            browserStateBySessionKey: nextSessionMap,
+            browserStateByProjectId: nextProjectMap,
+          };
+        }),
       setCodeFocusedPath: (projectId, path) =>
         set((state) => ({
           ...state,
@@ -855,6 +940,7 @@ export const useWorkspaceShellStore = create<WorkspaceShellStore>()(
         session: state.session,
         projectSettingsByProjectId: state.projectSettingsByProjectId,
         browserStateByProjectId: state.browserStateByProjectId,
+        browserStateBySessionKey: state.browserStateBySessionKey,
         browserUrlBySessionKey: state.browserUrlBySessionKey,
         codeStateByProjectId: state.codeStateByProjectId,
         codeChromeStateByProjectId: state.codeChromeStateByProjectId,

@@ -1,10 +1,5 @@
 import React, { useState, useRef, useEffect, memo } from "react";
-import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  HelpCircleIcon,
-  SearchIcon,
-} from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, HelpCircleIcon, SearchIcon } from "lucide-react";
 import type {
   ProjectId,
   DesktopBrowserSessionState,
@@ -152,6 +147,7 @@ export const TESTING_FUSION_PROVIDER_IDS: ReadonlyArray<ProviderPickerKind> = [
   "codex",
   "claudeAgent",
   "cursor",
+  "copilot",
   "grok",
   "opencode",
   "kilo",
@@ -303,12 +299,16 @@ export function TestingApplicationPreview(props: {
   targetUrl: string;
   sessionId: string;
   viewport: "desktop" | "tablet" | "mobile";
+  onUrlChange?: (url: string) => void;
 }) {
   const bridge = window.desktopBridge;
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [sessionState, setSessionState] = useState<DesktopBrowserSessionState>(() =>
     createEmptyBrowserSessionState(props.projectId, props.sessionId),
   );
+  const currentUrlRef = useRef<string | null>(null);
+  const onUrlChangeRef = useRef(props.onUrlChange);
+  onUrlChangeRef.current = props.onUrlChange;
 
   useEffect(() => {
     if (!bridge || !props.targetUrl) return;
@@ -331,7 +331,9 @@ export function TestingApplicationPreview(props: {
       ) {
         return;
       }
+      currentUrlRef.current = nextState.currentUrl;
       setSessionState(nextState);
+      if (nextState.currentUrl) onUrlChangeRef.current?.(nextState.currentUrl);
     });
     return () => {
       disposed = true;
@@ -341,7 +343,7 @@ export function TestingApplicationPreview(props: {
   }, [bridge, props.projectId, props.sessionId]);
 
   useEffect(() => {
-    if (!bridge || !props.targetUrl || isSameWebUrl(sessionState.currentUrl, props.targetUrl)) {
+    if (!bridge || !props.targetUrl || isSameWebUrl(currentUrlRef.current, props.targetUrl)) {
       return;
     }
     void bridge
@@ -351,7 +353,7 @@ export function TestingApplicationPreview(props: {
         url: props.targetUrl,
       })
       .catch(() => undefined);
-  }, [bridge, props.projectId, props.sessionId, props.targetUrl, sessionState.currentUrl]);
+  }, [bridge, props.projectId, props.sessionId, props.targetUrl]);
 
   useEffect(() => {
     if (!bridge) return;

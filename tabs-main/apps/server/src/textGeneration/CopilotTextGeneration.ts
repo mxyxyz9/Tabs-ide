@@ -59,6 +59,7 @@ function isTextGenerationError(error: unknown): error is TextGenerationError {
 export const makeCopilotTextGeneration = Effect.fn("makeCopilotTextGeneration")(function* (
   copilotSettings: CopilotSettings,
   environment: NodeJS.ProcessEnv = process.env,
+  isModelAdvertised?: (modelId: string) => Effect.Effect<boolean, never, never>,
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
@@ -83,6 +84,18 @@ export const makeCopilotTextGeneration = Effect.fn("makeCopilotTextGeneration")(
   }): Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]> =>
     Effect.gen(function* () {
       const resolvedModel = resolveCopilotAcpBaseModelId(modelSelection.model);
+      if (!resolvedModel) {
+        return yield* new TextGenerationError({
+          operation,
+          detail: "GitHub Copilot requires a model from the current account catalog.",
+        });
+      }
+      if (isModelAdvertised && !(yield* isModelAdvertised(resolvedModel))) {
+        return yield* new TextGenerationError({
+          operation,
+          detail: `GitHub Copilot model '${resolvedModel}' is stale or undiscovered. Refresh providers and select an advertised model.`,
+        });
+      }
       const outputRef = yield* Ref.make("");
       const runtime = yield* makeCopilotAcpRuntime({
         copilotSettings,
@@ -127,7 +140,10 @@ export const makeCopilotTextGeneration = Effect.fn("makeCopilotTextGeneration")(
           Option.match({
             onNone: () =>
               Effect.fail(
-                new TextGenerationError({ operation, detail: "GitHub Copilot ACP request timed out." }),
+                new TextGenerationError({
+                  operation,
+                  detail: "GitHub Copilot ACP request timed out.",
+                }),
               ),
             onSome: (value) => Effect.succeed(value),
           }),

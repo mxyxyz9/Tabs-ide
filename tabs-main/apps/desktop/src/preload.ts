@@ -49,6 +49,10 @@ const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const BROWSER_HOST_SESSION_STATE_CHANNEL = "desktop:browser-host:session-state";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
 const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
+const BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL = "desktop:browser-host:clear-profile-data";
+const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL = "desktop:browser-host:open-profile-login-window";
+const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profile-domains";
+const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
 
 // Persistence channels
 const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
@@ -126,6 +130,14 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_SYNC_SESSIONS_CHANNEL, projectIds),
   recreateBrowserSession: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_RECREATE_SESSION_CHANNEL, input),
+  clearBrowserProfileData: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL, input),
+  openBrowserProfileLoginWindow: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL, input),
+  getBrowserProfileDomains: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL, input),
+  clearBrowserProfileDomain: (input) =>
+    ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
   onBrowserSessionState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;

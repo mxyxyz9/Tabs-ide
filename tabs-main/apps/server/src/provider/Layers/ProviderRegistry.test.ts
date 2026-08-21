@@ -1798,18 +1798,19 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
         ),
       );
 
-      it.effect("returns warning when the Claude initialization result is unavailable", () =>
+      it.effect("returns unauthenticated before Claude initialization or model discovery", () =>
         Effect.gen(function* () {
           const status = yield* checkClaudeProviderStatus(
             defaultClaudeSettings,
             noClaudeCapabilities,
           );
-          assert.strictEqual(status.status, "warning");
+          assert.strictEqual(status.status, "error");
           assert.strictEqual(status.installed, true);
-          assert.strictEqual(status.auth.status, "unknown");
+          assert.strictEqual(status.auth.status, "unauthenticated");
+          assert.deepStrictEqual(status.models, []);
           assert.strictEqual(
             status.message,
-            "Could not verify Claude authentication status from initialization result.",
+            "Claude is not authenticated. Run `claude auth login --claudeai`, then retry.",
           );
         }).pipe(
           Effect.provide(

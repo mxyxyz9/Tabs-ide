@@ -38,7 +38,12 @@ import { makeCodexAdapter } from "../Layers/CodexAdapter";
 import { checkCodexProviderStatus, makePendingCodexProvider } from "../Layers/CodexProvider";
 import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
-import type { ProviderDriver, ProviderInstance } from "../ProviderDriver";
+import {
+  makeExternalCliLifecycle,
+  makeProviderInstanceCapabilities,
+  type ProviderDriver,
+  type ProviderInstance,
+} from "../ProviderDriver";
 import type { ServerProviderDraft } from "../providerSnapshot";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment";
 import {
@@ -194,6 +199,21 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "external",
+          logout: "external",
+          accountSwitch: "external",
+          installation: "external",
+        }),
+        lifecycle: makeExternalCliLifecycle([
+          { kind: "login", command: "codex login" },
+          { kind: "logout", command: "codex logout" },
+          { kind: "switch-account", command: "codex logout && codex login" },
+        ]),
         snapshot,
         adapter,
         textGeneration,

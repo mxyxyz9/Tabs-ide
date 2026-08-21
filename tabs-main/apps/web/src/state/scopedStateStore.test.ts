@@ -128,7 +128,10 @@ describe("scopedStateStore", () => {
       const store = useScopedStateStore.getState();
 
       store.updateServerState(p1, { presetsExpanded: true, activeTerminalId: "term-1" });
-      store.updateBrowserState(p1, { draftUrl: "http://localhost:3000/dashboard", viewportSelectorOpen: true });
+      store.updateBrowserState(p1, {
+        draftUrl: "http://localhost:3000/dashboard",
+        viewportSelectorOpen: true,
+      });
 
       const state = useScopedStateStore.getState();
       expect(state.serverStateByProjectId[p1]?.presetsExpanded).toBe(true);
@@ -202,7 +205,7 @@ describe("scopedStateStore", () => {
       const state = createDefaultTestingState(p1);
       expect(state.manualCaseDescription).toBe("Verify SSO login with Okta");
       expect(state.manualCaseSteps).toEqual(["Navigate to login", "Click Okta SSO"]);
-      expect(state.manualCaseExpected).toBe("Redirected to dashboard");
+      expect(state.manualCaseExpectedResults).toEqual(["Redirected to dashboard"]);
       expect(state.bugDraft).toBe("Failed to render spinner");
     });
 

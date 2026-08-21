@@ -76,7 +76,7 @@ export function parseClaudeAuthStatusFromOutput(result: CommandResult): {
     return {
       status: "error",
       authStatus: "unauthenticated",
-      message: "Claude is not authenticated. Run `claude auth login` and try again.",
+      message: "Claude is not authenticated. Run `claude auth login --claudeai`, then retry.",
     };
   }
 
@@ -90,7 +90,7 @@ export function parseClaudeAuthStatusFromOutput(result: CommandResult): {
     return {
       status: "error",
       authStatus: "unauthenticated",
-      message: "Claude is not authenticated. Run `claude auth login` and try again.",
+      message: "Claude is not authenticated. Run `claude auth login --claudeai`, then retry.",
     };
   }
   if (parsedAuth.attemptedJsonParse) {

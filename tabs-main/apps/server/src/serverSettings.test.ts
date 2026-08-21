@@ -2,8 +2,17 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { DEFAULT_SERVER_SETTINGS, ServerSettingsPatch, ProviderInstanceId } from "@tabs/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Schema } from "effect";
+import { vi } from "vitest";
 import { ServerConfig } from "./config";
 import { ServerSettingsLive, ServerSettingsService } from "./serverSettings";
+
+const keytarMock = vi.hoisted(() => ({
+  deletePassword: vi.fn(async () => true),
+  getPassword: vi.fn(async () => null),
+  setPassword: vi.fn(async () => undefined),
+}));
+
+vi.mock("keytar", () => ({ default: keytarMock }));
 
 const makeServerSettingsLayer = () =>
   ServerSettingsLive.pipe(
@@ -39,7 +48,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         },
       );
-    }),
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
   it.effect("deep merges nested settings updates without dropping siblings", () =>
@@ -230,6 +239,76 @@ it.layer(NodeServices.layer)("server settings", (it) => {
           },
         },
       });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("stores Copilot tokens securely without persisting plaintext", () =>
+    Effect.gen(function* () {
+      keytarMock.setPassword.mockClear();
+      const serverSettings = yield* ServerSettingsService;
+      const serverConfig = yield* ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+
+      const next = yield* serverSettings.updateSettings({
+        providers: { copilot: { token: "github_pat_secure_test" } },
+      });
+
+      assert.equal(next.providers.copilot.token, "");
+      assert.deepEqual(keytarMock.setPassword.mock.calls, [
+        ["Tabs GitHub Copilot", "github-token", "github_pat_secure_test"],
+      ]);
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.equal(raw.includes("github_pat_secure_test"), false);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("stores every app-managed provider secret in the OS credential store", () =>
+    Effect.gen(function* () {
+      keytarMock.setPassword.mockClear();
+      const serverSettings = yield* ServerSettingsService;
+
+      const next = yield* serverSettings.updateSettings({
+        providers: {
+          copilot: { byokApiKey: "copilot-byok-secret" },
+          gemini: { apiKey: "gemini-secret" },
+          opencode: { serverPassword: "opencode-secret" },
+          kilo: { serverPassword: "kilo-secret" },
+        },
+      });
+
+      assert.equal(next.providers.copilot.byokApiKey, "");
+      assert.equal(next.providers.gemini.apiKey, "");
+      assert.equal(next.providers.opencode.serverPassword, "");
+      assert.equal(next.providers.kilo.serverPassword, "");
+      assert.deepEqual(keytarMock.setPassword.mock.calls, [
+        ["Tabs Provider Credentials", "copilot.byok-api-key", "copilot-byok-secret"],
+        ["Tabs Provider Credentials", "gemini.api-key", "gemini-secret"],
+        ["Tabs Provider Credentials", "opencode.server-password", "opencode-secret"],
+        ["Tabs Provider Credentials", "kilo.server-password", "kilo-secret"],
+      ]);
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect("migrates a legacy plaintext Copilot token during startup", () =>
+    Effect.gen(function* () {
+      keytarMock.setPassword.mockClear();
+      const serverSettings = yield* ServerSettingsService;
+      const serverConfig = yield* ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+
+      yield* fileSystem.makeDirectory(serverConfig.stateDir, { recursive: true });
+      yield* fileSystem.writeFileString(
+        serverConfig.settingsPath,
+        JSON.stringify({ providers: { copilot: { token: "github_pat_legacy_test" } } }),
+      );
+      yield* serverSettings.start;
+
+      assert.deepEqual(keytarMock.setPassword.mock.calls, [
+        ["Tabs GitHub Copilot", "github-token", "github_pat_legacy_test"],
+      ]);
+      const raw = yield* fileSystem.readFileString(serverConfig.settingsPath);
+      assert.equal(raw.includes("github_pat_legacy_test"), false);
+      assert.equal((yield* serverSettings.getSettings).providers.copilot.token, "");
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 });

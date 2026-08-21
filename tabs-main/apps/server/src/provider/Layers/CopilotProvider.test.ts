@@ -5,12 +5,10 @@ import * as Schema from "effect/Schema";
 import { CopilotSettings } from "@tabs/contracts";
 
 import {
-  buildCopilotDiscoveredModelsFromSessionModelState,
-  buildCopilotDiscoveredModelsFromSessionSetup,
+  buildCopilotModelsFromCatalog,
   buildInitialCopilotProviderSnapshot,
   checkCopilotProviderStatus,
-  formatCopilotModelName,
-  parseCopilotDiscoveredModelsFromProbe,
+  classifyCopilotCatalogFailure,
 } from "./CopilotProvider";
 
 const decodeCopilotSettings = Schema.decodeSync(CopilotSettings);
@@ -44,103 +42,78 @@ describe("buildInitialCopilotProviderSnapshot", () => {
   );
 });
 
-describe("buildCopilotDiscoveredModelsFromSessionSetup", () => {
-  it("extracts and normalizes models from live ACP session state models", () => {
-    const models = buildCopilotDiscoveredModelsFromSessionSetup({
-      sessionId: "test-session-id",
-      models: {
-        availableModels: [
-          { modelId: "claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
-          { modelId: "gpt-5.4", name: "GPT 5.4" },
-          { modelId: "claude-opus-4.6", name: "Claude Opus 4.6" },
-        ],
-        currentModelId: "claude-sonnet-4.6",
-      },
-    });
-
-    expect(models).toHaveLength(3);
-    expect(models[0]?.slug).toBe("claude-sonnet-4.6");
-    expect(models[0]?.name).toBe("Claude Sonnet 4.6");
-    expect(models[1]?.slug).toBe("gpt-5.4");
-    expect(models[2]?.slug).toBe("claude-opus-4.6");
-  });
-
-  it("extracts models from configOptions when present", () => {
-    const models = buildCopilotDiscoveredModelsFromSessionSetup({
-      sessionId: "test-session-id",
-      configOptions: [
-        {
-          id: "model",
-          type: "select",
-          name: "Model",
-          options: [
-            { value: "claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
-            { value: "gpt-4o", name: "GPT-4o" },
-          ],
-        },
-      ],
-    } as any);
-
-    expect(models).toHaveLength(2);
-    expect(models[0]?.slug).toBe("claude-sonnet-4.6");
-    expect(models[1]?.slug).toBe("gpt-4o");
-  });
-
-  it("returns empty array when sessionSetup contains no dynamic models (no static fallback)", () => {
-    const models = buildCopilotDiscoveredModelsFromSessionSetup({
-      sessionId: "test-session-id",
-      configOptions: [
-        { id: "mode", type: "select", options: [] },
-      ],
-    } as any);
-
-    expect(models).toHaveLength(0);
-  });
-
-  it("handles null/undefined gracefully", () => {
-    expect(buildCopilotDiscoveredModelsFromSessionSetup(null)).toHaveLength(0);
-    expect(buildCopilotDiscoveredModelsFromSessionSetup(undefined)).toHaveLength(0);
+describe("classifyCopilotCatalogFailure", () => {
+  it("distinguishes authentication, explicit entitlement, and transient failures", () => {
+    expect(classifyCopilotCatalogFailure("Authentication required; run copilot login")).toBe(
+      "unauthenticated",
+    );
+    expect(classifyCopilotCatalogFailure("No active seat for this account")).toBe("unentitled");
+    expect(classifyCopilotCatalogFailure("Connection reset by peer")).toBe("unknown");
   });
 });
 
-describe("parseCopilotDiscoveredModelsFromProbe", () => {
-  it("parses models from error data array", () => {
-    const models = parseCopilotDiscoveredModelsFromProbe({
-      error: {
-        code: -32602,
-        message: "Invalid model",
-        data: {
-          validModels: ["gpt-5-mini", "gpt-4o", "claude-sonnet-4.6", "o3-mini"],
+describe("buildCopilotModelsFromCatalog", () => {
+  it("normalizes only descriptors advertised by models.list", () => {
+    const models = buildCopilotModelsFromCatalog([
+      {
+        id: "account-model-a",
+        name: "Account Model A",
+        capabilities: {
+          supports: { vision: false, reasoningEffort: true },
+          limits: { max_context_window_tokens: 1000 },
+        },
+        supportedReasoningEfforts: ["low", "high"],
+        defaultReasoningEffort: "low",
+      },
+      {
+        id: "account-model-b",
+        name: "Account Model B",
+        capabilities: {
+          supports: { vision: false, reasoningEffort: false },
+          limits: { max_context_window_tokens: 1000 },
         },
       },
-    });
-
-    expect(models).toHaveLength(4);
-    expect(models.map((m) => m.slug)).toEqual([
-      "gpt-5-mini",
-      "gpt-4o",
-      "claude-sonnet-4.6",
-      "o3-mini",
     ]);
-    expect(models[0]?.name).toBe("GPT-5-Mini");
+
+    expect(models.map((model) => model.slug)).toEqual(["account-model-a", "account-model-b"]);
+    expect(models[0]?.capabilities?.reasoningEffortLevels).toEqual([
+      { value: "low", label: "low", isDefault: true },
+      { value: "high", label: "high" },
+    ]);
   });
 
-  it("parses models from error message regex", () => {
-    const errorMsg =
-      "Error: Model '__tabs_probe_invalid__' is invalid. Supported models for this account: gpt-5-mini, gpt-4o, gpt-4.1, claude-sonnet-4.6, claude-haiku-4.5, o3-mini";
-    const models = parseCopilotDiscoveredModelsFromProbe(errorMsg);
-
-    expect(models.length).toBeGreaterThanOrEqual(6);
-    expect(models.map((m) => m.slug)).toContain("gpt-5-mini");
-    expect(models.map((m) => m.slug)).toContain("gpt-4o");
-    expect(models.map((m) => m.slug)).toContain("claude-sonnet-4.6");
-    expect(models.map((m) => m.slug)).toContain("o3-mini");
+  it("omits malformed and duplicate descriptors without inventing fallbacks", () => {
+    const models = buildCopilotModelsFromCatalog([
+      {
+        id: "",
+        name: "Missing id",
+        capabilities: {
+          supports: { vision: false, reasoningEffort: false },
+          limits: { max_context_window_tokens: 0 },
+        },
+      },
+      {
+        id: "account-model",
+        name: "Account Model",
+        capabilities: {
+          supports: { vision: false, reasoningEffort: false },
+          limits: { max_context_window_tokens: 0 },
+        },
+      },
+      {
+        id: "account-model",
+        name: "Duplicate",
+        capabilities: {
+          supports: { vision: false, reasoningEffort: false },
+          limits: { max_context_window_tokens: 0 },
+        },
+      },
+    ]);
+    expect(models.map((model) => model.slug)).toEqual(["account-model"]);
   });
 
-  it("returns empty array for non-parseable probe output (fail-closed)", () => {
-    expect(parseCopilotDiscoveredModelsFromProbe(null)).toHaveLength(0);
-    expect(parseCopilotDiscoveredModelsFromProbe({})).toHaveLength(0);
-    expect(parseCopilotDiscoveredModelsFromProbe("generic internal error")).toHaveLength(0);
+  it("accepts a successful empty catalog", () => {
+    expect(buildCopilotModelsFromCatalog([])).toEqual([]);
   });
 });
 

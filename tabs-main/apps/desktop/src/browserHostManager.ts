@@ -1,10 +1,12 @@
 import {
   BrowserView,
+  BrowserWindow,
   Menu,
+  session as electronSession,
   shell,
-  type BrowserWindow,
   type MenuItemConstructorOptions,
   type Rectangle,
+  type Session,
 } from "electron";
 import type {
   DesktopBrowserHostActivateSessionInput,
@@ -14,6 +16,7 @@ import type {
   DesktopBrowserHostSetBoundsInput,
   DesktopBrowserHostState,
   DesktopBrowserSessionState,
+  BrowserProfileDomainInfo,
 } from "@tabs/contracts";
 
 const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
@@ -24,14 +27,36 @@ const DOCKED_DEVTOOLS_MODE = "bottom";
 
 const DEFAULT_SESSION_ID = "browser";
 
-// Electron appends app/runtime tokens to the default User-Agent, e.g.
-// "... (KHTML, like Gecko) Tabs/0.0.14 Chrome/140.0.0.0 Electron/40.6.0 Safari/537.36".
-// Some web apps (figma being the notable one) branch on the UA and throw a
-// client-side exception when they see the `Electron/` token / unrecognized
-// product, rendering a blank error page inside the embed. Present as a vanilla
-// Chrome build by stripping the `Electron/<ver>` token and the product token
-// that precedes `Chrome/`, while preserving the real platform + Chrome version
-// (so this stays correct across macOS/Windows/Linux and Electron upgrades).
+export function getCleanDesktopUserAgent(): string {
+  return process.platform === "darwin"
+    ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    : process.platform === "win32"
+      ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      : "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+}
+
+export function configurePartitionSession(s: Session): void {
+  const cleanUA = getCleanDesktopUserAgent();
+  try {
+    s.setUserAgent(cleanUA);
+    s.webRequest.onBeforeSendHeaders((details, callback) => {
+      const headers = { ...details.requestHeaders };
+      headers["User-Agent"] = cleanUA;
+      headers["sec-ch-ua"] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
+      headers["sec-ch-ua-mobile"] = "?0";
+      headers["sec-ch-ua-platform"] =
+        process.platform === "darwin"
+          ? '"macOS"'
+          : process.platform === "win32"
+            ? '"Windows"'
+            : '"Linux"';
+      callback({ requestHeaders: headers });
+    });
+  } catch (err) {
+    console.error("[browserHostManager] Failed to configure partition session:", err);
+  }
+}
+
 export function sanitizeEmbeddedBrowserUserAgent(userAgent: string): string {
   return userAgent.replace(/ Electron\/[^ ]+/g, "").replace(/ [^ /]+\/[^ ]+ Chrome\//, " Chrome/");
 }
@@ -39,6 +64,7 @@ export function sanitizeEmbeddedBrowserUserAgent(userAgent: string): string {
 type BrowserSession = {
   projectId: string;
   sessionId: string;
+  partition: string;
   key: string;
   view: BrowserView;
   bounds: Rectangle | null;
@@ -92,8 +118,14 @@ export class BrowserHostManager {
 
   async ensureSession(input: DesktopBrowserHostEnsureSessionInput): Promise<void> {
     const key = this.sessionKey(input.projectId, input.sessionId);
+    const partition = input.partition ?? `persist:tabs-browser:${input.projectId}`;
     const existing = this.sessions.get(key);
     if (existing) {
+      // If the session's partition was updated in settings, recreate the session.
+      if (existing.partition !== partition) {
+        await this.recreateSession(input.projectId, input.sessionId, partition);
+        return;
+      }
       // Keep the tab alive across switches/re-mounts: do NOT re-navigate here
       // (that caused the reload-on-switch). Only load if it has nothing yet.
       if (!existing.currentUrl && input.initialUrl) {
@@ -108,10 +140,7 @@ export class BrowserHostManager {
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
-        // Shared per-project partition so logins/cookies are common across the
-        // project's browser tabs (like a real browser), while each tab keeps
-        // its own kept-alive view.
-        partition: `persist:tabs-browser:${input.projectId}`,
+        partition,
       },
     });
     view.setBackgroundColor("#111111");
@@ -142,6 +171,7 @@ export class BrowserHostManager {
     const session: BrowserSession = {
       projectId: input.projectId,
       sessionId,
+      partition,
       key,
       view,
       bounds: null,
@@ -182,12 +212,13 @@ export class BrowserHostManager {
     }
   }
 
-  async recreateSession(projectId: string, sessionId?: string): Promise<void> {
+  async recreateSession(projectId: string, sessionId?: string, partitionInput?: string): Promise<void> {
     const key = this.sessionKey(projectId, sessionId);
     const session = this.sessions.get(key);
     if (!session) return;
 
     const currentUrl = session.currentUrl;
+    const partition = partitionInput ?? session.partition ?? `persist:tabs-browser:${projectId}`;
 
     this.detachSession(session);
     session.view.webContents.close({ waitForBeforeUnload: false });
@@ -197,7 +228,7 @@ export class BrowserHostManager {
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
-        partition: `persist:tabs-browser:${projectId}`,
+        partition,
       },
     });
     view.setBackgroundColor("#111111");
@@ -226,18 +257,145 @@ export class BrowserHostManager {
     );
 
     session.view = view;
+    session.partition = partition;
+    session.lastError = null;
+    session.transientError = null;
     this.registerSessionEvents(session);
 
-    if (this.activeKey === key) {
+    if (this.activeKey === key && session.bounds) {
       this.attachSession(session);
-      if (session.bounds) {
-        session.view.setBounds(session.bounds);
-      }
+      session.view.setBounds(session.bounds);
     }
 
     if (currentUrl) {
       await this.loadUrl(session, currentUrl);
     }
+  }
+
+  async clearProfileData(profileId: string): Promise<void> {
+    const trimmed = profileId.trim();
+    if (!trimmed) return;
+    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const s = electronSession.fromPartition(partition);
+    await s.clearStorageData();
+    for (const session of this.sessions.values()) {
+      if (session.partition === partition && session.currentUrl) {
+        await this.loadUrl(session, session.currentUrl);
+      }
+    }
+  }
+
+  async getProfileDomains(profileId: string): Promise<BrowserProfileDomainInfo[]> {
+    const trimmed = profileId.trim();
+    if (!trimmed) return [];
+    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const s = electronSession.fromPartition(partition);
+    try {
+      const cookies = await s.cookies.get({});
+      const map = new Map<string, { count: number; isAuth: boolean }>();
+
+      const AUTH_COOKIE_NAMES = [
+        "sid", "hsid", "ssid", "apisid", "sapisid", "osid",
+        "user_session", "logged_in", "dotcom_user",
+        "__secure-next-auth.session-token", "auth_token", "figma.session",
+        "figma.login", "linear_session", "token_v2", "jwt", "sessionid",
+      ];
+
+      for (const cookie of cookies) {
+        let domain = cookie.domain || "";
+        if (domain.startsWith(".")) domain = domain.slice(1);
+        if (!domain) continue;
+
+        const parts = domain.split(".");
+        const baseDomain = parts.length > 2 ? parts.slice(-2).join(".") : domain;
+
+        const existing = map.get(baseDomain) ?? { count: 0, isAuth: false };
+        existing.count += 1;
+
+        const cName = cookie.name.toLowerCase();
+        const isAuthCookie =
+          AUTH_COOKIE_NAMES.some((name) => cName === name || cName.includes(name)) ||
+          ((cName.includes("session") || cName.includes("token") || cName.includes("auth")) &&
+            Boolean(cookie.value && cookie.value.length > 10));
+
+        if (isAuthCookie) {
+          existing.isAuth = true;
+        }
+        map.set(baseDomain, existing);
+      }
+
+      return Array.from(map.entries())
+        .map(([domain, data]) => ({
+          domain,
+          cookieCount: data.count,
+          isAuthenticated: data.isAuth,
+        }))
+        .sort((a, b) => {
+          if (a.isAuthenticated && !b.isAuthenticated) return -1;
+          if (!a.isAuthenticated && b.isAuthenticated) return 1;
+          return a.domain.localeCompare(b.domain);
+        });
+    } catch (err) {
+      console.error("[browserHostManager] Failed to get profile domains:", err);
+      return [];
+    }
+  }
+
+  async clearProfileDomain(profileId: string, domainToClear: string): Promise<void> {
+    const trimmed = profileId.trim();
+    const domain = domainToClear.trim().toLowerCase();
+    if (!trimmed || !domain) return;
+    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const s = electronSession.fromPartition(partition);
+    try {
+      const cookies = await s.cookies.get({});
+      for (const cookie of cookies) {
+        const cDomain = (cookie.domain || "").replace(/^\./, "").toLowerCase();
+        if (cDomain === domain || cDomain.endsWith("." + domain)) {
+          const protocol = cookie.secure ? "https:" : "http:";
+          const url = `${protocol}//${cDomain}${cookie.path || "/"}`;
+          await s.cookies.remove(url, cookie.name);
+        }
+      }
+      await s.clearStorageData({
+        origin: `https://${domain}`,
+        storages: ["cookies", "localstorage", "indexdb", "serviceworkers"],
+      });
+      for (const session of this.sessions.values()) {
+        if (session.partition === partition && session.currentUrl && session.currentUrl.includes(domain)) {
+          await this.loadUrl(session, session.currentUrl);
+        }
+      }
+    } catch (err) {
+      console.error("[browserHostManager] Failed to clear profile domain:", err);
+    }
+  }
+
+  openProfileLoginWindow(profileId: string, targetUrl?: string): void {
+    const trimmed = profileId.trim() || "default";
+    const partition = `persist:tabs-browser:profile:${trimmed}`;
+    const url = targetUrl?.trim() || "https://accounts.google.com";
+
+    const s = electronSession.fromPartition(partition);
+    configurePartitionSession(s);
+
+    const win = new BrowserWindow({
+      width: 1024,
+      height: 768,
+      title: `Tabs Profile Login — ${trimmed}`,
+      webPreferences: {
+        partition,
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+      },
+    });
+
+    win.webContents.setUserAgent(getCleanDesktopUserAgent());
+
+    win.loadURL(url).catch((err) => {
+      console.error("[browserHostManager] Failed to load login URL:", err);
+    });
   }
 
   hideActiveSession(): void {
@@ -536,7 +694,7 @@ export class BrowserHostManager {
               contextIsolation: true,
               sandbox: true,
               nodeIntegration: false,
-              partition: `persist:tabs-browser:${session.projectId}`,
+              partition: session.partition || `persist:tabs-browser:${session.projectId}`,
             },
           },
         };
@@ -561,7 +719,7 @@ export class BrowserHostManager {
                   contextIsolation: true,
                   sandbox: true,
                   nodeIntegration: false,
-                  partition: `persist:tabs-browser:${session.projectId}`,
+                  partition: session.partition || `persist:tabs-browser:${session.projectId}`,
                 },
               },
             };

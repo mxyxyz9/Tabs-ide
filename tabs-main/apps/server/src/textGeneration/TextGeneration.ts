@@ -20,8 +20,10 @@ export type TextGenerationProvider =
   | "codex"
   | "claudeAgent"
   | "cursor"
+  | "copilot"
   | "grok"
   | "opencode"
+  | "kilo"
   | "gemini";
 
 export interface CommitMessageGenerationInput {

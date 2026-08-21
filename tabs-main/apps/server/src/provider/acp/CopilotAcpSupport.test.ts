@@ -12,11 +12,11 @@ import {
 } from "./CopilotAcpSupport";
 
 describe("resolveCopilotAcpBaseModelId", () => {
-  it("normalizes empty and custom Copilot model ids", () => {
-    expect(resolveCopilotAcpBaseModelId(undefined)).toBe("claude-sonnet-4.6");
-    expect(resolveCopilotAcpBaseModelId("   ")).toBe("claude-sonnet-4.6");
-    expect(resolveCopilotAcpBaseModelId("  claude-sonnet-4.6  ")).toBe("claude-sonnet-4.6");
-    expect(resolveCopilotAcpBaseModelId("  gpt-5.4  ")).toBe("gpt-5.4");
+  it("requires an explicit Copilot model id", () => {
+    expect(resolveCopilotAcpBaseModelId(undefined)).toBeUndefined();
+    expect(resolveCopilotAcpBaseModelId("   ")).toBeUndefined();
+    expect(resolveCopilotAcpBaseModelId("  account-model-a  ")).toBe("account-model-a");
+    expect(resolveCopilotAcpBaseModelId("  account-model-b  ")).toBe("account-model-b");
   });
 });
 
@@ -34,21 +34,15 @@ describe("buildCopilotAcpSpawnInput", () => {
   });
 
   it("injects configured token into environment variables without leaking parent tokens", () => {
-    const env = buildCopilotEnvironment(
-      { token: "ghp_test12345" },
-      { PATH: "/bin:/usr/bin" },
-    );
+    const env = buildCopilotEnvironment({}, { PATH: "/bin:/usr/bin" }, "github_pat_test12345");
 
-    expect(env.COPILOT_GITHUB_TOKEN).toBe("ghp_test12345");
-    expect(env.GH_TOKEN).toBe("ghp_test12345");
-    expect(env.GITHUB_TOKEN).toBe("ghp_test12345");
+    expect(env.COPILOT_GITHUB_TOKEN).toBe("github_pat_test12345");
+    expect(env.GH_TOKEN).toBe("github_pat_test12345");
+    expect(env.GITHUB_TOKEN).toBe("github_pat_test12345");
   });
 
   it("injects GitHub Enterprise host into environment", () => {
-    const env = buildCopilotEnvironment(
-      { gheHost: "https://ghe.mycompany.com" },
-      { PATH: "/bin" },
-    );
+    const env = buildCopilotEnvironment({ gheHost: "https://ghe.mycompany.com" }, { PATH: "/bin" });
 
     expect(env.GITHUB_ENTERPRISE_URL).toBe("https://ghe.mycompany.com");
     expect(env.GH_HOST).toBe("https://ghe.mycompany.com");
@@ -118,7 +112,9 @@ describe("resolveCopilotAuthMethodId", () => {
   });
 
   it("falls back to copilot-login when authMethods array is empty", () => {
-    expect(resolveCopilotAuthMethodId({ protocolVersion: "1.0", authMethods: [] } as any)).toBe("copilot-login");
+    expect(resolveCopilotAuthMethodId({ protocolVersion: "1.0", authMethods: [] } as any)).toBe(
+      "copilot-login",
+    );
     expect(resolveCopilotAuthMethodId(undefined)).toBe("copilot-login");
   });
 });
@@ -142,13 +138,13 @@ describe("applyCopilotAcpModelSelection", () => {
       const { runtime, modelCalls } = makeRecordingRuntime();
       const result = yield* applyCopilotAcpModelSelection({
         runtime,
-        currentModelId: "claude-sonnet-4.6",
-        requestedModelId: "gpt-5.4",
+        currentModelId: "account-model-a",
+        requestedModelId: "account-model-b",
         mapError: (cause) => cause.message,
       });
 
-      expect(result).toBe("gpt-5.4");
-      expect(modelCalls).toEqual(["gpt-5.4"]);
+      expect(result).toBe("account-model-b");
+      expect(modelCalls).toEqual(["account-model-b"]);
     }),
   );
 
@@ -157,12 +153,12 @@ describe("applyCopilotAcpModelSelection", () => {
       const { runtime, modelCalls } = makeRecordingRuntime();
       const result = yield* applyCopilotAcpModelSelection({
         runtime,
-        currentModelId: "claude-sonnet-4.6",
-        requestedModelId: "claude-sonnet-4.6",
+        currentModelId: "account-model-a",
+        requestedModelId: "account-model-a",
         mapError: (cause) => cause.message,
       });
 
-      expect(result).toBe("claude-sonnet-4.6");
+      expect(result).toBe("account-model-a");
       expect(modelCalls).toHaveLength(0);
     }),
   );

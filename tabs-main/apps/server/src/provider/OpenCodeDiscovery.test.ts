@@ -25,6 +25,7 @@ function makeProvider(input: {
   name: string;
   source?: Provider["source"];
   env?: ReadonlyArray<string>;
+  options?: Record<string, unknown>;
   models?: Record<string, TestModelInput>;
 }): Provider {
   return {
@@ -32,7 +33,7 @@ function makeProvider(input: {
     name: input.name,
     source: input.source ?? "api",
     env: input.env ? [...input.env] : [],
-    options: {},
+    options: input.options ?? {},
     models: Object.fromEntries(
       Object.entries(input.models ?? {}).map(([modelId, model]) => [
         modelId,
@@ -97,6 +98,48 @@ function makeModel(input: Omit<TestModelInput, "providerID"> & Pick<Model, "prov
 }
 
 describe("resolvePreferredOpenCodeModelProviders", () => {
+  it("keeps custom connected providers with an inline API key", () => {
+    const providers = resolvePreferredOpenCodeModelProviders({
+      inventory: {
+        providerList: {
+          connected: ["custom-inline", "other"],
+          all: [
+            makeProvider({
+              id: "custom-inline",
+              name: "Custom Inline",
+              options: { apiKey: "configured-inline" },
+            }),
+            makeProvider({ id: "other", name: "Other" }),
+          ],
+        },
+        consoleState: null,
+      },
+    });
+
+    expect(providers.map((provider) => provider.id)).toEqual(["custom-inline"]);
+  });
+
+  it("accepts the snake_case inline API key option", () => {
+    const providers = resolvePreferredOpenCodeModelProviders({
+      inventory: {
+        providerList: {
+          connected: ["custom-inline", "other"],
+          all: [
+            makeProvider({
+              id: "custom-inline",
+              name: "Custom Inline",
+              options: { api_key: "configured-inline" },
+            }),
+            makeProvider({ id: "other", name: "Other" }),
+          ],
+        },
+        consoleState: null,
+      },
+    });
+
+    expect(providers.map((provider) => provider.id)).toEqual(["custom-inline"]);
+  });
+
   it("keeps explicit credential providers and OpenCode-managed providers together", () => {
     const providers = resolvePreferredOpenCodeModelProviders({
       inventory: {

@@ -1045,6 +1045,7 @@ export function makeOpenCodeAdapter(
                 binaryPath,
                 serverUrl,
                 ...(options?.environment ? { environment: options.environment } : {}),
+                ...(options?.provider === "kilo" ? { retryKiloCredentialStartup: true } : {}),
               });
               const client = openCodeRuntime.createOpenCodeSdkClient({
                 baseUrl: server.url,

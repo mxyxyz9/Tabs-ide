@@ -295,12 +295,12 @@ const baseCursorSettings: CursorSettings = {
 };
 
 describe("getCursorFallbackModels", () => {
-  it("includes composer-2 built-in fallback alongside custom models before ACP discovery", () => {
+  it("keeps only explicitly configured models before ACP discovery", () => {
     expect(
       getCursorFallbackModels({
         customModels: ["internal/cursor-model"],
       }).map((model) => model.slug),
-    ).toEqual(["composer-2", "internal/cursor-model"]);
+    ).toEqual(["internal/cursor-model"]);
   });
 });
 

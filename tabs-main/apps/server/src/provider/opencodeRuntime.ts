@@ -37,6 +37,7 @@ const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
 const OPENCODE_SERVER_READY_PREFIX = "opencode server listening";
 const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 5_000;
 const DEFAULT_HOSTNAME = "127.0.0.1";
+export const KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS = [500, 1_500] as const;
 export interface OpenCodeServerProcess {
   readonly url: string;
   readonly exitCode: Effect.Effect<number, never>;
@@ -77,6 +78,18 @@ export function openCodeRuntimeErrorDetail(cause: unknown): string {
     }
   }
   return String(cause);
+}
+
+function isRetryableKiloCredentialStartupFailure(cause: unknown): boolean {
+  const detail = openCodeRuntimeErrorDetail(cause).toLowerCase();
+  return (
+    detail.includes('failed query: update "credential" set') ||
+    detail.includes("failed query: update 'credential' set") ||
+    detail.includes("failed query: update `credential` set") ||
+    detail.includes("sqlite_busy") ||
+    detail.includes("database is busy") ||
+    detail.includes("database is locked")
+  );
 }
 
 export const runOpenCodeSdk = <A>(
@@ -131,6 +144,7 @@ export interface OpenCodeRuntimeShape {
     readonly port?: number;
     readonly hostname?: string;
     readonly timeoutMs?: number;
+    readonly retryKiloCredentialStartup?: boolean;
   }) => Effect.Effect<OpenCodeServerConnection, OpenCodeRuntimeError, Scope.Scope>;
   readonly runOpenCodeCommand: (input: {
     readonly binaryPath: string;
@@ -479,13 +493,46 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       });
     }
 
-    return startOpenCodeServerProcess({
+    const startInput = {
       binaryPath: input.binaryPath,
       ...(input.environment !== undefined ? { environment: input.environment } : {}),
       ...(input.port !== undefined ? { port: input.port } : {}),
       ...(input.hostname !== undefined ? { hostname: input.hostname } : {}),
       ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
-    }).pipe(
+    };
+    const startServer = input.retryKiloCredentialStartup
+      ? Effect.gen(function* () {
+          let retryIndex = 0;
+          while (true) {
+            const attemptScope = yield* Scope.make();
+            const attempt = yield* Effect.exit(
+              startOpenCodeServerProcess(startInput).pipe(
+                Effect.provideService(Scope.Scope, attemptScope),
+              ),
+            );
+            if (Exit.isSuccess(attempt)) {
+              yield* Effect.addFinalizer(() => Scope.close(attemptScope, Exit.void));
+              return attempt.value;
+            }
+
+            yield* Scope.close(attemptScope, Exit.void).pipe(Effect.ignore);
+            const retryDelayMs = KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS[retryIndex];
+            const failure = Cause.squash(attempt.cause);
+            if (retryDelayMs === undefined || !isRetryableKiloCredentialStartupFailure(failure)) {
+              return yield* Effect.failCause(attempt.cause);
+            }
+
+            retryIndex += 1;
+            yield* Effect.logWarning(
+              "Kilo credential reconciliation failed during startup; retrying",
+              { attempt: retryIndex + 1, delayMs: retryDelayMs },
+            );
+            yield* Effect.sleep(retryDelayMs);
+          }
+        })
+      : startOpenCodeServerProcess(startInput);
+
+    return startServer.pipe(
       Effect.map((server) => ({
         url: server.url,
         exitCode: server.exitCode,

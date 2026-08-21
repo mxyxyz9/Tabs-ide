@@ -34,6 +34,8 @@ import { ProviderEventLoggers } from "../Layers/ProviderEventLoggers";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import {
   defaultProviderContinuationIdentity,
+  makeExternalCliLifecycle,
+  makeProviderInstanceCapabilities,
   type ProviderDriver,
   type ProviderInstance,
 } from "../ProviderDriver";
@@ -167,6 +169,21 @@ export const CursorDriver: ProviderDriver<CursorSettings, CursorDriverEnv> = {
         displayName,
         accentColor,
         enabled,
+        capabilities: makeProviderInstanceCapabilities({
+          modelDiscovery: "runtime",
+          agentSessions: "supported",
+          textGeneration: "supported",
+          structuredGeneration: "supported",
+          login: "external",
+          logout: "external",
+          accountSwitch: "external",
+          installation: "external",
+        }),
+        lifecycle: makeExternalCliLifecycle([
+          { kind: "login", command: "cursor-agent login" },
+          { kind: "logout", command: "cursor-agent logout" },
+          { kind: "switch-account", command: "cursor-agent logout && cursor-agent login" },
+        ]),
         snapshot,
         adapter,
         textGeneration,

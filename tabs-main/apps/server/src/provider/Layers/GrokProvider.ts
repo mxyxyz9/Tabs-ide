@@ -49,15 +49,6 @@ const VERSION_PROBE_TIMEOUT_MS = 4_000;
 // under a second.
 const GROK_ACP_MODEL_DISCOVERY_TIMEOUT_MS = 6_000;
 
-const GROK_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
-  {
-    slug: "grok-build",
-    name: "Grok Build",
-    isCustom: false,
-    capabilities: DEFAULT_GROK_MODEL_CAPABILITIES,
-  },
-];
-
 export function buildInitialGrokProviderSnapshot(
   grokSettings: GrokSettings,
 ): Effect.Effect<ServerProviderDraft> {
@@ -70,6 +61,9 @@ export function buildInitialGrokProviderSnapshot(
         presentation: GROK_PRESENTATION,
         enabled: false,
         checkedAt,
+        catalogStatus: "empty",
+        catalogSource: "grok-acp",
+        catalogCheckedAt: checkedAt,
         models,
         probe: {
           installed: false,
@@ -99,7 +93,7 @@ export function buildInitialGrokProviderSnapshot(
 
 function grokModelsFromSettings(
   customModels: ReadonlyArray<string> | undefined,
-  builtInModels: ReadonlyArray<ServerProviderModel> = GROK_BUILT_IN_MODELS,
+  builtInModels: ReadonlyArray<ServerProviderModel> = [],
 ): ReadonlyArray<ServerProviderModel> {
   return providerModelsFromSettings(
     builtInModels,
@@ -198,6 +192,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       presentation: GROK_PRESENTATION,
       enabled: grokSettings.enabled,
       checkedAt,
+      catalogStatus: "failed",
+      catalogSource: "grok-acp",
+      catalogCheckedAt: checkedAt,
       models: fallbackModels,
       probe: {
         installed: !isCommandMissingCause(error),
@@ -216,6 +213,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       presentation: GROK_PRESENTATION,
       enabled: grokSettings.enabled,
       checkedAt,
+      catalogStatus: "failed",
+      catalogSource: "grok-acp",
+      catalogCheckedAt: checkedAt,
       models: fallbackModels,
       probe: {
         installed: true,
@@ -235,6 +235,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       presentation: GROK_PRESENTATION,
       enabled: grokSettings.enabled,
       checkedAt,
+      catalogStatus: "failed",
+      catalogSource: "grok-acp",
+      catalogCheckedAt: checkedAt,
       models: fallbackModels,
       probe: {
         installed: true,
@@ -263,6 +266,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       presentation: GROK_PRESENTATION,
       enabled: grokSettings.enabled,
       checkedAt,
+      catalogStatus: "failed",
+      catalogSource: "grok-acp",
+      catalogCheckedAt: checkedAt,
       models: fallbackModels,
       probe: {
         installed: true,
@@ -283,6 +289,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
       presentation: GROK_PRESENTATION,
       enabled: grokSettings.enabled,
       checkedAt,
+      catalogStatus: "failed",
+      catalogSource: "grok-acp",
+      catalogCheckedAt: checkedAt,
       models: fallbackModels,
       probe: {
         installed: true,
@@ -305,6 +314,9 @@ export const checkGrokProviderStatus = Effect.fn("checkGrokProviderStatus")(func
     presentation: GROK_PRESENTATION,
     enabled: grokSettings.enabled,
     checkedAt,
+    catalogStatus: models.length > 0 ? "ready" : "empty",
+    catalogSource: "grok-acp",
+    catalogCheckedAt: checkedAt,
     models,
     probe: {
       installed: true,

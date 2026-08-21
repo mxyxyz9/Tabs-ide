@@ -1065,6 +1065,12 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
   input: PreviewAutomationWaitForInput,
 });
 
+export interface BrowserProfileDomainInfo {
+  domain: string;
+  cookieCount: number;
+  isAuthenticated: boolean;
+}
+
 export interface DesktopBridge {
   getWsUrl: () => string | null;
   cloneRepository: (input: DesktopCloneRepositoryInput) => Promise<DesktopCloneRepositoryResult>;
@@ -1118,7 +1124,15 @@ export interface DesktopBridge {
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
   setBrowserBounds: (input: DesktopBrowserHostSetBoundsInput) => Promise<void>;
   syncBrowserSessions: (projectIds: readonly string[]) => Promise<void>;
-  recreateBrowserSession: (input: { projectId: string; sessionId?: string }) => Promise<void>;
+  recreateBrowserSession: (input: {
+    projectId: string;
+    sessionId?: string | undefined;
+    partition?: string | undefined;
+  }) => Promise<void>;
+  clearBrowserProfileData: (input: { profileId: string }) => Promise<void>;
+  openBrowserProfileLoginWindow: (input: { profileId: string; url?: string }) => Promise<void>;
+  getBrowserProfileDomains: (input: { profileId: string }) => Promise<BrowserProfileDomainInfo[]>;
+  clearBrowserProfileDomain: (input: { profileId: string; domain: string }) => Promise<void>;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
   getTailscaleStatus: () => Promise<{
     available: boolean;
@@ -1578,6 +1592,7 @@ export interface DesktopBrowserHostEnsureSessionInput {
   projectId: string;
   sessionId?: string | undefined;
   initialUrl: string;
+  partition?: string | undefined;
 }
 
 export interface DesktopBrowserHostActivateSessionInput {
