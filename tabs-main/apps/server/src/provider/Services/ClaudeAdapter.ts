@@ -16,4 +16,17 @@ import type { ProviderAdapterShape } from "./ProviderAdapter";
  * ClaudeAdapterShape — per-instance Claude adapter contract. Carries
  * a branded driver kind as the nominal discriminant.
  */
-export interface ClaudeAdapterShape extends ProviderAdapterShape<ProviderAdapterError> {}
+export interface ClaudeAdapterShape extends ProviderAdapterShape<ProviderAdapterError> {
+  readonly steerTurn?: NonNullable<ProviderAdapterShape<ProviderAdapterError>["steerTurn"]>;
+  readonly stopTask?: NonNullable<ProviderAdapterShape<ProviderAdapterError>["stopTask"]>;
+  readonly backgroundTask?: NonNullable<
+    ProviderAdapterShape<ProviderAdapterError>["backgroundTask"]
+  >;
+  readonly steerSubagent?: NonNullable<ProviderAdapterShape<ProviderAdapterError>["steerSubagent"]>;
+  readonly listCommands?: NonNullable<ProviderAdapterShape<ProviderAdapterError>["listCommands"]>;
+  readonly listSkills?: NonNullable<ProviderAdapterShape<ProviderAdapterError>["listSkills"]>;
+  readonly listAgents?: NonNullable<ProviderAdapterShape<ProviderAdapterError>["listAgents"]>;
+  readonly getComposerCapabilities?: NonNullable<
+    ProviderAdapterShape<ProviderAdapterError>["getComposerCapabilities"]
+  >;
+}

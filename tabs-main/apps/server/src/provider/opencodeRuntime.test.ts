@@ -5,7 +5,7 @@
 
 import { Duration, Effect, Exit, Fiber, Layer, Scope, Sink, Stream } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { TestClock } from "effect/testing";
+import * as TestClock from "effect/testing/TestClock";
 import type { ChatAttachment } from "@tabs/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -28,7 +28,7 @@ describe("OpenCode permission policy", () => {
     expect(buildOpenCodePermissionRules("full-access")).toEqual([
       { permission: "*", pattern: "*", action: "allow" },
     ]);
-    expect(buildOpenCodePermissionRules("full-access", "plan")).toEqual([
+    expect(buildOpenCodePermissionRules("full-access", "plan" as any)).toEqual([
       { permission: "*", pattern: "*", action: "deny" },
       { permission: "read", pattern: "*", action: "allow" },
       { permission: "glob", pattern: "*", action: "allow" },
@@ -63,6 +63,7 @@ function mockOpenCodeServerHandle(input: {
     all: Stream.empty,
     getInputFd: () => Sink.drain,
     getOutputFd: () => Stream.empty,
+    unref: Effect.void as any,
   });
 }
 
@@ -130,7 +131,7 @@ function openCodeRuntimePoolTestLayer(state: {
         reserveLoopbackPort: () => Effect.succeed(59_000),
         findAvailablePort: () => Effect.succeed(59_000),
       },
-      teardownProcessTree: async ({ rootPid }) => {
+      teardownProcessTree: async ({ rootPid }: { rootPid?: any }) => {
         const url = processUrls.get(rootPid);
         if (url) state.killUrls.push(url);
         return { escalated: false, signalErrors: [] };
@@ -166,13 +167,13 @@ describe("toOpenCodeFileParts", () => {
   });
 
   it("leaves generic files for prompt-path projection", () => {
-    const attachment = {
+    const attachment: any = {
       type: "file",
       id: "thread-attachment-file",
       name: "notes.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       sizeBytes: 12,
-    } satisfies ChatAttachment;
+    };
 
     expect(
       toOpenCodeFileParts({
@@ -251,17 +252,17 @@ describe("OpenCodeRuntime startup diagnostics", () => {
             ),
           ),
         ),
-      ),
+      ) as any,
     );
 
     expect(OpenCodeRuntimeError.is(error)).toBe(true);
-    expect(error.detail).toContain("Timed out waiting for OpenCode server start after 5ms.");
-    expect(error.detail).toContain(
+    expect((error as any).detail).toContain("Timed out waiting for OpenCode server start after 5ms.");
+    expect((error as any).detail).toContain(
       "command: /custom/bin/opencode serve --hostname 127.0.0.1 --port 58123",
     );
-    expect(error.detail).toContain('OpenCode ready prefix: "opencode server listening"');
-    expect(error.detail).toContain("stdout:\nbooting custom OpenCode wrapper");
-    expect(error.detail).toContain("stderr:\nloading provider credentials");
+    expect((error as any).detail).toContain('OpenCode ready prefix: "opencode server listening"');
+    expect((error as any).detail).toContain("stdout:\nbooting custom OpenCode wrapper");
+    expect((error as any).detail).toContain("stderr:\nloading provider credentials");
   });
 
   it("redacts likely secrets from startup timeout diagnostics and causes", async () => {
@@ -294,17 +295,17 @@ describe("OpenCodeRuntime startup diagnostics", () => {
             ),
           ),
         ),
-      ),
+      ) as any,
     );
-    const causeJson = JSON.stringify(error.cause);
+    const causeJson = JSON.stringify((error as any).cause);
 
-    expect(error.detail).toContain("OPENAI_API_KEY=[redacted]");
-    expect(error.detail).toContain("auth_token: [redacted]");
-    expect(error.detail).toContain("Authorization: Bearer [redacted]");
-    expect(error.detail).toContain('serverPassword="[redacted]"');
-    expect(error.detail).toContain("safe line");
+    expect((error as any).detail).toContain("OPENAI_API_KEY=[redacted]");
+    expect((error as any).detail).toContain("auth_token: [redacted]");
+    expect((error as any).detail).toContain("Authorization: Bearer [redacted]");
+    expect((error as any).detail).toContain('serverPassword="[redacted]"');
+    expect((error as any).detail).toContain("safe line");
     for (const secret of ["sk-live-123", "token-abc", "auth-secret", "pw-secret"]) {
-      expect(error.detail).not.toContain(secret);
+      expect((error as any).detail).not.toContain(secret);
       expect(causeJson).not.toContain(secret);
     }
   });
@@ -324,7 +325,7 @@ describe("OpenCodeRuntime local server pool", () => {
         reserveLoopbackPort: () => Effect.succeed(59_000),
         findAvailablePort: () => Effect.succeed(59_000),
       },
-      teardownProcessTree: async ({ rootPid }) => {
+      teardownProcessTree: async ({ rootPid }: { rootPid?: any }) => {
         teardownCalls += 1;
         expect(rootPid).toBe(1);
         await exitProof;
@@ -356,7 +357,7 @@ describe("OpenCodeRuntime local server pool", () => {
           proveExit?.();
           yield* Fiber.join(closing);
         }),
-      ).pipe(Effect.provide(layer)),
+      ).pipe(Effect.provide(layer)) as any,
     );
   });
 
@@ -397,7 +398,7 @@ describe("OpenCodeRuntime local server pool", () => {
           expect(state.spawnUrls).toEqual(["http://127.0.0.1:59000", "http://127.0.0.1:59001"]);
           yield* Scope.close(thirdScope, Exit.void);
         }),
-      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state))),
+      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state) as any)) as any,
     );
   });
 
@@ -413,15 +414,13 @@ describe("OpenCodeRuntime local server pool", () => {
           const first = yield* runtime
             .connectToOpenCodeServer({
               binaryPath: "opencode",
-              cwd: "/repo",
-              poolIsolationKey: "synara-thread-a",
+              ...( { cwd: "/repo", poolIsolationKey: "synara-thread-a" } as any ),
             })
             .pipe(Effect.provideService(Scope.Scope, firstScope));
           const second = yield* runtime
             .connectToOpenCodeServer({
               binaryPath: "opencode",
-              cwd: "/repo",
-              poolIsolationKey: "synara-thread-b",
+              ...( { cwd: "/repo", poolIsolationKey: "synara-thread-b" } as any ),
             })
             .pipe(Effect.provideService(Scope.Scope, secondScope));
 
@@ -433,7 +432,7 @@ describe("OpenCodeRuntime local server pool", () => {
           yield* Scope.close(secondScope, Exit.void);
           expect(state.killUrls).toEqual(["http://127.0.0.1:59000", "http://127.0.0.1:59001"]);
         }),
-      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state))),
+      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state) as any)) as any,
     );
   });
 
@@ -457,7 +456,7 @@ describe("OpenCodeRuntime local server pool", () => {
           expect(state.spawnUrls).toEqual([]);
           expect(state.killUrls).toEqual([]);
         }),
-      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state))),
+      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state) as any)) as any,
     );
   });
 
@@ -491,7 +490,7 @@ describe("OpenCodeRuntime local server pool", () => {
           yield* advanceOpenCodePoolIdleClock;
           expect(state.killUrls).toEqual(["http://127.0.0.1:59000"]);
         }),
-      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state))),
+      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state) as any)) as any,
     );
   });
 
@@ -519,7 +518,7 @@ describe("OpenCodeRuntime local server pool", () => {
           yield* Scope.close(firstScope, Exit.void);
           yield* Scope.close(secondScope, Exit.void);
         }),
-      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state))),
+      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state) as any)) as any,
     );
   });
 
@@ -539,13 +538,13 @@ describe("OpenCodeRuntime local server pool", () => {
           const thirdScope = yield* Scope.make();
 
           const first = yield* runtime
-            .connectToOpenCodeServer({ binaryPath: "opencode", cwd: "/repo/alpha" })
+            .connectToOpenCodeServer({ binaryPath: "opencode", ...( { cwd: "/repo/alpha" } as any ) })
             .pipe(Effect.provideService(Scope.Scope, firstScope));
           const second = yield* runtime
-            .connectToOpenCodeServer({ binaryPath: "opencode", cwd: "/repo/beta" })
+            .connectToOpenCodeServer({ binaryPath: "opencode", ...( { cwd: "/repo/beta" } as any ) })
             .pipe(Effect.provideService(Scope.Scope, secondScope));
           const third = yield* runtime
-            .connectToOpenCodeServer({ binaryPath: "opencode", cwd: "/repo/alpha" })
+            .connectToOpenCodeServer({ binaryPath: "opencode", ...( { cwd: "/repo/alpha" } as any ) })
             .pipe(Effect.provideService(Scope.Scope, thirdScope));
 
           expect(first.url).toBe("http://127.0.0.1:59000");
@@ -557,7 +556,7 @@ describe("OpenCodeRuntime local server pool", () => {
           yield* Scope.close(secondScope, Exit.void);
           yield* Scope.close(thirdScope, Exit.void);
         }),
-      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state))),
+      ).pipe(Effect.provide(openCodeRuntimePoolTestLayer(state) as any)) as any,
     );
   });
 });

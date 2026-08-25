@@ -11,7 +11,7 @@
 import * as fs from "node:fs/promises";
 import * as nodePath from "node:path";
 
-import type { ProviderKind, ProviderSkillDescriptor } from "@tabs/contracts";
+import type { ProviderDriverKind, ProviderSkillDescriptor } from "@tabs/contracts";
 import { discoverClaudePluginSkillRoots } from "./claudePluginSkills.ts";
 
 type FrontmatterValue = string | boolean;
@@ -306,7 +306,7 @@ async function collectSkillDescriptorsFromRoots(
           }),
         ),
       );
-      return descriptors.filter((skill) => skill !== null);
+      return descriptors.filter((skill): skill is ProviderSkillDescriptor => skill !== null);
     }),
   );
   return skillsPerRoot.flat();
@@ -337,11 +337,16 @@ export interface SkillsCatalogDiscoveryInput {
   /** Synara base dir (usually `~/.synara`); skills live in `{base}/skills`. */
   readonly synaraBaseDir: string;
   /** Provider whose native copies should win when the same skill exists in several roots. */
-  readonly provider?: ProviderKind | null;
+  readonly provider?: ProviderDriverKind | string | null;
   /** Settings needs every origin; composer/provider pickers keep one winner by name. */
   readonly includeDuplicateOrigins?: boolean;
   /** Bypass the short-lived discovery cache. */
   readonly forceReload?: boolean;
+}
+
+export interface DiscoverProviderSkillsCatalogInput extends SkillsCatalogDiscoveryInput {
+  readonly provider?: ProviderDriverKind | string | null;
+  readonly includeRemainingOrigins?: boolean;
 }
 
 export interface SkillsCatalogRootInput extends SkillsCatalogDiscoveryInput {
@@ -467,7 +472,7 @@ const PROVIDER_SKILL_ORIGIN_PREFERENCES = {
   kilo: ["kilo", "agents", "claude"],
   opencode: ["opencode", "claude", "agents"],
   pi: ["pi", "agents"],
-} as const satisfies Partial<Record<ProviderKind, readonly SkillsHomeOrigin[]>>;
+} as const satisfies Partial<Record<string, readonly SkillsHomeOrigin[]>>;
 
 function homeRootsForOrigin(
   origin: SkillsHomeOrigin,
@@ -483,13 +488,13 @@ function projectRootNamesForOrigin(origin: SkillsHomeOrigin): readonly string[] 
 // Native copies first so an agent keeps using its own skill, then Synara as the
 // portable fallback, then the remaining provider homes for cross-provider reuse.
 function preferredOriginsForProvider(
-  provider: ProviderKind | null | undefined,
+  provider: ProviderDriverKind | string | null | undefined,
 ): ReadonlyArray<SkillsHomeOrigin> {
-  return provider ? (PROVIDER_SKILL_ORIGIN_PREFERENCES[provider] ?? []) : [];
+  return provider ? (PROVIDER_SKILL_ORIGIN_PREFERENCES[provider as keyof typeof PROVIDER_SKILL_ORIGIN_PREFERENCES] ?? []) : [];
 }
 
 function orderedOriginsForProvider(
-  provider: ProviderKind | null | undefined,
+  provider: ProviderDriverKind | string | null | undefined,
   includeSynaraRoot = true,
   includeRemainingOrigins = true,
 ): SkillsHomeOrigin[] {

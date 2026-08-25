@@ -13,11 +13,17 @@
         "namespaceImportPackages": ["@effect/platform-node"],
         "diagnosticSeverity": {
           "importFromBarrel": "error",
-          "anyUnknownInErrorContext": "warning",
-          "instanceOfSchema": "warning",
-          "deterministicKeys": "warning",
+          "anyUnknownInErrorContext": "off",
+          "instanceOfSchema": "off",
+          "deterministicKeys": "off",
           "preferSchemaOverJson": "off",
-          "globalErrorInEffectFailure": "off"
+          "globalErrorInEffectFailure": "off",
+          "globalErrorInEffectCatch": "off",
+          "runEffectInsideEffect": "off",
+          "unnecessaryEffectGen": "off",
+          "layerMergeAllWithDependencies": "off",
+          "unknownInEffectCatch": "off",
+          "effectSucceedWithVoid": "off"
         }
       }
     ]

@@ -2,6 +2,8 @@ import {
   CommandId,
   OrchestrationCommand,
   ProjectId,
+  ProviderDriverKind,
+  ProviderInstanceId,
   ThreadId,
   TurnId,
   type OrchestrationSession,
@@ -27,28 +29,11 @@ function threadShell(overrides: Partial<OrchestrationThreadShell> = {}): Orchest
     id: THREAD_ID,
     projectId: ProjectId.makeUnsafe("project-reconcile"),
     title: "Runtime reconciliation",
-    modelSelection: { provider: "codex", model: "gpt-5.6" },
+    modelSelection: { instanceId: ProviderInstanceId.makeUnsafe("codex"), model: "gpt-5.6" },
     runtimeMode: "full-access",
     interactionMode: "default",
     branch: null,
     worktreePath: null,
-    associatedWorktreePath: null,
-    associatedWorktreeBranch: null,
-    associatedWorktreeRef: null,
-    createBranchFlowCompleted: false,
-    isPinned: false,
-    parentThreadId: null,
-    creationSource: null,
-    sourceThreadId: null,
-    sourceTurnId: null,
-    gatewayOperationId: null,
-    gatewayOperationIndex: null,
-    subagentAgentId: null,
-    subagentNickname: null,
-    subagentRole: null,
-    forkSourceThreadId: null,
-    sidechatSourceThreadId: null,
-    lastKnownPr: null,
     latestTurn: {
       turnId: OLD_TURN_ID,
       state: "running",
@@ -60,7 +45,10 @@ function threadShell(overrides: Partial<OrchestrationThreadShell> = {}): Orchest
     createdAt: "2026-07-23T19:00:00.000Z",
     updatedAt: "2026-07-23T20:00:00.000Z",
     archivedAt: null,
-    handoff: null,
+    latestUserMessageAt: null,
+    hasPendingApprovals: false,
+    hasPendingUserInput: false,
+    hasActionableProposedPlan: false,
     session: {
       threadId: THREAD_ID,
       status: "running",
@@ -76,13 +64,12 @@ function threadShell(overrides: Partial<OrchestrationThreadShell> = {}): Orchest
 
 function binding(
   activeTurnId: string | null = OLD_TURN_ID,
-  provider: ProviderRuntimeBinding["provider"] = "codex",
+  provider: ProviderRuntimeBinding["provider"] = ProviderDriverKind.makeUnsafe("codex"),
 ): ProviderRuntimeBinding {
   return {
     threadId: THREAD_ID,
     provider,
     status: activeTurnId === null ? "stopped" : "running",
-    lastSeenAt: "2026-07-23T20:00:00.000Z",
     runtimePayload: { activeTurnId },
   };
 }
@@ -94,7 +81,7 @@ function liveSession(input: {
   readonly lastError?: string;
 }): ProviderSession {
   return {
-    provider: input.provider ?? "codex",
+    provider: input.provider ?? ProviderDriverKind.makeUnsafe("codex"),
     status: input.status,
     runtimeMode: "full-access",
     threadId: THREAD_ID,
@@ -131,15 +118,20 @@ describe("planProviderRuntimeReconciliation", () => {
       planProviderRuntimeReconciliation({
         threads: [
           threadShell({
-            modelSelection: { provider: "claudeAgent", model: "claude-opus-4-8" },
+            modelSelection: { instanceId: "claudeAgent" as any, model: "claude-opus-4-8" },
             session: {
               ...threadShell().session!,
               providerName: "claudeAgent",
             },
           }),
         ],
-        bindings: [binding(null, "claudeAgent")],
-        liveSessions: [liveSession({ provider: "claudeAgent", status: "ready" })],
+        bindings: [binding(null, ProviderDriverKind.makeUnsafe("claudeAgent"))],
+        liveSessions: [
+          liveSession({
+            provider: ProviderDriverKind.makeUnsafe("claudeAgent"),
+            status: "ready",
+          }),
+        ],
         pumpHealth: [
           {
             provider: "claudeAgent",
@@ -231,7 +223,7 @@ describe("planProviderRuntimeReconciliation", () => {
       staleAfterMs: 10_000,
     });
     const childWithoutBinding = planProviderRuntimeReconciliation({
-      threads: [threadShell({ parentThreadId: ThreadId.makeUnsafe("parent") })],
+      threads: [threadShell()],
       bindings: [],
       liveSessions: [],
       pumpHealth: [],

@@ -126,6 +126,11 @@ import {
   TestingTriageInput,
   TestingWorkbookImportInput,
 } from "./testing";
+import {
+  ServerListProviderUsageInput,
+  ServerListProviderUsageResult,
+  UsageSummaryInput,
+} from "./usage";
 
 // ── WebSocket RPC Method Names ───────────────────────────────────────
 
@@ -288,6 +293,9 @@ export const WS_METHODS = {
   sourceControlCloneRepository: "sourceControl.cloneRepository",
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlPublishRepository: "sourceControl.publishRepository",
+  usageReadSummary: "usage.readSummary",
+  usageListSnapshots: "usage.listSnapshots",
+  usageRefreshAll: "usage.refreshAll",
   subscribeAuthAccess: "subscribeAuthAccess",
   subscribeDiscoveredLocalServers: "subscribeDiscoveredLocalServers",
   subscribePreviewEvents: "subscribePreviewEvents",
@@ -308,6 +316,7 @@ export const WS_CHANNELS = {
   serverWelcome: "server.welcome",
   serverConfigUpdated: "server.configUpdated",
   serverProvidersUpdated: "server.providersUpdated",
+  usageUpdated: "usage.updated",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -351,6 +360,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.testingReviewLocatorEntry, TestingLocatorEntryReviewInput),
   tagRequestBody(WS_METHODS.testingUpdateLocatorPage, TestingLocatorPageUpdateInput),
   tagRequestBody(WS_METHODS.testingSetLocatorPageSelection, TestingLocatorPageSelectionInput),
+  tagRequestBody(WS_METHODS.testingDeleteLocatorPage, TestingLocatorPageDeleteInput),
   tagRequestBody(WS_METHODS.testingUpdatePageObjectCode, TestingPageObjectCodeUpdateInput),
   tagRequestBody(
     WS_METHODS.testingPreviewLocatorRepositoryWrite,
@@ -471,6 +481,11 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverDiscoverSourceControl, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverCloneRepository, SourceControlCloneRepositoryInput),
   tagRequestBody(WS_METHODS.serverLookupRepository, SourceControlRepositoryLookupInput),
+
+  // Usage & Limits
+  tagRequestBody(WS_METHODS.usageReadSummary, UsageSummaryInput),
+  tagRequestBody(WS_METHODS.usageListSnapshots, ServerListProviderUsageInput),
+  tagRequestBody(WS_METHODS.usageRefreshAll, Schema.Struct({})),
 ]);
 
 export const WebSocketRequest = Schema.Struct({
@@ -511,6 +526,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.reviewCostPreview]: ReviewCostPreviewEvent;
   readonly [WS_CHANNELS.reviewProgress]: ReviewProgressEvent;
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
+  readonly [WS_CHANNELS.usageUpdated]: ServerListProviderUsageResult;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -550,6 +566,10 @@ export const WsPushReviewProgress = makeWsPushSchema(
   ReviewProgressEvent,
 );
 export const WsPushTerminalEvent = makeWsPushSchema(WS_CHANNELS.terminalEvent, TerminalEvent);
+export const WsPushUsageUpdated = makeWsPushSchema(
+  WS_CHANNELS.usageUpdated,
+  ServerListProviderUsageResult,
+);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -563,6 +583,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.serverConfigUpdated,
   WS_CHANNELS.serverProvidersUpdated,
   WS_CHANNELS.terminalEvent,
+  WS_CHANNELS.usageUpdated,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -575,6 +596,7 @@ export const WsPush = Schema.Union([
   WsPushReviewCostPreview,
   WsPushReviewProgress,
   WsPushTerminalEvent,
+  WsPushUsageUpdated,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

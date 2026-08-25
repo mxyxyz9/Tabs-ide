@@ -136,6 +136,12 @@ import type {
   TerminalEvent,
 } from "./terminal.ts";
 import type { ServerRemoveKeybindingInput, ServerUpsertKeybindingInput } from "./server.ts";
+import type {
+  UsageSummary,
+  UsageSummaryInput,
+  ServerListProviderUsageInput,
+  ServerListProviderUsageResult,
+} from "./usage.ts";
 import * as Schema from "effect/Schema";
 import type {
   DiscoveredLocalServerList,
@@ -1269,6 +1275,9 @@ export interface LocalApi {
       input: ServerProcessResourceHistoryInput,
     ) => Promise<ServerProcessResourceHistoryResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
+    readUsageSummary: (input: UsageSummaryInput) => Promise<UsageSummary>;
+    listUsageSnapshots: (input?: ServerListProviderUsageInput) => Promise<ServerListProviderUsageResult>;
+    refreshAllUsageSnapshots: () => Promise<ServerListProviderUsageResult>;
   };
 }
 

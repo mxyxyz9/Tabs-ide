@@ -35,6 +35,7 @@ import { GitHubCliLive } from "./git/Layers/GitHubCli";
 import { GitEnvironmentLive } from "./git/Layers/GitEnvironment";
 import { PtyAdapter } from "./terminal/Services/PTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
+import { layer as UsageServiceLive } from "./usage/UsageService.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -144,6 +145,10 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(runtimeServicesLayer),
   );
 
+  const usageLayer = UsageServiceLive.pipe(
+    Layer.provide(FetchHttpClient.layer),
+  );
+
   // NodeServices (FileSystem/Path/ChildProcessSpawner) is provided once, at the
   // innermost level of the main composition, so the instance-registry drivers
   // (which sit below this layer) can also see it.
@@ -156,5 +161,6 @@ export function makeServerRuntimeServicesLayer() {
     terminalLayer,
     KeybindingsLive,
     ProviderMaintenanceRunnerLive,
+    usageLayer,
   );
 }

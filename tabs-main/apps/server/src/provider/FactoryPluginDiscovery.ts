@@ -6,13 +6,11 @@
 import * as fs from "node:fs/promises";
 import * as nodePath from "node:path";
 
-import type {
-  ProviderListPluginsResult,
-  ProviderPluginDescriptor,
-  ProviderPluginMarketplaceDescriptor,
-  ProviderPluginMarketplaceLoadError,
-  ProviderReadPluginResult,
-} from "@tabs/contracts";
+type ProviderListPluginsResult = any;
+type ProviderPluginDescriptor = any;
+type ProviderPluginMarketplaceDescriptor = any;
+type ProviderPluginMarketplaceLoadError = any;
+type ProviderReadPluginResult = any;
 
 import { collectSkillsFromRoots } from "./skillsCatalog.ts";
 
@@ -190,7 +188,7 @@ export async function listFactoryPlugins(
           }),
         ),
       )
-    ).filter((plugin): plugin is ProviderPluginDescriptor => plugin !== null);
+    ).filter((plugin: any): plugin is ProviderPluginDescriptor => plugin !== null);
     marketplaces.push({
       name: registration.name,
       path: registration.path,

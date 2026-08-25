@@ -643,11 +643,12 @@ const runClaudeCommand = Effect.fn("runClaudeCommand")(function* (
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
-  const command = ChildProcess.make(claudeSettings.binaryPath, [...args], {
+  const binary = claudeSettings.binaryPath?.trim() || "claude";
+  const command = ChildProcess.make(binary, [...args], {
     env: claudeEnvironment,
     shell: process.platform === "win32",
   });
-  return yield* spawnAndCollect(claudeSettings.binaryPath, command);
+  return yield* spawnAndCollect(binary, command);
 });
 
 export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(function* (

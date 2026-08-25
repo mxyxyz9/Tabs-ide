@@ -431,8 +431,9 @@ export function makeDroidAdapter(
                     }
                   }
 
-                  const parsed = parsePermissionRequest(params);
+                  const permissionRequest = parsePermissionRequest(params);
                   const requestId = (yield* randomUUIDv4) as ApprovalRequestId;
+                  const runtimeRequestId = requestId as unknown as RuntimeRequestId;
                   const decisionDeferred = yield* Deferred.make<ProviderApprovalDecision>();
                   pendingApprovals.set(requestId, { decision: decisionDeferred });
 
@@ -442,9 +443,13 @@ export function makeDroidAdapter(
                       provider: PROVIDER,
                       threadId: input.threadId,
                       turnId: sessions.get(input.threadId)?.activeTurnId,
-                      requestId: requestId as unknown as RuntimeRequestId,
-                      requestKind: parsed.requestKind,
-                      payload: parsed.payload,
+                      requestId: runtimeRequestId,
+                      permissionRequest,
+                      detail:
+                        permissionRequest.detail ??
+                        encodeJsonStringForDiagnostics(params)?.slice(0, 2000) ??
+                        "[unserializable params]",
+                      args: params,
                       source: "acp.jsonrpc",
                       method: "session/request_permission",
                       rawPayload: params,
@@ -459,10 +464,9 @@ export function makeDroidAdapter(
                       provider: PROVIDER,
                       threadId: input.threadId,
                       turnId: sessions.get(input.threadId)?.activeTurnId,
-                      requestId: requestId as unknown as RuntimeRequestId,
+                      requestId: runtimeRequestId,
+                      permissionRequest,
                       decision,
-                      source: "acp.jsonrpc",
-                      method: "session/request_permission",
                     }),
                   );
 
@@ -570,11 +574,12 @@ export function makeDroidAdapter(
             stopped: false,
           };
 
-          ctx.notificationFiber = yield* Effect.fork(
+          ctx.notificationFiber = yield* Effect.forkChild(
             Stream.runForEach(acp.getEvents(), (parsedEvent) =>
               Effect.gen(function* () {
                 switch (parsedEvent._tag) {
                   case "AssistantItemStarted":
+                  case "AssistantItemCompleted":
                     yield* offerRuntimeEvent(
                       makeAcpAssistantItemEvent({
                         stamp: yield* makeEventStamp(),
@@ -582,8 +587,10 @@ export function makeDroidAdapter(
                         threadId: ctx.threadId,
                         turnId: ctx.activeTurnId,
                         itemId: parsedEvent.itemId,
-                        source: "acp.jsonrpc",
-                        method: "session/update",
+                        lifecycle:
+                          parsedEvent._tag === "AssistantItemStarted"
+                            ? "item.started"
+                            : "item.completed",
                       }),
                     );
                     break;
@@ -594,10 +601,9 @@ export function makeDroidAdapter(
                         provider: PROVIDER,
                         threadId: ctx.threadId,
                         turnId: ctx.activeTurnId,
-                        itemId: parsedEvent.itemId,
-                        delta: parsedEvent.delta,
-                        source: "acp.jsonrpc",
-                        method: "session/update",
+                        ...(parsedEvent.itemId ? { itemId: parsedEvent.itemId } : {}),
+                        text: parsedEvent.text,
+                        rawPayload: parsedEvent.rawPayload,
                       }),
                     );
                     break;
@@ -609,117 +615,164 @@ export function makeDroidAdapter(
                       "session/update",
                     );
                     break;
-                  case "ToolCallStarted":
                   case "ToolCallUpdated":
-                  case "ToolCallFinished":
                     yield* offerRuntimeEvent(
                       makeAcpToolCallEvent({
                         stamp: yield* makeEventStamp(),
                         provider: PROVIDER,
                         threadId: ctx.threadId,
                         turnId: ctx.activeTurnId,
-                        itemId: parsedEvent.itemId,
-                        callState: parsedEvent.callState,
-                        source: "acp.jsonrpc",
-                        method: "session/update",
+                        toolCall: parsedEvent.toolCall,
+                        rawPayload: parsedEvent.rawPayload,
                       }),
                     );
                     break;
                 }
               }),
+            ).pipe(
+              Effect.catch((cause) =>
+                Effect.logError("Failed to process Droid runtime notification.", { cause }),
+              ),
             ),
           );
 
           sessionScopeTransferred = true;
           sessions.set(input.threadId, ctx);
           return session;
-        }),
+        }).pipe(Effect.scoped),
       );
 
     const sendTurn: DroidAdapterShape["sendTurn"] = (input) =>
-      withThreadLock(
-        input.threadId,
-        Effect.gen(function* () {
-          const ctx = yield* requireSession(input.threadId);
-          const turnId = ((yield* randomUUIDv4) ?? `droid-turn-${Date.now()}`) as TurnId;
-          ctx.activeTurnId = turnId;
+      Effect.gen(function* () {
+        const prepared = yield* withThreadLock(
+          input.threadId,
+          Effect.gen(function* () {
+            const ctx = yield* requireSession(input.threadId);
+            const turnId = (yield* randomUUIDv4) as TurnId;
+            ctx.activeTurnId = turnId;
+            ctx.lastPlanFingerprint = undefined;
 
-          const droidModelSelection =
-            input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
-          if (droidModelSelection?.model) {
-            const requestedModelId = resolveDroidAcpBaseModelId(droidModelSelection.model);
-            yield* validateAdvertisedModel(requestedModelId, "turn/send");
-            ctx.currentModelId = yield* applyDroidAcpModelSelection({
-              runtime: ctx.acp,
-              currentModelId: ctx.currentModelId,
-              requestedModelId,
-              mapError: (cause) =>
-                mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
+            const droidModelSelection =
+              input.modelSelection?.instanceId === boundInstanceId
+                ? input.modelSelection
+                : undefined;
+            if (droidModelSelection?.model) {
+              const requestedModelId = resolveDroidAcpBaseModelId(droidModelSelection.model);
+              yield* validateAdvertisedModel(requestedModelId, "turn/send");
+              ctx.currentModelId = yield* applyDroidAcpModelSelection({
+                runtime: ctx.acp,
+                currentModelId: ctx.currentModelId,
+                requestedModelId,
+                mapError: (cause) =>
+                  mapAcpToAdapterError(PROVIDER, input.threadId, "session/set_model", cause),
+              });
+              ctx.session = {
+                ...ctx.session,
+                ...(ctx.currentModelId ? { model: ctx.currentModelId } : {}),
+                updatedAt: yield* nowIso,
+              };
+            }
+
+            const promptParts: Array<EffectAcpSchema.ContentBlock> = [];
+            const promptText = input.input?.trim();
+            if (promptText) {
+              promptParts.push({ type: "text", text: promptText });
+            }
+            for (const attachment of input.attachments ?? []) {
+              const attachmentPath = resolveAttachmentPath({
+                attachmentsDir: serverConfig.attachmentsDir,
+                attachment,
+              });
+              if (!attachmentPath) {
+                return yield* new ProviderAdapterRequestError({
+                  provider: PROVIDER,
+                  method: "session/prompt",
+                  detail: `Invalid attachment id '${attachment.id}'.`,
+                });
+              }
+              const bytes = yield* fileSystem.readFile(attachmentPath).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapterRequestError({
+                      provider: PROVIDER,
+                      method: "session/prompt",
+                      detail: cause.message,
+                      cause,
+                    }),
+                ),
+              );
+              promptParts.push({
+                type: "image",
+                data: Buffer.from(bytes).toString("base64"),
+                mimeType: attachment.mimeType,
+              });
+            }
+            if (promptParts.length === 0) {
+              return yield* new ProviderAdapterValidationError({
+                provider: PROVIDER,
+                operation: "sendTurn",
+                issue: "Turn requires non-empty text or attachments.",
+              });
+            }
+            yield* offerRuntimeEvent({
+              type: "turn.started",
+              ...(yield* makeEventStamp()),
+              provider: PROVIDER,
+              threadId: input.threadId,
+              turnId,
+              payload: ctx.currentModelId ? { model: ctx.currentModelId } : {},
+            });
+            return { acp: ctx.acp, acpSessionId: ctx.acpSessionId, promptParts, turnId };
+          }),
+        );
+
+        const result = yield* prepared.acp
+          .prompt({ prompt: prepared.promptParts })
+          .pipe(
+            Effect.mapError((cause) =>
+              mapAcpToAdapterError(PROVIDER, input.threadId, "session/prompt", cause),
+            ),
+          );
+
+        return yield* withThreadLock(
+          input.threadId,
+          Effect.gen(function* () {
+            const ctx = yield* requireSession(input.threadId);
+            if (ctx.acpSessionId !== prepared.acpSessionId) {
+              return yield* new ProviderAdapterRequestError({
+                provider: PROVIDER,
+                method: "session/prompt",
+                detail: "Droid session changed before the turn completed.",
+              });
+            }
+            ctx.turns.push({
+              id: prepared.turnId,
+              items: [{ prompt: prepared.promptParts, result }],
             });
             ctx.session = {
               ...ctx.session,
-              ...(ctx.currentModelId ? { model: ctx.currentModelId } : {}),
+              activeTurnId: prepared.turnId,
               updatedAt: yield* nowIso,
             };
-          }
-
-          const promptText = input.input?.trim() || "";
-          const resolvedAttachments = yield* Effect.forEach(
-            input.attachments ?? [],
-            (att) =>
-              resolveAttachmentPath(serverConfig.cwd, att).pipe(
-                Effect.map((absPath) => ({
-                  type: "file" as const,
-                  path: absPath,
-                })),
-                Effect.orElseSucceed(() => undefined),
-              ),
-            { concurrency: "unbounded" },
-          ).pipe(
-            Effect.map((items) =>
-              items.filter((item): item is NonNullable<typeof item> => item !== undefined),
-            ),
-          );
-
-          // Send turn via ACP prompt
-          yield* Effect.fork(
-            Effect.gen(function* () {
-              yield* ctx.acp
-                .prompt({
-                  prompt: [
-                    { type: "text", text: promptText },
-                    ...resolvedAttachments.map((att) => ({
-                      type: "resource" as const,
-                      resource: { uri: `file://${att.path}`, text: "" },
-                    })),
-                  ],
-                })
-                .pipe(
-                  Effect.mapError((cause) =>
-                    mapAcpToAdapterError(PROVIDER, input.threadId, "session/prompt", cause),
-                  ),
-                );
-            }).pipe(
-              Effect.catchAll((err) =>
-                offerRuntimeEvent({
-                  type: "turn.failed",
-                  ...Effect.runSync(makeEventStamp()),
-                  provider: PROVIDER,
-                  threadId: input.threadId,
-                  turnId,
-                  payload: { error: err.detail ?? err.message },
-                }),
-              ),
-            ),
-          );
-
-          return {
-            threadId: input.threadId,
-            turnId,
-            resumeCursor: ctx.session.resumeCursor,
-          };
-        }),
-      );
+            yield* offerRuntimeEvent({
+              type: "turn.completed",
+              ...(yield* makeEventStamp()),
+              provider: PROVIDER,
+              threadId: input.threadId,
+              turnId: prepared.turnId,
+              payload: {
+                state: result.stopReason === "cancelled" ? "cancelled" : "completed",
+                stopReason: result.stopReason ?? null,
+              },
+            });
+            return {
+              threadId: input.threadId,
+              turnId: prepared.turnId,
+              resumeCursor: ctx.session.resumeCursor,
+            };
+          }),
+        );
+      });
 
     const interruptTurn: DroidAdapterShape["interruptTurn"] = (threadId) =>
       withThreadLock(
@@ -730,7 +783,7 @@ export function makeDroidAdapter(
             Effect.mapError((cause) =>
               mapAcpToAdapterError(PROVIDER, threadId, "session/cancel", cause),
             ),
-            Effect.catchAll(() => Effect.void),
+            Effect.catch(() => Effect.void),
           );
         }),
       );
@@ -825,7 +878,7 @@ export function makeDroidAdapter(
       provider: PROVIDER,
       capabilities: {
         sessionModelSwitch: "in-session",
-        agentChat: "supported",
+        agentChat: "unsupported",
       },
       startSession,
       sendTurn,

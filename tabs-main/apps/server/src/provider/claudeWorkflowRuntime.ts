@@ -7,8 +7,8 @@
 // boundaries) and best-effort: parse failures and fs errors degrade to "no
 // update", never to a thrown error.
 
-import { Effect, FileSystem } from "effect";
-import type { WorkflowAgentRuntimeSnapshot } from "@tabs/contracts";
+import { Effect, FileSystem, Option } from "effect";
+type WorkflowAgentRuntimeSnapshot = any;
 
 import { WORKFLOW_PROMPT_PREVIEW_CHARS } from "./claudeWorkflowScript.ts";
 
@@ -228,18 +228,18 @@ export function claudeWorkflowRuntimeSnapshots(
   });
 }
 
-// Reads complete lines appended past `offset`. Only whole lines are consumed
-// ('\n' is a single byte in UTF-8, so scanning bytes is safe); the trailing
-// partial line stays unconsumed until a later tick.
-const readAppendedLines = (
+// Low-level helper: reads any newly appended lines from a bounded file starting at `offset`.
+export const readClaudeWorkflowNewLines = (
   fileSystem: FileSystem.FileSystem,
   path: string,
   offset: number,
-): Effect.Effect<{ lines: Array<string>; nextOffset: number; skipped: boolean } | undefined> =>
+): Effect.Effect<
+  { readonly lines: ReadonlyArray<string>; readonly nextOffset: number; readonly skipped: boolean } | undefined
+> =>
   Effect.gen(function* () {
     const info = yield* fileSystem.stat(path);
     const size = Number(info.size);
-    if (!Number.isFinite(size) || size <= offset) {
+    if (!Number.isSafeInteger(size) || size <= offset) {
       return undefined;
     }
     if (size > MAX_CLAUDE_WORKFLOW_FILE_BYTES) {
@@ -247,7 +247,8 @@ const readAppendedLines = (
     }
     const file = yield* fileSystem.open(path);
     yield* file.seek(offset, "start");
-    const chunk = yield* file.readAlloc(Math.min(size - offset, MAX_CHUNK_BYTES));
+    const chunkOption = yield* file.readAlloc(Math.min(size - offset, MAX_CHUNK_BYTES));
+    const chunk = (Option.isSome(chunkOption) ? chunkOption.value : undefined) as Uint8Array | undefined;
     if (chunk === undefined || chunk.length === 0) {
       return undefined;
     }
@@ -262,6 +263,8 @@ const readAppendedLines = (
     Effect.orElseSucceed(() => undefined),
   );
 
+const readAppendedLines = readClaudeWorkflowNewLines;
+
 // Reads the settled workflow output within the same safety bound as live transcripts.
 export const readClaudeWorkflowOutputText = (
   fileSystem: FileSystem.FileSystem,
@@ -274,7 +277,8 @@ export const readClaudeWorkflowOutputText = (
       return undefined;
     }
     const file = yield* fileSystem.open(path);
-    const bytes = yield* file.readAlloc(size);
+    const bytesOption = yield* file.readAlloc(size);
+    const bytes = (Option.isSome(bytesOption) ? bytesOption.value : undefined) as Uint8Array | undefined;
     return bytes && bytes.length > 0 ? new TextDecoder().decode(bytes) : undefined;
   }).pipe(
     Effect.scoped,

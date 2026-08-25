@@ -14,7 +14,7 @@ function completedEvent(eventId: string): ProviderRuntimeEvent {
   return {
     type: "turn.completed",
     eventId: EventId.makeUnsafe(eventId),
-    provider: "codex",
+    provider: "codex" as any,
     createdAt: "2026-07-23T20:00:00.000Z",
     threadId: THREAD_ID,
     turnId: TURN_ID,

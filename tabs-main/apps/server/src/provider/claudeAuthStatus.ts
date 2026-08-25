@@ -7,7 +7,7 @@
  * only; the health check in ProviderHealth owns spawning, locking, and
  * retries.
  */
-import type { ServerProviderAuthStatus, ServerProviderStatusState } from "@tabs/contracts";
+import type { ServerProviderAuthStatus, ServerProviderState as ServerProviderStatusState } from "@tabs/contracts";
 
 import {
   detailFromResult,

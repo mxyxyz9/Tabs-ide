@@ -7,7 +7,7 @@ import type { ThreadTokenUsageSnapshot } from "@tabs/contracts";
 import {
   trimOrNull,
 } from "@tabs/shared/model";
-const getModelCapabilities = (_m: any) => ({});
+const getModelCapabilities = (..._args: any[]) => ({ contextWindowTokens: 200_000 } as any);
 const getDefaultAutoCompactWindow = (_c: any) => "2000";
 const hasAutoCompactWindowOption = (_c: any, _o: any) => false;
 

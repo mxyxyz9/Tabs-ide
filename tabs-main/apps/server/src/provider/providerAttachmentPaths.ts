@@ -6,7 +6,7 @@
 import { statSync } from "node:fs";
 
 import {
-  type AttachmentContext,
+  type ChatAttachment,
   CanonicalItemType,
   ProviderDriverKind,
   RuntimeItemId,
@@ -17,8 +17,30 @@ import * as Option from "effect/Option";
 
 import { resolveAttachmentRelativePath } from "../attachmentPaths.ts";
 import { resolveAttachmentPath } from "../attachmentStore.ts";
-import type { ManagedAttachmentRepositoryShape } from "../persistence/services/ManagedAttachments.ts";
 import { ProviderAdapterValidationError } from "./Errors.ts";
+
+export interface ManagedAttachmentBlob {
+  readonly attachmentId: string;
+  readonly ownerThreadId: string;
+  readonly ownerKind: string;
+  readonly ownerId: string;
+  readonly kind: "image" | "file";
+  readonly originalName: string;
+  readonly mimeType: string;
+  readonly reservedBytes: number;
+  readonly sizeBytes: number | null;
+  readonly sha256: string;
+  readonly relativePath: string;
+  readonly state: string;
+  readonly claimMessageId?: string | null;
+  readonly [key: string]: unknown;
+}
+
+export interface ManagedAttachmentRepositoryShape {
+  readonly findClaimedById: (input: {
+    readonly attachmentId: string;
+  }) => Effect.Effect<Option.Option<ManagedAttachmentBlob>, unknown>;
+}
 
 const MANAGED_ATTACHMENT_ID_PATTERN = /^att_v2_[0-9a-f]{32}$/u;
 const PROVIDER_ATTACHMENT_STORAGE_PATH = Symbol("synara.providerAttachmentStoragePath");
@@ -55,7 +77,7 @@ function withStoragePath(attachment: ChatAttachment, storagePath: string): ChatA
 }
 
 function resolutionError(input: {
-  readonly provider: ProviderKind;
+  readonly provider: ProviderDriverKind | string;
   readonly operation: string;
   readonly attachmentId: string;
 }): ProviderAdapterValidationError {
@@ -114,12 +136,12 @@ export function resolveProviderDispatchAttachments(input: {
   readonly repository: Pick<ManagedAttachmentRepositoryShape, "findClaimedById">;
   readonly threadId: ThreadId;
   readonly messageId: string;
-  readonly provider: ProviderKind;
+  readonly provider: ProviderDriverKind | string;
   readonly operation: string;
-}) {
+}): Effect.Effect<ReadonlyArray<ChatAttachment>, ProviderAdapterValidationError> {
   return Effect.forEach(
     input.attachments ?? [],
-    (attachment) => {
+    (attachment: any) => {
       if (attachment.type === "assistant-selection") {
         return Effect.succeed<ChatAttachment>(attachment);
       }
@@ -154,6 +176,14 @@ export function resolveProviderDispatchAttachments(input: {
       }
 
       return input.repository.findClaimedById({ attachmentId: attachment.id }).pipe(
+        Effect.mapError(
+          () =>
+            resolutionError({
+              provider: input.provider,
+              operation: input.operation,
+              attachmentId: attachment.id,
+            }),
+        ),
         Effect.flatMap(
           Option.match({
             onNone: () =>
@@ -164,7 +194,7 @@ export function resolveProviderDispatchAttachments(input: {
                   attachmentId: attachment.id,
                 }),
               ),
-            onSome: (blob) => {
+            onSome: (blob: any) => {
               const storagePath = resolveAttachmentRelativePath({
                 attachmentsDir: input.attachmentsDir,
                 relativePath: blob.relativePath,

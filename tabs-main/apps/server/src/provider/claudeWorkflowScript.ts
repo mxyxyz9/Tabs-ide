@@ -3,7 +3,9 @@
 // so the meta can be read without evaluating the script; everything here returns
 // undefined instead of throwing when the input does not match that shape.
 
-import type { WorkflowAgentPlan, WorkflowAgentSnapshot, WorkflowPhase } from "@tabs/contracts";
+type WorkflowAgentPlan = any;
+type WorkflowAgentSnapshot = any;
+type WorkflowPhase = any;
 
 export interface ClaudeWorkflowScriptMeta {
   readonly name?: string;

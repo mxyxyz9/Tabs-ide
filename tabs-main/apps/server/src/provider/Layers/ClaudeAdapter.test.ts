@@ -169,7 +169,7 @@ function makeHarness(config?: {
     ...(config?.instanceId ? { instanceId: config.instanceId } : {}),
     createQuery: (input) => {
       createInput = input;
-      return query;
+      return query as any;
     },
     ...(config?.nativeEventLogger
       ? {
@@ -1375,7 +1375,7 @@ describe("ClaudeAdapterLive", () => {
           createQuery: () => {
             const query = new FakeClaudeQuery();
             queries.push(query);
-            return query;
+            return query as any;
           },
         });
       }),
@@ -1466,7 +1466,7 @@ describe("ClaudeAdapterLive", () => {
                 promptConsumerError = error;
               }
             })();
-            return query;
+            return query as any;
           },
         });
       }),

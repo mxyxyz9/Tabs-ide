@@ -10,7 +10,11 @@ import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 import { describe, expect } from "vitest";
 
-import { AcpSessionRuntime, type AcpSessionRequestLogEvent } from "./AcpSessionRuntime";
+import {
+  AcpSessionRuntime,
+  resolveAcpAuthenticationMethod,
+  type AcpSessionRequestLogEvent,
+} from "./AcpSessionRuntime";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +23,33 @@ const mockAgentCommand = "bun";
 const mockAgentArgs = [mockAgentPath];
 
 describe("AcpSessionRuntime", () => {
+  it("negotiates authentication only from methods advertised by the agent", () => {
+    expect(
+      resolveAcpAuthenticationMethod({ protocolVersion: 1, authMethods: [] }, "cursor_login"),
+    ).toBeUndefined();
+    expect(
+      resolveAcpAuthenticationMethod(
+        {
+          protocolVersion: 1,
+          authMethods: [
+            { id: "device-flow", name: "Device flow" },
+            { id: "api-key", name: "API key" },
+          ],
+        },
+        "api-key",
+      ),
+    ).toBe("api-key");
+    expect(
+      resolveAcpAuthenticationMethod(
+        {
+          protocolVersion: 1,
+          authMethods: [{ id: "agent-defined", name: "Agent-defined login" }],
+        },
+        "stale-hard-coded-id",
+      ),
+    ).toBe("agent-defined");
+  });
+
   it.effect("merges custom initialize client capabilities into the ACP handshake", () => {
     const requestEvents: Array<AcpSessionRequestLogEvent> = [];
     return Effect.gen(function* () {

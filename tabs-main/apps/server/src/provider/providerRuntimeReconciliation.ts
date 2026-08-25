@@ -11,12 +11,18 @@ import {
   TurnId,
   type OrchestrationSession,
   type OrchestrationThreadShell,
+  type ProviderDriverKind,
   type ProviderSession,
   type ThreadId,
 } from "@tabs/contracts";
-import { nonEmptyTrimmed } from "@tabs/shared/text";
 
-import type { ProviderRuntimeEventPumpHealth } from "./Services/ProviderService.ts";
+const nonEmptyTrimmed = (value: string | null | undefined): string | null => {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
+import type { ProviderRuntimeEventPumpHealth } from "./providerRuntimeEventPump.ts";
 import type { ProviderRuntimeBinding } from "./Services/ProviderSessionDirectory.ts";
 
 export const DEFAULT_RUNTIME_RECONCILIATION_STALE_AFTER_MS = 15_000;
@@ -72,7 +78,7 @@ type TerminalProjectedSession = Omit<OrchestrationSession, "status"> & {
 };
 
 /**
- * A turn id as `OrchestrationSession.activeTurnId` and activity `turnId` require
+ * Normalizes an activeTurnId across three representations before comparing
  * it: trimmed non-empty, or null.
  *
  * A blank id means "no turn"; it is not a turn named "". Both fields are branded
@@ -81,8 +87,8 @@ type TerminalProjectedSession = Omit<OrchestrationSession, "status"> & {
  * code with `makeUnsafe` and never re-decoded, so nothing upstream guarantees it.
  */
 function turnIdOrNull(value: TurnId | string | null | undefined): TurnId | null {
-  const trimmed = nonEmptyTrimmed(value ?? undefined);
-  return trimmed === undefined ? null : TurnId.makeUnsafe(trimmed);
+  const trimmed = nonEmptyTrimmed(value);
+  return trimmed === null ? null : TurnId.makeUnsafe(trimmed);
 }
 
 function terminalProjectedSession(
@@ -208,7 +214,9 @@ export function planProviderRuntimeReconciliation(input: {
   const liveSessionByThreadId = new Map(
     input.liveSessions.map((session) => [session.threadId, session]),
   );
-  const healthByProvider = new Map(input.pumpHealth.map((health) => [health.provider, health]));
+  const healthByProvider = new Map<ProviderDriverKind, ProviderRuntimeEventPumpHealth>(
+    input.pumpHealth.map((health) => [health.provider as unknown as ProviderDriverKind, health]),
+  );
   const plans: ProviderRuntimeReconciliationPlan[] = [];
 
   for (const thread of input.threads) {
@@ -221,7 +229,8 @@ export function planProviderRuntimeReconciliation(input: {
     // start) - which is precisely the thread most likely to be stuck with
     // nothing left that could ever settle it - so fall back to the thread's own
     // provider instead of dropping the candidate.
-    const provider = binding?.provider ?? thread.modelSelection.provider;
+    const provider =
+      binding?.provider ?? (thread.modelSelection.instanceId as unknown as ProviderDriverKind);
     const detail = pumpDetail(provider, healthByProvider);
     const abandoned =
       lifecycleAgeMs >= maxTurnAgeMs && threadActivityAgeMs(thread, input.nowMs) >= maxTurnAgeMs;

@@ -104,6 +104,14 @@ export const ServerProviderSkill = Schema.Struct({
   shortDescription: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderSkill = typeof ServerProviderSkill.Type;
+export const ProviderSkillDescriptor = ServerProviderSkill;
+export type ProviderSkillDescriptor = ServerProviderSkill;
+
+export const ProviderSkillReference = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  path: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProviderSkillReference = typeof ProviderSkillReference.Type;
 
 /**
  * Availability of a configured provider instance from the runtime's POV.

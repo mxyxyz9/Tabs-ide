@@ -695,7 +695,7 @@ describe("flattenOpenCodeModels", () => {
       },
     });
 
-    expect(models.map((model) => model.slug)).toEqual(["opencode/glm-4.6"]);
+    expect(models.map((model: any) => model.slug)).toEqual(["opencode/glm-4.6"]);
   });
 });
 

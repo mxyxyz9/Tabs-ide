@@ -23,6 +23,7 @@ const serverConfigUpdatedListeners = new Set<(payload: ServerConfigUpdatedPayloa
 const providersUpdatedListeners = new Set<(payload: ServerProviderUpdatedPayload) => void>();
 const gitActionProgressListeners = new Set<(payload: GitActionProgressEvent) => void>();
 const reviewProgressListeners = new Set<(payload: ReviewProgressEvent) => void>();
+const usageUpdatedListeners = new Set<(payload: any) => void>();
 
 /**
  * Subscribe to the server welcome message. If a welcome was already received
@@ -90,6 +91,19 @@ export function onServerProvidersUpdated(
   };
 }
 
+export function onUsageUpdated(
+  listener: (payload: any) => void,
+): () => void {
+  usageUpdatedListeners.add(listener);
+  return () => {
+    usageUpdatedListeners.delete(listener);
+  };
+}
+
+export function getWsTransport(): WsTransport | null {
+  return instance?.transport ?? null;
+}
+
 export function createWsNativeApi(): NativeApi {
   if (instance) return instance.api;
 
@@ -138,6 +152,16 @@ export function createWsNativeApi(): NativeApi {
   transport.subscribe(WS_CHANNELS.reviewProgress, (message) => {
     const payload = message.data;
     for (const listener of reviewProgressListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.usageUpdated, (message) => {
+    const payload = message.data;
+    for (const listener of usageUpdatedListeners) {
       try {
         listener(payload);
       } catch {
@@ -386,6 +410,9 @@ export function createWsNativeApi(): NativeApi {
       getProcessResourceHistory: (input) =>
         transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
       signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
+      readUsageSummary: (input) => transport.request(WS_METHODS.usageReadSummary, input),
+      listUsageSnapshots: (input = {}) => transport.request(WS_METHODS.usageListSnapshots, input),
+      refreshAllUsageSnapshots: () => transport.request(WS_METHODS.usageRefreshAll, {}),
     },
     orchestration: {
       getSnapshot: () => transport.request(ORCHESTRATION_WS_METHODS.getSnapshot),

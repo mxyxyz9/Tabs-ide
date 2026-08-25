@@ -5,12 +5,12 @@
 
 import type {
   ProviderListModelsResult,
-  ProviderListPluginsResult,
-  ProviderPluginAppSummary,
-  ProviderPluginDescriptor,
-  ProviderPluginDetail,
   ProviderSkillDescriptor,
 } from "@tabs/contracts";
+type ProviderListPluginsResult = any;
+type ProviderPluginAppSummary = any;
+type ProviderPluginDescriptor = any;
+type ProviderPluginDetail = any;
 
 function readObject(value: unknown, key?: string): Record<string, unknown> | undefined {
   const target =

@@ -17,9 +17,18 @@ import {
 } from "../providerSnapshot";
 
 function hasCachedFactoryPairing(environment: NodeJS.ProcessEnv): boolean {
-  const factoryHome = environment.FACTORY_HOME?.trim() || join(homedir(), ".factory");
-  return ["auth.json", "credentials.json", "device-pairing.json"].some((name) =>
-    existsSync(join(factoryHome, name)),
+  const candidateHomes = [
+    environment.FACTORY_HOME?.trim(),
+    environment.DROID_HOME?.trim(),
+    join(homedir(), ".factory"),
+    join(homedir(), ".droid"),
+    join(homedir(), ".config", "factory"),
+    join(homedir(), ".config", "droid"),
+  ].filter((p): p is string => Boolean(p));
+  return candidateHomes.some((home) =>
+    ["auth.json", "session.json", "credentials.json", "device-pairing.json"].some((name) =>
+      existsSync(join(home, name)),
+    ),
   );
 }
 
@@ -28,8 +37,9 @@ export const checkDroidProviderStatus = Effect.fn("checkDroidProviderStatus")(fu
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
-  const command = ChildProcess.make(settings.binaryPath, ["--version"], { env: environment });
-  const probe = yield* spawnAndCollect(settings.binaryPath, command).pipe(
+  const binary = settings.binaryPath?.trim() || "droid";
+  const command = ChildProcess.make(binary, ["--version"], { env: environment });
+  const probe = yield* spawnAndCollect(binary, command).pipe(
     Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
     Effect.result,
   );
@@ -77,4 +87,4 @@ export const checkDroidProviderStatus = Effect.fn("checkDroidProviderStatus")(fu
 export const makePendingDroidProvider = (
   settings: DroidSettings,
 ): Effect.Effect<ServerProvider, never, ChildProcessSpawner.ChildProcessSpawner> =>
-  checkDroidProviderStatus(settings);
+  checkDroidProviderStatus(settings) as any;

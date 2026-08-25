@@ -10,10 +10,22 @@
 import type { ProviderKind, ProviderRuntimeEvent } from "@tabs/contracts";
 import { Cause, Effect, Stream } from "effect";
 
-import type {
-  ProviderRuntimeEventPumpHealth,
-  ProviderRuntimeEventPumpStatus,
-} from "./Services/ProviderService.ts";
+export type ProviderRuntimeEventPumpStatus =
+  | "healthy"
+  | "starting"
+  | "recovering"
+  | "degraded"
+  | "failed";
+
+export interface ProviderRuntimeEventPumpHealth {
+  readonly provider: ProviderKind;
+  readonly status: ProviderRuntimeEventPumpStatus;
+  readonly consecutiveFailures: number;
+  readonly updatedAt: string;
+  readonly lastError?: string;
+  readonly lastQuarantinedEventId?: string;
+  readonly lastQuarantinedAt?: string;
+}
 
 const DEFAULT_RETRY_BASE_DELAY_MS = 25;
 const DEFAULT_RETRY_MAX_DELAY_MS = 2_000;

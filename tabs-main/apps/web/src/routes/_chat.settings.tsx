@@ -40,7 +40,9 @@ import {
   Trash2Icon,
   FingerprintIcon,
   GlobeIcon,
+  GaugeIcon,
 } from "lucide-react";
+import { UsageLimitsPage } from "../components/settings/usage/UsageLimitsPage";
 import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesSettings";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
@@ -353,7 +355,7 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
   {
     provider: "opencode",
     title: "OpenCode",
-    icon: DroidIcon,
+    icon: OpenCodeIcon,
     binaryPlaceholder: "OpenCode binary path",
     binaryDescription: "Path to the OpenCode binary",
     installCommand: "npm install -g opencode-ai",
@@ -369,7 +371,7 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
   {
     provider: "droid",
     title: "Factory Droid",
-    icon: OpenCodeIcon,
+    icon: DroidIcon,
     binaryPlaceholder: "droid",
     binaryDescription: "Path to the Factory Droid binary",
     installCommand: "curl -fsSL https://app.factory.ai/cli | sh",
@@ -414,6 +416,7 @@ type SettingsSectionId =
   | "workspace"
   | "profiles"
   | "providers"
+  | "usage"
   | "source-control"
   | "connections"
   | "startup-animation"
@@ -429,6 +432,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   { id: "themes", label: "Themes", icon: PaletteIcon },
   { id: "startup-animation", label: "Animations", icon: MonitorPlayIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
+  { id: "usage", label: "Usage & Limits", icon: GaugeIcon },
   { id: "source-control", label: "Source Control", icon: GitBranchIcon },
   { id: "connections", label: "Connections", icon: Link2Icon },
   { id: "workspace", label: "Workspace", icon: FolderIcon },
@@ -6181,6 +6185,9 @@ function SettingsRouteView() {
                     availableEditors={(availableEditors as any) ?? []}
                   />
                 ) : null}
+                {activeSettingsSection === "usage" ? (
+                  <UsageLimitsPage />
+                ) : null}
                 {activeSettingsSection === "about" ? (
                   <div className="space-y-6">
                     <div>
@@ -6309,8 +6316,11 @@ function SettingsRouteView() {
           }}
         >
           {providerActionSession && loginCwd ? (
-            <DialogPopup showCloseButton={false} className="w-full max-w-3xl overflow-hidden p-0">
-              <div className="flex items-center gap-2 border-b border-border px-4 py-3 sm:px-5">
+            <DialogPopup
+              showCloseButton={false}
+              className="w-[92vw] max-w-5xl h-[640px] max-h-[85vh] overflow-hidden p-0 flex flex-col shadow-2xl border-border/80"
+            >
+              <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3 sm:px-5">
                 {providerActionSession.kind === "install" ? (
                   <DownloadIcon className="size-3.5 shrink-0 text-muted-foreground" />
                 ) : providerActionSession.kind === "update" ? (
@@ -6354,27 +6364,29 @@ function SettingsRouteView() {
                     ? "Log-out terminal opened"
                     : "Provider command terminal opened"}
               </div>
-              <ThreadTerminalDrawer
-                variant="drawer"
-                showControls={false}
-                threadId={providerActionSession.threadId}
-                cwd={loginCwd}
-                height={Math.max(DEFAULT_THREAD_TERMINAL_HEIGHT, 360)}
-                terminalIds={[DEFAULT_THREAD_TERMINAL_ID]}
-                activeTerminalId={DEFAULT_THREAD_TERMINAL_ID}
-                terminalGroups={[{ id: "action", terminalIds: [DEFAULT_THREAD_TERMINAL_ID] }]}
-                activeTerminalGroupId="action"
-                focusRequestId={0}
-                terminalLabels={{
-                  [DEFAULT_THREAD_TERMINAL_ID]: providerActionSession.providerName,
-                }}
-                onSplitTerminal={() => {}}
-                onNewTerminal={() => {}}
-                onActiveTerminalChange={() => {}}
-                onCloseTerminal={closeProviderAction}
-                onHeightChange={() => {}}
-                onAddTerminalContext={() => {}}
-              />
+              <div className="min-h-0 w-full flex-1 bg-background p-2">
+                <ThreadTerminalDrawer
+                  variant="embedded"
+                  showControls={false}
+                  threadId={providerActionSession.threadId}
+                  cwd={loginCwd}
+                  height={580}
+                  terminalIds={[DEFAULT_THREAD_TERMINAL_ID]}
+                  activeTerminalId={DEFAULT_THREAD_TERMINAL_ID}
+                  terminalGroups={[{ id: "action", terminalIds: [DEFAULT_THREAD_TERMINAL_ID] }]}
+                  activeTerminalGroupId="action"
+                  focusRequestId={0}
+                  terminalLabels={{
+                    [DEFAULT_THREAD_TERMINAL_ID]: providerActionSession.providerName,
+                  }}
+                  onSplitTerminal={() => {}}
+                  onNewTerminal={() => {}}
+                  onActiveTerminalChange={() => {}}
+                  onCloseTerminal={closeProviderAction}
+                  onHeightChange={() => {}}
+                  onAddTerminalContext={() => {}}
+                />
+              </div>
             </DialogPopup>
           ) : null}
         </Dialog>

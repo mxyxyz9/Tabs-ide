@@ -21,7 +21,81 @@ import {
   ProviderUserInputAnswers,
   RuntimeMode,
 } from "./orchestration.ts";
+import { ProviderOptionDescriptor } from "./model.ts";
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
+
+export const ProviderMentionReference = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  path: TrimmedNonEmptyString,
+});
+export type ProviderMentionReference = typeof ProviderMentionReference.Type;
+
+export const ProviderAgentDescriptor = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  displayName: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+  model: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProviderAgentDescriptor = typeof ProviderAgentDescriptor.Type;
+
+export const ProviderListAgentsResult = Schema.Struct({
+  agents: Schema.Array(ProviderAgentDescriptor),
+  source: Schema.optional(TrimmedNonEmptyString),
+  cached: Schema.optional(Schema.Boolean),
+});
+export type ProviderListAgentsResult = typeof ProviderListAgentsResult.Type;
+
+export const ProviderNativeCommandDescriptor = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProviderNativeCommandDescriptor = typeof ProviderNativeCommandDescriptor.Type;
+
+export const ProviderListCommandsResult = Schema.Struct({
+  commands: Schema.Array(ProviderNativeCommandDescriptor),
+  source: Schema.optional(TrimmedNonEmptyString),
+  cached: Schema.optional(Schema.Boolean),
+});
+export type ProviderListCommandsResult = typeof ProviderListCommandsResult.Type;
+
+export const ProviderReasoningEffortDescriptor = Schema.Struct({
+  value: TrimmedNonEmptyString,
+  label: Schema.optional(TrimmedNonEmptyString),
+  description: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProviderReasoningEffortDescriptor = typeof ProviderReasoningEffortDescriptor.Type;
+
+export const ProviderContextWindowDescriptor = Schema.Struct({
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  isDefault: Schema.optional(Schema.Literal(true)),
+});
+export type ProviderContextWindowDescriptor = typeof ProviderContextWindowDescriptor.Type;
+
+export const ProviderModelDescriptor = Schema.Struct({
+  slug: TrimmedNonEmptyString,
+  resolvedModel: Schema.optional(TrimmedNonEmptyString),
+  name: TrimmedNonEmptyString,
+  description: Schema.optional(TrimmedNonEmptyString),
+  upstreamProviderId: Schema.optional(TrimmedNonEmptyString),
+  upstreamProviderName: Schema.optional(TrimmedNonEmptyString),
+  optionDescriptors: Schema.optional(Schema.Array(ProviderOptionDescriptor)),
+  supportedReasoningEfforts: Schema.optional(Schema.Array(ProviderReasoningEffortDescriptor)),
+  defaultReasoningEffort: Schema.optional(TrimmedNonEmptyString),
+  supportsFastMode: Schema.optional(Schema.Boolean),
+  supportsThinkingToggle: Schema.optional(Schema.Boolean),
+  supportsAutoMode: Schema.optional(Schema.Boolean),
+  contextWindowOptions: Schema.optional(Schema.Array(ProviderContextWindowDescriptor)),
+  defaultContextWindow: Schema.optional(TrimmedNonEmptyString),
+});
+export type ProviderModelDescriptor = typeof ProviderModelDescriptor.Type;
+
+export const ProviderListModelsResult = Schema.Struct({
+  models: Schema.Array(ProviderModelDescriptor),
+  source: Schema.optional(TrimmedNonEmptyString),
+  cached: Schema.optional(Schema.Boolean),
+});
+export type ProviderListModelsResult = typeof ProviderListModelsResult.Type;
 
 const ProviderSessionStatus = Schema.Literals([
   "connecting",

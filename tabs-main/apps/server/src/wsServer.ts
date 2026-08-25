@@ -59,6 +59,8 @@ import {
   type TestingTraceabilityInput,
   type TestingTriageInput,
   type TestingWorkbookImportInput,
+  type UsageSummaryInput,
+  type ServerListProviderUsageInput,
   WS_CHANNELS,
   WS_METHODS,
   WebSocketRequest,
@@ -125,6 +127,8 @@ import { discoverSourceControl } from "./sourceControl/discovery";
 import { runProcess } from "./processRunner";
 import { TestingService } from "./testing/TestingService";
 import { TextGeneration } from "./textGeneration/TextGeneration";
+import { UsageService } from "./usage/UsageService.ts";
+import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -275,6 +279,7 @@ export type ServerRuntimeServices =
   | Keybindings
   | ServerSettingsService
   | TextGeneration
+  | UsageService
   | Open
   | AnalyticsService;
 
@@ -328,6 +333,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const textGeneration = yield* TextGeneration;
+  const usageService = yield* UsageService;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -1849,6 +1855,26 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             });
           }
         }
+      }
+
+      case WS_METHODS.usageReadSummary: {
+        const body = stripRequestTag(request.body) as UsageSummaryInput;
+        return yield* usageService.readSummary(body).pipe(
+          Effect.catchCause((cause) =>
+            new RouteRequestError({
+              message: `Usage summary read failed: ${Cause.squash(cause)}`,
+            }),
+          ),
+        );
+      }
+
+      case WS_METHODS.usageListSnapshots: {
+        const body = stripRequestTag(request.body) as ServerListProviderUsageInput;
+        return yield* listProviderUsageSnapshotsEffect(body);
+      }
+
+      case WS_METHODS.usageRefreshAll: {
+        return yield* listProviderUsageSnapshotsEffect({ forceRefresh: true });
       }
 
       default: {

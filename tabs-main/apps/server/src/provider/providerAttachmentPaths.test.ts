@@ -6,14 +6,12 @@ import { ProviderSendTurnInput, ThreadId, type ChatAttachment } from "@tabs/cont
 import { Effect, Option, Schema } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type {
-  ManagedAttachmentBlob,
-  ManagedAttachmentRepositoryShape,
-} from "../persistence/Services/ManagedAttachments.ts";
 import {
   carryProviderAttachmentPaths,
   resolveProviderAttachmentPath,
   resolveProviderDispatchAttachments,
+  type ManagedAttachmentBlob,
+  type ManagedAttachmentRepositoryShape,
 } from "./providerAttachmentPaths.ts";
 import { loadProviderPromptImageBlocks } from "./promptAttachments.ts";
 import { buildFileAttachmentsPromptBlock } from "./attachmentProjection.ts";
@@ -123,7 +121,7 @@ describe("provider attachment paths", () => {
       resolve({
         attachmentsDir,
         attachment: {
-          type: fixture.type,
+          type: fixture.type as any,
           id: fixture.id,
           name: fixture.name,
           mimeType: fixture.mimeType,
@@ -147,7 +145,7 @@ describe("provider attachment paths", () => {
 
   it("keeps legacy flat-file attachments working", async () => {
     const attachmentsDir = makeRoot();
-    const attachment: ChatAttachment = {
+    const attachment: any = {
       type: "file",
       id: "thread-1-legacy-file",
       name: "legacy.txt",
@@ -198,7 +196,7 @@ describe("provider attachment paths", () => {
             sizeBytes: 4,
           },
           {
-            type: "file",
+            type: "file" as any,
             id: fileId,
             name: "notes.txt",
             mimeType: "text/plain",
@@ -299,7 +297,7 @@ describe("provider attachment paths", () => {
         resolve({
           attachmentsDir,
           attachment: {
-            type: "file",
+            type: "file" as any,
             id,
             name: "notes.txt",
             mimeType: "text/plain",

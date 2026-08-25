@@ -133,7 +133,17 @@ export const DroidDriver: ProviderDriver<DroidSettings, DroidDriverEnv> = {
             ? adapter.listModels({ binaryPath: effectiveConfig.binaryPath }).pipe(
                 Effect.map((catalog) => ({
                   ...health,
-                  models: catalog.models,
+                  models: catalog.models.map((model) => ({
+                    slug: model.slug,
+                    name: model.name,
+                    isCustom: false,
+                    capabilities: {
+                      reasoningEffortLevels: [],
+                      supportsFastMode: false,
+                      supportsThinkingToggle: false,
+                      promptInjectedEffortLevels: [],
+                    },
+                  })),
                   catalogStatus: "ready" as const,
                   catalogSource: catalog.source ?? "droid-acp",
                   catalogCheckedAt: new Date().toISOString(),

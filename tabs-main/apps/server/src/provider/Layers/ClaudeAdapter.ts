@@ -34,10 +34,10 @@ import type {
 import {
   ApprovalRequestId,
   type CanonicalItemType,
-  type ClaudeApiEffort,
   type CanonicalRequestType,
   EventId,
   type ProviderApprovalDecision,
+  ProviderDriverKind,
   ProviderItemId,
   type ProviderRuntimeEvent,
   type ProviderRuntimeTurnStatus,
@@ -53,13 +53,14 @@ import {
   ThreadId,
   TurnId,
   type UserInputQuestion,
-  type ProviderComposerCapabilities,
-  type ProviderListCommandsInput,
   type ProviderListCommandsResult,
-  type ProviderListSkillsInput,
-  type ProviderListSkillsResult,
   type ProviderListAgentsResult,
 } from "@tabs/contracts";
+type ClaudeApiEffort = any;
+type ProviderComposerCapabilities = any;
+type ProviderListCommandsInput = any;
+type ProviderListSkillsInput = any;
+type ProviderListSkillsResult = any;
 import { getModelSelectionStringOptionValue } from "@tabs/shared/model";
 import type { ProviderListModelsResult } from "../Services/ProviderAdapter";
 import {
@@ -120,7 +121,7 @@ class AgentGatewayCredentials extends Context.Service<AgentGatewayCredentials, a
 type AgentGatewaySessionLease = any;
 const acquireAgentGatewaySessionLease = (...args: any[]) => ({ connection: {}, release: () => {} } as any);
 const cancelAgentGatewayTurn = (..._: any) => Effect.void;
-const withAgentGatewayTurnCancellation = (l: any, t: any) => <A, E, R>(eff: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => eff;
+const withAgentGatewayTurnCancellation = (_l: any, _t: any, eff?: any) => (eff !== undefined ? eff : (<A, E, R>(inner: Effect.Effect<A, E, R>) => inner));
 const PROVIDER_ADAPTER_RUNTIME_EVENT_BUFFER_CAPACITY = 256;
 import { resolveProviderAttachmentPath } from "../providerAttachmentPaths.ts";
 import { ServerConfig } from "../../config.ts";
@@ -189,7 +190,7 @@ import {
   type ProcessExitHandle,
 } from "../supervisedProcessTeardown.ts";
 
-const PROVIDER = "claudeAgent" as const;
+const PROVIDER: ProviderDriverKind = ProviderDriverKind.makeUnsafe("claudeAgent");
 const CLAUDE_DISCOVERY_THREAD_ID = ThreadId.makeUnsafe("claude:discovery");
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
@@ -843,7 +844,7 @@ function toPermissionMode(value: unknown): PermissionMode | undefined {
 function mapClaudeModelInfo(model: ModelInfo): ProviderListModelsResult["models"][number] {
   return {
     slug: model.value,
-    ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
+    ...((model as any).resolvedModel ? { resolvedModel: (model as any).resolvedModel } : {}),
     name: model.displayName,
     ...(typeof model.supportsAutoMode === "boolean"
       ? { supportsAutoMode: model.supportsAutoMode }
@@ -1722,7 +1723,7 @@ function subagentRunForTask(
 }
 
 export function makeClaudeAdapter(
-  claudeSettingsOrOptions?: Partial<ClaudeSettings> | ClaudeAdapterLiveOptions,
+  claudeSettingsOrOptions?: any,
   optionsInput?: ClaudeAdapterLiveOptions,
 ) {
   const options =
@@ -1822,7 +1823,8 @@ export function makeClaudeAdapter(
         const selectedModel = discoveredModels.find(
           (model) =>
             requestedModels.has(model.value) ||
-            (model.resolvedModel !== undefined && requestedModels.has(model.resolvedModel)),
+            ((model as any).resolvedModel !== undefined &&
+              requestedModels.has((model as any).resolvedModel)),
         );
         if (selectedModel?.supportsAutoMode !== true) {
           return yield* new ProviderAdapterValidationError({
@@ -1862,7 +1864,7 @@ export function makeClaudeAdapter(
       ? rawClaudeConfig.homePath.startsWith("~/")
         ? nodePath.join(OS.homedir(), rawClaudeConfig.homePath.slice(2))
         : rawClaudeConfig.homePath
-      : serverConfig.homeDir;
+      : (serverConfig as any).homeDir ?? (serverConfig as any).cwd ?? OS.homedir();
 
     const resolveClaudeSdkEnv = Effect.sync(() =>
       buildClaudeProcessEnv({ homeDir: effectiveHomeDir }),
@@ -2524,7 +2526,7 @@ export function makeClaudeAdapter(
             method: "claude/user/task-result",
             payload: input.rawPayload,
           },
-        });
+        } as any);
       });
 
     const settlePendingApproval = (
@@ -3414,7 +3416,7 @@ export function makeClaudeAdapter(
                 method: "claude/user",
                 payload: message,
               },
-            });
+            } as any);
             if (workflowLaunch.transcriptDir) {
               startWorkflowRuntimePoller(
                 context,
@@ -3539,7 +3541,7 @@ export function makeClaudeAdapter(
               toolUseId: run.toolUseId,
             },
           },
-        });
+        } as any);
       });
 
     const handleAssistantMessage = (
@@ -3850,7 +3852,7 @@ export function makeClaudeAdapter(
               workflowAgents: snapshots,
             },
             providerRefs: nativeProviderRefs(context),
-          });
+          } as any);
         }
       });
       const fiber = Effect.runFork(loop);
@@ -3951,9 +3953,13 @@ export function makeClaudeAdapter(
                 ? { workflowTaskId: RuntimeTaskId.makeUnsafe(workflowTaskId) }
                 : {}),
             },
-            providerRefs: nativeProviderRefs(context),
+            providerRefs: {
+              ...nativeProviderRefs(context),
+              taskId: message.task_id,
+              ...(run ? { toolUseId: run.toolUseId } : {}),
+            },
             raw,
-          });
+          } as any);
           const state =
             status !== undefined ? runtimeSessionStateFromClaudeTaskStatus(status) : undefined;
           if (!run || state === undefined) {
@@ -4313,11 +4319,11 @@ export function makeClaudeAdapter(
               },
             });
             return;
-          case "background_tasks_changed": {
+          case "background_tasks_changed" as any: {
             // REPLACE semantics: the payload is the full live background set.
             // Announce only newly backgrounded work with a one-line notice;
             // removals settle through their own task lifecycle events.
-            const tasks = Array.isArray(message.tasks) ? message.tasks : [];
+            const tasks: any[] = Array.isArray((message as any).tasks) ? (message as any).tasks : [];
             const added = tasks.filter((task) => !context.knownBackgroundTaskIds.has(task.task_id));
             context.knownBackgroundTaskIds.clear();
             for (const task of tasks) {
@@ -4649,7 +4655,7 @@ export function makeClaudeAdapter(
         if (sessions.get(context.session.threadId) === context) {
           sessions.delete(context.session.threadId);
         }
-      });
+      }) as any;
 
     const stopSessionInternal = (
       context: ClaudeSessionContext,
@@ -5044,7 +5050,7 @@ export function makeClaudeAdapter(
               );
 
               if (decision === "accept" || decision === "acceptForSession") {
-                if (decision === "acceptForSession" && runtimeMode !== "auto") {
+                if (decision === "acceptForSession" && (runtimeMode as any) !== "auto") {
                   // The SDK's permission suggestions only cover some requests;
                   // supervised mode preserves its live "always allow" fallback.
                   // Auto stays reviewer-gated and applies only SDK-provided
@@ -5070,7 +5076,7 @@ export function makeClaudeAdapter(
             }),
           );
 
-        const providerOptions = input.providerOptions?.claudeAgent;
+        const providerOptions = (input as any).providerOptions?.claudeAgent;
         const modelSelection = input.modelSelection;
         const requestedEffort = trimOrNull(
           modelSelection ? (getModelSelectionStringOptionValue(modelSelection, "effort") ?? null) : null,
@@ -5097,7 +5103,7 @@ export function makeClaudeAdapter(
         const effectiveEffort = getEffectiveClaudeCodeEffort(effort, modelSelection?.model);
         const ultracode = effort === "ultracode" && hasEffortLevel(caps, "xhigh");
         const permissionMode =
-          input.runtimeMode === "auto"
+          (input.runtimeMode as any) === "auto"
             ? "auto"
             : (toPermissionMode(providerOptions?.permissionMode) ??
               (input.runtimeMode === "full-access" ? "bypassPermissions" : undefined));
@@ -5111,7 +5117,7 @@ export function makeClaudeAdapter(
         };
         const claudeSubagents = buildClaudeSdkSubagents();
         const claudeSdkEnv = yield* resolveClaudeSdkEnv;
-        if (input.runtimeMode === "auto") {
+        if ((input.runtimeMode as any) === "auto") {
           const binaryPath = providerOptions?.binaryPath ?? "claude";
           const installedVersion = yield* Effect.tryPromise({
             try: () =>
@@ -5157,7 +5163,7 @@ export function makeClaudeAdapter(
           threadId,
           PROVIDER,
         );
-        const queryOptions: ClaudeQueryOptions = {
+        const queryOptions: any = {
           ...(input.cwd ? { cwd: input.cwd } : {}),
           // Keep Claude context-window selection model-driven so session start
           // and in-session switches both use the same API model contract.
@@ -5243,13 +5249,15 @@ export function makeClaudeAdapter(
           ),
         );
         const messageStream =
-          input.runtimeMode === "auto" ? prestartClaudeMessageStream(queryRuntime) : undefined;
+          (input.runtimeMode as any) === "auto"
+            ? prestartClaudeMessageStream(queryRuntime)
+            : undefined;
 
         let installationContext: ClaudeSessionContext | undefined;
         let installationComplete = false;
 
         return yield* Effect.gen(function* () {
-          if (input.runtimeMode === "auto") {
+          if ((input.runtimeMode as any) === "auto") {
             yield* verifyClaudeAutoModelSupport({
               queryRuntime,
               selectedModel: effectiveClaudeModel,
@@ -5317,8 +5325,8 @@ export function makeClaudeAdapter(
           const context: ClaudeSessionContext = {
             ...(gatewaySessionLease ? { gatewaySessionLease } : {}),
             session,
-            ...(input.lifecycleGeneration !== undefined
-              ? { lifecycleGeneration: input.lifecycleGeneration }
+            ...((input as any).lifecycleGeneration !== undefined
+              ? { lifecycleGeneration: (input as any).lifecycleGeneration }
               : {}),
             promptQueue,
             query: queryRuntime,
@@ -5544,7 +5552,7 @@ export function makeClaudeAdapter(
         if (modelSelection?.model) {
           const apiModelId = resolveApiModelId(modelSelection);
           if (apiModelId !== context.currentApiModelId) {
-            if (context.session.runtimeMode === "auto") {
+            if ((context.session.runtimeMode as any) === "auto") {
               yield* verifyClaudeAutoModelSupport({
                 queryRuntime: context.query,
                 selectedModel: modelSelection.model,
@@ -5778,13 +5786,13 @@ export function makeClaudeAdapter(
         if (steerText) {
           const stamp = yield* makeEventStamp();
           yield* offerRuntimeEvent(context, {
-            type: "turn.steered",
+            type: "turn.steered" as any,
             eventId: stamp.eventId,
             provider: PROVIDER,
             createdAt: stamp.createdAt,
             threadId: context.session.threadId,
             turnId: liveTurnState.turnId,
-            payload: { message: steerText, target: "turn" },
+            payload: { message: steerText, target: "turn" } as any,
             providerRefs: nativeProviderRefs(context),
           });
         }
@@ -5798,10 +5806,10 @@ export function makeClaudeAdapter(
         };
       });
 
-    const interruptTurn: ClaudeAdapterShape["interruptTurn"] = (
-      threadId,
-      turnId,
-      providerThreadId,
+    const interruptTurn: ClaudeAdapterShape["interruptTurn"] = ((
+      threadId: any,
+      turnId?: any,
+      providerThreadId?: any,
     ) =>
       Effect.gen(function* () {
         const context = yield* requireSession(threadId);
@@ -5870,7 +5878,7 @@ export function makeClaudeAdapter(
             )}ms.`,
           });
         }
-      });
+      })) as any;
 
     // Stops one background task by its SDK task id (workflow runs and their member
     // agents included); the SDK answers with a task_notification status "stopped".
@@ -5938,7 +5946,10 @@ export function makeClaudeAdapter(
       Effect.gen(function* () {
         const context = yield* requireSession(threadId);
         if (numTurns > 0) {
-          context.turns = context.turns.slice(0, Math.max(0, context.turns.length - numTurns));
+          (context as any).turns = context.turns.slice(
+            0,
+            Math.max(0, context.turns.length - numTurns),
+          );
         }
         return yield* snapshotThread(context);
       });

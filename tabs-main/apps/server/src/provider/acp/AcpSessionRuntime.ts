@@ -63,6 +63,21 @@ export interface AcpSessionRequestLogEvent {
   readonly cause?: Cause.Cause<EffectAcpErrors.AcpError>;
 }
 
+export function resolveAcpAuthenticationMethod(
+  initializeResult: EffectAcpSchema.InitializeResponse,
+  preferredMethodId: string,
+): string | undefined {
+  const methods = initializeResult.authMethods ?? [];
+  if (methods.length === 0) {
+    return undefined;
+  }
+  const preferred = preferredMethodId.trim();
+  return (
+    methods.find((method) => method.id.trim() === preferred)?.id.trim() ||
+    methods.find((method) => method.id.trim().length > 0)?.id.trim()
+  );
+}
+
 export interface AcpSessionRuntimeStartResult {
   readonly sessionId: string;
   readonly initializeResult: EffectAcpSchema.InitializeResponse;
@@ -381,15 +396,20 @@ const makeAcpSessionRuntime = (
         acp.agent.initialize(initializePayload),
       );
 
-      const authenticatePayload = {
-        methodId: options.authMethodId,
-      } satisfies EffectAcpSchema.AuthenticateRequest;
-
-      yield* runLoggedRequest(
-        "authenticate",
-        authenticatePayload,
-        acp.agent.authenticate(authenticatePayload),
+      const authenticationMethod = resolveAcpAuthenticationMethod(
+        initializeResult,
+        options.authMethodId,
       );
+      if (authenticationMethod !== undefined) {
+        const authenticatePayload = {
+          methodId: authenticationMethod,
+        } satisfies EffectAcpSchema.AuthenticateRequest;
+        yield* runLoggedRequest(
+          "authenticate",
+          authenticatePayload,
+          acp.agent.authenticate(authenticatePayload),
+        );
+      }
 
       let sessionId: string;
       let sessionSetupResult:

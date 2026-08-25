@@ -484,6 +484,15 @@ const TaskCompletedPayload = Schema.Struct({
 });
 export type TaskCompletedPayload = typeof TaskCompletedPayload.Type;
 
+export const RuntimeTaskStatus = Schema.Literals(["pending", "inProgress", "completed"]);
+export type RuntimeTaskStatus = typeof RuntimeTaskStatus.Type;
+
+export const RuntimeTaskListItem = Schema.Struct({
+  task: TrimmedNonEmptyStringSchema,
+  status: RuntimeTaskStatus,
+});
+export type RuntimeTaskListItem = typeof RuntimeTaskListItem.Type;
+
 const HookStartedPayload = Schema.Struct({
   hookId: TrimmedNonEmptyStringSchema,
   hookName: TrimmedNonEmptyStringSchema,

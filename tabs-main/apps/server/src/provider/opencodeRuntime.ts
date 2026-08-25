@@ -30,6 +30,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { isWindowsCommandNotFound } from "../processRunner";
 import { collectStreamAsString } from "./providerSnapshot";
+import { buildProviderChildEnvironment } from "../providerChildEnvironment.ts";
 import * as NetService from "@tabs/shared/Net";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
@@ -47,6 +48,27 @@ export interface OpenCodeServerConnection {
   readonly url: string;
   readonly exitCode: Effect.Effect<number, never> | null;
   readonly external: boolean;
+}
+
+export interface OpenCodeCliModelDescriptor {
+  readonly slug: string;
+  readonly providerID: string;
+  readonly modelID: string;
+  readonly name: string;
+  readonly variants: ReadonlyArray<string>;
+  readonly supportedReasoningEfforts: ReadonlyArray<{
+    readonly value: string;
+    readonly label?: string;
+    readonly description?: string;
+  }>;
+  readonly defaultReasoningEffort?: string;
+  readonly contextWindowOptions?: ReadonlyArray<{
+    readonly value: string;
+    readonly label: string;
+    readonly isDefault?: true;
+  }>;
+  readonly defaultContextWindow?: string;
+  readonly isFree?: boolean;
 }
 
 const OPENCODE_RUNTIME_ERROR_TAG = "OpenCodeRuntimeError";
@@ -172,76 +194,7 @@ function parseServerUrlFromOutput(output: string): string | null {
   return null;
 }
 
-export function parseOpenCodeModelSlug(
-  slug: string | null | undefined,
-): ParsedOpenCodeModelSlug | null {
-  if (typeof slug !== "string") {
-    return null;
-  }
 
-  const trimmed = slug.trim();
-  const separator = trimmed.indexOf("/");
-  if (separator <= 0 || separator === trimmed.length - 1) {
-    return null;
-  }
-
-  return {
-    providerID: trimmed.slice(0, separator),
-    modelID: trimmed.slice(separator + 1),
-  };
-}
-
-export function openCodeQuestionId(
-  index: number,
-  question: QuestionRequest["questions"][number],
-): string {
-  const header = question.header
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-");
-  return header.length > 0 ? `question-${index}-${header}` : `question-${index}`;
-}
-
-export function toOpenCodeFileParts(input: {
-  readonly attachments: ReadonlyArray<ChatAttachment> | undefined;
-  readonly resolveAttachmentPath: (attachment: ChatAttachment) => string | null;
-}): Array<FilePartInput> {
-  const parts: Array<FilePartInput> = [];
-
-  for (const attachment of input.attachments ?? []) {
-    const attachmentPath = input.resolveAttachmentPath(attachment);
-    if (!attachmentPath) {
-      continue;
-    }
-
-    parts.push({
-      type: "file",
-      mime: attachment.mimeType,
-      filename: attachment.name,
-      url: pathToFileURL(attachmentPath).href,
-    });
-  }
-
-  return parts;
-}
-
-export function buildOpenCodePermissionRules(runtimeMode: RuntimeMode): PermissionRuleset {
-  if (runtimeMode === "full-access") {
-    return [{ permission: "*", pattern: "*", action: "allow" }];
-  }
-
-  return [
-    { permission: "*", pattern: "*", action: "ask" },
-    { permission: "bash", pattern: "*", action: "ask" },
-    { permission: "edit", pattern: "*", action: "ask" },
-    { permission: "webfetch", pattern: "*", action: "ask" },
-    { permission: "websearch", pattern: "*", action: "ask" },
-    { permission: "codesearch", pattern: "*", action: "ask" },
-    { permission: "external_directory", pattern: "*", action: "ask" },
-    { permission: "doom_loop", pattern: "*", action: "ask" },
-    { permission: "question", pattern: "*", action: "allow" },
-  ];
-}
 
 export function toOpenCodePermissionReply(
   decision: ProviderApprovalDecision,
@@ -256,6 +209,17 @@ export function toOpenCodePermissionReply(
     default:
       return "reject";
   }
+}
+
+export function openCodeQuestionId(
+  index: number,
+  question: QuestionRequest["questions"][number],
+): string {
+  const header = question.header
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-");
+  return header.length > 0 ? `question-${index}-${header}` : `question-${index}`;
 }
 
 export function toOpenCodeQuestionAnswers(
@@ -293,8 +257,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
   const runOpenCodeCommand: OpenCodeRuntimeShape["runOpenCodeCommand"] = (input) =>
     Effect.gen(function* () {
+      const binary = input.binaryPath?.trim() || "opencode";
       const child = yield* spawner.spawn(
-        ChildProcess.make(input.binaryPath, [...input.args], {
+        ChildProcess.make(binary, [...input.args], {
           shell: process.platform === "win32",
           env: input.environment ?? process.env,
         }),
@@ -348,10 +313,11 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         ));
       const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
       const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
+      const binary = input.binaryPath?.trim() || "opencode";
 
       const child = yield* spawner
         .spawn(
-          ChildProcess.make(input.binaryPath, args, {
+          ChildProcess.make(binary, args, {
             detached: process.platform !== "win32",
             shell: process.platform === "win32",
             env: {
@@ -590,10 +556,264 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
   } satisfies OpenCodeRuntimeShape;
 });
 
+export const OPENCODE_LOCAL_SERVER_IDLE_TTL_MS = 5 * 60_000;
+
+export function buildOpenCodeServerProcessEnv(input: {
+  readonly cliSpec?: { readonly dataDirectoryName: string };
+  readonly experimentalWebSockets?: boolean;
+  readonly baseEnv?: NodeJS.ProcessEnv;
+}): NodeJS.ProcessEnv {
+  return buildProviderChildEnvironment({
+    provider: input.cliSpec?.dataDirectoryName === "kilo" ? "kilo" : "opencode",
+    baseEnv: input.baseEnv ?? process.env,
+    overrides: input.experimentalWebSockets ? { OPENCODE_EXPERIMENTAL_WEBSOCKETS: "true" } : {},
+  });
+}
+
+export function parseOpenCodeCredentialProviderIDs(content: string): ReadonlyArray<string> {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
+    return Object.entries(parsed as Record<string, unknown>)
+      .flatMap(([providerID, value]) =>
+        value && typeof value === "object" && !Array.isArray(value) ? [providerID.trim()] : [],
+      )
+      .filter((providerID) => providerID.length > 0)
+      .toSorted((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+export interface ParsedOpenCodeModelSlug {
+  readonly providerID: string;
+  readonly modelID: string;
+}
+
+export function parseOpenCodeModelSlug(
+  slug: string | null | undefined,
+): ParsedOpenCodeModelSlug | null {
+  if (typeof slug !== "string") {
+    return null;
+  }
+  const trimmed = slug.trim();
+  const separator = trimmed.indexOf("/");
+  if (separator <= 0 || separator === trimmed.length - 1) {
+    return null;
+  }
+  return {
+    providerID: trimmed.slice(0, separator),
+    modelID: trimmed.slice(separator + 1),
+  };
+}
+
+function trimToNull(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function fallbackOpenCodeModelName(slug: string, parsedSlug: ParsedOpenCodeModelSlug): string {
+  return trimToNull(parsedSlug.modelID) ?? slug;
+}
+
+function readJsonObjectBlock(
+  source: string,
+  startIndex: number,
+): { readonly json: string; readonly nextIndex: number } | null {
+  if (source[startIndex] !== "{") {
+    return null;
+  }
+  let depth = 0;
+  let inString = false;
+  let escaping = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (!char) break;
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaping = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          json: source.slice(startIndex, index + 1),
+          nextIndex: index + 1,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function parseOpenCodeCliModelJson(
+  value: unknown,
+  slug: string,
+  parsedSlug: ParsedOpenCodeModelSlug,
+): OpenCodeCliModelDescriptor {
+  const object = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  const providerID = trimToNull(object.providerID) ?? parsedSlug.providerID;
+  const modelID = trimToNull(object.id) ?? parsedSlug.modelID;
+  const name = trimToNull(object.name) ?? fallbackOpenCodeModelName(slug, parsedSlug);
+  const variantsObject =
+    object.variants && typeof object.variants === "object" && !Array.isArray(object.variants)
+      ? (object.variants as Record<string, unknown>)
+      : {};
+  const variants = Object.keys(variantsObject)
+    .map((variant) => variant.trim())
+    .filter((variant) => variant.length > 0)
+    .toSorted((left, right) => left.localeCompare(right));
+
+  return {
+    slug,
+    providerID,
+    modelID,
+    name,
+    variants,
+    supportedReasoningEfforts: [],
+    ...(typeof object.isFree === "boolean" ? { isFree: object.isFree } : {}),
+  };
+}
+
+export function parseOpenCodeCliModelsOutput(
+  output: string,
+): ReadonlyArray<OpenCodeCliModelDescriptor> {
+  const models = new Map<string, OpenCodeCliModelDescriptor>();
+  let index = 0;
+
+  while (index < output.length) {
+    while (index < output.length && /\s/u.test(output[index]!)) {
+      index += 1;
+    }
+    if (index >= output.length) break;
+
+    const lineEnd = output.indexOf("\n", index);
+    const nextLineIndex = lineEnd === -1 ? output.length : lineEnd + 1;
+    const candidate = output.slice(index, lineEnd === -1 ? output.length : lineEnd).trim();
+    index = nextLineIndex;
+
+    const parsedSlug = parseOpenCodeModelSlug(candidate);
+    if (!parsedSlug) continue;
+
+    let descriptor: OpenCodeCliModelDescriptor = {
+      slug: candidate,
+      providerID: parsedSlug.providerID,
+      modelID: parsedSlug.modelID,
+      name: fallbackOpenCodeModelName(candidate, parsedSlug),
+      variants: [],
+      supportedReasoningEfforts: [],
+    };
+
+    while (index < output.length && /\s/u.test(output[index]!)) {
+      index += 1;
+    }
+
+    if (output[index] === "{") {
+      const block = readJsonObjectBlock(output, index);
+      if (block) {
+        try {
+          descriptor = parseOpenCodeCliModelJson(JSON.parse(block.json), candidate, parsedSlug);
+        } catch {
+          // Fallback
+        }
+        index = block.nextIndex;
+      }
+    }
+
+    models.set(descriptor.slug, descriptor);
+  }
+
+  return [...models.values()].toSorted(
+    (left, right) => left.name.localeCompare(right.name) || left.slug.localeCompare(right.slug),
+  );
+}
+
+export function toOpenCodeFileParts(input: {
+  readonly attachments: ReadonlyArray<ChatAttachment> | undefined;
+  readonly resolveAttachmentPath: (attachment: ChatAttachment) => string | null;
+}): Array<FilePartInput> {
+  const parts: Array<FilePartInput> = [];
+  for (const attachment of input.attachments ?? []) {
+    if (attachment.type !== "image") continue;
+    const attachmentPath = input.resolveAttachmentPath(attachment);
+    if (!attachmentPath) continue;
+    parts.push({
+      type: "file",
+      mime: attachment.mimeType,
+      filename: attachment.name,
+      url: pathToFileURL(attachmentPath).href,
+    });
+  }
+  return parts;
+}
+
+export function buildOpenCodePermissionRules(
+  runtimeMode: RuntimeMode,
+  interactionMode: string = "default",
+): PermissionRuleset {
+  if (interactionMode === "plan") {
+    return [
+      { permission: "*", pattern: "*", action: "deny" },
+      { permission: "read", pattern: "*", action: "allow" },
+      { permission: "glob", pattern: "*", action: "allow" },
+      { permission: "grep", pattern: "*", action: "allow" },
+      { permission: "list", pattern: "*", action: "allow" },
+      { permission: "lsp", pattern: "*", action: "allow" },
+      { permission: "webfetch", pattern: "*", action: "allow" },
+      { permission: "websearch", pattern: "*", action: "allow" },
+      { permission: "codesearch", pattern: "*", action: "allow" },
+      { permission: "todoread", pattern: "*", action: "allow" },
+      { permission: "todowrite", pattern: "*", action: "allow" },
+      { permission: "question", pattern: "*", action: "allow" },
+    ];
+  }
+
+  return runtimeMode === "full-access"
+    ? [{ permission: "*", pattern: "*", action: "allow" }]
+    : [
+        { permission: "*", pattern: "*", action: "ask" },
+        { permission: "bash", pattern: "*", action: "ask" },
+        { permission: "edit", pattern: "*", action: "ask" },
+        { permission: "webfetch", pattern: "*", action: "ask" },
+        { permission: "websearch", pattern: "*", action: "ask" },
+        { permission: "codesearch", pattern: "*", action: "ask" },
+        { permission: "external_directory", pattern: "*", action: "ask" },
+        { permission: "doom_loop", pattern: "*", action: "ask" },
+        { permission: "question", pattern: "*", action: "allow" },
+      ];
+}
+
 export class OpenCodeRuntime extends Context.Service<OpenCodeRuntime, OpenCodeRuntimeShape>()(
   "tabs/provider/opencodeRuntime",
 ) {}
 
-export const OpenCodeRuntimeLive = Layer.effect(OpenCodeRuntime, makeOpenCodeRuntime).pipe(
-  Layer.provide(NetService.layer),
-);
+export const makeOpenCodeRuntimeLive = (_options?: any) =>
+  Layer.effect(OpenCodeRuntime, makeOpenCodeRuntime).pipe(Layer.provide(NetService.layer));
+
+export const OpenCodeRuntimeLive = makeOpenCodeRuntimeLive();

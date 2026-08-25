@@ -42,18 +42,18 @@ async function main() {
   const query = new FakeClaudeQuery();
 
   const program = Effect.gen(function* () {
-    const adapter = yield* makeClaudeAdapter({
+    const adapter = yield* (makeClaudeAdapter as any)({
       createQuery: () => query as any,
     });
 
     const eventsFiber = yield* Stream.take(adapter.streamEvents, 4).pipe(
       Stream.runCollect,
-      Effect.fork
+      Effect.forkChild,
     );
 
     yield* adapter.startSession({
       threadId: "thread-claude-test" as any,
-      provider: "claudeAgent",
+      provider: "claudeAgent" as any,
       runtimeMode: "full-access",
     });
 
@@ -103,7 +103,7 @@ async function main() {
     const runtimeEvents = yield* Fiber.join(eventsFiber);
     
     console.log("Captured Runtime Events:");
-    for (const evt of runtimeEvents) {
+    for (const evt of runtimeEvents as any) {
       console.log(` - ${evt.type} (ref: ${evt.providerThreadRef})`);
     }
 
@@ -131,7 +131,7 @@ async function main() {
         readDirectory: () => Effect.succeed([]),
         readFile: () => Effect.succeed(new Uint8Array(0)),
         readFileString: () => Effect.succeed(""),
-        realPath: (p) => Effect.succeed(p),
+        realPath: (p: string) => Effect.succeed(p),
         remove: () => Effect.void,
         rename: () => Effect.void,
         stat: () => Effect.succeed({ type: "File", size: 0, mtime: new Date(), atime: new Date(), ctime: new Date(), birthtime: new Date(), dev: 0, ino: 0, mode: 0, nlink: 0, uid: 0, gid: 0, rdev: 0, blksize: 0, blocks: 0 } as any),
@@ -142,12 +142,12 @@ async function main() {
         writeFile: () => Effect.void,
         writeFileString: () => Effect.void,
         readLink: () => Effect.succeed(""),
-        link: () => Effect.void
-      })
-    )
+        link: () => Effect.void,
+      } as any),
+    ),
   );
 
-  await Effect.runPromise(program.pipe(Effect.provide(layer)));
+  await Effect.runPromise(program.pipe(Effect.provide(layer)) as any);
 }
 
 main().catch(console.error);

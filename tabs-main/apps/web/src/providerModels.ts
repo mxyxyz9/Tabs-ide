@@ -110,7 +110,32 @@ export const FALLBACK_BUILTIN_MODELS_BY_PROVIDER: Record<
     },
   ],
   droid: [],
-  antigravity: [],
+  antigravity: [
+    {
+      slug: "gemini-3.7-flash",
+      name: "Gemini 3.7 Flash",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "gemini-2.5-pro",
+      name: "Gemini 2.5 Pro",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "gemini-2.5-flash",
+      name: "Gemini 2.5 Flash",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+    {
+      slug: "claude-3-7-sonnet",
+      name: "Claude 3.7 Sonnet",
+      isCustom: false,
+      capabilities: DEFAULT_FALLBACK_MODEL_CAPABILITIES,
+    },
+  ],
   openrouter: [],
   gemini: [
     {

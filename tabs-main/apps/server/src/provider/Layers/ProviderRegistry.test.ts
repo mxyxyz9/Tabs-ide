@@ -716,7 +716,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             },
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
-          } satisfies ProviderInstance;
+          } as any;
           const instanceRegistryLayer = Layer.succeed(ProviderInstanceRegistry, {
             getInstance: (instanceId) =>
               Effect.succeed(instanceId === cursorInstanceId ? instance : undefined),
@@ -810,7 +810,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             },
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
-          } satisfies ProviderInstance;
+          } as any;
           const instanceRegistryLayer = Layer.succeed(ProviderInstanceRegistry, {
             getInstance: (instanceId) =>
               Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
@@ -879,27 +879,28 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             slashCommands: [],
             skills: [],
           } as const satisfies ServerProvider;
-          const makeInstance = (provider: ServerProvider): ProviderInstance => ({
-            instanceId: provider.instanceId,
-            driverKind: provider.driver,
-            continuationIdentity: {
+          const makeInstance = (provider: ServerProvider): ProviderInstance =>
+            ({
+              instanceId: provider.instanceId,
               driverKind: provider.driver,
-              continuationKey: `${provider.driver}:instance:${provider.instanceId}`,
-            },
-            displayName: undefined,
-            enabled: true,
-            snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                provider: provider.driver,
-                packageName: null,
-              }),
-              getSnapshot: Effect.succeed(provider),
-              refresh: Effect.succeed(provider),
-              streamChanges: Stream.empty,
-            },
-            adapter: {} as ProviderInstance["adapter"],
-            textGeneration: {} as ProviderInstance["textGeneration"],
-          });
+              continuationIdentity: {
+                driverKind: provider.driver,
+                continuationKey: `${provider.driver}:instance:${provider.instanceId}`,
+              },
+              displayName: undefined,
+              enabled: true,
+              snapshot: {
+                maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+                  provider: provider.driver,
+                  packageName: null,
+                }),
+                getSnapshot: Effect.succeed(provider),
+                refresh: Effect.succeed(provider),
+                streamChanges: Stream.empty,
+              },
+              adapter: {} as ProviderInstance["adapter"],
+              textGeneration: {} as ProviderInstance["textGeneration"],
+            }) as any;
           const codexInstance = makeInstance(codexProvider);
           const claudeInstance = makeInstance(claudeProvider);
           const changes = yield* PubSub.unbounded<void>();

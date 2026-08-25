@@ -3,7 +3,7 @@
 // Layer: Provider adapter utilities
 // Depends on: shared chat attachment contracts.
 
-import type { ChatAttachment, ChatImageAttachment, ProviderKind } from "@tabs/contracts";
+import type { ChatAttachment, ChatImageAttachment, ProviderDriverKind } from "@tabs/contracts";
 import { Effect } from "effect";
 
 import { resolveProviderAttachmentPath } from "./providerAttachmentPaths.ts";
@@ -27,7 +27,7 @@ export interface ProviderPromptImageBlock {
 export function loadProviderPromptImageBlocks(input: {
   readonly attachments: ReadonlyArray<ChatAttachment> | undefined;
   readonly attachmentsDir: string;
-  readonly provider: ProviderKind;
+  readonly provider: ProviderDriverKind | string;
   readonly method: string;
   readonly readFile: (path: string) => Effect.Effect<Uint8Array, unknown>;
   readonly readErrorDetail?: (cause: unknown) => string;

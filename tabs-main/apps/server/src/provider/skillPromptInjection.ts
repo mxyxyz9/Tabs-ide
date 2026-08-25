@@ -8,7 +8,7 @@
 import * as fs from "node:fs/promises";
 import * as nodePath from "node:path";
 
-import type { ProviderKind, ProviderSkillReference } from "@tabs/contracts";
+import type { ProviderDriverKind, ProviderSkillReference } from "@tabs/contracts";
 
 // Per-skill cap keeps a single oversized SKILL.md from eating the turn budget.
 const MAX_INLINE_SKILL_CONTENT_CHARS = 24_000;
@@ -30,7 +30,10 @@ function pathSegments(path: string): Set<string> {
   return new Set(nodePath.normalize(path).split(/[\\/]+/));
 }
 
-export function shouldInlineSkillForProvider(provider: ProviderKind, skillPath: string): boolean {
+export function shouldInlineSkillForProvider(
+  provider: ProviderDriverKind | string,
+  skillPath: string,
+): boolean {
   const segments = pathSegments(skillPath);
   switch (provider) {
     case "antigravity":
@@ -59,12 +62,12 @@ export function shouldInlineSkillForProvider(provider: ProviderKind, skillPath: 
 }
 
 export async function buildInlineSkillInstructions(input: {
-  readonly provider: ProviderKind;
+  readonly provider: ProviderDriverKind | string;
   readonly skills: ReadonlyArray<ProviderSkillReference>;
   readonly maxChars: number;
 }): Promise<string> {
-  const inlineSkills = input.skills.filter((skill) =>
-    shouldInlineSkillForProvider(input.provider, skill.path),
+  const inlineSkills = input.skills.filter(
+    (skill) => skill.path && shouldInlineSkillForProvider(input.provider, skill.path),
   );
   if (inlineSkills.length === 0 || input.maxChars <= 0) {
     return "";
@@ -72,6 +75,7 @@ export async function buildInlineSkillInstructions(input: {
 
   let text = "";
   for (const skill of inlineSkills) {
+    if (!skill.path) continue;
     let content: string;
     try {
       content = await fs.readFile(skill.path, "utf8");

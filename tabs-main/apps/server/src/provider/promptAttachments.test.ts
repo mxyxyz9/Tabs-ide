@@ -22,7 +22,7 @@ describe("filterProviderPromptImageAttachments", () => {
       id: "thread-1-selection-1",
       assistantMessageId: MessageId.makeUnsafe("assistant-message-1"),
       text: "Selected assistant text is already serialized into the prompt body.",
-    } satisfies ChatAttachment;
+    } as any;
 
     expect(filterProviderPromptImageAttachments([selectionAttachment, imageAttachment])).toEqual([
       imageAttachment,

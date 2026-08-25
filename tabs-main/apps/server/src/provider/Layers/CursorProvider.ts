@@ -409,7 +409,7 @@ const makeCursorAcpProbeRuntime = (
     const acpContext = yield* Layer.build(
       AcpSessionRuntime.layer({
         spawn: {
-          command: cursorSettings.binaryPath,
+          command: cursorSettings.binaryPath?.trim() || "cursor-agent",
           args: [
             ...(cursorSettings.apiEndpoint ? (["-e", cursorSettings.apiEndpoint] as const) : []),
             "acp",
@@ -947,8 +947,9 @@ const runCursorCommand = (
 ) =>
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const binary = cursorSettings.binaryPath?.trim() || "cursor-agent";
     const spawnCommand = yield* resolveSpawnCommand(
-      cursorSettings.binaryPath,
+      binary,
       args,
       environment ? { env: environment } : {},
     );

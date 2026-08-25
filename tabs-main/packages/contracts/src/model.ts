@@ -161,7 +161,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [GEMINI_DRIVER_KIND]: "gemini-3.6-flash",
   [DROID_DRIVER_KIND]: "auto",
-  [ANTIGRAVITY_DRIVER_KIND]: "auto",
+  [ANTIGRAVITY_DRIVER_KIND]: "gemini-3.7-flash",
 };
 
 /** Per-provider text generation model defaults. */

@@ -92,7 +92,24 @@ export interface ProviderAdapterShape<TError> {
   /**
    * Interrupt an active turn.
    */
-  readonly interruptTurn: (threadId: ThreadId, turnId?: TurnId) => Effect.Effect<void, TError>;
+  readonly interruptTurn: (
+    threadId: ThreadId,
+    turnId?: TurnId,
+    providerThreadId?: string,
+  ) => Effect.Effect<void, TError>;
+
+  readonly steerTurn?: (input: any) => Effect.Effect<ProviderTurnStartResult, TError>;
+  readonly stopTask?: (threadId: ThreadId, taskId: string) => Effect.Effect<void, TError>;
+  readonly backgroundTask?: (threadId: ThreadId, toolUseId: string) => Effect.Effect<void, TError>;
+  readonly steerSubagent?: (
+    threadId: ThreadId,
+    providerThreadId: string,
+    input: any,
+  ) => Effect.Effect<void, TError>;
+  readonly listSkills?: (input: any) => Effect.Effect<any, TError>;
+  readonly listCommands?: (input: any) => Effect.Effect<any, TError>;
+  readonly listAgents?: (input: any) => Effect.Effect<any, TError>;
+  readonly getComposerCapabilities?: () => Effect.Effect<any, TError>;
 
   /**
    * Respond to an interactive approval request.

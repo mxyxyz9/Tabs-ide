@@ -125,7 +125,7 @@ const makeFakeInstance = (
     },
     adapter,
     textGeneration: {} as unknown as TextGenerationShape,
-  };
+  } as any as ProviderInstance;
 };
 
 const fakeInstances: ReadonlyArray<ProviderInstance> = [

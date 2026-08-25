@@ -6,7 +6,7 @@ describe("parseAntigravityModels", () => {
   it("normalizes the live agy catalog without adding fallback models", () => {
     expect(
       parseAntigravityModels(
-        "gemini-2.5-pro\tGemini 2.5 Pro (High)\nclaude-sonnet\tClaude Sonnet\n",
+        "Fetching available models...\ngemini-2.5-pro\tGemini 2.5 Pro (High)\nclaude-sonnet\tClaude Sonnet\n",
       ),
     ).toMatchObject([
       { slug: "gemini-2.5-pro", name: "Gemini 2.5 Pro", isCustom: false },
