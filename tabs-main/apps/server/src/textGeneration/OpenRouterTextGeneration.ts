@@ -15,6 +15,7 @@ import {
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
 import {
+  logStructuredGenerationRequest,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
@@ -77,6 +78,12 @@ export const makeOpenRouterTextGeneration = Effect.fn("makeOpenRouterTextGenerat
     if (!model) {
       return yield* mapOpenRouterError(operation, "Select an OpenRouter model first.");
     }
+    yield* logStructuredGenerationRequest({
+      operation,
+      provider: "openrouter",
+      model,
+      schemaMode: "native",
+    });
     const endpoint = `${baseUrl}/chat/completions`;
 
     const requestPayload = {

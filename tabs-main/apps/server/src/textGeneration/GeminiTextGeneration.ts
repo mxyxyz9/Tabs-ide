@@ -15,6 +15,7 @@ import {
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
 import {
+  logStructuredGenerationRequest,
   sanitizeCommitSubject,
   sanitizePrTitle,
   sanitizeThreadTitle,
@@ -73,6 +74,12 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
       geminiSettings.baseUrl?.trim() || "https://generativelanguage.googleapis.com"
     ).replace(/\/+$/, "");
     const model = modelSelection.model || "gemini-3.6-flash";
+    yield* logStructuredGenerationRequest({
+      operation,
+      provider: "gemini",
+      model,
+      schemaMode: "native",
+    });
     const endpoint = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const requestPayload = {

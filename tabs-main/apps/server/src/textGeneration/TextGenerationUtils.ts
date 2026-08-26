@@ -1,4 +1,5 @@
 import { TextGenerationError } from "@tabs/contracts";
+import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 const isTextGenerationError = Schema.is(TextGenerationError);
@@ -10,6 +11,65 @@ export function toJsonSchemaObject(schema: Schema.Top): unknown {
     return { ...document.schema, $defs: document.definitions };
   }
   return document.schema;
+}
+
+function jsonSchemaExample(schema: unknown): unknown {
+  if (typeof schema !== "object" || schema === null) return null;
+  const node = schema as {
+    const?: unknown;
+    default?: unknown;
+    enum?: ReadonlyArray<unknown>;
+    type?: string | ReadonlyArray<string>;
+    properties?: Record<string, unknown>;
+    required?: ReadonlyArray<string>;
+    items?: unknown;
+  };
+  if (node.const !== undefined) return node.const;
+  if (node.default !== undefined) return node.default;
+  if (node.enum && node.enum.length > 0) return node.enum[0];
+  const type = Array.isArray(node.type) ? node.type.find((value) => value !== "null") : node.type;
+  switch (type) {
+    case "object":
+      return Object.fromEntries(
+        (node.required ?? []).map((key) => [key, jsonSchemaExample(node.properties?.[key])]),
+      );
+    case "array":
+      return [];
+    case "integer":
+    case "number":
+      return 0;
+    case "boolean":
+      return false;
+    case "string":
+      return "";
+    default:
+      return null;
+  }
+}
+
+export function buildSchemaConstrainedPrompt(prompt: string, schema: Schema.Top): string {
+  const jsonSchema = toJsonSchemaObject(schema);
+  return [
+    prompt,
+    "",
+    "Structured output contract:",
+    "Return exactly one JSON object that validates against this JSON Schema:",
+    JSON.stringify(jsonSchema, null, 2),
+    "",
+    "Minimal valid example:",
+    JSON.stringify(jsonSchemaExample(jsonSchema), null, 2),
+    "",
+    "Return the JSON object only. Do not use Markdown fences or add commentary.",
+  ].join("\n");
+}
+
+export function logStructuredGenerationRequest(input: {
+  readonly operation: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly schemaMode: "native" | "prompt-fallback-with-example";
+}) {
+  return Effect.logInfo("structured text-generation request", input);
 }
 
 /** Truncate a text section to `maxChars`, appending a `[truncated]` marker when needed. */

@@ -133,7 +133,7 @@ export const KiloDriver: ProviderDriver<KiloSettings, KiloDriverEnv> = {
         turnIdPrefix: "kilo-turn",
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
       });
-      const textGeneration = yield* makeOpenCodeTextGeneration(effectiveConfig, processEnv);
+      const textGeneration = yield* makeOpenCodeTextGeneration(effectiveConfig, processEnv, "kilo");
 
       const checkProvider = checkKiloProviderStatus(
         effectiveConfig,

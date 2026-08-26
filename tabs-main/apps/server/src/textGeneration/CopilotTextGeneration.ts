@@ -19,7 +19,13 @@ import {
   buildThreadTitlePrompt,
   buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
-import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
+import {
+  buildSchemaConstrainedPrompt,
+  logStructuredGenerationRequest,
+  sanitizeCommitSubject,
+  sanitizePrTitle,
+  sanitizeThreadTitle,
+} from "./TextGenerationUtils";
 import {
   applyCopilotAcpModelSelection,
   currentCopilotModelIdFromSessionSetup,
@@ -83,6 +89,13 @@ export const makeCopilotTextGeneration = Effect.fn("makeCopilotTextGeneration")(
     modelSelection: ModelSelection;
   }): Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]> =>
     Effect.gen(function* () {
+      const structuredPrompt = buildSchemaConstrainedPrompt(prompt, outputSchemaJson);
+      yield* logStructuredGenerationRequest({
+        operation,
+        provider: "copilot",
+        model: modelSelection.model,
+        schemaMode: "prompt-fallback-with-example",
+      });
       const resolvedModel = resolveCopilotAcpBaseModelId(modelSelection.model);
       if (!resolvedModel) {
         return yield* new TextGenerationError({
@@ -132,7 +145,7 @@ export const makeCopilotTextGeneration = Effect.fn("makeCopilotTextGeneration")(
         });
 
         return yield* runtime.prompt({
-          prompt: [{ type: "text", text: prompt }],
+          prompt: [{ type: "text", text: structuredPrompt }],
         });
       }).pipe(
         Effect.timeoutOption(COPILOT_TIMEOUT_MS),

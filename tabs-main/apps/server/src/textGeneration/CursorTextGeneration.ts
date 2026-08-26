@@ -18,7 +18,13 @@ import {
   buildThreadTitlePrompt,
   buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
-import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
+import {
+  buildSchemaConstrainedPrompt,
+  logStructuredGenerationRequest,
+  sanitizeCommitSubject,
+  sanitizePrTitle,
+  sanitizeThreadTitle,
+} from "./TextGenerationUtils";
 import {
   applyCursorAcpModelSelection,
   makeCursorAcpRuntime,
@@ -83,6 +89,13 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
     modelSelection: ModelSelection;
   }): Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]> =>
     Effect.gen(function* () {
+      const structuredPrompt = buildSchemaConstrainedPrompt(prompt, outputSchemaJson);
+      yield* logStructuredGenerationRequest({
+        operation,
+        provider: "cursor",
+        model: modelSelection.model,
+        schemaMode: "prompt-fallback-with-example",
+      });
       const outputRef = yield* Ref.make("");
       const runtime = yield* makeCursorAcpRuntime({
         cursorSettings,
@@ -122,7 +135,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
         });
 
         return yield* runtime.prompt({
-          prompt: [{ type: "text", text: prompt }],
+          prompt: [{ type: "text", text: structuredPrompt }],
         });
       }).pipe(
         Effect.timeoutOption(CURSOR_TIMEOUT_MS),

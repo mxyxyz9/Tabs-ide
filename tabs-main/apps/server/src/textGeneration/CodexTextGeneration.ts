@@ -28,6 +28,7 @@ import {
   buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import {
+  logStructuredGenerationRequest,
   normalizeCliError,
   sanitizeCommitSubject,
   sanitizePrTitle,
@@ -177,6 +178,12 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     cleanupPaths?: ReadonlyArray<string>;
     modelSelection: ModelSelection;
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
+    yield* logStructuredGenerationRequest({
+      operation,
+      provider: "codex",
+      model: modelSelection.model,
+      schemaMode: "native",
+    });
     const schemaJson = yield* encodeJsonForOperation(
       operation,
       toJsonSchemaObject(outputSchemaJson),

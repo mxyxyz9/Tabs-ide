@@ -27,7 +27,13 @@ import {
   buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import { type TextGenerationShape } from "./TextGeneration";
-import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
+import {
+  buildSchemaConstrainedPrompt,
+  logStructuredGenerationRequest,
+  sanitizeCommitSubject,
+  sanitizePrTitle,
+  sanitizeThreadTitle,
+} from "./TextGenerationUtils";
 import {
   OpenCodeRuntime,
   type OpenCodeServerConnection,
@@ -99,6 +105,7 @@ interface SharedOpenCodeTextGenerationServerState {
 export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration")(function* (
   openCodeSettings: OpenCodeSettings | KiloSettings,
   environment: NodeJS.ProcessEnv = process.env,
+  provider = "opencode",
 ) {
   const serverConfig = yield* ServerConfig;
   const openCodeRuntime = yield* OpenCodeRuntime;
@@ -280,6 +287,13 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     readonly modelSelection: ModelSelection;
     readonly attachments?: ReadonlyArray<ChatAttachment> | undefined;
   }) {
+    const structuredPrompt = buildSchemaConstrainedPrompt(input.prompt, input.outputSchemaJson);
+    yield* logStructuredGenerationRequest({
+      operation: input.operation,
+      provider,
+      model: input.modelSelection.model,
+      schemaMode: "prompt-fallback-with-example",
+    });
     const parsedModel = parseOpenCodeModelSlug(input.modelSelection.model);
     if (!parsedModel) {
       return yield* new TextGenerationError({
@@ -322,7 +336,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
             model: parsedModel,
             ...(selectedAgent ? { agent: selectedAgent } : {}),
             ...(selectedVariant ? { variant: selectedVariant } : {}),
-            parts: [{ type: "text", text: input.prompt }, ...fileParts],
+            parts: [{ type: "text", text: structuredPrompt }, ...fileParts],
           });
           const info = result.data?.info;
           const errorMessage = getOpenCodePromptErrorMessage(info?.error);

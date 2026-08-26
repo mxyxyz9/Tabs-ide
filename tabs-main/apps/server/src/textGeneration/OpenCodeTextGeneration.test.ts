@@ -23,6 +23,7 @@ const runtimeMock = {
   state: {
     startCalls: [] as string[],
     promptUrls: [] as string[],
+    prompts: [] as string[],
     authHeaders: [] as Array<string | null>,
     closeCalls: [] as string[],
     promptResult: undefined as
@@ -32,6 +33,7 @@ const runtimeMock = {
   reset() {
     this.state.startCalls.length = 0;
     this.state.promptUrls.length = 0;
+    this.state.prompts.length = 0;
     this.state.authHeaders.length = 0;
     this.state.closeCalls.length = 0;
     this.state.promptResult = undefined;
@@ -67,8 +69,9 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
     ({
       session: {
         create: async () => ({ data: { id: `${baseUrl}/session` } }),
-        prompt: async () => {
+        prompt: async (input: { parts?: Array<{ type: string; text?: string }> }) => {
           runtimeMock.state.promptUrls.push(baseUrl);
+          runtimeMock.state.prompts.push(input.parts?.[0]?.text ?? "");
           runtimeMock.state.authHeaders.push(
             serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
           );
@@ -218,6 +221,12 @@ it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
           "http://127.0.0.1:4301",
         ]);
         expect(runtimeMock.state.closeCalls).toEqual([]);
+        expect(runtimeMock.state.prompts[0]).toContain("Structured output contract:");
+        expect(runtimeMock.state.prompts[0]).toContain('"subject"');
+        expect(runtimeMock.state.prompts[0]).toContain("Minimal valid example:");
+        expect(runtimeMock.state.prompts[0]).toContain(
+          "Do not use Markdown fences or add commentary.",
+        );
 
         yield* advanceIdleClock;
 

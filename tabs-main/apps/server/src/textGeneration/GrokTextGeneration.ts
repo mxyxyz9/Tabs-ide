@@ -19,7 +19,13 @@ import {
   buildThreadTitlePrompt,
   buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
-import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
+import {
+  buildSchemaConstrainedPrompt,
+  logStructuredGenerationRequest,
+  sanitizeCommitSubject,
+  sanitizePrTitle,
+  sanitizeThreadTitle,
+} from "./TextGenerationUtils";
 import {
   applyGrokAcpModelSelection,
   currentGrokModelIdFromSessionSetup,
@@ -82,6 +88,13 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
     modelSelection: ModelSelection;
   }): Effect.Effect<S["Type"], TextGenerationError, S["DecodingServices"]> =>
     Effect.gen(function* () {
+      const structuredPrompt = buildSchemaConstrainedPrompt(prompt, outputSchemaJson);
+      yield* logStructuredGenerationRequest({
+        operation,
+        provider: "grok",
+        model: modelSelection.model,
+        schemaMode: "prompt-fallback-with-example",
+      });
       const resolvedModel = resolveGrokAcpBaseModelId(modelSelection.model);
       const outputRef = yield* Ref.make("");
       const runtime = yield* makeGrokAcpRuntime({
@@ -119,7 +132,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
         });
 
         return yield* runtime.prompt({
-          prompt: [{ type: "text", text: prompt }],
+          prompt: [{ type: "text", text: structuredPrompt }],
         });
       }).pipe(
         Effect.timeoutOption(GROK_TIMEOUT_MS),

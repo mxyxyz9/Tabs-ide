@@ -1,5 +1,5 @@
 // @effect-diagnostics nodeBuiltinImport:off
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -100,4 +100,36 @@ it.layer(testLayer)("CopilotTextGeneration", (it) => {
         }),
     ),
   );
+
+  it.effect("sends the operation schema and a valid example in the final ACP prompt", () => {
+    const requestLogDir = mkdtempSync(path.join(os.tmpdir(), "tabs-copilot-schema-log-"));
+    const requestLogPath = path.join(requestLogDir, "requests.ndjson");
+    return withFakeCopilot(
+      {
+        T3_ACP_REQUEST_LOG_PATH: requestLogPath,
+        T3_ACP_PROMPT_RESPONSE_TEXT: JSON.stringify({ subject: "Describe schema", body: "" }),
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          yield* textGeneration.generateCommitMessage({
+            cwd: process.cwd(),
+            branch: "feature/schema",
+            stagedSummary: "M README.md",
+            stagedPatch: "diff --git a/README.md b/README.md",
+            modelSelection: createModelSelection("copilot" as ProviderInstanceId, "grok-build"),
+          });
+          const promptRequest = readFileSync(requestLogPath, "utf8")
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line) as { method?: string; params?: { prompt?: Array<{ text?: string }> } })
+            .find((request) => request.method === "session/prompt");
+          const prompt = promptRequest?.params?.prompt?.[0]?.text ?? "";
+          expect(prompt).toContain("Structured output contract:");
+          expect(prompt).toContain('"subject"');
+          expect(prompt).toContain("Minimal valid example:");
+          expect(prompt).toContain("Do not use Markdown fences or add commentary.");
+          rmSync(requestLogDir, { recursive: true, force: true });
+        }),
+    );
+  });
 });

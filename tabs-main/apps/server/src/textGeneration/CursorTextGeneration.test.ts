@@ -181,6 +181,15 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
               }),
             ]),
           );
+          const prompt = (
+            requests.find((request) => request.method === "session/prompt")?.params?.prompt as
+              | Array<{ text?: string }>
+              | undefined
+          )?.[0]?.text;
+          expect(prompt).toContain("Structured output contract:");
+          expect(prompt).toContain('"subject"');
+          expect(prompt).toContain("Minimal valid example:");
+          expect(prompt).toContain("Do not use Markdown fences or add commentary.");
 
           rmSync(requestLogDir, { recursive: true, force: true });
         }),

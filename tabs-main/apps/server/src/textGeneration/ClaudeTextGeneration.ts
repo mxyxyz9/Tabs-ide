@@ -27,6 +27,7 @@ import {
   buildStructuredTestingPrompt,
 } from "./TextGenerationPrompts";
 import {
+  logStructuredGenerationRequest,
   normalizeCliError,
   sanitizeCommitSubject,
   sanitizePrTitle,
@@ -126,6 +127,12 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     outputSchemaJson: S;
     modelSelection: ModelSelection;
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
+    yield* logStructuredGenerationRequest({
+      operation,
+      provider: "claude",
+      model: modelSelection.model,
+      schemaMode: "native",
+    });
     const jsonSchemaStr = yield* encodeJsonForOperation(
       operation,
       toJsonSchemaObject(outputSchemaJson),
