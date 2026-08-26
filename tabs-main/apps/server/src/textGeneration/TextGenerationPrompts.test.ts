@@ -5,10 +5,49 @@ import {
   buildCommitMessagePrompt,
   buildDiffSummaryPrompt,
   buildPrContentPrompt,
+  buildStructuredTestingPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
 import { normalizeCliError, sanitizeThreadTitle } from "./TextGenerationUtils";
 import { TextGenerationError } from "@tabs/contracts";
+
+const testingPromptInput = {
+  sanitizedPrompt: "Use the supplied testing evidence.",
+  reasoningTier: "standard" as const,
+  budget: { maxEstimatedTokens: 1_000, maxEstimatedCostUsd: 0.1 },
+};
+
+describe("buildStructuredTestingPrompt", () => {
+  it("describes test-generation fields", () => {
+    const prompt = buildStructuredTestingPrompt({
+      ...testingPromptInput,
+      taskKind: "test-generation",
+    });
+    expect(prompt).toContain("featureSlug: non-empty, lowercase slug-compatible text");
+    expect(prompt).toContain("testTitle: concise, non-empty title");
+    expect(prompt).toContain("assertionText: non-empty observable outcome");
+  });
+
+  it("describes story-to-cases fields", () => {
+    const prompt = buildStructuredTestingPrompt({
+      ...testingPromptInput,
+      taskKind: "story-to-cases",
+    });
+    expect(prompt).toContain("cases[].externalId: stable, non-empty human-readable case identifier");
+    expect(prompt).toContain("cases[].steps: ordered, actionable user interactions");
+    expect(prompt).toContain("cases[].locatorKeys: known locator-library keys");
+  });
+
+  it("describes failure-triage fields", () => {
+    const prompt = buildStructuredTestingPrompt({
+      ...testingPromptInput,
+      taskKind: "failure-triage",
+    });
+    expect(prompt).toContain("classification: exactly one of application-regression");
+    expect(prompt).toContain("observedFacts: directly observed evidence only");
+    expect(prompt).toContain("recommendation: concrete next action");
+  });
+});
 
 describe("buildCommitMessagePrompt", () => {
   it("includes staged patch and summary in the prompt", () => {
