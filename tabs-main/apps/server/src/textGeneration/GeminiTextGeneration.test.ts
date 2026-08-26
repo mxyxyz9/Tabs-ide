@@ -55,11 +55,12 @@ describe("GeminiTextGeneration", () => {
     };
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => mockResponse,
-    }) as unknown) as typeof fetch;
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     try {
       const driver = await Effect.runPromise(makeGeminiTextGeneration(settings));
@@ -79,6 +80,21 @@ describe("GeminiTextGeneration", () => {
       expect(result.summary).toBe("Updated documentation.");
       expect(result.keyChanges).toBe("- Added Gemini provider support.");
       expect(result.notesAndRisk).toBe("No breaking changes.");
+      const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+        generationConfig: { responseMimeType: string; responseSchema: Record<string, unknown> };
+      };
+      expect(request.generationConfig).toMatchObject({
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "object",
+          required: ["summary", "keyChanges", "notesAndRisk"],
+          properties: {
+            summary: { type: "string" },
+            keyChanges: { type: "string" },
+            notesAndRisk: { type: "string" },
+          },
+        },
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

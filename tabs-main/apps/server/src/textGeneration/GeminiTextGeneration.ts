@@ -14,7 +14,12 @@ import {
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
-import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
+import {
+  sanitizeCommitSubject,
+  sanitizePrTitle,
+  sanitizeThreadTitle,
+  toJsonSchemaObject,
+} from "./TextGenerationUtils";
 
 const GEMINI_TIMEOUT_MS = 60_000;
 
@@ -79,6 +84,7 @@ export const makeGeminiTextGeneration = Effect.fn("makeGeminiTextGeneration")(fu
       ],
       generationConfig: {
         responseMimeType: "application/json",
+        responseSchema: toJsonSchemaObject(outputSchemaJson),
       },
     };
 

@@ -14,7 +14,12 @@ import {
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts";
-import { sanitizeCommitSubject, sanitizePrTitle, sanitizeThreadTitle } from "./TextGenerationUtils";
+import {
+  sanitizeCommitSubject,
+  sanitizePrTitle,
+  sanitizeThreadTitle,
+  toJsonSchemaObject,
+} from "./TextGenerationUtils";
 
 const OPENROUTER_TIMEOUT_MS = 60_000;
 
@@ -77,7 +82,14 @@ export const makeOpenRouterTextGeneration = Effect.fn("makeOpenRouterTextGenerat
     const requestPayload = {
       model,
       messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" },
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: operation,
+          strict: true,
+          schema: toJsonSchemaObject(outputSchemaJson),
+        },
+      },
     };
 
     const fetchEffect = Effect.tryPromise({
