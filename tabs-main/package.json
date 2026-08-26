@@ -38,6 +38,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "oxlint --report-unused-disable-directives",
     "test": "turbo run test",
+    "check:effect-versions": "bun scripts/check-effect-versions.ts",
     "test:desktop-smoke": "turbo run smoke-test --filter=@tabs/desktop",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
@@ -62,6 +63,7 @@
     "vitest": "catalog:"
   },
   "overrides": {
+    "@effect/platform-node-shared": "4.0.0-beta.78",
     "vite": "^8.0.16"
   },
   "engines": {
