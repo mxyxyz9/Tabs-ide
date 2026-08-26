@@ -290,6 +290,7 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       summary: generated.summary.trim(),
       keyChanges: generated.keyChanges.trim(),
       notesAndRisk: generated.notesAndRisk.trim(),
+      ...(generated.findings ? { findings: generated.findings } : {}),
     };
   });
 

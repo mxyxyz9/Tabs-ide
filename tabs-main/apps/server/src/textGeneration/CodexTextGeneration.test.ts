@@ -12,8 +12,10 @@ import { expect } from "vitest";
 import { CodexSettings, ProviderInstanceId, TextGenerationError } from "@tabs/contracts";
 
 import { ServerConfig } from "../config";
+import { runReviewPasses } from "../review/ReviewPassRunner";
 import { type TextGenerationShape } from "./TextGeneration";
 import { makeCodexTextGeneration } from "./CodexTextGeneration";
+import { TEST_REVIEW_FINDING } from "./TextGenerationTestFixtures";
 const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 const DEFAULT_TEST_MODEL_SELECTION = createModelSelection(
@@ -180,6 +182,58 @@ function withFakeCodexEnv<A, E, R>(
 }
 
 it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
+  it.effect("preserves code-review findings", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          summary: "Review summary",
+          keyChanges: "- Reviewed change",
+          notesAndRisk: "Low risk",
+          findings: [TEST_REVIEW_FINDING],
+        }),
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          const generated = yield* textGeneration.generateDiffSummary({
+            cwd: process.cwd(),
+            diffSummary: "M src/example.ts",
+            diffPatch: "diff --git a/src/example.ts b/src/example.ts",
+            modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+          });
+
+          expect(generated.findings).toEqual([TEST_REVIEW_FINDING]);
+        }),
+    ),
+  );
+
+  it.effect("preserves adapter findings through ReviewPassRunner", () =>
+    withFakeCodexEnv(
+      {
+        output: JSON.stringify({
+          summary: "Review summary",
+          keyChanges: "- Reviewed change",
+          notesAndRisk: "Low risk",
+          findings: [TEST_REVIEW_FINDING],
+        }),
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          const result = yield* runReviewPasses(
+            {
+              cwd: process.cwd(),
+              diffSummary: "M src/example.ts",
+              diffPatch: "diff --git a/src/example.ts b/src/example.ts",
+              modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+              configuredPasses: ["correctness"],
+            },
+            textGeneration,
+          );
+
+          expect(result.findings).toEqual([expect.objectContaining(TEST_REVIEW_FINDING)]);
+        }),
+    ),
+  );
+
   it.effect("generates and sanitizes commit messages without branch by default", () =>
     withFakeCodexEnv(
       {

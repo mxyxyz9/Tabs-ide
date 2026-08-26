@@ -17,6 +17,7 @@ import {
 } from "../provider/opencodeRuntime";
 import { type TextGenerationShape } from "./TextGeneration";
 import { makeOpenCodeTextGeneration } from "./OpenCodeTextGeneration";
+import { TEST_REVIEW_FINDING } from "./TextGenerationTestFixtures";
 
 const runtimeMock = {
   state: {
@@ -162,6 +163,37 @@ const advanceIdleClock = Effect.gen(function* () {
 });
 
 it.layer(OpenCodeTextGenerationTestLayer)("OpenCodeTextGeneration", (it) => {
+  it.effect("preserves code-review findings", () =>
+    withOpenCodeTextGeneration(DEFAULT_OPENCODE_SETTINGS, (textGeneration) =>
+      Effect.gen(function* () {
+        runtimeMock.state.promptResult = {
+          data: {
+            parts: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  summary: "Review summary",
+                  keyChanges: "- Reviewed change",
+                  notesAndRisk: "Low risk",
+                  findings: [TEST_REVIEW_FINDING],
+                }),
+              },
+            ],
+          },
+        };
+
+        const generated = yield* textGeneration.generateDiffSummary({
+          cwd: process.cwd(),
+          diffSummary: "M src/example.ts",
+          diffPatch: "diff --git a/src/example.ts b/src/example.ts",
+          modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+        });
+
+        expect(generated.findings).toEqual([TEST_REVIEW_FINDING]);
+      }),
+    ),
+  );
+
   it.effect("reuses a warm server across back-to-back requests and closes it after idling", () =>
     withOpenCodeTextGeneration(DEFAULT_OPENCODE_SETTINGS, (textGeneration) =>
       Effect.gen(function* () {

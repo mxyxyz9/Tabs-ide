@@ -13,6 +13,7 @@ import { ServerConfig } from "../config";
 import { type TextGenerationShape } from "./TextGeneration";
 import { sanitizeThreadTitle } from "./TextGenerationUtils";
 import { makeClaudeTextGeneration } from "./ClaudeTextGeneration";
+import { TEST_REVIEW_FINDING } from "./TextGenerationTestFixtures";
 const decodeClaudeSettings = Schema.decodeSync(ClaudeSettings);
 
 const ClaudeTextGenerationTestLayer = ServerConfig.layerTest(process.cwd(), {
@@ -190,6 +191,35 @@ function withFakeClaudeEnv<A, E, R>(
 }
 
 it.layer(ClaudeTextGenerationTestLayer)("ClaudeTextGeneration", (it) => {
+  it.effect("preserves code-review findings", () =>
+    withFakeClaudeEnv(
+      {
+        output: JSON.stringify({
+          structured_output: {
+            summary: "Review summary",
+            keyChanges: "- Reviewed change",
+            notesAndRisk: "Low risk",
+            findings: [TEST_REVIEW_FINDING],
+          },
+        }),
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          const generated = yield* textGeneration.generateDiffSummary({
+            cwd: process.cwd(),
+            diffSummary: "M src/example.ts",
+            diffPatch: "diff --git a/src/example.ts b/src/example.ts",
+            modelSelection: createModelSelection(
+              "claudeAgent" as ProviderInstanceId,
+              "claude-sonnet-4-6",
+            ),
+          });
+
+          expect(generated.findings).toEqual([TEST_REVIEW_FINDING]);
+        }),
+    ),
+  );
+
   it.effect("forwards Claude thinking settings for Haiku without passing effort", () =>
     withFakeClaudeEnv(
       {

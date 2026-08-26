@@ -19,6 +19,7 @@ import { CursorSettings, ProviderInstanceId } from "@tabs/contracts";
 import { ServerConfig } from "../config";
 import { type TextGenerationShape } from "./TextGeneration";
 import { makeCursorTextGeneration } from "./CursorTextGeneration";
+import { TEST_REVIEW_FINDING } from "./TextGenerationTestFixtures";
 const decodeCursorSettings = Schema.decodeSync(CursorSettings);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -214,8 +215,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
   it.effect("parses lenient JSON containing trailing commas and comments", () =>
     withFakeAcpAgent(
       {
-        T3_ACP_PROMPT_RESPONSE_TEXT:
-          '{\n  "summary": "Full review summary",\n  "keyChanges": "- Added feature X",\n  "notesAndRisk": "Low risk",\n  "findings": [],\n} // trailing comma and comment',
+        T3_ACP_PROMPT_RESPONSE_TEXT: `{\n  "summary": "Full review summary",\n  "keyChanges": "- Added feature X",\n  "notesAndRisk": "Low risk",\n  "findings": [${JSON.stringify(TEST_REVIEW_FINDING)}],\n} // trailing comma and comment`,
       },
       (textGeneration) =>
         Effect.gen(function* () {
@@ -231,6 +231,7 @@ it.layer(CursorTextGenerationTestLayer)("CursorTextGeneration", (it) => {
 
           expect(generated.summary).toBe("Full review summary");
           expect(generated.keyChanges).toBe("- Added feature X");
+          expect(generated.findings).toEqual([TEST_REVIEW_FINDING]);
         }),
     ),
   );

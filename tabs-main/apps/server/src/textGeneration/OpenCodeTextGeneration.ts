@@ -485,6 +485,7 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       summary: generated.summary.trim(),
       keyChanges: generated.keyChanges.trim(),
       notesAndRisk: generated.notesAndRisk.trim(),
+      ...(generated.findings ? { findings: generated.findings } : {}),
     };
   });
 

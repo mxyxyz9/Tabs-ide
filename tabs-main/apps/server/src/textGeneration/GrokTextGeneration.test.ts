@@ -16,6 +16,7 @@ import { GrokSettings, ProviderInstanceId } from "@tabs/contracts";
 import { ServerConfig } from "../config";
 import { type TextGenerationShape } from "./TextGeneration";
 import { makeGrokTextGeneration } from "./GrokTextGeneration";
+import { TEST_REVIEW_FINDING } from "./TextGenerationTestFixtures";
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,30 @@ function readJsonRpcRequests(
 }
 
 it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
+  it.effect("preserves code-review findings", () =>
+    withFakeAcpGrok(
+      {
+        T3_ACP_PROMPT_RESPONSE_TEXT: JSON.stringify({
+          summary: "Review summary",
+          keyChanges: "- Reviewed change",
+          notesAndRisk: "Low risk",
+          findings: [TEST_REVIEW_FINDING],
+        }),
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          const generated = yield* textGeneration.generateDiffSummary({
+            cwd: process.cwd(),
+            diffSummary: "M src/example.ts",
+            diffPatch: "diff --git a/src/example.ts b/src/example.ts",
+            modelSelection: createModelSelection("grok" as ProviderInstanceId, "grok-build"),
+          });
+
+          expect(generated.findings).toEqual([TEST_REVIEW_FINDING]);
+        }),
+    ),
+  );
+
   it.effect("uses ACP with disabled tool capabilities and forwards the requested model id", () => {
     const requestLogDir = mkdtempSync(path.join(os.tmpdir(), "t3code-grok-text-log-"));
     const requestLogPath = path.join(requestLogDir, "requests.ndjson");

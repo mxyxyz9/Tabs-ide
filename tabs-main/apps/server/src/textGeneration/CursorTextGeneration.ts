@@ -296,6 +296,7 @@ export const makeCursorTextGeneration = Effect.fn("makeCursorTextGeneration")(fu
       summary: generated.summary.trim(),
       keyChanges: generated.keyChanges.trim(),
       notesAndRisk: generated.notesAndRisk.trim(),
+      ...(generated.findings ? { findings: generated.findings } : {}),
     };
   });
 

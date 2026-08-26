@@ -306,6 +306,7 @@ export const makeCopilotTextGeneration = Effect.fn("makeCopilotTextGeneration")(
       summary: generated.summary.trim(),
       keyChanges: generated.keyChanges.trim(),
       notesAndRisk: generated.notesAndRisk.trim(),
+      ...(generated.findings ? { findings: generated.findings } : {}),
     };
   });
 
