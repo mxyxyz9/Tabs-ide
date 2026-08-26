@@ -121,7 +121,13 @@ it.layer(testLayer)("CopilotTextGeneration", (it) => {
           const promptRequest = readFileSync(requestLogPath, "utf8")
             .trim()
             .split("\n")
-            .map((line) => JSON.parse(line) as { method?: string; params?: { prompt?: Array<{ text?: string }> } })
+            .map(
+              (line) =>
+                JSON.parse(line) as {
+                  method?: string;
+                  params?: { prompt?: Array<{ text?: string }> };
+                },
+            )
             .find((request) => request.method === "session/prompt");
           const prompt = promptRequest?.params?.prompt?.[0]?.text ?? "";
           expect(prompt).toContain("Structured output contract:");

@@ -13,7 +13,7 @@ import { TextGenerationError } from "@tabs/contracts";
 
 const testingPromptInput = {
   sanitizedPrompt: "Use the supplied testing evidence.",
-  reasoningTier: "standard" as const,
+  reasoningTier: "medium" as const,
   budget: { maxEstimatedTokens: 1_000, maxEstimatedCostUsd: 0.1 },
 };
 
@@ -33,7 +33,9 @@ describe("buildStructuredTestingPrompt", () => {
       ...testingPromptInput,
       taskKind: "story-to-cases",
     });
-    expect(prompt).toContain("cases[].externalId: stable, non-empty human-readable case identifier");
+    expect(prompt).toContain(
+      "cases[].externalId: stable, non-empty human-readable case identifier",
+    );
     expect(prompt).toContain("cases[].steps: ordered, actionable user interactions");
     expect(prompt).toContain("cases[].locatorKeys: known locator-library keys");
   });
@@ -257,8 +259,12 @@ describe("buildDiffSummaryPrompt", () => {
       projectRules: "All console statements must be removed before merging.",
     });
 
-    expect(result.prompt).toContain("Custom Review Instructions: Custom instructions: Focus on security.");
-    expect(result.prompt).toContain("Static Analysis Tool Findings:\n- ESLint: [warning] no-console");
+    expect(result.prompt).toContain(
+      "Custom Review Instructions: Custom instructions: Focus on security.",
+    );
+    expect(result.prompt).toContain(
+      "Static Analysis Tool Findings:\n- ESLint: [warning] no-console",
+    );
     expect(result.prompt).toContain("## Repo Context & Impact Analysis");
     expect(result.prompt).toContain("## Project Review Rules (.tabs-review.json)");
     expect(result.prompt).toContain("All console statements must be removed before merging.");
