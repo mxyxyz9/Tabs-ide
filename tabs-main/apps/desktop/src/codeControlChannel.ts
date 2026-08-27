@@ -5,8 +5,8 @@
  *
  * Why this exists: the native React chrome in the Tabs window (activity rail /
  * header / status bar) needs to drive the embedded VS Code (switch sidebar
- * view, toggle terminal, …) and reflect its state. The managed-server runtime
- * exposes no command accessor on the workbench window, so the only place we can
+ * view, toggle terminal, …) and reflect its state. The workbench window exposes
+ * no command accessor, so the only place we can
  * call `vscode.commands.executeCommand` is the extension host. Main is the
  * natural broker: it already owns the BrowserView and the desktopBridge IPC.
  *

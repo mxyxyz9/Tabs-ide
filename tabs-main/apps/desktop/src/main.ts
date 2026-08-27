@@ -1287,9 +1287,8 @@ function buildPrimaryCodeOssWindowConfiguration(
       TABS_DESKTOP_HTTP_URL: backendHttpUrl,
       TABS_WEB_APP_URL: resolveEmbeddedTabsWebAppUrl(),
       TABS_WORKSPACE_ROOT: workspaceRoot ?? "",
-      // The desktop-renderer fallback is the legacy Code-OSS-first shell: keep
-      // the integration extension's in-editor "Tabs" panel behavior here. The
-      // managed-server runtime omits this flag so only the control channel runs.
+      // Keep the integration extension's in-editor Tabs panel enabled in the
+      // primary Code-OSS shell.
       TABS_CODE_OSS_PRIMARY_SHELL: "1",
     },
     product: getCodeOssProductConfiguration(runtime.vscodeRoot),
@@ -2768,30 +2767,18 @@ function createCodeOssWindow(
   });
 
   let codeOssReady = false;
-  let fallbackTriggered = false;
+  let startupFailureLogged = false;
   const workbenchEntry = buildVsCodeFileUrl(
     getRequiredCodeOssPath(runtime.vscodeRoot, CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH),
   );
 
-  const fallbackToLegacyShell = (reason: string): void => {
-    if (fallbackTriggered || isQuitting) {
+  const reportStartupFailure = (reason: string): void => {
+    if (startupFailureLogged || isQuitting) {
       return;
     }
-    fallbackTriggered = true;
-    writeDesktopLogHeader(`code-oss primary shell fallback reason=${sanitizeLogValue(reason)}`);
-    const downgradedToManagedServer = codeHostManager.downgradeToManagedServer(reason);
-    if (downgradedToManagedServer) {
-      writeDesktopLogHeader("code-oss legacy shell downgrade target=managed-server");
-    } else {
-      codeHostManager.disableEmbeddedHost(
-        `Primary Code-OSS startup failed: ${reason}. Using the fallback code workspace for this session.`,
-      );
-      writeDesktopLogHeader("code-oss legacy shell downgrade target=fallback-workspace");
-    }
-
-    const replacementWindow = createLegacyWindow();
-    mainWindow = replacementWindow;
-    window.destroy();
+    startupFailureLogged = true;
+    writeDesktopLogHeader(`code-oss primary shell startup failure reason=${sanitizeLogValue(reason)}`);
+    window.show();
   };
 
   window.webContents.on(
@@ -2806,20 +2793,20 @@ function createCodeOssWindow(
       writeDesktopLogHeader(
         `code-oss did-fail-load code=${errorCode} url=${validatedURL} description=${sanitizeLogValue(errorDescription)}`,
       );
-      fallbackToLegacyShell(`did-fail-load ${errorCode} ${errorDescription}`);
+      reportStartupFailure(`did-fail-load ${errorCode} ${errorDescription}`);
     },
   );
   window.webContents.on("render-process-gone", (_event, details) => {
     writeDesktopLogHeader(
       `code-oss render-process-gone reason=${details.reason} exitCode=${details.exitCode}`,
     );
-    fallbackToLegacyShell(`render-process-gone ${details.reason}`);
+    reportStartupFailure(`render-process-gone ${details.reason}`);
   });
   window.webContents.on("preload-error", (_event, preloadPathname, error) => {
     writeDesktopLogHeader(
       `code-oss preload-error preload=${preloadPathname} message=${sanitizeLogValue(formatErrorMessage(error))}`,
     );
-    fallbackToLegacyShell(`preload-error ${formatErrorMessage(error)}`);
+    reportStartupFailure(`preload-error ${formatErrorMessage(error)}`);
   });
   window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     writeDesktopLogHeader(
@@ -2852,7 +2839,7 @@ function createCodeOssWindow(
   });
 
   const readyTimeout = setTimeout(() => {
-    if (fallbackTriggered || codeOssReady || window.isDestroyed()) {
+    if (startupFailureLogged || codeOssReady || window.isDestroyed()) {
       return;
     }
 
@@ -2863,14 +2850,14 @@ function createCodeOssWindow(
           `code-oss ready-timeout ready=${String(hasVisibleWorkbench)} readyState=${snapshot.readyState} children=${snapshot.bodyChildCount} title=${sanitizeLogValue(snapshot.title)} text=${sanitizeLogValue(snapshot.bodyText)}`,
         );
         if (!hasVisibleWorkbench) {
-          fallbackToLegacyShell("workbench readiness timeout");
+          reportStartupFailure("workbench readiness timeout");
         }
       })
       .catch((error) => {
         writeDesktopLogHeader(
           `code-oss ready-timeout inspect-failed message=${sanitizeLogValue(formatErrorMessage(error))}`,
         );
-        fallbackToLegacyShell(`workbench inspect failed ${formatErrorMessage(error)}`);
+        reportStartupFailure(`workbench inspect failed ${formatErrorMessage(error)}`);
       });
   }, CODE_OSS_READY_TIMEOUT_MS);
 
@@ -2896,9 +2883,10 @@ function createCodeOssWindow(
 
 function createWindow(): BrowserWindow {
   const runtime = codeHostConfig.runtime;
-  const window = runtime && runtime.kind === "desktop-renderer"
-    ? createCodeOssWindow(runtime)
-    : createLegacyWindow();
+  if (!runtime) {
+    throw new Error(codeHostConfig.state.reason ?? "Desktop Code-OSS runtime is unavailable.");
+  }
+  const window = createCodeOssWindow(runtime);
   window.on("close", (event) => {
     if (
       isQuittingConfirmed ||
@@ -3005,7 +2993,7 @@ function ensureDownloadedCodeOssRuntime(): void {
 
 async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap start");
-  if (codeHostConfig.runtime?.kind === "desktop-renderer") {
+  if (codeHostConfig.runtime) {
     nativeCodeHostMainBackend = await createNativeCodeHostMainBackend(
       codeHostConfig.runtime.vscodeRoot,
     );

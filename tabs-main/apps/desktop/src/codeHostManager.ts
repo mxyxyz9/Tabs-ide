@@ -1,8 +1,5 @@
-import * as ChildProcess from "node:child_process";
 import * as Crypto from "node:crypto";
 import * as FS from "node:fs";
-import * as Http from "node:http";
-import * as Net from "node:net";
 import * as OS from "node:os";
 import * as Path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -38,38 +35,8 @@ import {
   type CustomThemeConfig,
 } from "@tabs/shared/themeDerivation";
 
-const CODE_OSS_SERVER_HOST = "127.0.0.1";
-const CODE_OSS_SERVER_START_TIMEOUT_MS = 20_000;
-const CODE_OSS_STARTUP_LOG_LIMIT = 24;
-// A reserved loopback port can be claimed by another process between our
-// reservation and the server's bind (TOCTOU); allow a few fresh-port retries.
-const MANAGED_SERVER_START_ATTEMPTS = 3;
-// Grace period after SIGTERM before escalating to SIGKILL when stopping a server.
-const PROCESS_KILL_GRACE_MS = 3_000;
-
 export const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 
-export const CODE_OSS_WEB_LAUNCHER_RELATIVE_PATH = Path.join("scripts", "code-web.js");
-export const CODE_OSS_WEB_SERVER_RELATIVE_PATH = Path.join(
-  "node_modules",
-  "@vscode",
-  "test-web",
-  "out",
-  "server",
-  "index.js",
-);
-export const PRIMARY_CODE_OSS_WEB_ASSET_RELATIVE_PATH = Path.join(
-  "out",
-  "vs",
-  "workbench",
-  "workbench.web.main.internal.js",
-);
-export const SECONDARY_CODE_OSS_WEB_ASSET_RELATIVE_PATH = Path.join(
-  "out-vscode-web",
-  "vs",
-  "workbench",
-  "workbench.web.main.internal.js",
-);
 export const CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH = Path.join(
   "..",
   "resources",
@@ -102,15 +69,6 @@ export const CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH = Path.join(
 export const CODE_OSS_NLS_MESSAGES_RELATIVE_PATH = Path.join("out-build", "nls.messages.json");
 export const CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH = "product.json";
 
-// Real VS Code REH web server ("code-server-oss"). Unlike `@vscode/test-web`
-// (a read-only test harness), this server provides genuine disk read/write via
-// its remote filesystem provider, so edits in the embedded editor persist.
-export const CODE_OSS_WEB_SERVER_MAIN_RELATIVE_PATH = Path.join("out", "server-main.js");
-export const CODE_OSS_WEB_SERVER_CLI_RELATIVE_PATH = Path.join("out", "server-cli.js");
-// The server reads NLS strings from out/nls.messages.json; the dev `compile`
-// only writes it under out-build/, so we copy it on first launch (see below).
-export const CODE_OSS_WEB_SERVER_NLS_RELATIVE_PATH = Path.join("out", "nls.messages.json");
-
 const REQUIRED_CODE_OSS_DESKTOP_RELATIVE_PATHS = [
   CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH,
   CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH,
@@ -124,7 +82,6 @@ const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
   process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs"),
   "userdata",
 );
-const CODE_OSS_WEB_SERVER_DATA_DIR = Path.join(DEFAULT_CODE_HOST_STATE_DIR, "code-oss-web-server");
 
 export interface CodeHostConfig {
   state: DesktopCodeHostState;
@@ -134,9 +91,7 @@ export interface CodeHostConfig {
 
 type FsLike = Pick<typeof FS, "existsSync" | "readdirSync" | "statSync">;
 
-type CodeHostRuntime =
-  | { kind: "managed-server"; vscodeRoot: string }
-  | { kind: "desktop-renderer"; vscodeRoot: string; stateDir: string };
+type CodeHostRuntime = { kind: "desktop-renderer"; vscodeRoot: string; stateDir: string };
 
 type CodeSession = {
   projectId: string;
@@ -154,15 +109,6 @@ type CodeSession = {
   desktopProtocolRegistered: boolean;
   desktopRequestDiagnosticsRegistered: boolean;
   runtimeStartPromise: Promise<CodeSessionRuntime> | null;
-  serverProcess: ChildProcess.ChildProcess | null;
-  serverStartupLogs: string[];
-};
-
-type ManagedServerSessionRuntime = {
-  kind: "managed-server";
-  entry: string;
-  mountRoot: string;
-  workspaceUri: string;
 };
 
 type DesktopRendererSessionRuntime = {
@@ -171,7 +117,7 @@ type DesktopRendererSessionRuntime = {
   workspaceUri: string;
 };
 
-type CodeSessionRuntime = ManagedServerSessionRuntime | DesktopRendererSessionRuntime;
+type CodeSessionRuntime = DesktopRendererSessionRuntime;
 
 type UriComponent = {
   scheme: string;
@@ -381,103 +327,6 @@ function writeKeybindingsJsonFile(pathname: string, rules: Array<Record<string, 
   FS.writeFileSync(pathname, `${JSON.stringify([...filtered, ...rules], null, 2)}\n`, "utf8");
 }
 
-export function buildMountedWorkspaceDescriptor(workspaceRoot: string): {
-  mountRoot: string;
-  workspaceUri: string;
-} {
-  // The real REH server opens the workspace by its actual filesystem path. The
-  // web workbench maps a leading-`/` `?folder=` value to `vscode-remote://` for
-  // the server's remote authority, giving genuine on-disk read/write.
-  const resolvedWorkspaceRoot = Path.resolve(workspaceRoot);
-  return {
-    mountRoot: resolvedWorkspaceRoot,
-    workspaceUri: resolvedWorkspaceRoot,
-  };
-}
-
-/**
- * Seed the embedded Code-OSS server's user settings so the stock VS Code
- * "Get Started" walkthrough / welcome editor never opens in the Tabs embed.
- * Merges into any existing settings.json (our embed keys win). Best-effort.
- */
-function ensureCodeOssWebServerDefaultSettings(): void {
-  const userDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "data", "User");
-  const settingsPath = Path.join(userDir, "settings.json");
-  try {
-    writeMergedJsonFile(settingsPath, CODE_OSS_EMBED_DEFAULT_SETTINGS);
-    // Verify in dev which profile dir the running session actually reads.
-    console.log(`[code-oss] embed settings written (managed-server) → ${settingsPath}`);
-  } catch {
-    // Non-fatal.
-  }
-}
-
-function ensureCodeOssWebServerDefaultKeybindings(): void {
-  const userDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "data", "User");
-  const keybindingsPath = Path.join(userDir, "keybindings.json");
-  try {
-    writeKeybindingsJsonFile(keybindingsPath, [
-      {
-        key: "cmd+shift+n",
-        command: "-workbench.action.newWindow",
-      },
-      {
-        key: "cmd+shift+n",
-        command: "tabs.openProjectTab",
-      },
-      {
-        key: "ctrl+shift+n",
-        command: "-workbench.action.newWindow",
-      },
-      {
-        key: "ctrl+shift+n",
-        command: "tabs.openProjectTab",
-      },
-    ]);
-    console.log(`[code-oss] embed keybindings written (managed-server) → ${keybindingsPath}`);
-  } catch (err) {
-    console.error("[code-oss] failed to write embed keybindings (managed-server)", err);
-  }
-}
-
-/**
- * The web workbench bootstrap loads NLS from `out/nls.messages.js` and the
- * server reads `out/nls.messages.json`, but the dev `compile` only writes these
- * under `out-build/`. Without `out/nls.messages.js` the workbench fails to load
- * (the script 404s and the page renders blank). Copy both across once.
- * Best-effort: copy failures are swallowed.
- */
-function ensureCodeOssWebServerNlsMessages(vscodeRoot: string): void {
-  const outBuildDir = Path.dirname(
-    getRequiredCodeOssPath(vscodeRoot, CODE_OSS_NLS_MESSAGES_RELATIVE_PATH),
-  );
-  const outDir = Path.dirname(
-    getRequiredCodeOssPath(vscodeRoot, CODE_OSS_WEB_SERVER_NLS_RELATIVE_PATH),
-  );
-  for (const fileName of ["nls.messages.json", "nls.messages.js"]) {
-    const target = Path.join(outDir, fileName);
-    if (isFile(target, FS)) {
-      continue;
-    }
-    const source = Path.join(outBuildDir, fileName);
-    try {
-      if (isFile(source, FS)) {
-        FS.copyFileSync(source, target);
-      }
-    } catch {
-      // Non-fatal.
-    }
-  }
-}
-
-function formatCodeHostStartupLogs(logs: readonly string[]): string {
-  if (logs.length === 0) {
-    return "No startup logs were captured.";
-  }
-
-  return logs.slice(-CODE_OSS_STARTUP_LOG_LIMIT).join(" | ");
-}
-
 function getRequiredCodeOssPath(root: string, relativePath: string): string {
   return Path.join(root, relativePath);
 }
@@ -494,73 +343,13 @@ function getCodeOssEmbedExtensionPath(baseDir: string): string {
   return Path.resolve(baseDir, CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH);
 }
 
-// Identity of the bundled integration extension (publisher.name from its
-// package.json), used to lay it out under the server's extensions dir.
-const CONTROL_EXTENSION_ID = "tabs.tabs-workbench-integration";
-const CONTROL_EXTENSION_VERSION = "0.0.1";
-const CONTROL_EXTENSION_FOLDER = `${CONTROL_EXTENSION_ID}-${CONTROL_EXTENSION_VERSION}`;
-
-function resolveBundledIntegrationExtensionSource(baseDir: string): string | null {
-  // In packaged builds the extension lives inside `app.asar` under
-  // `prod-resources/`. Electron's asar layer patches reads (existsSync,
-  // statSync, readFileSync) but NOT `cpSync` — so a source path inside
-  // `app.asar` silently fails the copy. The build config's `asarUnpack`
-  // places a real-disk copy at `app.asar.unpacked/…`; check that first.
-  const relative = Path.join("code-oss-extensions", "tabs-workbench-integration");
-  const candidates = [
-    // Packaged app — asar-unpacked path (real disk, cpSync works)
-    Path.resolve(baseDir, "..", "prod-resources", relative).replace(
-      "app.asar",
-      "app.asar.unpacked",
-    ),
-    // Packaged app — prod-resources inside asar (fallback; reads work, cpSync may not)
-    Path.resolve(baseDir, "..", "prod-resources", relative),
-    // Dev mode — resources next to source
-    Path.resolve(baseDir, CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH),
-    ...(process.resourcesPath
-      ? [
-          Path.join(process.resourcesPath, "resources", relative),
-          Path.join(process.resourcesPath, relative),
-        ]
-      : []),
-  ];
-  for (const candidate of candidates) {
-    try {
-      if (FS.statSync(candidate).isDirectory()) {
-        return candidate;
-      }
-    } catch {
-      /* try next candidate */
-    }
-  }
-  return null;
-}
-
-/**
- * Remove every manifest entry with the given extension id from a Code-OSS
- * `extensions.json` array. Pure for testability; preserves all other entries.
- */
-export function removeExtensionFromManifest(existing: readonly unknown[], id: string): unknown[] {
-  return existing.filter((item) => {
-    const itemId = (item as { identifier?: { id?: unknown } })?.identifier?.id;
-    return typeof itemId !== "string" || itemId.toLowerCase() !== id.toLowerCase();
-  });
-}
-
 /**
  * Merge the embed's settings into a product.json's `configurationDefaults`.
  * Pure for testability. Returns the next product object and whether anything
  * actually changed (callers skip the disk write when unchanged).
  *
- * Why product.json: settings written to the REH server's `data/User/
- * settings.json` only cover the REMOTE configuration scope — application-scoped
- * settings (most importantly `security.workspace.trust.enabled`) are read by
- * the WEB CLIENT, which never sees that file. An enabled Workspace Trust prompt
- * then gates the whole workbench startup: extension-host timers and sockets
- * stall until the user answers, so the integration extension's control channel
- * never connects and the native chrome looks dead. `configurationDefaults` is
- * VS Code's distro-level default mechanism, honored by client and server alike
- * before first render — no prompt, no per-workspace state, no race.
+ * Product configuration defaults are applied before the native workbench's
+ * profile and workspace configuration, avoiding first-run prompt races.
  */
 export function mergeProductConfigurationDefaults(
   product: Record<string, unknown>,
@@ -584,73 +373,6 @@ export function mergeProductConfigurationDefaults(
     product: { ...product, configurationDefaults: { ...existing, ...defaults } },
     changed: true,
   };
-}
-
-/**
- * Install the bundled integration extension as a BUILT-IN extension (under
- * `<vscodeRoot>/extensions/`, next to vscode.git) so its control channel runs
- * in the remote extension host and drives the native Tabs chrome.
- *
- * Why built-in: `out/server-main.js` silently ignores
- * `--extensionDevelopmentPath`, and the user-extensions route
- * (`<server-data-dir>/extensions` + `extensions.json`) proved unreliable — the
- * workbench skipped the scan in some sessions, leaving the chrome dead.
- * Built-ins are scanned from disk on every boot and activate unconditionally
- * (every session log shows vscode.git et al activating), so this is the only
- * mechanism with the reliability the chrome needs. Also cleans up any legacy
- * user-dir install so the same id is not present twice.
- *
- * The copy also resolves the asar problem: the server runs as plain Node
- * (`ELECTRON_RUN_AS_NODE`) and cannot read inside `app.asar`, but the Electron
- * main process can, so the copy lands on real disk the server can read.
- * Best-effort: failures are swallowed (the editor still works, the chrome's
- * buttons just no-op).
- */
-function installManagedServerControlExtension(baseDir: string, vscodeRoot: string): void {
-  const source = resolveBundledIntegrationExtensionSource(baseDir);
-  if (!source) {
-    return;
-  }
-  try {
-    const destDir = Path.join(vscodeRoot, "extensions", "tabs-workbench-integration");
-    FS.rmSync(destDir, { recursive: true, force: true });
-    FS.cpSync(source, destDir, { recursive: true });
-
-    // Remove the legacy user-dir install (folder + manifest entry) so the
-    // extension service never sees the same id from two locations.
-    const userExtensionsDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "extensions");
-    FS.rmSync(Path.join(userExtensionsDir, CONTROL_EXTENSION_FOLDER), {
-      recursive: true,
-      force: true,
-    });
-    const manifestPath = Path.join(userExtensionsDir, "extensions.json");
-    if (isFile(manifestPath, FS)) {
-      try {
-        const parsed = JSON.parse(FS.readFileSync(manifestPath, "utf8"));
-        if (Array.isArray(parsed)) {
-          FS.writeFileSync(
-            manifestPath,
-            JSON.stringify(removeExtensionFromManifest(parsed, CONTROL_EXTENSION_ID)),
-            "utf8",
-          );
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-
-    // Drop stale extension-scan caches so the (re)installed built-in is picked
-    // up immediately instead of a cached scan result masking it.
-    for (const cacheDir of ["CachedExtensions", Path.join("data", "CachedExtensions")]) {
-      FS.rmSync(Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, cacheDir), {
-        recursive: true,
-        force: true,
-      });
-    }
-  } catch (err) {
-    // Non-fatal — but log so it's visible in desktop-dev.log.
-    console.error("[code-host] installManagedServerControlExtension failed:", err);
-  }
 }
 
 /**
@@ -688,7 +410,6 @@ function isFile(pathname: string, fs: FsLike): boolean {
 
 function hasCodeOssMarker(candidate: string, fs: FsLike): boolean {
   return [
-    CODE_OSS_WEB_LAUNCHER_RELATIVE_PATH,
     CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH,
     CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH,
   ].some((relativePath) => isFile(getRequiredCodeOssPath(candidate, relativePath), fs));
@@ -800,64 +521,6 @@ function resolveWorkspaceRootForSession(
   return normalizedRequestedRoot;
 }
 
-function resolveExplicitEntry(
-  candidate: string,
-): { ok: true; entry: string } | { ok: false; reason: string } {
-  if (/^https?:\/\//.test(candidate)) {
-    try {
-      const url = new URL(candidate);
-      return { ok: true, entry: trimTrailingSlash(url.toString()) };
-    } catch {
-      return {
-        ok: false,
-        reason: `Invalid Code-OSS entry URL: ${candidate}`,
-      };
-    }
-  }
-
-  return {
-    ok: false,
-    reason: [
-      `Unsupported Code-OSS entry: ${candidate}.`,
-      "Tabs now embeds VS Code through a served web runtime, not a raw `workbench.html` file.",
-      "Set `TABS_CODE_OSS_ENTRY` to an `http://` or `https://` workbench URL, or set `TABS_CODE_OSS_BUILD_DIR` to the local `tabs-code-main` checkout root built with `npm run compile && npm run compile-web`.",
-    ].join(" "),
-  };
-}
-
-function resolveManagedServerRoot(
-  candidate: string,
-  fs: FsLike,
-): { ok: true; vscodeRoot: string } | { ok: false; reason: string } {
-  const vscodeRoot = resolveVsCodeRootCandidate(candidate, fs);
-  if (!vscodeRoot || !isDirectory(vscodeRoot, fs)) {
-    return {
-      ok: false,
-      reason: `Configured Code-OSS build directory does not exist or is not a VS Code checkout: ${candidate}`,
-    };
-  }
-
-  for (const relativePath of [
-    CODE_OSS_WEB_SERVER_MAIN_RELATIVE_PATH,
-    CODE_OSS_WEB_SERVER_CLI_RELATIVE_PATH,
-  ]) {
-    const serverEntryPath = getRequiredCodeOssPath(vscodeRoot, relativePath);
-    if (!isFile(serverEntryPath, fs)) {
-      return {
-        ok: false,
-        reason: [
-          "Code-OSS web server build not found.",
-          `Expected compiled asset: ${serverEntryPath}`,
-          `Build it with: \`cd ${vscodeRoot} && npm run compile\` (and \`npm install\`).`,
-          "Then restart the Tabs desktop app.",
-        ].join(" "),
-      };
-    }
-  }
-
-  return { ok: true, vscodeRoot };
-}
-
 function resolveManagedDesktopRoot(
   candidate: string,
   fs: FsLike,
@@ -900,7 +563,7 @@ function getDefaultResolutionFailureReason(rootDir: string): string {
     `Expected local VS Code checkout: ${expectedSiblingRoot}`,
     `Expected compiled asset: ${expectedAsset}`,
     "Build it with: `cd ../tabs-code-main && npm install && npm run compile`",
-    "Or set `TABS_CODE_OSS_ENTRY` to a served workbench URL or `TABS_CODE_OSS_BUILD_DIR` to the local `tabs-code-main` checkout root.",
+    "Or set `TABS_CODE_OSS_BUILD_DIR` to the local `tabs-code-main` checkout root.",
   ].join(" ");
 }
 
@@ -911,18 +574,6 @@ export function resolveCodeHostConfigWithFs(
   },
   fs: FsLike,
 ): CodeHostConfig {
-  const explicitEntry = input.env.TABS_CODE_OSS_ENTRY?.trim() || null;
-  if (explicitEntry) {
-    const resolvedEntry = resolveExplicitEntry(explicitEntry);
-    return resolvedEntry.ok
-      ? createAvailableState({
-          entry: resolvedEntry.entry,
-          runtime: null,
-          rootDir: input.rootDir,
-        })
-      : createUnavailableState(resolvedEntry.reason);
-  }
-
   const explicitBuildDir = input.env.TABS_CODE_OSS_BUILD_DIR?.trim() || null;
   if (explicitBuildDir) {
     const resolvedDesktopRoot = resolveManagedDesktopRoot(explicitBuildDir, fs);
@@ -987,43 +638,6 @@ export function resolveCodeHostConfig(input: {
   return resolveCodeHostConfigWithFs(input, FS);
 }
 
-export function buildSessionUrl(
-  entry: string,
-  session: Pick<
-    CodeSession,
-    "workspaceRoot" | "lastFocusedPath" | "lastNavigationNonce" | "projectId"
-  >,
-  options?: {
-    workspaceUri?: string;
-    focusedFileUri?: string | null;
-  },
-): string {
-  const url = new URL(entry);
-  // The real web workbench reads `?folder=`; a leading-`/` value is resolved
-  // against the server's remote authority (vscode-remote://). Pass the plain
-  // absolute path so the workspace opens on the server's real filesystem.
-  const workspaceUri = options?.workspaceUri ?? Path.resolve(session.workspaceRoot);
-
-  url.searchParams.set("folder", workspaceUri);
-  url.searchParams.set("tabs_projectId", session.projectId);
-  url.searchParams.set("tabs_workspaceRoot", session.workspaceRoot);
-  url.searchParams.set("tabs_navigationNonce", String(session.lastNavigationNonce));
-
-  // Do NOT embed payload/openFile or tabs_relativePath in the startup URL.
-  // The extension host (and thus the remoteFilesystem WebSocket channel)
-  // connects ~15 seconds AFTER loadURL fires (proven by live [PROOF] trace:
-  // T=A loadURL at ms 1785095157547, T=C ext-host connected at 1785095172232,
-  // gap = 14,685ms). Opening the file via the startup URL races and loses
-  // every time — the workbench resolves the file URI before the FS provider
-  // is ready, resulting in a blank editor pane. Instead we send openFile
-  // over CodeControlChannel once the extension host connects
-  // (see CodeHostManager._onExtensionHostConnected).
-  url.searchParams.delete("payload");
-  url.searchParams.delete("tabs_relativePath");
-
-  return url.toString();
-}
-
 function buildDesktopSessionUrl(
   entry: string,
   session: Pick<
@@ -1041,117 +655,6 @@ function buildDesktopSessionUrl(
     url.searchParams.delete("tabs_relativePath");
   }
   return url.toString();
-}
-
-export function buildManagedServerArgs(input: {
-  host: string;
-  port: number;
-  serverDataDir: string;
-}): string[] {
-  // Launch the real REH web server (out/server-main.js). The workspace folder
-  // is selected per-session via the `?folder=` URL param, not a CLI argument.
-  return [
-    CODE_OSS_WEB_SERVER_MAIN_RELATIVE_PATH,
-    "--without-connection-token",
-    "--accept-server-license-terms",
-    "--host",
-    input.host,
-    "--port",
-    String(input.port),
-    "--server-data-dir",
-    input.serverDataDir,
-  ];
-}
-
-function isPortConflictError(error: Error): boolean {
-  const message = error.message.toLowerCase();
-  return message.includes("eaddrinuse") || message.includes("address already in use");
-}
-
-/**
- * Terminate a child process and all of its descendants. The Code-OSS server
- * forks an extension host, pty host and file watchers; killing only the top PID
- * would orphan them (especially on Windows, where signals don't propagate to
- * the tree). On Windows `taskkill /T` kills the whole tree; elsewhere we send
- * SIGTERM and escalate to SIGKILL if the process ignores it.
- */
-function terminateProcessTree(child: ChildProcess.ChildProcess): void {
-  if (child.killed || child.pid === undefined) {
-    return;
-  }
-  const pid = child.pid;
-  if (process.platform === "win32") {
-    try {
-      ChildProcess.spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
-      return;
-    } catch {
-      // Fall through to a direct kill.
-    }
-  }
-  child.kill("SIGTERM");
-  const killTimer = setTimeout(() => {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch {
-      // Already exited (or PID gone) — nothing to escalate.
-    }
-  }, PROCESS_KILL_GRACE_MS);
-  killTimer.unref?.();
-  child.once("exit", () => clearTimeout(killTimer));
-}
-
-async function reserveLoopbackPort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = Net.createServer();
-    server.once("error", reject);
-    server.listen(0, CODE_OSS_SERVER_HOST, () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => {
-          reject(new Error("Unable to reserve a loopback port for the VS Code web runtime."));
-        });
-        return;
-      }
-
-      const { port } = address;
-      server.close((closeError) => {
-        if (closeError) {
-          reject(closeError);
-          return;
-        }
-
-        console.log(`[PROOF] reserveLoopbackPort selected random port: ${port}`);
-        resolve(port);
-      });
-    });
-  });
-}
-
-async function waitForHttpReady(entry: string, timeoutMs: number): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-
-  while (Date.now() < deadline) {
-    const isReady = await new Promise<boolean>((resolve) => {
-      const request = Http.get(entry, (response) => {
-        response.resume();
-        resolve(response.statusCode === 200);
-      });
-
-      request.once("error", () => resolve(false));
-      request.setTimeout(1_000, () => {
-        request.destroy();
-        resolve(false);
-      });
-    });
-
-    if (isReady) {
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-
-  throw new Error(`Timed out waiting for the VS Code web runtime at ${entry}.`);
 }
 
 export function getWorkspaceTabsFilePath(
@@ -1193,179 +696,6 @@ export function writeWorkspaceTabs(
   } catch (err) {
     console.error(`[code-oss] failed to write workspace tabs for ${projectId}:`, err);
   }
-}
-
-export function migrateAndCleanSessionIndexedDBStorage(
-  idbRootDir: string,
-  targetPort: number,
-  fs: Pick<
-    typeof FS,
-    | "existsSync"
-    | "mkdirSync"
-    | "readdirSync"
-    | "statSync"
-    | "cpSync"
-    | "rmSync"
-  > = FS,
-): { migratedFrom: number | null; cleanedPorts: number[] } {
-  if (!fs.existsSync(idbRootDir)) {
-    return { migratedFrom: null, cleanedPorts: [] };
-  }
-
-  const levelRe = /^http_127\.0\.0\.1_(\d+)\.indexeddb\.leveldb$/;
-  const blobRe = /^http_127\.0\.0\.1_(\d+)\.indexeddb\.blob$/;
-
-  let entries: string[] = [];
-  try {
-    entries = fs.readdirSync(idbRootDir);
-  } catch {
-    return { migratedFrom: null, cleanedPorts: [] };
-  }
-
-  const ports = new Set<number>();
-  for (const e of entries) {
-    let m = levelRe.exec(e);
-    if (m) {
-      ports.add(Number(m[1]));
-      continue;
-    }
-    m = blobRe.exec(e);
-    if (m) {
-      ports.add(Number(m[1]));
-    }
-  }
-
-  if (ports.size === 0) {
-    return { migratedFrom: null, cleanedPorts: [] };
-  }
-
-  const targetLevel = Path.join(idbRootDir, `http_127.0.0.1_${targetPort}.indexeddb.leveldb`);
-  const targetBlob = Path.join(idbRootDir, `http_127.0.0.1_${targetPort}.indexeddb.blob`);
-
-  // If target exists, skip migration but clean up other ports.
-  if (fs.existsSync(targetLevel) || fs.existsSync(targetBlob)) {
-    const cleaned: number[] = [];
-    for (const p of Array.from(ports)) {
-      if (p === targetPort) continue;
-      const lvl = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.leveldb`);
-      const blob = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.blob`);
-      if (fs.existsSync(lvl) || fs.existsSync(blob)) {
-        if (fs.existsSync(lvl)) fs.rmSync(lvl, { recursive: true, force: true });
-        if (fs.existsSync(blob)) fs.rmSync(blob, { recursive: true, force: true });
-        cleaned.push(p);
-      }
-    }
-    return { migratedFrom: null, cleanedPorts: cleaned.sort((a, b) => a - b) };
-  }
-
-  // Compute mtime for each candidate port (considering level and blob dirs)
-  type PortInfo = { port: number; mtime: number };
-  const infos: PortInfo[] = [];
-  for (const p of Array.from(ports)) {
-    if (p === targetPort) continue;
-    const lvl = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.leveldb`);
-    const blob = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.blob`);
-    if (!fs.existsSync(lvl) && !fs.existsSync(blob)) continue;
-
-    let mtime = 0;
-    const updateMtime = (targetPath: string) => {
-      if (!fs.existsSync(targetPath)) return;
-      try {
-        const stat = fs.statSync(targetPath);
-        mtime = Math.max(mtime, stat.mtimeMs);
-        if (stat.isDirectory()) {
-          for (const child of fs.readdirSync(targetPath)) {
-            try {
-              const childStat = fs.statSync(Path.join(targetPath, child));
-              mtime = Math.max(mtime, childStat.mtimeMs);
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    };
-
-    updateMtime(lvl);
-    updateMtime(blob);
-
-    infos.push({ port: p, mtime });
-  }
-
-  if (infos.length === 0) {
-    return { migratedFrom: null, cleanedPorts: [] };
-  }
-
-  // Sort: most recent mtime first; tie-break by higher port number
-  infos.sort((a, b) => {
-    if (b.mtime !== a.mtime) return b.mtime - a.mtime;
-    return b.port - a.port;
-  });
-
-  const firstInfo = infos[0];
-  if (!firstInfo) {
-    return { migratedFrom: null, cleanedPorts: [] };
-  }
-
-  const sourcePort = firstInfo.port;
-  const sourceLevel = Path.join(idbRootDir, `http_127.0.0.1_${sourcePort}.indexeddb.leveldb`);
-  const sourceBlob = Path.join(idbRootDir, `http_127.0.0.1_${sourcePort}.indexeddb.blob`);
-
-  // Ensure target parent exists
-  try {
-    fs.mkdirSync(idbRootDir, { recursive: true });
-  } catch {
-    /* ignore */
-  }
-
-  // Copy with fs.cpSync if available, fallback to manual recursive copy
-  const copyRecursive = (src: string, dest: string) => {
-    if (!fs.existsSync(src)) return;
-    try {
-      if (typeof fs.cpSync === "function") {
-        fs.cpSync(src, dest, { recursive: true });
-        return;
-      }
-    } catch {
-      // fall through
-    }
-    const stat = fs.statSync(src);
-    if (stat.isDirectory()) {
-      fs.mkdirSync(dest, { recursive: true });
-      for (const entry of fs.readdirSync(src)) {
-        copyRecursive(Path.join(src, entry), Path.join(dest, entry));
-      }
-    } else {
-      fs.mkdirSync(Path.dirname(dest), { recursive: true });
-      fs.cpSync(src, dest, { recursive: true });
-    }
-  };
-
-  try {
-    copyRecursive(sourceLevel, targetLevel);
-    if (fs.existsSync(sourceBlob)) {
-      copyRecursive(sourceBlob, targetBlob);
-    }
-  } catch (err) {
-    return { migratedFrom: null, cleanedPorts: [] };
-  }
-
-  // Delete all original port directories that matched (including the source)
-  const cleaned: number[] = [];
-  for (const p of Array.from(ports)) {
-    if (p === targetPort) continue;
-    const lvl = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.leveldb`);
-    const blob = Path.join(idbRootDir, `http_127.0.0.1_${p}.indexeddb.blob`);
-    if (fs.existsSync(lvl) || fs.existsSync(blob)) {
-      cleaned.push(p);
-      if (fs.existsSync(lvl)) fs.rmSync(lvl, { recursive: true, force: true });
-      if (fs.existsSync(blob)) fs.rmSync(blob, { recursive: true, force: true });
-    }
-  }
-
-  return { migratedFrom: sourcePort, cleanedPorts: cleaned.sort((a, b) => a - b) };
 }
 
 export class CodeHostManager {
@@ -1498,54 +828,29 @@ export class CodeHostManager {
             "chat.commandCenter.enabled": false,
             "workbench.secondarySideBar.defaultVisibility": "hidden",
           };
-    const userDir = Path.join(CODE_OSS_WEB_SERVER_DATA_DIR, "data", "User");
-    const settingsPath = Path.join(userDir, "settings.json");
-    try {
-      writeMergedJsonFile(settingsPath, settingsPatch);
-      console.log(`[code-oss] updated AI provider settings (${provider}) → ${settingsPath}`);
-    } catch (err) {
-      console.error("[code-oss] failed to write AI provider settings", err);
+    const settingsPaths = new Set<string>([
+      Path.join(DEFAULT_CODE_HOST_STATE_DIR, "code-oss-main", "profile", "default", "settings.json"),
+    ]);
+    const runtime = this.config.runtime;
+    if (runtime) {
+      for (const session of this.sessions.values()) {
+        settingsPaths.add(
+          Path.join(
+            this.getDesktopSessionStateRoot(session.projectId, runtime.stateDir),
+            "profile",
+            "default",
+            "settings.json",
+          ),
+        );
+      }
     }
-  }
-
-  private prepareSessionIndexedDBStorage(session: CodeSession, newPort: number): void {
-    try {
-      let partitionStoragePath: string | null = null;
-      if (session.view?.webContents?.session) {
-        try {
-          partitionStoragePath = session.view.webContents.session.getStoragePath();
-        } catch {
-          partitionStoragePath = null;
-        }
+    for (const settingsPath of settingsPaths) {
+      try {
+        writeMergedJsonFile(settingsPath, settingsPatch);
+        console.log(`[code-oss] updated AI provider settings (${provider}) → ${settingsPath}`);
+      } catch (err) {
+        console.error("[code-oss] failed to write AI provider settings", err);
       }
-      if (!partitionStoragePath) {
-        let userData: string | null = null;
-        try {
-          if (app && typeof app.getPath === "function") {
-            userData = app.getPath("userData");
-          }
-        } catch {
-          userData = null;
-        }
-        if (!userData) return;
-        const partitionName = session.partition || `persist:tabs-code-host:${session.projectId}`;
-        const cleanPartition = partitionName.replace(/^persist:/, "");
-        partitionStoragePath = Path.join(userData, "Partitions", encodeURIComponent(cleanPartition));
-      }
-      const indexedDbDir = Path.join(partitionStoragePath, "IndexedDB");
-      const res = migrateAndCleanSessionIndexedDBStorage(indexedDbDir, newPort, FS);
-      if (res.migratedFrom !== null) {
-        console.log(
-          `[code-oss] migrated IndexedDB storage for project ${session.projectId}: port ${res.migratedFrom} -> ${newPort}`,
-        );
-      }
-      if (res.cleanedPorts.length > 0) {
-        console.log(
-          `[code-oss] cleaned up ${res.cleanedPorts.length} old IndexedDB port folder(s) for project ${session.projectId}`,
-        );
-      }
-    } catch (err) {
-      console.error(`[code-oss] prepareSessionIndexedDBStorage failed:`, err);
     }
   }
 
@@ -1657,7 +962,6 @@ export class CodeHostManager {
     const session = this.sessions.get(projectId);
     if (!session) return;
 
-    this.stopSessionServer(session);
     session.entry = null;
     session.workspaceUri = null;
     session.runtimeStartPromise = null;
@@ -1681,7 +985,6 @@ export class CodeHostManager {
       const workspaceChanged = existing.workspaceRoot !== workspaceRoot;
       existing.workspaceRoot = workspaceRoot;
       if (workspaceChanged) {
-        this.stopSessionServer(existing);
         existing.entry = null;
         existing.workspaceUri = null;
         existing.runtimeStartPromise = null;
@@ -1693,8 +996,7 @@ export class CodeHostManager {
     }
 
     const partition = `persist:tabs-code-host:${input.projectId}`;
-    const desktopRuntime =
-      this.config.runtime?.kind === "desktop-renderer" ? this.config.runtime : null;
+    const desktopRuntime = this.config.runtime;
     const desktopConfigChannel = desktopRuntime
       ? `vscode:tabs-window-config:${Crypto.randomUUID()}`
       : null;
@@ -1761,10 +1063,8 @@ export class CodeHostManager {
     });
 
     // Theme the embedded Code-OSS workbench to match the Tabs shell. We inject
-    // our CSS host-side (no VS Code fork edits needed) for BOTH runtimes — the
-    // managed-server workbench loads over http and the desktop-renderer over a
-    // custom protocol, but `insertCSS` applies to either webContents and is the
-    // single source of truth so neither path can drift to stock styling.
+    // our CSS host-side (no VS Code fork edits needed). `insertCSS` applies to
+    // the desktop renderer webContents and remains the single source of truth.
     // insertCSS is cleared on navigation, so re-apply on every load.
     {
       // Inject the editor font FIRST, then the theme — both via insertCSS, which
@@ -1852,8 +1152,6 @@ export class CodeHostManager {
       desktopProtocolRegistered: false,
       desktopRequestDiagnosticsRegistered: false,
       runtimeStartPromise: null,
-      serverProcess: null,
-      serverStartupLogs: [],
     };
     this.registerDesktopDiagnostics(session);
     this.sessions.set(input.projectId, session);
@@ -2103,7 +1401,6 @@ export class CodeHostManager {
           }
         }
 
-        this.stopSessionServer(session);
         this.disposeSessionConfigChannel(session);
       }),
     );
@@ -2114,39 +1411,9 @@ export class CodeHostManager {
     void this.flushAndShutdownSessions().catch(() => undefined);
   }
 
-  downgradeToManagedServer(reason: string): boolean {
-    const runtime = this.config.runtime;
-    if (!runtime || runtime.kind !== "desktop-renderer") {
-      return false;
-    }
-
-    const resolvedRoot = resolveManagedServerRoot(runtime.vscodeRoot, FS);
-    if (!resolvedRoot.ok) {
-      return false;
-    }
-
-    this.hideActiveSession();
-    for (const session of this.sessions.values()) {
-      this.stopSessionServer(session);
-      this.disposeSessionConfigChannel(session);
-      session.view?.webContents.close({ waitForBeforeUnload: false });
-    }
-    this.sessions.clear();
-
-    this.config.runtime = {
-      kind: "managed-server",
-      vscodeRoot: resolvedRoot.vscodeRoot,
-    };
-    this.config.state.available = true;
-    this.config.state.entry = null;
-    this.config.state.reason = null;
-    return true;
-  }
-
   disableEmbeddedHost(reason: string): void {
     this.hideActiveSession();
     for (const session of this.sessions.values()) {
-      this.stopSessionServer(session);
       this.disposeSessionConfigChannel(session);
       session.view?.webContents.close({ waitForBeforeUnload: false });
     }
@@ -2165,7 +1432,6 @@ export class CodeHostManager {
   reconfigure(config: CodeHostConfig): void {
     this.hideActiveSession();
     for (const session of this.sessions.values()) {
-      this.stopSessionServer(session);
       this.disposeSessionConfigChannel(session);
       session.view?.webContents.close({ waitForBeforeUnload: false });
     }
@@ -2189,40 +1455,19 @@ export class CodeHostManager {
     const promise = (async () => {
       try {
         const runtime = await this.ensureSessionRuntime(session);
-        if (runtime.kind === "managed-server") {
-          try {
-            const url = new URL(runtime.entry);
-            const port = Number(url.port);
-            if (port > 0) {
-              this.prepareSessionIndexedDBStorage(session, port);
-            }
-          } catch {
-            /* best effort */
-          }
-        }
         if (!session.lastFocusedPath) {
           session.lastFocusedPath = findDefaultWorkspaceFile(session.workspaceRoot);
         }
-        const nextUrl =
-          runtime.kind === "desktop-renderer"
-            ? buildDesktopSessionUrl(runtime.entry, session)
-            : buildSessionUrl(runtime.entry, session, {
-                workspaceUri: runtime.workspaceUri,
-                focusedFileUri: session.lastFocusedPath
-                  ? this.buildMountedResourceUri(session, session.lastFocusedPath)
-                  : null,
-              });
+        const nextUrl = buildDesktopSessionUrl(runtime.entry, session);
         if (session.lastLoadedUrl === nextUrl) {
           return;
         }
-        if (runtime.kind === "desktop-renderer") {
-          const desktopRuntime = this.config.runtime;
-          if (!desktopRuntime || desktopRuntime.kind !== "desktop-renderer") {
-            throw new Error("Desktop Code-OSS runtime is unavailable.");
-          }
-          this.ensureDesktopProtocol(session, desktopRuntime);
-          session.desktopLoadPending = false;
+        const desktopRuntime = this.config.runtime;
+        if (!desktopRuntime) {
+          throw new Error("Desktop Code-OSS runtime is unavailable.");
         }
+        this.ensureDesktopProtocol(session, desktopRuntime);
+        session.desktopLoadPending = false;
         session.lastLoadedUrl = nextUrl;
         if (!session.view) {
           throw new Error("Embedded Code-OSS session view is unavailable.");
@@ -2239,8 +1484,7 @@ export class CodeHostManager {
 
   private async loadSessionWhenVisible(session: CodeSession): Promise<void> {
     const runtime = this.config.runtime;
-    if (!runtime || runtime.kind !== "desktop-renderer") {
-      await this.loadSession(session);
+    if (!runtime) {
       return;
     }
 
@@ -2264,43 +1508,24 @@ export class CodeHostManager {
       throw new Error(this.config.state.reason ?? "Code-OSS is unavailable.");
     }
 
-    if (!this.config.runtime) {
-      if (!this.config.state.entry) {
-        throw new Error("Missing served Code-OSS entry.");
-      }
-
-      return {
-        kind: "managed-server",
-        entry: this.config.state.entry,
-        mountRoot: session.workspaceRoot,
-        workspaceUri: pathToFileURL(session.workspaceRoot).toString(),
-      };
+    const runtime = this.config.runtime;
+    if (!runtime) {
+      throw new Error("Desktop Code-OSS runtime is unavailable.");
     }
 
     if (session.entry && session.workspaceUri) {
-      if (this.config.runtime.kind === "managed-server") {
-        return {
-          kind: "managed-server",
-          entry: session.entry,
-          mountRoot: session.workspaceRoot,
-          workspaceUri: session.workspaceUri,
-        };
-      }
-
-      if (this.config.runtime.kind === "desktop-renderer") {
-        return {
-          kind: "desktop-renderer",
-          entry: session.entry,
-          workspaceUri: session.workspaceUri,
-        };
-      }
+      return {
+        kind: "desktop-renderer",
+        entry: session.entry,
+        workspaceUri: session.workspaceUri,
+      };
     }
 
     if (session.runtimeStartPromise) {
       return session.runtimeStartPromise;
     }
 
-    session.runtimeStartPromise = this.startManagedServer(this.config.runtime, session)
+    session.runtimeStartPromise = Promise.resolve(this.startDesktopRenderer(runtime, session))
       .then((runtime) => {
         session.entry = runtime.entry;
         session.workspaceUri = runtime.workspaceUri;
@@ -2321,214 +1546,6 @@ export class CodeHostManager {
     return session.runtimeStartPromise;
   }
 
-  private async startManagedServer(
-    runtime: CodeHostRuntime,
-    session: CodeSession,
-  ): Promise<CodeSessionRuntime> {
-    if (runtime.kind !== "managed-server") {
-      return this.startDesktopRenderer(runtime, session);
-    }
-
-    ensureCodeOssWebServerNlsMessages(runtime.vscodeRoot);
-    FS.mkdirSync(CODE_OSS_WEB_SERVER_DATA_DIR, { recursive: true });
-    ensureCodeOssWebServerDefaultSettings();
-    ensureCodeOssWebServerDefaultKeybindings();
-
-    const mountedWorkspace = buildMountedWorkspaceDescriptor(session.workspaceRoot);
-
-    let lastError: Error | null = null;
-    for (let attempt = 1; attempt <= MANAGED_SERVER_START_ATTEMPTS; attempt++) {
-      try {
-        return await this.spawnManagedServerOnce(runtime, session, mountedWorkspace);
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        // Retry with a fresh port only when the bind raced another process;
-        // every other failure (missing assets, hung start, crash) is fatal.
-        if (attempt < MANAGED_SERVER_START_ATTEMPTS && isPortConflictError(lastError)) {
-          continue;
-        }
-        throw lastError;
-      }
-    }
-    // Unreachable: the loop body always returns or throws.
-    throw lastError ?? new Error("Failed to start the local VS Code web runtime.");
-  }
-
-  private spawnManagedServerOnce(
-    runtime: Extract<CodeHostRuntime, { kind: "managed-server" }>,
-    session: CodeSession,
-    mountedWorkspace: ReturnType<typeof buildMountedWorkspaceDescriptor>,
-  ): Promise<CodeSessionRuntime> {
-    return new Promise<CodeSessionRuntime>((resolve, reject) => {
-      void (async () => {
-        const port = await reserveLoopbackPort();
-        const entry = `http://${CODE_OSS_SERVER_HOST}:${port}`;
-
-        session.serverStartupLogs = [];
-        // Install the bundled integration extension as a built-in so its
-        // native-chrome control channel runs in the remote extension host.
-        // (The legacy in-editor "Tabs" panel it can also show is gated off —
-        // see the extension's TABS_CODE_OSS_PRIMARY_SHELL guard — so only the
-        // control channel runs.) Must happen before the server starts so it
-        // scans the extension on boot. The product defaults suppress the
-        // Workspace Trust prompt, which would otherwise gate workbench startup
-        // (and with it the extension's control channel) behind a modal.
-        installManagedServerControlExtension(__dirname, runtime.vscodeRoot);
-        ensureProductConfigurationDefaults(runtime.vscodeRoot);
-        const serverArgs = buildManagedServerArgs({
-          host: CODE_OSS_SERVER_HOST,
-          port,
-          serverDataDir: CODE_OSS_WEB_SERVER_DATA_DIR,
-        });
-
-        const buildFailureError = (causeMessage: string): Error =>
-          new Error(
-            [
-              causeMessage,
-              `Checkout root: ${runtime.vscodeRoot}.`,
-              `Workspace root: ${session.workspaceRoot}.`,
-              `Mounted root: ${mountedWorkspace.mountRoot}.`,
-              `Launch command: node ${serverArgs.map((arg) => normalizeFilePath(arg)).join(" ")}.`,
-              `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`,
-            ].join(" "),
-          );
-
-        // Run the Code-OSS server (and the extension host it forks) on Electron's
-        // bundled Node via `ELECTRON_RUN_AS_NODE`, rather than a `node` from PATH.
-        // This (a) removes the dependency on the user having Node installed in the
-        // packaged app, and (b) guarantees Node >= 22 so `globalThis.WebSocket`
-        // exists — without it `@vscode/proxy-agent`'s `createWebSocketPatch` throws
-        // `Cannot read properties of undefined (reading 'prototype')` during
-        // extension-host startup.
-        const child = ChildProcess.spawn(process.execPath, serverArgs, {
-          cwd: runtime.vscodeRoot,
-          env: {
-            ...process.env,
-            ELECTRON_RUN_AS_NODE: "1",
-            BROWSER: "none",
-            VSCODE_DEV: "1",
-            // Identify this project's extension host on the shared control
-            // channel so the native chrome routes commands to the right editor
-            // when multiple projects are open at once.
-            TABS_PROJECT_ID: session.projectId,
-          },
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-
-        session.serverProcess = child;
-        let ready = false;
-        // Guards the readiness/early-exit race: whichever settles this attempt
-        // first wins, so a late readiness timeout can't tear down a server that a
-        // later retry attempt has already brought up.
-        let settled = false;
-
-        const appendLog = (chunk: Buffer | string) => {
-          for (const line of String(chunk).split(/\r?\n/)) {
-            const trimmedLine = line.trim();
-            if (trimmedLine.length > 0) {
-              session.serverStartupLogs.push(trimmedLine);
-            }
-          }
-        };
-        child.stdout?.on("data", appendLog);
-        child.stderr?.on("data", appendLog);
-
-        child.once("error", (error) => {
-          appendLog(error.message);
-        });
-
-        child.once("exit", (code, signal) => {
-          if (session.serverProcess !== child) {
-            return;
-          }
-
-          session.serverProcess = null;
-          session.entry = null;
-          session.workspaceUri = null;
-          session.runtimeStartPromise = null;
-
-          if (!ready) {
-            // Exited before becoming ready — fail this attempt immediately so the
-            // caller can retry (e.g. on a raced port) instead of waiting out the
-            // full readiness timeout.
-            if (settled) {
-              return;
-            }
-            settled = true;
-            reject(
-              buildFailureError(
-                [
-                  "The local VS Code web runtime exited before it became ready.",
-                  signal ? `Signal: ${signal}.` : `Exit code: ${code ?? "unknown"}.`,
-                ].join(" "),
-              ),
-            );
-            return;
-          }
-
-          if (this.disposed) {
-            return;
-          }
-
-          this.config.state.available = false;
-          if (this.config.state.entry === entry) {
-            this.config.state.entry = null;
-          }
-          this.config.state.reason = [
-            "The local VS Code web runtime exited unexpectedly.",
-            signal ? `Signal: ${signal}.` : `Exit code: ${code ?? "unknown"}.`,
-            `Workspace root: ${session.workspaceRoot}.`,
-            `Mounted root: ${mountedWorkspace.mountRoot}.`,
-            `Startup logs: ${formatCodeHostStartupLogs(session.serverStartupLogs)}`,
-          ].join(" ");
-        });
-
-        try {
-          await waitForHttpReady(entry, CODE_OSS_SERVER_START_TIMEOUT_MS);
-          if (settled) {
-            return;
-          }
-          settled = true;
-          ready = true;
-          resolve({
-            kind: "managed-server",
-            entry,
-            mountRoot: mountedWorkspace.mountRoot,
-            workspaceUri: mountedWorkspace.workspaceUri,
-          });
-        } catch (error) {
-          // The process exited early and already settled this attempt — don't
-          // tear down whatever server is currently assigned to the session.
-          if (settled) {
-            return;
-          }
-          settled = true;
-          this.stopSessionServer(session);
-          const causeMessage =
-            error instanceof Error && error.message.includes("Timed out waiting")
-              ? error.message
-              : `Failed to start the local VS Code web runtime. ${
-                  error instanceof Error ? error.message : String(error)
-                }`;
-          reject(buildFailureError(causeMessage));
-        }
-      })().catch(reject);
-    });
-  }
-
-  private stopSessionServer(session: CodeSession): void {
-    if (!session.serverProcess) {
-      return;
-    }
-
-    const serverProcess = session.serverProcess;
-    session.serverProcess = null;
-    session.entry = null;
-    session.workspaceUri = null;
-    session.runtimeStartPromise = null;
-    terminateProcessTree(serverProcess);
-  }
-
   private startDesktopRenderer(
     runtime: Extract<CodeHostRuntime, { kind: "desktop-renderer" }>,
     session: CodeSession,
@@ -2544,34 +1561,6 @@ export class CodeHostManager {
       ),
       workspaceUri: pathToFileURL(session.workspaceRoot).toString(),
     };
-  }
-
-  private buildMountedResourceUri(session: CodeSession, relativePath: string): string {
-    const normalizedRelativePath = normalizeFilePath(relativePath).replace(/^\/+/, "");
-    const baseUri =
-      session.workspaceUri ?? buildMountedWorkspaceDescriptor(session.workspaceRoot).workspaceUri;
-    if (normalizedRelativePath.length === 0) {
-      return baseUri;
-    }
-
-    const fullPath = Path.resolve(Path.join(session.workspaceRoot, normalizedRelativePath));
-
-    if (baseUri.includes("://")) {
-      try {
-        return new URL(
-          normalizedRelativePath
-            .split("/")
-            .filter((segment) => segment.length > 0)
-            .map(encodeURIComponent)
-            .join("/"),
-          `${trimTrailingSlash(baseUri)}/`,
-        ).toString();
-      } catch {
-        /* fall through to fullPath */
-      }
-    }
-
-    return fullPath;
   }
 
   public focusSession(projectId: string): void {
@@ -2659,7 +1648,7 @@ export class CodeHostManager {
 
   private getDesktopAllowedRoots(session: CodeSession): string[] {
     const runtime = this.config.runtime;
-    if (!runtime || runtime.kind !== "desktop-renderer") {
+    if (!runtime) {
       return [session.workspaceRoot];
     }
 
@@ -2713,7 +1702,7 @@ export class CodeHostManager {
   private buildDesktopWindowConfiguration(projectId: string): DesktopWindowConfiguration {
     const session = this.sessions.get(projectId);
     const runtime = this.config.runtime;
-    if (!session || !runtime || runtime.kind !== "desktop-renderer" || !session.view) {
+    if (!session || !runtime || !session.view) {
       throw new Error("Desktop Code-OSS runtime is unavailable.");
     }
 
@@ -2744,8 +1733,7 @@ export class CodeHostManager {
       userEnv: {
         VSCODE_CWD: session.workspaceRoot,
         // Identify this project's extension host on the shared control channel so
-        // the native chrome routes commands to the right editor — mirrors the
-        // managed-server spawn env (see spawnManagedServerOnce). Without it the
+        // the native chrome routes commands to the right editor. Without it the
         // integration extension announces an empty projectId and the broker can't
         // match it, leaving every chrome button a silent no-op.
         TABS_PROJECT_ID: projectId,
@@ -2973,7 +1961,7 @@ export class CodeHostManager {
 
   private registerDesktopDiagnostics(session: CodeSession): void {
     const runtime = this.config.runtime;
-    if (!runtime || runtime.kind !== "desktop-renderer" || !session.view) {
+    if (!runtime || !session.view) {
       return;
     }
 
@@ -3028,7 +2016,7 @@ export class CodeHostManager {
     }
 
     const runtime = this.config.runtime;
-    if (!runtime || runtime.kind !== "desktop-renderer" || !session.view) {
+    if (!runtime || !session.view) {
       return;
     }
 

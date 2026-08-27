@@ -42,3 +42,13 @@
 - Normal verification used plain `bun run dev:desktop` with the real `tabs-code-main` checkout and both REH entrypoint files present. The loaded URL was `vscode-file://vscode-app/.../workbench-dev.html`, proving resolver selection no longer depends on hiding REH artifacts.
 - The normal launch started local extension host PID 5601, activated the Tabs integration extension, connected its control channel, applied the theme, and processed restored file-open commands.
 - Verification: desktop typecheck passed; `bun run test -- src/codeHostManager.test.ts` passed all 31 tests. An earlier `bun test` invocation failed before test execution because Bun's runner does not apply this suite's Vitest Electron mock; the prescribed Vitest command is the valid result.
+
+## Phase 3: REH removal
+
+- Removed the managed-server runtime variant and all associated child-process handles, server startup logs, loopback port allocation/retry, HTTP readiness polling, HTTP session URL construction, port-keyed IndexedDB migration, server arguments/defaults, and process-tree termination.
+- Removed the runtime downgrade path that could replace the native Code-OSS window with the legacy shell after load failure. Native startup failures are now logged and remain visible in the existing window; no server or replacement-window path is activated.
+- Runtime discovery and downloaded-runtime validation now require native desktop workbench assets only. `TABS_CODE_OSS_ENTRY` is no longer a supported served-entry override.
+- The main window and native backend no longer branch on `runtime.kind`; the sole runtime type is `desktop-renderer`. The remaining conditional is runtime availability for thin-install download handling, not runtime selection.
+- Updated AI-provider settings persistence to target native per-profile settings rather than the deleted shared REH server-data directory.
+- Verification: desktop typecheck passed; the focused CodeHostManager Vitest suite passed all 15 remaining native/session tests. A normal `bun run dev:desktop` launch loaded `vscode-file://vscode-app/.../workbench-dev.html`, started local extension host PID 10058, activated and connected the Tabs control extension, and issued native file-open commands. No Tabs/Electron process remained after the run.
+- Phase 4 gap confirmed during this launch: the workbench requests `localPty`, but that channel is not registered yet. Terminal verification therefore cannot pass until the normal native terminal backend is mirrored.

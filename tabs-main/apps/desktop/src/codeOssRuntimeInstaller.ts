@@ -64,7 +64,9 @@ export function resolveInstalledRuntimeDir(version: string): string {
 /** True when a usable runtime is already present for this version. */
 export function isRuntimeInstalled(version: string): boolean {
   const dir = resolveInstalledRuntimeDir(version);
-  return FS.existsSync(Path.join(dir, "out", "server-main.js"));
+  return FS.existsSync(
+    Path.join(dir, "out", "vs", "code", "electron-browser", "workbench", "workbench-dev.html"),
+  );
 }
 
 function httpGetFollow(url: string, redirectsLeft = 5): Promise<IncomingMessage> {

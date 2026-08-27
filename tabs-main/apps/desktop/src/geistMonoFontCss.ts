@@ -2,8 +2,8 @@
  * Geist Mono (latin subset, weights 400–500) embedded as a base64 woff2 data
  * URI so the embedded Code-OSS editor can render its configured editor font.
  *
- * Why inline rather than a <link>: the managed-server workbench is served with a
- * strict Content-Security-Policy that blocks cross-origin font/style fetches
+ * Why inline rather than a <link>: the workbench has a strict
+ * Content-Security-Policy that blocks cross-origin font/style fetches
  * (fonts.googleapis.com), and Geist Mono is not installed on the host. Injecting
  * the font face through `webContents.insertCSS` applies it as an Electron user
  * stylesheet, which is NOT subject to the page CSP — so the @font-face (and its
