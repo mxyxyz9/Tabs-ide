@@ -5,7 +5,6 @@ import {
   MessageSquareIcon,
   PanelBottomIcon,
   PanelLeftIcon,
-  PanelRightIcon,
   PlayIcon,
   SearchIcon,
   SettingsIcon,
@@ -141,12 +140,6 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
           ) : (
             <ChevronsUpDownIcon aria-hidden="true" className="size-4" />
           )}
-        </HeaderAction>
-        <HeaderAction
-          label="Toggle secondary side bar"
-          onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar)}
-        >
-          <PanelRightIcon aria-hidden="true" className="size-4" />
         </HeaderAction>
         <HeaderAction
           label="Customize layout"

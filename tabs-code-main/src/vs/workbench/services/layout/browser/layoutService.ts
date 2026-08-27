@@ -365,6 +365,13 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 }
 
 export function shouldShowCustomTitleBar(configurationService: IConfigurationService, window: Window, menuBarToggled?: boolean): boolean {
+	// Tabs renders its workspace toolbar outside the native WebContentsView. The
+	// startup marker exists before profile settings are resolved, so the embedded
+	// grid never allocates a redundant title-bar row.
+	if ((globalThis as { __tabsEmbeddedWorkbench?: boolean }).__tabsEmbeddedWorkbench === true && !isAuxiliaryWindow(window)) {
+		return false;
+	}
+
 	if (!hasCustomTitlebar(configurationService)) {
 		return false;
 	}
