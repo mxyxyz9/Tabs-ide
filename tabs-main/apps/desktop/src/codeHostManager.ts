@@ -5,7 +5,6 @@ import * as Path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
-  app,
   BrowserView,
   ipcMain,
   nativeTheme,
@@ -13,7 +12,6 @@ import {
   type BrowserWindow,
   type ProtocolRequest,
   type Rectangle,
-  type Session as ElectronSession,
 } from "electron";
 import type {
   CodeChromeState,
@@ -76,7 +74,6 @@ const REQUIRED_CODE_OSS_DESKTOP_RELATIVE_PATHS = [
   CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH,
 ] as const;
 const CODE_OSS_FILE_PROTOCOL = "vscode-file";
-const CODE_OSS_WEBVIEW_PROTOCOL = "vscode-webview";
 const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
   process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs"),
@@ -210,14 +207,6 @@ const cssModulesCache = new Map<string, string[]>();
 
 function normalizeFilePath(input: string): string {
   return input.replace(/\\/g, "/");
-}
-
-function trimTrailingSlash(input: string): string {
-  return input.replace(/\/+$/, "");
-}
-
-function formatCodeHostPayload(entries: ReadonlyArray<readonly [string, string]>): string {
-  return JSON.stringify(entries);
 }
 
 function findDefaultWorkspaceFile(workspaceRoot: string): string | null {
@@ -373,31 +362,6 @@ export function mergeProductConfigurationDefaults(
     product: { ...product, configurationDefaults: { ...existing, ...defaults } },
     changed: true,
   };
-}
-
-/**
- * Bake the embed defaults into the runtime's product.json
- * `configurationDefaults` (see mergeProductConfigurationDefaults for why the
- * settings.json route is not enough). Idempotent; best-effort.
- */
-function ensureProductConfigurationDefaults(vscodeRoot: string): void {
-  try {
-    const productPath = Path.join(vscodeRoot, "product.json");
-    if (!isFile(productPath, FS)) {
-      return;
-    }
-    const parsed = JSON.parse(FS.readFileSync(productPath, "utf8")) as Record<string, unknown>;
-    const { product, changed } = mergeProductConfigurationDefaults(
-      parsed,
-      CODE_OSS_EMBED_DEFAULT_SETTINGS,
-    );
-    if (changed) {
-      FS.writeFileSync(productPath, `${JSON.stringify(product, null, "\t")}\n`, "utf8");
-    }
-  } catch {
-    // Non-fatal: the workbench still runs, the user may just see stock chrome
-    // prompts (e.g. Workspace Trust) that the defaults would have suppressed.
-  }
 }
 
 function isDirectory(pathname: string, fs: FsLike): boolean {
@@ -1985,7 +1949,7 @@ export class CodeHostManager {
           "/Users/rushil.dev/.tabs/userdata/workbench-console.log",
           `[console] ${message} (${sourceId}:${line})\n`,
         );
-      } catch (e) {}
+      } catch {}
     });
     session.view.webContents.on("did-finish-load", () => {
       setTimeout(() => {

@@ -22,7 +22,7 @@ The repository is divided into `apps/` (runnable applications) and `packages/` (
   - **Tech**: Node.js, WebSockets, `effect` library for robust async and error handling.
 
 - **`apps/desktop`**: The Electron application wrapper.
-  - **Role**: Packages the `server` and `web` apps into a native desktop experience. Manages native OS integrations (like resizing embedded browser views, system menus, file system access).
+  - **Role**: Packages the `server` and `web` apps into a native desktop experience and hosts the Code-OSS desktop workbench. Manages native OS integrations, project-scoped editor views, system menus, and file system access.
 
 - **`apps/marketing`**: The public-facing landing page/website.
 
@@ -63,6 +63,26 @@ The repository is divided into `apps/` (runnable applications) and `packages/` (
 - The `dev-runner.ts` script orchestrates Turborepo to start the Vite dev server (`apps/web`), the backend WebSocket server (`apps/server`), and the Electron host (`apps/desktop`).
 
 *Note to Agents: When architectural changes are made (e.g., new packages, major state management shifts), you MUST update this file to ensure future agents have accurate context.*
+
+## Native Code-OSS Embedding
+
+The desktop app has one Code-OSS runtime path: the compiled Electron desktop renderer loaded from
+`tabs-code-main` over `vscode-file://`. There is no Remote Extension Host web server, served
+workbench URL, loopback editor port, or `vscode-remote` filesystem transport.
+
+- `apps/desktop/src/nativeCodeHostMain.ts` is the Tabs-owned boundary to compiled Code-OSS main
+  process modules. It constructs the Electron IPC server and registers extension-host starter,
+  local filesystem, utility-process worker, local PTY, and external-terminal channels.
+- The extension host and PTY host are Electron utility processes. Code-OSS transfers their
+  `MessagePort` connections through Electron IPC, matching the native desktop architecture.
+- `apps/desktop/src/codeHostManager.ts` owns per-project sessions: a persistent Electron partition,
+  `BrowserView`, workspace file URI, profile/state roots, configuration IPC channel, bounds/focus,
+  recreation, storage flush, and disposal. Each view is registered with the native main backend so
+  its extension host can be addressed by webContents ID.
+- `Schemas.file` operations use the renderer's `DiskFileSystemProvider` backed by the main-process
+  `localFilesystem` channel. They do not pass through the Tabs WebSocket backend.
+- `TABS_CODE_OSS_BUILD_DIR` can override runtime discovery with a compiled `tabs-code-main` root.
+  Runtime selection does not support HTTP entries or a web-server fallback.
 
 ## Testing Workspace Architecture
 

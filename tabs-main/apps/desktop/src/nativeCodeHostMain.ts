@@ -1,6 +1,7 @@
 import { BrowserWindow, type WebContents } from "electron";
 import { pathToFileURL } from "node:url";
 import * as Path from "node:path";
+import * as OS from "node:os";
 
 type NativeCodeHostModules = {
   ElectronIPCServer: new () => {
@@ -21,6 +22,7 @@ type NativeCodeHostModules = {
   };
   EventNone: unknown;
   NullLogService: new () => unknown;
+  NullLoggerService: new () => unknown;
   NullTelemetryService: unknown;
   ExtensionHostStarter: new (...args: unknown[]) => {
     dispose(): void;
@@ -37,6 +39,11 @@ type NativeCodeHostModules = {
   extensionHostChannelName: string;
   localFileSystemChannelName: string;
   utilityProcessWorkerChannelName: string;
+  ElectronPtyHostStarter: new (...args: unknown[]) => { dispose(): void };
+  PtyHostService: new (...args: unknown[]) => { dispose(): void };
+  TerminalLocalPtyChannelName: string;
+  ExternalTerminalService: new () => unknown;
+  URI: { file(path: string): unknown };
 };
 
 type ServerChannel = {
@@ -84,6 +91,11 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     diskProviderClient,
     utilityProcessWorker,
     utilityProcessWorkerContract,
+    electronPtyHostStarter,
+    ptyHostService,
+    terminalContract,
+    externalTerminal,
+    uri,
   ] = await Promise.all([
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.electron.js")),
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/common/ipc.js")),
@@ -98,6 +110,11 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     import(moduleUrl(vscodeRoot, "vs/platform/files/common/diskFileSystemProviderClient.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/utilityProcess/electron-main/utilityProcessWorkerMainService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/utilityProcess/common/utilityProcessWorkerService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/terminal/electron-main/electronPtyHostStarter.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/terminal/node/ptyHostService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/terminal/common/terminal.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/externalTerminal/node/externalTerminalService.js")),
+    import(moduleUrl(vscodeRoot, "vs/base/common/uri.js")),
   ]);
 
   return {
@@ -107,6 +124,7 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     Emitter: events.Emitter,
     EventNone: events.Event.None,
     NullLogService: log.NullLogService,
+    NullLoggerService: log.NullLoggerService,
     NullTelemetryService: telemetry.NullTelemetryService,
     ExtensionHostStarter: extensionHostStarter.ExtensionHostStarter,
     DiskFileSystemProvider: diskProvider.DiskFileSystemProvider,
@@ -116,6 +134,16 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     localFileSystemChannelName: diskProviderClient.LOCAL_FILE_SYSTEM_CHANNEL_NAME,
     utilityProcessWorkerChannelName:
       utilityProcessWorkerContract.ipcUtilityProcessWorkerChannelName,
+    ElectronPtyHostStarter: electronPtyHostStarter.ElectronPtyHostStarter,
+    PtyHostService: ptyHostService.PtyHostService,
+    TerminalLocalPtyChannelName: terminalContract.TerminalIpcChannels.LocalPty,
+    ExternalTerminalService:
+      process.platform === "win32"
+        ? externalTerminal.WindowsExternalTerminalService
+        : process.platform === "darwin"
+          ? externalTerminal.MacExternalTerminalService
+          : externalTerminal.LinuxExternalTerminalService,
+    URI: uri.URI,
   };
 }
 
@@ -148,12 +176,18 @@ export async function createNativeCodeHostMainBackend(
     },
   };
   const configurationService = {
-    getValue() {
+    onDidChangeConfiguration: modules.EventNone,
+    getValue(key?: string) {
+      if (key === "terminal.integrated.persistentSessionScrollback") return 100;
       return undefined;
     },
   };
   const environmentService = {
     args: {},
+    isBuilt: false,
+    logsHome: modules.URI.file(Path.join(OS.tmpdir(), "tabs-code-oss-logs")),
+    unsetSnapExportedVariables() {},
+    restoreSnapExportedVariables() {},
   };
 
   const extensionHostStarter = new modules.ExtensionHostStarter(
@@ -175,6 +209,21 @@ export async function createNativeCodeHostMainBackend(
     modules.NullTelemetryService,
     lifecycleService,
   );
+  const loggerService = new modules.NullLoggerService();
+  const ptyHostStarter = new modules.ElectronPtyHostStarter(
+    { graceTime: 60_000, shortGraceTime: 6_000, scrollback: 100 },
+    configurationService,
+    environmentService,
+    lifecycleService,
+    logService,
+  );
+  const ptyHostService = new modules.PtyHostService(
+    ptyHostStarter,
+    configurationService,
+    logService,
+    loggerService,
+  );
+  const externalTerminalService = new modules.ExternalTerminalService();
 
   ipcServer.registerChannel(
     modules.extensionHostChannelName,
@@ -184,6 +233,14 @@ export async function createNativeCodeHostMainBackend(
   ipcServer.registerChannel(
     modules.utilityProcessWorkerChannelName,
     modules.ProxyChannel.fromService(utilityProcessWorkerService, disposables),
+  );
+  ipcServer.registerChannel(
+    modules.TerminalLocalPtyChannelName,
+    modules.ProxyChannel.fromService(ptyHostService, disposables),
+  );
+  ipcServer.registerChannel(
+    "externalTerminal",
+    modules.ProxyChannel.fromService(externalTerminalService, disposables),
   );
 
   const storage = new Map<string, string>();
@@ -276,6 +333,8 @@ export async function createNativeCodeHostMainBackend(
         join: (_id: string, promise: Promise<void>) => void promise.catch(() => undefined),
       });
       windows.clear();
+      ptyHostService.dispose();
+      (loggerService as { dispose(): void }).dispose();
       utilityProcessWorkerService.dispose();
       diskFileSystemProviderChannel.dispose();
       diskFileSystemProvider.dispose();

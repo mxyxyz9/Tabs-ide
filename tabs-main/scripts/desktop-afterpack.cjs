@@ -4,9 +4,8 @@
  * electron-builder afterPack hook.
  *
  * electron-builder drops nested `node_modules` from the `extraFiles` copy of
- * `tabs-code-main`, so the packaged Code-OSS server (`out/server-main.js`) fails
- * at runtime on `import minimist from 'minimist'` with
- * `ERR_MODULE_NOT_FOUND: Cannot find package 'minimist'`.
+ * `tabs-code-main`, which removes dependencies used by native main-process
+ * services and built-in extensions.
  *
  * This hook runs after the app directory is packed but before the installer
  * (nsis / AppImage / dmg) is assembled, and restores the runtime `node_modules`
@@ -57,8 +56,8 @@ module.exports = async function afterPack(context) {
   if (!fs.existsSync(source)) {
     console.warn(
       `[afterPack] Runtime node_modules source not found at ${source}; ` +
-        "skipping tabs-code-main/node_modules restore. The packaged Code-OSS " +
-        "server will fail to start.",
+        "skipping tabs-code-main/node_modules restore. Native Code-OSS services " +
+        "may fail to start.",
     );
     return;
   }

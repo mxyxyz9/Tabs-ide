@@ -292,12 +292,8 @@ function activate(context) {
     }),
   );
 
-  // The in-editor "Tabs" webview panel is the legacy Code-OSS-first shell. In
-  // the current architecture the Tabs React app is the shell and renders native
-  // chrome around the embedded editor, so the panel must NOT auto-open in the
-  // managed-server runtime — only the control channel (started above) runs
-  // there. The desktop-renderer fallback sets TABS_CODE_OSS_PRIMARY_SHELL=1 to
-  // keep its original panel-shell behavior.
+  // The native primary Code-OSS shell opts into the in-editor Tabs panel. Other
+  // embedded sessions run only the control channel started above.
   if (process.env.TABS_CODE_OSS_PRIMARY_SHELL === "1") {
     void shellController.show(readStoredTool(context));
   }

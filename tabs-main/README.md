@@ -102,15 +102,13 @@ npm run compile
 Tabs will auto-detect `../tabs-code-main` and expects these compiled assets:
 
 - `out/vs/base/parts/sandbox/electron-browser/preload.js`
-- `out/vs/code/electron-browser/workbench/workbench.html`
+- `out/vs/code/electron-browser/workbench/workbench-dev.html`
 - `out-build/nls.messages.json`
 
 You can also override detection with:
 
 - `TABS_CODE_OSS_BUILD_DIR`
   Absolute path to the local `tabs-code-main` checkout root
-- `TABS_CODE_OSS_ENTRY`
-  `http://` or `https://` URL for a served workbench if you explicitly want web-hosted workbench mode
 
 ## Workspace folder layout expected by this repo
 

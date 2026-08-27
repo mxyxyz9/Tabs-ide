@@ -538,9 +538,9 @@ function getRequiredMacArtifactPaths(productName: string, thin = false): readonl
     join(codeOss, "out", "vs", "base", "parts", "sandbox", "electron-browser", "preload.js"),
     join(codeOss, "out-build", "nls.messages.json"),
     join(codeOss, "product.json"),
-    // Root node_modules must be present for server-main.js bootstrap imports
-    // (e.g. `import minimist from 'minimist'` resolves against root node_modules).
-    join(codeOss, "node_modules", "minimist", "index.js"),
+    // Native main-process services and built-in extensions resolve runtime
+    // dependencies from the checkout's root node_modules.
+    join(codeOss, "node_modules"),
   ];
 }
 
@@ -600,32 +600,6 @@ const validateMacDmgContents = Effect.fn("validateMacDmgContents")(function* (
   try {
     yield* assertRequiredPaths(mountPoint, requiredPaths, "Generated DMG");
 
-    // Runtime smoke test: verify the Code-OSS server can actually bootstrap.
-    // The static `import minimist from 'minimist'` in server-main.js resolves
-    // against root node_modules — if that directory is missing the process exits
-    // immediately with ERR_MODULE_NOT_FOUND before reaching loadCode().
-    const codeOssRoot = join(
-      mountPoint,
-      `${productName}.app`,
-      "Contents",
-      "Resources",
-      "tabs-code-main",
-    );
-    const serverMainJs = join(codeOssRoot, "out", "server-main.js");
-    yield* Effect.sync(() => {
-      const result = spawnSync("node", [serverMainJs, "--help"], {
-        cwd: codeOssRoot,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 15_000,
-      });
-      if (result.status !== 0) {
-        const stderr = result.stderr?.trim() ?? "";
-        throw new Error(
-          `[desktop-artifact] Code-OSS server smoke test failed (exit ${result.status}): ${stderr}`,
-        );
-      }
-    });
   } finally {
     const detachResult = spawnSync("hdiutil", ["detach", mountPoint], {
       encoding: "utf8",
@@ -685,11 +659,9 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     })`ditto ${packagedAppPath} ${path.join(dmgRoot, `${input.productName}.app`)}`,
   );
 
-  // electron-builder drops `node_modules` from the `extraFiles` copy of
-  // tabs-code-main (it does not honour the removed .gitignore), so the packaged
-  // `out/server-main.js` would fail at runtime on `import minimist from 'minimist'`.
-  // Restore the runtime node_modules into the extracted payload before we
-  // validate it and build the DMG from this tree.
+  // electron-builder can drop `node_modules` from the `extraFiles` copy of
+  // tabs-code-main. Restore native service and extension dependencies before
+  // validating and assembling the DMG.
   const codeOssAppDir = path.join(
     dmgRoot,
     `${input.productName}.app`,
@@ -996,24 +968,19 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   }
 
   // Remove .gitignore so electron-builder does not honour it when packaging
-  // extraFiles. The root .gitignore contains `node_modules/` which causes
-  // electron-builder to exclude root node_modules from the final app bundle.
-  // server-main.js has a static `import minimist from 'minimist'` that resolves
-  // against root node_modules, so stripping it breaks the Code-OSS server.
+  // extraFiles. The root .gitignore contains `node_modules/`, which causes
+  // electron-builder to exclude native runtime dependencies from the bundle.
   const gitignorePath = path.join(vsCodeDestDir, ".gitignore");
   if (yield* fs.exists(gitignorePath)) {
     yield* fs.remove(gitignorePath);
   }
 
-  // Drop large, clearly build/test-only node_modules that the runtime server
-  // (out/server-main.js) never imports — ~1GB. NOTE: a blanket
-  // `npm prune --omit=dev` is NOT safe here: server-main.js dynamically imports
-  // some packages npm classifies as dev, so pruning them yields
-  // ERR_MODULE_NOT_FOUND. This curated list is verified by the DMG smoke test
-  // (`server-main.js --help`) below.
+  // Drop large, clearly build/test-only node_modules that the native runtime
+  // does not import. A blanket `npm prune --omit=dev` is not safe because some
+  // runtime dependencies are classified as development dependencies upstream.
   yield* Effect.log("[desktop-artifact] Trimming dev-only node_modules from VS Code runtime...");
   const devOnlyModules = [
-    "electron", // tabs-code-main's build Electron; the server runs under Tabs' Electron
+    "electron", // tabs-code-main's build Electron; the runtime uses Tabs' Electron
     "@github",
     "playwright",
     "@playwright",

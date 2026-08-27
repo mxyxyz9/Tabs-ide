@@ -117,7 +117,7 @@ const CODE_HOST_SYNC_SESSIONS_CHANNEL = "desktop:code-host:sync-sessions";
 // Native Code-tab chrome ↔ embedded workbench command bridge (see
 // codeControlChannel.ts). The renderer invokes run-command; main pushes
 // chrome-state updates back to the renderer.
-const CODE_HOST_RUN_COMMAND_CHANNEL = "desktop:code-host:run-command";
+const CODE_HOST_RUN_COMMAND_CHANNEL = "vscode:tabs-code-host:run-command";
 const CODE_HOST_GET_CHROME_STATE_CHANNEL = "desktop:code-host:get-chrome-state";
 const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 const BROWSER_HOST_GET_STATE_CHANNEL = "desktop:browser-host:get-state";
@@ -2617,110 +2617,6 @@ function getIconOption(): { icon: string } | Record<string, never> {
   const ext = process.platform === "win32" ? "ico" : "png";
   const iconPath = resolveIconPath(ext);
   return iconPath ? { icon: iconPath } : {};
-}
-
-function createLegacyWindow(): BrowserWindow {
-  const window = new BrowserWindow({
-    width: 1100,
-    height: 780,
-    minWidth: 840,
-    minHeight: 620,
-    show: false,
-    autoHideMenuBar: true,
-    ...getIconOption(),
-    title: APP_DISPLAY_NAME,
-    ...resolveTitleBarOptions(),
-    webPreferences: {
-      preload: Path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webviewTag: true,
-    },
-  });
-
-  window.webContents.on("context-menu", (event, params) => {
-    event.preventDefault();
-
-    const menuTemplate: MenuItemConstructorOptions[] = [];
-
-    if (params.misspelledWord) {
-      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
-        menuTemplate.push({
-          label: suggestion,
-          click: () => window.webContents.replaceMisspelling(suggestion),
-        });
-      }
-      if (params.dictionarySuggestions.length === 0) {
-        menuTemplate.push({ label: "No suggestions", enabled: false });
-      }
-      menuTemplate.push({ type: "separator" });
-    }
-
-    menuTemplate.push(
-      { role: "cut", enabled: params.editFlags.canCut },
-      { role: "copy", enabled: params.editFlags.canCopy },
-      { role: "paste", enabled: params.editFlags.canPaste },
-      { role: "selectAll", enabled: params.editFlags.canSelectAll },
-    );
-
-    Menu.buildFromTemplate(menuTemplate).popup({ window });
-  });
-
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    const externalUrl = getSafeExternalUrl(url);
-    if (externalUrl) {
-      void shell.openExternal(externalUrl);
-    }
-    return { action: "deny" };
-  });
-
-  window.on("page-title-updated", (event) => {
-    event.preventDefault();
-    window.setTitle(APP_DISPLAY_NAME);
-  });
-  window.webContents.on("did-finish-load", () => {
-    window.setTitle(APP_DISPLAY_NAME);
-    emitUpdateState();
-  });
-  window.webContents.on("console-message", (_event, _level, message, line, sourceId) => {
-    if (message.includes("[SLIDER-DEBUG-3]")) {
-      console.log(`[RENDERER] [${sourceId}:${line}] ${message}`);
-      try {
-        const logLine = `[${new Date().toISOString()}] ${message}\n`;
-        FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
-      } catch {
-        /* ignore */
-      }
-    }
-  });
-
-  window.once("ready-to-show", () => {
-    window.show();
-  });
-
-  if (isDevelopment) {
-    void window.loadURL(process.env.VITE_DEV_SERVER_URL as string);
-  } else {
-    void window.loadURL(`${DESKTOP_SCHEME}://app/index.html`);
-  }
-
-  window.on("closed", () => {
-    if (mainWindow === window) {
-      mainWindow = null;
-    }
-  });
-
-  window.webContents.on(
-    "did-fail-load",
-    (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
-      if (isMainFrame && !window.isVisible()) {
-        window.show();
-      }
-    },
-  );
-
-  return window;
 }
 
 function createCodeOssWindow(
