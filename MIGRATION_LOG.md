@@ -67,3 +67,66 @@
 - Degraded: Node debugging because the runtime lacks a Node debug adapter. Standard optional main-process channels `workspaces`, `NativeMcpDiscoveryHelper`, `menubar`, and `webview` still log as unavailable; they did not block the required extension host, filesystem, or terminal verification, but their corresponding optional desktop features were not validated.
 - Human manual verification priority: install/include the intended Node debugger extension and start the `Native debug probe`-equivalent configuration; then exercise workspace management, MCP discovery, native menu updates, and webview restoration if those features are expected in the shipped primary shell.
 - Automated verification: monorepo `bun run typecheck` passed all 10 packages; desktop CodeHostManager Vitest passed all 15 tests; targeted Oxlint completed with pre-existing warnings only. Final runtime cleanup left no Tabs/Electron dev process running.
+
+## Composition correction: Code remains a Tabs tool
+
+- The Phase 3/4 verification incorrectly promoted the native Code-OSS renderer to the application's
+  top-level `BrowserWindow`. That proved the native services in isolation but bypassed the Tabs
+  workspace shell and therefore removed its project tabs and tool toolbar.
+- Restored the Tabs React renderer as the sole top-level application window. The native backend is
+  still initialized during desktop bootstrap, and the existing `DesktopCodeTool` lifecycle still
+  creates, activates, bounds, hides, and restores the project-scoped Code-OSS `BrowserView` through
+  `CodeHostManager`.
+- Removed the separate primary-workbench window loader and its duplicate configuration/protocol
+  scaffolding. This does not restore REH: embedded Code views still load `workbench-dev.html` over
+  `vscode-file://` and use the native extension-host, filesystem, and terminal IPC services.
+
+## Five-phase embedded-workbench completion
+
+### Phase 1: complete stock workbench and truthful readiness
+
+- Restored Code-OSS ownership of its activity bar, sidebar, editor, panel, and status bar inside the
+  Tabs Code tool. Removed the duplicated React header/activity rail from the Code surface.
+- Session activation now applies bounds and loads the workbench before returning. It does not report
+  ready until the bundled integration extension completes its authenticated control-channel hello.
+- Added timeout and disposal handling plus focused regression tests for the readiness handshake.
+
+### Phase 2: supported Electron composition
+
+- Replaced the deprecated Code `BrowserView` session surface with `WebContentsView` and the
+  `BrowserWindow.contentView` child-view API. Tabs remains the sole top-level window.
+- Project switching still detaches/attaches persistent views without reloading their editor state.
+
+### Phase 3: native service and lifecycle parity
+
+- Added the stock desktop channels still requested by the workbench: workspace history/identity,
+  menubar, webview shortcut coordination, and native MCP discovery. Existing extension host,
+  filesystem, utility worker, PTY, and external terminal channels remain native Electron IPC.
+- Fixed the embedded-window adapter used by `WindowUtilityProcess`: it is now an event emitter with
+  `webContents`, `isDestroyed()`, and a `closed` lifecycle, allowing extension-host and worker
+  MessagePorts to attach to a `WebContentsView` rather than requiring a second BrowserWindow.
+- Shutdown continues to invoke the workbench's awaited shutdown hook, flush Chromium storage, close
+  each view, and dispose the native backend services.
+
+### Phase 4: upstream-stable customization boundary
+
+- Deleted the large injected Code-OSS selector override and embedded font stylesheet. Styling and
+  layout now follow the compiled upstream workbench instead of depending on private DOM selectors.
+- Product metadata now combines `product.json` with the Code-OSS package version, preventing valid
+  bundled extensions from being rejected as incompatible with `Code undefined`.
+- Both bundled extensions are explicitly supplied as development extensions. No additional
+  `tabs-code-main` source edit was required.
+
+### Phase 5: verification
+
+- `bun run typecheck` passed all 10 Tabs packages.
+- Desktop Vitest passed 15/15 focused tests across CodeHostManager and CodeControlChannel.
+- A real `bun run dev:desktop` launch produced one Tabs shell target and a nested
+  `vscode-file://vscode-app/.../workbench-dev.html` target. The stock Explorer and editor rendered,
+  the native extension host activated both bundled extensions, and its authenticated control
+  channel connected. The Tabs loading overlay cleared only after that connection.
+- Native file access restored existing workspace files and opened several files through the
+  integration channel. The terminal command returned `true` and displayed a live `zsh` terminal,
+  confirming the PTY channel. The verification run did not modify the user's project files.
+- Screenshots from the disposable verification run are under
+  `/tmp/tabs-native-verify.g2tzyD/`. The dev process was stopped after verification.

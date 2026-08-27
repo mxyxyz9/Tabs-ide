@@ -12,13 +12,13 @@ The repository is divided into `apps/` (runnable applications) and `packages/` (
 
 #### Applications (`apps/`)
 
-- **`apps/web`**: The main frontend React application. 
+- **`apps/web`**: The main frontend React application.
   - **Stack**: React, Vite, Tailwind CSS, Zustand (state management).
   - **Role**: Renders the session UX, workspace shell, conversation/event streams, and embedded browser views. It connects to the local server via WebSocket.
   - **Key Components**: `WorkspaceShell` (the main IDE layout), `DesktopBrowserTool` (embedded browser for webviews), terminal emulators, and chat interfaces.
 
 - **`apps/server`**: The backend Node.js WebSocket server.
-  - **Role**: Wraps the Codex app-server (via JSON-RPC over stdio), serves the compiled React web app locally, and manages provider sessions. 
+  - **Role**: Wraps the Codex app-server (via JSON-RPC over stdio), serves the compiled React web app locally, and manages provider sessions.
   - **Tech**: Node.js, WebSockets, `effect` library for robust async and error handling.
 
 - **`apps/desktop`**: The Electron application wrapper.
@@ -29,17 +29,17 @@ The repository is divided into `apps/` (runnable applications) and `packages/` (
 #### Shared Packages (`packages/`)
 
 - **`packages/contracts`**: The single source of truth for types and schemas.
-  - **Role**: Contains `effect/Schema` definitions and TypeScript contracts for provider events, WebSocket protocols, and model/session types. 
-  - **Rule**: *Keep this package schema-only — absolutely no runtime logic.*
+  - **Role**: Contains `effect/Schema` definitions and TypeScript contracts for provider events, WebSocket protocols, and model/session types.
+  - **Rule**: _Keep this package schema-only — absolutely no runtime logic._
 
 - **`packages/shared`**: Shared runtime utilities.
-  - **Role**: Consumed by both server and client applications (e.g., git utilities). 
+  - **Role**: Consumed by both server and client applications (e.g., git utilities).
   - **Rule**: Uses explicit subpath exports (e.g., `@t3tools/shared/git`) — no barrel index (`index.ts`).
 
 - **`packages/client-runtime`**: Shared frontend logic.
   - **Role**: Shared runtime code specifically for clients (e.g., sharing React hooks or API clients across web and mobile/desktop).
 
-- **`packages/effect-acp` & `packages/effect-codex-app-server`**: 
+- **`packages/effect-acp` & `packages/effect-codex-app-server`**:
   - **Role**: Integrations with the Agent Communication Protocol (ACP) and Codex app servers, heavily utilizing the `effect` ecosystem for functional programming patterns.
 
 ## Core Technologies
@@ -62,7 +62,7 @@ The repository is divided into `apps/` (runnable applications) and `packages/` (
 - Start the desktop app: `bun run dev:desktop`
 - The `dev-runner.ts` script orchestrates Turborepo to start the Vite dev server (`apps/web`), the backend WebSocket server (`apps/server`), and the Electron host (`apps/desktop`).
 
-*Note to Agents: When architectural changes are made (e.g., new packages, major state management shifts), you MUST update this file to ensure future agents have accurate context.*
+_Note to Agents: When architectural changes are made (e.g., new packages, major state management shifts), you MUST update this file to ensure future agents have accurate context._
 
 ## Native Code-OSS Embedding
 
@@ -70,13 +70,20 @@ The desktop app has one Code-OSS runtime path: the compiled Electron desktop ren
 `tabs-code-main` over `vscode-file://`. There is no Remote Extension Host web server, served
 workbench URL, loopback editor port, or `vscode-remote` filesystem transport.
 
+The Tabs React workspace remains the top-level Electron window and owns the project tabs, tool
+toolbar (`Code`, `Agents`, `Server`, provider tools, `Git`, and `Browser`), settings, and other
+platform chrome. Code-OSS is not a replacement top-level window: selecting the `Code` tool mounts
+the active project's native Code-OSS `WebContentsView` inside the Code surface, and leaving the tool
+hides that view while preserving its project session.
+
 - `apps/desktop/src/nativeCodeHostMain.ts` is the Tabs-owned boundary to compiled Code-OSS main
   process modules. It constructs the Electron IPC server and registers extension-host starter,
-  local filesystem, utility-process worker, local PTY, and external-terminal channels.
+  local filesystem, utility-process worker, local PTY, external-terminal, workspace, menubar,
+  webview, and native MCP discovery channels.
 - The extension host and PTY host are Electron utility processes. Code-OSS transfers their
   `MessagePort` connections through Electron IPC, matching the native desktop architecture.
-- `apps/desktop/src/codeHostManager.ts` owns per-project sessions: a persistent Electron partition,
-  `BrowserView`, workspace file URI, profile/state roots, configuration IPC channel, bounds/focus,
+- `apps/desktop/src/codeHostManager.ts` owns the Code-tool per-project sessions: a persistent Electron partition,
+  `WebContentsView`, workspace file URI, profile/state roots, configuration IPC channel, bounds/focus,
   recreation, storage flush, and disposal. Each view is registered with the native main backend so
   its extension host can be addressed by webContents ID.
 - `Schemas.file` operations use the renderer's `DiskFileSystemProvider` backed by the main-process

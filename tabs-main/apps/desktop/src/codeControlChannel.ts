@@ -3,12 +3,11 @@
  * `tabs-workbench-integration` extension running inside the Code-OSS extension
  * host.
  *
- * Why this exists: the native React chrome in the Tabs window (activity rail /
- * header / status bar) needs to drive the embedded VS Code (switch sidebar
- * view, toggle terminal, …) and reflect its state. The workbench window exposes
- * no command accessor, so the only place we can
+ * Why this exists: Tabs controls outside the Code tool need to drive the
+ * embedded workbench and reflect its state. The workbench window exposes no
+ * command accessor, so the only place we can
  * call `vscode.commands.executeCommand` is the extension host. Main is the
- * natural broker: it already owns the BrowserView and the desktopBridge IPC.
+ * natural broker: it owns the embedded WebContentsView and desktopBridge IPC.
  *
  * Transport: a raw TCP server (`node:net`) bound to 127.0.0.1 on an ephemeral
  * port, speaking newline-delimited JSON. Deliberately NOT WebSocket: the
@@ -18,9 +17,9 @@
  *
  * Auth: a per-launch random token, sent in-band as the first (`hello`) message;
  * connections that send anything else first are destroyed. The connection info
- * is handed to the extension via env vars and a JSON file (it inherits the main
- * process env through the spawned REH server; the file lets a long-lived
- * extension host re-read the current port after a main-process restart).
+ * is handed to the extension via env vars and a JSON file. The file lets a
+ * long-lived native extension host re-read the current port after a main-process
+ * restart.
  *
  * Routing: one connection per project — the `hello` carries the projectId the
  * desktop set in the server's env, and commands are forwarded only to that
@@ -37,7 +36,6 @@ import {
   parseCodeControlClientMessage,
   type CodeChromeState,
   type CodeControlServerMessage,
-  type CustomActivityBarItem,
 } from "@tabs/shared/codeChrome";
 
 // Hard cap on a connection's unframed buffer: control messages are tiny, so
@@ -57,9 +55,14 @@ export class CodeControlChannel {
   private readonly latestChromeStateByProject = new Map<string, CodeChromeState>();
   private token = "";
   private port = 0;
-  private readonly chromeStateListeners: ((projectId: string, state: CodeChromeState) => void)[] = [];
+  private readonly chromeStateListeners: ((projectId: string, state: CodeChromeState) => void)[] =
+    [];
   private readonly openTabsProjectTabListeners: ((projectId: string) => void)[] = [];
   private extensionHostConnectedListener: ((projectId: string) => void) | null = null;
+  private readonly extensionHostWaiters = new Map<
+    string,
+    Set<{ resolve: () => void; reject: (error: Error) => void; timeout: NodeJS.Timeout }>
+  >();
   private urlFilePath: string | null = null;
 
   /**
@@ -176,6 +179,43 @@ export class CodeControlChannel {
     }
     this.socketsByProject.set(projectId, socket);
     this.projectBySocket.set(socket, projectId);
+    const waiters = this.extensionHostWaiters.get(projectId);
+    if (waiters) {
+      this.extensionHostWaiters.delete(projectId);
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timeout);
+        waiter.resolve();
+      }
+    }
+  }
+
+  isExtensionHostConnected(projectId: string): boolean {
+    const socket = this.socketsByProject.get(projectId);
+    return Boolean(socket && !socket.destroyed && socket.writable);
+  }
+
+  waitForExtensionHost(projectId: string, timeoutMs = 60_000): Promise<void> {
+    if (this.isExtensionHostConnected(projectId)) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        resolve,
+        reject,
+        timeout: setTimeout(() => {
+          const waiters = this.extensionHostWaiters.get(projectId);
+          waiters?.delete(waiter);
+          if (waiters?.size === 0) {
+            this.extensionHostWaiters.delete(projectId);
+          }
+          reject(new Error(`Code-OSS extension host did not become ready within ${timeoutMs}ms.`));
+        }, timeoutMs),
+      };
+      const waiters = this.extensionHostWaiters.get(projectId) ?? new Set();
+      waiters.add(waiter);
+      this.extensionHostWaiters.set(projectId, waiters);
+    });
   }
 
   /** Persist the live URL/token for the extension to re-read on reconnect. */
@@ -277,6 +317,13 @@ export class CodeControlChannel {
     this.socketsByProject.clear();
     this.projectBySocket.clear();
     this.dynamicAllowedCommandsByProject.clear();
+    for (const waiters of this.extensionHostWaiters.values()) {
+      for (const waiter of waiters) {
+        clearTimeout(waiter.timeout);
+        waiter.reject(new Error("Code-OSS control channel was disposed before startup completed."));
+      }
+    }
+    this.extensionHostWaiters.clear();
     this.server?.close();
     this.server = null;
     this.chromeStateListeners.length = 0;

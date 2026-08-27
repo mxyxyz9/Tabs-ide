@@ -21,7 +21,6 @@
     ],
     "configurationDefaults": {
       "workbench.welcome.enabled": false,
-      "workbench.welcomePage.walkthroughs.openOnInstall": false,
       "workbench.editor.restoreEditors": false,
       "workbench.startupEditor": "none",
       "workbench.tips.enabled": false,

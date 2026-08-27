@@ -1,4 +1,6 @@
-import { BrowserWindow, type WebContents } from "electron";
+import { BrowserWindow, webContents as electronWebContents, type WebContents } from "electron";
+import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { pathToFileURL } from "node:url";
 import * as Path from "node:path";
 import * as OS from "node:os";
@@ -43,6 +45,8 @@ type NativeCodeHostModules = {
   PtyHostService: new (...args: unknown[]) => { dispose(): void };
   TerminalLocalPtyChannelName: string;
   ExternalTerminalService: new () => unknown;
+  NativeMcpDiscoveryHelperService: new () => unknown;
+  NativeMcpDiscoveryHelperChannelName: string;
   URI: { file(path: string): unknown };
 };
 
@@ -95,6 +99,8 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     ptyHostService,
     terminalContract,
     externalTerminal,
+    nativeMcpDiscoveryHelper,
+    nativeMcpDiscoveryContract,
     uri,
   ] = await Promise.all([
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.electron.js")),
@@ -106,14 +112,25 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     import(moduleUrl(vscodeRoot, "vs/platform/extensions/electron-main/extensionHostStarter.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/extensions/common/extensionHostStarter.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/files/node/diskFileSystemProvider.js")),
-    import(moduleUrl(vscodeRoot, "vs/platform/files/electron-main/diskFileSystemProviderServer.js")),
+    import(
+      moduleUrl(vscodeRoot, "vs/platform/files/electron-main/diskFileSystemProviderServer.js")
+    ),
     import(moduleUrl(vscodeRoot, "vs/platform/files/common/diskFileSystemProviderClient.js")),
-    import(moduleUrl(vscodeRoot, "vs/platform/utilityProcess/electron-main/utilityProcessWorkerMainService.js")),
-    import(moduleUrl(vscodeRoot, "vs/platform/utilityProcess/common/utilityProcessWorkerService.js")),
+    import(
+      moduleUrl(
+        vscodeRoot,
+        "vs/platform/utilityProcess/electron-main/utilityProcessWorkerMainService.js",
+      )
+    ),
+    import(
+      moduleUrl(vscodeRoot, "vs/platform/utilityProcess/common/utilityProcessWorkerService.js")
+    ),
     import(moduleUrl(vscodeRoot, "vs/platform/terminal/electron-main/electronPtyHostStarter.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/terminal/node/ptyHostService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/terminal/common/terminal.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/externalTerminal/node/externalTerminalService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/mcp/node/nativeMcpDiscoveryHelperService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/mcp/common/nativeMcpDiscoveryHelper.js")),
     import(moduleUrl(vscodeRoot, "vs/base/common/uri.js")),
   ]);
 
@@ -143,6 +160,9 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
         : process.platform === "darwin"
           ? externalTerminal.MacExternalTerminalService
           : externalTerminal.LinuxExternalTerminalService,
+    NativeMcpDiscoveryHelperService: nativeMcpDiscoveryHelper.NativeMcpDiscoveryHelperService,
+    NativeMcpDiscoveryHelperChannelName:
+      nativeMcpDiscoveryContract.NativeMcpDiscoveryHelperChannelName,
     URI: uri.URI,
   };
 }
@@ -158,7 +178,11 @@ export async function createNativeCodeHostMainBackend(
   const onWillLoadWindow = new modules.Emitter();
   const windows = new Map<
     number,
-    { webContents: WebContents; isDestroyed(): boolean }
+    {
+      webContents: WebContents;
+      isDestroyed(): boolean;
+      on(event: string, listener: () => void): unknown;
+    }
   >();
 
   Object.assign(globalThis, {
@@ -224,6 +248,7 @@ export async function createNativeCodeHostMainBackend(
     loggerService,
   );
   const externalTerminalService = new modules.ExternalTerminalService();
+  const nativeMcpDiscoveryHelperService = new modules.NativeMcpDiscoveryHelperService();
 
   ipcServer.registerChannel(
     modules.extensionHostChannelName,
@@ -241,6 +266,79 @@ export async function createNativeCodeHostMainBackend(
   ipcServer.registerChannel(
     "externalTerminal",
     modules.ProxyChannel.fromService(externalTerminalService, disposables),
+  );
+  ipcServer.registerChannel(
+    modules.NativeMcpDiscoveryHelperChannelName,
+    modules.ProxyChannel.fromService(nativeMcpDiscoveryHelperService, disposables),
+  );
+
+  // These channels are always present in the stock Electron main process. The
+  // embedded workbench does not own a second application window or native
+  // menubar, so Tabs provides the subset that is meaningful inside a tool.
+  const recentWorkspaces: unknown[] = [];
+  ipcServer.registerChannel(
+    "workspaces",
+    modules.ProxyChannel.fromService(
+      {
+        onDidChangeRecentlyOpened: modules.EventNone,
+        async enterWorkspace() {
+          return undefined;
+        },
+        async createUntitledWorkspace(folders: unknown[] = []) {
+          const configPath = modules.URI.file(
+            Path.join(OS.tmpdir(), "tabs-code-workspaces", `${randomUUID()}.code-workspace`),
+          );
+          return { id: randomUUID(), configPath, folders };
+        },
+        async deleteUntitledWorkspace() {},
+        async getWorkspaceIdentifier(workspaceUri: { toString(): string }) {
+          return {
+            id: createHash("md5").update(workspaceUri.toString()).digest("hex"),
+            configPath: workspaceUri,
+          };
+        },
+        async addRecentlyOpened(recents: unknown[]) {
+          recentWorkspaces.push(...recents);
+        },
+        async removeRecentlyOpened() {},
+        async clearRecentlyOpened() {
+          recentWorkspaces.length = 0;
+        },
+        async getRecentlyOpened() {
+          return { workspaces: recentWorkspaces, files: [] };
+        },
+        async getDirtyWorkspaces() {
+          return [];
+        },
+      },
+      disposables,
+    ),
+  );
+  ipcServer.registerChannel(
+    "menubar",
+    modules.ProxyChannel.fromService({ async updateMenubar() {} }, disposables),
+  );
+  ipcServer.registerChannel(
+    "webview",
+    modules.ProxyChannel.fromService(
+      {
+        onFoundInFrame: modules.EventNone,
+        async setIgnoreMenuShortcuts(
+          id: { webContentsId?: number; windowId?: number },
+          enabled: boolean,
+        ) {
+          const contents = id.webContentsId
+            ? electronWebContents.fromId(id.webContentsId)
+            : id.windowId
+              ? windows.get(id.windowId)?.webContents
+              : undefined;
+          contents?.setIgnoreMenuShortcuts(enabled);
+        },
+        async findInFrame() {},
+        async stopFindInFrame() {},
+      },
+      disposables,
+    ),
   );
 
   const storage = new Map<string, string>();
@@ -318,11 +416,15 @@ export async function createNativeCodeHostMainBackend(
       window.once("closed", () => windows.delete(window.webContents.id));
     },
     registerWebContents(webContents) {
-      windows.set(webContents.id, {
+      const embeddedWindow = Object.assign(new EventEmitter(), {
         webContents,
         isDestroyed: () => webContents.isDestroyed(),
       });
-      webContents.once("destroyed", () => windows.delete(webContents.id));
+      windows.set(webContents.id, embeddedWindow);
+      webContents.once("destroyed", () => {
+        embeddedWindow.emit("closed");
+        windows.delete(webContents.id);
+      });
     },
     unregisterWindow(windowId) {
       windows.delete(windowId);

@@ -225,8 +225,6 @@ import { MercuryChromeLoader } from "./MercuryChromeLoader";
 const ChatView = lazy(() => import("./ChatView"));
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { getCodeHostUnavailableMessage } from "./codeHost.logic";
-import { CodeActivityRail } from "./code/CodeActivityRail";
-import { CodeHeaderBar } from "./code/CodeHeaderBar";
 import {
   CODE_ACTIVITY_ITEMS,
   CODE_CHROME_COMMANDS,
@@ -2162,11 +2160,25 @@ function DesktopCodeTool(props: { project: Project }) {
         projectId: props.project.id,
         workspaceRoot: props.project.cwd,
       })
-      .then(() =>
-        bridge.activateCodeSession({
+      .then(async () => {
+        const hostNode = hostRef.current;
+        if (!hostNode) {
+          throw new Error("The Code workbench host is unavailable.");
+        }
+        const cssZoom = parseFloat(document.documentElement.style.zoom) || 1;
+        const rect = hostNode.getBoundingClientRect();
+        await bridge.setCodeBounds({
           projectId: props.project.id,
-        }),
-      )
+          x: rect.x * cssZoom,
+          y: rect.y * cssZoom,
+          width: rect.width * cssZoom,
+          height: rect.height * cssZoom,
+          visible: rect.width > 0 && rect.height > 0,
+        });
+        await bridge.activateCodeSession({
+          projectId: props.project.id,
+        });
+      })
       .then(() => {
         if (!cancelled) {
           setHostReady(true);
@@ -2369,39 +2381,20 @@ function DesktopCodeTool(props: { project: Project }) {
     );
   }
 
-  const activeChromeTabPath = chromeState.openTabs?.find((t) => t.active)?.filePath ?? null;
-  const headerActiveFilePath = activeChromeTabPath || codeState.lastFocusedPath;
-
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
-      <CodeHeaderBar
-        workspaceName={props.project.name}
-        activeFilePath={headerActiveFilePath}
-        branch={chromeState.branch}
-        panelMaximized={chromeState.panelMaximized}
-        sideChatOpen={aiProvider === "copilot" ? false : sideChatOpen}
-        showSideChatToggle={aiProvider === "tabs"}
-        onToggleSideChat={() => {
-          if (aiProvider === "copilot") {
-            runCodeCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar);
-          } else {
-            setSideChatOpen(!sideChatOpen);
-          }
-        }}
-        onRunCommand={runCodeCommand}
-      />
       <div className="flex min-h-0 min-w-0 flex-1">
-        <CodeActivityRail chromeState={chromeState} onRunCommand={runCodeCommand} />
-        {/* The BrowserView is positioned to exactly cover this host node (see the
-            ResizeObserver effect above), so leaving it as a flex child inset by
-            the rail/header/status bar automatically insets the native view. When
-            the AI side chat opens, this host shrinks and the BrowserView follows
-            (the ResizeObserver republishes the smaller bounds), freeing the gutter
-            for the React chat panel beside it. */}
+        {/* Code-OSS owns its complete stock workbench inside this host region.
+            Tabs only positions the native view and keeps its platform toolbar
+            outside the Code tool. */}
         <div className="relative min-h-0 min-w-0 flex-1">
           <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0 bg-background" />
           {!hostReady ? (
-            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/64 text-sm text-muted-foreground">
+            <div
+              role="status"
+              aria-live="polite"
+              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-background/64 text-sm text-muted-foreground"
+            >
               <div className="rounded-2xl border border-border/70 bg-background/86 px-5 py-4 shadow-lg backdrop-blur-sm">
                 {hostError ?? "Attaching stock Code-OSS for this project…"}
               </div>

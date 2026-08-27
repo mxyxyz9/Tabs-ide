@@ -3,7 +3,6 @@ import * as Crypto from "node:crypto";
 import * as FS from "node:fs";
 import * as OS from "node:os";
 import * as Path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   app,
@@ -56,15 +55,7 @@ import {
   reduceDesktopUpdateStateOnUpdateAvailable,
 } from "./updateMachine";
 import { isArm64HostRunningIntelBuild, resolveDesktopRuntimeInfo } from "./runtimeArch";
-import {
-  CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH,
-  CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH,
-  CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH,
-  CODE_OSS_NLS_MESSAGES_RELATIVE_PATH,
-  CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH,
-  CodeHostManager,
-  resolveCodeHostConfig,
-} from "./codeHostManager";
+import { CodeHostManager, resolveCodeHostConfig } from "./codeHostManager";
 import { BrowserHostManager } from "./browserHostManager";
 import {
   ensureRuntimeInstalled,
@@ -135,7 +126,8 @@ const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
 const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
 const BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL = "desktop:browser-host:clear-profile-data";
-const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL = "desktop:browser-host:open-profile-login-window";
+const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
+  "desktop:browser-host:open-profile-login-window";
 const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profile-domains";
 const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
 
@@ -193,7 +185,6 @@ const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const DESKTOP_UPDATE_CHANNEL = "latest";
 const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
-const CODE_OSS_READY_TIMEOUT_MS = 60_000;
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 
@@ -210,7 +201,6 @@ let isQuitting = false;
 let isQuittingConfirmed = false;
 let isQuitConfirmationOpen = false;
 let desktopProtocolRegistered = false;
-let codeOssFileProtocolRegistered = false;
 let nativeCodeHostMainBackend: NativeCodeHostMainBackend | null = null;
 let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
@@ -229,16 +219,7 @@ const codeHostConfig = resolveCodeHostConfig({
 const codeControlChannel = new CodeControlChannel();
 const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig, codeControlChannel);
 const browserHostManager = new BrowserHostManager(() => mainWindow);
-const CODE_OSS_FILE_PROTOCOL = "vscode-file";
-const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
-const TABS_CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH = Path.join(
-  "apps",
-  "desktop",
-  "resources",
-  "code-oss-extensions",
-  "tabs-workbench-integration",
-);
 
 let destructiveMenuIconCache: Electron.NativeImage | null | undefined;
 const desktopRuntimeInfo = resolveDesktopRuntimeInfo({
@@ -1061,360 +1042,8 @@ function applyDesktopIconTheme(theme: DesktopIconTheme): void {
   }
 }
 
-function normalizeFilePath(input: string): string {
-  return input.replace(/\\/g, "/");
-}
-
-function getRequiredCodeOssPath(root: string, relativePath: string): string {
-  return Path.join(root, relativePath);
-}
-
-function buildVsCodeFileUrl(pathname: string): string {
-  const fileUrl = pathToFileURL(pathname);
-  return new URL(
-    `${fileUrl.pathname}${fileUrl.search}${fileUrl.hash}`,
-    `${CODE_OSS_FILE_PROTOCOL}://${CODE_OSS_FILE_PROTOCOL_AUTHORITY}/`,
-  ).toString();
-}
-
-function resolveCodeOssEmbedExtensionPath(): string {
-  return Path.resolve(__dirname, CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH);
-}
-
-function resolveTabsWorkbenchIntegrationExtensionPath(): string {
-  return Path.resolve(ROOT_DIR, TABS_CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH);
-}
-
 function isDirectory(pathname: string): boolean {
   return FS.existsSync(pathname) && FS.statSync(pathname).isDirectory();
-}
-
-function isFile(pathname: string): boolean {
-  return FS.existsSync(pathname) && FS.statSync(pathname).isFile();
-}
-
-const codeOssProductConfigurationCache = new Map<string, Record<string, unknown>>();
-const codeOssNlsMessagesCache = new Map<string, string[]>();
-const codeOssCssModulesCache = new Map<string, string[]>();
-
-function getCodeOssProductConfiguration(vscodeRoot: string): Record<string, unknown> {
-  const cached = codeOssProductConfigurationCache.get(vscodeRoot);
-  if (cached) return cached;
-  const product = JSON.parse(
-    FS.readFileSync(
-      getRequiredCodeOssPath(vscodeRoot, CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH),
-      "utf8",
-    ),
-  ) as Record<string, unknown>;
-  const packageConfiguration = JSON.parse(
-    FS.readFileSync(Path.join(vscodeRoot, "package.json"), "utf8"),
-  ) as Record<string, unknown>;
-  const parsed = { ...packageConfiguration, ...product };
-  codeOssProductConfigurationCache.set(vscodeRoot, parsed);
-  return parsed;
-}
-
-function getCodeOssNlsMessages(vscodeRoot: string): string[] {
-  const cached = codeOssNlsMessagesCache.get(vscodeRoot);
-  if (cached) return cached;
-  const parsed = JSON.parse(
-    FS.readFileSync(
-      getRequiredCodeOssPath(vscodeRoot, CODE_OSS_NLS_MESSAGES_RELATIVE_PATH),
-      "utf8",
-    ),
-  ) as string[];
-  codeOssNlsMessagesCache.set(vscodeRoot, parsed);
-  return parsed;
-}
-
-function getCodeOssCssModules(vscodeRoot: string): string[] {
-  const cached = codeOssCssModulesCache.get(vscodeRoot);
-  if (cached) return cached;
-
-  const outRoot = Path.join(vscodeRoot, "out");
-  const cssModules: string[] = [];
-  const queue = [outRoot];
-
-  while (queue.length > 0) {
-    const current = queue.pop();
-    if (!current || !isDirectory(current)) {
-      continue;
-    }
-
-    for (const entry of FS.readdirSync(current, { withFileTypes: true })) {
-      const absolutePath = Path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        queue.push(absolutePath);
-        continue;
-      }
-
-      if (!entry.isFile() || !entry.name.endsWith(".css")) {
-        continue;
-      }
-
-      cssModules.push(normalizeFilePath(Path.relative(outRoot, absolutePath)));
-    }
-  }
-
-  cssModules.sort();
-  codeOssCssModulesCache.set(vscodeRoot, cssModules);
-  return cssModules;
-}
-
-function hashCodeOssIdentity(value: string): string {
-  return Crypto.createHash("sha256").update(value).digest("hex");
-}
-
-function toFileUriComponent(pathname: string) {
-  const fileUrl = pathToFileURL(pathname);
-  return {
-    scheme: "file",
-    authority: "",
-    path: fileUrl.pathname,
-    query: "",
-    fragment: "",
-  };
-}
-
-function ensureCodeOssUserDataProfile(profileRoot: string) {
-  const location = Path.join(profileRoot, "default");
-  const cacheHome = Path.join(profileRoot, "cache");
-  for (const pathname of [location, cacheHome]) {
-    FS.mkdirSync(pathname, { recursive: true });
-  }
-  for (const pathname of [
-    Path.join(location, "snippets"),
-    Path.join(location, "prompts"),
-    Path.join(location, "globalStorage"),
-  ]) {
-    FS.mkdirSync(pathname, { recursive: true });
-  }
-
-  return {
-    id: "default",
-    isDefault: true,
-    name: "Default",
-    location: toFileUriComponent(location),
-    globalStorageHome: toFileUriComponent(Path.join(location, "globalStorage")),
-    settingsResource: toFileUriComponent(Path.join(location, "settings.json")),
-    keybindingsResource: toFileUriComponent(Path.join(location, "keybindings.json")),
-    tasksResource: toFileUriComponent(Path.join(location, "tasks.json")),
-    snippetsHome: toFileUriComponent(Path.join(location, "snippets")),
-    promptsHome: toFileUriComponent(Path.join(location, "prompts")),
-    extensionsResource: toFileUriComponent(Path.join(location, "extensions.json")),
-    mcpResource: toFileUriComponent(Path.join(location, "mcp.json")),
-    cacheHome: toFileUriComponent(cacheHome),
-  };
-}
-
-function resolveInitialCodeOssWorkspaceRoot(): string | null {
-  const explicitWorkspaceRoot = process.env.TABS_PROJECT_ROOT?.trim() || null;
-  if (explicitWorkspaceRoot && isDirectory(explicitWorkspaceRoot)) {
-    return Path.resolve(explicitWorkspaceRoot);
-  }
-  if (!app.isPackaged && isDirectory(ROOT_DIR)) {
-    return ROOT_DIR;
-  }
-  return null;
-}
-
-function resolveEmbeddedTabsWebAppUrl(): string {
-  if (isDevelopment && process.env.VITE_DEV_SERVER_URL) {
-    return process.env.VITE_DEV_SERVER_URL;
-  }
-  return backendHttpUrl;
-}
-
-async function inspectCodeOssWorkbench(window: BrowserWindow): Promise<{
-  readyState: string;
-  title: string;
-  bodyChildCount: number;
-  bodyText: string;
-  hasWorkbench: boolean;
-}> {
-  return window.webContents.executeJavaScript(
-    `({
-      readyState: document.readyState,
-      title: document.title,
-      bodyChildCount: document.body?.childElementCount ?? -1,
-      bodyText: document.body?.innerText?.slice(0, 400) ?? "",
-      hasWorkbench: Boolean(document.querySelector(".monaco-workbench, .part.workbench, #workbench-container, [role='application']"))
-    })`,
-    true,
-  ) as Promise<{
-    readyState: string;
-    title: string;
-    bodyChildCount: number;
-    bodyText: string;
-    hasWorkbench: boolean;
-  }>;
-}
-
-function buildPrimaryCodeOssWindowConfiguration(
-  window: BrowserWindow,
-  runtime: Extract<NonNullable<typeof codeHostConfig.runtime>, { kind: "desktop-renderer" }>,
-  workspaceRoot: string | null,
-) {
-  const sessionStateRoot = CODE_OSS_PRIMARY_STATE_DIR;
-  const profileRoot = Path.join(sessionStateRoot, "profile");
-  const profile = ensureCodeOssUserDataProfile(profileRoot);
-  const emptyWorkspacePath = Path.join(sessionStateRoot, "workspace.code-workspace");
-  const embedExtensionPath = resolveCodeOssEmbedExtensionPath();
-  const integrationExtensionPath = resolveTabsWorkbenchIntegrationExtensionPath();
-  const builtInExtensionsDir = Path.join(runtime.vscodeRoot, ".build", "extensions");
-  const workspaceUriPath = workspaceRoot ?? emptyWorkspacePath;
-
-  FS.mkdirSync(Path.join(sessionStateRoot, "logs"), { recursive: true });
-  FS.mkdirSync(Path.join(sessionStateRoot, "cache"), { recursive: true });
-  FS.mkdirSync(Path.join(sessionStateRoot, "extensions"), { recursive: true });
-  if (!isFile(emptyWorkspacePath)) {
-    FS.writeFileSync(emptyWorkspacePath, JSON.stringify({ folders: [] }, null, 2), "utf8");
-  }
-
-  const configuration: Record<string, unknown> = {
-    _: [],
-    "disable-telemetry": true,
-    "disable-updates": true,
-    "skip-release-notes": true,
-    "skip-welcome": true,
-    "extensions-dir": Path.join(sessionStateRoot, "extensions"),
-    windowId: window.webContents.id,
-    appRoot: runtime.vscodeRoot,
-    userEnv: {
-      ...process.env,
-      VSCODE_CWD: workspaceRoot ?? ROOT_DIR,
-      TABS_DESKTOP_WS_URL: backendWsUrl,
-      TABS_DESKTOP_HTTP_URL: backendHttpUrl,
-      TABS_WEB_APP_URL: resolveEmbeddedTabsWebAppUrl(),
-      TABS_WORKSPACE_ROOT: workspaceRoot ?? "",
-      // Keep the integration extension's in-editor Tabs panel enabled in the
-      // primary Code-OSS shell.
-      TABS_CODE_OSS_PRIMARY_SHELL: "1",
-    },
-    product: getCodeOssProductConfiguration(runtime.vscodeRoot),
-    zoomLevel: 0,
-    codeCachePath: Path.join(sessionStateRoot, "cache"),
-    nls: {
-      messages: getCodeOssNlsMessages(runtime.vscodeRoot),
-      language: "en",
-    },
-    cssModules: getCodeOssCssModules(runtime.vscodeRoot),
-    mainPid: process.pid,
-    machineId: hashCodeOssIdentity(`machine:${runtime.vscodeRoot}`),
-    sqmId: hashCodeOssIdentity(`sqm:${runtime.vscodeRoot}`),
-    devDeviceId: hashCodeOssIdentity(`dev:${runtime.vscodeRoot}`),
-    isPortable: false,
-    execPath: process.execPath,
-    profiles: {
-      home: toFileUriComponent(Path.join(sessionStateRoot, "profiles")),
-      all: [profile],
-      profile,
-    },
-    homeDir: OS.homedir(),
-    tmpDir: OS.tmpdir(),
-    userDataDir: sessionStateRoot,
-    workspace: {
-      id: hashCodeOssIdentity(`workspace:${workspaceUriPath}`),
-      uri: toFileUriComponent(workspaceUriPath),
-    },
-    logLevel: 2,
-    loggers: [],
-    logsPath: Path.join(sessionStateRoot, "logs"),
-    isInitialStartup: false,
-    perfMarks: [],
-    os: {
-      release: OS.release(),
-      hostname: OS.hostname(),
-      arch: OS.arch(),
-    },
-    autoDetectHighContrast: true,
-    autoDetectColorScheme: true,
-    accessibilitySupport: false,
-    colorScheme: {
-      dark: nativeTheme.shouldUseDarkColors,
-      highContrast: nativeTheme.shouldUseHighContrastColors,
-    },
-    policiesData: {},
-    extensionDevelopmentPath: [embedExtensionPath, integrationExtensionPath].filter((pathname) =>
-      isDirectory(pathname),
-    ),
-  };
-
-  if (workspaceRoot) {
-    configuration["folder-uri"] = [pathToFileURL(workspaceRoot).toString()];
-  }
-
-  if (isDirectory(builtInExtensionsDir)) {
-    configuration["builtin-extensions-dir"] = builtInExtensionsDir;
-  }
-
-  return configuration;
-}
-
-function ensurePrimaryCodeOssFileProtocol(
-  window: BrowserWindow,
-  runtime: Extract<NonNullable<typeof codeHostConfig.runtime>, { kind: "desktop-renderer" }>,
-  workspaceRoot: string | null,
-): void {
-  if (codeOssFileProtocolRegistered) {
-    return;
-  }
-
-  const allowedRoots = [
-    runtime.vscodeRoot,
-    Path.join(runtime.vscodeRoot, "extensions"),
-    Path.join(runtime.vscodeRoot, ".build", "extensions"),
-    CODE_OSS_PRIMARY_STATE_DIR,
-    resolveCodeOssEmbedExtensionPath(),
-    resolveTabsWorkbenchIntegrationExtensionPath(),
-    workspaceRoot,
-  ]
-    .filter((pathname): pathname is string => typeof pathname === "string" && pathname.length > 0)
-    .map((pathname) => Path.resolve(pathname))
-    .filter((value, index, array) => array.indexOf(value) === index);
-
-  window.webContents.session.protocol.registerFileProtocol(
-    CODE_OSS_FILE_PROTOCOL,
-    (request, callback) => {
-      try {
-        const parsed = new URL(request.url);
-        if (parsed.protocol !== `${CODE_OSS_FILE_PROTOCOL}:`) {
-          callback({ error: -10 });
-          return;
-        }
-        const fileUrl = new URL(`file://${parsed.pathname}${parsed.search}${parsed.hash}`);
-        const resolvedPath = Path.resolve(fileURLToPath(fileUrl));
-        const allowed = allowedRoots.some((root) => {
-          const relativePath = Path.relative(root, resolvedPath);
-          return (
-            relativePath === "" ||
-            (!relativePath.startsWith("..") && !Path.isAbsolute(relativePath))
-          );
-        });
-        if (!allowed) {
-          callback({ error: -3 });
-          return;
-        }
-
-        const headers: Record<string, string> = {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        };
-        if (
-          resolvedPath.startsWith(Path.join(runtime.vscodeRoot, ".build", "extensions")) ||
-          resolvedPath.startsWith(Path.join(runtime.vscodeRoot, "extensions"))
-        ) {
-          headers["Access-Control-Allow-Origin"] = "*";
-        }
-        callback({ path: resolvedPath, headers });
-      } catch {
-        callback({ error: -3 });
-      }
-    },
-  );
-
-  codeOssFileProtocolRegistered = true;
 }
 
 /**
@@ -2545,24 +2174,21 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeHandler(BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL);
-  ipcMain.handle(
-    BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL,
-    async (_event, input: unknown) => {
-      if (
-        typeof input !== "object" ||
-        input === null ||
-        typeof (input as { profileId?: unknown }).profileId !== "string"
-      ) {
-        return;
-      }
-      const profileId = (input as { profileId: string }).profileId;
-      const url =
-        typeof (input as { url?: unknown }).url === "string"
-          ? (input as { url: string }).url
-          : undefined;
-      browserHostManager.openProfileLoginWindow(profileId, url);
-    },
-  );
+  ipcMain.handle(BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { profileId?: unknown }).profileId !== "string"
+    ) {
+      return;
+    }
+    const profileId = (input as { profileId: string }).profileId;
+    const url =
+      typeof (input as { url?: unknown }).url === "string"
+        ? (input as { url: string }).url
+        : undefined;
+    browserHostManager.openProfileLoginWindow(profileId, url);
+  });
 
   ipcMain.removeHandler(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL);
   ipcMain.handle(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL, async (_event, input: unknown) => {
@@ -2619,40 +2245,53 @@ function getIconOption(): { icon: string } | Record<string, never> {
   return iconPath ? { icon: iconPath } : {};
 }
 
-function createCodeOssWindow(
-  runtime: Extract<NonNullable<typeof codeHostConfig.runtime>, { kind: "desktop-renderer" }>,
-): BrowserWindow {
-  const workspaceRoot = resolveInitialCodeOssWorkspaceRoot();
-  const configChannel = `vscode:tabs-main-window-config:${Crypto.randomUUID()}`;
+function createTabsWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1320,
-    height: 860,
-    minWidth: 960,
-    minHeight: 680,
+    width: 1100,
+    height: 780,
+    minWidth: 840,
+    minHeight: 620,
     show: false,
     autoHideMenuBar: true,
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
     ...resolveTitleBarOptions(),
-    backgroundColor: "#1e1e1e",
     webPreferences: {
-      preload: getRequiredCodeOssPath(runtime.vscodeRoot, CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH),
-      additionalArguments: [`--vscode-window-config=${configChannel}`],
+      preload: Path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       webviewTag: true,
-      backgroundThrottling: false,
     },
   });
 
-  nativeCodeHostMainBackend?.registerWindow(window);
+  window.webContents.on("context-menu", (event, params) => {
+    event.preventDefault();
 
-  ipcMain.handle(configChannel, async () =>
-    buildPrimaryCodeOssWindowConfiguration(window, runtime, workspaceRoot),
-  );
+    const menuTemplate: MenuItemConstructorOptions[] = [];
 
-  ensurePrimaryCodeOssFileProtocol(window, runtime, workspaceRoot);
+    if (params.misspelledWord) {
+      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+        menuTemplate.push({
+          label: suggestion,
+          click: () => window.webContents.replaceMisspelling(suggestion),
+        });
+      }
+      if (params.dictionarySuggestions.length === 0) {
+        menuTemplate.push({ label: "No suggestions", enabled: false });
+      }
+      menuTemplate.push({ type: "separator" });
+    }
+
+    menuTemplate.push(
+      { role: "cut", enabled: params.editFlags.canCut },
+      { role: "copy", enabled: params.editFlags.canCopy },
+      { role: "paste", enabled: params.editFlags.canPaste },
+      { role: "selectAll", enabled: params.editFlags.canSelectAll },
+    );
+
+    Menu.buildFromTemplate(menuTemplate).popup({ window });
+  });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     const externalUrl = getSafeExternalUrl(url);
@@ -2662,53 +2301,17 @@ function createCodeOssWindow(
     return { action: "deny" };
   });
 
-  let codeOssReady = false;
-  let startupFailureLogged = false;
-  const workbenchEntry = buildVsCodeFileUrl(
-    getRequiredCodeOssPath(runtime.vscodeRoot, CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH),
-  );
-
-  const reportStartupFailure = (reason: string): void => {
-    if (startupFailureLogged || isQuitting) {
-      return;
-    }
-    startupFailureLogged = true;
-    writeDesktopLogHeader(`code-oss primary shell startup failure reason=${sanitizeLogValue(reason)}`);
-    window.show();
-  };
-
-  window.webContents.on(
-    "did-fail-load",
-    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      if (!isMainFrame) {
-        writeDesktopLogHeader(
-          `code-oss did-fail-load (ignored iframe) code=${errorCode} url=${validatedURL}`,
-        );
-        return;
-      }
-      writeDesktopLogHeader(
-        `code-oss did-fail-load code=${errorCode} url=${validatedURL} description=${sanitizeLogValue(errorDescription)}`,
-      );
-      reportStartupFailure(`did-fail-load ${errorCode} ${errorDescription}`);
-    },
-  );
-  window.webContents.on("render-process-gone", (_event, details) => {
-    writeDesktopLogHeader(
-      `code-oss render-process-gone reason=${details.reason} exitCode=${details.exitCode}`,
-    );
-    reportStartupFailure(`render-process-gone ${details.reason}`);
+  window.on("page-title-updated", (event) => {
+    event.preventDefault();
+    window.setTitle(APP_DISPLAY_NAME);
   });
-  window.webContents.on("preload-error", (_event, preloadPathname, error) => {
-    writeDesktopLogHeader(
-      `code-oss preload-error preload=${preloadPathname} message=${sanitizeLogValue(formatErrorMessage(error))}`,
-    );
-    reportStartupFailure(`preload-error ${formatErrorMessage(error)}`);
+  window.webContents.on("did-finish-load", () => {
+    window.setTitle(APP_DISPLAY_NAME);
+    emitUpdateState();
   });
-  window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-    writeDesktopLogHeader(
-      `code-oss console level=${level} source=${sourceId}:${line} message=${sanitizeLogValue(message)}`,
-    );
+  window.webContents.on("console-message", (_event, _level, message, line, sourceId) => {
     if (message.includes("[SLIDER-DEBUG-3]")) {
+      console.log(`[RENDERER] [${sourceId}:${line}] ${message}`);
       try {
         const logLine = `[${new Date().toISOString()}] ${message}\n`;
         FS.appendFileSync(SLIDER_DEBUG_LOG_PATH, logLine, "utf8");
@@ -2717,72 +2320,36 @@ function createCodeOssWindow(
       }
     }
   });
-  window.webContents.on("did-finish-load", () => {
-    writeDesktopLogHeader(`code-oss did-finish-load entry=${workbenchEntry}`);
-    window.setTitle(APP_DISPLAY_NAME);
-    void inspectCodeOssWorkbench(window)
-      .then((snapshot) => {
-        codeOssReady = snapshot.hasWorkbench;
-        writeDesktopLogHeader(
-          `code-oss dom ready=${String(codeOssReady)} readyState=${snapshot.readyState} children=${snapshot.bodyChildCount} title=${sanitizeLogValue(snapshot.title)} text=${sanitizeLogValue(snapshot.bodyText)}`,
-        );
-      })
-      .catch((error) => {
-        writeDesktopLogHeader(
-          `code-oss dom-inspect-error message=${sanitizeLogValue(formatErrorMessage(error))}`,
-        );
-      });
-  });
-
-  const readyTimeout = setTimeout(() => {
-    if (startupFailureLogged || codeOssReady || window.isDestroyed()) {
-      return;
-    }
-
-    void inspectCodeOssWorkbench(window)
-      .then((snapshot) => {
-        const hasVisibleWorkbench = snapshot.hasWorkbench;
-        writeDesktopLogHeader(
-          `code-oss ready-timeout ready=${String(hasVisibleWorkbench)} readyState=${snapshot.readyState} children=${snapshot.bodyChildCount} title=${sanitizeLogValue(snapshot.title)} text=${sanitizeLogValue(snapshot.bodyText)}`,
-        );
-        if (!hasVisibleWorkbench) {
-          reportStartupFailure("workbench readiness timeout");
-        }
-      })
-      .catch((error) => {
-        writeDesktopLogHeader(
-          `code-oss ready-timeout inspect-failed message=${sanitizeLogValue(formatErrorMessage(error))}`,
-        );
-        reportStartupFailure(`workbench inspect failed ${formatErrorMessage(error)}`);
-      });
-  }, CODE_OSS_READY_TIMEOUT_MS);
-
   window.once("ready-to-show", () => {
     window.show();
   });
 
+  if (isDevelopment) {
+    void window.loadURL(process.env.VITE_DEV_SERVER_URL as string);
+  } else {
+    void window.loadURL(`${DESKTOP_SCHEME}://app/index.html`);
+  }
+
   window.on("closed", () => {
-    clearTimeout(readyTimeout);
-    ipcMain.removeHandler(configChannel);
     if (mainWindow === window) {
       mainWindow = null;
     }
   });
 
-  writeDesktopLogHeader(
-    `code-oss load start entry=${workbenchEntry} workspaceRoot=${workspaceRoot ?? "<empty>"}`,
+  window.webContents.on(
+    "did-fail-load",
+    (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
+      if (isMainFrame && !window.isVisible()) {
+        window.show();
+      }
+    },
   );
-  void window.loadURL(workbenchEntry);
 
   return window;
 }
 
 function createWindow(): BrowserWindow {
-  const runtime = codeHostConfig.runtime;
-  if (!runtime) {
-    throw new Error(codeHostConfig.state.reason ?? "Desktop Code-OSS runtime is unavailable.");
-  }
-  const window = createCodeOssWindow(runtime);
+  const window = createTabsWindow();
   window.on("close", (event) => {
     if (
       isQuittingConfirmed ||

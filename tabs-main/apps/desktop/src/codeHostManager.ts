@@ -5,10 +5,10 @@ import * as Path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
-  BrowserView,
   ipcMain,
   nativeTheme,
   shell,
+  WebContentsView,
   type BrowserWindow,
   type ProtocolRequest,
   type Rectangle,
@@ -23,15 +23,7 @@ import type {
   DesktopCodeHostState,
 } from "@tabs/contracts";
 
-import { CODE_OSS_THEME_CSS } from "./codeOssThemeCss";
-import { GEIST_MONO_FONT_CSS } from "./geistMonoFontCss";
 import type { CodeControlChannel } from "./codeControlChannel";
-import {
-  BUILTIN_THEME_CONFIGS,
-  evaluateThemeTokens,
-  getOptimalPrimaryForeground,
-  type CustomThemeConfig,
-} from "@tabs/shared/themeDerivation";
 
 export const CODE_HOST_CHROME_STATE_CHANNEL = "desktop:code-host:chrome-state";
 
@@ -93,7 +85,7 @@ type CodeHostRuntime = { kind: "desktop-renderer"; vscodeRoot: string; stateDir:
 type CodeSession = {
   projectId: string;
   workspaceRoot: string;
-  view: BrowserView | null;
+  view: WebContentsView | null;
   partition: string | null;
   bounds: Rectangle | null;
   lastFocusedPath: string | null;
@@ -104,7 +96,6 @@ type CodeSession = {
   workspaceUri: string | null;
   desktopConfigChannel: string | null;
   desktopProtocolRegistered: boolean;
-  desktopRequestDiagnosticsRegistered: boolean;
   runtimeStartPromise: Promise<CodeSessionRuntime> | null;
 };
 
@@ -253,14 +244,12 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // opened in the first place (startupEditor "none" + welcome/walkthrough
   // disabled above), so there is nothing for the restore to bring back.
   "workbench.editor.restoreEditors": true,
-  // Hide VS Code's own chrome — Tabs renders its own native React chrome
-  // (activity rail, header, status bar) in the gutters around the embedded
-  // view (see DesktopCodeTool in apps/web). The remaining sidebar / editor /
-  // panel stay inside the embedded view and are driven by the integration
-  // extension's command bridge.
-  "workbench.activityBar.location": "hidden",
-  "workbench.activityBar.visible": false,
-  "workbench.statusBar.visible": false,
+  // Code owns its complete stock workbench inside the Tabs Code tool. Keeping
+  // these parts native avoids duplicating VS Code's layout and accessibility
+  // behavior in the surrounding React shell.
+  "workbench.activityBar.location": "default",
+  "workbench.activityBar.visible": true,
+  "workbench.statusBar.visible": true,
   "window.menuBarVisibility": "hidden",
   "window.titleBarStyle": "native",
   "window.customTitleBarVisibility": "never",
@@ -332,6 +321,10 @@ function getCodeOssEmbedExtensionPath(baseDir: string): string {
   return Path.resolve(baseDir, CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH);
 }
 
+function getCodeOssIntegrationExtensionPath(baseDir: string): string {
+  return Path.resolve(baseDir, CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH);
+}
+
 /**
  * Merge the embed's settings into a product.json's `configurationDefaults`.
  * Pure for testability. Returns the next product object and whether anything
@@ -373,10 +366,9 @@ function isFile(pathname: string, fs: FsLike): boolean {
 }
 
 function hasCodeOssMarker(candidate: string, fs: FsLike): boolean {
-  return [
-    CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH,
-    CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH,
-  ].some((relativePath) => isFile(getRequiredCodeOssPath(candidate, relativePath), fs));
+  return [CODE_OSS_DESKTOP_PRELOAD_RELATIVE_PATH, CODE_OSS_DESKTOP_WORKBENCH_RELATIVE_PATH].some(
+    (relativePath) => isFile(getRequiredCodeOssPath(candidate, relativePath), fs),
+  );
 }
 
 function resolveVsCodeRootCandidate(candidate: string, fs: FsLike): string | null {
@@ -573,7 +565,6 @@ export function resolveCodeHostConfigWithFs(
         Path.join(input.rootDir, "..", "vscode"),
       ];
 
-
   for (const fallbackRoot of fallbackRoots) {
     if (!isDirectory(fallbackRoot, fs)) {
       continue;
@@ -684,98 +675,11 @@ export class CodeHostManager {
     }
   }
 
-  private applyThemeToWebContents(webContents: Electron.WebContents): void {
-    if (!webContents || webContents.isDestroyed?.()) return;
-    const themeId = this.currentThemeId;
-    const customConfig = this.currentCustomConfig;
-    const config: CustomThemeConfig | undefined =
-      themeId === "custom" && customConfig?.colors
-        ? customConfig
-        : BUILTIN_THEME_CONFIGS[themeId] || BUILTIN_THEME_CONFIGS["tabs-dark"];
-
-    let customPropsJson = "null";
-    if (config) {
-      const evaluated = evaluateThemeTokens(config);
-      const primary = evaluated["app.primaryBackground"] || config.colors.primary;
-      const primaryFg = evaluated["app.primaryForeground"] || getOptimalPrimaryForeground(primary);
-      const buttonBg = evaluated["button.background"] || primary;
-      const buttonFg = evaluated["button.foreground"] || primaryFg;
-      const bg = evaluated["editor.background"] || config.colors.background;
-      const cardBg = evaluated["sideBar.background"] || config.colors.card;
-      const popoverBg = evaluated["editorWidget.background"] || config.colors.card;
-      const fg = evaluated["foreground"] || config.colors.foreground;
-      const mutedFg = evaluated["app.mutedForeground"] || `color-mix(in srgb, ${fg} 65%, transparent)`;
-
-      customPropsJson = JSON.stringify({
-        "--tabs-bg": bg,
-        "--tabs-bg-sidebar": cardBg,
-        "--tabs-bg-elevated": cardBg,
-        "--tabs-bg-popover": popoverBg,
-        "--tabs-input-bg": cardBg,
-        "--tabs-text": fg,
-        "--tabs-text-muted": mutedFg,
-        "--tabs-accent": primary,
-        "--tabs-accent-strong": buttonBg,
-        "--tabs-accent-fg": buttonFg,
-        "--tabs-accent-soft": `color-mix(in srgb, ${primary} 15%, transparent)`,
-        "--tabs-hairline": `color-mix(in srgb, ${fg} 6%, transparent)`,
-        "--tabs-hairline-strong": `color-mix(in srgb, ${fg} 12%, transparent)`,
-        "--vscode-button-background": buttonBg,
-        "--vscode-button-foreground": buttonFg,
-      });
-    }
-
-    const script = `(() => {
-      const themeId = ${JSON.stringify(themeId)};
-      const customProps = ${customPropsJson};
-      const TABS_PROP_KEYS = [
-        '--tabs-bg',
-        '--tabs-bg-sidebar',
-        '--tabs-bg-elevated',
-        '--tabs-bg-popover',
-        '--tabs-input-bg',
-        '--tabs-text',
-        '--tabs-text-muted',
-        '--tabs-accent',
-        '--tabs-accent-strong',
-        '--tabs-accent-fg',
-        '--tabs-accent-soft',
-        '--tabs-hairline',
-        '--tabs-hairline-strong',
-        '--vscode-button-background',
-        '--vscode-button-foreground',
-      ];
-
-      const targets = [
-        document.documentElement,
-        document.body,
-        document.querySelector('.monaco-workbench'),
-      ].filter(Boolean);
-
-      targets.forEach((el) => {
-        el.setAttribute('data-theme', themeId);
-        TABS_PROP_KEYS.forEach((key) => {
-          if (customProps && customProps[key]) {
-            el.style.setProperty(key, customProps[key]);
-          } else {
-            el.style.removeProperty(key);
-          }
-        });
-      });
-    })()`;
-    void webContents.executeJavaScript?.(script)?.catch(() => {});
-  }
-
   private currentAiProvider: "tabs" | "copilot" = "tabs";
 
   setTheme(themeId: string, customConfig?: any): void {
     this.currentThemeId = themeId;
     this.currentCustomConfig = customConfig ?? null;
-    for (const session of this.sessions.values()) {
-      if (session.view && !session.view.webContents.isDestroyed()) {
-        this.applyThemeToWebContents(session.view.webContents);
-      }
-    }
   }
 
   setAiProvider(provider: "tabs" | "copilot"): void {
@@ -793,7 +697,13 @@ export class CodeHostManager {
             "workbench.secondarySideBar.defaultVisibility": "hidden",
           };
     const settingsPaths = new Set<string>([
-      Path.join(DEFAULT_CODE_HOST_STATE_DIR, "code-oss-main", "profile", "default", "settings.json"),
+      Path.join(
+        DEFAULT_CODE_HOST_STATE_DIR,
+        "code-oss-main",
+        "profile",
+        "default",
+        "settings.json",
+      ),
     ]);
     const runtime = this.config.runtime;
     if (runtime) {
@@ -964,7 +874,7 @@ export class CodeHostManager {
     const desktopConfigChannel = desktopRuntime
       ? `vscode:tabs-window-config:${Crypto.randomUUID()}`
       : null;
-    const view = new BrowserView({
+    const view = new WebContentsView({
       webPreferences: {
         contextIsolation: true,
         sandbox: true,
@@ -989,12 +899,6 @@ export class CodeHostManager {
     });
     this.registerNativeWebContents?.(view.webContents);
     view.setBackgroundColor("#141414");
-
-    view.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-      if (level >= 2) {
-        console.error(`[code-oss webContents L${level}] ${message} (${sourceId}:${line})`);
-      }
-    });
 
     const allowedPermissions = new Set([
       "clipboard-read",
@@ -1026,74 +930,6 @@ export class CodeHostManager {
       return { action: "deny" };
     });
 
-    // Theme the embedded Code-OSS workbench to match the Tabs shell. We inject
-    // our CSS host-side (no VS Code fork edits needed). `insertCSS` applies to
-    // the desktop renderer webContents and remains the single source of truth.
-    // insertCSS is cleared on navigation, so re-apply on every load.
-    {
-      // Inject the editor font FIRST, then the theme — both via insertCSS, which
-      // applies as an Electron user stylesheet above the workbench's CSP (a plain
-      // <link> to Google Fonts is blocked by that CSP, and Geist Mono isn't
-      // installed on the host, so the font must be embedded; see
-      // geistMonoFontCss.ts). insertCSS is cleared on navigation, so re-apply on
-      // every load.
-      const applyThemeCss = () => {
-        void view.webContents.insertCSS?.(GEIST_MONO_FONT_CSS)?.catch(() => {
-          /* view may have been torn down */
-        });
-        void view.webContents.insertCSS?.(CODE_OSS_THEME_CSS)?.catch(() => {
-          /* view may have been torn down */
-        });
-        this.applyThemeToWebContents(view.webContents);
-      };
-      view.webContents.on("did-finish-load", applyThemeCss);
-      view.webContents.on("dom-ready", applyThemeCss);
-      applyThemeCss();
-      // One-shot layout probe: record where each stock workbench part actually
-      // sits (left/width/display) so "the chrome has a weird gap" reports are
-      // diagnosable from ~/.tabs/userdata/layout-diagnostic.json instead of
-      // guessing from screenshots.
-      let layoutProbed = false;
-      view.webContents.on("did-finish-load", () => {
-        if (layoutProbed) return;
-        layoutProbed = true;
-        setTimeout(() => {
-          void view.webContents
-            .executeJavaScript(
-              `(() => {
-                 const m = (sel) => {
-                   const el = document.querySelector(sel);
-                   if (!el) return null;
-                   const r = el.getBoundingClientRect();
-                   const cs = getComputedStyle(el);
-                   return { left: Math.round(r.left), width: Math.round(r.width), display: cs.display };
-                 };
-                 return JSON.stringify({
-                   activitybar: m('.monaco-workbench .part.activitybar'),
-                   sidebar: m('.monaco-workbench .part.sidebar'),
-                   auxiliarybar: m('.monaco-workbench .part.auxiliarybar'),
-                   statusbar: m('.monaco-workbench .part.statusbar'),
-                   titlebar: m('.monaco-workbench .part.titlebar'),
-                   banner: m('.monaco-workbench .part.banner'),
-                 });
-               })()`,
-            )
-            .then((result: unknown) => {
-              try {
-                FS.writeFileSync(
-                  Path.join(DEFAULT_CODE_HOST_STATE_DIR, "layout-diagnostic.json"),
-                  String(result),
-                  "utf8",
-                );
-              } catch {
-                /* ignore */
-              }
-            })
-            .catch(() => undefined);
-        }, 3000);
-      });
-    }
-
     if (desktopConfigChannel) {
       ipcMain.handle(desktopConfigChannel, async () =>
         this.buildDesktopWindowConfiguration(input.projectId),
@@ -1114,10 +950,8 @@ export class CodeHostManager {
       workspaceUri: null,
       desktopConfigChannel,
       desktopProtocolRegistered: false,
-      desktopRequestDiagnosticsRegistered: false,
       runtimeStartPromise: null,
     };
-    this.registerDesktopDiagnostics(session);
     this.sessions.set(input.projectId, session);
     await this.loadSessionWhenVisible(session);
   }
@@ -1144,6 +978,9 @@ export class CodeHostManager {
       session.view.setBounds(session.bounds);
     }
     await this.loadSessionWhenVisible(session);
+    if (session.lastLoadedUrl && this.controlChannel) {
+      await this.controlChannel.waitForExtensionHost(session.projectId);
+    }
 
     const cachedState = this.controlChannel?.getChromeState(session.projectId);
     if (cachedState && !window.isDestroyed()) {
@@ -1225,15 +1062,20 @@ export class CodeHostManager {
 
     const mainWindow = this.getWindow();
     const mainWebContents = mainWindow?.webContents as { getZoomFactor?: () => number } | undefined;
-    const zoomFactor = typeof mainWebContents?.getZoomFactor === "function" ? mainWebContents.getZoomFactor() : 1.0;
+    const zoomFactor =
+      typeof mainWebContents?.getZoomFactor === "function" ? mainWebContents.getZoomFactor() : 1.0;
 
     let x = Math.round(input.x * zoomFactor);
     let y = Math.round(input.y * zoomFactor);
     let width = Math.round(input.width * zoomFactor);
     let height = Math.round(input.height * zoomFactor);
 
-    const isDestroyed = typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
-    const getContentSize = typeof mainWindow?.getContentSize === "function" ? mainWindow.getContentSize.bind(mainWindow) : null;
+    const isDestroyed =
+      typeof mainWindow?.isDestroyed === "function" ? mainWindow.isDestroyed() : false;
+    const getContentSize =
+      typeof mainWindow?.getContentSize === "function"
+        ? mainWindow.getContentSize.bind(mainWindow)
+        : null;
 
     if (mainWindow && !isDestroyed && getContentSize) {
       try {
@@ -1256,22 +1098,23 @@ export class CodeHostManager {
     session.bounds = { x, y, width, height };
 
     if (session.view) {
-      const viewWebContents = session.view.webContents as {
-        getZoomFactor?: () => number;
-        setZoomFactor?: (factor: number) => void;
-      } | undefined;
+      const viewWebContents = session.view.webContents as
+        | {
+            getZoomFactor?: () => number;
+            setZoomFactor?: (factor: number) => void;
+          }
+        | undefined;
       const currentZoom =
-        typeof viewWebContents?.getZoomFactor === "function" ? viewWebContents.getZoomFactor() : 1.0;
-      if (Math.abs(currentZoom - zoomFactor) > 0.001 && typeof viewWebContents?.setZoomFactor === "function") {
+        typeof viewWebContents?.getZoomFactor === "function"
+          ? viewWebContents.getZoomFactor()
+          : 1.0;
+      if (
+        Math.abs(currentZoom - zoomFactor) > 0.001 &&
+        typeof viewWebContents?.setZoomFactor === "function"
+      ) {
         viewWebContents.setZoomFactor(zoomFactor);
       }
     }
-
-    console.log("[BOUNDS_INSTRUMENTATION_MAIN]", {
-      input,
-      zoomFactor,
-      finalBounds: session.bounds,
-    });
 
     if (this.activeProjectId === input.projectId) {
       this.attachSession(session);
@@ -1297,15 +1140,12 @@ export class CodeHostManager {
   }
 
   async flushAndShutdownSessions(): Promise<void> {
-    const { writeDesktopLogHeader } = require("./main");
-    writeDesktopLogHeader("flushAndShutdownSessions: entering function");
     this.disposed = true;
     this.hideActiveSession();
 
     const sessions = Array.from(this.sessions.values());
     this.sessions.clear();
 
-    writeDesktopLogHeader(`flushAndShutdownSessions: preparing to flush ${sessions.length} sessions`);
     await Promise.all(
       sessions.map(async (session) => {
         if (session.view && !session.view.webContents.isDestroyed()) {
@@ -1324,7 +1164,6 @@ export class CodeHostManager {
             // would only hit onBeforeUnload() → doShutdown() which fires
             // storageService.flush() optimistically (fire-and-forget) and
             // cannot be awaited from the main process.
-            writeDesktopLogHeader("flushAndShutdownSessions: invoking __tabs_codehost_shutdown via executeJavaScript");
             await session.view.webContents.executeJavaScript(
               `(async () => {
                 const fn = window.__tabs_codehost_shutdown;
@@ -1337,9 +1176,7 @@ export class CodeHostManager {
                 return true;
               })()`,
             );
-            writeDesktopLogHeader("flushAndShutdownSessions: __tabs_codehost_shutdown executed successfully");
-          } catch (e: any) {
-            writeDesktopLogHeader(`flushAndShutdownSessions: __tabs_codehost_shutdown failed: ${e?.message}`);
+          } catch {
             /* best effort — if the webcontents crashes or the page hasn't loaded yet, continue */
           }
 
@@ -1349,12 +1186,9 @@ export class CodeHostManager {
             // Note: flushStorageData() covers DOMStorage/localStorage only;
             // IndexedDB flushing is handled by the shutdown() call above.
             if (session.view.webContents.session) {
-              writeDesktopLogHeader("flushAndShutdownSessions: flushing DOMStorage data");
               await session.view.webContents.session.flushStorageData();
-              writeDesktopLogHeader("flushAndShutdownSessions: DOMStorage data flushed successfully");
             }
-          } catch (e: any) {
-            writeDesktopLogHeader(`flushAndShutdownSessions: DOMStorage data flush failed: ${e?.message}`);
+          } catch {
             /* best effort */
           }
 
@@ -1368,7 +1202,6 @@ export class CodeHostManager {
         this.disposeSessionConfigChannel(session);
       }),
     );
-    writeDesktopLogHeader("flushAndShutdownSessions: successfully exited function");
   }
 
   dispose(): void {
@@ -1536,9 +1369,8 @@ export class CodeHostManager {
   private attachSession(session: CodeSession): void {
     const window = this.getWindow();
     if (!window || !session.view) return;
-    const currentViews = window.getBrowserViews();
-    if (!currentViews.includes(session.view)) {
-      window.addBrowserView(session.view);
+    if (!window.contentView.children.includes(session.view)) {
+      window.contentView.addChildView(session.view);
     }
     session.view.webContents.focus?.();
   }
@@ -1546,9 +1378,8 @@ export class CodeHostManager {
   private detachSession(session: CodeSession): void {
     const window = this.getWindow();
     if (!window || !session.view) return;
-    const currentViews = window.getBrowserViews();
-    if (currentViews.includes(session.view)) {
-      window.removeBrowserView(session.view);
+    if (window.contentView.children.includes(session.view)) {
+      window.contentView.removeChildView(session.view);
     }
   }
 
@@ -1568,7 +1399,7 @@ export class CodeHostManager {
       return;
     }
     if (!session.view) {
-      throw new Error("Desktop Code-OSS BrowserView is unavailable.");
+      throw new Error("Desktop Code-OSS WebContentsView is unavailable.");
     }
 
     const browserSession = session.view.webContents.session;
@@ -1583,7 +1414,6 @@ export class CodeHostManager {
       const headers = this.buildDesktopProtocolHeaders(request.url, resolvedPath, runtime);
       callback({ path: resolvedPath, headers });
     });
-    this.registerDesktopRequestDiagnostics(session);
 
     session.desktopProtocolRegistered = true;
     this.config.state.entry = session.entry;
@@ -1678,6 +1508,7 @@ export class CodeHostManager {
       ? Path.join(session.workspaceRoot, session.lastFocusedPath)
       : null;
     const embedExtensionPath = getCodeOssEmbedExtensionPath(__dirname);
+    const integrationExtensionPath = getCodeOssIntegrationExtensionPath(__dirname);
     const builtInExtensionsDir = Path.join(runtime.vscodeRoot, ".build", "extensions");
 
     FS.mkdirSync(Path.join(sessionStateRoot, "logs"), { recursive: true });
@@ -1764,9 +1595,9 @@ export class CodeHostManager {
       configuration["builtin-extensions-dir"] = builtInExtensionsDir;
     }
 
-    if (isDirectory(embedExtensionPath, FS)) {
-      configuration.extensionDevelopmentPath = [embedExtensionPath];
-    }
+    configuration.extensionDevelopmentPath = [embedExtensionPath, integrationExtensionPath].filter(
+      (extensionPath) => isDirectory(extensionPath, FS),
+    );
 
     // Ensure user settings file has window.customContextMenu and window.dialogStyle set on initial boot
     try {
@@ -1783,7 +1614,10 @@ export class CodeHostManager {
           existingSettings = {};
         }
       }
-      if (existingSettings["window.customContextMenu"] !== true || existingSettings["window.dialogStyle"] !== "custom") {
+      if (
+        existingSettings["window.customContextMenu"] !== true ||
+        existingSettings["window.dialogStyle"] !== "custom"
+      ) {
         existingSettings["window.customContextMenu"] = true;
         existingSettings["window.dialogStyle"] = "custom";
         FS.writeFileSync(userSettingsFile, JSON.stringify(existingSettings, null, 2), "utf8");
@@ -1826,8 +1660,6 @@ export class CodeHostManager {
     try {
       const desktopSettingsPath = Path.join(location, "settings.json");
       writeMergedJsonFile(desktopSettingsPath, CODE_OSS_EMBED_DEFAULT_SETTINGS);
-      // Verify in dev which profile dir the running session actually reads.
-      console.log(`[code-oss] embed settings written (desktop-renderer) → ${desktopSettingsPath}`);
     } catch {
       // Non-fatal. The integration extension also enforces these settings.
     }
@@ -1852,9 +1684,6 @@ export class CodeHostManager {
           command: "tabs.openProjectTab",
         },
       ]);
-      console.log(
-        `[code-oss] embed keybindings written (desktop-renderer) → ${desktopKeybindingsPath}`,
-      );
     } catch {
       // Non-fatal.
     }
@@ -1903,6 +1732,14 @@ export class CodeHostManager {
         "utf8",
       ),
     ) as Record<string, unknown>;
+    if (typeof parsed.version !== "string") {
+      const packageConfiguration = JSON.parse(
+        FS.readFileSync(Path.join(vscodeRoot, "package.json"), "utf8"),
+      ) as { version?: unknown };
+      if (typeof packageConfiguration.version === "string") {
+        parsed.version = packageConfiguration.version;
+      }
+    }
     productConfigurationCache.set(vscodeRoot, parsed);
     return parsed;
   }
@@ -1942,43 +1779,9 @@ export class CodeHostManager {
     session.view.webContents.on("preload-error", (_event, preloadPathname, error) => {
       console.error(`${prefix} preload-error`, preloadPathname, error);
     });
-    session.view.webContents.on("console-message", (_event, level, message, line, sourceId) => {
-      console.error(`${prefix} console`, { level, message, line, sourceId });
-      try {
-        FS.appendFileSync(
-          "/Users/rushil.dev/.tabs/userdata/workbench-console.log",
-          `[console] ${message} (${sourceId}:${line})\n`,
-        );
-      } catch {}
-    });
-    session.view.webContents.on("did-finish-load", () => {
-      setTimeout(() => {
-        void session.view?.webContents
-          .executeJavaScript(
-            `({
-              readyState: document.readyState,
-              title: document.title,
-              bodyChildCount: document.body?.childElementCount ?? -1,
-              bodyText: document.body?.innerText?.slice(0, 400) ?? "",
-              bodyHtml: document.body?.innerHTML?.slice(0, 400) ?? ""
-            })`,
-            true,
-          )
-          .then((snapshot) => {
-            console.error(`${prefix} dom-snapshot`, snapshot);
-          })
-          .catch((error) => {
-            console.error(`${prefix} dom-snapshot-error`, error);
-          });
-      }, 2_000);
-    });
   }
 
   private registerDesktopRequestDiagnostics(session: CodeSession): void {
-    if (session.desktopRequestDiagnosticsRegistered) {
-      return;
-    }
-
     const runtime = this.config.runtime;
     if (!runtime || !session.view) {
       return;
@@ -2004,8 +1807,6 @@ export class CodeHostManager {
         });
       }
     });
-
-    session.desktopRequestDiagnosticsRegistered = true;
   }
 
   private getCssModules(vscodeRoot: string): string[] {
