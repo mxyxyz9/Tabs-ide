@@ -128,7 +128,7 @@ describe("resolveCodeHostConfig", () => {
     expect(config.state.reason).toBeNull();
   });
 
-  it("uses TABS_CODE_OSS_BUILD_DIR when the VS Code web assets exist", () => {
+  it("does not select REH when only the VS Code web assets exist", () => {
     const rootDir = makeTempDir("tabs-codehost-root-");
     const vscodeRoot = makeTempDir("vscode-root-");
     writeVsCodeCheckout(vscodeRoot);
@@ -140,15 +140,12 @@ describe("resolveCodeHostConfig", () => {
       },
     });
 
-    expect(config.state.available).toBe(true);
+    expect(config.state.available).toBe(false);
     expect(config.state.entry).toBeNull();
-    expect(config.runtime).toEqual({
-      kind: "managed-server",
-      vscodeRoot,
-    });
+    expect(config.runtime).toBeNull();
   });
 
-  it("prefers the web server when desktop and web assets both exist", () => {
+  it("selects desktop renderer when desktop and web assets both exist", () => {
     const rootDir = makeTempDir("tabs-codehost-root-");
     const vscodeRoot = makeTempDir("vscode-root-");
     writeVsCodeCheckout(vscodeRoot);
@@ -163,12 +160,12 @@ describe("resolveCodeHostConfig", () => {
 
     expect(config.state.available).toBe(true);
     expect(config.runtime).toMatchObject({
-      kind: "managed-server",
+      kind: "desktop-renderer",
       vscodeRoot,
     });
   });
 
-  it("falls back to a sibling tabs-code-main checkout", () => {
+  it("does not select a sibling REH-only tabs-code-main checkout", () => {
     const parentDir = makeTempDir("tabs-parent-");
     const rootDir = Path.join(parentDir, "tabs-main");
     const vscodeMainDir = Path.join(parentDir, "tabs-code-main");
@@ -180,14 +177,11 @@ describe("resolveCodeHostConfig", () => {
       env: {},
     });
 
-    expect(config.state.available).toBe(true);
-    expect(config.runtime).toEqual({
-      kind: "managed-server",
-      vscodeRoot: vscodeMainDir,
-    });
+    expect(config.state.available).toBe(false);
+    expect(config.runtime).toBeNull();
   });
 
-  it("prefers a sibling web server when desktop and web assets both exist", () => {
+  it("selects a sibling desktop runtime when web assets also exist", () => {
     const parentDir = makeTempDir("tabs-parent-");
     const rootDir = Path.join(parentDir, "tabs-main");
     const vscodeMainDir = Path.join(parentDir, "tabs-code-main");
@@ -202,7 +196,7 @@ describe("resolveCodeHostConfig", () => {
 
     expect(config.state.available).toBe(true);
     expect(config.runtime).toMatchObject({
-      kind: "managed-server",
+      kind: "desktop-renderer",
       vscodeRoot: vscodeMainDir,
     });
   });

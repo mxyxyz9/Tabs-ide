@@ -925,17 +925,6 @@ export function resolveCodeHostConfigWithFs(
 
   const explicitBuildDir = input.env.TABS_CODE_OSS_BUILD_DIR?.trim() || null;
   if (explicitBuildDir) {
-    const resolvedRoot = resolveManagedServerRoot(explicitBuildDir, fs);
-    if (resolvedRoot.ok) {
-      return createAvailableState({
-        runtime: {
-          kind: "managed-server",
-          vscodeRoot: resolvedRoot.vscodeRoot,
-        },
-        rootDir: input.rootDir,
-      });
-    }
-
     const resolvedDesktopRoot = resolveManagedDesktopRoot(explicitBuildDir, fs);
     if (resolvedDesktopRoot.ok) {
       return createAvailableState({
@@ -947,7 +936,7 @@ export function resolveCodeHostConfigWithFs(
         rootDir: input.rootDir,
       });
     }
-    return createUnavailableState(resolvedRoot.reason);
+    return createUnavailableState(resolvedDesktopRoot.reason);
   }
 
   // In packaged apps, process.resourcesPath points to the Resources directory
@@ -973,20 +962,6 @@ export function resolveCodeHostConfigWithFs(
   for (const fallbackRoot of fallbackRoots) {
     if (!isDirectory(fallbackRoot, fs)) {
       continue;
-    }
-
-    // Prefer the real REH web server: it persists edits to disk and boots
-    // reliably. The desktop-renderer path is kept only as a fallback for
-    // checkouts that lack the server build.
-    const resolvedRoot = resolveManagedServerRoot(fallbackRoot, fs);
-    if (resolvedRoot.ok) {
-      return createAvailableState({
-        runtime: {
-          kind: "managed-server",
-          vscodeRoot: resolvedRoot.vscodeRoot,
-        },
-        rootDir: input.rootDir,
-      });
     }
 
     const resolvedDesktopRoot = resolveManagedDesktopRoot(fallbackRoot, fs);
@@ -1400,6 +1375,20 @@ export class CodeHostManager {
   private currentThemeId: string = "tabs-dark";
   private currentCustomConfig: any = null;
   private disposed = false;
+  private registerNativeWebContents: ((webContents: Electron.WebContents) => void) | null = null;
+
+  setNativeWebContentsRegistrar(
+    registrar: ((webContents: Electron.WebContents) => void) | null,
+  ): void {
+    this.registerNativeWebContents = registrar;
+    if (registrar) {
+      for (const session of this.sessions.values()) {
+        if (session.view && !session.view.webContents.isDestroyed()) {
+          registrar(session.view.webContents);
+        }
+      }
+    }
+  }
 
   private applyThemeToWebContents(webContents: Electron.WebContents): void {
     if (!webContents || webContents.isDestroyed?.()) return;
@@ -1732,6 +1721,7 @@ export class CodeHostManager {
           : null),
       },
     });
+    this.registerNativeWebContents?.(view.webContents);
     view.setBackgroundColor("#141414");
 
     view.webContents.on("console-message", (_event, level, message, line, sourceId) => {

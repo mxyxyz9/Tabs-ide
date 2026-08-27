@@ -32,3 +32,13 @@
 - Product metadata must be the normal merge of Code-OSS `package.json` plus `product.json`; using only `product.json` left the version undefined and made otherwise valid extensions appear incompatible.
 - Remaining non-gating channel gaps observed during the probe are `workspaces`, `localPty`, `NativeMcpDiscoveryHelper`, `externalTerminal`, `menubar`, and `webview`. They affect secondary desktop features but did not prevent extension activation or native file persistence; they remain in scope for the native-only cutover.
 - Verification: `bun run typecheck` passed in `tabs-main/apps/desktop`.
+
+## Phase 2: Resolver and session model
+
+- The resolver no longer inspects or prefers `out/server-main.js` / `out/server-cli.js`. Both explicit build directories and discovered sibling runtimes are accepted only when the compiled desktop preload, workbench, NLS, and product assets exist.
+- The existing per-project desktop `CodeSession` implementation already owns a dedicated persistent Electron partition, `BrowserView`, workspace root/URI, per-project profile/state root, configuration IPC channel, bounds, focus state, and load/recreation lifecycle. Those responsibilities were retained instead of introducing a second session abstraction.
+- Extended the native backend window registry to accept each per-project `BrowserView.webContents`. This is the missing session-to-extension-host link: Code-OSS identifies the target by webContents ID, while the backend supplies the window-like adapter used to transfer the extension-host `MessagePort`. Destroying the view removes it from the registry; existing workspace-change, project-removal, and shutdown paths already close the view and flush its storage.
+- A first normal-launch verification exposed `responseWindow.win.isDestroyed is not a function` in the generalized adapter. The adapter was corrected to preserve the full `BrowserWindow` for top-level windows and provide `isDestroyed()` for BrowserView-backed sessions.
+- Normal verification used plain `bun run dev:desktop` with the real `tabs-code-main` checkout and both REH entrypoint files present. The loaded URL was `vscode-file://vscode-app/.../workbench-dev.html`, proving resolver selection no longer depends on hiding REH artifacts.
+- The normal launch started local extension host PID 5601, activated the Tabs integration extension, connected its control channel, applied the theme, and processed restored file-open commands.
+- Verification: desktop typecheck passed; `bun run test -- src/codeHostManager.test.ts` passed all 31 tests. An earlier `bun test` invocation failed before test execution because Bun's runner does not apply this suite's Vitest Electron mock; the prescribed Vitest command is the valid result.

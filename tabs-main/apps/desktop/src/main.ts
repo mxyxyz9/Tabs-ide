@@ -3009,6 +3009,9 @@ async function bootstrap(): Promise<void> {
     nativeCodeHostMainBackend = await createNativeCodeHostMainBackend(
       codeHostConfig.runtime.vscodeRoot,
     );
+    codeHostManager.setNativeWebContentsRegistrar((webContents) => {
+      nativeCodeHostMainBackend?.registerWebContents(webContents);
+    });
     writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
   }
   ensureDownloadedCodeOssRuntime();
@@ -3178,6 +3181,7 @@ app.on("before-quit", (event) => {
 
     nativeCodeHostMainBackend?.dispose();
     nativeCodeHostMainBackend = null;
+    codeHostManager.setNativeWebContentsRegistrar(null);
 
     try {
       await Effect.runPromise(resolvedShutdown.request);

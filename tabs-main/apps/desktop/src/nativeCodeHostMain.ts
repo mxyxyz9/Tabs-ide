@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, type WebContents } from "electron";
 import { pathToFileURL } from "node:url";
 import * as Path from "node:path";
 
@@ -60,6 +60,7 @@ function passiveChannel(
 
 export interface NativeCodeHostMainBackend {
   registerWindow(window: BrowserWindow): void;
+  registerWebContents(webContents: WebContents): void;
   unregisterWindow(windowId: number): void;
   dispose(): void;
 }
@@ -127,7 +128,10 @@ export async function createNativeCodeHostMainBackend(
   const logService = new modules.NullLogService();
   const onWillShutdown = new modules.Emitter();
   const onWillLoadWindow = new modules.Emitter();
-  const windows = new Map<number, BrowserWindow>();
+  const windows = new Map<
+    number,
+    { webContents: WebContents; isDestroyed(): boolean }
+  >();
 
   Object.assign(globalThis, {
     _VSCODE_FILE_ROOT: pathToFileURL(Path.join(vscodeRoot, "out") + Path.sep).href,
@@ -235,7 +239,7 @@ export async function createNativeCodeHostMainBackend(
     passiveChannel(modules.EventNone, (command) => {
       if (command === "getWindowCount") return windows.size;
       if (command === "getWindows") {
-        return Array.from(windows.values(), (window) => ({ id: window.id, pid: process.pid }));
+        return Array.from(windows.keys(), (id) => ({ id, pid: process.pid }));
       }
       if (command === "getActiveWindowId") return BrowserWindow.getFocusedWindow()?.id;
       if (command === "getOSStatistics") {
@@ -253,8 +257,15 @@ export async function createNativeCodeHostMainBackend(
 
   return {
     registerWindow(window) {
-      windows.set(window.id, window);
-      window.once("closed", () => windows.delete(window.id));
+      windows.set(window.webContents.id, window);
+      window.once("closed", () => windows.delete(window.webContents.id));
+    },
+    registerWebContents(webContents) {
+      windows.set(webContents.id, {
+        webContents,
+        isDestroyed: () => webContents.isDestroyed(),
+      });
+      webContents.once("destroyed", () => windows.delete(webContents.id));
     },
     unregisterWindow(windowId) {
       windows.delete(windowId);
