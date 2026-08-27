@@ -75,6 +75,10 @@ import {
 import { CodeControlChannel } from "./codeControlChannel";
 import { getTailscaleStatus } from "./tailscale";
 import { DEFAULT_CODE_CHROME_STATE, type CodeChromeState } from "@tabs/shared/codeChrome";
+import {
+  createNativeCodeHostMainBackend,
+  type NativeCodeHostMainBackend,
+} from "./nativeCodeHostMain";
 
 // Prevent EPIPE crashes when pipes are closed unexpectedly (e.g. parent process killed)
 process.stdout.on("error", () => {});
@@ -207,6 +211,7 @@ let isQuittingConfirmed = false;
 let isQuitConfirmationOpen = false;
 let desktopProtocolRegistered = false;
 let codeOssFileProtocolRegistered = false;
+let nativeCodeHostMainBackend: NativeCodeHostMainBackend | null = null;
 let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
@@ -1095,12 +1100,16 @@ const codeOssCssModulesCache = new Map<string, string[]>();
 function getCodeOssProductConfiguration(vscodeRoot: string): Record<string, unknown> {
   const cached = codeOssProductConfigurationCache.get(vscodeRoot);
   if (cached) return cached;
-  const parsed = JSON.parse(
+  const product = JSON.parse(
     FS.readFileSync(
       getRequiredCodeOssPath(vscodeRoot, CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH),
       "utf8",
     ),
   ) as Record<string, unknown>;
+  const packageConfiguration = JSON.parse(
+    FS.readFileSync(Path.join(vscodeRoot, "package.json"), "utf8"),
+  ) as Record<string, unknown>;
+  const parsed = { ...packageConfiguration, ...product };
   codeOssProductConfigurationCache.set(vscodeRoot, parsed);
   return parsed;
 }
@@ -2742,6 +2751,8 @@ function createCodeOssWindow(
     },
   });
 
+  nativeCodeHostMainBackend?.registerWindow(window);
+
   ipcMain.handle(configChannel, async () =>
     buildPrimaryCodeOssWindowConfiguration(window, runtime, workspaceRoot),
   );
@@ -2994,6 +3005,12 @@ function ensureDownloadedCodeOssRuntime(): void {
 
 async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap start");
+  if (codeHostConfig.runtime?.kind === "desktop-renderer") {
+    nativeCodeHostMainBackend = await createNativeCodeHostMainBackend(
+      codeHostConfig.runtime.vscodeRoot,
+    );
+    writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
+  }
   ensureDownloadedCodeOssRuntime();
   backendPort = await Effect.service(NetService).pipe(
     Effect.flatMap((net) => net.reserveLoopbackPort()),
@@ -3158,6 +3175,9 @@ app.on("before-quit", (event) => {
     } catch (err: any) {
       writeDesktopLogHeader(`Code-OSS session flush failed: ${err?.message}`);
     }
+
+    nativeCodeHostMainBackend?.dispose();
+    nativeCodeHostMainBackend = null;
 
     try {
       await Effect.runPromise(resolvedShutdown.request);
