@@ -248,7 +248,9 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // these parts native avoids duplicating VS Code's layout and accessibility
   // behavior in the surrounding React shell.
   "workbench.activityBar.location": "default",
-  "workbench.activityBar.visible": true,
+  // Tabs supplies the outer activity rail. Code-OSS keeps ownership of the
+  // corresponding views, commands, keyboard navigation, and sidebar content.
+  "workbench.activityBar.visible": false,
   "workbench.statusBar.visible": true,
   "window.menuBarVisibility": "hidden",
   "window.titleBarStyle": "native",

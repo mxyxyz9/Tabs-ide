@@ -957,6 +957,81 @@ function startCodeControlChannel(context) {
                 return evaluateThemeTokens(customConfig);
               }
 
+              function generateEditorTokenCustomizations(config) {
+                const colors = config.colors;
+                const isLight = config.baseVariant === "light";
+                const muted = isLight ? "#64748b" : "#94a3b8";
+                const keyword = colors.primary;
+                const string = isLight ? "#15803d" : "#86efac";
+                const number = isLight ? "#b45309" : "#fbbf24";
+                const type = isLight ? "#0369a1" : "#7dd3fc";
+                const callable = isLight ? "#6d28d9" : "#c4b5fd";
+                return {
+                  comments: muted,
+                  strings: string,
+                  numbers: number,
+                  keywords: keyword,
+                  types: type,
+                  functions: callable,
+                  variables: colors.foreground,
+                  textMateRules: [
+                    {
+                      scope: ["comment", "punctuation.definition.comment"],
+                      settings: { foreground: muted, fontStyle: "italic" },
+                    },
+                    {
+                      scope: ["string", "string.quoted", "string.template"],
+                      settings: { foreground: string },
+                    },
+                    {
+                      scope: ["constant.numeric", "constant.language", "constant.character"],
+                      settings: { foreground: number },
+                    },
+                    {
+                      scope: ["keyword", "storage.type", "storage.modifier"],
+                      settings: { foreground: keyword },
+                    },
+                    {
+                      scope: ["entity.name.type", "support.type", "support.class"],
+                      settings: { foreground: type },
+                    },
+                    {
+                      scope: ["entity.name.function", "support.function", "meta.function-call"],
+                      settings: { foreground: callable },
+                    },
+                    {
+                      scope: ["variable", "meta.object-literal.key"],
+                      settings: { foreground: colors.foreground },
+                    },
+                    {
+                      scope: ["invalid", "invalid.illegal"],
+                      settings: { foreground: "#ffffff", background: "#dc2626" },
+                    },
+                  ],
+                };
+              }
+
+              function generateSemanticTokenCustomizations(config) {
+                const colors = config.colors;
+                const isLight = config.baseVariant === "light";
+                return {
+                  enabled: true,
+                  rules: {
+                    comment: { foreground: isLight ? "#64748b" : "#94a3b8", italic: true },
+                    string: isLight ? "#15803d" : "#86efac",
+                    number: isLight ? "#b45309" : "#fbbf24",
+                    keyword: colors.primary,
+                    type: isLight ? "#0369a1" : "#7dd3fc",
+                    class: isLight ? "#0369a1" : "#7dd3fc",
+                    interface: isLight ? "#0369a1" : "#7dd3fc",
+                    function: isLight ? "#6d28d9" : "#c4b5fd",
+                    method: isLight ? "#6d28d9" : "#c4b5fd",
+                    variable: colors.foreground,
+                    parameter: colors.foreground,
+                  },
+                };
+              }
+
               const BUILTIN_THEMES = {
                 "tabs-dark": {
                   baseVariant: "dark",
@@ -1083,6 +1158,17 @@ function startCodeControlChannel(context) {
               await workspaceConfig.update(
                 "workbench.colorCustomizations",
                 Object.keys(currentCustomizations).length > 0 ? currentCustomizations : undefined,
+                vscode.ConfigurationTarget.Global,
+              );
+
+              await workspaceConfig.update(
+                "editor.tokenColorCustomizations",
+                generateEditorTokenCustomizations(activeConfig),
+                vscode.ConfigurationTarget.Global,
+              );
+              await workspaceConfig.update(
+                "editor.semanticTokenColorCustomizations",
+                generateSemanticTokenCustomizations(activeConfig),
                 vscode.ConfigurationTarget.Global,
               );
 

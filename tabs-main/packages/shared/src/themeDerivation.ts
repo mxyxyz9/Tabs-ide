@@ -293,7 +293,7 @@ export function suggestAccessibleFg(fgHex: string, bgHex: string): string {
 /**
  * Master Spec & Registry for Native VS Code Tokens + Web App Shell Component Tokens (~95 Tokens Total).
  */
-export const VSCODE_TOKEN_REGISTRY: TokenMetadata[] = [
+const VSCODE_TOKEN_REGISTRY_ENTRIES: TokenMetadata[] = [
   // ── 0. Web App Shell Component Tokens ────────────────────────────────────
   { id: "app.primaryBackground", label: "App Primary Button Background", description: "Background for primary web app buttons (e.g. Save Preset)", category: "accents", isBg: true, deriveDefault: (c) => c.primary },
   { id: "app.primaryForeground", label: "App Primary Button Text (Save Preset)", description: "Foreground text color for primary buttons (Save Preset)", category: "accents", contrastPairId: "app.primaryBackground", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
@@ -1024,6 +1024,11 @@ export const VSCODE_TOKEN_REGISTRY: TokenMetadata[] = [
   { id: "welcomePage.progress.background", label: "Welcome Progress Bar Surface", description: "Track background of setup progress bar on welcome page", category: "surfaces", isBg: true, deriveDefault: (c) => c.primary },
   { id: "welcomePage.progress.foreground", label: "Welcome Progress Bar Fill", description: "Fill indicator color of setup progress bar on welcome page", category: "text", contrastPairId: "welcomePage.progress.background", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
 ];
+
+// Keep one canonical entry per VS Code color id. Feature-oriented sections can overlap.
+export const VSCODE_TOKEN_REGISTRY: TokenMetadata[] = Array.from(
+  new Map(VSCODE_TOKEN_REGISTRY_ENTRIES.map((token) => [token.id, token])).values(),
+);
 
 /**
  * Returns the derived default value for a single token key given primary colors and dark mode variant.

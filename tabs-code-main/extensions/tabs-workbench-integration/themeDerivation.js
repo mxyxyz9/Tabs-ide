@@ -164,7 +164,7 @@ function suggestAccessibleFg(fgHex, bgHex) {
   return ensureMinContrast(fgHex, bgHex, 4.5);
 }
 
-const VSCODE_TOKEN_REGISTRY = [
+const VSCODE_TOKEN_REGISTRY_ENTRIES = [
   // ── 0. Web App Shell Component Tokens ────────────────────────────────────
   { id: "app.primaryBackground", label: "App Primary Button Background", description: "Background for primary web app buttons (e.g. Save Preset)", category: "accents", isBg: true, deriveDefault: (c) => c.primary },
   { id: "app.primaryForeground", label: "App Primary Button Text (Save Preset)", description: "Foreground text color for primary buttons (Save Preset)", category: "accents", contrastPairId: "app.primaryBackground", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
@@ -895,6 +895,10 @@ const VSCODE_TOKEN_REGISTRY = [
   { id: "welcomePage.progress.background", label: "Welcome Progress Bar Surface", description: "Track background of setup progress bar on welcome page", category: "surfaces", isBg: true, deriveDefault: (c) => c.primary },
   { id: "welcomePage.progress.foreground", label: "Welcome Progress Bar Fill", description: "Fill indicator color of setup progress bar on welcome page", category: "text", contrastPairId: "welcomePage.progress.background", deriveDefault: (c) => getOptimalPrimaryForeground(c.primary) },
 ];
+
+const VSCODE_TOKEN_REGISTRY = Array.from(
+  new Map(VSCODE_TOKEN_REGISTRY_ENTRIES.map((token) => [token.id, token])).values(),
+);
 
 function getDerivedTokenValue(tokenId, colors, baseVariant = "dark") {
   const token = VSCODE_TOKEN_REGISTRY.find((t) => t.id === tokenId);

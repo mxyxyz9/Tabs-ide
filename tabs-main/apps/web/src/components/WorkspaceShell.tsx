@@ -225,6 +225,8 @@ import { MercuryChromeLoader } from "./MercuryChromeLoader";
 const ChatView = lazy(() => import("./ChatView"));
 import { VscodeEntryIcon } from "./chat/VscodeEntryIcon";
 import { getCodeHostUnavailableMessage } from "./codeHost.logic";
+import { CodeActivityRail } from "./code/CodeActivityRail";
+import { CodeHeaderBar } from "./code/CodeHeaderBar";
 import {
   CODE_ACTIVITY_ITEMS,
   CODE_CHROME_COMMANDS,
@@ -2383,10 +2385,22 @@ function DesktopCodeTool(props: { project: Project }) {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
+      <CodeHeaderBar
+        workspaceName={props.project.name}
+        activeFilePath={
+          chromeState.openTabs?.find((tab) => tab.active)?.filePath ?? codeState.lastFocusedPath
+        }
+        branch={chromeState.branch}
+        panelMaximized={chromeState.panelMaximized}
+        sideChatOpen={aiProvider === "copilot" ? false : sideChatOpen}
+        showSideChatToggle={aiProvider === "tabs"}
+        onToggleSideChat={() => setSideChatOpen(!sideChatOpen)}
+        onRunCommand={runCodeCommand}
+      />
       <div className="flex min-h-0 min-w-0 flex-1">
-        {/* Code-OSS owns its complete stock workbench inside this host region.
-            Tabs only positions the native view and keeps its platform toolbar
-            outside the Code tool. */}
+        <CodeActivityRail chromeState={chromeState} onRunCommand={runCodeCommand} />
+        {/* Code-OSS owns the editor workbench inside this host region while Tabs
+            owns the stable outer navigation and workspace toolbar. */}
         <div className="relative min-h-0 min-w-0 flex-1">
           <div ref={hostRef} className="absolute inset-0 min-h-0 min-w-0 bg-background" />
           {!hostReady ? (

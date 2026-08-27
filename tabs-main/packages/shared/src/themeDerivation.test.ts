@@ -35,6 +35,11 @@ describe("themeDerivation shared module", () => {
     expect(savePresetToken?.contrastPairId).toBe("app.primaryBackground");
   });
 
+  it("registers each workbench color token exactly once", () => {
+    const ids = VSCODE_TOKEN_REGISTRY.map((token) => token.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it("evaluates default derived tokens cleanly when no overrides exist", () => {
     const tokens = evaluateThemeTokens(baseConfig);
     expect(tokens["editor.background"]).toBe("#0f172a");
