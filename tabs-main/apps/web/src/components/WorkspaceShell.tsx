@@ -2095,9 +2095,11 @@ function DesktopCodeTool(props: { project: Project }) {
     if (aiProvider === "copilot") {
       setSideChatOpen(false);
     } else {
-      runCodeCommand(CODE_CHROME_COMMANDS.closeAuxiliaryBar);
+      void window.desktopBridge
+        ?.runCodeCommand(projectId, CODE_CHROME_COMMANDS.closeAuxiliaryBar)
+        .catch(() => undefined);
     }
-  }, [aiProvider, setSideChatOpen, runCodeCommand]);
+  }, [aiProvider, projectId, setSideChatOpen]);
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!bridge?.getCodeChromeState) {
@@ -2398,7 +2400,13 @@ function DesktopCodeTool(props: { project: Project }) {
         onRunCommand={runCodeCommand}
       />
       <div className="flex min-h-0 min-w-0 flex-1">
-        <CodeActivityRail chromeState={chromeState} onRunCommand={runCodeCommand} />
+        <CodeActivityRail
+          chromeState={chromeState}
+          onApplicationMenuOpen={() => {
+            void window.desktopBridge?.hideCodeSession().catch(() => undefined);
+          }}
+          onRunCommand={runCodeCommand}
+        />
         {/* Code-OSS owns the editor workbench inside this host region while Tabs
             owns the stable outer navigation and workspace toolbar. */}
         <div className="relative min-h-0 min-w-0 flex-1">

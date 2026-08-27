@@ -11,11 +11,24 @@ import { type ComponentType, Fragment } from "react";
 import {
   CODE_ACTIVITY_ITEMS,
   CODE_CHROME_COMMANDS,
+  CODE_MENU_BAR,
   type CodeActivityItem,
   type CodeChromeState,
 } from "@tabs/shared/codeChrome";
 
 import { cn } from "../../lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 const ICONS: Record<CodeActivityItem["icon"], ComponentType<{ className?: string }>> = {
@@ -28,6 +41,7 @@ const ICONS: Record<CodeActivityItem["icon"], ComponentType<{ className?: string
 
 interface CodeActivityRailProps {
   chromeState: CodeChromeState;
+  onApplicationMenuOpen?: () => void;
   onRunCommand: (commandId: string) => void;
 }
 
@@ -47,14 +61,14 @@ function RailButton(props: {
             aria-pressed={props.active}
             onClick={props.onClick}
             className={cn(
-              "group relative flex size-9 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-              props.active && "bg-accent/70 text-foreground",
+              "group relative flex size-10 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+              props.active && "bg-accent/70 text-foreground shadow-sm",
             )}
           >
             {props.active ? (
               <span
                 aria-hidden="true"
-                className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+                className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary"
               />
             ) : null}
             {props.children}
@@ -66,19 +80,72 @@ function RailButton(props: {
   );
 }
 
+function ApplicationMenu(props: CodeActivityRailProps) {
+  return (
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) props.onApplicationMenuOpen?.();
+      }}
+    >
+      <DropdownMenuTrigger
+        aria-label="Code application menu"
+        className="flex size-10 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-accent data-popup-open:text-foreground"
+      >
+        <MenuIcon aria-hidden="true" className="size-5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        aria-label="Code application menu"
+        align="start"
+        className="w-56 rounded-xl"
+        side="right"
+        sideOffset={6}
+      >
+        {CODE_MENU_BAR.map((menu) => (
+          <DropdownMenuSub key={menu.id}>
+            <DropdownMenuSubTrigger>{menu.label}</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-72 rounded-xl">
+              {menu.groups.map((group, groupIndex) => (
+                <Fragment key={`${menu.id}-${group.items.map((item) => item.commandId).join("-")}`}>
+                  {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
+                  {group.items.map((item) =>
+                    item.commandId === "workbench.action.toggleAutoSave" ? (
+                      <DropdownMenuCheckboxItem
+                        checked={props.chromeState.autoSaveEnabled}
+                        key={item.commandId}
+                        onClick={() => props.onRunCommand(item.commandId)}
+                      >
+                        {item.label}
+                      </DropdownMenuCheckboxItem>
+                    ) : (
+                      <DropdownMenuItem
+                        key={item.commandId}
+                        onClick={() => props.onRunCommand(item.commandId)}
+                      >
+                        {item.label}
+                        {item.shortcut ? (
+                          <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>
+                        ) : null}
+                      </DropdownMenuItem>
+                    ),
+                  )}
+                </Fragment>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 /** Stable Tabs activity rail backed only by allowlisted workbench commands. */
 export function CodeActivityRail(props: CodeActivityRailProps) {
   return (
     <nav
       aria-label="Code views"
-      className="flex h-full w-12 shrink-0 flex-col items-center gap-1 border-r border-border/70 bg-background py-2"
+      className="flex h-full w-14 shrink-0 flex-col items-center gap-1.5 border-r border-border/70 bg-background py-2.5"
     >
-      <RailButton
-        label="Command palette"
-        onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.commandPalette)}
-      >
-        <MenuIcon aria-hidden="true" className="size-[18px]" />
-      </RailButton>
+      <ApplicationMenu {...props} />
       {CODE_ACTIVITY_ITEMS.map((item) => {
         const Icon = ICONS[item.icon];
         const active = props.chromeState.activeViewId === item.id;
@@ -93,7 +160,7 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
               onClick={() => props.onRunCommand(item.commandId)}
             >
               <span aria-hidden="true">
-                <Icon className="size-[18px]" />
+                <Icon className="size-5" />
               </span>
             </RailButton>
           </Fragment>
@@ -104,7 +171,7 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
           label="Open settings"
           onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.settings)}
         >
-          <SettingsIcon aria-hidden="true" className="size-[18px]" />
+          <SettingsIcon aria-hidden="true" className="size-5" />
         </RailButton>
       </div>
     </nav>

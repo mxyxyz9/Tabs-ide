@@ -42,8 +42,8 @@ function HeaderAction(props: {
             aria-pressed={props.pressed}
             onClick={props.onClick}
             className={cn(
-              "flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-              props.pressed && "bg-accent text-foreground",
+              "flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+              props.pressed && "bg-accent text-foreground shadow-sm",
             )}
           >
             {props.children}
@@ -82,7 +82,7 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
               type="button"
               aria-label="Quick open file search"
               onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.quickOpen)}
-              className="flex h-7 w-[34rem] max-w-[55%] items-center gap-2 rounded-lg border border-border/70 bg-card/70 px-3 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-8 w-[34rem] max-w-[55%] items-center gap-2 rounded-xl border border-border/70 bg-card/70 px-3 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               <SearchIcon aria-hidden="true" className="size-3.5" />
               <span className="truncate">Go to file...</span>

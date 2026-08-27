@@ -354,3 +354,12 @@ body {
 	outline: 1px dashed var(--vscode-toolbar-hoverOutline);
 	outline-offset: -1px;
 }
+
+/* Tabs embeds the workbench inside its own rounded application chrome. Keep
+ * these refinements scoped to that host so upstream/standalone Code remains
+ * visually unchanged. */
+.tabs-embedded-workbench .monaco-workbench .monaco-button,
+.tabs-embedded-workbench .monaco-workbench .monaco-button-dropdown,
+.tabs-embedded-workbench .monaco-workbench .monaco-action-bar:not(.vertical) .action-label {
+	border-radius: var(--vscode-cornerRadius-medium);
+}

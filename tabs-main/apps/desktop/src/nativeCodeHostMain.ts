@@ -48,6 +48,18 @@ type NativeCodeHostModules = {
   NativeMcpDiscoveryHelperService: new () => unknown;
   NativeMcpDiscoveryHelperChannelName: string;
   URI: { file(path: string): unknown };
+  SharedProcess: new (...args: unknown[]) => {
+    connect(payload?: unknown): Promise<unknown>;
+    dispose(): void;
+  };
+  MessagePortClient: new (
+    port: unknown,
+    id: string,
+  ) => {
+    registerChannel(name: string, channel: unknown): void;
+    dispose(): void;
+  };
+  EncryptionMainService: new (...args: unknown[]) => unknown;
 };
 
 type ServerChannel = {
@@ -102,6 +114,9 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     nativeMcpDiscoveryHelper,
     nativeMcpDiscoveryContract,
     uri,
+    sharedProcess,
+    messagePortIpc,
+    encryptionMain,
   ] = await Promise.all([
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.electron.js")),
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/common/ipc.js")),
@@ -132,6 +147,9 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     import(moduleUrl(vscodeRoot, "vs/platform/mcp/node/nativeMcpDiscoveryHelperService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/mcp/common/nativeMcpDiscoveryHelper.js")),
     import(moduleUrl(vscodeRoot, "vs/base/common/uri.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/sharedProcess/electron-main/sharedProcess.js")),
+    import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.mp.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/encryption/electron-main/encryptionMainService.js")),
   ]);
 
   return {
@@ -164,11 +182,39 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     NativeMcpDiscoveryHelperChannelName:
       nativeMcpDiscoveryContract.NativeMcpDiscoveryHelperChannelName,
     URI: uri.URI,
+    SharedProcess: sharedProcess.SharedProcess,
+    MessagePortClient: messagePortIpc.Client,
+    EncryptionMainService: encryptionMain.EncryptionMainService,
+  };
+}
+
+function createSharedProcessProfile(modules: NativeCodeHostModules, stateDir: string) {
+  const profileRoot = Path.join(stateDir, "code-oss-desktop", "shared-profile");
+  const location = Path.join(profileRoot, "default");
+  const resource = (name: string) => modules.URI.file(Path.join(location, name));
+  return {
+    home: modules.URI.file(Path.join(profileRoot, "profiles")),
+    profile: {
+      id: "default",
+      isDefault: true,
+      name: "Default",
+      location: modules.URI.file(location),
+      globalStorageHome: resource("globalStorage"),
+      settingsResource: resource("settings.json"),
+      keybindingsResource: resource("keybindings.json"),
+      tasksResource: resource("tasks.json"),
+      snippetsHome: resource("snippets"),
+      promptsHome: resource("prompts"),
+      extensionsResource: resource("extensions.json"),
+      mcpResource: resource("mcp.json"),
+      cacheHome: modules.URI.file(Path.join(profileRoot, "cache")),
+    },
   };
 }
 
 export async function createNativeCodeHostMainBackend(
   vscodeRoot: string,
+  stateDir: string,
 ): Promise<NativeCodeHostMainBackend> {
   const modules = await loadNativeCodeHostModules(vscodeRoot);
   const disposables = new modules.DisposableStore();
@@ -207,8 +253,15 @@ export async function createNativeCodeHostMainBackend(
     },
   };
   const environmentService = {
-    args: {},
+    args: {
+      _: [],
+      "disable-telemetry": true,
+      "disable-updates": true,
+      "extensions-dir": Path.join(stateDir, "code-oss-desktop", "extensions"),
+      "user-data-dir": Path.join(stateDir, "code-oss-desktop", "shared-process"),
+    },
     isBuilt: false,
+    codeCachePath: Path.join(stateDir, "code-oss-desktop", "shared-process", "cache"),
     logsHome: modules.URI.file(Path.join(OS.tmpdir(), "tabs-code-oss-logs")),
     unsetSnapExportedVariables() {},
     restoreSnapExportedVariables() {},
@@ -249,11 +302,116 @@ export async function createNativeCodeHostMainBackend(
   );
   const externalTerminalService = new modules.ExternalTerminalService();
   const nativeMcpDiscoveryHelperService = new modules.NativeMcpDiscoveryHelperService();
+  const encryptionService = new modules.EncryptionMainService(logService);
+  const sharedProfile = createSharedProcessProfile(modules, stateDir);
+  const storage = new Map<string, string>();
+  const storageChannel = passiveChannel(modules.EventNone, (command, arg) => {
+    if (command === "getItems") {
+      return Array.from(storage.entries());
+    }
+    if (command === "updateItems" && arg && typeof arg === "object") {
+      const update = arg as { insert?: Array<[string, string]>; delete?: string[] };
+      for (const [key, value] of update.insert ?? []) storage.set(key, value);
+      for (const key of update.delete ?? []) storage.delete(key);
+    }
+    if (command === "isUsed") return false;
+    return undefined;
+  });
+  const loggerChannel = passiveChannel(modules.EventNone, (command, arg) => {
+    if (command === "consoleLog" && Array.isArray(arg)) {
+      const values = Array.isArray(arg[1]) ? arg[1] : [];
+      console.log("[code-oss]", ...values);
+    }
+    return undefined;
+  });
+
+  for (const pathname of [
+    environmentService.args["extensions-dir"],
+    environmentService.args["user-data-dir"],
+    environmentService.codeCachePath,
+  ]) {
+    await import("node:fs/promises").then((fs) => fs.mkdir(pathname, { recursive: true }));
+  }
 
   ipcServer.registerChannel(
     modules.extensionHostChannelName,
     modules.ProxyChannel.fromService(extensionHostStarter, disposables),
   );
+
+  const userDataProfilesChannel = modules.ProxyChannel.fromService(
+    {
+      onDidChangeProfiles: modules.EventNone,
+      onDidResetWorkspaces: modules.EventNone,
+      profilesHome: sharedProfile.home,
+      profiles: [sharedProfile.profile],
+      defaultProfile: sharedProfile.profile,
+      async createProfile() {
+        return sharedProfile.profile;
+      },
+      async updateProfile() {
+        return sharedProfile.profile;
+      },
+      async removeProfile() {},
+      async setProfileForWorkspace() {},
+      async unsetWorkspace() {},
+      async resetWorkspaces() {},
+      async cleanUp() {},
+      async cleanUpTransientProfiles() {},
+    },
+    disposables,
+  );
+  ipcServer.registerChannel("userDataProfiles", userDataProfilesChannel);
+  ipcServer.registerChannel(
+    "encryption",
+    modules.ProxyChannel.fromService(encryptionService, disposables),
+  );
+  ipcServer.registerChannel(
+    "extensionhostdebugservice",
+    passiveChannel(modules.EventNone, () => undefined),
+  );
+
+  const sharedProcess = new modules.SharedProcess(
+    "tabs-machine",
+    "tabs-sqm",
+    "tabs-device",
+    environmentService,
+    {
+      profilesHome: sharedProfile.home,
+      profiles: [sharedProfile.profile],
+    },
+    lifecycleService,
+    logService,
+    {
+      getLogLevel: () => 2,
+      getGlobalLoggers: () => [],
+    },
+    { serialize: () => ({}) },
+  );
+
+  const sharedProcessMainClient = sharedProcess.connect().then((port) => {
+    const client = new modules.MessagePortClient(port, "main");
+    client.registerChannel(modules.localFileSystemChannelName, diskFileSystemProviderChannel);
+    client.registerChannel("userDataProfiles", userDataProfilesChannel);
+    client.registerChannel("logger", loggerChannel);
+    client.registerChannel(
+      "policy",
+      passiveChannel(modules.EventNone, () => ({})),
+    );
+    client.registerChannel(
+      "nativeHost",
+      passiveChannel(modules.EventNone, () => undefined),
+    );
+    client.registerChannel("storage", storageChannel);
+    client.registerChannel(
+      "meteredConnection",
+      passiveChannel(modules.EventNone, () => false),
+    );
+    client.registerChannel(
+      "browserElements",
+      passiveChannel(modules.EventNone, () => undefined),
+    );
+    return client;
+  });
   ipcServer.registerChannel(modules.localFileSystemChannelName, diskFileSystemProviderChannel);
   ipcServer.registerChannel(
     modules.utilityProcessWorkerChannelName,
@@ -341,32 +499,8 @@ export async function createNativeCodeHostMainBackend(
     ),
   );
 
-  const storage = new Map<string, string>();
-  ipcServer.registerChannel(
-    "logger",
-    passiveChannel(modules.EventNone, (command, arg) => {
-      if (command === "consoleLog" && Array.isArray(arg)) {
-        const values = Array.isArray(arg[1]) ? arg[1] : [];
-        console.log("[code-oss]", ...values);
-      }
-      return undefined;
-    }),
-  );
-  ipcServer.registerChannel(
-    "storage",
-    passiveChannel(modules.EventNone, (command, arg) => {
-      if (command === "getItems") {
-        return Array.from(storage.entries());
-      }
-      if (command === "updateItems" && arg && typeof arg === "object") {
-        const update = arg as { insert?: Array<[string, string]>; delete?: string[] };
-        for (const [key, value] of update.insert ?? []) storage.set(key, value);
-        for (const key of update.delete ?? []) storage.delete(key);
-      }
-      if (command === "isUsed") return false;
-      return undefined;
-    }),
-  );
+  ipcServer.registerChannel("logger", loggerChannel);
+  ipcServer.registerChannel("storage", storageChannel);
   ipcServer.registerChannel(
     "keyboardLayout",
     passiveChannel(modules.EventNone, (command) =>
@@ -441,6 +575,8 @@ export async function createNativeCodeHostMainBackend(
       diskFileSystemProviderChannel.dispose();
       diskFileSystemProvider.dispose();
       extensionHostStarter.dispose();
+      void sharedProcessMainClient.then((client) => client.dispose()).catch(() => undefined);
+      sharedProcess.dispose();
       disposables.dispose();
       ipcServer.dispose();
       onWillLoadWindow.dispose();

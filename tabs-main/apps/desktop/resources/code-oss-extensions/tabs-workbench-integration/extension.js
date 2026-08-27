@@ -18,7 +18,7 @@ const EMBED_CHROME_DEFAULTS = {
   // themed to match the app in codeOssThemeCss.ts, so it reads as custom.
   "workbench.statusBar.visible": true,
   "window.menuBarVisibility": "hidden",
-  "window.titleBarStyle": "custom",
+  "window.titleBarStyle": "native",
   "window.customTitleBarVisibility": "never",
   "workbench.layoutControl.enabled": false,
   "window.commandCenter": false,

@@ -2321,7 +2321,11 @@ function createTabsWindow(): BrowserWindow {
     }
   });
   window.once("ready-to-show", () => {
-    window.show();
+    if (process.env.TABS_DEV_RESTART === "1") {
+      window.showInactive();
+    } else {
+      window.show();
+    }
   });
 
   if (isDevelopment) {
@@ -2459,6 +2463,7 @@ async function bootstrap(): Promise<void> {
   if (codeHostConfig.runtime) {
     nativeCodeHostMainBackend = await createNativeCodeHostMainBackend(
       codeHostConfig.runtime.vscodeRoot,
+      codeHostConfig.runtime.stateDir,
     );
     codeHostManager.setNativeWebContentsRegistrar((webContents) => {
       nativeCodeHostMainBackend?.registerWebContents(webContents);

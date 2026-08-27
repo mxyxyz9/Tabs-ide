@@ -513,8 +513,9 @@
 				// embedded workbench. Record that fact before the workbench layout is
 				// imported so it cannot reserve a second, empty title-bar row while
 				// the per-project settings profile is still loading.
-				(globalThis as { __tabsEmbeddedWorkbench?: boolean }).__tabsEmbeddedWorkbench =
-					typeof windowConfig.userEnv?.TABS_PROJECT_ID === 'string';
+				const isTabsEmbeddedWorkbench = typeof windowConfig.userEnv?.TABS_PROJECT_ID === 'string';
+				(globalThis as { __tabsEmbeddedWorkbench?: boolean }).__tabsEmbeddedWorkbench = isTabsEmbeddedWorkbench;
+				document.documentElement.classList.toggle('tabs-embedded-workbench', isTabsEmbeddedWorkbench);
 
 				// Show our splash as early as possible
 				showSplash(windowConfig);

@@ -30,6 +30,7 @@ delete childEnv.ELECTRON_RUN_AS_NODE;
 let shuttingDown = false;
 let restartTimer = null;
 let currentApp = null;
+let hasLaunchedApp = false;
 let restartQueue = Promise.resolve();
 const expectedExits = new WeakSet();
 const watchers = [];
@@ -80,6 +81,7 @@ function startApp() {
       cwd: desktopDir,
       env: {
         ...childEnv,
+        TABS_DEV_RESTART: hasLaunchedApp ? "1" : "0",
         VITE_DEV_SERVER_URL: devServerUrl,
       },
       stdio: "inherit",
@@ -87,6 +89,7 @@ function startApp() {
   );
 
   currentApp = app;
+  hasLaunchedApp = true;
 
   app.once("error", () => {
     if (currentApp === app) {
