@@ -599,7 +599,6 @@ const validateMacDmgContents = Effect.fn("validateMacDmgContents")(function* (
 
   try {
     yield* assertRequiredPaths(mountPoint, requiredPaths, "Generated DMG");
-
   } finally {
     const detachResult = spawnSync("hdiutil", ["detach", mountPoint], {
       encoding: "utf8",
@@ -912,6 +911,10 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   // missing it throws "Cannot find module .../build/Debug/vscode_fs.node" and
   // takes down git (and anything depending on it, e.g. CodeRabbit).
   compiledMarkers.push("extensions/git/node_modules/@vscode/fs-copyfile/build");
+  // Marketplace signature verification runs in the shared process. The
+  // verifier lives in build/node_modules in a source checkout and is copied
+  // into the packaged runtime below before build/ is removed.
+  compiledMarkers.push("build/node_modules/@vscode/vsce-sign/src/main.js");
 
   const missingMarkers: string[] = [];
   for (const marker of compiledMarkers) {
@@ -931,6 +934,19 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
 
   yield* Effect.log("[desktop-artifact] Staging VS Code runtime...");
   yield* fs.copy(vsCodeSourceDir, vsCodeDestDir);
+
+  // The shared process verifies Marketplace signatures with @vscode/vsce-sign.
+  // Upstream installs that package under build/node_modules, but build/ is not
+  // part of the runtime artifact. Preserve only the verifier and its matching
+  // platform package in the runtime dependency tree before removing build/.
+  const buildVscodeModules = path.join(vsCodeDestDir, "build", "node_modules", "@vscode");
+  const runtimeVscodeModules = path.join(vsCodeDestDir, "node_modules", "@vscode");
+  if (yield* fs.exists(buildVscodeModules)) {
+    for (const entry of yield* fs.readDirectory(buildVscodeModules)) {
+      if (!entry.startsWith("vsce-sign")) continue;
+      yield* fs.copy(path.join(buildVscodeModules, entry), path.join(runtimeVscodeModules, entry));
+    }
+  }
 
   // Remove problematic absolute symlinks that break code signing
   const claudeDir = path.join(vsCodeDestDir, ".claude");

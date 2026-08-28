@@ -230,17 +230,12 @@ export async function createNativeCodeHostMainBackend(
   vscodeRoot: string,
   stateDir: string,
 ): Promise<NativeCodeHostMainBackend> {
-  const developmentNodeModules = Path.join(vscodeRoot, "build", "node_modules");
-  if (
-    !process.env.VSCODE_DEV_INJECT_NODE_MODULE_LOOKUP_PATH &&
-    existsSync(developmentNodeModules)
-  ) {
-    // bootstrap-fork intentionally ignores the injected dependency tree unless
-    // it is running in development mode. Tabs ships the source-built Code-OSS
-    // runtime (out/ + build/node_modules), so both values must travel together
-    // to the shared process and extension host utility processes.
-    process.env.VSCODE_DEV ??= "1";
-    process.env.VSCODE_DEV_INJECT_NODE_MODULE_LOOKUP_PATH = developmentNodeModules;
+  const vsceSignEntry = [
+    Path.join(vscodeRoot, "node_modules", "@vscode", "vsce-sign", "src", "main.js"),
+    Path.join(vscodeRoot, "build", "node_modules", "@vscode", "vsce-sign", "src", "main.js"),
+  ].find((candidate) => existsSync(candidate));
+  if (!process.env.TABS_VSCE_SIGN_MODULE_PATH && vsceSignEntry) {
+    process.env.TABS_VSCE_SIGN_MODULE_PATH = pathToFileURL(vsceSignEntry).href;
   }
 
   const modules = await loadNativeCodeHostModules(vscodeRoot);

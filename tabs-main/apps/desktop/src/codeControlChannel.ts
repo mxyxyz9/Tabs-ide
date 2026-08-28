@@ -209,7 +209,11 @@ export class CodeControlChannel {
           if (waiters?.size === 0) {
             this.extensionHostWaiters.delete(projectId);
           }
-          reject(new Error(`Code-OSS extension host did not become ready within ${timeoutMs}ms.`));
+          reject(
+            new Error(
+              `Tabs' Code-OSS integration extension did not connect within ${timeoutMs}ms.`,
+            ),
+          );
         }, timeoutMs),
       };
       const waiters = this.extensionHostWaiters.get(projectId) ?? new Set();

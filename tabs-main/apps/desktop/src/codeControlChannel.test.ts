@@ -35,7 +35,7 @@ describe("CodeControlChannel extension-host readiness", () => {
     await channel.start();
 
     await expect(channel.waitForExtensionHost("missing", 10)).rejects.toThrow(
-      "did not become ready",
+      "integration extension did not connect",
     );
   });
 
