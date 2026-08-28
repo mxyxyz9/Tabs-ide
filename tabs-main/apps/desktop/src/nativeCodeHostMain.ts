@@ -1,6 +1,7 @@
 import { BrowserWindow, webContents as electronWebContents, type WebContents } from "electron";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as Path from "node:path";
 import * as OS from "node:os";
@@ -216,6 +217,14 @@ export async function createNativeCodeHostMainBackend(
   vscodeRoot: string,
   stateDir: string,
 ): Promise<NativeCodeHostMainBackend> {
+  const developmentNodeModules = Path.join(vscodeRoot, "build", "node_modules");
+  if (
+    !process.env.VSCODE_DEV_INJECT_NODE_MODULE_LOOKUP_PATH &&
+    existsSync(developmentNodeModules)
+  ) {
+    process.env.VSCODE_DEV_INJECT_NODE_MODULE_LOOKUP_PATH = developmentNodeModules;
+  }
+
   const modules = await loadNativeCodeHostModules(vscodeRoot);
   const disposables = new modules.DisposableStore();
   const ipcServer = new modules.ElectronIPCServer();

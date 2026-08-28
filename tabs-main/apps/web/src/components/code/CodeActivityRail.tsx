@@ -61,8 +61,8 @@ function RailButton(props: {
             aria-pressed={props.active}
             onClick={props.onClick}
             className={cn(
-              "group relative flex size-10 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
-              props.active && "bg-accent/70 text-foreground shadow-sm",
+              "group relative flex size-10 items-center justify-center rounded-xl text-muted-foreground outline-none transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+              props.active && "text-foreground",
             )}
           >
             {props.active ? (
