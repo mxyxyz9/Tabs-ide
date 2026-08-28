@@ -188,6 +188,8 @@ const BUILTIN_ACTIVITY_CONTAINERS = new Set([
   "extensions",
 ]);
 
+const normalizeActivityContainerId = (id) => VIEW_COMMAND_TO_ID[id] || id || null;
+
 /** @type {vscode.WebviewPanel | null} */
 let shellPanel = null;
 /** @type {ReturnType<typeof createShellController> | null} */
@@ -593,8 +595,17 @@ function startCodeControlChannel(context) {
   let lastRegistryCacheKey = "";
   const refreshContainers = async () => {
     try {
-      const containers = await vscode.commands.executeCommand("_tabs.getViewContainers");
+      const [containers, activeContainerId] = await Promise.all([
+        vscode.commands.executeCommand("_tabs.getViewContainers"),
+        vscode.commands.executeCommand("_tabs.getActiveViewContainer"),
+      ]);
       if (!Array.isArray(containers)) return;
+
+      const nextActiveViewId = normalizeActivityContainerId(activeContainerId);
+      const activeViewChanged = state.activeViewId !== nextActiveViewId;
+      if (activeViewChanged) {
+        state.activeViewId = nextActiveViewId;
+      }
 
       const customContainers = containers.filter(
         (c) => c && c.id && !BUILTIN_ACTIVITY_CONTAINERS.has(c.id),
@@ -604,6 +615,7 @@ function startCodeControlChannel(context) {
         .map((c) => `${c.id}:${c.commandId}:${c.order || 0}`)
         .join("|");
       if (cacheKey === lastRegistryCacheKey) {
+        if (activeViewChanged) pushState();
         return;
       }
       lastRegistryCacheKey = cacheKey;
@@ -1258,7 +1270,7 @@ function startCodeControlChannel(context) {
 
   const containerInterval = setInterval(() => {
     void refreshContainers();
-  }, 5000);
+  }, 1000);
 
   const extensionChangeSub = vscode.extensions.onDidChange(() => {
     void refreshContainers();

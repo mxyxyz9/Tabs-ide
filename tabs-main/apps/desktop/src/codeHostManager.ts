@@ -67,6 +67,8 @@ const REQUIRED_CODE_OSS_DESKTOP_RELATIVE_PATHS = [
 ] as const;
 const CODE_OSS_FILE_PROTOCOL = "vscode-file";
 const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
+const CODE_OSS_WEBVIEW_PROTOCOL = "vscode-webview";
+const CODE_OSS_WEBVIEW_RESOURCES = new Set(["index.html", "fake.html", "service-worker.js"]);
 const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
   process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs"),
   "userdata",
@@ -270,9 +272,13 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   "chat.disableAIFeatures": true,
   "chat.commandCenter.enabled": false,
   "workbench.secondarySideBar.defaultVisibility": "hidden",
-  // The embed ships a fixed, bundled extension set with no marketplace, so
-  // background update checks only add startup work and network noise (and can
-  // delay the integration extension's activation on a cold session).
+  // Open VSX signature archives are not Microsoft Marketplace repository
+  // signatures. Some currently contain the Open VSX signature alongside an
+  // empty legacy .signature.p7s, which Microsoft's verifier rejects before an
+  // otherwise valid extension can be installed. Keep integrity checks at the
+  // transport/package layer and do not apply the incompatible repository
+  // signature policy to this gallery.
+  "extensions.verifySignature": false,
   "extensions.autoCheckUpdates": false,
 };
 
@@ -287,6 +293,90 @@ function writeMergedJsonFile(pathname: string, patch: Record<string, unknown>): 
     }
   }
   FS.writeFileSync(pathname, `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`, "utf8");
+}
+
+type ExtensionRegistration = {
+  identifier?: { id?: string };
+  version?: string;
+  location?: { fsPath?: string; path?: string };
+  relativeLocation?: string;
+  metadata?: { installedTimestamp?: number };
+};
+
+function readExtensionRegistrations(pathname: string): ExtensionRegistration[] {
+  try {
+    const value = JSON.parse(FS.readFileSync(pathname, "utf8")) as unknown;
+    return Array.isArray(value) ? (value as ExtensionRegistration[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function resolveRegisteredExtensionPath(
+  registration: ExtensionRegistration,
+  extensionsDir: string,
+): string | null {
+  const configuredPath = registration.location?.fsPath ?? registration.location?.path;
+  if (configuredPath) {
+    return Path.resolve(configuredPath);
+  }
+  return registration.relativeLocation
+    ? Path.resolve(extensionsDir, registration.relativeLocation)
+    : null;
+}
+
+/**
+ * Migrate per-workspace extension registrations into the shared native profile.
+ * The extension files have always been shared; keeping the registry shared too
+ * prevents one workspace from retaining a pointer to a version removed by
+ * another workspace.
+ */
+export function reconcileSharedExtensionRegistry(stateDir: string): string {
+  const desktopStateRoot = Path.join(stateDir, "code-oss-desktop");
+  const extensionsDir = Path.join(desktopStateRoot, "extensions");
+  const sharedRegistry = Path.join(
+    desktopStateRoot,
+    "shared-profile",
+    "default",
+    "extensions.json",
+  );
+  const registryPaths = new Set<string>([sharedRegistry]);
+
+  try {
+    for (const entry of FS.readdirSync(desktopStateRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      registryPaths.add(
+        Path.join(desktopStateRoot, entry.name, "profile", "default", "extensions.json"),
+      );
+    }
+  } catch {
+    // The state root is created below on first launch.
+  }
+
+  const registrations = new Map<string, ExtensionRegistration>();
+  for (const registryPath of registryPaths) {
+    for (const registration of readExtensionRegistrations(registryPath)) {
+      const id = registration.identifier?.id?.toLowerCase();
+      const extensionPath = resolveRegisteredExtensionPath(registration, extensionsDir);
+      if (!id || !extensionPath || !isFile(Path.join(extensionPath, "package.json"), FS)) {
+        continue;
+      }
+      const current = registrations.get(id);
+      if (
+        !current ||
+        (registration.metadata?.installedTimestamp ?? 0) >=
+          (current.metadata?.installedTimestamp ?? 0)
+      ) {
+        registrations.set(id, registration);
+      }
+    }
+  }
+
+  FS.mkdirSync(Path.dirname(sharedRegistry), { recursive: true });
+  const temporaryRegistry = `${sharedRegistry}.${process.pid}.${Crypto.randomUUID()}.tmp`;
+  FS.writeFileSync(temporaryRegistry, JSON.stringify(Array.from(registrations.values())), "utf8");
+  FS.renameSync(temporaryRegistry, sharedRegistry);
+  return sharedRegistry;
 }
 
 function writeKeybindingsJsonFile(pathname: string, rules: Array<Record<string, unknown>>): void {
@@ -1417,6 +1507,36 @@ export class CodeHostManager {
       callback({ path: resolvedPath, headers });
     });
 
+    // The stock Electron main process normally installs this handler through
+    // WebviewMainService. Tabs owns the Electron main process, so native
+    // workbench webviews (extension READMEs, changelogs, and extension UIs)
+    // need the equivalent endpoint in the embedded session.
+    browserSession.protocol.registerFileProtocol(CODE_OSS_WEBVIEW_PROTOCOL, (request, callback) => {
+      try {
+        const resourceName = Path.posix.basename(new URL(request.url).pathname);
+        if (!CODE_OSS_WEBVIEW_RESOURCES.has(resourceName)) {
+          callback({ error: -10 });
+          return;
+        }
+        callback({
+          path: Path.join(
+            runtime.vscodeRoot,
+            "out",
+            "vs",
+            "workbench",
+            "contrib",
+            "webview",
+            "browser",
+            "pre",
+            resourceName,
+          ),
+          headers: { "Cross-Origin-Resource-Policy": "cross-origin" },
+        });
+      } catch {
+        callback({ error: -3 });
+      }
+    });
+
     session.desktopProtocolRegistered = true;
     this.config.state.entry = session.entry;
   }
@@ -1504,8 +1624,9 @@ export class CodeHostManager {
 
     const sessionStateRoot = this.getDesktopSessionStateRoot(projectId, runtime.stateDir);
     const sharedExtensionsDir = this.getDesktopSharedExtensionsDir(runtime.stateDir);
+    const sharedExtensionsRegistry = reconcileSharedExtensionRegistry(runtime.stateDir);
     const profileRoot = Path.join(sessionStateRoot, "profile");
-    const profile = this.ensureDesktopUserDataProfile(profileRoot);
+    const profile = this.ensureDesktopUserDataProfile(profileRoot, sharedExtensionsRegistry);
     const focusedFilePath = session.lastFocusedPath
       ? Path.join(session.workspaceRoot, session.lastFocusedPath)
       : null;
@@ -1646,7 +1767,10 @@ export class CodeHostManager {
     return Path.join(stateDir, "code-oss-desktop", "extensions");
   }
 
-  private ensureDesktopUserDataProfile(profileRoot: string): DesktopUserDataProfile {
+  private ensureDesktopUserDataProfile(
+    profileRoot: string,
+    sharedExtensionsRegistry: string,
+  ): DesktopUserDataProfile {
     const location = Path.join(profileRoot, "default");
     const cacheHome = Path.join(profileRoot, "cache");
     for (const pathname of [location, cacheHome]) {
@@ -1701,7 +1825,7 @@ export class CodeHostManager {
       tasksResource: this.toFileUriComponent(Path.join(location, "tasks.json")),
       snippetsHome: this.toFileUriComponent(Path.join(location, "snippets")),
       promptsHome: this.toFileUriComponent(Path.join(location, "prompts")),
-      extensionsResource: this.toFileUriComponent(Path.join(location, "extensions.json")),
+      extensionsResource: this.toFileUriComponent(sharedExtensionsRegistry),
       mcpResource: this.toFileUriComponent(Path.join(location, "mcp.json")),
       cacheHome: this.toFileUriComponent(cacheHome),
     };

@@ -452,7 +452,7 @@ export function isAllowedChromeCommand(commandId: string): boolean {
 }
 
 export const DEFAULT_CODE_CHROME_STATE: CodeChromeState = {
-  activeViewId: null,
+  activeViewId: "explorer",
   panelOpen: false,
   panelMaximized: false,
   dirtyCount: 0,

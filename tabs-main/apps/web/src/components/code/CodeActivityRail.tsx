@@ -82,6 +82,9 @@ function RailButton(props: {
 }
 
 function CustomActivityIcon({ item }: { item: CustomActivityBarItem }) {
+  if (item.icon.type === "themeIcon" && item.icon.value) {
+    return <span aria-hidden="true" className={`codicon codicon-${item.icon.value} text-[18px]`} />;
+  }
   if (item.icon.type === "uri" && item.icon.value) {
     return <img alt="" aria-hidden="true" className="size-[18px]" src={item.icon.value} />;
   }

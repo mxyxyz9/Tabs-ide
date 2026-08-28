@@ -49,10 +49,48 @@ import {
   CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH,
   CodeHostManager,
   mergeProductConfigurationDefaults,
+  reconcileSharedExtensionRegistry,
   readWorkspaceTabs,
   resolveCodeHostConfig,
   writeWorkspaceTabs,
 } from "./codeHostManager";
+
+describe("reconcileSharedExtensionRegistry", () => {
+  it("keeps valid registrations and removes stale workspace registrations", () => {
+    const stateDir = makeTempDir("tabs-extension-registry-");
+    const desktopRoot = Path.join(stateDir, "code-oss-desktop");
+    const extensionsDir = Path.join(desktopRoot, "extensions");
+    const validExtensionDir = Path.join(extensionsDir, "openai.chatgpt-1.0.0");
+    FS.mkdirSync(validExtensionDir, { recursive: true });
+    FS.writeFileSync(Path.join(validExtensionDir, "package.json"), "{}");
+
+    const workspaceRegistry = Path.join(desktopRoot, "workspace", "profile", "default");
+    FS.mkdirSync(workspaceRegistry, { recursive: true });
+    FS.writeFileSync(
+      Path.join(workspaceRegistry, "extensions.json"),
+      JSON.stringify([
+        {
+          identifier: { id: "openai.chatgpt" },
+          version: "1.0.0",
+          relativeLocation: "openai.chatgpt-1.0.0",
+          metadata: { installedTimestamp: 2 },
+        },
+        {
+          identifier: { id: "coderabbit.coderabbit-vscode" },
+          version: "0.21.4",
+          relativeLocation: "coderabbit.coderabbit-vscode-0.21.4-universal",
+          metadata: { installedTimestamp: 3 },
+        },
+      ]),
+    );
+
+    const sharedRegistry = reconcileSharedExtensionRegistry(stateDir);
+
+    expect(JSON.parse(FS.readFileSync(sharedRegistry, "utf8"))).toEqual([
+      expect.objectContaining({ identifier: { id: "openai.chatgpt" }, version: "1.0.0" }),
+    ]);
+  });
+});
 
 function makeTempDir(prefix: string): string {
   return FS.mkdtempSync(Path.join(OS.tmpdir(), prefix));
