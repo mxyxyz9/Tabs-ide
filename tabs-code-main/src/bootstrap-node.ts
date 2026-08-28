@@ -5,11 +5,17 @@
 
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import { Buffer } from 'node:buffer';
 import { createRequire } from 'node:module';
 import type { IProductConfiguration } from './vs/base/common/product.js';
 
 const require = createRequire(import.meta.url);
 const isWindows = process.platform === 'win32';
+
+// Avoid 64 KiB pooled backing stores crossing Mojo's shared-memory threshold.
+if (process.platform === 'linux') {
+	Buffer.poolSize = 8 * 1024;
+}
 
 // increase number of stack frames(from 10, https://github.com/v8/v8/wiki/Stack-Trace-API)
 Error.stackTraceLimit = 100;
@@ -55,6 +61,72 @@ function setupCurrentWorkingDirectory(): void {
 setupCurrentWorkingDirectory();
 
 /**
+ * Add ASAR support to Node's CommonJS module resolution.
+ *
+ * Production builds bundle our `node_modules` into a `node_modules.asar`
+ * archive that sits next to the (now mostly empty) `node_modules` folder.
+ * Node does not look into `.asar` archives on its own, so we splice the
+ * archive into the lookup paths right before the real `node_modules` folder.
+ *
+ * The archive keeps the same top-level layout as `node_modules`
+ * (`node_modules.asar/<module>`), so bare `require('<module>')` calls resolve
+ * exactly like they did before ASAR was introduced. This keeps extensions and
+ * tooling that reach into `${appRoot}/node_modules.asar/<module>` working.
+ *
+ * Note: only applies to the packaged app running on Electron (incl.
+ * `ELECTRON_RUN_AS_NODE` forks), never when running out of sources.
+ */
+function enableASARSupport(): void {
+	if (!process.env['ELECTRON_RUN_AS_NODE'] && !process.versions['electron']) {
+		return; // only on Electron / Electron-as-node
+	}
+
+	if (process.env['VSCODE_DEV']) {
+		return; // no ASAR when running out of sources
+	}
+
+	// Normalize the drive letter to lower-case for comparison. On Windows the
+	// path derived from `import.meta.dirname` (a file URL) can use a different
+	// drive-letter case than the paths Node computes for a `require` parent, so
+	// an exact string comparison would miss the insertion point (breaking e.g.
+	// `require('mkdirp')` from a module inside the archive).
+	const normalizeDriveLetter = (p: string): string => {
+		if (isWindows && p.length >= 2 && p.charCodeAt(1) === 58 /* : */) {
+			const code = p.charCodeAt(0);
+			if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+				return p[0].toLowerCase() + p.slice(1);
+			}
+		}
+		return p;
+	};
+
+	const NODE_MODULES_PATH = normalizeDriveLetter(path.join(import.meta.dirname, '../node_modules'));
+
+	const Module = require('node:module') as typeof import('node:module') & {
+		_resolveLookupPaths: (request: string, parent: unknown) => string[] | null;
+	};
+
+	const originalResolveLookupPaths = Module._resolveLookupPaths;
+	Module._resolveLookupPaths = function (request: string, parent: unknown): string[] | null {
+		const paths = originalResolveLookupPaths(request, parent);
+		if (Array.isArray(paths)) {
+			for (let i = 0, len = paths.length; i < len; i++) {
+				if (normalizeDriveLetter(paths[i]) === NODE_MODULES_PATH) {
+					// Derive the archive path from the matched entry so drive-letter
+					// case and path separators are preserved exactly.
+					paths.splice(i, 0, `${paths[i]}.asar`);
+					break;
+				}
+			}
+		}
+
+		return paths;
+	};
+}
+
+enableASARSupport();
+
+/**
  * Add support for redirecting the loading of node modules
  *
  * Note: only applies when running out of sources.
@@ -68,106 +140,9 @@ export function devInjectNodeModuleLookupPath(injectPath: string): void {
 		throw new Error('Missing injectPath');
 	}
 
+	// register a loader hook
 	const Module = require('node:module');
-	if (typeof Module.registerHooks === 'function') {
-		// Prefer the synchronous in-thread hooks API (Node >= 22.15). The
-		// off-thread `Module.register` loader worker can deadlock under
-		// Electron-run-as-Node: a synchronous resolve request parks the main
-		// thread in the hooks channel's futex wait while the worker never
-		// wakes, freezing the whole process on the next dynamic import (this
-		// froze every remote extension host in the embedded Tabs runtime).
-		// The mapping is a plain table lookup, so it needs no worker at all.
-		devRegisterSyncNodeModuleHooks(Module, injectPath);
-	} else {
-		// register a loader hook
-		Module.register('./bootstrap-import.js', { parentURL: import.meta.url, data: injectPath });
-	}
-}
-
-/**
- * Synchronous equivalent of the mapping in `bootstrap-import.ts`: redirects
- * bare imports of the inject path's package dependencies to that
- * node_modules tree. Keep the resolution logic in sync with
- * `bootstrap-import.ts#initialize`.
- */
-function devRegisterSyncNodeModuleHooks(Module: typeof import('node:module'), injectPath: string): void {
-	const { fileURLToPath, pathToFileURL } = require('node:url');
-
-	const specifierToUrl: Record<string, string> = {};
-	const specifierToFormat: Record<string, string> = {};
-
-	const injectPackageJSONPath = fileURLToPath(new URL('../package.json', pathToFileURL(injectPath)));
-	const packageJSON = JSON.parse(String(fs.readFileSync(injectPackageJSONPath)));
-	for (const [name] of Object.entries(packageJSON.dependencies)) {
-		try {
-			const pkgJsonPath = path.join(injectPackageJSONPath, `../node_modules/${name}/package.json`);
-			const pkgJson = JSON.parse(String(fs.readFileSync(pkgJsonPath)));
-
-			// Determine the entry point: prefer exports["."].import for ESM, then main.
-			// Handle conditional export targets where exports["."].import/default
-			// can be a string or an object with a string `default` field.
-			let main: string | undefined;
-			if (pkgJson.exports?.['.']) {
-				const dotExport = pkgJson.exports['.'];
-				if (typeof dotExport === 'string') {
-					main = dotExport;
-				} else if (typeof dotExport === 'object' && dotExport !== null) {
-					const resolveCondition = (v: unknown): string | undefined => {
-						if (typeof v === 'string') {
-							return v;
-						}
-						if (typeof v === 'object' && v !== null) {
-							const d = (v as { default?: unknown }).default;
-							if (typeof d === 'string') {
-								return d;
-							}
-						}
-						return undefined;
-					};
-					main = resolveCondition(dotExport.import) ?? resolveCondition(dotExport.default);
-				}
-			}
-			if (typeof main !== 'string') {
-				main = typeof pkgJson.main === 'string' ? pkgJson.main : undefined;
-			}
-
-			if (!main) {
-				main = 'index.js';
-			}
-			if (!main.endsWith('.js') && !main.endsWith('.mjs') && !main.endsWith('.cjs')) {
-				main += '.js';
-			}
-			const mainPath = path.join(injectPackageJSONPath, `../node_modules/${name}/${main}`);
-			specifierToUrl[name] = pathToFileURL(mainPath).href;
-			// Determine module format: .mjs is always ESM, .cjs always CJS, otherwise check type field
-			const isModule = main.endsWith('.mjs')
-				? true
-				: main.endsWith('.cjs')
-					? false
-					: pkgJson.type === 'module';
-			specifierToFormat[name] = isModule ? 'module' : 'commonjs';
-
-		} catch (err) {
-			console.error(name);
-			console.error(err);
-		}
-	}
-
-	Module.registerHooks({
-		resolve(specifier, context, nextResolve) {
-			const newSpecifier = specifierToUrl[specifier];
-			if (newSpecifier !== undefined) {
-				return {
-					format: specifierToFormat[specifier] ?? 'commonjs',
-					shortCircuit: true,
-					url: newSpecifier
-				};
-			}
-			return nextResolve(specifier, context);
-		}
-	});
-
-	console.log(`[bootstrap-import] Initialized node_modules redirector (sync hooks) for: ${injectPath}`);
+	Module.register('./bootstrap-import.js', { parentURL: import.meta.url, data: injectPath });
 }
 
 export function removeGlobalNodeJsModuleLookupPaths(): void {

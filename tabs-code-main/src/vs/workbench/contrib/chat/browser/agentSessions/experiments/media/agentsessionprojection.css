@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/* Style all tabs with normal theme background */
+/* Style all tabs with the same background as the agent status */
 .monaco-workbench.agent-session-projection-active .part.editor > .content .editor-group-container > .title .tabs-container > .tab {
-	background-color: var(--vscode-tab-inactiveBackground, transparent);
+	background-color: var(--vscode-quickInput-background) !important;
 }
 
-/* Active tab gets active tab theme background */
+/* Active tab gets slightly stronger tint */
 .monaco-workbench.agent-session-projection-active .part.editor > .content .editor-group-container > .title .tabs-container > .tab.active {
-	background-color: var(--vscode-tab-activeBackground, transparent);
+	background-color: var(--vscode-chat-requestBubbleBackground) !important;
 }
 
 .hc-black .monaco-workbench.agent-session-projection-active .part.editor > .content .editor-group-container > .title .tabs-container > .tab,

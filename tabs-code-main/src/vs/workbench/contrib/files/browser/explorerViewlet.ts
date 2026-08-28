@@ -171,7 +171,7 @@ export class ExplorerViewPaneContainer extends ViewPaneContainer {
 		@ILogService logService: ILogService,
 	) {
 
-		super(VIEWLET_ID, { mergeViewWithContainerWhenSingleView: false }, instantiationService, configurationService, layoutService, contextMenuService, telemetryService, extensionService, themeService, storageService, contextService, viewDescriptorService, logService);
+		super(VIEWLET_ID, { mergeViewWithContainerWhenSingleView: true }, instantiationService, configurationService, layoutService, contextMenuService, telemetryService, extensionService, themeService, storageService, contextService, viewDescriptorService, logService);
 
 		this.viewletVisibleContextKey = ExplorerViewletVisibleContext.bindTo(contextKeyService);
 		this._register(this.contextService.onDidChangeWorkspaceName(e => this.updateTitleArea()));

@@ -23,11 +23,22 @@ import nodeModule from 'node:module';
 import { assertType } from '../../../base/common/types.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { BidirectionalMap } from '../../../base/common/map.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
-
+import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 const require = nodeModule.createRequire(import.meta.url);
 
 class NodeModuleRequireInterceptor extends RequireInterceptor {
+
+	private static _createDataUri(scriptContent: string): string {
+		return `data:text/javascript;base64,${Buffer.from(scriptContent).toString('base64')}`;
+	}
+
+	private static _vscodeImportFnName = `_VSCODE_IMPORT_VSCODE_API`;
+
+	private readonly _store = new DisposableStore();
+
+	dispose(): void {
+		this._store.dispose();
+	}
 
 	protected _installInterceptor(): void {
 		const that = this;
@@ -72,30 +83,12 @@ class NodeModuleRequireInterceptor extends RequireInterceptor {
 			}
 			return request;
 		};
-	}
-}
-
-class NodeModuleESMInterceptor extends RequireInterceptor {
-
-	private static _createDataUri(scriptContent: string): string {
-		return `data:text/javascript;base64,${Buffer.from(scriptContent).toString('base64')}`;
-	}
-
-	private static _vscodeImportFnName = `_VSCODE_IMPORT_VSCODE_API`;
-
-	private readonly _store = new DisposableStore();
-
-	dispose(): void {
-		this._store.dispose();
-	}
-
-	protected override _installInterceptor(): void {
 
 		const apiInstances = new BidirectionalMap<typeof vscode, string>();
 		const apiImportDataUrl = new Map<string, string>();
 
 		// define a global function that can be used to get API instances given a random key
-		Object.defineProperty(globalThis, NodeModuleESMInterceptor._vscodeImportFnName, {
+		Object.defineProperty(globalThis, NodeModuleRequireInterceptor._vscodeImportFnName, {
 			enumerable: false,
 			configurable: false,
 			writable: false,
@@ -106,19 +99,18 @@ class NodeModuleESMInterceptor extends RequireInterceptor {
 
 		let apiModuleFactory: INodeModuleFactory | undefined;
 
-		// Resolve the 'vscode' specifier to a data-url containing the API exports.
-		// This runs synchronously on the main thread, avoiding the deadlock that
-		// occurs with nodeModule.register() + off-thread loader worker + MessagePort.
-		const resolveVscodeUri = (parentURL: string): string => {
+		const lookup = (url: string): string => {
+			// Get the vscode-module factory - which is the same logic that's also used by
+			// the CommonJS require interceptor
 			if (!apiModuleFactory) {
 				apiModuleFactory = this._factories.get('vscode');
 				assertType(apiModuleFactory);
 			}
 
-			const uri = URI.parse(parentURL);
+			const uri = URI.parse(url);
 
 			// Get or create the API instance. The interface is per extension and extensions are
-			// looked up by the uri and path containment.
+			// looked up by the uri (e.data.url) and path containment.
 			const apiInstance = apiModuleFactory.load('_not_used', uri, () => { throw new Error('CANNOT LOAD MODULE from here.'); });
 			let key = apiInstances.get(apiInstance);
 			if (!key) {
@@ -129,33 +121,25 @@ class NodeModuleESMInterceptor extends RequireInterceptor {
 			// Create and cache a data-url which is the import script for the API instance
 			let scriptDataUrlSrc = apiImportDataUrl.get(key);
 			if (!scriptDataUrlSrc) {
-				const jsCode = `const _vscodeInstance = globalThis.${NodeModuleESMInterceptor._vscodeImportFnName}('${key}');\n\n${Object.keys(apiInstance).map((name => `export const ${name} = _vscodeInstance['${name}'];`)).join('\n')}`;
-				scriptDataUrlSrc = NodeModuleESMInterceptor._createDataUri(jsCode);
+				const jsCode = `const _vscodeInstance = globalThis.${NodeModuleRequireInterceptor._vscodeImportFnName}('${key}');\n\n${Object.keys(apiInstance).map((name => `export const ${name} = _vscodeInstance['${name}'];`)).join('\n')}`;
+				scriptDataUrlSrc = NodeModuleRequireInterceptor._createDataUri(jsCode);
 				apiImportDataUrl.set(key, scriptDataUrlSrc);
 			}
-
 			return scriptDataUrlSrc;
 		};
-
-		// Use synchronous in-thread resolve hooks (Node >= 22.15) instead of
-		// nodeModule.register() which spawns an off-thread loader worker.
-		// The async worker approach deadlocks because:
-		//   1. Main thread calls import('vscode.github') and blocks in Atomics.wait()
-		//      during synchronous module linking
-		//   2. Loader worker resolves 'vscode' and sends MessagePort request to main thread
-		//   3. Main thread can't process the message because its event loop is blocked
-		//   => circular wait / deadlock
-		nodeModule.registerHooks({
-			resolve(specifier: string, context: { parentURL?: string }, nextResolve: Function) {
-				if (specifier === 'vscode' && context.parentURL) {
-					return {
-						url: resolveVscodeUri(context.parentURL),
-						shortCircuit: true
-					};
+		const hooks = nodeModule.registerHooks({
+			resolve: (specifier, context, nextResolve) => {
+				if (specifier !== 'vscode' || !context.parentURL) {
+					return nextResolve(specifier, context);
 				}
-				return nextResolve(specifier, context);
-			}
+				const otherUrl = lookup(context.parentURL);
+				return {
+					url: otherUrl,
+					shortCircuit: true,
+				};
+			},
 		});
+		this._store.add(toDisposable(() => hooks.deregister()));
 	}
 }
 
@@ -182,12 +166,11 @@ export class ExtHostExtensionService extends AbstractExtHostExtensionService {
 		// Register local file system shortcut
 		this._instaService.createInstance(ExtHostDiskFileSystemProvider);
 
-		// Module loading tricks
-		await this._instaService.createInstance(NodeModuleRequireInterceptor, extensionApiFactory, { mine: this._myRegistry, all: this._globalRegistry })
-			.install();
-
-		// ESM loading tricks
-		await this._store.add(this._instaService.createInstance(NodeModuleESMInterceptor, extensionApiFactory, { mine: this._myRegistry, all: this._globalRegistry }))
+		// Module loading tricks based on `module._load`.
+		// `module._load` intercepts `require(...)`.
+		// Module loading tricks based on `module.registerHooks`.
+		// `module.registerHooks` is a generic interceptor that intercepts `require(...)`, `import ...`, and `import(...)`.
+		await this._store.add(this._instaService.createInstance(NodeModuleRequireInterceptor, extensionApiFactory, { mine: this._myRegistry, all: this._globalRegistry }))
 			.install();
 
 		performance.mark('code/extHost/didInitAPI');

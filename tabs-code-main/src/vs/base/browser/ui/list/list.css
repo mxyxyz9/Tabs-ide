@@ -36,7 +36,6 @@
 	box-sizing: border-box;
 	overflow: hidden;
 	width: 100%;
-	border-radius: var(--vscode-cornerRadius-small);
 }
 
 .monaco-list.mouse-support .monaco-list-row {

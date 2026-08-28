@@ -67,7 +67,7 @@ export class ExtensionSignatureVerificationService implements IExtensionSignatur
 	}
 
 	private async resolveVsceSign(): Promise<typeof vsceSign> {
-		const mod = process.env['TABS_VSCE_SIGN_MODULE_PATH'] || '@vscode/vsce-sign';
+		const mod = '@vscode/vsce-sign';
 		return import(mod);
 	}
 

@@ -59,7 +59,6 @@ body {
 	--vscode-shadow-md: 0 0 6px rgba(0, 0, 0, 0.08);
 	--vscode-shadow-lg: 0 0 12px rgba(0, 0, 0, 0.14);
 	--vscode-shadow-xl: 0 0 20px rgba(0, 0, 0, 0.15);
-	--vscode-shadow-hover: 0 0 8px rgba(0, 0, 0, 0.12);
 	--vscode-shadow-active-tab: 0 8px 12px rgba(0, 0, 0, 0.02);
 
 	/* Panel depth shadows cast onto the editor surface */
@@ -353,13 +352,4 @@ body {
 .monaco-workbench .monaco-action-bar:not(.vertical) .action-item .action-label:hover:not(.disabled) {
 	outline: 1px dashed var(--vscode-toolbar-hoverOutline);
 	outline-offset: -1px;
-}
-
-/* Tabs embeds the workbench inside its own rounded application chrome. Keep
- * these refinements scoped to that host so upstream/standalone Code remains
- * visually unchanged. */
-.tabs-embedded-workbench .monaco-workbench .monaco-button,
-.tabs-embedded-workbench .monaco-workbench .monaco-button-dropdown,
-.tabs-embedded-workbench .monaco-workbench .monaco-action-bar:not(.vertical) .action-label {
-	border-radius: var(--vscode-cornerRadius-medium);
 }

@@ -34,7 +34,6 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { GettingStartedAccessibleView } from './gettingStartedAccessibleView.js';
 import { AgentSessionsWelcomePage } from '../../welcomeAgentSessions/browser/agentSessionsWelcome.js';
 import { IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
-import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 
 export * as icons from './gettingStartedIcons.js';
 
@@ -65,11 +64,6 @@ registerAction2(class extends Action2 {
 		const commandService = accessor.get(ICommandService);
 		const configurationService = accessor.get(IConfigurationService);
 		const chatEntitlementService = accessor.get(IChatEntitlementService);
-		const environmentService = accessor.get(IWorkbenchEnvironmentService);
-
-		if (environmentService.skipWelcome) {
-			return;
-		}
 
 		const toSide = typeof optionsOrToSide === 'object' ? optionsOrToSide.toSide : optionsOrToSide;
 		const inactive = typeof optionsOrToSide === 'object' ? optionsOrToSide.inactive : false;
@@ -333,13 +327,10 @@ configurationRegistry.registerConfiguration({
 				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.terminal' }, "Open a new terminal in the editor area."),
 				localize({ comment: ['This is the description for a setting. Values surrounded by single quotes are not to be translated.'], key: 'workbench.startupEditor.agentSessionsWelcomePage' }, "Open the Agent Sessions Welcome page. Will override the workbench secondary side bar visibility settings."),
 			],
-			// Tabs: the embedded Code-OSS must never auto-open the Welcome/walkthrough.
-			// The web workbench reads user settings from the browser, not the server
-			// data dir, so our settings.json override is ignored — the registered
-			// default is what actually applies. Default to 'none'.
-			'default': 'none',
+			'default': 'welcomePage',
 			'description': localize('workbench.startupEditor', "Controls which editor is shown at startup, if none are restored from the previous session."),
-			'experiment': { mode: 'auto' }
+			'experiment': { mode: 'auto' },
+			agentsWindow: { default: 'none', readOnly: true },
 		},
 		'workbench.welcomePage.preferReducedMotion': {
 			scope: ConfigurationScope.APPLICATION,
@@ -347,6 +338,16 @@ configurationRegistry.registerConfiguration({
 			default: false,
 			deprecationMessage: localize('deprecationMessage', "Deprecated, use the global `workbench.reduceMotion`."),
 			description: localize('workbench.welcomePage.preferReducedMotion', "When enabled, reduce motion in welcome page.")
+		},
+		'workbench.welcomePage.experimentalOnboarding': {
+			scope: ConfigurationScope.APPLICATION,
+			type: 'boolean',
+			default: true,
+			tags: ['experimental'],
+			description: localize('workbench.welcomePage.experimentalOnboarding', "When enabled, show the new onboarding experience instead of the classic walkthrough on first launch."),
+			experiment: {
+				mode: 'auto'
+			}
 		}
 	}
 });
@@ -356,3 +357,4 @@ registerWorkbenchContribution2(StartupPageEditorResolverContribution.ID, Startup
 registerWorkbenchContribution2(StartupPageRunnerContribution.ID, StartupPageRunnerContribution, WorkbenchPhase.AfterRestored);
 
 AccessibleViewRegistry.register(new GettingStartedAccessibleView());
+
