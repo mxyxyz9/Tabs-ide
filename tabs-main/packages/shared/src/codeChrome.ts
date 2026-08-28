@@ -557,6 +557,8 @@ export const BUILTIN_ACTIVITY_CONTAINERS = new Set<string>([
   "workbench.view.scm",
   "workbench.view.debug",
   "workbench.view.extensions",
+  "workbench.panel.chat",
+  "workbench.panel.chat.view.copilot",
   "explorer",
   "search",
   "scm",
@@ -575,6 +577,7 @@ export function coerceChromeState(value: unknown): CodeChromeState {
         const itemRecord = item as Record<string, unknown>;
         if (
           typeof itemRecord.id === "string" &&
+          !BUILTIN_ACTIVITY_CONTAINERS.has(itemRecord.id) &&
           typeof itemRecord.label === "string" &&
           typeof itemRecord.commandId === "string"
         ) {

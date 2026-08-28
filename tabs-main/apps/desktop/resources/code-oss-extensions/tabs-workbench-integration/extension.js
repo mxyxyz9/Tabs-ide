@@ -181,6 +181,11 @@ const BUILTIN_ACTIVITY_CONTAINERS = new Set([
   "workbench.view.scm",
   "workbench.view.debug",
   "workbench.view.extensions",
+  // Tabs owns its Chat/provider switcher outside the embedded workbench. The
+  // native Chat container may be moved from the auxiliary bar to the sidebar,
+  // but it must not become a duplicate (and potentially icon-less) rail item.
+  "workbench.panel.chat",
+  "workbench.panel.chat.view.copilot",
   "explorer",
   "search",
   "scm",
@@ -854,11 +859,13 @@ function startCodeControlChannel(context) {
       state.autoSaveEnabled = computeAutoSaveEnabled();
       state.openTabs = computeOpenTabs();
       lastTabsJson = JSON.stringify(state.openTabs);
-      void refreshContainers().then(() => {
-        send({ type: "hello", projectId, token: target.token });
-        authenticated = true;
-        pushState();
-      });
+      // Authenticate immediately. Container discovery can be delayed while the
+      // workbench registry settles; it must not hold the entire Tabs control
+      // channel (or cached activity rail) hostage.
+      send({ type: "hello", projectId, token: target.token });
+      authenticated = true;
+      pushState();
+      void refreshContainers();
     });
     sock.on("data", (chunk) => {
       buffer += chunk.toString("utf8");

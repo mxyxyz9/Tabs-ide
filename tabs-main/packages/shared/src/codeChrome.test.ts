@@ -73,6 +73,31 @@ describe("parseCodeControlServerMessage", () => {
 });
 
 describe("parseCodeControlClientMessage / coerceChromeState", () => {
+  it("filters the native Chat container from the custom activity rail", () => {
+    expect(
+      coerceChromeState({
+        activeViewId: "workbench.panel.chat",
+        activityBarItems: [
+          {
+            id: "workbench.panel.chat",
+            label: "Chat",
+            commandId: "workbench.panel.chat",
+            icon: { type: "themeIcon", value: "chat-sparkle" },
+          },
+          {
+            id: "provider.sidebar",
+            label: "Provider",
+            commandId: "workbench.view.extension.provider.sidebar",
+            icon: { type: "themeIcon", value: "sparkle" },
+          },
+        ],
+      }),
+    ).toMatchObject({
+      activeViewId: null,
+      activityBarItems: [{ id: "provider.sidebar", label: "Provider" }],
+    });
+  });
+
   it("parses hello with projectId and token", () => {
     expect(
       parseCodeControlClientMessage(
