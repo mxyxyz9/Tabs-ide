@@ -1,4 +1,4 @@
-import { BrowserWindow, webContents as electronWebContents, type WebContents } from "electron";
+import { BrowserWindow, type WebContents } from "electron";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
@@ -34,6 +34,13 @@ type NativeCodeHostModules = {
     dispose(): void;
   };
   DiskFileSystemProviderChannel: new (...args: unknown[]) => {
+    dispose(): void;
+  };
+  FileService: new (...args: unknown[]) => {
+    registerProvider(scheme: string, provider: unknown): { dispose(): void };
+    dispose(): void;
+  };
+  WebviewMainService: new (...args: unknown[]) => {
     dispose(): void;
   };
   UtilityProcessWorkerMainService: new (...args: unknown[]) => {
@@ -106,6 +113,8 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     diskProvider,
     diskProviderChannel,
     diskProviderClient,
+    fileService,
+    webviewMainService,
     utilityProcessWorker,
     utilityProcessWorkerContract,
     electronPtyHostStarter,
@@ -132,6 +141,8 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
       moduleUrl(vscodeRoot, "vs/platform/files/electron-main/diskFileSystemProviderServer.js")
     ),
     import(moduleUrl(vscodeRoot, "vs/platform/files/common/diskFileSystemProviderClient.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/files/common/fileService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/webview/electron-main/webviewMainService.js")),
     import(
       moduleUrl(
         vscodeRoot,
@@ -165,6 +176,8 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     ExtensionHostStarter: extensionHostStarter.ExtensionHostStarter,
     DiskFileSystemProvider: diskProvider.DiskFileSystemProvider,
     DiskFileSystemProviderChannel: diskProviderChannel.DiskFileSystemProviderChannel,
+    FileService: fileService.FileService,
+    WebviewMainService: webviewMainService.WebviewMainService,
     UtilityProcessWorkerMainService: utilityProcessWorker.UtilityProcessWorkerMainService,
     extensionHostChannelName: extensionHostStarterContract.ipcExtensionHostStarterChannelName,
     localFileSystemChannelName: diskProviderClient.LOCAL_FILE_SYSTEM_CHANNEL_NAME,
@@ -222,6 +235,11 @@ export async function createNativeCodeHostMainBackend(
     !process.env.VSCODE_DEV_INJECT_NODE_MODULE_LOOKUP_PATH &&
     existsSync(developmentNodeModules)
   ) {
+    // bootstrap-fork intentionally ignores the injected dependency tree unless
+    // it is running in development mode. Tabs ships the source-built Code-OSS
+    // runtime (out/ + build/node_modules), so both values must travel together
+    // to the shared process and extension host utility processes.
+    process.env.VSCODE_DEV ??= "1";
     process.env.VSCODE_DEV_INJECT_NODE_MODULE_LOOKUP_PATH = developmentNodeModules;
   }
 
@@ -284,6 +302,8 @@ export async function createNativeCodeHostMainBackend(
     configurationService,
   );
   const diskFileSystemProvider = new modules.DiskFileSystemProvider(logService);
+  const fileService = new modules.FileService(logService);
+  const fileProviderRegistration = fileService.registerProvider("file", diskFileSystemProvider);
   const diskFileSystemProviderChannel = new modules.DiskFileSystemProviderChannel(
     diskFileSystemProvider,
     logService,
@@ -312,6 +332,7 @@ export async function createNativeCodeHostMainBackend(
   const externalTerminalService = new modules.ExternalTerminalService();
   const nativeMcpDiscoveryHelperService = new modules.NativeMcpDiscoveryHelperService();
   const encryptionService = new modules.EncryptionMainService(logService);
+  const webviewMainService = new modules.WebviewMainService(fileService, windowsService);
   const sharedProfile = createSharedProcessProfile(modules, stateDir);
   const storage = new Map<string, string>();
   const storageChannel = passiveChannel(modules.EventNone, (command, arg) => {
@@ -487,25 +508,7 @@ export async function createNativeCodeHostMainBackend(
   );
   ipcServer.registerChannel(
     "webview",
-    modules.ProxyChannel.fromService(
-      {
-        onFoundInFrame: modules.EventNone,
-        async setIgnoreMenuShortcuts(
-          id: { webContentsId?: number; windowId?: number },
-          enabled: boolean,
-        ) {
-          const contents = id.webContentsId
-            ? electronWebContents.fromId(id.webContentsId)
-            : id.windowId
-              ? windows.get(id.windowId)?.webContents
-              : undefined;
-          contents?.setIgnoreMenuShortcuts(enabled);
-        },
-        async findInFrame() {},
-        async stopFindInFrame() {},
-      },
-      disposables,
-    ),
+    modules.ProxyChannel.fromService(webviewMainService, disposables),
   );
 
   ipcServer.registerChannel("logger", loggerChannel);
@@ -581,6 +584,9 @@ export async function createNativeCodeHostMainBackend(
       ptyHostService.dispose();
       (loggerService as { dispose(): void }).dispose();
       utilityProcessWorkerService.dispose();
+      webviewMainService.dispose();
+      fileProviderRegistration.dispose();
+      fileService.dispose();
       diskFileSystemProviderChannel.dispose();
       diskFileSystemProvider.dispose();
       extensionHostStarter.dispose();

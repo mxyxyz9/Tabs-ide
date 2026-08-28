@@ -11,6 +11,7 @@ import {
   SlidersHorizontalIcon,
 } from "lucide-react";
 import { CODE_CHROME_COMMANDS, deriveActiveFileName } from "@tabs/shared/codeChrome";
+import type { CustomActivityBarItem } from "@tabs/contracts";
 
 import { cn } from "../../lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
@@ -23,6 +24,9 @@ interface CodeHeaderBarProps {
   sideChatOpen: boolean;
   sideChatLabel?: string;
   showSideChatToggle?: boolean;
+  assistantItems?: readonly CustomActivityBarItem[];
+  activeAssistantId?: string | undefined;
+  onSelectAssistant?: (id: string) => void;
   onToggleSideChat: () => void;
   onRunCommand: (commandId: string) => void;
 }
@@ -54,6 +58,17 @@ function HeaderAction(props: {
       <TooltipPopup side="bottom">{props.label}</TooltipPopup>
     </Tooltip>
   );
+}
+
+function moveAssistantTabFocus(event: React.KeyboardEvent<HTMLButtonElement>) {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+  const tabs = Array.from(
+    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+  );
+  const index = tabs.indexOf(event.currentTarget);
+  if (index < 0 || tabs.length === 0) return;
+  event.preventDefault();
+  tabs[(index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length]?.focus();
 }
 
 /** Tabs-owned chrome above the native Code-OSS workbench. */
@@ -92,6 +107,44 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
         />
         <TooltipPopup side="bottom">Quick open file search</TooltipPopup>
       </Tooltip>
+
+      {props.assistantItems?.length ? (
+        <div
+          role="tablist"
+          aria-label="AI assistant"
+          className="flex max-w-72 items-center gap-0.5 overflow-x-auto rounded-xl border border-border/70 bg-muted/45 p-0.5"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={props.activeAssistantId === "tabs"}
+            onClick={() => props.onSelectAssistant?.("tabs")}
+            onKeyDown={moveAssistantTabFocus}
+            className={cn(
+              "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+              props.activeAssistantId === "tabs" && "bg-background text-foreground shadow-sm",
+            )}
+          >
+            Tabs AI
+          </button>
+          {props.assistantItems.map((item) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={props.activeAssistantId === item.id}
+              key={item.id}
+              onClick={() => props.onSelectAssistant?.(item.id)}
+              onKeyDown={moveAssistantTabFocus}
+              className={cn(
+                "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+                props.activeAssistantId === item.id && "bg-background text-foreground shadow-sm",
+              )}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div
         role="toolbar"

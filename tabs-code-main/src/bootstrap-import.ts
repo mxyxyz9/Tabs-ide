@@ -23,9 +23,26 @@ export async function initialize(injectPath: string): Promise<void> {
 	// populate mappings
 
 	const injectPackageJSONPath = fileURLToPath(new URL('../package.json', pathToFileURL(injectPath)));
-	const packageJSON = JSON.parse(String(await promises.readFile(injectPackageJSONPath)));
-
-	for (const [name] of Object.entries(packageJSON.dependencies)) {
+	const nodeModulesPath = join(injectPackageJSONPath, '../node_modules');
+	const packageNames = (await promises.readdir(nodeModulesPath, { withFileTypes: true })).flatMap(entry => {
+		if (!entry.isDirectory() || entry.name.startsWith('.')) {
+			return [];
+		}
+		return [entry.name];
+	});
+	const expandedPackageNames: string[] = [];
+	for (const name of packageNames) {
+		if (!name.startsWith('@')) {
+			expandedPackageNames.push(name);
+			continue;
+		}
+		for (const child of await promises.readdir(join(nodeModulesPath, name), { withFileTypes: true })) {
+			if (child.isDirectory()) {
+				expandedPackageNames.push(`${name}/${child.name}`);
+			}
+		}
+	}
+	for (const name of expandedPackageNames) {
 		try {
 			const path = join(injectPackageJSONPath, `../node_modules/${name}/package.json`);
 			const pkgJson = JSON.parse(String(await promises.readFile(path)));

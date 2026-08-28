@@ -2090,6 +2090,26 @@ function DesktopCodeTool(props: { project: Project }) {
     },
     [projectId, chromeState.activityBarItems],
   );
+  const assistantItems = useMemo(
+    () => chromeState.activityBarItems?.filter((item) => item.location === "auxiliaryBar") ?? [],
+    [chromeState.activityBarItems],
+  );
+  const selectAssistant = useCallback(
+    (id: string) => {
+      if (id === "tabs") {
+        void window.desktopBridge
+          ?.runCodeCommand(projectId, CODE_CHROME_COMMANDS.closeAuxiliaryBar)
+          .catch(() => undefined);
+        setSideChatOpen(true);
+        return;
+      }
+      const item = assistantItems.find((candidate) => candidate.id === id);
+      if (!item) return;
+      setSideChatOpen(false);
+      runCodeCommand(item.commandId);
+    },
+    [assistantItems, projectId, runCodeCommand, setSideChatOpen],
+  );
 
   useEffect(() => {
     if (aiProvider === "copilot") {
@@ -2394,11 +2414,14 @@ function DesktopCodeTool(props: { project: Project }) {
         }
         branch={chromeState.branch}
         panelMaximized={chromeState.panelMaximized}
+        assistantItems={assistantItems}
+        activeAssistantId={sideChatOpen ? "tabs" : (chromeState.activeViewId ?? undefined)}
+        onSelectAssistant={selectAssistant}
         sideChatOpen={aiProvider === "tabs" ? sideChatOpen : false}
         sideChatLabel={
           aiProvider === "copilot" ? "Toggle GitHub Copilot chat" : "Toggle Tabs AI chat"
         }
-        showSideChatToggle
+        showSideChatToggle={assistantItems.length === 0}
         onToggleSideChat={() => {
           if (aiProvider === "copilot") {
             runCodeCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar);

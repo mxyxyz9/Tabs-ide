@@ -97,8 +97,19 @@ function devRegisterSyncNodeModuleHooks(Module: typeof import('node:module'), in
 	const specifierToFormat: Record<string, string> = {};
 
 	const injectPackageJSONPath = fileURLToPath(new URL('../package.json', pathToFileURL(injectPath)));
-	const packageJSON = JSON.parse(String(fs.readFileSync(injectPackageJSONPath)));
-	for (const [name] of Object.entries(packageJSON.dependencies)) {
+	const nodeModulesPath = path.join(injectPackageJSONPath, '../node_modules');
+	const packageNames = fs.readdirSync(nodeModulesPath, { withFileTypes: true }).flatMap(entry => {
+		if (!entry.isDirectory() || entry.name.startsWith('.')) {
+			return [];
+		}
+		if (!entry.name.startsWith('@')) {
+			return [entry.name];
+		}
+		return fs.readdirSync(path.join(nodeModulesPath, entry.name), { withFileTypes: true })
+			.filter(child => child.isDirectory())
+			.map(child => `${entry.name}/${child.name}`);
+	});
+	for (const name of packageNames) {
 		try {
 			const pkgJsonPath = path.join(injectPackageJSONPath, `../node_modules/${name}/package.json`);
 			const pkgJson = JSON.parse(String(fs.readFileSync(pkgJsonPath)));

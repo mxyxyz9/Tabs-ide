@@ -1516,6 +1516,7 @@ export interface CustomActivityBarItem {
   id: string;
   label: string;
   commandId: string;
+  location?: "sidebar" | "auxiliaryBar";
   icon: {
     type: "themeIcon" | "uri" | "themeUri";
     value?: string;

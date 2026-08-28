@@ -185,6 +185,7 @@ export function CodeActivityRail(props: CodeActivityRailProps) {
         );
       })}
       {props.chromeState.activityBarItems
+        ?.filter((item) => item.location !== "auxiliaryBar")
         ?.toSorted((left, right) => (left.order ?? 0) - (right.order ?? 0))
         .map((item) => (
           <RailButton

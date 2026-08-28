@@ -625,6 +625,7 @@ function startCodeControlChannel(context) {
           id: c.id,
           label: c.title,
           commandId: c.commandId,
+          location: c.location,
           icon,
           order: c.order,
         });

@@ -10,6 +10,7 @@ import { ThemeIcon } from '../../../../base/common/themables.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { mainWindow } from '../../../../base/browser/window.js';
 
 class TabsIntegrationContribution extends Disposable implements IWorkbenchContribution {
 	constructor(
@@ -21,7 +22,7 @@ class TabsIntegrationContribution extends Disposable implements IWorkbenchContri
 				const visibleContainer = this.viewsService.getVisibleViewContainer(ViewContainerLocation.Sidebar);
 				const activeId = visibleContainer ? visibleContainer.id : null;
 				// Notify local server about active container change
-				fetch(`${window.location.origin}/active-container?id=${encodeURIComponent(activeId || '')}`).catch(() => {});
+				fetch(`${mainWindow.location.origin}/active-container?id=${encodeURIComponent(activeId || '')}`).catch(() => { });
 			}
 		}));
 	}
@@ -34,9 +35,10 @@ CommandsRegistry.registerCommand('_tabs.getViewContainers', (accessor) => {
 	// (empty/placeholder registrations the user never installed) are hidden by
 	// the real activity bar too — surfacing them would show blank rail icons.
 	const railContainers = [ViewContainerLocation.Sidebar, ViewContainerLocation.AuxiliaryBar]
-		.flatMap(location => viewDescriptorService.getViewContainersByLocation(location))
-		.filter(container => viewDescriptorService.getViewContainerModel(container).activeViewDescriptors.length > 0);
-	return railContainers.map(container => {
+		.flatMap(location => viewDescriptorService.getViewContainersByLocation(location)
+			.map(container => ({ container, location })))
+		.filter(({ container }) => viewDescriptorService.getViewContainerModel(container).activeViewDescriptors.length > 0);
+	return railContainers.map(({ container, location }) => {
 		// Use the container *model*'s resolved icon/title — it reflects the icon
 		// the activity bar actually renders (falling back to a view's icon, etc.).
 		const model = viewDescriptorService.getViewContainerModel(container);
@@ -51,6 +53,7 @@ CommandsRegistry.registerCommand('_tabs.getViewContainers', (accessor) => {
 			id: container.id,
 			title: model.title,
 			commandId: container.openCommandActionDescriptor?.id ?? container.id,
+			location: location === ViewContainerLocation.AuxiliaryBar ? 'auxiliaryBar' : 'sidebar',
 			icon: serializableIcon,
 			order: container.order
 		};
