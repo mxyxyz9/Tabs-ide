@@ -609,6 +609,19 @@ export function coerceChromeState(value: unknown): CodeChromeState {
       ? record.activeViewId
       : null;
 
+  // Some AI extensions contribute both a primary view and a sessions-list
+  // container with the same visible provider name. Tabs presents providers as
+  // one activity entry, preferring whichever of those containers is active.
+  const activityItemsByLabel = new Map<string, CustomActivityBarItem>();
+  for (const item of activityBarItems) {
+    const labelKey = item.label.trim().toLocaleLowerCase();
+    const current = activityItemsByLabel.get(labelKey);
+    if (!current || item.id === activeViewId) {
+      activityItemsByLabel.set(labelKey, item);
+    }
+  }
+  activityBarItems.splice(0, activityBarItems.length, ...activityItemsByLabel.values());
+
   if (activeViewId !== null) {
     const isBuiltIn = CODE_ACTIVITY_ITEMS.some((item) => item.id === activeViewId);
     const isCustom = activityBarItems.some((item) => item.id === activeViewId);

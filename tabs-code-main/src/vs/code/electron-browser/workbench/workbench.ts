@@ -43,7 +43,8 @@
 		}
 
 		// developing an extension -> ignore stored layouts
-		if (data && configuration.extensionDevelopmentPath) {
+		const isTabsEmbeddedWorkbench = typeof configuration.userEnv?.TABS_PROJECT_ID === 'string';
+		if (data && configuration.extensionDevelopmentPath && !isTabsEmbeddedWorkbench) {
 			data.layoutInfo = undefined;
 		}
 

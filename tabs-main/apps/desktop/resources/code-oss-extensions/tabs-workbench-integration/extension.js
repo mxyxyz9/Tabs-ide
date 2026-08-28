@@ -578,6 +578,15 @@ function startCodeControlChannel(context) {
       return icon.value ? { type: "themeIcon", value: icon.value } : undefined;
     }
     if (icon.type === "uri") {
+      const whiteIcon = icon.value && /(?:^|[-_.])white\.svg$/i.test(icon.value);
+      const blackIconPath = whiteIcon ? icon.value.replace(/white\.svg$/i, "black.svg") : null;
+      if (blackIconPath) {
+        const light = resolveIconFileToDataUri(blackIconPath);
+        const dark = resolveIconFileToDataUri(icon.value);
+        if (light && dark) {
+          return { type: "themeUri", light, dark };
+        }
+      }
       const dataUri = resolveIconFileToDataUri(icon.value);
       return dataUri ? { type: "uri", value: dataUri } : undefined;
     }

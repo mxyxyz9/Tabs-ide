@@ -186,6 +186,7 @@
 		"chat.disableAIFeatures": true,
 		"chat.commandCenter.enabled": false,
 		"workbench.secondarySideBar.defaultVisibility": "hidden",
+		"extensions.verifySignature": false,
 		"extensions.autoCheckUpdates": false
 	}
 }

@@ -776,8 +776,14 @@ export class CodeHostManager {
 
   setAiProvider(provider: "tabs" | "copilot"): void {
     this.currentAiProvider = provider;
-    const settingsPatch: Record<string, unknown> =
-      provider === "copilot"
+    const settingsPatch: Record<string, unknown> = {
+      // Extension installation is owned by Code-OSS's main process, whose
+      // application-scoped configuration comes from code-oss-main rather than
+      // an individual project's profile. Keep this setting in both places so
+      // Open VSX packages never fall back to Microsoft's repository-signature
+      // verifier after a provider switch or a fresh application profile.
+      "extensions.verifySignature": false,
+      ...(provider === "copilot"
         ? {
             "chat.disableAIFeatures": false,
             "chat.commandCenter.enabled": true,
@@ -787,7 +793,8 @@ export class CodeHostManager {
             "chat.disableAIFeatures": true,
             "chat.commandCenter.enabled": false,
             "workbench.secondarySideBar.defaultVisibility": "hidden",
-          };
+          }),
+    };
     const settingsPaths = new Set<string>([
       Path.join(
         DEFAULT_CODE_HOST_STATE_DIR,

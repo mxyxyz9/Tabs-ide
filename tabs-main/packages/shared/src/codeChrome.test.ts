@@ -111,7 +111,9 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
   });
   it("parses the narrowly scoped request to open a Tabs project tab", () => {
     expect(
-      parseCodeControlClientMessage(JSON.stringify({ type: "openTabsProjectTab", projectId: "p4" })),
+      parseCodeControlClientMessage(
+        JSON.stringify({ type: "openTabsProjectTab", projectId: "p4" }),
+      ),
     ).toEqual({ type: "openTabsProjectTab", projectId: "p4" });
   });
   it("parses editor state (language + cursor) folded into chromeState", () => {
@@ -139,6 +141,34 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
         cursor: { line: 12, col: 4 },
       },
     });
+  });
+  it("deduplicates provider containers by label and keeps the active container", () => {
+    expect(
+      coerceChromeState({
+        activeViewId: "claude-sessions-sidebar",
+        activityBarItems: [
+          {
+            id: "claude-sidebar",
+            label: "Claude Code",
+            commandId: "claude.open",
+            icon: { type: "themeIcon", value: "sparkle" },
+          },
+          {
+            id: "claude-sessions-sidebar",
+            label: "Claude Code",
+            commandId: "claude.sessions.open",
+            icon: { type: "uri", value: "data:image/svg+xml;base64,PHN2Zy8+" },
+          },
+        ],
+      }).activityBarItems,
+    ).toEqual([
+      {
+        id: "claude-sessions-sidebar",
+        label: "Claude Code",
+        commandId: "claude.sessions.open",
+        icon: { type: "uri", value: "data:image/svg+xml;base64,PHN2Zy8+" },
+      },
+    ]);
   });
   it("falls back to defaults for junk state", () => {
     expect(coerceChromeState(null)).toEqual(DEFAULT_CODE_CHROME_STATE);
