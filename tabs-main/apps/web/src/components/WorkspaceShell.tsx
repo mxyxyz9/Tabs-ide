@@ -2394,9 +2394,18 @@ function DesktopCodeTool(props: { project: Project }) {
         }
         branch={chromeState.branch}
         panelMaximized={chromeState.panelMaximized}
-        sideChatOpen={aiProvider === "copilot" ? false : sideChatOpen}
-        showSideChatToggle={aiProvider === "tabs"}
-        onToggleSideChat={() => setSideChatOpen(!sideChatOpen)}
+        sideChatOpen={aiProvider === "tabs" ? sideChatOpen : false}
+        sideChatLabel={
+          aiProvider === "copilot" ? "Toggle GitHub Copilot chat" : "Toggle Tabs AI chat"
+        }
+        showSideChatToggle
+        onToggleSideChat={() => {
+          if (aiProvider === "copilot") {
+            runCodeCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar);
+          } else {
+            setSideChatOpen(!sideChatOpen);
+          }
+        }}
         onRunCommand={runCodeCommand}
       />
       <div className="flex min-h-0 min-w-0 flex-1">

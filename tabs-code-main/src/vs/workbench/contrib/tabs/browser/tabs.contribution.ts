@@ -33,9 +33,10 @@ CommandsRegistry.registerCommand('_tabs.getViewContainers', (accessor) => {
 	// currently have at least one active view. Containers with no active views
 	// (empty/placeholder registrations the user never installed) are hidden by
 	// the real activity bar too — surfacing them would show blank rail icons.
-	const sidebarContainers = viewDescriptorService.getViewContainersByLocation(ViewContainerLocation.Sidebar)
+	const railContainers = [ViewContainerLocation.Sidebar, ViewContainerLocation.AuxiliaryBar]
+		.flatMap(location => viewDescriptorService.getViewContainersByLocation(location))
 		.filter(container => viewDescriptorService.getViewContainerModel(container).activeViewDescriptors.length > 0);
-	return sidebarContainers.map(container => {
+	return railContainers.map(container => {
 		// Use the container *model*'s resolved icon/title — it reflects the icon
 		// the activity bar actually renders (falling back to a view's icon, etc.).
 		const model = viewDescriptorService.getViewContainerModel(container);

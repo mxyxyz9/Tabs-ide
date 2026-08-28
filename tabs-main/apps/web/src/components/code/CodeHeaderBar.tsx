@@ -21,6 +21,7 @@ interface CodeHeaderBarProps {
   branch: string | null;
   panelMaximized: boolean;
   sideChatOpen: boolean;
+  sideChatLabel?: string;
   showSideChatToggle?: boolean;
   onToggleSideChat: () => void;
   onRunCommand: (commandId: string) => void;
@@ -42,7 +43,7 @@ function HeaderAction(props: {
             aria-pressed={props.pressed}
             onClick={props.onClick}
             className={cn(
-              "flex size-8 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+              "flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
               props.pressed && "bg-accent text-foreground shadow-sm",
             )}
           >
@@ -61,7 +62,7 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
   return (
     <header
       aria-label="Code workspace toolbar"
-      className="flex h-10 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-3"
+      className="flex h-9 shrink-0 items-center gap-2 border-b border-border/70 bg-background/95 px-2.5"
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <span className="truncate text-xs font-medium text-foreground">{props.workspaceName}</span>
@@ -82,7 +83,7 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
               type="button"
               aria-label="Quick open file search"
               onClick={() => props.onRunCommand(CODE_CHROME_COMMANDS.quickOpen)}
-              className="flex h-8 w-[34rem] max-w-[55%] items-center gap-2 rounded-xl border border-border/70 bg-card/70 px-3 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-7 w-[34rem] max-w-[55%] items-center gap-2 rounded-lg border border-border/70 bg-card/70 px-3 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
             >
               <SearchIcon aria-hidden="true" className="size-3.5" />
               <span className="truncate">Go to file...</span>
@@ -149,7 +150,7 @@ export function CodeHeaderBar(props: CodeHeaderBarProps) {
         </HeaderAction>
         {props.showSideChatToggle !== false ? (
           <HeaderAction
-            label="Toggle AI chat"
+            label={props.sideChatLabel ?? "Toggle AI chat"}
             pressed={props.sideChatOpen}
             onClick={props.onToggleSideChat}
           >
