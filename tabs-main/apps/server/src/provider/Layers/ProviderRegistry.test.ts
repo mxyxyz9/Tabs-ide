@@ -596,6 +596,69 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
         ]);
       });
 
+      it("removes obsolete models from an authoritative refreshed catalog", () => {
+        const previousProvider = {
+          instanceId: "antigravity" as ProviderInstanceId,
+          driver: "antigravity" as ProviderDriverKind,
+          status: "ready",
+          enabled: true,
+          installed: true,
+          auth: { status: "authenticated" },
+          checkedAt: "2026-08-25T00:00:00.000Z",
+          version: "1.1.20",
+          catalogStatus: "ready",
+          models: [
+            {
+              slug: "gemini-3.7-flash-high",
+              name: "Gemini 3.7 Flash",
+              isCustom: false,
+              capabilities: null,
+            },
+            {
+              slug: "gemini-3.7-flash-medium",
+              name: "Gemini 3.7 Flash",
+              isCustom: false,
+              capabilities: null,
+            },
+            {
+              slug: "gemini-3.7-flash-low",
+              name: "Gemini 3.7 Flash",
+              isCustom: false,
+              capabilities: null,
+            },
+          ],
+          slashCommands: [],
+          skills: [],
+        } as const satisfies ServerProvider;
+        const refreshedProvider = {
+          ...previousProvider,
+          checkedAt: "2026-08-25T00:01:00.000Z",
+          models: [
+            {
+              slug: "gemini-3.7-flash",
+              name: "Gemini 3.7 Flash",
+              isCustom: false,
+              capabilities: createModelCapabilities({
+                optionDescriptors: [
+                  selectDescriptor("reasoningEffort", "Reasoning", [
+                    { id: "low", label: "Low" },
+                    { id: "medium", label: "Medium" },
+                    { id: "high", label: "High", isDefault: true },
+                  ]),
+                ],
+              }),
+            },
+          ],
+        } satisfies ServerProvider;
+
+        assert.deepStrictEqual(
+          mergeProviderSnapshot(previousProvider, refreshedProvider).models.map(
+            (model) => model.slug,
+          ),
+          ["gemini-3.7-flash"],
+        );
+      });
+
       it("persists merged provider snapshots for the providers that were refreshed", () => {
         const previousProviders = [
           {
@@ -1750,7 +1813,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
           assert.strictEqual(status.status, "ready");
           assert.strictEqual(status.auth.status, "authenticated");
           assert.strictEqual(status.auth.type, "apiKey");
-          assert.strictEqual(status.auth.label, "Claude API Key");
+          assert.strictEqual(status.auth.label, "Claude API Key (usage-based billing)");
         }).pipe(
           Effect.provide(
             mockSpawnerLayer((args) => {

@@ -17,7 +17,7 @@ describe("resolveGrokAcpBaseModelId", () => {
 });
 
 describe("buildGrokAcpSpawnInput", () => {
-  it("passes the T3 Code referrer through Grok OAuth env", () => {
+  it("uses cached login and removes ambient metered API credentials", () => {
     const spawn = buildGrokAcpSpawnInput({ binaryPath: "/usr/local/bin/grok" }, "/tmp/project", {
       XAI_API_KEY: "secret",
       GROK_OAUTH2_REFERRER: "other-client",
@@ -27,10 +27,7 @@ describe("buildGrokAcpSpawnInput", () => {
       command: "/usr/local/bin/grok",
       args: ["agent", "stdio"],
       cwd: "/tmp/project",
-      env: {
-        XAI_API_KEY: "secret",
-        GROK_OAUTH2_REFERRER: "t3code",
-      },
+      env: {},
     });
   });
 });

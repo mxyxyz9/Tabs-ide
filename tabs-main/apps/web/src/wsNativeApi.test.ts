@@ -372,6 +372,26 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("forwards Testing artifact reads without a caller-supplied path", async () => {
+    requestMock.mockResolvedValue({ contents: "export const preview = true;\n" });
+    const { createWsNativeApi } = await import("./wsNativeApi");
+
+    const api = createWsNativeApi();
+    await api.testing.readArtifact({
+      projectId: "project-a",
+      generationJobId: "job-1",
+      caseId: "case-1",
+      artifactKind: "data",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(WS_METHODS.testingReadArtifact, {
+      projectId: "project-a",
+      generationJobId: "job-1",
+      caseId: "case-1",
+      artifactKind: "data",
+    });
+  });
+
   it("uses no client timeout for git.runStackedAction", async () => {
     requestMock.mockResolvedValue({
       action: "commit",

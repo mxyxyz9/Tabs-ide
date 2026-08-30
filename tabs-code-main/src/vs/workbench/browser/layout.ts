@@ -2812,7 +2812,16 @@ type ZenModeConfiguration = {
 };
 
 function getZenModeConfiguration(configurationService: IConfigurationService): ZenModeConfiguration {
-	return configurationService.getValue<ZenModeConfiguration>(WorkbenchLayoutSettings.ZEN_MODE_CONFIG);
+	return configurationService.getValue<ZenModeConfiguration>(WorkbenchLayoutSettings.ZEN_MODE_CONFIG) ?? {
+		centerLayout: true,
+		fullScreen: true,
+		hideActivityBar: true,
+		hideLineNumbers: true,
+		hideStatusBar: true,
+		showTabs: 'multiple',
+		restore: true,
+		silentNotifications: true,
+	};
 }
 
 //#endregion

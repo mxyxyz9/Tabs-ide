@@ -29,8 +29,36 @@ describe("discoverOpenRouterModels", () => {
       models: [{ slug: "vendor/model", name: "Live Model" }],
     });
     expect(fetchImpl).toHaveBeenCalledWith(
-      "https://openrouter.test/api/v1/models",
+      "https://openrouter.test/api/v1/models/user",
       expect.objectContaining({ headers: { Authorization: "Bearer valid-key" } }),
+    );
+  });
+
+  it("omits models that explicitly do not support response_format", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "vendor/compatible",
+              name: "Compatible",
+              supported_parameters: ["response_format"],
+            },
+            {
+              id: "vendor/incompatible",
+              name: "Incompatible",
+              supported_parameters: ["temperature"],
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(discoverOpenRouterModels(settings("valid-key"), fetchImpl)).resolves.toMatchObject(
+      {
+        models: [{ slug: "vendor/compatible", name: "Compatible" }],
+      },
     );
   });
 

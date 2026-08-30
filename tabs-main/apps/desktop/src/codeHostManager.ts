@@ -69,10 +69,30 @@ const CODE_OSS_FILE_PROTOCOL = "vscode-file";
 const CODE_OSS_FILE_PROTOCOL_AUTHORITY = "vscode-app";
 const CODE_OSS_WEBVIEW_PROTOCOL = "vscode-webview";
 const CODE_OSS_WEBVIEW_RESOURCES = new Set(["index.html", "fake.html", "service-worker.js"]);
+const CODE_OSS_NAVIGATION_TIMEOUT_MS = 30_000;
 const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
   process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs"),
   "userdata",
 );
+
+// Keep a small, append-only manager trace outside the renderer. In embedded
+// mode the native WebContents can fail before it is visible to DevTools, so a
+// file trace is the only reliable way to distinguish protocol/navigation
+// failures from extension-host handshake failures.
+const CODE_HOST_DIAGNOSTIC_LOG = Path.join(DEFAULT_CODE_HOST_STATE_DIR, "code-host-manager.log");
+function writeCodeHostDiagnostic(message: string, details?: unknown): void {
+  try {
+    FS.mkdirSync(Path.dirname(CODE_HOST_DIAGNOSTIC_LOG), { recursive: true });
+    const suffix = details === undefined ? "" : ` ${JSON.stringify(details)}`;
+    FS.appendFileSync(
+      CODE_HOST_DIAGNOSTIC_LOG,
+      `${new Date().toISOString()} ${message}${suffix}\n`,
+      "utf8",
+    );
+  } catch {
+    // Diagnostics must never affect the host lifecycle.
+  }
+}
 
 export interface CodeHostConfig {
   state: DesktopCodeHostState;
@@ -130,6 +150,8 @@ type DesktopUserDataProfile = {
   promptsHome: UriComponent;
   extensionsResource: UriComponent;
   mcpResource: UriComponent;
+  languageModelsResource: UriComponent;
+  agentPluginsHome: UriComponent;
   cacheHome: UriComponent;
 };
 
@@ -237,15 +259,12 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   "workbench.startupEditor": "none",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,
   "workbench.welcome.enabled": false,
-  "workbench.tips.enabled": false,
+  "workbench.tips.enabled": true,
   "workbench.editor.empty.hint": "hidden",
-  // Restore the user's open editors across app restarts so the Code tab
-  // reopens exactly where they left off (a core "continue where I left off"
-  // expectation). The "Setup VS Code Web" walkthrough that previously rode
-  // back in on restore is suppressed structurally instead: it can never be
-  // opened in the first place (startupEditor "none" + welcome/walkthrough
-  // disabled above), so there is nothing for the restore to bring back.
-  "workbench.editor.restoreEditors": true,
+  // Tabs restores editors from its project-scoped workspace-tabs file. Native
+  // workbench restoration is disabled so a stale editor-group snapshot cannot
+  // reintroduce files from another Tabs project before that filtered restore.
+  "workbench.editor.restoreEditors": false,
   // Code owns its complete stock workbench inside the Tabs Code tool. Keeping
   // these parts native avoids duplicating VS Code's layout and accessibility
   // behavior in the surrounding React shell.
@@ -745,6 +764,30 @@ export function writeWorkspaceTabs(
   }
 }
 
+export function isPathInsideWorkspace(workspaceRoot: string, filePath: string): boolean {
+  const resolvedRoot = Path.resolve(workspaceRoot);
+  const resolvedFile = Path.resolve(filePath);
+  const relativePath = Path.relative(resolvedRoot, resolvedFile);
+  return (
+    relativePath !== "" &&
+    !relativePath.startsWith(`..${Path.sep}`) &&
+    relativePath !== ".." &&
+    !Path.isAbsolute(relativePath)
+  );
+}
+
+export function filterWorkspaceTabs(
+  workspaceRoot: string,
+  tabs: readonly CodeTabInfo[],
+): CodeTabInfo[] {
+  return tabs.filter((tab) => {
+    const fullPath = Path.isAbsolute(tab.filePath)
+      ? tab.filePath
+      : Path.resolve(workspaceRoot, tab.filePath);
+    return isPathInsideWorkspace(workspaceRoot, fullPath);
+  });
+}
+
 export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
@@ -772,6 +815,13 @@ export class CodeHostManager {
   setTheme(themeId: string, customConfig?: any): void {
     this.currentThemeId = themeId;
     this.currentCustomConfig = customConfig ?? null;
+  }
+
+  private isCurrentThemeLight(): boolean {
+    if (this.currentThemeId === "custom") {
+      return this.currentCustomConfig?.baseVariant === "light";
+    }
+    return ["tabs-light", "solarized-light", "light"].includes(this.currentThemeId);
   }
 
   setAiProvider(provider: "tabs" | "copilot"): void {
@@ -832,7 +882,10 @@ export class CodeHostManager {
   handleChromeStateForTabs(projectId: string, state: CodeChromeState): void {
     if (!state.openTabs) return;
 
-    const tabs = state.openTabs;
+    const session = this.sessions.get(projectId);
+    if (!session) return;
+
+    const tabs = filterWorkspaceTabs(session.workspaceRoot, state.openTabs);
     const existingTimer = this.workspaceTabsDebounceTimers.get(projectId);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -872,13 +925,17 @@ export class CodeHostManager {
       const session = this.sessions.get(projectId);
       const savedTabs = readWorkspaceTabs(projectId);
 
-      if (Array.isArray(savedTabs)) {
-        if (savedTabs.length === 0) {
+      if (session && Array.isArray(savedTabs)) {
+        const workspaceTabs = filterWorkspaceTabs(session.workspaceRoot, savedTabs);
+        if (workspaceTabs.length !== savedTabs.length) {
+          writeWorkspaceTabs(projectId, workspaceTabs);
+        }
+        if (workspaceTabs.length === 0) {
           // Explicit zero-tabs state persisted by user closing all tabs. Do not open fallback file.
           return;
         }
 
-        const tabsToRestore = [...savedTabs];
+        const tabsToRestore = [...workspaceTabs];
         const inactiveTabs = tabsToRestore.filter((t) => !t.active);
         const activeTabs = tabsToRestore.filter((t) => t.active);
 
@@ -947,11 +1004,25 @@ export class CodeHostManager {
   }
 
   async ensureSession(input: DesktopCodeHostEnsureSessionInput): Promise<void> {
+    writeCodeHostDiagnostic(`[code-oss:${input.projectId}] ensureSession requested`, {
+      workspaceRoot: input.workspaceRoot,
+      available: this.config.state.available,
+      runtimeRoot: this.config.runtime?.vscodeRoot ?? null,
+    });
+    console.log(`[code-oss:${input.projectId}] ensureSession requested`, {
+      workspaceRoot: input.workspaceRoot,
+      available: this.config.state.available,
+      runtimeRoot: this.config.runtime?.vscodeRoot ?? null,
+    });
     if (!this.config.state.available) {
       return;
     }
 
     const workspaceRoot = resolveWorkspaceRootForSession(input.workspaceRoot, this.config, FS);
+    writeCodeHostDiagnostic(
+      `[code-oss:${input.projectId}] resolved workspace root ${workspaceRoot}`,
+    );
+    console.log(`[code-oss:${input.projectId}] resolved workspace root`, workspaceRoot);
 
     const existing = this.sessions.get(input.projectId);
     if (existing) {
@@ -997,7 +1068,7 @@ export class CodeHostManager {
       },
     });
     this.registerNativeWebContents?.(view.webContents);
-    view.setBackgroundColor("#141414");
+    view.setBackgroundColor(this.isCurrentThemeLight() ? "#f8f8f8" : "#141414");
 
     const allowedPermissions = new Set([
       "clipboard-read",
@@ -1030,9 +1101,23 @@ export class CodeHostManager {
     });
 
     if (desktopConfigChannel) {
-      ipcMain.handle(desktopConfigChannel, async () =>
-        this.buildDesktopWindowConfiguration(input.projectId),
-      );
+      ipcMain.handle(desktopConfigChannel, async () => {
+        const startedAt = Date.now();
+        writeCodeHostDiagnostic(`[code-oss:${input.projectId}] window configuration requested`);
+        try {
+          const configuration = this.buildDesktopWindowConfiguration(input.projectId);
+          writeCodeHostDiagnostic(`[code-oss:${input.projectId}] window configuration resolved`, {
+            durationMs: Date.now() - startedAt,
+          });
+          return configuration;
+        } catch (error) {
+          writeCodeHostDiagnostic(`[code-oss:${input.projectId}] window configuration failed`, {
+            durationMs: Date.now() - startedAt,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
+      });
     }
 
     const session: CodeSession = {
@@ -1052,17 +1137,51 @@ export class CodeHostManager {
       runtimeStartPromise: null,
     };
     this.sessions.set(input.projectId, session);
+    this.registerDesktopDiagnostics(session);
+    this.registerDesktopRequestDiagnostics(session);
+    writeCodeHostDiagnostic(`[code-oss:${input.projectId}] embedded session created`, {
+      webContentsId: view.webContents.id,
+      configChannel: desktopConfigChannel,
+    });
+    console.log(`[code-oss:${input.projectId}] embedded session created`, {
+      webContentsId: view.webContents.id,
+      configChannel: desktopConfigChannel,
+    });
     await this.loadSessionWhenVisible(session);
   }
 
   async activateSession(input: DesktopCodeHostActivateSessionInput): Promise<void> {
+    writeCodeHostDiagnostic(`[code-oss:${input.projectId}] activateSession requested`);
+    console.log(`[code-oss:${input.projectId}] activateSession requested`);
     if (!this.config.state.available) {
+      writeCodeHostDiagnostic(
+        `[code-oss:${input.projectId}] activateSession skipped: host unavailable`,
+        this.config.state.reason,
+      );
+      console.warn(
+        `[code-oss:${input.projectId}] activateSession skipped: host unavailable`,
+        this.config.state.reason,
+      );
       return;
     }
 
     const session = this.sessions.get(input.projectId);
     const window = this.getWindow();
     if (!session || !window) {
+      writeCodeHostDiagnostic(
+        `[code-oss:${input.projectId}] activateSession skipped: missing session/window`,
+        {
+          session: Boolean(session),
+          window: Boolean(window),
+        },
+      );
+      console.warn(
+        `[code-oss:${input.projectId}] activateSession skipped: missing session/window`,
+        {
+          session: Boolean(session),
+          window: Boolean(window),
+        },
+      );
       return;
     }
 
@@ -1078,7 +1197,13 @@ export class CodeHostManager {
     }
     await this.loadSessionWhenVisible(session);
     if (session.lastLoadedUrl && this.controlChannel) {
+      writeCodeHostDiagnostic(
+        `[code-oss:${input.projectId}] waiting for integration extension host`,
+      );
+      console.log(`[code-oss:${input.projectId}] waiting for integration extension host`);
       await this.controlChannel.waitForExtensionHost(session.projectId);
+      writeCodeHostDiagnostic(`[code-oss:${input.projectId}] integration extension host connected`);
+      console.log(`[code-oss:${input.projectId}] integration extension host connected`);
     }
 
     const cachedState = this.controlChannel?.getChromeState(session.projectId);
@@ -1094,6 +1219,18 @@ export class CodeHostManager {
     if (!this.activeProjectId) return;
     const session = this.sessions.get(this.activeProjectId);
     if (session && session.view) {
+      writeCodeHostDiagnostic(`[code-oss:${session.projectId}] hideActiveSession detach`);
+      // Detaching a WebContentsView while Chromium is still navigating can
+      // abort the main-frame request. Treat that as a cancelled, not a
+      // successfully loaded, session so the next activation starts a clean
+      // navigation instead of waiting forever for an extension host that can
+      // never connect.
+      if (session.view.webContents.isLoading()) {
+        session.lastLoadedUrl = null;
+        session.desktopLoadPending = true;
+        session.view.webContents.stop();
+        writeCodeHostDiagnostic(`[code-oss:${session.projectId}] cancelled pending navigation`);
+      }
       this.detachSession(session);
     }
     this.activeProjectId = null;
@@ -1117,6 +1254,14 @@ export class CodeHostManager {
     }
 
     const normalizedRelativePath = normalizeFilePath(input.relativePath);
+    const fullFilePath = Path.resolve(session.workspaceRoot, normalizedRelativePath);
+    if (!isPathInsideWorkspace(session.workspaceRoot, fullFilePath)) {
+      writeCodeHostDiagnostic(`[code-oss:${input.projectId}] rejected file outside workspace`, {
+        relativePath: input.relativePath,
+        workspaceRoot: session.workspaceRoot,
+      });
+      return;
+    }
     const needsUpdate =
       session.lastFocusedPath !== normalizedRelativePath ||
       session.lastNavigationNonce !== input.navigationNonce;
@@ -1126,8 +1271,6 @@ export class CodeHostManager {
     if (!needsUpdate) {
       return;
     }
-
-    const fullFilePath = Path.resolve(Path.join(session.workspaceRoot, normalizedRelativePath));
 
     if (this.controlChannel) {
       const sent = this.controlChannel.openFile(input.projectId, fullFilePath);
@@ -1152,6 +1295,11 @@ export class CodeHostManager {
     }
 
     if (!input.visible || input.width <= 0 || input.height <= 0) {
+      writeCodeHostDiagnostic(`[code-oss:${input.projectId}] setBounds hidden`, {
+        width: input.width,
+        height: input.height,
+        activeProjectId: this.activeProjectId,
+      });
       session.bounds = null;
       if (this.activeProjectId === input.projectId) {
         this.detachSession(session);
@@ -1223,9 +1371,17 @@ export class CodeHostManager {
   }
 
   syncSessions(projectIds: readonly string[]): void {
+    writeCodeHostDiagnostic("[code-oss] syncSessions", {
+      projectIds: [...projectIds],
+      sessions: [...this.sessions.keys()],
+      activeProjectId: this.activeProjectId,
+    });
     const allowed = new Set(projectIds);
     for (const [projectId, session] of this.sessions) {
       if (allowed.has(projectId)) continue;
+      writeCodeHostDiagnostic(`[code-oss:${projectId}] syncSessions closing session`, {
+        active: this.activeProjectId === projectId,
+      });
       if (this.activeProjectId === projectId) {
         if (session.view) {
           this.detachSession(session);
@@ -1233,6 +1389,7 @@ export class CodeHostManager {
         this.activeProjectId = null;
       }
       this.disposeSessionConfigChannel(session);
+      this.disposeDesktopProtocols(session);
       session.view?.webContents.close({ waitForBeforeUnload: false });
       this.sessions.delete(projectId);
     }
@@ -1299,6 +1456,7 @@ export class CodeHostManager {
         }
 
         this.disposeSessionConfigChannel(session);
+        this.disposeDesktopProtocols(session);
       }),
     );
   }
@@ -1308,9 +1466,14 @@ export class CodeHostManager {
   }
 
   disableEmbeddedHost(reason: string): void {
+    writeCodeHostDiagnostic("[code-oss] disableEmbeddedHost", {
+      reason,
+      sessions: [...this.sessions.keys()],
+    });
     this.hideActiveSession();
     for (const session of this.sessions.values()) {
       this.disposeSessionConfigChannel(session);
+      this.disposeDesktopProtocols(session);
       session.view?.webContents.close({ waitForBeforeUnload: false });
     }
     this.sessions.clear();
@@ -1326,9 +1489,14 @@ export class CodeHostManager {
    * mutates the held config in place so callers keep a valid reference.
    */
   reconfigure(config: CodeHostConfig): void {
+    writeCodeHostDiagnostic("[code-oss] reconfigure", {
+      available: config.state.available,
+      sessions: [...this.sessions.keys()],
+    });
     this.hideActiveSession();
     for (const session of this.sessions.values()) {
       this.disposeSessionConfigChannel(session);
+      this.disposeDesktopProtocols(session);
       session.view?.webContents.close({ waitForBeforeUnload: false });
     }
     this.sessions.clear();
@@ -1356,6 +1524,8 @@ export class CodeHostManager {
         }
         const nextUrl = buildDesktopSessionUrl(runtime.entry, session);
         if (session.lastLoadedUrl === nextUrl) {
+          writeCodeHostDiagnostic(`[code-oss:${session.projectId}] session already loaded`);
+          console.log(`[code-oss:${session.projectId}] session already loaded`);
           return;
         }
         const desktopRuntime = this.config.runtime;
@@ -1364,11 +1534,46 @@ export class CodeHostManager {
         }
         this.ensureDesktopProtocol(session, desktopRuntime);
         session.desktopLoadPending = false;
-        session.lastLoadedUrl = nextUrl;
         if (!session.view) {
           throw new Error("Embedded Code-OSS session view is unavailable.");
         }
-        await session.view.webContents.loadURL(nextUrl);
+        writeCodeHostDiagnostic(`[code-oss:${session.projectId}] loading workbench ${nextUrl}`);
+        console.log(`[code-oss:${session.projectId}] loading workbench`, nextUrl);
+        const loadRequest = session.view.webContents.loadURL(nextUrl);
+        let timeoutHandle: NodeJS.Timeout | null = null;
+        try {
+          await Promise.race([
+            loadRequest,
+            new Promise<never>((_, reject) => {
+              timeoutHandle = setTimeout(() => {
+                reject(
+                  new Error(
+                    `Code-OSS workbench navigation timed out after ${CODE_OSS_NAVIGATION_TIMEOUT_MS}ms.`,
+                  ),
+                );
+              }, CODE_OSS_NAVIGATION_TIMEOUT_MS);
+            }),
+          ]);
+        } catch (error) {
+          session.lastLoadedUrl = null;
+          session.desktopLoadPending = true;
+          if (!session.view.webContents.isDestroyed()) {
+            session.view.webContents.stop();
+          }
+          await loadRequest.catch(() => undefined);
+          throw error;
+        } finally {
+          if (timeoutHandle) {
+            clearTimeout(timeoutHandle);
+          }
+        }
+        session.lastLoadedUrl = nextUrl;
+        writeCodeHostDiagnostic(`[code-oss:${session.projectId}] workbench loadURL resolved`);
+        console.log(`[code-oss:${session.projectId}] workbench loadURL resolved`);
+      } catch (error) {
+        writeCodeHostDiagnostic(`[code-oss:${session.projectId}] workbench load failed`, error);
+        console.error(`[code-oss:${session.projectId}] workbench load failed`, error);
+        throw error;
       } finally {
         this.loadPromiseByProjectId.delete(session.projectId);
       }
@@ -1490,6 +1695,23 @@ export class CodeHostManager {
     session.desktopConfigChannel = null;
   }
 
+  private disposeDesktopProtocols(session: CodeSession): void {
+    if (!session.desktopProtocolRegistered || !session.view?.webContents.session) {
+      return;
+    }
+
+    const browserSession = session.view.webContents.session;
+    for (const scheme of [CODE_OSS_FILE_PROTOCOL, CODE_OSS_WEBVIEW_PROTOCOL]) {
+      if (browserSession.protocol.isProtocolHandled(scheme)) {
+        browserSession.protocol.unhandle(scheme);
+      }
+    }
+    session.desktopProtocolRegistered = false;
+    writeCodeHostDiagnostic(`[code-oss:${session.projectId}] desktop protocols removed`, {
+      partition: session.partition,
+    });
+  }
+
   private ensureDesktopProtocol(
     session: CodeSession,
     runtime: Extract<CodeHostRuntime, { kind: "desktop-renderer" }>,
@@ -1502,49 +1724,95 @@ export class CodeHostManager {
     }
 
     const browserSession = session.view.webContents.session;
+    const prefix = `[code-oss:${session.projectId}]`;
     const allowedRoots = this.getDesktopAllowedRoots(session);
-    browserSession.protocol.registerFileProtocol(CODE_OSS_FILE_PROTOCOL, (request, callback) => {
+    // Persistent Electron sessions outlive their WebContents. A renderer
+    // reload can therefore leave an earlier handler behind even though its
+    // owning CodeSession has already gone away. Replace stale handlers before
+    // registering the new session's roots and runtime.
+    for (const scheme of [CODE_OSS_FILE_PROTOCOL, CODE_OSS_WEBVIEW_PROTOCOL]) {
+      if (browserSession.protocol.isProtocolHandled(scheme)) {
+        browserSession.protocol.unhandle(scheme);
+      }
+    }
+    // Electron 40 still exposes registerFileProtocol, but it is deprecated and
+    // can leave a WebContentsView navigation pending when the handler is owned
+    // by a non-default persistent session. The promise-based handler commits a
+    // real Response and lets Chromium finish the document request reliably.
+    browserSession.protocol.handle(CODE_OSS_FILE_PROTOCOL, async (request) => {
       const resolvedPath = this.resolveDesktopProtocolPath(request, allowedRoots);
+      writeCodeHostDiagnostic(`${prefix} protocol-request`, {
+        url: request.url,
+        resolvedPath,
+      });
       if (!resolvedPath) {
-        callback({ error: -3 });
-        return;
+        return new Response(null, { status: 404, statusText: "Not Found" });
       }
 
-      const headers = this.buildDesktopProtocolHeaders(request.url, resolvedPath, runtime);
-      callback({ path: resolvedPath, headers });
+      try {
+        const fileResponse = await browserSession.fetch(pathToFileURL(resolvedPath).toString());
+        const size =
+          Number(fileResponse.headers.get("Content-Length")) ||
+          (await FS.promises.stat(resolvedPath)).size;
+        writeCodeHostDiagnostic(`${prefix} protocol-response`, {
+          url: request.url,
+          resolvedPath,
+          bytes: size,
+          contentType: fileResponse.headers.get("Content-Type"),
+        });
+        // Return Electron's network response directly. Re-wrapping its body in
+        // a global Response leaves the file stream open in Electron 40 and the
+        // main-frame navigation never commits.
+        return fileResponse;
+      } catch (error) {
+        writeCodeHostDiagnostic(`${prefix} protocol-read-error`, {
+          url: request.url,
+          resolvedPath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return new Response(null, { status: 404, statusText: "Not Found" });
+      }
     });
 
     // The stock Electron main process normally installs this handler through
     // WebviewMainService. Tabs owns the Electron main process, so native
     // workbench webviews (extension READMEs, changelogs, and extension UIs)
     // need the equivalent endpoint in the embedded session.
-    browserSession.protocol.registerFileProtocol(CODE_OSS_WEBVIEW_PROTOCOL, (request, callback) => {
+    browserSession.protocol.handle(CODE_OSS_WEBVIEW_PROTOCOL, async (request) => {
       try {
         const resourceName = Path.posix.basename(new URL(request.url).pathname);
         if (!CODE_OSS_WEBVIEW_RESOURCES.has(resourceName)) {
-          callback({ error: -10 });
-          return;
+          return new Response(null, { status: 404, statusText: "Not Found" });
         }
-        callback({
-          path: Path.join(
-            runtime.vscodeRoot,
-            "out",
-            "vs",
-            "workbench",
-            "contrib",
-            "webview",
-            "browser",
-            "pre",
-            resourceName,
-          ),
-          headers: { "Cross-Origin-Resource-Policy": "cross-origin" },
+        const resourcePath = Path.join(
+          runtime.vscodeRoot,
+          "out",
+          "vs",
+          "workbench",
+          "contrib",
+          "webview",
+          "browser",
+          "pre",
+          resourceName,
+        );
+        const fileResponse = await browserSession.fetch(pathToFileURL(resourcePath).toString());
+        const headers = new Headers(fileResponse.headers);
+        headers.set("Content-Type", this.getDesktopContentType(resourcePath));
+        headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+        return new Response(fileResponse.body, {
+          status: fileResponse.status,
+          statusText: fileResponse.statusText,
+          headers,
         });
       } catch {
-        callback({ error: -3 });
+        return new Response(null, { status: 404, statusText: "Not Found" });
       }
     });
 
     session.desktopProtocolRegistered = true;
+    writeCodeHostDiagnostic(`${prefix} desktop protocols registered`, {
+      partition: session.partition,
+    });
     this.config.state.entry = session.entry;
   }
 
@@ -1567,6 +1835,38 @@ export class CodeHostManager {
     }
 
     return headers;
+  }
+
+  private getDesktopContentType(pathname: string): string {
+    switch (Path.extname(pathname).toLowerCase()) {
+      case ".html":
+        return "text/html; charset=utf-8";
+      case ".js":
+      case ".mjs":
+        return "text/javascript; charset=utf-8";
+      case ".css":
+        return "text/css; charset=utf-8";
+      case ".json":
+      case ".map":
+        return "application/json; charset=utf-8";
+      case ".svg":
+        return "image/svg+xml";
+      case ".png":
+        return "image/png";
+      case ".jpg":
+      case ".jpeg":
+        return "image/jpeg";
+      case ".gif":
+        return "image/gif";
+      case ".woff":
+        return "font/woff";
+      case ".woff2":
+        return "font/woff2";
+      case ".ttf":
+        return "font/ttf";
+      default:
+        return "application/octet-stream";
+    }
   }
 
   private getDesktopAllowedRoots(session: CodeSession): string[] {
@@ -1593,7 +1893,7 @@ export class CodeHostManager {
   }
 
   private resolveDesktopProtocolPath(
-    request: ProtocolRequest,
+    request: Pick<ProtocolRequest, "url">,
     allowedRoots: readonly string[],
   ): string | null {
     try {
@@ -1632,7 +1932,7 @@ export class CodeHostManager {
     const sessionStateRoot = this.getDesktopSessionStateRoot(projectId, runtime.stateDir);
     const sharedExtensionsDir = this.getDesktopSharedExtensionsDir(runtime.stateDir);
     const sharedExtensionsRegistry = reconcileSharedExtensionRegistry(runtime.stateDir);
-    const profileRoot = Path.join(sessionStateRoot, "profile");
+    const profileRoot = Path.join(runtime.stateDir, "code-oss-desktop", "shared-profile");
     const profile = this.ensureDesktopUserDataProfile(profileRoot, sharedExtensionsRegistry);
     const focusedFilePath = session.lastFocusedPath
       ? Path.join(session.workspaceRoot, session.lastFocusedPath)
@@ -1686,7 +1986,7 @@ export class CodeHostManager {
       isPortable: false,
       execPath: process.execPath,
       profiles: {
-        home: this.toFileUriComponent(Path.join(sessionStateRoot, "profiles")),
+        home: this.toFileUriComponent(Path.join(profileRoot, "profiles")),
         all: [profile],
         profile,
       },
@@ -1786,6 +2086,7 @@ export class CodeHostManager {
     for (const pathname of [
       Path.join(location, "snippets"),
       Path.join(location, "prompts"),
+      Path.join(location, "agentPlugins"),
       Path.join(location, "globalStorage"),
     ]) {
       FS.mkdirSync(pathname, { recursive: true });
@@ -1834,6 +2135,8 @@ export class CodeHostManager {
       promptsHome: this.toFileUriComponent(Path.join(location, "prompts")),
       extensionsResource: this.toFileUriComponent(sharedExtensionsRegistry),
       mcpResource: this.toFileUriComponent(Path.join(location, "mcp.json")),
+      languageModelsResource: this.toFileUriComponent(Path.join(location, "languageModels.json")),
+      agentPluginsHome: this.toFileUriComponent(Path.join(location, "agentPlugins")),
       cacheHome: this.toFileUriComponent(cacheHome),
     };
   }
@@ -1900,16 +2203,57 @@ export class CodeHostManager {
     }
 
     const prefix = `[code-oss:${session.projectId}]`;
+    session.view.webContents.on("did-start-loading", () => {
+      writeCodeHostDiagnostic(`${prefix} did-start-loading`);
+      console.log(`${prefix} did-start-loading`);
+    });
+    session.view.webContents.on("did-finish-load", () => {
+      session.desktopLoadPending = false;
+      writeCodeHostDiagnostic(
+        `${prefix} did-finish-load ${session.view?.webContents.getURL() ?? ""}`,
+      );
+      console.log(`${prefix} did-finish-load`, session.view?.webContents.getURL());
+    });
     session.view.webContents.on(
       "did-fail-load",
       (_event, errorCode, errorDescription, validatedURL) => {
+        session.lastLoadedUrl = null;
+        session.desktopLoadPending = true;
+        writeCodeHostDiagnostic(`${prefix} did-fail-load`, {
+          errorCode,
+          errorDescription,
+          validatedURL,
+        });
         console.error(`${prefix} did-fail-load`, { errorCode, errorDescription, validatedURL });
       },
     );
     session.view.webContents.on("render-process-gone", (_event, details) => {
+      session.lastLoadedUrl = null;
+      session.desktopLoadPending = true;
+      writeCodeHostDiagnostic(`${prefix} render-process-gone`, details);
       console.error(`${prefix} render-process-gone`, details);
     });
+    session.view.webContents.on("destroyed", () => {
+      writeCodeHostDiagnostic(`${prefix} webContents destroyed`);
+      console.error(`${prefix} webContents destroyed`);
+    });
+    session.view.webContents.on("unresponsive", () => {
+      writeCodeHostDiagnostic(`${prefix} webContents unresponsive`);
+      console.warn(`${prefix} webContents unresponsive`);
+    });
+    session.view.webContents.on("responsive", () => {
+      writeCodeHostDiagnostic(`${prefix} webContents responsive`);
+    });
+    session.view.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+      writeCodeHostDiagnostic(`${prefix} renderer-console`, {
+        level,
+        message: message.slice(0, 1000),
+        line,
+        sourceId,
+      });
+    });
     session.view.webContents.on("preload-error", (_event, preloadPathname, error) => {
+      writeCodeHostDiagnostic(`${prefix} preload-error`, { preloadPathname, error });
       console.error(`${prefix} preload-error`, preloadPathname, error);
     });
   }
@@ -1922,15 +2266,27 @@ export class CodeHostManager {
 
     const prefix = `[code-oss:${session.projectId}]`;
     const browserSession = session.view.webContents.session;
+    browserSession.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, (details, callback) => {
+      writeCodeHostDiagnostic(`${prefix} request-start`, {
+        url: details.url,
+        resourceType: details.resourceType,
+      });
+      callback({ cancel: false });
+    });
     const filter = { urls: [`${CODE_OSS_FILE_PROTOCOL}://*/*`] };
     browserSession.webRequest.onErrorOccurred(filter, (details) => {
+      writeCodeHostDiagnostic(`${prefix} request-error`, {
+        url: details.url,
+        error: details.error,
+        resourceType: details.resourceType,
+      });
       console.error(`${prefix} request-error`, {
         url: details.url,
         error: details.error,
         resourceType: details.resourceType,
       });
     });
-    browserSession.webRequest.onHeadersReceived(filter, (details) => {
+    browserSession.webRequest.onHeadersReceived(filter, (details, callback) => {
       if (details.url.includes("/workbench-dev.html") || details.url.includes("/workbench.js")) {
         console.error(`${prefix} response`, {
           url: details.url,
@@ -1939,6 +2295,11 @@ export class CodeHostManager {
           responseHeaders: details.responseHeaders,
         });
       }
+      callback(
+        details.responseHeaders
+          ? { cancel: false, responseHeaders: details.responseHeaders }
+          : { cancel: false },
+      );
     });
   }
 

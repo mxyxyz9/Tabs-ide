@@ -326,6 +326,22 @@ export const TestingGenerationJobInput = Schema.Struct({
 });
 export type TestingGenerationJobInput = typeof TestingGenerationJobInput.Type;
 
+export const TestingArtifactKind = Schema.Literals(["spec", "page", "data"]);
+export type TestingArtifactKind = typeof TestingArtifactKind.Type;
+
+export const TestingArtifactReadInput = Schema.Struct({
+  projectId: Schema.String,
+  generationJobId: Schema.String,
+  caseId: Schema.String,
+  artifactKind: TestingArtifactKind,
+});
+export type TestingArtifactReadInput = typeof TestingArtifactReadInput.Type;
+
+export const TestingArtifactReadResult = Schema.Struct({
+  contents: Schema.String,
+});
+export type TestingArtifactReadResult = typeof TestingArtifactReadResult.Type;
+
 export const TestingExecutionInput = Schema.Struct({
   projectId: Schema.String,
   generationJobId: Schema.String,
@@ -929,6 +945,7 @@ export interface TestingApi {
     input: TestingProjectInput,
   ) => Promise<TestingGenerationJobListResult>;
   readonly cancelGenerationJob: (input: TestingGenerationJobInput) => Promise<TestingGenerationJob>;
+  readonly readArtifact: (input: TestingArtifactReadInput) => Promise<TestingArtifactReadResult>;
   readonly runTests: (input: TestingExecutionInput) => Promise<TestingExecutionRun>;
   readonly listExecutionRuns: (
     input: TestingProjectInput,

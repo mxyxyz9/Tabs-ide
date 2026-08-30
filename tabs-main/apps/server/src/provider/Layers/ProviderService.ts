@@ -658,15 +658,22 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         ...(input.modelSelection?.model ? { "provider.model": input.modelSelection.model } : {}),
       });
       const turn = yield* routed.adapter.sendTurn(input);
+      // Request/response protocols such as ACP may complete before sendTurn
+      // returns, while streaming protocols return with an active turn. Read
+      // the adapter's authoritative state so a completed turn is not persisted
+      // as active after its terminal event already moved the UI to ready.
+      const adapterSessions = yield* routed.adapter.listSessions();
+      const adapterSession = adapterSessions.find((session) => session.threadId === input.threadId);
+      const turnStillActive = adapterSession?.activeTurnId === turn.turnId;
       yield* directory.upsert({
         threadId: input.threadId,
         provider: routed.adapter.provider,
         providerInstanceId: routed.instanceId,
-        status: "running",
+        ...(turnStillActive ? { status: "running" as const } : {}),
         ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
         runtimePayload: {
           ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
-          activeTurnId: turn.turnId,
+          activeTurnId: turnStillActive ? turn.turnId : null,
           lastRuntimeEvent: "provider.sendTurn",
           lastRuntimeEventAt: yield* nowIso,
         },

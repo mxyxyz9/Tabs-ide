@@ -43,7 +43,8 @@
 		}
 
 		// developing an extension -> ignore stored layouts
-		if (data && configuration.extensionDevelopmentPath) {
+		const isTabsEmbeddedWorkbench = typeof configuration.userEnv?.TABS_PROJECT_ID === 'string';
+		if (data && configuration.extensionDevelopmentPath && !isTabsEmbeddedWorkbench) {
 			data.layoutInfo = undefined;
 		}
 
@@ -608,6 +609,9 @@
 				};
 			},
 			beforeImport: function (windowConfig) {
+				const isTabsEmbeddedWorkbench = typeof windowConfig.userEnv?.TABS_PROJECT_ID === 'string';
+				(globalThis as { __tabsEmbeddedWorkbench?: boolean }).__tabsEmbeddedWorkbench = isTabsEmbeddedWorkbench;
+				document.documentElement.classList.toggle('tabs-embedded-workbench', isTabsEmbeddedWorkbench);
 
 				// Show our splash as early as possible
 				showSplash(windowConfig);

@@ -123,6 +123,12 @@ export type TimelineEntry =
       kind: "work";
       createdAt: string;
       entry: WorkLogEntry;
+    }
+  | {
+      id: string;
+      kind: "tasks";
+      createdAt: string;
+      tasks: ReadonlyArray<TaskNode>;
     };
 
 export function formatDuration(durationMs: number): string {
@@ -484,6 +490,7 @@ export function deriveWorkLogEntries(
   const entries = ordered
     .filter((activity) => (latestTurnId ? activity.turnId === latestTurnId : true))
     .filter((activity) => activity.kind !== "tool.started")
+    .filter((activity) => activity.kind !== "turn.plan.updated")
     // task.started and task.completed are now surfaced for the Task UI
     .filter((activity) => activity.kind !== "context-window.updated")
     .filter((activity) => activity.summary !== "Checkpoint captured")
@@ -871,6 +878,7 @@ export function deriveTimelineEntries(
   messages: ChatMessage[],
   proposedPlans: ProposedPlan[],
   workEntries: WorkLogEntry[],
+  taskGroups: ReadonlyArray<TaskGroup> = [],
 ): TimelineEntry[] {
   const messageRows: TimelineEntry[] = messages.map((message) => ({
     id: message.id,
@@ -890,7 +898,13 @@ export function deriveTimelineEntries(
     createdAt: entry.createdAt,
     entry,
   }));
-  return [...messageRows, ...proposedPlanRows, ...workRows].toSorted((a, b) =>
+  const taskRows: TimelineEntry[] = taskGroups.map((group) => ({
+    id: `tasks:${group.turnId ?? group.createdAt}`,
+    kind: "tasks",
+    createdAt: group.createdAt,
+    tasks: group.tasks,
+  }));
+  return [...messageRows, ...proposedPlanRows, ...workRows, ...taskRows].toSorted((a, b) =>
     a.createdAt.localeCompare(b.createdAt),
   );
 }
@@ -923,7 +937,7 @@ export interface TaskNode {
   taskId: string;
   description: string;
   taskType?: string;
-  status: "running" | "completed" | "failed" | "stopped";
+  status: "pending" | "running" | "completed" | "failed" | "stopped";
   lastToolName?: string;
   usage?: unknown;
   latestDetail?: string;
@@ -931,13 +945,164 @@ export interface TaskNode {
   completedAt?: string;
 }
 
+export interface TaskGroup {
+  turnId: TurnId | null;
+  createdAt: string;
+  tasks: ReadonlyArray<TaskNode>;
+}
+
+/**
+ * Returns genuine provider tasks grouped by turn. Synthetic task records are
+ * deliberately excluded: those records mirror turns and tool calls, which are
+ * work-log events rather than user-meaningful tasks.
+ */
+export function deriveTaskGroups(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+): TaskGroup[] {
+  const taskActivities = activities.filter((activity) => {
+    if (
+      activity.kind !== "task.started" &&
+      activity.kind !== "task.progress" &&
+      activity.kind !== "task.completed"
+    ) {
+      return false;
+    }
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    return typeof payload?.taskId === "string" && !payload.taskId.startsWith("synthetic:");
+  });
+  const activitiesByTurn = new Map<TurnId | null, OrchestrationThreadActivity[]>();
+  for (const activity of taskActivities) {
+    const turnId = activity.turnId ?? null;
+    const existing = activitiesByTurn.get(turnId) ?? [];
+    existing.push(activity);
+    activitiesByTurn.set(turnId, existing);
+  }
+  const groupsByTurn = new Map<TurnId | null, TaskGroup>(
+    [...activitiesByTurn.entries()].map(([turnId, turnActivities]) => [
+      turnId,
+      {
+        turnId,
+        createdAt: turnActivities.reduce(
+          (latest, activity) => (activity.createdAt > latest ? activity.createdAt : latest),
+          turnActivities[0]?.createdAt ?? new Date(0).toISOString(),
+        ),
+        tasks: deriveActiveTaskNodes(turnActivities, undefined),
+      },
+    ]),
+  );
+
+  const latestPlanByTurn = new Map<TurnId | null, OrchestrationThreadActivity>();
+  for (const activity of activities) {
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const data =
+      payload?.data && typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : null;
+    const state =
+      data?.state && typeof data.state === "object"
+        ? (data.state as Record<string, unknown>)
+        : null;
+    const input =
+      state?.input && typeof state.input === "object"
+        ? (state.input as Record<string, unknown>)
+        : null;
+    const isTodoWriteSnapshot =
+      (activity.kind === "tool.updated" || activity.kind === "tool.completed") &&
+      typeof data?.tool === "string" &&
+      data.tool.toLowerCase() === "todowrite" &&
+      Array.isArray(input?.todos);
+    if (activity.kind !== "turn.plan.updated" && !isTodoWriteSnapshot) continue;
+    const turnId = activity.turnId ?? null;
+    const existing = latestPlanByTurn.get(turnId);
+    if (!existing || activity.createdAt >= existing.createdAt) {
+      latestPlanByTurn.set(turnId, activity);
+    }
+  }
+  for (const [turnId, activity] of latestPlanByTurn) {
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const data =
+      payload?.data && typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : null;
+    const state =
+      data?.state && typeof data.state === "object"
+        ? (data.state as Record<string, unknown>)
+        : null;
+    const input =
+      state?.input && typeof state.input === "object"
+        ? (state.input as Record<string, unknown>)
+        : null;
+    const rawPlan = Array.isArray(payload?.plan)
+      ? payload.plan
+      : Array.isArray(input?.todos)
+        ? input.todos.map((todo) => {
+            if (!todo || typeof todo !== "object") return todo;
+            const record = todo as Record<string, unknown>;
+            return { step: record.content, status: record.status };
+          })
+        : null;
+    if (!rawPlan) continue;
+    const planTasks = rawPlan.flatMap((entry, index): TaskNode[] => {
+      if (!entry || typeof entry !== "object") return [];
+      const step = entry as Record<string, unknown>;
+      if (typeof step.step !== "string" || step.step.trim().length === 0) return [];
+      const status: TaskNode["status"] =
+        step.status === "completed" || step.status === "cancelled"
+          ? "completed"
+          : step.status === "inProgress" || step.status === "in_progress"
+            ? "running"
+            : "pending";
+      return [
+        {
+          taskId: `plan:${turnId ?? "unscoped"}:${index}`,
+          description: step.step,
+          taskType: "plan",
+          status,
+          startedAt: activity.createdAt,
+          ...(status === "completed" ? { completedAt: activity.createdAt } : {}),
+        },
+      ];
+    });
+    if (planTasks.length === 0) continue;
+    const existing = groupsByTurn.get(turnId);
+    groupsByTurn.set(turnId, {
+      turnId,
+      createdAt:
+        existing && existing.createdAt > activity.createdAt
+          ? existing.createdAt
+          : activity.createdAt,
+      tasks: [...(existing?.tasks.filter((task) => task.taskType !== "plan") ?? []), ...planTasks],
+    });
+  }
+
+  return [...groupsByTurn.values()]
+    .filter((group) => group.tasks.length > 0)
+    .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
 export function deriveActiveTaskNodes(
   activities: ReadonlyArray<OrchestrationThreadActivity>,
   latestTurnId: TurnId | undefined,
 ): TaskNode[] {
-  const turnActivities = latestTurnId
+  const scopedActivities = latestTurnId
     ? activities.filter((a) => a.turnId === latestTurnId)
     : activities;
+  const turnActivities = scopedActivities.filter((activity) => {
+    const payload =
+      activity.payload && typeof activity.payload === "object"
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    return !(typeof payload?.taskId === "string" && payload.taskId.startsWith("synthetic:"));
+  });
 
   const taskMap = new Map<string, TaskNode>();
 
@@ -962,9 +1127,6 @@ export function deriveActiveTaskNodes(
       if (existing) {
         if (typeof payload.detail === "string") {
           existing.latestDetail = payload.detail;
-        }
-        if (typeof payload.summary === "string") {
-          existing.description = payload.summary;
         }
         if (typeof payload.lastToolName === "string") {
           existing.lastToolName = payload.lastToolName;

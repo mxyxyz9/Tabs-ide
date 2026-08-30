@@ -1724,6 +1724,37 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("keeps projects.readFile restricted to relative paths inside the workspace root", async () => {
+    const workspace = makeTempDir("tabs-ws-read-file-reject-");
+    const outsideFile = path.join(makeTempDir("tabs-ws-read-file-outside-"), "secret.md");
+    fs.writeFileSync(outsideFile, "# secret\n");
+
+    server = await createTestServer({ cwd: "/test" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const absoluteResponse = await sendRequest(ws, WS_METHODS.projectsReadFile, {
+      cwd: workspace,
+      relativePath: outsideFile,
+    });
+    expect(absoluteResponse.result).toBeUndefined();
+    expect(absoluteResponse.error?.message).toContain(
+      "Workspace file path must be relative to the project root.",
+    );
+
+    const escapingResponse = await sendRequest(ws, WS_METHODS.projectsReadFile, {
+      cwd: workspace,
+      relativePath: "../secret.md",
+    });
+    expect(escapingResponse.result).toBeUndefined();
+    expect(escapingResponse.error?.message).toContain(
+      "Workspace file path must stay within the project root.",
+    );
+  }, 20_000);
+
   it("rejects projects.writeFile paths outside the workspace root", async () => {
     const workspace = makeTempDir("tabs-ws-write-file-reject-");
 

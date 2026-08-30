@@ -16,6 +16,8 @@ const { webContentsViews, MockWebContentsView } = vi.hoisted(() => {
       setWindowOpenHandler: vi.fn(),
       executeJavaScript: vi.fn(async () => null),
       isDestroyed: vi.fn(() => false),
+      isLoading: vi.fn(() => false),
+      stop: vi.fn(),
     };
 
     readonly loadedUrls: string[] = [];
@@ -48,6 +50,8 @@ import {
   CODE_OSS_NLS_MESSAGES_RELATIVE_PATH,
   CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH,
   CodeHostManager,
+  filterWorkspaceTabs,
+  isPathInsideWorkspace,
   mergeProductConfigurationDefaults,
   reconcileSharedExtensionRegistry,
   readWorkspaceTabs,
@@ -357,6 +361,19 @@ describe("CodeHostManager", () => {
       } finally {
         FS.rmSync(testDir, { recursive: true, force: true });
       }
+    });
+
+    it("keeps only tabs contained by the project workspace", () => {
+      const workspaceRoot = Path.join(Path.sep, "projects", "tabs");
+      const tabs = [
+        { filePath: Path.join(workspaceRoot, "src", "index.ts"), active: true },
+        { filePath: "README.md", active: false },
+        { filePath: Path.join(Path.sep, "projects", "throttle", "app.json"), active: false },
+        { filePath: Path.join("..", "throttle", "package.json"), active: false },
+      ];
+
+      expect(filterWorkspaceTabs(workspaceRoot, tabs)).toEqual(tabs.slice(0, 2));
+      expect(isPathInsideWorkspace(workspaceRoot, workspaceRoot)).toBe(false);
     });
   });
 });

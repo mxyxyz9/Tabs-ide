@@ -74,6 +74,15 @@ describe("buildCursorAcpSpawnInput", () => {
       cwd: "/tmp/project",
     });
   });
+
+  it("removes ambient API keys so Cursor account login remains the default", () => {
+    expect(
+      buildCursorAcpSpawnInput(undefined, "/tmp/project", {
+        PATH: "/bin",
+        CURSOR_API_KEY: "metered-secret",
+      }).env,
+    ).toEqual({ PATH: "/bin" });
+  });
 });
 
 describe("applyCursorAcpModelSelection", () => {

@@ -6,11 +6,23 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { GrokSettings } from "@tabs/contracts";
 
-import { buildInitialGrokProviderSnapshot, checkGrokProviderStatus } from "./GrokProvider";
+import {
+  buildInitialGrokProviderSnapshot,
+  checkGrokProviderStatus,
+  parseGrokModelsOutput,
+} from "./GrokProvider";
 
 const decodeGrokSettings = Schema.decodeSync(GrokSettings);
 
 describe("buildInitialGrokProviderSnapshot", () => {
+  it("parses the account-scoped `grok models` output", () => {
+    expect(
+      parseGrokModelsOutput(
+        "You are logged in with grok.com.\n\nDefault model: grok-4.6\n\nAvailable models:\n  * grok-4.6 (default)\n  * grok-code-fast-1\n",
+      ).map((model) => model.slug),
+    ).toEqual(["grok-4.6", "grok-code-fast-1"]);
+  });
+
   it.effect("returns a disabled snapshot when settings.enabled is false", () =>
     Effect.gen(function* () {
       const snapshot = yield* buildInitialGrokProviderSnapshot(
@@ -79,7 +91,7 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
     }),
   );
 
-  it.effect("reports an error when ACP model discovery is unavailable", () =>
+  it.effect("reports an error when `grok models` is unavailable", () =>
     Effect.gen(function* () {
       const snapshot = yield* Effect.scoped(
         Effect.gen(function* () {
@@ -89,7 +101,13 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
           const grokPath = path.join(dir, "grok");
           yield* fs.writeFileString(
             grokPath,
-            ["#!/bin/sh", 'printf "grok-cli 0.0.99\\n"', "exit 0", ""].join("\n"),
+            [
+              "#!/bin/sh",
+              'if [ "$1" = "--version" ]; then printf "grok-cli 0.0.99\\n"; exit 0; fi',
+              'printf "not logged in\\n" >&2',
+              "exit 2",
+              "",
+            ].join("\n"),
           );
           yield* fs.chmod(grokPath, 0o755);
 
@@ -103,7 +121,39 @@ it.layer(NodeServices.layer)("checkGrokProviderStatus", (it) => {
       expect(snapshot.installed).toBe(true);
       expect(snapshot.models).toEqual([]);
       expect(snapshot.catalogStatus).toBe("failed");
-      expect(snapshot.message).toContain("couldn't start an ACP session");
+      expect(snapshot.message).toContain("model discovery failed");
+    }),
+  );
+
+  it.effect("uses the lightweight account-scoped model command", () =>
+    Effect.gen(function* () {
+      const snapshot = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3code-grok-models-" });
+          const grokPath = path.join(dir, "grok");
+          yield* fs.writeFileString(
+            grokPath,
+            [
+              "#!/bin/sh",
+              'if [ "$1" = "--version" ]; then printf "grok-cli 0.0.99\\n"; exit 0; fi',
+              'if [ "$1" = "models" ]; then printf "Available models:\\n  * grok-4.6 (default)\\n"; exit 0; fi',
+              "exit 3",
+              "",
+            ].join("\n"),
+          );
+          yield* fs.chmod(grokPath, 0o755);
+          return yield* checkGrokProviderStatus(
+            decodeGrokSettings({ enabled: true, binaryPath: grokPath }),
+          );
+        }),
+      );
+
+      expect(snapshot.status).toBe("ready");
+      expect(snapshot.catalogSource).toBe("grok-models");
+      expect(snapshot.models.map((model) => model.slug)).toEqual(["grok-4.6"]);
+      expect(snapshot.auth.label).toBe("Grok account allowance");
     }),
   );
 });

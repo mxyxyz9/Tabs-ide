@@ -153,6 +153,26 @@ function toToolLifecycleItemType(toolName: string): ToolLifecycleItemType {
   return "dynamic_tool_call";
 }
 
+function normalizeOpenCodeTodoPlan(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const todo = entry as Record<string, unknown>;
+    if (typeof todo.content !== "string" || todo.content.trim().length === 0) return [];
+    return [
+      {
+        step: todo.content.trim(),
+        status:
+          todo.status === "completed" || todo.status === "cancelled"
+            ? ("completed" as const)
+            : todo.status === "in_progress"
+              ? ("inProgress" as const)
+              : ("pending" as const),
+      },
+    ];
+  });
+}
+
 function mapPermissionToRequestType(
   permission: string,
 ): "command_execution_approval" | "file_read_approval" | "file_change_approval" | "unknown" {
@@ -663,6 +683,21 @@ export function makeOpenCodeAdapter(
       });
 
       switch (event.type) {
+        case "todo.updated": {
+          yield* emit({
+            ...(yield* buildEventBase({
+              threadId: context.session.threadId,
+              turnId,
+              raw: event,
+            })),
+            type: "turn.plan.updated",
+            payload: {
+              plan: normalizeOpenCodeTodoPlan(event.properties.todos),
+            },
+          });
+          break;
+        }
+
         case "message.updated": {
           context.messageRoleById.set(event.properties.info.id, event.properties.info.role);
           if (event.properties.info.role === "assistant") {
@@ -772,6 +807,25 @@ export function makeOpenCodeAdapter(
             };
             appendTurnItem(context, turnId, part);
             yield* emit(runtimeEvent);
+            if (part.tool.toLowerCase() === "todowrite") {
+              const todoPlan = normalizeOpenCodeTodoPlan(
+                "input" in part.state && part.state.input && typeof part.state.input === "object"
+                  ? (part.state.input as Record<string, unknown>).todos
+                  : undefined,
+              );
+              if (todoPlan.length > 0) {
+                yield* emit({
+                  ...(yield* buildEventBase({
+                    threadId: context.session.threadId,
+                    turnId,
+                    createdAt: toolStateCreatedAt(part),
+                    raw: event,
+                  })),
+                  type: "turn.plan.updated",
+                  payload: { plan: todoPlan },
+                });
+              }
+            }
           }
           break;
         }

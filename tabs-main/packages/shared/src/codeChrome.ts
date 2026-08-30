@@ -599,6 +599,9 @@ export function coerceChromeState(value: unknown): CodeChromeState {
               commandId: itemRecord.commandId,
               icon,
             };
+            if (itemRecord.location === "sidebar" || itemRecord.location === "auxiliaryBar") {
+              entry.location = itemRecord.location;
+            }
             if (typeof itemRecord.order === "number") entry.order = itemRecord.order;
             activityBarItems.push(entry);
           }

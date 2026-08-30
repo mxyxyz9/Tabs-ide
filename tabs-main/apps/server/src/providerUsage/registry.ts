@@ -5,6 +5,7 @@ import { antigravityUsageFetcher } from "./providers/antigravity";
 import { claudeUsageFetcher } from "./providers/claude";
 import { codexUsageFetcher } from "./providers/codex";
 import { cursorUsageFetcher } from "./providers/cursor";
+import { copilotUsageFetcher } from "./providers/copilot";
 import { grokUsageFetcher } from "./providers/grok";
 import { droidUsageFetcher, kiloUsageFetcher, piUsageFetcher } from "./providers/localCredential";
 import { opencodeUsageFetcher } from "./providers/opencode";
@@ -15,6 +16,7 @@ export const PROVIDER_USAGE_FETCHERS: Record<string, ProviderUsageFetcher> = {
   claudeAgent: claudeUsageFetcher,
   claude: claudeUsageFetcher,
   cursor: cursorUsageFetcher,
+  copilot: copilotUsageFetcher,
   antigravity: antigravityUsageFetcher,
   grok: grokUsageFetcher,
   droid: droidUsageFetcher,

@@ -150,6 +150,7 @@
 
 			acquire(responseChannel: string, nonce: string) {
 				if (validateIPC(responseChannel)) {
+					console.debug(`[tabs-code] waiting for MessagePort on ${responseChannel}`);
 					const responseListener = (e: Electron.IpcRendererEvent, response: string | { nonce: string; error?: string; fatal?: boolean }) => {
 						// validate that the nonce from the response is the same
 						// as when requested. and if so, use `postMessage` to
@@ -157,6 +158,7 @@
 						// isolation is enabled
 						const responseNonce = typeof response === 'string' ? response : response.nonce;
 						if (nonce === responseNonce) {
+							console.debug(`[tabs-code] received MessagePort on ${responseChannel} (${e.ports.length} ports)`);
 							ipcRenderer.off(responseChannel, responseListener);
 							window.postMessage(response, '*', e.ports);
 						}

@@ -293,6 +293,106 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
     }),
   );
 
+  it.effect("normalizes OpenCode and Kilo todo updates into shared plan tasks", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-todos");
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "todo.updated",
+          properties: {
+            sessionID: "http://127.0.0.1:9999/session",
+            todos: [
+              { content: "Inspect the provider", status: "completed", priority: "high" },
+              { content: "Implement task mapping", status: "in_progress", priority: "medium" },
+              { content: "Run focused tests", status: "pending", priority: "low" },
+            ],
+          },
+        },
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(3),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: "opencode" as ProviderDriverKind,
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
+      const planUpdated = events.find((event) => event.type === "turn.plan.updated");
+      assert.equal(planUpdated?.type, "turn.plan.updated");
+      if (planUpdated?.type === "turn.plan.updated") {
+        assert.deepEqual(planUpdated.payload.plan, [
+          { step: "Inspect the provider", status: "completed" },
+          { step: "Implement task mapping", status: "inProgress" },
+          { step: "Run focused tests", status: "pending" },
+        ]);
+      }
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
+  it.effect("normalizes TodoWrite tool snapshots when OpenCode omits todo.updated", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-todowrite-tool");
+      runtimeMock.state.subscribedEvents = [
+        {
+          type: "message.part.updated",
+          properties: {
+            sessionID: "http://127.0.0.1:9999/session",
+            part: {
+              id: "part-todowrite",
+              sessionID: "http://127.0.0.1:9999/session",
+              messageID: "message-todowrite",
+              type: "tool",
+              callID: "call-todowrite",
+              tool: "todowrite",
+              state: {
+                status: "running",
+                input: {
+                  todos: [
+                    { content: "Inspect provider events", status: "completed", priority: "high" },
+                    { content: "Render task UI", status: "in_progress", priority: "high" },
+                  ],
+                },
+                time: { start: 1 },
+              },
+            },
+          },
+        },
+      ];
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter((event) => event.threadId === threadId),
+        Stream.take(4),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: "opencode" as ProviderDriverKind,
+        threadId,
+        runtimeMode: "full-access",
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
+      const planUpdated = events.find((event) => event.type === "turn.plan.updated");
+      assert.equal(planUpdated?.type, "turn.plan.updated");
+      if (planUpdated?.type === "turn.plan.updated") {
+        assert.deepEqual(planUpdated.payload.plan, [
+          { step: "Inspect provider events", status: "completed" },
+          { step: "Render task UI", status: "inProgress" },
+        ]);
+      }
+      yield* adapter.stopSession(threadId);
+    }),
+  );
+
   it.effect("clears session state even when cleanup finalizers throw", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;

@@ -54,6 +54,7 @@ import { makeAcpNativeLoggerFactory } from "../acp/AcpNativeLogging";
 import {
   applyDroidAcpModelSelection,
   currentDroidModelIdFromSessionSetup,
+  discoverDroidAcpModels,
   makeDroidAcpRuntime,
   resolveDroidAcpBaseModelId,
 } from "../acp/DroidAcpSupport";
@@ -751,7 +752,8 @@ export function makeDroidAdapter(
             });
             ctx.session = {
               ...ctx.session,
-              activeTurnId: prepared.turnId,
+              status: "ready",
+              activeTurnId: undefined,
               updatedAt: yield* nowIso,
             };
             yield* offerRuntimeEvent({
@@ -874,11 +876,38 @@ export function makeDroidAdapter(
         discard: true,
       });
 
+    const listModels: NonNullable<DroidAdapterShape["listModels"]> = (input) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const cwd = path.resolve(input.cwd?.trim() || serverConfig.cwd);
+          const runtime = yield* makeDroidAcpRuntime({
+            droidSettings: {
+              ...droidSettings,
+              ...(input.binaryPath ? { binaryPath: input.binaryPath } : {}),
+            },
+            ...(options?.environment ? { environment: options.environment } : {}),
+            childProcessSpawner,
+            cwd,
+            clientInfo: { name: "tabs-model-discovery", version: "0.0.0" },
+          });
+          yield* runtime.start();
+          return yield* discoverDroidAcpModels(runtime);
+        }).pipe(
+          Effect.mapError((cause) =>
+            mapAcpToAdapterError(
+              PROVIDER,
+              "droid-model-discovery" as ThreadId,
+              "model/list",
+              cause,
+            ),
+          ),
+        ),
+      );
+
     return {
       provider: PROVIDER,
       capabilities: {
         sessionModelSwitch: "in-session",
-        agentChat: "unsupported",
       },
       startSession,
       sendTurn,
@@ -890,6 +919,7 @@ export function makeDroidAdapter(
       hasSession,
       readThread,
       rollbackThread,
+      listModels,
       stopAll,
       streamEvents: Stream.fromPubSub(runtimeEventPubSub),
     } satisfies DroidAdapterShape;

@@ -2,7 +2,25 @@ import { describe, expect, it } from "vitest";
 import { ProviderDriverKind, type ModelCapabilities } from "@tabs/contracts";
 import { createModelCapabilities } from "@tabs/shared/model";
 
-import { providerModelsFromSettings } from "./providerSnapshot";
+import { normalizeProviderAuth, providerModelsFromSettings } from "./providerSnapshot";
+
+describe("normalizeProviderAuth", () => {
+  it("classifies metered and account credentials through the shared contract", () => {
+    expect(
+      normalizeProviderAuth({
+        status: "authenticated",
+        type: "apiKey",
+        label: "Provider API Key (usage-based)",
+      }),
+    ).toMatchObject({
+      credentialSource: "api_key",
+      billingLabel: "Provider API Key (usage-based)",
+    });
+    expect(normalizeProviderAuth({ status: "authenticated", type: "oauth" })).toMatchObject({
+      credentialSource: "account",
+    });
+  });
+});
 
 const OPENCODE_CUSTOM_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [

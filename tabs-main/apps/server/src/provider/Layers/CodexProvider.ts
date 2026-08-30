@@ -114,7 +114,7 @@ function codexAccountAuthLabel(account: CodexSchema.V2GetAccountResponse["accoun
 
   switch (account.planType) {
     case "free":
-      return "ChatGPT Free Subscription";
+      return "ChatGPT Free";
     case "go":
       return "ChatGPT Go Subscription";
     case "plus":

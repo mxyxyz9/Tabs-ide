@@ -60,10 +60,22 @@ export const ServerProviderAuthStatus = Schema.Literals([
 ]);
 export type ServerProviderAuthStatus = typeof ServerProviderAuthStatus.Type;
 
+export const ProviderCredentialSource = Schema.Literals([
+  "account",
+  "api_key",
+  "cloud_credential",
+  "byok",
+  "free_local",
+  "unknown",
+]);
+export type ProviderCredentialSource = typeof ProviderCredentialSource.Type;
+
 export const ServerProviderAuth = Schema.Struct({
   status: ServerProviderAuthStatus,
   type: Schema.optional(TrimmedNonEmptyString),
   label: Schema.optional(TrimmedNonEmptyString),
+  credentialSource: Schema.optional(ProviderCredentialSource),
+  billingLabel: Schema.optional(TrimmedNonEmptyString),
   email: Schema.optional(TrimmedNonEmptyString),
 });
 export type ServerProviderAuth = typeof ServerProviderAuth.Type;

@@ -29,9 +29,7 @@ interface WatermarkEntry {
 	};
 }
 
-const showChatContextKey = ContextKeyExpr.and(ContextKeyExpr.equals('chatSetupHidden', false), ContextKeyExpr.equals('chatSetupDisabledInWorkspace', false));
-
-const openChat: WatermarkEntry = { text: localize('watermark.openChat', "Open Chat"), id: 'workbench.action.chat.open', when: { native: showChatContextKey, web: showChatContextKey } };
+const openChat: WatermarkEntry = { text: localize('watermark.openChat', "Chat with Agent"), id: 'tabs.openAgents' };
 const showCommands: WatermarkEntry = { text: localize('watermark.showCommands', "Show All Commands"), id: 'workbench.action.showCommands' };
 const gotoFile: WatermarkEntry = { text: localize('watermark.quickAccess', "Go to File"), id: 'workbench.action.quickOpen' };
 const openFile: WatermarkEntry = { text: localize('watermark.openFile', "Open File"), id: 'workbench.action.files.openFile' };
@@ -102,7 +100,10 @@ export class EditorGroupWatermark extends Disposable {
 			h('.editor-group-watermark-toolbar-container@toolbarContainer'),
 			h('.editor-group-watermark', [
 				h('.watermark-container', [
-					h('.letterpress'),
+					h('.tabs-identity', [
+						h('.letterpress', { 'aria-hidden': 'true' }),
+						h('.tabs-identity-title', [localize('watermark.tabsIDE', "Tabs IDE")]),
+					]),
 					h('.shortcuts@shortcuts'),
 				])
 			])

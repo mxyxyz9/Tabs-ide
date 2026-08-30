@@ -149,6 +149,15 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 	}
 
 	private onDidChangeAutoHideViewContainers(e: { before: number; after: number }): void {
+		// The secondary sidebar still needs a switcher when the main activity bar
+		// is hidden and more than one view container is available.
+		if (this.configuration.position === ActivityBarPosition.HIDDEN) {
+			if ((e.before > 1) !== (e.after > 1)) {
+				this.onDidChangeActivityBarLocation();
+			}
+			return;
+		}
+
 		// Only update if auto-hide is enabled and composite bar would show
 		const autoHide = this.configurationService.getValue<boolean>(LayoutSettings.ACTIVITY_BAR_AUTO_HIDE);
 		if (autoHide && (this.configuration.position === ActivityBarPosition.TOP || this.configuration.position === ActivityBarPosition.BOTTOM)) {
@@ -262,7 +271,7 @@ export class AuxiliaryBarPart extends AbstractPaneCompositePart {
 
 	protected shouldShowCompositeBar(): boolean {
 		if (this.configuration.position === ActivityBarPosition.HIDDEN) {
-			return false;
+			return this.visibleViewContainersTracker.visibleCount > 1;
 		}
 
 		// Check if auto-hide is enabled and there's only one visible view container

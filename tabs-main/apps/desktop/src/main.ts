@@ -142,6 +142,7 @@ const VSCODE_RELOAD_WINDOW_CHANNEL = "vscode:reloadWindow";
 const VSCODE_NOTIFY_ZOOM_LEVEL_CHANNEL = "vscode:notifyZoomLevel";
 const BASE_DIR = process.env.TABS_HOME?.trim() || Path.join(OS.homedir(), ".tabs");
 const STATE_DIR = Path.join(BASE_DIR, "userdata");
+const DESKTOP_THEME_STATE_PATH = Path.join(STATE_DIR, "desktop-theme.json");
 const DESKTOP_SCHEME = "tabs";
 // In packaged apps, ROOT_DIR should point to the Resources directory, not inside the asar.
 // __dirname in packaged app: /path/to/Tabs.app/Contents/Resources/app.asar/apps/desktop/dist-electron
@@ -158,6 +159,36 @@ function resolveRootDir(): string {
     return process.resourcesPath;
   }
   return Path.resolve(__dirname, "../../..");
+}
+
+type PersistedDesktopTheme = { themeId: string; customConfig?: unknown };
+
+function loadPersistedDesktopTheme(): PersistedDesktopTheme | null {
+  try {
+    const parsed = JSON.parse(FS.readFileSync(DESKTOP_THEME_STATE_PATH, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    const themeId = getSafeTheme(parsed.themeId);
+    return themeId ? { themeId, customConfig: parsed.customConfig } : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedDesktopTheme(theme: PersistedDesktopTheme): void {
+  try {
+    FS.mkdirSync(Path.dirname(DESKTOP_THEME_STATE_PATH), { recursive: true });
+    FS.writeFileSync(DESKTOP_THEME_STATE_PATH, `${JSON.stringify(theme, null, 2)}\n`, "utf8");
+  } catch {
+    // Theme persistence is best-effort; renderer storage remains the fallback.
+  }
+}
+
+function isLightDesktopTheme(themeId: string, customConfig?: any): boolean {
+  return themeId === "custom"
+    ? customConfig?.baseVariant === "light"
+    : themeId === "tabs-light" || themeId === "solarized-light" || themeId === "light";
 }
 const ROOT_DIR = resolveRootDir();
 
@@ -218,6 +249,19 @@ const codeHostConfig = resolveCodeHostConfig({
 });
 const codeControlChannel = new CodeControlChannel();
 const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig, codeControlChannel);
+const persistedDesktopTheme = loadPersistedDesktopTheme();
+if (persistedDesktopTheme) {
+  nativeTheme.themeSource = isLightDesktopTheme(
+    persistedDesktopTheme.themeId,
+    persistedDesktopTheme.customConfig,
+  )
+    ? "light"
+    : "dark";
+  codeHostManager.setTheme(
+    persistedDesktopTheme.themeId,
+    persistedDesktopTheme.customConfig,
+  );
+}
 const browserHostManager = new BrowserHostManager(() => mainWindow);
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
 
@@ -1679,12 +1723,10 @@ function registerIpcHandlers(): void {
       return;
     }
 
-    let isLight = themeId === "tabs-light" || themeId === "solarized-light" || themeId === "light";
-    if (themeId === "custom" && customConfig?.baseVariant) {
-      isLight = customConfig.baseVariant === "light";
-    }
+    const isLight = isLightDesktopTheme(themeId, customConfig);
 
     nativeTheme.themeSource = isLight ? "light" : "dark";
+    savePersistedDesktopTheme({ themeId, customConfig });
     codeControlChannel.setTheme(themeId, customConfig);
     codeHostManager.setTheme(themeId, customConfig);
   });
@@ -1834,10 +1876,14 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    await codeHostManager.ensureSession({
-      projectId: (input as { projectId: string }).projectId,
-      workspaceRoot: (input as { workspaceRoot: string }).workspaceRoot,
-    });
+    const projectId = (input as { projectId: string }).projectId;
+    const workspaceRoot = (input as { workspaceRoot: string }).workspaceRoot;
+    try {
+      await codeHostManager.ensureSession({ projectId, workspaceRoot });
+    } catch (error) {
+      console.error(`[code-oss:${projectId}] ensureSession IPC failed`, error);
+      throw error;
+    }
   });
 
   ipcMain.removeHandler(CODE_HOST_ACTIVATE_SESSION_CHANNEL);
@@ -1849,9 +1895,13 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    await codeHostManager.activateSession({
-      projectId: (input as { projectId: string }).projectId,
-    });
+    const projectId = (input as { projectId: string }).projectId;
+    try {
+      await codeHostManager.activateSession({ projectId });
+    } catch (error) {
+      console.error(`[code-oss:${projectId}] activateSession IPC failed`, error);
+      throw error;
+    }
   });
 
   ipcMain.removeHandler(CODE_HOST_HIDE_SESSION_CHANNEL);
@@ -2236,6 +2286,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.removeHandler(VSCODE_NOTIFY_ZOOM_LEVEL_CHANNEL);
   ipcMain.handle(VSCODE_NOTIFY_ZOOM_LEVEL_CHANNEL, async () => undefined);
+
 }
 
 function getIconOption(): { icon: string } | Record<string, never> {
@@ -2550,9 +2601,11 @@ async function bootstrap(): Promise<void> {
       }
       win.webContents
         .executeJavaScript(`
-        const logs = window.__SLIDER_LOGS || [];
-        window.__SLIDER_LOGS = [];
-        JSON.stringify(logs);
+        (() => {
+          const entries = window.__SLIDER_LOGS || [];
+          window.__SLIDER_LOGS = [];
+          return JSON.stringify(entries);
+        })();
       `)
         .then((result: string) => {
           const logs = JSON.parse(result) as string[];

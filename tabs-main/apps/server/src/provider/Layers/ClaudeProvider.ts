@@ -448,6 +448,9 @@ function formatClaudeSubscriptionAuthLabel(subscriptionType: string): string {
     claudeSubscriptionLabel(subscriptionType) ?? toTitleCaseWords(subscriptionType);
   const normalized = subscriptionLabel.toLowerCase().replace(/[\s_-]+/g, "");
 
+  if (normalized === "free" || normalized === "claudefree") {
+    return "Claude Free";
+  }
   if (normalized.startsWith("claude") && normalized.endsWith("subscription")) {
     return subscriptionLabel;
   }
@@ -467,7 +470,7 @@ function claudeAuthMetadata(input: {
   if (normalizeClaudeAuthMethod(input.authMethod) === "apiKey") {
     return {
       type: "apiKey",
-      label: "Claude API Key",
+      label: "Claude API Key (usage-based billing)",
     };
   }
 

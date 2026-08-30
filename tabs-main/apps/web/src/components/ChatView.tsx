@@ -63,6 +63,7 @@ import {
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
   deriveActiveTaskNodes,
+  deriveTaskGroups,
   deriveLatestTaskDescription,
   findSidebarProposedPlan,
   findLatestProposedPlan,
@@ -471,8 +472,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   const setPlanSidebarOpen = useCallback(
     (updater: boolean | ((prev: boolean) => boolean)) => {
       setAgentsState((prev) => ({
-        planSidebarOpen:
-          typeof updater === "function" ? updater(prev.planSidebarOpen) : updater,
+        planSidebarOpen: typeof updater === "function" ? updater(prev.planSidebarOpen) : updater,
       }));
     },
     [setAgentsState],
@@ -814,13 +814,14 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   );
   const threadActivities = activeThread?.activities ?? EMPTY_ACTIVITIES;
   const workLogEntries = useMemo(
-    () => deriveWorkLogEntries(threadActivities, activeLatestTurn?.turnId ?? undefined),
-    [activeLatestTurn?.turnId, threadActivities],
+    () => deriveWorkLogEntries(threadActivities, undefined),
+    [threadActivities],
   );
   const activeTaskNodes = useMemo(
     () => deriveActiveTaskNodes(threadActivities, activeLatestTurn?.turnId ?? undefined),
     [activeLatestTurn?.turnId, threadActivities],
   );
+  const taskGroups = useMemo(() => deriveTaskGroups(threadActivities), [threadActivities]);
   const latestTaskDescription = useMemo(
     () => deriveLatestTaskDescription(activeTaskNodes),
     [activeTaskNodes],
@@ -1065,8 +1066,13 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   }, [serverMessages, attachmentPreviewHandoffByMessageId, optimisticUserMessages]);
   const timelineEntries = useMemo(
     () =>
-      deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
-    [activeThread?.proposedPlans, timelineMessages, workLogEntries],
+      deriveTimelineEntries(
+        timelineMessages,
+        activeThread?.proposedPlans ?? [],
+        workLogEntries,
+        taskGroups,
+      ),
+    [activeThread?.proposedPlans, taskGroups, timelineMessages, workLogEntries],
   );
   const hasTimelineEntries = timelineEntries.length > 0;
   const hasConversationHistory = hasTimelineEntries || activeLatestTurn !== null;
@@ -2586,6 +2592,27 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         description: `Please sign in to ${activeProviderSnapshot.displayName ?? selectedProvider} in Settings → Providers before sending a message.`,
       });
       return;
+    }
+    const credentialSource = activeProviderSnapshot?.auth?.credentialSource;
+    if (
+      activeProviderSnapshot &&
+      credentialSource &&
+      ["api_key", "byok", "cloud_credential"].includes(credentialSource)
+    ) {
+      const confirmationKey = `tabs.billing-confirmed.${activeProviderSnapshot.instanceId ?? activeProviderSnapshot.driver}`;
+      if (window.localStorage.getItem(confirmationKey) !== "true") {
+        const billingLabel =
+          activeProviderSnapshot.auth.billingLabel ??
+          activeProviderSnapshot.auth.label ??
+          "usage-based credentials";
+        const confirmed = window.confirm(
+          `${activeProviderSnapshot.displayName} is configured to use ${billingLabel}. ` +
+            "Requests may be billed separately from your existing subscription. " +
+            "Continue and remember this choice for this provider?",
+        );
+        if (!confirmed) return;
+        window.localStorage.setItem(confirmationKey, "true");
+      }
     }
 
     const threadIdForSend = activeThread.id;
@@ -4305,7 +4332,6 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
                   timestampFormat={timestampFormat}
                   workspaceRoot={activeProject?.cwd ?? undefined}
                   latestTaskDescription={latestTaskDescription}
-                  activeTaskNodes={activeTaskNodes}
                   providerInstanceId={selectedProvider}
                 />
               </div>

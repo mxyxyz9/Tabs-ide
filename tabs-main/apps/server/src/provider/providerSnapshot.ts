@@ -3,6 +3,7 @@ import type {
   ModelCapabilities,
   ServerProvider,
   ServerProviderAuth,
+  ProviderCredentialSource,
   ServerProviderSkill,
   ServerProviderSlashCommand,
   ServerProviderModel,
@@ -46,6 +47,31 @@ export interface ServerProviderPresentation {
   readonly badgeLabel?: string;
   readonly showInteractionModeToggle?: boolean;
   readonly requiresNewThreadForModelChange?: boolean;
+}
+
+function inferCredentialSource(auth: ServerProviderAuth): ProviderCredentialSource {
+  const type = auth.type?.trim().toLowerCase();
+  if (!type) return auth.status === "authenticated" ? "account" : "unknown";
+  if (type === "apikey" || type === "api_key") return "api_key";
+  if (type === "byok") return "byok";
+  if (type === "amazonbedrock" || type === "googlevertex" || type === "cloudcredential") {
+    return "cloud_credential";
+  }
+  if (type === "freelocal" || type === "local") return "free_local";
+  return "account";
+}
+
+export function normalizeProviderAuth(auth: ServerProviderAuth): ServerProviderAuth {
+  const credentialSource = auth.credentialSource ?? inferCredentialSource(auth);
+  return {
+    ...auth,
+    credentialSource,
+    ...(auth.billingLabel
+      ? { billingLabel: auth.billingLabel }
+      : auth.label
+        ? { billingLabel: auth.label }
+        : {}),
+  };
 }
 
 export type ServerProviderDraft = Omit<ServerProvider, "instanceId" | "driver">;
@@ -225,7 +251,7 @@ export function buildServerProvider(input: {
     installed: input.probe.installed,
     version: input.probe.version,
     status: input.enabled ? input.probe.status : "disabled",
-    auth: input.probe.auth,
+    auth: normalizeProviderAuth(input.probe.auth),
     checkedAt: input.checkedAt,
     catalogStatus: input.catalogStatus ?? (input.models.length > 0 ? "ready" : "empty"),
     catalogSource: input.catalogSource ?? "provider-snapshot",

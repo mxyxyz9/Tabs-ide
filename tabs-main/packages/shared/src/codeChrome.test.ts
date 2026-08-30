@@ -88,13 +88,16 @@ describe("parseCodeControlClientMessage / coerceChromeState", () => {
             id: "provider.sidebar",
             label: "Provider",
             commandId: "workbench.view.extension.provider.sidebar",
+            location: "auxiliaryBar",
             icon: { type: "themeIcon", value: "sparkle" },
           },
         ],
       }),
     ).toMatchObject({
       activeViewId: null,
-      activityBarItems: [{ id: "provider.sidebar", label: "Provider" }],
+      activityBarItems: [
+        { id: "provider.sidebar", label: "Provider", location: "auxiliaryBar" },
+      ],
     });
   });
 

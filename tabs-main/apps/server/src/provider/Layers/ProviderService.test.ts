@@ -128,9 +128,17 @@ function makeFakeCodexAdapter(provider: ProviderDriverKind = CODEX_DRIVER) {
         );
       }
 
+      const session = sessions.get(input.threadId)!;
+      const turnId = `turn-${String(input.threadId)}` as TurnId;
+      sessions.set(input.threadId, {
+        ...session,
+        status: "running",
+        activeTurnId: turnId,
+      });
+
       return Effect.succeed({
         threadId: input.threadId,
-        turnId: `turn-${String(input.threadId)}` as TurnId,
+        turnId,
       });
     },
   );
@@ -1217,6 +1225,51 @@ routing.layer("ProviderServiceLive routing", (it) => {
           assert.equal(runtimePayload.lastError, null);
           assert.equal(runtimePayload.lastRuntimeEvent, "provider.sendTurn");
         }
+      }
+    }),
+  );
+
+  it.effect("does not persist a synchronously settled turn as active", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService;
+      const runtimeRepository = yield* ProviderSessionRuntimeRepository;
+      const threadId = asThreadId("thread-settled-before-send-return");
+      const turnId = asTurnId(`turn-${String(threadId)}`);
+      const originalSendTurn = routing.codex.sendTurn.getMockImplementation();
+      routing.codex.sendTurn.mockImplementation((input) =>
+        Effect.gen(function* () {
+          routing.codex.emit({
+            type: "turn.completed",
+            eventId: asEventId("evt-settled-before-send-return"),
+            provider: CODEX_DRIVER,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            threadId: input.threadId,
+            turnId,
+            payload: { state: "completed" },
+          });
+          yield* Effect.yieldNow;
+          return { threadId: input.threadId, turnId };
+        }),
+      );
+
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      yield* provider.sendTurn({ threadId, input: "hello", attachments: [] });
+      const persisted = yield* runtimeRepository.getByThreadId({ threadId });
+      routing.codex.sendTurn.mockImplementation(originalSendTurn!);
+
+      assert.equal(Option.isSome(persisted), true);
+      if (Option.isSome(persisted)) {
+        // The provider runtime binding has no idle/ready status; the canonical
+        // orchestration event owns that state. The important invariant here is
+        // that recovery never sees the settled turn as active.
+        assert.equal(persisted.value.status, "running");
+        const payload = persisted.value.runtimePayload as { activeTurnId?: unknown } | null;
+        assert.equal(payload?.activeTurnId, null);
       }
     }),
   );

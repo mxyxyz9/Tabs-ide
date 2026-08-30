@@ -45,6 +45,11 @@
     ],
     "keybindings": [
       {
+        "command": "tabs.openAgents",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i"
+      },
+      {
         "command": "tabs.openProjectTab",
         "key": "ctrl+shift+n",
         "mac": "cmd+shift+n"

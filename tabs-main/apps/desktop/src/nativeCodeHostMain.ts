@@ -6,6 +6,8 @@ import { pathToFileURL } from "node:url";
 import * as Path from "node:path";
 import * as OS from "node:os";
 
+import { loadNativeCodeHostStorage, saveNativeCodeHostStorage } from "./nativeCodeHostStorage";
+
 type NativeCodeHostModules = {
   ElectronIPCServer: new () => {
     registerChannel(name: string, channel: unknown): void;
@@ -221,6 +223,8 @@ function createSharedProcessProfile(modules: NativeCodeHostModules, stateDir: st
       promptsHome: resource("prompts"),
       extensionsResource: resource("extensions.json"),
       mcpResource: resource("mcp.json"),
+      languageModelsResource: resource("chatLanguageModels.json"),
+      agentPluginsHome: resource("agent-plugins"),
       cacheHome: modules.URI.file(Path.join(profileRoot, "cache")),
     },
   };
@@ -329,7 +333,15 @@ export async function createNativeCodeHostMainBackend(
   const encryptionService = new modules.EncryptionMainService(logService);
   const webviewMainService = new modules.WebviewMainService(fileService, windowsService);
   const sharedProfile = createSharedProcessProfile(modules, stateDir);
-  const storage = new Map<string, string>();
+  const storagePath = Path.join(
+    stateDir,
+    "code-oss-desktop",
+    "shared-profile",
+    "default",
+    "globalStorage",
+    "storage.json",
+  );
+  const storage = loadNativeCodeHostStorage(storagePath);
   const storageChannel = passiveChannel(modules.EventNone, (command, arg) => {
     if (command === "getItems") {
       return Array.from(storage.entries());
@@ -338,6 +350,7 @@ export async function createNativeCodeHostMainBackend(
       const update = arg as { insert?: Array<[string, string]>; delete?: string[] };
       for (const [key, value] of update.insert ?? []) storage.set(key, value);
       for (const key of update.delete ?? []) storage.delete(key);
+      saveNativeCodeHostStorage(storagePath, storage);
     }
     if (command === "isUsed") return false;
     return undefined;
@@ -354,6 +367,7 @@ export async function createNativeCodeHostMainBackend(
     environmentService.args["extensions-dir"],
     environmentService.args["user-data-dir"],
     environmentService.codeCachePath,
+    Path.join(stateDir, "code-oss-desktop", "shared-profile", "default", "agent-plugins"),
   ]) {
     await import("node:fs/promises").then((fs) => fs.mkdir(pathname, { recursive: true }));
   }
@@ -393,6 +407,24 @@ export async function createNativeCodeHostMainBackend(
   ipcServer.registerChannel(
     "extensionhostdebugservice",
     passiveChannel(modules.EventNone, () => undefined),
+  );
+  ipcServer.registerChannel(
+    "nativeManagedSettings",
+    passiveChannel(modules.EventNone, (command) => {
+      if (command === "getManagedSettings" || command === "updatePolicyDefinitions") {
+        return {};
+      }
+      return undefined;
+    }),
+  );
+  ipcServer.registerChannel(
+    "fileManagedSettings",
+    passiveChannel(modules.EventNone, (command) => {
+      if (command === "getRawManagedSettings" || command === "getManagedSettings") {
+        return {};
+      }
+      return undefined;
+    }),
   );
 
   const sharedProcess = new modules.SharedProcess(

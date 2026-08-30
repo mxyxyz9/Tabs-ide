@@ -97,6 +97,10 @@ export const makeOpenRouterTextGeneration = Effect.fn("makeOpenRouterTextGenerat
           schema: toJsonSchemaObject(outputSchemaJson),
         },
       },
+      // Tabs never silently falls back to another paid upstream. A future
+      // explicit routing preference may opt back in per provider instance.
+      provider: { allow_fallbacks: false },
+      usage: { include: true },
     };
 
     const fetchEffect = Effect.tryPromise({

@@ -95,7 +95,6 @@ describe("MessagesTimeline", () => {
         timestampFormat="locale"
         workspaceRoot={undefined}
         latestTaskDescription={null}
-        activeTaskNodes={[]}
       />,
     );
 
@@ -142,11 +141,79 @@ describe("MessagesTimeline", () => {
         timestampFormat="locale"
         workspaceRoot={undefined}
         latestTaskDescription={null}
-        activeTaskNodes={[]}
       />,
     );
 
     expect(markup).toContain("Context compacted");
     expect(markup).toContain("Work log");
+  });
+
+  it("places each turn's tasks after its assistant response and before the next user message", async () => {
+    const { placeTaskRowsAtTurnEnds } = await import("./MessagesTimeline");
+    const rows = placeTaskRowsAtTurnEnds([
+      {
+        id: "user-1",
+        kind: "message",
+        createdAt: "2026-03-17T19:12:20.000Z",
+        message: {
+          id: MessageId.makeUnsafe("user-1"),
+          role: "user",
+          text: "First prompt marker",
+          createdAt: "2026-03-17T19:12:20.000Z",
+          streaming: false,
+        },
+        durationStart: "2026-03-17T19:12:20.000Z",
+        showCompletionDivider: false,
+      },
+      {
+        id: "tasks-turn-1",
+        kind: "tasks",
+        createdAt: "2026-03-17T19:12:21.000Z",
+        tasks: [
+          {
+            taskId: "task-1",
+            description: "First task",
+            status: "completed",
+            startedAt: "2026-03-17T19:12:21.000Z",
+          },
+          {
+            taskId: "task-2",
+            description: "Second task",
+            status: "completed",
+            startedAt: "2026-03-17T19:12:21.000Z",
+          },
+        ],
+      },
+      {
+        id: "assistant-1",
+        kind: "message",
+        createdAt: "2026-03-17T19:12:22.000Z",
+        message: {
+          id: MessageId.makeUnsafe("assistant-1"),
+          role: "assistant",
+          text: "",
+          createdAt: "2026-03-17T19:12:22.000Z",
+          streaming: false,
+        },
+        durationStart: "2026-03-17T19:12:22.000Z",
+        showCompletionDivider: false,
+      },
+      {
+        id: "user-2",
+        kind: "message",
+        createdAt: "2026-03-17T19:12:23.000Z",
+        message: {
+          id: MessageId.makeUnsafe("user-2"),
+          role: "user",
+          text: "Second prompt marker",
+          createdAt: "2026-03-17T19:12:23.000Z",
+          streaming: false,
+        },
+        durationStart: "2026-03-17T19:12:23.000Z",
+        showCompletionDivider: false,
+      },
+    ]);
+
+    expect(rows.map((row) => row.id)).toEqual(["user-1", "assistant-1", "tasks-turn-1", "user-2"]);
   });
 });

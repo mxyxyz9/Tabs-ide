@@ -751,7 +751,8 @@ export function makeCopilotAdapter(
             });
             ctx.session = {
               ...ctx.session,
-              activeTurnId: prepared.turnId,
+              status: "ready",
+              activeTurnId: undefined,
               updatedAt: yield* nowIso,
             };
             yield* offerRuntimeEvent({

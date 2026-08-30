@@ -7,12 +7,11 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { ChildProcess } from "effect/unstable/process";
 
 import { compareSemverVersions } from "@tabs/shared/semver";
 import { createModelCapabilities } from "@tabs/shared/model";
 import {
-  AUTH_PROBE_TIMEOUT_MS,
   buildServerProvider,
   DEFAULT_TIMEOUT_MS,
   parseGenericCliVersion,
@@ -20,6 +19,7 @@ import {
 } from "../providerSnapshot";
 
 const MINIMUM_VERSION = "1.0.12";
+const MODEL_DISCOVERY_TIMEOUT_MS = 30_000;
 
 export function getGeminiOsAuth(environment: NodeJS.ProcessEnv = process.env): {
   authenticated: boolean;
@@ -58,33 +58,58 @@ export function getGeminiOsAuth(environment: NodeJS.ProcessEnv = process.env): {
   return { authenticated: false };
 }
 export function parseAntigravityModels(output: string) {
-  const seen = new Set<string>();
-  return output.split(/\r?\n/u).flatMap((line) => {
+  const effortOrder = ["low", "medium", "high"] as const;
+  const entries = output.split(/\r?\n/u).flatMap((line) => {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("Fetching")) return [];
     const [rawSlug, rawName] = line.split("\t", 2);
     const slug = rawSlug?.trim() ?? "";
-    if (!slug || seen.has(slug)) return [];
+    if (!slug) return [];
+    const name = rawName?.trim().replace(/\s+\([^)]*\)$/u, "") || slug;
+    const effort = effortOrder.find((value) => slug.endsWith(`-${value}`));
+    const baseSlug = effort ? slug.slice(0, -(effort.length + 1)) : slug;
+    return [{ slug, baseSlug, name, effort }];
+  });
+
+  const effortsByBaseSlug = new Map<string, Set<(typeof effortOrder)[number]>>();
+  for (const entry of entries) {
+    if (!entry.effort) continue;
+    const efforts = effortsByBaseSlug.get(entry.baseSlug) ?? new Set();
+    efforts.add(entry.effort);
+    effortsByBaseSlug.set(entry.baseSlug, efforts);
+  }
+
+  const seen = new Set<string>();
+  return entries.flatMap((entry) => {
+    const discoveredEfforts = effortsByBaseSlug.get(entry.baseSlug);
+    const isMultiEffortFamily = discoveredEfforts !== undefined && discoveredEfforts.size > 1;
+    const slug = isMultiEffortFamily ? entry.baseSlug : entry.slug;
+    if (seen.has(slug)) return [];
     seen.add(slug);
+    const efforts = isMultiEffortFamily
+      ? effortOrder.filter((effort) => discoveredEfforts.has(effort))
+      : [];
     return [
       {
         slug,
-        name: rawName?.trim().replace(/\s+\([^)]*\)$/u, "") || slug,
+        name: entry.name,
         isCustom: false,
         capabilities: createModelCapabilities({
-          optionDescriptors: [
-            {
-              id: "reasoningEffort",
-              type: "select",
-              label: "Reasoning",
-              currentValue: "high",
-              options: [
-                { id: "low", label: "Low" },
-                { id: "medium", label: "Medium" },
-                { id: "high", label: "High" },
-              ],
-            },
-          ],
+          optionDescriptors:
+            efforts.length > 0
+              ? [
+                  {
+                    id: "reasoningEffort",
+                    type: "select",
+                    label: "Reasoning",
+                    currentValue: efforts.includes("high") ? "high" : efforts[0],
+                    options: efforts.map((effort) => ({
+                      id: effort,
+                      label: effort.charAt(0).toUpperCase() + effort.slice(1),
+                    })),
+                  },
+                ]
+              : [],
         }),
       },
     ];
@@ -93,9 +118,22 @@ export function parseAntigravityModels(output: string) {
 
 const resolveBinary = (settings: AntigravitySettings) => settings.binaryPath?.trim() || "agy";
 
-const run = (settings: AntigravitySettings, args: ReadonlyArray<string>, env: NodeJS.ProcessEnv) => {
+export const makeAntigravityCommand = (
+  settings: AntigravitySettings,
+  args: ReadonlyArray<string>,
+  env: NodeJS.ProcessEnv,
+) => {
   const binary = resolveBinary(settings);
-  return spawnAndCollect(binary, ChildProcess.make(binary, [...args], { env }));
+  return ChildProcess.make(binary, [...args], { env, stdin: "ignore" });
+};
+
+const run = (
+  settings: AntigravitySettings,
+  args: ReadonlyArray<string>,
+  env: NodeJS.ProcessEnv,
+) => {
+  const binary = resolveBinary(settings);
+  return spawnAndCollect(binary, makeAntigravityCommand(settings, args, env));
 };
 
 export const checkAntigravityProviderStatus = Effect.fn("checkAntigravityProviderStatus")(
@@ -141,7 +179,7 @@ export const checkAntigravityProviderStatus = Effect.fn("checkAntigravityProvide
     const osAuth = getGeminiOsAuth(environment);
 
     const modelProbe = yield* run(settings, ["models"], environment).pipe(
-      Effect.timeoutOption(AUTH_PROBE_TIMEOUT_MS),
+      Effect.timeoutOption(MODEL_DISCOVERY_TIMEOUT_MS),
       Effect.result,
     );
 

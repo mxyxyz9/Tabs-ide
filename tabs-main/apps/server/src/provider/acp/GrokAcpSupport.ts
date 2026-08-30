@@ -15,9 +15,6 @@ import {
 } from "./AcpSessionRuntime";
 
 const GROK_API_KEY_ENV = "XAI_API_KEY";
-const GROK_OAUTH2_REFERRER_ENV = "GROK_OAUTH2_REFERRER";
-const T3_CODE_OAUTH_REFERRER = "t3code";
-const GROK_AUTH_METHOD_API_KEY = "xai.api_key";
 const GROK_AUTH_METHOD_CACHED_TOKEN = "cached_token";
 const GROK_DRIVER_KIND = "grok" as ProviderDriverKind;
 
@@ -37,21 +34,18 @@ export function buildGrokAcpSpawnInput(
   cwd: string,
   environment?: NodeJS.ProcessEnv,
 ): AcpSpawnInput {
+  const subscriptionEnvironment = { ...environment };
+  // The Grok provider currently exposes only account login in Tabs. An
+  // inherited XAI_API_KEY would otherwise switch the CLI to usage-based API
+  // billing without an explicit user choice.
+  delete subscriptionEnvironment[GROK_API_KEY_ENV];
+  delete subscriptionEnvironment.GROK_OAUTH2_REFERRER;
   return {
     command: grokSettings?.binaryPath || "grok",
     args: ["agent", "stdio"],
     cwd,
-    env: {
-      ...environment,
-      [GROK_OAUTH2_REFERRER_ENV]: T3_CODE_OAUTH_REFERRER,
-    },
+    env: subscriptionEnvironment,
   };
-}
-
-function resolveGrokAuthMethodId(environment: NodeJS.ProcessEnv | undefined): string {
-  return environment?.[GROK_API_KEY_ENV]?.trim()
-    ? GROK_AUTH_METHOD_API_KEY
-    : GROK_AUTH_METHOD_CACHED_TOKEN;
 }
 
 export const makeGrokAcpRuntime = (
@@ -62,7 +56,7 @@ export const makeGrokAcpRuntime = (
       AcpSessionRuntime.layer({
         ...input,
         spawn: buildGrokAcpSpawnInput(input.grokSettings, input.cwd, input.environment),
-        authMethodId: resolveGrokAuthMethodId(input.environment),
+        authMethodId: GROK_AUTH_METHOD_CACHED_TOKEN,
       }).pipe(
         Layer.provide(
           Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, input.childProcessSpawner),

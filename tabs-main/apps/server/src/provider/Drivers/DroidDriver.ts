@@ -1,4 +1,9 @@
-import { DroidSettings, ProviderDriverKind, type ServerProvider } from "@tabs/contracts";
+import {
+  DroidSettings,
+  ProviderDriverKind,
+  type ProviderOptionDescriptor,
+  type ServerProvider,
+} from "@tabs/contracts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -7,6 +12,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
+import { createModelCapabilities } from "@tabs/shared/model";
 
 import { ServerConfig } from "../../config";
 import { makeUnsupportedTextGeneration } from "../../textGeneration/UnsupportedTextGeneration";
@@ -116,7 +122,10 @@ export const DroidDriver: ProviderDriver<DroidSettings, DroidDriverEnv> = {
       );
 
       const advertisedModelsRef = yield* Ref.make<ReadonlySet<string>>(new Set());
-      const checkHealth = checkDroidProviderStatus(effectiveConfig, processEnv).pipe(
+      const checkHealth: Effect.Effect<ServerProvider> = checkDroidProviderStatus(
+        effectiveConfig,
+        processEnv,
+      ).pipe(
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       );
@@ -127,30 +136,59 @@ export const DroidDriver: ProviderDriver<DroidSettings, DroidDriverEnv> = {
         isModelAdvertised: (modelId) =>
           Ref.get(advertisedModelsRef).pipe(Effect.map((models) => models.has(modelId))),
       });
-      const checkProvider = checkHealth.pipe(
+      const checkProvider: Effect.Effect<ServerProvider> = checkHealth.pipe(
         Effect.flatMap((health) =>
-          health.auth.status === "authenticated" && adapter.listModels
+          health.installed && adapter.listModels
             ? adapter.listModels({ binaryPath: effectiveConfig.binaryPath }).pipe(
-                Effect.map((catalog) => ({
-                  ...health,
-                  models: catalog.models.map((model) => ({
-                    slug: model.slug,
-                    name: model.name,
-                    isCustom: false,
-                    capabilities: {
-                      reasoningEffortLevels: [],
-                      supportsFastMode: false,
-                      supportsThinkingToggle: false,
-                      promptInjectedEffortLevels: [],
-                    },
-                  })),
-                  catalogStatus: "ready" as const,
-                  catalogSource: catalog.source ?? "droid-acp",
-                  catalogCheckedAt: new Date().toISOString(),
-                })),
-                Effect.orElseSucceed(() => ({ ...health, models: [] })),
+                Effect.map((catalog) => {
+                  const { message, ...healthWithoutMessage } = health;
+                  void message;
+                  return {
+                    ...healthWithoutMessage,
+                    status: "ready" as const,
+                    auth: effectiveConfig.apiKey.trim()
+                      ? {
+                          status: "authenticated" as const,
+                          type: "apiKey",
+                          label: "Factory API Key (usage-based)",
+                        }
+                      : {
+                          status: "authenticated" as const,
+                          type: "account",
+                          label: "Factory paired account",
+                        },
+                    models: catalog.models.map((model) => ({
+                      slug: model.slug,
+                      name: model.name,
+                      isCustom: false,
+                      capabilities: createModelCapabilities({
+                        optionDescriptors:
+                          (model.optionDescriptors as
+                            | ReadonlyArray<ProviderOptionDescriptor>
+                            | undefined) ?? [],
+                      }),
+                    })),
+                    catalogStatus: "ready" as const,
+                    catalogSource: catalog.source ?? "droid-acp",
+                    catalogCheckedAt: new Date().toISOString(),
+                  } satisfies ServerProvider;
+                }),
+                Effect.orElseSucceed(
+                  () =>
+                    ({
+                      ...health,
+                      status: "warning" as const,
+                      auth: { status: "unauthenticated" as const },
+                      message:
+                        "Factory Droid did not authenticate through ACP. Run `droid` to pair this device, then retry.",
+                      models: [],
+                      catalogStatus: "failed" as const,
+                      catalogSource: "droid-acp",
+                      catalogCheckedAt: new Date().toISOString(),
+                    }) satisfies ServerProvider,
+                ),
               )
-            : Effect.succeed({ ...health, models: [] }),
+            : Effect.succeed<ServerProvider>({ ...health, models: [] }),
         ),
         Effect.tap((provider) =>
           Ref.set(advertisedModelsRef, new Set(provider.models.map((model) => model.slug))),

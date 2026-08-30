@@ -1909,7 +1909,7 @@ function FallbackCodeTool(props: { project: Project }) {
 }
 
 function DesktopCodeTool(props: { project: Project }) {
-  const aiProvider = useSettings((s) => s.aiProvider ?? "tabs");
+  const aiProvider = useSettings((s) => s.aiProvider ?? "copilot");
   const api = readNativeApi();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const scheduleBoundsRef = useRef<(() => void) | null>(null);
@@ -2090,27 +2090,6 @@ function DesktopCodeTool(props: { project: Project }) {
     },
     [projectId, chromeState.activityBarItems],
   );
-  const assistantItems = useMemo(
-    () => chromeState.activityBarItems?.filter((item) => item.location === "auxiliaryBar") ?? [],
-    [chromeState.activityBarItems],
-  );
-  const selectAssistant = useCallback(
-    (id: string) => {
-      if (id === "tabs") {
-        void window.desktopBridge
-          ?.runCodeCommand(projectId, CODE_CHROME_COMMANDS.closeAuxiliaryBar)
-          .catch(() => undefined);
-        setSideChatOpen(true);
-        return;
-      }
-      const item = assistantItems.find((candidate) => candidate.id === id);
-      if (!item) return;
-      setSideChatOpen(false);
-      runCodeCommand(item.commandId);
-    },
-    [assistantItems, projectId, runCodeCommand, setSideChatOpen],
-  );
-
   useEffect(() => {
     if (aiProvider === "copilot") {
       setSideChatOpen(false);
@@ -2414,14 +2393,10 @@ function DesktopCodeTool(props: { project: Project }) {
         }
         branch={chromeState.branch}
         panelMaximized={chromeState.panelMaximized}
-        assistantItems={assistantItems}
-        activeAssistantId={sideChatOpen ? "tabs" : (chromeState.activeViewId ?? undefined)}
-        onSelectAssistant={selectAssistant}
-        sideChatOpen={aiProvider === "tabs" ? sideChatOpen : false}
+        sideChatOpen={aiProvider === "tabs" ? sideChatOpen : undefined}
         sideChatLabel={
           aiProvider === "copilot" ? "Toggle GitHub Copilot chat" : "Toggle Tabs AI chat"
         }
-        showSideChatToggle={assistantItems.length === 0}
         onToggleSideChat={() => {
           if (aiProvider === "copilot") {
             runCodeCommand(CODE_CHROME_COMMANDS.toggleAuxiliaryBar);

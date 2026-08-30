@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useId, useRef, useState } from "react";
 import { CheckIcon, ChevronDownIcon, ListChecksIcon, LoaderIcon, XIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { TaskNode } from "../../session-logic";
@@ -45,7 +45,7 @@ const TaskRow = memo(function TaskRow({ task }: { task: TaskNode }) {
   const isStopped = task.status === "stopped";
   const isDone = task.status === "completed";
 
-  const description = task.latestDetail ?? task.lastToolName ?? task.description;
+  const description = task.description;
 
   return (
     <div className="flex items-center gap-3 py-1">
@@ -111,6 +111,7 @@ export const TaskProgressCard = memo(function TaskProgressCard({
   tasks: ReadonlyArray<TaskNode>;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const contentId = useId();
   if (tasks.length === 0) return null;
 
   const completedCount = tasks.filter(
@@ -131,6 +132,8 @@ export const TaskProgressCard = memo(function TaskProgressCard({
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        aria-controls={contentId}
         className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/20"
       >
         <div className="flex items-center gap-2">
@@ -161,7 +164,10 @@ export const TaskProgressCard = memo(function TaskProgressCard({
 
       {/* Task rows */}
       {expanded && (
-        <div className="flex flex-col gap-0 px-4 pb-3 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div
+          id={contentId}
+          className="flex flex-col gap-0 px-4 pb-3 animate-in fade-in slide-in-from-top-1 duration-150"
+        >
           {tasks.map((task) => (
             <TaskRow key={task.taskId} task={task} />
           ))}

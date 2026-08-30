@@ -174,7 +174,11 @@ function kiloCapabilitiesForModel(input: {
   const defaultAgent = inferDefaultAgent(primaryAgents);
   const agentOptions = primaryAgents.map((agent) =>
     defaultAgent === agent.name
-      ? { id: agent.name, label: titleCaseSlug(agent.name), isDefault: true as const }
+      ? {
+          id: agent.name,
+          label: titleCaseSlug(agent.name),
+          isDefault: true as const,
+        }
       : { id: agent.name, label: titleCaseSlug(agent.name) },
   );
   return createModelCapabilities({
@@ -209,18 +213,16 @@ export function flattenKiloModels(input: OpenCodeInventory): ReadonlyArray<Serve
   const models: Array<ServerProviderModel> = [];
 
   for (const provider of input.providerList.all) {
-    // Kilo's OpenCode-compatible router reports every upstream it knows about
-    // as connected. Synara scopes Kilo discovery to the native provider and
-    // its explicitly free account catalog; paid/router-wide entries require
-    // credentials outside the signed-in Kilo account.
+    // The native Kilo provider is account-scoped by the authenticated Kilo
+    // runtime. Keep every model it returns: `isFree` describes billing, not
+    // entitlement, and filtering on it hides paid models from paid accounts.
+    // Other connected OpenCode providers may use separate credentials and
+    // belong to the standalone OpenCode provider instead.
     if (provider.id !== "kilo") {
       continue;
     }
 
     for (const model of Object.values(provider.models)) {
-      if ((model as typeof model & { readonly isFree?: boolean }).isFree !== true) {
-        continue;
-      }
       const name = nonEmptyTrimmed(model.name);
       if (!name) {
         continue;
@@ -360,7 +362,11 @@ export const checkKiloProviderStatus = Effect.fn("checkKiloProviderStatus")(func
         })
         .pipe(
           Effect.mapError(
-            (cause) => new KiloProbeError({ cause, detail: openCodeRuntimeErrorDetail(cause) }),
+            (cause) =>
+              new KiloProbeError({
+                cause,
+                detail: openCodeRuntimeErrorDetail(cause),
+              }),
           ),
         ),
     );
@@ -390,7 +396,11 @@ export const checkKiloProviderStatus = Effect.fn("checkKiloProviderStatus")(func
         );
       }).pipe(
         Effect.mapError(
-          (cause) => new KiloProbeError({ cause, detail: openCodeRuntimeErrorDetail(cause) }),
+          (cause) =>
+            new KiloProbeError({
+              cause,
+              detail: openCodeRuntimeErrorDetail(cause),
+            }),
         ),
       ),
     ),

@@ -975,7 +975,8 @@ export function makeCursorAdapter(
         ctx.turns.push({ id: turnId, items: [{ prompt: promptParts, result }] });
         ctx.session = {
           ...ctx.session,
-          activeTurnId: turnId,
+          status: "ready",
+          activeTurnId: undefined,
           updatedAt: yield* nowIso,
           model: resolvedModel,
         };

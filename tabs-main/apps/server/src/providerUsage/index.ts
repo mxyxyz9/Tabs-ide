@@ -19,6 +19,7 @@ export const SUPPORTED_USAGE_PROVIDERS: readonly string[] = [
   "codex",
   "claudeAgent",
   "cursor",
+  "copilot",
   "grok",
   "antigravity",
   "droid",
@@ -154,9 +155,7 @@ export async function listProviderUsageSnapshots(input: {
   homeDir?: string;
   claudeBinaryPath?: string;
 }): Promise<ServerProviderUsageSnapshot[]> {
-  const targets = input.provider
-    ? [input.provider]
-    : SUPPORTED_USAGE_PROVIDERS;
+  const targets = input.provider ? [input.provider] : SUPPORTED_USAGE_PROVIDERS;
 
   const results = await Promise.all(
     targets.map((provider) =>
@@ -164,7 +163,9 @@ export async function listProviderUsageSnapshots(input: {
         provider,
         ...(input.forceRefresh !== undefined ? { forceRefresh: input.forceRefresh } : {}),
         ...(input.homeDir !== undefined ? { homeDir: input.homeDir } : {}),
-        ...(input.claudeBinaryPath !== undefined ? { claudeBinaryPath: input.claudeBinaryPath } : {}),
+        ...(input.claudeBinaryPath !== undefined
+          ? { claudeBinaryPath: input.claudeBinaryPath }
+          : {}),
       }),
     ),
   );

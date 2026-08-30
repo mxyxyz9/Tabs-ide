@@ -438,6 +438,9 @@ import './contrib/codeActions/browser/codeActions.contribution.js';
 import './contrib/timeline/browser/timeline.contribution.js';
 import './contrib/timeline/browser/timeline.service.contribution.js';
 
+// Tabs embedded-workbench bridge
+import './contrib/tabs/browser/tabs.contribution.js';
+
 // Local History
 import './contrib/localHistory/browser/localHistory.contribution.js';
 

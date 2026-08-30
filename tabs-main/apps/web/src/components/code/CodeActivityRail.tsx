@@ -1,9 +1,9 @@
 import {
+  BlocksIcon,
   BugIcon,
   FilesIcon,
   GitBranchIcon,
   MenuIcon,
-  PuzzleIcon,
   SearchIcon,
   SettingsIcon,
 } from "lucide-react";
@@ -37,7 +37,7 @@ const ICONS: Record<CodeActivityItem["icon"], ComponentType<{ className?: string
   search: SearchIcon,
   "git-branch": GitBranchIcon,
   bug: BugIcon,
-  puzzle: PuzzleIcon,
+  puzzle: BlocksIcon,
 };
 
 interface CodeActivityRailProps {
@@ -86,7 +86,22 @@ function CustomActivityIcon({ item }: { item: CustomActivityBarItem }) {
     return <span aria-hidden="true" className={`codicon codicon-${item.icon.value} text-[18px]`} />;
   }
   if (item.icon.type === "uri" && item.icon.value) {
-    return <img alt="" aria-hidden="true" className="size-[18px]" src={item.icon.value} />;
+    return (
+      <span
+        aria-hidden="true"
+        className="size-[18px] bg-current"
+        style={{
+          WebkitMaskImage: `url(${JSON.stringify(item.icon.value)})`,
+          WebkitMaskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskSize: "contain",
+          maskImage: `url(${JSON.stringify(item.icon.value)})`,
+          maskPosition: "center",
+          maskRepeat: "no-repeat",
+          maskSize: "contain",
+        }}
+      />
+    );
   }
   if (item.icon.type === "themeUri" && (item.icon.light || item.icon.dark)) {
     return (
@@ -98,7 +113,7 @@ function CustomActivityIcon({ item }: { item: CustomActivityBarItem }) {
       </picture>
     );
   }
-  return <PuzzleIcon aria-hidden="true" className="size-[18px]" />;
+  return <BlocksIcon aria-hidden="true" className="size-[18px]" />;
 }
 
 function ApplicationMenu(props: CodeActivityRailProps) {

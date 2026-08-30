@@ -1,7 +1,7 @@
 import { type MessageId, type TurnId } from "@tabs/contracts";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
-import { deriveTimelineEntries, formatElapsed, type TaskNode } from "../../session-logic";
+import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
 import { TaskProgressCard } from "./TaskProgressCard";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
@@ -41,7 +41,15 @@ import {
   formatInlineTerminalContextLabel,
   textContainsInlineTerminalContextLabels,
 } from "./userMessageTerminalContexts";
-import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, CursorIcon, CopilotIcon, type Icon } from "../Icons";
+import {
+  ClaudeAI,
+  OpenAI,
+  GrokIcon,
+  OpenCodeIcon,
+  CursorIcon,
+  CopilotIcon,
+  type Icon,
+} from "../Icons";
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
 
@@ -78,7 +86,6 @@ interface MessagesTimelineProps {
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
   latestTaskDescription: string | null;
-  activeTaskNodes: ReadonlyArray<TaskNode>;
   /** Provider instanceId for the active thread (e.g. "claudeAgent", "codex", "grok") */
   providerInstanceId?: string;
 }
@@ -106,7 +113,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   timestampFormat,
   workspaceRoot,
   latestTaskDescription,
-  activeTaskNodes,
   providerInstanceId,
 }: MessagesTimelineProps) {
   const rows = useMemo<TimelineRow[]>(() => {
@@ -150,6 +156,16 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         continue;
       }
 
+      if (timelineEntry.kind === "tasks") {
+        nextRows.push({
+          kind: "tasks",
+          id: timelineEntry.id,
+          createdAt: timelineEntry.createdAt,
+          tasks: timelineEntry.tasks,
+        });
+        continue;
+      }
+
       nextRows.push({
         kind: "message",
         id: timelineEntry.id,
@@ -163,15 +179,21 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       });
     }
 
+    // Plan/task updates happen before the final assistant response, but their
+    // card belongs to the completed turn. Move each card to the end of its
+    // user-message segment so every provider renders tasks after the response
+    // and immediately before the next user message.
+    const positionedRows = placeTaskRowsAtTurnEnds(nextRows);
+
     if (isWorking) {
-      nextRows.push({
+      positionedRows.push({
         kind: "working",
         id: "working-indicator-row",
         createdAt: activeTurnStartedAt,
       });
     }
 
-    return nextRows;
+    return positionedRows;
   }, [timelineEntries, completionDividerBeforeEntryId, isWorking, activeTurnStartedAt]);
   const [allDirectoriesExpandedByTurnId, setAllDirectoriesExpandedByTurnId] = useState<
     Record<string, boolean>
@@ -318,6 +340,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             </div>
           );
         })()}
+
+      {row.kind === "tasks" && <TaskProgressCard tasks={row.tasks} />}
 
       {row.kind === "message" &&
         row.message.role === "user" &&
@@ -604,12 +628,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           ))}
         </div>
       ))}
-      {/* TaskProgressCard shown once, after all rows, only when tasks are active */}
-      {activeTaskNodes.length > 0 && (
-        <div className="pb-4">
-          <TaskProgressCard tasks={activeTaskNodes} />
-        </div>
-      )}
     </div>
   );
 });
@@ -618,6 +636,7 @@ type TimelineEntry = ReturnType<typeof deriveTimelineEntries>[number];
 type TimelineMessage = Extract<TimelineEntry, { kind: "message" }>["message"];
 type TimelineProposedPlan = Extract<TimelineEntry, { kind: "proposed-plan" }>["proposedPlan"];
 type TimelineWorkEntry = Extract<TimelineEntry, { kind: "work" }>["entry"];
+type TimelineTasks = Extract<TimelineEntry, { kind: "tasks" }>["tasks"];
 type TimelineRow =
   | {
       kind: "work";
@@ -639,7 +658,25 @@ type TimelineRow =
       createdAt: string;
       proposedPlan: TimelineProposedPlan;
     }
+  | { kind: "tasks"; id: string; createdAt: string; tasks: TimelineTasks }
   | { kind: "working"; id: string; createdAt: string | null };
+
+export function placeTaskRowsAtTurnEnds(rows: ReadonlyArray<TimelineRow>): TimelineRow[] {
+  const taskRows = rows.filter((row) => row.kind === "tasks");
+  const positionedRows: TimelineRow[] = rows.filter((row) => row.kind !== "tasks");
+  for (const taskRow of taskRows) {
+    const nextUserMessageIndex = positionedRows.findIndex(
+      (row) =>
+        row.kind === "message" && row.message.role === "user" && row.createdAt > taskRow.createdAt,
+    );
+    positionedRows.splice(
+      nextUserMessageIndex === -1 ? positionedRows.length : nextUserMessageIndex,
+      0,
+      taskRow,
+    );
+  }
+  return positionedRows;
+}
 
 function formatWorkingTimer(startIso: string, endIso: string): string | null {
   const startedAtMs = Date.parse(startIso);

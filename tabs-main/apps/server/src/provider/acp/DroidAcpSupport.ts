@@ -16,6 +16,8 @@ import { getProviderSecret } from "../ProviderSecretStore";
 
 export const DROID_DEFAULT_AUTH_METHOD_ID = "droid-login";
 export const DROID_DRIVER_KIND = "droid" as ProviderDriverKind;
+const DROID_MODEL_CONFIG_ID = "model";
+const DROID_REASONING_EFFORT_CONFIG_ID = "reasoning_effort";
 
 export type DroidAcpRuntimeDroidSettings = Partial<Pick<DroidSettings, "binaryPath" | "apiKey">>;
 
@@ -36,9 +38,13 @@ export function buildDroidEnvironment(
   const env: NodeJS.ProcessEnv = { ...(baseEnv ?? process.env) };
 
   // Explicit token injection from the OS credential store (no settings-file or parent leakage).
-  const configuredToken = secureToken?.trim();
+  const configuredToken = secureToken?.trim() || droidSettings?.apiKey?.trim();
   if (configuredToken) {
     env.FACTORY_API_KEY = configuredToken;
+  } else {
+    // Factory account pairing is the default. Ignore inherited API keys unless
+    // the user explicitly saved one in this provider instance.
+    delete env.FACTORY_API_KEY;
   }
 
   return env;
@@ -151,6 +157,98 @@ export function currentDroidModelIdFromSessionSetup(
     | EffectAcpSchema.ResumeSessionResponse,
 ): string | undefined {
   return sessionSetupResult.models?.currentModelId?.trim() || undefined;
+}
+
+function flattenDroidConfigOptions(
+  options: EffectAcpSchema.SessionConfigSelectOptions,
+): ReadonlyArray<EffectAcpSchema.SessionConfigSelectOption> {
+  return options.flatMap((entry) => ("options" in entry ? entry.options : [entry]));
+}
+
+function findDroidSelectConfig(
+  options: ReadonlyArray<EffectAcpSchema.SessionConfigOption>,
+  input: { readonly id: string; readonly category: string },
+): Extract<EffectAcpSchema.SessionConfigOption, { readonly type: "select" }> | undefined {
+  return options.find(
+    (option): option is Extract<EffectAcpSchema.SessionConfigOption, { readonly type: "select" }> =>
+      option.type === "select" && (option.id === input.id || option.category === input.category),
+  );
+}
+
+function droidModelDescriptor(
+  model: EffectAcpSchema.SessionConfigSelectOption,
+  reasoning: Extract<EffectAcpSchema.SessionConfigOption, { readonly type: "select" }> | undefined,
+) {
+  const efforts = reasoning ? flattenDroidConfigOptions(reasoning.options) : [];
+  return {
+    slug: model.value,
+    name: model.name,
+    ...(reasoning
+      ? {
+          optionDescriptors: [
+            {
+              id: "reasoningEffort",
+              label: reasoning.name,
+              type: "select" as const,
+              options: efforts.map((effort) => ({ id: effort.value, label: effort.name })),
+              ...(reasoning.currentValue ? { currentValue: reasoning.currentValue } : {}),
+            },
+          ],
+        }
+      : {}),
+  };
+}
+
+/** Discovers the account-scoped model catalog and per-model effort choices advertised by Droid. */
+export function discoverDroidAcpModels(
+  runtime: Pick<AcpSessionRuntimeShape, "getConfigOptions" | "setConfigOption">,
+) {
+  return Effect.gen(function* () {
+    const initialOptions = yield* runtime.getConfigOptions;
+    const modelConfig = findDroidSelectConfig(initialOptions, {
+      id: DROID_MODEL_CONFIG_ID,
+      category: "model",
+    });
+    if (!modelConfig) {
+      return yield* new EffectAcpErrors.AcpRequestError({
+        code: -32602,
+        errorMessage: "Droid ACP did not advertise a model configuration option.",
+      });
+    }
+    const originalModel = modelConfig.currentValue;
+    const originalReasoning = findDroidSelectConfig(initialOptions, {
+      id: DROID_REASONING_EFFORT_CONFIG_ID,
+      category: "thought_level",
+    })?.currentValue;
+    const models = flattenDroidConfigOptions(modelConfig.options);
+    const descriptors = yield* Effect.forEach(
+      models,
+      (model) =>
+        runtime.setConfigOption(modelConfig.id, model.value).pipe(
+          Effect.andThen(runtime.getConfigOptions),
+          Effect.map((updatedOptions) =>
+            droidModelDescriptor(
+              model,
+              findDroidSelectConfig(updatedOptions, {
+                id: DROID_REASONING_EFFORT_CONFIG_ID,
+                category: "thought_level",
+              }),
+            ),
+          ),
+          Effect.catch(() => Effect.succeed(droidModelDescriptor(model, undefined))),
+        ),
+      { concurrency: 1 },
+    );
+    if (originalModel) {
+      yield* runtime.setConfigOption(modelConfig.id, originalModel).pipe(Effect.ignore);
+      if (originalReasoning) {
+        yield* runtime
+          .setConfigOption(DROID_REASONING_EFFORT_CONFIG_ID, originalReasoning)
+          .pipe(Effect.ignore);
+      }
+    }
+    return { models: descriptors, source: "droid-acp", cached: false };
+  });
 }
 
 export function applyDroidAcpModelSelection<E>(input: {

@@ -35,6 +35,7 @@ import {
   type TestingDiscoveryExperienceInput,
   type TestingExplorationInput,
   type TestingExecutionInput,
+  type TestingArtifactReadInput,
   type TestingGenerationInput,
   type TestingGenerationJobInput,
   type TestingHealingDecisionInput,
@@ -1064,6 +1065,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.testingCancelGenerationJob: {
         const body = stripRequestTag(request.body) as TestingGenerationJobInput;
         return testingService.cancelGenerationJob(body);
+      }
+
+      case WS_METHODS.testingReadArtifact: {
+        const body = stripRequestTag(request.body) as TestingArtifactReadInput;
+        return yield* Effect.tryPromise({
+          try: () => testingService.readArtifact(body),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
       }
 
       case WS_METHODS.testingRunTests: {

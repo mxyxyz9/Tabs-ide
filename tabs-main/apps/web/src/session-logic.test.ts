@@ -14,6 +14,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
   deriveTimelineEntries,
+  deriveTaskGroups,
   deriveWorkLogEntries,
   findLatestProposedPlan,
   findSidebarProposedPlan,
@@ -969,6 +970,126 @@ describe("deriveTimelineEntries", () => {
         implementationThreadId: null,
       },
     });
+  });
+});
+
+describe("deriveTaskGroups", () => {
+  it("keeps genuine tasks for every turn and excludes synthetic tool-call tasks", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "turn-1-task-started",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "task.started",
+        summary: "Plan task started",
+        turnId: "turn-1",
+        payload: { taskId: "task-1", taskType: "plan", detail: "Inspect provider state" },
+      }),
+      makeActivity({
+        id: "turn-1-task-progress",
+        createdAt: "2026-02-23T00:00:02.000Z",
+        kind: "task.progress",
+        summary: "Reasoning update",
+        turnId: "turn-1",
+        payload: { taskId: "task-1", detail: "Read file", summary: "Read file" },
+      }),
+      makeActivity({
+        id: "turn-1-task-completed",
+        createdAt: "2026-02-23T00:00:03.000Z",
+        kind: "task.completed",
+        summary: "Task completed",
+        turnId: "turn-1",
+        payload: { taskId: "task-1", status: "completed" },
+      }),
+      makeActivity({
+        id: "synthetic-tool-task",
+        createdAt: "2026-02-23T00:00:04.000Z",
+        kind: "task.completed",
+        summary: "Task completed",
+        turnId: "turn-2",
+        payload: { taskId: "synthetic:task:item:thread-1:item-1", status: "completed" },
+      }),
+      makeActivity({
+        id: "turn-2-task-started",
+        createdAt: "2026-02-23T00:00:05.000Z",
+        kind: "task.started",
+        summary: "Plan task started",
+        turnId: "turn-2",
+        payload: { taskId: "task-2", taskType: "plan", detail: "Run focused tests" },
+      }),
+    ];
+
+    const groups = deriveTaskGroups(activities);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.tasks[0]).toMatchObject({
+      description: "Inspect provider state",
+      status: "completed",
+    });
+    expect(groups[1]?.tasks[0]).toMatchObject({
+      description: "Run focused tests",
+      status: "running",
+    });
+    expect(groups.flatMap((group) => group.tasks).map((task) => task.taskId)).toEqual([
+      "task-1",
+      "task-2",
+    ]);
+  });
+
+  it("uses explicit provider plan steps as high-level tasks", () => {
+    const groups = deriveTaskGroups([
+      makeActivity({
+        id: "plan-update",
+        createdAt: "2026-02-23T00:00:06.000Z",
+        kind: "turn.plan.updated",
+        summary: "Plan updated",
+        turnId: "turn-plan",
+        payload: {
+          plan: [
+            { step: "Inspect session history", status: "completed" },
+            { step: "Preserve tasks by turn", status: "inProgress" },
+            { step: "Verify the timeline", status: "pending" },
+          ],
+        },
+      }),
+    ]);
+
+    expect(groups[0]?.tasks).toMatchObject([
+      { description: "Inspect session history", status: "completed" },
+      { description: "Preserve tasks by turn", status: "running" },
+      { description: "Verify the timeline", status: "pending" },
+    ]);
+  });
+
+  it("recovers OpenCode TodoWrite tasks from persisted tool snapshots", () => {
+    const groups = deriveTaskGroups([
+      makeActivity({
+        id: "opencode-todowrite",
+        createdAt: "2026-02-23T00:00:07.000Z",
+        kind: "tool.updated",
+        summary: "todowrite",
+        turnId: "turn-opencode",
+        payload: {
+          itemType: "file_change",
+          data: {
+            tool: "todowrite",
+            state: {
+              status: "running",
+              input: {
+                todos: [
+                  { content: "Explore the workspace", status: "completed", priority: "high" },
+                  { content: "Write the report", status: "in_progress", priority: "high" },
+                ],
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(groups[0]?.tasks).toMatchObject([
+      { description: "Explore the workspace", status: "completed" },
+      { description: "Write the report", status: "running" },
+    ]);
   });
 });
 

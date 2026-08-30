@@ -307,7 +307,11 @@ export class Workbench extends Layout {
 			}
 		}
 
-		FontMeasurements.readFontInfo(mainWindow, createBareFontInfoFromRawSettings(configurationService.getValue('editor'), PixelRatio.getInstance(mainWindow).value));
+		// An embedded workbench can render before the configuration registry has
+		// produced the aggregate `editor` object. The individual editor defaults
+		// are optional to this font bootstrapper, so use an empty settings object
+		// instead of aborting the entire workbench render.
+		FontMeasurements.readFontInfo(mainWindow, createBareFontInfoFromRawSettings(configurationService.getValue('editor') ?? {}, PixelRatio.getInstance(mainWindow).value));
 	}
 
 	private storeFontInfo(storageService: IStorageService): void {

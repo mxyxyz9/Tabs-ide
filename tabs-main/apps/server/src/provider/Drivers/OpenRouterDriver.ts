@@ -35,19 +35,34 @@ export async function discoverOpenRouterModels(
   const apiKey = settings.apiKey.trim();
   if (!apiKey) return { kind: "missing" as const, models: [] };
   const baseUrl = (settings.baseUrl.trim() || "https://openrouter.ai/api/v1").replace(/\/+$/u, "");
-  const response = await fetchImpl(`${baseUrl}/models`, {
+  // The user-scoped endpoint applies the account's provider preferences,
+  // privacy policy, and routing restrictions before Tabs filters capabilities.
+  const response = await fetchImpl(`${baseUrl}/models/user`, {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   if (!response.ok) {
     return { kind: "rejected" as const, status: response.status, models: [] };
   }
   const payload = (await response.json()) as {
-    data?: ReadonlyArray<{ id?: unknown; name?: unknown }>;
+    data?: ReadonlyArray<{
+      id?: unknown;
+      name?: unknown;
+      supported_parameters?: unknown;
+    }>;
   };
   const models = validateServerProviderModelList(
     (payload.data ?? []).flatMap((model) => {
       const slug = typeof model.id === "string" ? model.id.trim() : "";
       if (!slug) return [];
+      // Every OpenRouter text-generation request made by Tabs asks for a JSON
+      // object via response_format. Do not advertise models that the catalog
+      // says cannot accept that parameter.
+      if (
+        Array.isArray(model.supported_parameters) &&
+        !model.supported_parameters.includes("response_format")
+      ) {
+        return [];
+      }
       const name = typeof model.name === "string" && model.name.trim() ? model.name.trim() : slug;
       return [{ slug, name, isCustom: false, capabilities: null }];
     }),
@@ -128,6 +143,9 @@ export const OpenRouterDriver: ProviderDriver<OpenRouterSettings, never> = {
                       : "error",
                 auth: {
                   status: discovery.kind === "authenticated" ? "authenticated" : "unauthenticated",
+                  ...(discovery.kind === "authenticated"
+                    ? { type: "apiKey", label: "OpenRouter API Key (usage-based)" }
+                    : {}),
                 },
                 ...(discovery.kind === "missing"
                   ? { message: "OpenRouter API key is not configured." }
@@ -152,7 +170,11 @@ export const OpenRouterDriver: ProviderDriver<OpenRouterSettings, never> = {
                   installed: true,
                   version: null,
                   status: "error",
-                  auth: { status: "authenticated" },
+                  auth: {
+                    status: "unknown",
+                    type: "apiKey",
+                    label: "OpenRouter API Key (usage-based)",
+                  },
                   message: `OpenRouter model discovery failed: ${cause instanceof Error ? cause.message : String(cause)}`,
                 },
               }),

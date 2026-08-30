@@ -233,6 +233,7 @@ export function createWsNativeApi(): NativeApi {
       listGenerationJobs: (input) => transport.request(WS_METHODS.testingListGenerationJobs, input),
       cancelGenerationJob: (input) =>
         transport.request(WS_METHODS.testingCancelGenerationJob, input),
+      readArtifact: (input) => transport.request(WS_METHODS.testingReadArtifact, input),
       runTests: (input) =>
         transport.request(WS_METHODS.testingRunTests, input, { timeoutMs: null }),
       listExecutionRuns: (input) => transport.request(WS_METHODS.testingListExecutionRuns, input),

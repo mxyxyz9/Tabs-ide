@@ -31,6 +31,10 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import { isWindowsCommandNotFound } from "../processRunner";
 import { collectStreamAsString } from "./providerSnapshot";
 import { buildProviderChildEnvironment } from "../providerChildEnvironment.ts";
+import {
+  teardownEffectProcessTree,
+  teardownProviderProcessTree,
+} from "./supervisedProcessTeardown.ts";
 import * as NetService from "@tabs/shared/Net";
 const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJsonString);
 const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
@@ -121,7 +125,11 @@ export const runOpenCodeSdk = <A>(
   Effect.tryPromise({
     try: fn,
     catch: (cause) =>
-      new OpenCodeRuntimeError({ operation, detail: openCodeRuntimeErrorDetail(cause), cause }),
+      new OpenCodeRuntimeError({
+        operation,
+        detail: openCodeRuntimeErrorDetail(cause),
+        cause,
+      }),
   }).pipe(Effect.withSpan(`opencode.${operation}`));
 
 export interface OpenCodeCommandResult {
@@ -194,8 +202,6 @@ function parseServerUrlFromOutput(output: string): string | null {
   return null;
 }
 
-
-
 export function toOpenCodePermissionReply(
   decision: ProviderApprovalDecision,
 ): "once" | "always" | "reject" {
@@ -251,310 +257,321 @@ function ensureRuntimeError(
     : new OpenCodeRuntimeError({ operation, detail, cause });
 }
 
-const makeOpenCodeRuntime = Effect.gen(function* () {
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const netService = yield* NetService.NetService;
+export interface OpenCodeRuntimeLiveOptions {
+  readonly teardownProcessTree?: typeof teardownProviderProcessTree;
+  readonly netService?: NetService.NetServiceShape;
+}
 
-  const runOpenCodeCommand: OpenCodeRuntimeShape["runOpenCodeCommand"] = (input) =>
-    Effect.gen(function* () {
-      const binary = input.binaryPath?.trim() || "opencode";
-      const child = yield* spawner.spawn(
-        ChildProcess.make(binary, [...input.args], {
-          shell: process.platform === "win32",
-          env: input.environment ?? process.env,
-        }),
-      );
-      const [stdout, stderr, code] = yield* Effect.all(
-        [collectStreamAsString(child.stdout), collectStreamAsString(child.stderr), child.exitCode],
-        { concurrency: "unbounded" },
-      );
-      const exitCode = Number(code);
-      if (isWindowsCommandNotFound(exitCode, stderr)) {
-        return yield* new OpenCodeRuntimeError({
-          operation: "runOpenCodeCommand",
-          detail: `spawn ${input.binaryPath} ENOENT`,
-        });
-      }
-      return {
-        stdout,
-        stderr,
-        code: exitCode,
-      } satisfies OpenCodeCommandResult;
-    }).pipe(
-      Effect.scoped,
-      Effect.mapError((cause) =>
-        ensureRuntimeError(
-          "runOpenCodeCommand",
-          `Failed to execute '${input.binaryPath} ${input.args.join(" ")}': ${openCodeRuntimeErrorDetail(cause)}`,
-          cause,
-        ),
-      ),
-    );
+const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
+  Effect.gen(function* () {
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const platformNetService = yield* NetService.NetService;
+    const netService = options?.netService ?? platformNetService;
 
-  const startOpenCodeServerProcess: OpenCodeRuntimeShape["startOpenCodeServerProcess"] = (input) =>
-    Effect.gen(function* () {
-      // Bind this server's lifetime to the caller's scope. When the caller's
-      // scope closes, the spawned child is killed and all associated fibers
-      // are interrupted automatically — no `close()` method needed.
-      const runtimeScope = yield* Scope.Scope;
-
-      const hostname = input.hostname ?? DEFAULT_HOSTNAME;
-      const port =
-        input.port ??
-        (yield* netService.findAvailablePort(0).pipe(
-          Effect.mapError(
-            (cause) =>
-              new OpenCodeRuntimeError({
-                operation: "startOpenCodeServerProcess",
-                detail: `Failed to find available port: ${openCodeRuntimeErrorDetail(cause)}`,
-                cause,
-              }),
-          ),
-        ));
-      const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
-      const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
-      const binary = input.binaryPath?.trim() || "opencode";
-
-      const child = yield* spawner
-        .spawn(
-          ChildProcess.make(binary, args, {
-            detached: process.platform !== "win32",
+    const runOpenCodeCommand: OpenCodeRuntimeShape["runOpenCodeCommand"] = (input) =>
+      Effect.gen(function* () {
+        const binary = input.binaryPath?.trim() || "opencode";
+        const child = yield* spawner.spawn(
+          ChildProcess.make(binary, [...input.args], {
             shell: process.platform === "win32",
-            env: {
-              ...(input.environment ?? process.env),
-              OPENCODE_CONFIG_CONTENT: OPENCODE_EMPTY_CONFIG_CONTENT,
-            },
+            env: input.environment ?? process.env,
           }),
-        )
-        .pipe(
-          Effect.provideService(Scope.Scope, runtimeScope),
-          Effect.mapError(
-            (cause) =>
+        );
+        const [stdout, stderr, code] = yield* Effect.all(
+          [
+            collectStreamAsString(child.stdout),
+            collectStreamAsString(child.stderr),
+            child.exitCode,
+          ],
+          { concurrency: "unbounded" },
+        );
+        const exitCode = Number(code);
+        if (isWindowsCommandNotFound(exitCode, stderr)) {
+          return yield* new OpenCodeRuntimeError({
+            operation: "runOpenCodeCommand",
+            detail: `spawn ${input.binaryPath} ENOENT`,
+          });
+        }
+        return {
+          stdout,
+          stderr,
+          code: exitCode,
+        } satisfies OpenCodeCommandResult;
+      }).pipe(
+        Effect.scoped,
+        Effect.mapError((cause) =>
+          ensureRuntimeError(
+            "runOpenCodeCommand",
+            `Failed to execute '${input.binaryPath} ${input.args.join(" ")}': ${openCodeRuntimeErrorDetail(cause)}`,
+            cause,
+          ),
+        ),
+      );
+
+    const startOpenCodeServerProcess: OpenCodeRuntimeShape["startOpenCodeServerProcess"] = (
+      input,
+    ) =>
+      Effect.gen(function* () {
+        // Bind this server's lifetime to the caller's scope. When the caller's
+        // scope closes, the spawned child is killed and all associated fibers
+        // are interrupted automatically — no `close()` method needed.
+        const runtimeScope = yield* Scope.Scope;
+
+        const hostname = input.hostname ?? DEFAULT_HOSTNAME;
+        const port =
+          input.port ??
+          (yield* netService.findAvailablePort(0).pipe(
+            Effect.mapError(
+              (cause) =>
+                new OpenCodeRuntimeError({
+                  operation: "startOpenCodeServerProcess",
+                  detail: `Failed to find available port: ${openCodeRuntimeErrorDetail(cause)}`,
+                  cause,
+                }),
+            ),
+          ));
+        const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
+        const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
+        const binary = input.binaryPath?.trim() || "opencode";
+
+        const child = yield* spawner
+          .spawn(
+            ChildProcess.make(binary, args, {
+              detached: process.platform !== "win32",
+              shell: process.platform === "win32",
+              env: {
+                ...(input.environment ?? process.env),
+                OPENCODE_CONFIG_CONTENT: OPENCODE_EMPTY_CONFIG_CONTENT,
+              },
+            }),
+          )
+          .pipe(
+            Effect.provideService(Scope.Scope, runtimeScope),
+            Effect.mapError(
+              (cause) =>
+                new OpenCodeRuntimeError({
+                  operation: "startOpenCodeServerProcess",
+                  detail: `Failed to spawn OpenCode server process: ${openCodeRuntimeErrorDetail(cause)}`,
+                  cause,
+                }),
+            ),
+          );
+
+        yield* Scope.addFinalizer(
+          runtimeScope,
+          Effect.tryPromise({
+            try: () =>
+              teardownEffectProcessTree(
+                child,
+                options?.teardownProcessTree ?? teardownProviderProcessTree,
+              ),
+            catch: (cause) =>
               new OpenCodeRuntimeError({
-                operation: "startOpenCodeServerProcess",
-                detail: `Failed to spawn OpenCode server process: ${openCodeRuntimeErrorDetail(cause)}`,
+                operation: "stopOpenCodeServerProcess",
+                detail: `Failed to prove OpenCode server process-tree exit: ${openCodeRuntimeErrorDetail(cause)}`,
                 cause,
               }),
+          }).pipe(Effect.asVoid, Effect.orDie),
+        );
+
+        const stdoutRef = yield* Ref.make("");
+        const stderrRef = yield* Ref.make("");
+        const readyDeferred = yield* Deferred.make<string, OpenCodeRuntimeError>();
+
+        const setReadyFromStdoutChunk = (chunk: string) =>
+          Ref.updateAndGet(stdoutRef, (stdout) => `${stdout}${chunk}`).pipe(
+            Effect.flatMap((nextStdout) => {
+              const parsed = parseServerUrlFromOutput(nextStdout);
+              return parsed
+                ? Deferred.succeed(readyDeferred, parsed).pipe(Effect.ignore)
+                : Effect.void;
+            }),
+          );
+
+        const stdoutFiber = yield* child.stdout.pipe(
+          Stream.decodeText(),
+          Stream.runForEach(setReadyFromStdoutChunk),
+          Effect.ignore,
+          Effect.forkIn(runtimeScope),
+        );
+        const stderrFiber = yield* child.stderr.pipe(
+          Stream.decodeText(),
+          Stream.runForEach((chunk) => Ref.update(stderrRef, (stderr) => `${stderr}${chunk}`)),
+          Effect.ignore,
+          Effect.forkIn(runtimeScope),
+        );
+
+        const exitFiber = yield* child.exitCode.pipe(
+          Effect.flatMap((code) =>
+            Effect.gen(function* () {
+              const stdout = yield* Ref.get(stdoutRef);
+              const stderr = yield* Ref.get(stderrRef);
+              const exitCode = Number(code);
+              yield* Deferred.fail(
+                readyDeferred,
+                new OpenCodeRuntimeError({
+                  operation: "startOpenCodeServerProcess",
+                  detail: [
+                    `OpenCode server exited before startup completed (code: ${String(exitCode)}).`,
+                    stdout.trim() ? `stdout:\n${stdout.trim()}` : null,
+                    stderr.trim() ? `stderr:\n${stderr.trim()}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n"),
+                  cause: { exitCode, stdout, stderr },
+                }),
+              ).pipe(Effect.ignore);
+            }),
           ),
+          Effect.ignore,
+          Effect.forkIn(runtimeScope),
         );
 
-      const killOpenCodeProcessGroup = (signal: NodeJS.Signals) =>
-        process.platform === "win32"
-          ? child.kill({ killSignal: signal, forceKillAfter: "1 second" }).pipe(Effect.asVoid)
-          : Effect.sync(() => {
-              try {
-                process.kill(-Number(child.pid), signal);
-              } catch {
-                // The direct child may already have exited after starting the
-                // server; the process group kill is best-effort cleanup for
-                // any serve process left in that group.
-              }
-            });
-      const terminateChild = killOpenCodeProcessGroup("SIGTERM").pipe(
-        Effect.andThen(Effect.sleep("1 second")),
-        Effect.andThen(killOpenCodeProcessGroup("SIGKILL")),
-        Effect.ignore,
-      );
-      yield* Scope.addFinalizer(runtimeScope, terminateChild);
-
-      const stdoutRef = yield* Ref.make("");
-      const stderrRef = yield* Ref.make("");
-      const readyDeferred = yield* Deferred.make<string, OpenCodeRuntimeError>();
-
-      const setReadyFromStdoutChunk = (chunk: string) =>
-        Ref.updateAndGet(stdoutRef, (stdout) => `${stdout}${chunk}`).pipe(
-          Effect.flatMap((nextStdout) => {
-            const parsed = parseServerUrlFromOutput(nextStdout);
-            return parsed
-              ? Deferred.succeed(readyDeferred, parsed).pipe(Effect.ignore)
-              : Effect.void;
-          }),
+        const readyExit = yield* Effect.exit(
+          Deferred.await(readyDeferred).pipe(Effect.timeoutOption(timeoutMs)),
         );
 
-      const stdoutFiber = yield* child.stdout.pipe(
-        Stream.decodeText(),
-        Stream.runForEach(setReadyFromStdoutChunk),
-        Effect.ignore,
-        Effect.forkIn(runtimeScope),
-      );
-      const stderrFiber = yield* child.stderr.pipe(
-        Stream.decodeText(),
-        Stream.runForEach((chunk) => Ref.update(stderrRef, (stderr) => `${stderr}${chunk}`)),
-        Effect.ignore,
-        Effect.forkIn(runtimeScope),
-      );
+        // Startup-time fibers are no longer needed once ready has resolved (either
+        // way). The exit fiber is only interrupted on failure; on success it keeps
+        // the caller's `exitCode` effect observable until the scope closes.
+        yield* Fiber.interrupt(stdoutFiber).pipe(Effect.ignore);
+        yield* Fiber.interrupt(stderrFiber).pipe(Effect.ignore);
 
-      const exitFiber = yield* child.exitCode.pipe(
-        Effect.flatMap((code) =>
-          Effect.gen(function* () {
-            const stdout = yield* Ref.get(stdoutRef);
-            const stderr = yield* Ref.get(stderrRef);
-            const exitCode = Number(code);
-            yield* Deferred.fail(
-              readyDeferred,
-              new OpenCodeRuntimeError({
-                operation: "startOpenCodeServerProcess",
-                detail: [
-                  `OpenCode server exited before startup completed (code: ${String(exitCode)}).`,
-                  stdout.trim() ? `stdout:\n${stdout.trim()}` : null,
-                  stderr.trim() ? `stderr:\n${stderr.trim()}` : null,
-                ]
-                  .filter(Boolean)
-                  .join("\n\n"),
-                cause: { exitCode, stdout, stderr },
-              }),
-            ).pipe(Effect.ignore);
-          }),
-        ),
-        Effect.ignore,
-        Effect.forkIn(runtimeScope),
-      );
+        if (Exit.isFailure(readyExit)) {
+          yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
+          const squashed = Cause.squash(readyExit.cause);
+          return yield* ensureRuntimeError(
+            "startOpenCodeServerProcess",
+            `Failed while waiting for OpenCode server startup: ${openCodeRuntimeErrorDetail(squashed)}`,
+            squashed,
+          );
+        }
 
-      const readyExit = yield* Effect.exit(
-        Deferred.await(readyDeferred).pipe(Effect.timeoutOption(timeoutMs)),
-      );
+        const readyOption = readyExit.value;
+        if (Option.isNone(readyOption)) {
+          yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
+          return yield* new OpenCodeRuntimeError({
+            operation: "startOpenCodeServerProcess",
+            detail: `Timed out waiting for OpenCode server start after ${timeoutMs}ms.`,
+          });
+        }
 
-      // Startup-time fibers are no longer needed once ready has resolved (either
-      // way). The exit fiber is only interrupted on failure; on success it keeps
-      // the caller's `exitCode` effect observable until the scope closes.
-      yield* Fiber.interrupt(stdoutFiber).pipe(Effect.ignore);
-      yield* Fiber.interrupt(stderrFiber).pipe(Effect.ignore);
+        return {
+          url: readyOption.value,
+          exitCode: child.exitCode.pipe(
+            Effect.map(Number),
+            Effect.orElseSucceed(() => 0),
+          ),
+        } satisfies OpenCodeServerProcess;
+      });
 
-      if (Exit.isFailure(readyExit)) {
-        yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
-        const squashed = Cause.squash(readyExit.cause);
-        return yield* ensureRuntimeError(
-          "startOpenCodeServerProcess",
-          `Failed while waiting for OpenCode server startup: ${openCodeRuntimeErrorDetail(squashed)}`,
-          squashed,
-        );
-      }
-
-      const readyOption = readyExit.value;
-      if (Option.isNone(readyOption)) {
-        yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
-        return yield* new OpenCodeRuntimeError({
-          operation: "startOpenCodeServerProcess",
-          detail: `Timed out waiting for OpenCode server start after ${timeoutMs}ms.`,
+    const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {
+      const serverUrl = input.serverUrl?.trim();
+      if (serverUrl) {
+        // We don't own externally-configured servers — no scope interaction.
+        return Effect.succeed({
+          url: serverUrl,
+          exitCode: null,
+          external: true,
         });
       }
 
-      return {
-        url: readyOption.value,
-        exitCode: child.exitCode.pipe(
-          Effect.map(Number),
-          Effect.orElseSucceed(() => 0),
-        ),
-      } satisfies OpenCodeServerProcess;
-    });
+      const startInput = {
+        binaryPath: input.binaryPath,
+        ...(input.environment !== undefined ? { environment: input.environment } : {}),
+        ...(input.port !== undefined ? { port: input.port } : {}),
+        ...(input.hostname !== undefined ? { hostname: input.hostname } : {}),
+        ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+      };
+      const startServer = input.retryKiloCredentialStartup
+        ? Effect.gen(function* () {
+            let retryIndex = 0;
+            while (true) {
+              const attemptScope = yield* Scope.make();
+              const attempt = yield* Effect.exit(
+                startOpenCodeServerProcess(startInput).pipe(
+                  Effect.provideService(Scope.Scope, attemptScope),
+                ),
+              );
+              if (Exit.isSuccess(attempt)) {
+                yield* Effect.addFinalizer(() => Scope.close(attemptScope, Exit.void));
+                return attempt.value;
+              }
 
-  const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {
-    const serverUrl = input.serverUrl?.trim();
-    if (serverUrl) {
-      // We don't own externally-configured servers — no scope interaction.
-      return Effect.succeed({
-        url: serverUrl,
-        exitCode: null,
-        external: true,
-      });
-    }
+              yield* Scope.close(attemptScope, Exit.void).pipe(Effect.ignore);
+              const retryDelayMs = KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS[retryIndex];
+              const failure = Cause.squash(attempt.cause);
+              if (retryDelayMs === undefined || !isRetryableKiloCredentialStartupFailure(failure)) {
+                return yield* Effect.failCause(attempt.cause);
+              }
 
-    const startInput = {
-      binaryPath: input.binaryPath,
-      ...(input.environment !== undefined ? { environment: input.environment } : {}),
-      ...(input.port !== undefined ? { port: input.port } : {}),
-      ...(input.hostname !== undefined ? { hostname: input.hostname } : {}),
-      ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+              retryIndex += 1;
+              yield* Effect.logWarning(
+                "Kilo credential reconciliation failed during startup; retrying",
+                { attempt: retryIndex + 1, delayMs: retryDelayMs },
+              );
+              yield* Effect.sleep(retryDelayMs);
+            }
+          })
+        : startOpenCodeServerProcess(startInput);
+
+      return startServer.pipe(
+        Effect.map((server) => ({
+          url: server.url,
+          exitCode: server.exitCode,
+          external: false,
+        })),
+      );
     };
-    const startServer = input.retryKiloCredentialStartup
-      ? Effect.gen(function* () {
-          let retryIndex = 0;
-          while (true) {
-            const attemptScope = yield* Scope.make();
-            const attempt = yield* Effect.exit(
-              startOpenCodeServerProcess(startInput).pipe(
-                Effect.provideService(Scope.Scope, attemptScope),
-              ),
-            );
-            if (Exit.isSuccess(attempt)) {
-              yield* Effect.addFinalizer(() => Scope.close(attemptScope, Exit.void));
-              return attempt.value;
+
+    const createOpenCodeSdkClient: OpenCodeRuntimeShape["createOpenCodeSdkClient"] = (input) =>
+      createOpencodeClient({
+        baseUrl: input.baseUrl,
+        directory: input.directory,
+        ...(input.serverPassword
+          ? {
+              headers: {
+                Authorization: `Basic ${Buffer.from(`opencode:${input.serverPassword}`, "utf8").toString("base64")}`,
+              },
             }
+          : {}),
+        throwOnError: true,
+      });
 
-            yield* Scope.close(attemptScope, Exit.void).pipe(Effect.ignore);
-            const retryDelayMs = KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS[retryIndex];
-            const failure = Cause.squash(attempt.cause);
-            if (retryDelayMs === undefined || !isRetryableKiloCredentialStartupFailure(failure)) {
-              return yield* Effect.failCause(attempt.cause);
-            }
+    const loadProviders = (client: OpencodeClient) =>
+      runOpenCodeSdk("provider.list", () => client.provider.list()).pipe(
+        Effect.filterMapOrFail(
+          (list) =>
+            list.data
+              ? Result.succeed(list.data)
+              : Result.fail(
+                  new OpenCodeRuntimeError({
+                    operation: "provider.list",
+                    detail: "OpenCode provider list was empty.",
+                  }),
+                ),
+          (result) => result,
+        ),
+      );
 
-            retryIndex += 1;
-            yield* Effect.logWarning(
-              "Kilo credential reconciliation failed during startup; retrying",
-              { attempt: retryIndex + 1, delayMs: retryDelayMs },
-            );
-            yield* Effect.sleep(retryDelayMs);
-          }
-        })
-      : startOpenCodeServerProcess(startInput);
+    const loadAgents = (client: OpencodeClient) =>
+      runOpenCodeSdk("app.agents", () => client.app.agents()).pipe(
+        Effect.map((result) => result.data ?? []),
+      );
 
-    return startServer.pipe(
-      Effect.map((server) => ({
-        url: server.url,
-        exitCode: server.exitCode,
-        external: false,
-      })),
-    );
-  };
+    const loadOpenCodeInventory: OpenCodeRuntimeShape["loadOpenCodeInventory"] = (client) =>
+      Effect.all([loadProviders(client), loadAgents(client)], {
+        concurrency: "unbounded",
+      }).pipe(Effect.map(([providerList, agents]) => ({ providerList, agents })));
 
-  const createOpenCodeSdkClient: OpenCodeRuntimeShape["createOpenCodeSdkClient"] = (input) =>
-    createOpencodeClient({
-      baseUrl: input.baseUrl,
-      directory: input.directory,
-      ...(input.serverPassword
-        ? {
-            headers: {
-              Authorization: `Basic ${Buffer.from(`opencode:${input.serverPassword}`, "utf8").toString("base64")}`,
-            },
-          }
-        : {}),
-      throwOnError: true,
-    });
-
-  const loadProviders = (client: OpencodeClient) =>
-    runOpenCodeSdk("provider.list", () => client.provider.list()).pipe(
-      Effect.filterMapOrFail(
-        (list) =>
-          list.data
-            ? Result.succeed(list.data)
-            : Result.fail(
-                new OpenCodeRuntimeError({
-                  operation: "provider.list",
-                  detail: "OpenCode provider list was empty.",
-                }),
-              ),
-        (result) => result,
-      ),
-    );
-
-  const loadAgents = (client: OpencodeClient) =>
-    runOpenCodeSdk("app.agents", () => client.app.agents()).pipe(
-      Effect.map((result) => result.data ?? []),
-    );
-
-  const loadOpenCodeInventory: OpenCodeRuntimeShape["loadOpenCodeInventory"] = (client) =>
-    Effect.all([loadProviders(client), loadAgents(client)], { concurrency: "unbounded" }).pipe(
-      Effect.map(([providerList, agents]) => ({ providerList, agents })),
-    );
-
-  return {
-    startOpenCodeServerProcess,
-    connectToOpenCodeServer,
-    runOpenCodeCommand,
-    createOpenCodeSdkClient,
-    loadOpenCodeInventory,
-  } satisfies OpenCodeRuntimeShape;
-});
+    return {
+      startOpenCodeServerProcess,
+      connectToOpenCodeServer,
+      runOpenCodeCommand,
+      createOpenCodeSdkClient,
+      loadOpenCodeInventory,
+    } satisfies OpenCodeRuntimeShape;
+  });
 
 export const OPENCODE_LOCAL_SERVER_IDLE_TTL_MS = 5 * 60_000;
 
@@ -813,7 +830,7 @@ export class OpenCodeRuntime extends Context.Service<OpenCodeRuntime, OpenCodeRu
   "tabs/provider/opencodeRuntime",
 ) {}
 
-export const makeOpenCodeRuntimeLive = (_options?: any) =>
-  Layer.effect(OpenCodeRuntime, makeOpenCodeRuntime).pipe(Layer.provide(NetService.layer));
+export const makeOpenCodeRuntimeLive = (options?: OpenCodeRuntimeLiveOptions) =>
+  Layer.effect(OpenCodeRuntime, makeOpenCodeRuntime(options)).pipe(Layer.provide(NetService.layer));
 
 export const OpenCodeRuntimeLive = makeOpenCodeRuntimeLive();

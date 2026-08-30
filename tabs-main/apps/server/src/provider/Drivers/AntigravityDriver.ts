@@ -6,8 +6,9 @@ import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { makeUnsupportedTextGeneration } from "../../textGeneration/UnsupportedTextGeneration";
-import { ProviderAdapterRequestError, ProviderDriverError } from "../Errors";
-import type { ProviderAdapterShape } from "../Services/ProviderAdapter";
+import { ServerConfig } from "../../config";
+import { ProviderDriverError } from "../Errors";
+import { makeAntigravityAdapter } from "../Layers/AntigravityAdapter";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import { checkAntigravityProviderStatus } from "../Layers/AntigravityProvider";
 import {
@@ -41,7 +42,7 @@ const withInstanceIdentity =
     continuation: { groupKey: input.continuationGroupKey },
   });
 
-export type AntigravityDriverEnv = ChildProcessSpawner.ChildProcessSpawner;
+export type AntigravityDriverEnv = ChildProcessSpawner.ChildProcessSpawner | ServerConfig;
 
 export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -54,6 +55,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
   create: ({ instanceId, displayName, accentColor, environment, enabled, config }) =>
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+      const serverConfig = yield* ServerConfig;
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
@@ -101,38 +103,12 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         ),
       );
 
-      // Antigravity is a text-generation-only provider (Code Review). It does NOT
-      // support interactive Agent Chat sessions. Every agent-protocol method
-      // returns a typed ProviderAdapterRequestError so the error bubbles
-      // through ProviderService cleanly instead of producing a
-      // `yield* undefined` TypeError that crashes the turn handler.
-      const antigravityUnsupportedError = (method: string) =>
-        new ProviderAdapterRequestError({
-          provider: DRIVER_KIND,
-          method,
-          detail:
-            "Antigravity session support requires the Agent Gateway MCP injection point, which tabs-main does not currently expose.",
-        });
-
-      const antigravityAdapter = {
-        provider: DRIVER_KIND,
-        capabilities: {
-          sessionModelSwitch: "unsupported" as const,
-          agentChat: "unsupported" as const,
-        },
-        streamEvents: Stream.empty,
-        startSession: () => Effect.fail(antigravityUnsupportedError("startSession")),
-        sendTurn: () => Effect.fail(antigravityUnsupportedError("sendTurn")),
-        interruptTurn: () => Effect.fail(antigravityUnsupportedError("interruptTurn")),
-        respondToRequest: () => Effect.fail(antigravityUnsupportedError("respondToRequest")),
-        respondToUserInput: () => Effect.fail(antigravityUnsupportedError("respondToUserInput")),
-        stopSession: () => Effect.void,
-        listSessions: () => Effect.succeed([] as const),
-        hasSession: () => Effect.succeed(false),
-        readThread: () => Effect.fail(antigravityUnsupportedError("readThread")),
-        rollbackThread: () => Effect.fail(antigravityUnsupportedError("rollbackThread")),
-        stopAll: () => Effect.void,
-      } satisfies ProviderAdapterShape<ProviderAdapterRequestError>;
+      const antigravityAdapter = yield* makeAntigravityAdapter(effectiveConfig, {
+        instanceId,
+        environment: processEnv,
+        defaultCwd: serverConfig.cwd,
+        attachmentsDir: serverConfig.attachmentsDir,
+      });
 
       return {
         instanceId,

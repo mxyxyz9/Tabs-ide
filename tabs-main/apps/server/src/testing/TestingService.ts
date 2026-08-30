@@ -1,7 +1,10 @@
-import { join } from "node:path";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type {
   TestingAuthStartResult,
+  TestingArtifactReadInput,
+  TestingArtifactReadResult,
   TestingBugDraft,
   TestingBugDraftInput,
   TestingCaseListResult,
@@ -94,6 +97,18 @@ import { sanitizeModelBoundText, shortDigest, tokenizePii } from "./security";
 import { parseUserStory } from "./storyImporter";
 import { parseTestingWorkbook } from "./workbookParser";
 import { scanTestingInventory } from "./testInventory";
+
+const MAX_TESTING_ARTIFACT_PREVIEW_BYTES = 1024 * 1024;
+
+function isPathInside(root: string, candidate: string): boolean {
+  const pathFromRoot = relative(root, candidate);
+  return (
+    pathFromRoot.length > 0 &&
+    pathFromRoot !== ".." &&
+    !pathFromRoot.startsWith(`..${sep}`) &&
+    !isAbsolute(pathFromRoot)
+  );
+}
 
 interface AuthCapture {
   readonly session: PlaywrightMcpSession;
@@ -964,6 +979,43 @@ export class TestingService {
       throw new Error("No configured coding-agent text-generation backend is available");
     }
     return this.#generator.cancel(input.projectId, input.jobId);
+  }
+
+  async readArtifact(input: TestingArtifactReadInput): Promise<TestingArtifactReadResult> {
+    const job = this.#store.generationJob(input.projectId, input.generationJobId);
+    if (!job) {
+      throw new Error("Generation job was not found in this project");
+    }
+    if (job.status !== "completed") {
+      throw new Error("Generation job is not completed");
+    }
+    const artifact = job.artifacts.find((candidate) => candidate.caseId === input.caseId);
+    if (!artifact) {
+      throw new Error("Generated artifact was not found for this case");
+    }
+    const storedPath =
+      input.artifactKind === "spec"
+        ? artifact.specPath
+        : input.artifactKind === "page"
+          ? artifact.pageObjectPath
+          : artifact.dataPath;
+    const [canonicalOutputDirectory, canonicalArtifactPath] = await Promise.all([
+      realpath(resolve(job.outputDirectory)),
+      realpath(resolve(storedPath)),
+    ]).catch((cause) => {
+      throw new Error("Generated artifact file is unavailable", { cause });
+    });
+    if (!isPathInside(canonicalOutputDirectory, canonicalArtifactPath)) {
+      throw new Error("Generated artifact path escapes the generation output directory");
+    }
+    const fileInfo = await stat(canonicalArtifactPath);
+    if (!fileInfo.isFile()) {
+      throw new Error("Generated artifact path is not a file");
+    }
+    if (fileInfo.size > MAX_TESTING_ARTIFACT_PREVIEW_BYTES) {
+      throw new Error("Generated artifact is too large to preview");
+    }
+    return { contents: await readFile(canonicalArtifactPath, "utf8") };
   }
 
   runTests(input: TestingExecutionInput): Promise<TestingExecutionRun> {

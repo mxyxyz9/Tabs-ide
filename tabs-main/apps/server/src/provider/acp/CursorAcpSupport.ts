@@ -39,6 +39,10 @@ export function buildCursorAcpSpawnInput(
   cwd: string,
   environment?: NodeJS.ProcessEnv,
 ): AcpSpawnInput {
+  const subscriptionEnvironment = environment ? { ...environment } : undefined;
+  // Tabs has no API-key opt-in for Cursor. Do not let an ambient key silently
+  // replace the user's Cursor login and move usage onto metered API billing.
+  if (subscriptionEnvironment) delete subscriptionEnvironment.CURSOR_API_KEY;
   return {
     command: cursorSettings?.binaryPath || "agent",
     args: [
@@ -46,7 +50,7 @@ export function buildCursorAcpSpawnInput(
       "acp",
     ],
     cwd,
-    ...(environment ? { env: environment } : {}),
+    ...(subscriptionEnvironment ? { env: subscriptionEnvironment } : {}),
   };
 }
 

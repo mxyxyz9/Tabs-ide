@@ -59,6 +59,7 @@ const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
 const SET_PERSISTED_ITEM_CHANNEL = "desktop:set-persisted-item";
 const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
 
+
 contextBridge.exposeInMainWorld("desktopBridge", {
   getWsUrl: () => {
     const result = ipcRenderer.sendSync(GET_WS_URL_CHANNEL);

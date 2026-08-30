@@ -57,6 +57,22 @@ describe("buildCopilotAcpSpawnInput", () => {
     expect(env.COPILOT_PROVIDER_OPENAI_API_KEY).toBe("sk-proj-test99");
     expect(env.COPILOT_PROVIDER_API_KEY).toBe("sk-proj-test99");
   });
+
+  it("removes ambient BYOK keys unless the user configured BYOK", () => {
+    const env = buildCopilotEnvironment(
+      {},
+      {
+        PATH: "/bin",
+        COPILOT_PROVIDER_API_KEY: "ambient-generic",
+        COPILOT_PROVIDER_OPENAI_API_KEY: "ambient-openai",
+        COPILOT_GITHUB_TOKEN: "ambient-copilot-token",
+        GH_TOKEN: "ambient-gh-token",
+        GITHUB_TOKEN: "ambient-github-token",
+      },
+    );
+
+    expect(env).toEqual({ PATH: "/bin" });
+  });
 });
 
 describe("resolveCopilotTerminalAuthCommand", () => {

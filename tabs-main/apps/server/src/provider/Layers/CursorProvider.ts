@@ -721,7 +721,10 @@ function cursorAuthMetadata(
   const subscriptionLabel = cursorSubscriptionLabel(subscriptionType);
   return {
     type: subscriptionType,
-    label: `Cursor ${subscriptionLabel ?? toTitleCaseWords(subscriptionType)} Subscription`,
+    label:
+      subscriptionType.toLowerCase() === "free"
+        ? "Cursor Free"
+        : `Cursor ${subscriptionLabel ?? toTitleCaseWords(subscriptionType)} Subscription`,
   };
 }
 

@@ -785,7 +785,8 @@ export function makeGrokAdapter(grokSettings: GrokSettings, options?: GrokAdapte
             ];
             ctx.session = {
               ...ctx.session,
-              activeTurnId: prepared.turnId,
+              status: "ready",
+              activeTurnId: undefined,
               updatedAt: yield* nowIso,
               ...(prepared.displayModel ? { model: prepared.displayModel } : {}),
             };

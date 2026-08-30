@@ -1,0 +1,24 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* Assistant providers use the native auxiliary-bar composite as a compact tab strip. */
+.monaco-workbench .part.auxiliarybar > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item:not(.icon) .action-label {
+	border-radius: 6px;
+	color: var(--vscode-sideBarTitle-foreground);
+	padding-left: 8px;
+	padding-right: 8px;
+	text-transform: none;
+}
+
+.monaco-workbench .part.auxiliarybar > .title > .composite-bar-container > .composite-bar > .monaco-action-bar .action-item:focus-visible .action-label {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
+}
+
+/* The shared assistant switcher replaces per-editor launch shortcuts. */
+.monaco-workbench .editor-actions .action-item:has(> .action-label[aria-label^='Claude Code: Open']),
+.monaco-workbench .editor-actions .action-item:has(> .action-label[aria-label='Open Codex Sidebar']) {
+	display: none;
+}

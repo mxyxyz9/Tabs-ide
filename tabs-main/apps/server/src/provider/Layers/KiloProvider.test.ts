@@ -4,7 +4,7 @@ import type { OpenCodeInventory } from "../opencodeRuntime.ts";
 import { flattenKiloModels } from "./KiloProvider.ts";
 
 describe("flattenKiloModels", () => {
-  it("keeps the account-scoped Kilo catalog and excludes router-wide upstreams", () => {
+  it("keeps free and paid account-scoped Kilo models and excludes other upstreams", () => {
     const inventory = {
       providerList: {
         connected: ["kilo", "anthropic", "openrouter"],
@@ -13,8 +13,16 @@ describe("flattenKiloModels", () => {
             id: "kilo",
             name: "Kilo",
             models: {
-              auto: { id: "kilo-auto/free", name: "Kilo Auto Free", isFree: true },
-              paid: { id: "paid-model", name: "Paid Router Model", isFree: false },
+              auto: {
+                id: "kilo-auto/free",
+                name: "Kilo Auto Free",
+                isFree: true,
+              },
+              paid: {
+                id: "paid-model",
+                name: "Paid Router Model",
+                isFree: false,
+              },
             },
           },
           {
@@ -38,6 +46,7 @@ describe("flattenKiloModels", () => {
 
     expect(flattenKiloModels(inventory).map((model) => model.slug)).toEqual([
       "kilo/kilo-auto/free",
+      "kilo/paid-model",
     ]);
   });
 });

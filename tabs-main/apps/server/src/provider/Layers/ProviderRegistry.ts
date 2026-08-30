@@ -83,6 +83,7 @@ const hasModelCapabilities = (model: ServerProvider["models"][number]): boolean 
 const mergeProviderModels = (
   previousModels: ReadonlyArray<ServerProvider["models"][number]>,
   nextModels: ReadonlyArray<ServerProvider["models"][number]>,
+  options: { readonly preserveMissing: boolean } = { preserveMissing: true },
 ): ReadonlyArray<ServerProvider["models"][number]> => {
   const validatedNext = validateServerProviderModelList(nextModels);
   if (validatedNext.length === 0 && previousModels.length > 0) {
@@ -101,6 +102,9 @@ const mergeProviderModels = (
       capabilities: previousModel.capabilities,
     };
   });
+  if (!options.preserveMissing) {
+    return mergedModels;
+  }
   const nextSlugs = new Set(modelsToUse.map((model) => model.slug));
   return [...mergedModels, ...previousModels.filter((model) => !nextSlugs.has(model.slug))];
 };
@@ -122,7 +126,9 @@ export const mergeProviderSnapshot = (
           models:
             nextProvider.catalogStatus === "empty"
               ? []
-              : mergeProviderModels(previousProvider.models, nextProvider.models),
+              : mergeProviderModels(previousProvider.models, nextProvider.models, {
+                  preserveMissing: nextProvider.catalogStatus !== "ready",
+                }),
         };
 
 export const mergeProviderSnapshots = (

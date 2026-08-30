@@ -37,6 +37,16 @@ export function buildCopilotEnvironment(
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...(baseEnv ?? process.env) };
 
+  // BYOK must be an explicit provider setting. Remove inherited Copilot BYOK
+  // variables first so a shell-level key cannot silently bypass seat billing.
+  delete env.COPILOT_PROVIDER_API_KEY;
+  for (const key of Object.keys(env)) {
+    if (/^COPILOT_PROVIDER_.*_API_KEY$/u.test(key)) delete env[key];
+  }
+  delete env.COPILOT_GITHUB_TOKEN;
+  delete env.GH_TOKEN;
+  delete env.GITHUB_TOKEN;
+
   // Explicit token injection from the OS credential store (no settings-file or parent leakage).
   const configuredToken = secureToken?.trim();
   if (configuredToken) {

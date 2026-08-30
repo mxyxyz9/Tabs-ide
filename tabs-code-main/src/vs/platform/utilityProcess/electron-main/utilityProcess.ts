@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BrowserWindow, Details, MessageChannelMain, app, utilityProcess, UtilityProcess as ElectronUtilityProcess } from 'electron';
+import { BrowserWindow, Details, MessageChannelMain, WebContents, app, utilityProcess, UtilityProcess as ElectronUtilityProcess, webContents } from 'electron';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { ILogService } from '../../log/common/log.js';
@@ -475,7 +475,9 @@ export class WindowUtilityProcess extends UtilityProcess {
 
 	override start(configuration: IWindowUtilityProcessConfiguration): boolean {
 		const responseWindow = this.windowsMainService.getWindowById(configuration.responseWindowId);
-		if (!responseWindow?.win || responseWindow.win.isDestroyed() || responseWindow.win.webContents.isDestroyed()) {
+		const responseWebContents = responseWindow?.win?.webContents ?? webContents.fromId(configuration.responseWindowId);
+		this.log(`Resolving utility-process response target ${configuration.responseWindowId}: ${responseWindow?.win ? 'window' : responseWebContents ? 'webContents' : 'missing'}`, Severity.Info);
+		if (!responseWebContents || responseWebContents.isDestroyed()) {
 			this.log('Refusing to start utility process because requesting window cannot be found or is destroyed...', Severity.Error);
 
 			return true;
@@ -488,13 +490,29 @@ export class WindowUtilityProcess extends UtilityProcess {
 		}
 
 		// Register to window events
-		this.registerWindowListeners(responseWindow.win, configuration);
+		if (responseWindow?.win && !responseWindow.win.isDestroyed()) {
+			this.registerWindowListeners(responseWindow.win, configuration);
+		} else {
+			this.registerWebContentsListeners(responseWebContents, configuration);
+		}
 
 		// Establish & exchange message ports
 		const windowPort = this.connect(configuration.payload);
-		responseWindow.win.webContents.postMessage(configuration.responseChannel, configuration.responseNonce, [windowPort]);
+		responseWebContents.postMessage(configuration.responseChannel, configuration.responseNonce, [windowPort]);
 
 		return true;
+	}
+
+	private registerWebContentsListeners(responseWebContents: WebContents, configuration: IWindowUtilityProcessConfiguration): void {
+		if (!configuration.windowLifecycleBound) {
+			return;
+		}
+
+		const graceTime = configuration.windowLifecycleGraceTime;
+		const terminate = graceTime && graceTime > 0
+			? () => this.waitForExit(graceTime)
+			: () => this.kill();
+		this._register(Event.fromNodeEventEmitter(responseWebContents, 'destroyed')(terminate));
 	}
 
 	private registerWindowListeners(window: BrowserWindow, configuration: IWindowUtilityProcessConfiguration): void {

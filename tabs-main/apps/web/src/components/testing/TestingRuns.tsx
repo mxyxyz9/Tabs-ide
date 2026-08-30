@@ -15,7 +15,6 @@ import {
 import type { TestingGeneratedArtifact } from "@tabs/contracts";
 import { openInPreferredEditor } from "~/editorPreferences";
 import { ensureNativeApi } from "~/nativeApi";
-import { projectReadFileQueryOptions } from "~/lib/projectReactQuery";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -40,12 +39,6 @@ type ArtifactFile = {
 };
 const fileName = (path: string) =>
   path.replace(/\\/g, "/").split("/").filter(Boolean).at(-1) ?? path;
-function relativeToProject(projectPath: string, filePath: string) {
-  const root = projectPath.replace(/\\/g, "/").replace(/\/$/, "");
-  const file = filePath.replace(/\\/g, "/");
-  if (file.startsWith(`${root}/`)) return file.slice(root.length + 1);
-  return file.startsWith("/") ? null : file;
-}
 function statusTone(status?: string) {
   if (status === "passed") return "bg-emerald-500";
   if (status === "failed") return "bg-destructive";
@@ -130,20 +123,34 @@ export const TestingRuns = memo(function TestingRuns() {
     return [...output.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [artifacts, casesById, filter]);
   const effectiveFile = selectedFile ?? (artifacts[0] ? filesFor(artifacts[0])[0] : null);
-  const relativePath = effectiveFile
-    ? relativeToProject(data.projectPath, effectiveFile.path)
-    : null;
-  const fileQuery = useQuery(
-    projectReadFileQueryOptions({
-      cwd: data.projectPath,
-      relativePath,
-      enabled: Boolean(effectiveFile && relativePath),
-    }),
-  );
+  const completedJobId = data.completedGenerationJob?.id ?? null;
+  const fileQuery = useQuery({
+    queryKey: [
+      "testing",
+      "artifact",
+      data.projectId,
+      completedJobId,
+      effectiveFile?.caseId,
+      effectiveFile?.kind,
+    ],
+    queryFn: () => {
+      if (!completedJobId || !effectiveFile || effectiveFile.kind === "locator") {
+        throw new Error("Generated artifact preview is unavailable.");
+      }
+      return ensureNativeApi().testing.readArtifact({
+        projectId: data.projectId,
+        generationJobId: completedJobId,
+        caseId: effectiveFile.caseId,
+        artifactKind: effectiveFile.kind,
+      });
+    },
+    enabled: Boolean(completedJobId && effectiveFile && effectiveFile.kind !== "locator"),
+  });
   const toggle = (id: string) =>
     setCollapsed((current) => {
       const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   const canRun = Boolean(
@@ -345,9 +352,7 @@ export const TestingRuns = memo(function TestingRuns() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{effectiveFile.label}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {relativePath ?? effectiveFile.path}
-                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{effectiveFile.path}</p>
                   </div>
                   <div className="flex gap-1">
                     <Button
@@ -372,9 +377,9 @@ export const TestingRuns = memo(function TestingRuns() {
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto" aria-live="polite">
-                  {relativePath === null ? (
+                  {effectiveFile.kind === "locator" ? (
                     <p className="p-6 text-sm text-muted-foreground">
-                      This locator is outside the project. Open it in the editor to inspect it.
+                      Open this locator source in the editor to inspect it.
                     </p>
                   ) : fileQuery.isLoading ? (
                     <p className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
@@ -383,7 +388,8 @@ export const TestingRuns = memo(function TestingRuns() {
                     </p>
                   ) : fileQuery.isError ? (
                     <p className="p-6 text-sm text-destructive">
-                      Could not read this file. It may have moved since the last build.
+                      Could not read this generated artifact. It may have been deleted or replaced
+                      since the last build.
                     </p>
                   ) : (
                     <pre

@@ -1,7 +1,3 @@
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 import { type DroidSettings, type ServerProvider } from "@tabs/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
@@ -15,22 +11,6 @@ import {
   parseGenericCliVersion,
   spawnAndCollect,
 } from "../providerSnapshot";
-
-function hasCachedFactoryPairing(environment: NodeJS.ProcessEnv): boolean {
-  const candidateHomes = [
-    environment.FACTORY_HOME?.trim(),
-    environment.DROID_HOME?.trim(),
-    join(homedir(), ".factory"),
-    join(homedir(), ".droid"),
-    join(homedir(), ".config", "factory"),
-    join(homedir(), ".config", "droid"),
-  ].filter((p): p is string => Boolean(p));
-  return candidateHomes.some((home) =>
-    ["auth.json", "session.json", "credentials.json", "device-pairing.json"].some((name) =>
-      existsSync(join(home, name)),
-    ),
-  );
-}
 
 export const checkDroidProviderStatus = Effect.fn("checkDroidProviderStatus")(function* (
   settings: DroidSettings,
@@ -59,8 +39,6 @@ export const checkDroidProviderStatus = Effect.fn("checkDroidProviderStatus")(fu
     });
   }
   const result = probe.success.value;
-  const apiKey = settings.apiKey.trim() || environment.FACTORY_API_KEY?.trim();
-  const authenticated = Boolean(apiKey) || hasCachedFactoryPairing(environment);
   return buildServerProvider({
     presentation: { displayName: "Factory Droid" },
     enabled: settings.enabled,
@@ -69,17 +47,12 @@ export const checkDroidProviderStatus = Effect.fn("checkDroidProviderStatus")(fu
     probe: {
       installed: result.code === 0,
       version: parseGenericCliVersion(`${result.stdout}\n${result.stderr}`),
-      status: authenticated ? "ready" : "warning",
-      auth: {
-        status: authenticated ? "authenticated" : "unauthenticated",
-        ...(apiKey ? { type: "apiKey", label: "Factory API Key" } : {}),
-      },
-      ...(authenticated
-        ? {}
-        : {
-            message:
-              "Factory Droid is not authenticated. Run `droid` to pair this device or configure FACTORY_API_KEY.",
-          }),
+      status: result.code === 0 ? "warning" : "error",
+      auth: { status: "unknown" },
+      message:
+        result.code === 0
+          ? "Checking Factory Droid authentication through ACP..."
+          : "Factory Droid CLI is installed but failed its version check.",
     },
   });
 });

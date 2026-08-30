@@ -505,9 +505,16 @@ function getProviderSummary(provider: ServerProvider | undefined): {
     };
   }
   if (provider.auth.status === "authenticated") {
+    const usesMeteredCredentials = ["api_key", "byok", "cloud_credential"].includes(
+      provider.auth.credentialSource ?? "unknown",
+    );
     return {
       headline: "Authenticated",
-      detail: provider.message ?? null,
+      detail:
+        provider.message ??
+        (usesMeteredCredentials
+          ? `${provider.auth.billingLabel ?? provider.auth.label ?? "API credentials"}. Requests may incur usage-based charges; this is not using plan-included account access.`
+          : (provider.auth.billingLabel ?? provider.auth.label ?? null)),
     };
   }
   if (provider.auth.status === "authenticated_unentitled") {
@@ -5315,865 +5322,876 @@ function SettingsRouteView() {
                         ).length;
                         return providerCards.map((providerCard) => {
                           const isLastEnabledProvider =
-                            providerCard.providerConfig.enabled &&
-                            enabledProvidersCount <= 1;
-                          const customModelInput = customModelInputByProvider[providerCard.provider];
-                        const customModelError =
-                          customModelErrorByProvider[providerCard.provider] ?? null;
-                        const providerDisplayName =
-                          PROVIDER_DISPLAY_NAMES[
-                            providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
-                          ] ?? providerCard.title;
-                        const RowIcon = providerCard.icon;
-                        // A provider action terminal is already open (this row or another).
-                        const providerActionBusy = providerActionSession !== null;
+                            providerCard.providerConfig.enabled && enabledProvidersCount <= 1;
+                          const customModelInput =
+                            customModelInputByProvider[providerCard.provider];
+                          const customModelError =
+                            customModelErrorByProvider[providerCard.provider] ?? null;
+                          const providerDisplayName =
+                            PROVIDER_DISPLAY_NAMES[
+                              providerCard.provider as keyof typeof PROVIDER_DISPLAY_NAMES
+                            ] ?? providerCard.title;
+                          const RowIcon = providerCard.icon;
+                          // A provider action terminal is already open (this row or another).
+                          const providerActionBusy = providerActionSession !== null;
 
-                        return (
-                          <div
-                            key={providerCard.provider}
-                            className="rounded-xl border border-border bg-card p-0 overflow-hidden shadow-2xs hover:border-border/90 transition-all"
-                            data-slot="settings-row"
-                          >
-                            <div className="px-4 py-4 sm:px-5">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="min-w-0 flex-1 space-y-1">
-                                  <div className="flex min-h-5 items-center gap-1.5">
-                                    <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
-                                      <RowIcon
-                                        aria-hidden="true"
-                                        className={cn(
-                                          "size-4",
-                                          providerCard.provider === "claudeAgent"
-                                            ? "text-[#d97757]"
-                                            : "text-muted-foreground/85",
-                                        )}
-                                      />
-                                      <span
-                                        className={cn(
-                                          "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-background",
-                                          providerCard.statusStyle.dot,
-                                        )}
-                                      />
-                                    </span>
-                                    <h3 className="text-sm font-medium text-foreground">
-                                      {providerDisplayName}
-                                    </h3>
-                                    {providerCard.versionLabel ? (
-                                      <code className="text-xs text-muted-foreground">
-                                        {providerCard.versionLabel}
-                                      </code>
-                                    ) : null}
-                                    {providerCard.updatePrompt ? (
-                                      <Tooltip>
-                                        <TooltipTrigger
-                                          render={
-                                            <button
-                                              type="button"
-                                              aria-label={`${providerDisplayName} update available`}
-                                              className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
-                                              onClick={() =>
-                                                providerCard.updatePrompt?.command &&
-                                                copyToClipboard(providerCard.updatePrompt.command, {
-                                                  providerName: providerDisplayName,
-                                                })
-                                              }
-                                            >
-                                              <ArrowUpCircleIcon className="size-3.5" />
-                                            </button>
-                                          }
+                          return (
+                            <div
+                              key={providerCard.provider}
+                              className="rounded-xl border border-border bg-card p-0 overflow-hidden shadow-2xs hover:border-border/90 transition-all"
+                              data-slot="settings-row"
+                            >
+                              <div className="px-4 py-4 sm:px-5">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="min-w-0 flex-1 space-y-1">
+                                    <div className="flex min-h-5 items-center gap-1.5">
+                                      <span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+                                        <RowIcon
+                                          aria-hidden="true"
+                                          className={cn(
+                                            "size-4",
+                                            providerCard.provider === "claudeAgent"
+                                              ? "text-[#d97757]"
+                                              : "text-muted-foreground/85",
+                                          )}
                                         />
-                                        <TooltipPopup side="top">
-                                          Update available: click to copy installer command
-                                        </TooltipPopup>
-                                      </Tooltip>
-                                    ) : null}
-                                    {providerCard.isDirty ? (
-                                      <Tooltip>
-                                        <TooltipTrigger
-                                          render={
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                updateSettings({
-                                                  providers: {
-                                                    ...settings.providers,
-                                                    [providerCard.provider]:
-                                                      DEFAULT_UNIFIED_SETTINGS.providers[
-                                                        providerCard.provider
-                                                      ],
-                                                  },
-                                                })
-                                              }
-                                              className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/65 hover:text-foreground"
-                                              aria-label={`Reset ${providerDisplayName} to default settings`}
-                                            >
-                                              <Undo2Icon className="size-3.5" />
-                                            </button>
-                                          }
+                                        <span
+                                          className={cn(
+                                            "absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full ring-2 ring-background",
+                                            providerCard.statusStyle.dot,
+                                          )}
                                         />
-                                        <TooltipPopup side="top">
-                                          Reset provider settings to defaults
-                                        </TooltipPopup>
-                                      </Tooltip>
-                                    ) : null}
-                                  </div>
-
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                                    <span className="text-muted-foreground">
-                                      {providerCard.summary.headline}
-                                      {providerCard.summary.detail
-                                        ? ` — ${providerCard.summary.detail}`
-                                        : null}
-                                    </span>
-                                    {providerCard.badgeLabel ? (
-                                      <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
-                                        {providerCard.badgeLabel}
                                       </span>
-                                    ) : null}
+                                      <h3 className="text-sm font-medium text-foreground">
+                                        {providerDisplayName}
+                                      </h3>
+                                      {providerCard.versionLabel ? (
+                                        <code className="text-xs text-muted-foreground">
+                                          {providerCard.versionLabel}
+                                        </code>
+                                      ) : null}
+                                      {providerCard.updatePrompt ? (
+                                        <Tooltip>
+                                          <TooltipTrigger
+                                            render={
+                                              <button
+                                                type="button"
+                                                aria-label={`${providerDisplayName} update available`}
+                                                className="inline-flex size-4 shrink-0 items-center justify-center rounded text-amber-500 hover:text-amber-400"
+                                                onClick={() =>
+                                                  providerCard.updatePrompt?.command &&
+                                                  copyToClipboard(
+                                                    providerCard.updatePrompt.command,
+                                                    {
+                                                      providerName: providerDisplayName,
+                                                    },
+                                                  )
+                                                }
+                                              >
+                                                <ArrowUpCircleIcon className="size-3.5" />
+                                              </button>
+                                            }
+                                          />
+                                          <TooltipPopup side="top">
+                                            Update available: click to copy installer command
+                                          </TooltipPopup>
+                                        </Tooltip>
+                                      ) : null}
+                                      {providerCard.isDirty ? (
+                                        <Tooltip>
+                                          <TooltipTrigger
+                                            render={
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  updateSettings({
+                                                    providers: {
+                                                      ...settings.providers,
+                                                      [providerCard.provider]:
+                                                        DEFAULT_UNIFIED_SETTINGS.providers[
+                                                          providerCard.provider
+                                                        ],
+                                                    },
+                                                  })
+                                                }
+                                                className="inline-flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/65 hover:text-foreground"
+                                                aria-label={`Reset ${providerDisplayName} to default settings`}
+                                              >
+                                                <Undo2Icon className="size-3.5" />
+                                              </button>
+                                            }
+                                          />
+                                          <TooltipPopup side="top">
+                                            Reset provider settings to defaults
+                                          </TooltipPopup>
+                                        </Tooltip>
+                                      ) : null}
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                      <span className="text-muted-foreground">
+                                        {providerCard.summary.headline}
+                                        {providerCard.summary.detail
+                                          ? ` — ${providerCard.summary.detail}`
+                                          : null}
+                                      </span>
+                                      {providerCard.badgeLabel ? (
+                                        <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground">
+                                          {providerCard.badgeLabel}
+                                        </span>
+                                      ) : null}
+                                    </div>
                                   </div>
-                                </div>
 
-                                <div className="flex shrink-0 items-center gap-2 sm:justify-end">
-                                  {providerCard.needsInstall && providerCard.installCommand ? (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
-                                      disabled={providerActionBusy}
-                                      onClick={() =>
-                                        startProviderAction({
-                                          provider: providerCard.provider,
-                                          providerName: providerDisplayName,
-                                          command: providerCard.installCommand!,
-                                          kind: "install",
-                                        })
-                                      }
-                                    >
-                                      <DownloadIcon className="size-3.5" />
-                                      Install
-                                    </Button>
-                                  ) : null}
+                                  <div className="flex shrink-0 items-center gap-2 sm:justify-end">
+                                    {providerCard.needsInstall && providerCard.installCommand ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                        disabled={providerActionBusy}
+                                        onClick={() =>
+                                          startProviderAction({
+                                            provider: providerCard.provider,
+                                            providerName: providerDisplayName,
+                                            command: providerCard.installCommand!,
+                                            kind: "install",
+                                          })
+                                        }
+                                      >
+                                        <DownloadIcon className="size-3.5" />
+                                        Install
+                                      </Button>
+                                    ) : null}
 
-                                  {providerCard.updatePrompt?.command ? (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
-                                      disabled={providerActionBusy}
-                                      onClick={() =>
-                                        startProviderAction({
-                                          provider: providerCard.provider,
-                                          providerName: providerDisplayName,
-                                          command: providerCard.updatePrompt!.command!,
-                                          kind: "update",
-                                        })
-                                      }
-                                    >
-                                      <ArrowUpCircleIcon className="size-3.5" />
-                                      Update
-                                    </Button>
-                                  ) : null}
+                                    {providerCard.updatePrompt?.command ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                        disabled={providerActionBusy}
+                                        onClick={() =>
+                                          startProviderAction({
+                                            provider: providerCard.provider,
+                                            providerName: providerDisplayName,
+                                            command: providerCard.updatePrompt!.command!,
+                                            kind: "update",
+                                          })
+                                        }
+                                      >
+                                        <ArrowUpCircleIcon className="size-3.5" />
+                                        Update
+                                      </Button>
+                                    ) : null}
 
-                                  {providerCard.needsAuth && providerCard.loginCommand ? (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
-                                      disabled={providerActionBusy}
-                                      onClick={() =>
-                                        startProviderAction({
-                                          provider: providerCard.provider,
-                                          providerName: providerDisplayName,
-                                          command: providerCard.loginCommand ?? "",
-                                          kind: "login",
-                                        })
-                                      }
-                                    >
-                                      <LogInIcon className="size-3.5" />
-                                      Sign in
-                                    </Button>
-                                  ) : null}
+                                    {providerCard.needsAuth && providerCard.loginCommand ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                        disabled={providerActionBusy}
+                                        onClick={() =>
+                                          startProviderAction({
+                                            provider: providerCard.provider,
+                                            providerName: providerDisplayName,
+                                            command: providerCard.loginCommand ?? "",
+                                            kind: "login",
+                                          })
+                                        }
+                                      >
+                                        <LogInIcon className="size-3.5" />
+                                        Sign in
+                                      </Button>
+                                    ) : null}
 
-                                  {providerCard.isAuthenticated && providerCard.logoutCommand ? (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
-                                      disabled={providerActionBusy}
-                                      onClick={() => {
-                                        const api = readNativeApi();
-                                        if (!api) return;
-                                        const secretPatch =
-                                          providerCard.provider === "copilot"
-                                            ? {
-                                                providers: {
-                                                  copilot: { token: "", byokApiKey: "" },
-                                                },
-                                              }
-                                            : providerCard.provider === "opencode"
+                                    {providerCard.isAuthenticated && providerCard.logoutCommand ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
+                                        disabled={providerActionBusy}
+                                        onClick={() => {
+                                          const api = readNativeApi();
+                                          if (!api) return;
+                                          const secretPatch =
+                                            providerCard.provider === "copilot"
                                               ? {
                                                   providers: {
-                                                    opencode: { serverPassword: "" },
+                                                    copilot: { token: "", byokApiKey: "" },
                                                   },
                                                 }
-                                              : providerCard.provider === "kilo"
+                                              : providerCard.provider === "opencode"
                                                 ? {
                                                     providers: {
-                                                      kilo: { serverPassword: "" },
+                                                      opencode: { serverPassword: "" },
                                                     },
                                                   }
-                                                : {};
-                                        void api.server
-                                          .updateSettings(secretPatch)
-                                          .then(() => {
-                                            const isCopilot = providerCard.provider === "copilot";
-                                            startProviderAction(
-                                              isCopilot
-                                                ? {
-                                                    provider: "copilot",
-                                                    providerName: providerDisplayName,
-                                                    command: "copilot",
-                                                    followUpCommand: "/logout",
-                                                    kind: "logout",
-                                                  }
-                                                : {
-                                                    provider: providerCard.provider,
-                                                    providerName: providerDisplayName,
-                                                    command: providerCard.logoutCommand!,
-                                                    kind: "logout",
-                                                  },
-                                            );
-                                          })
-                                          .catch(() => {
-                                            toastManager.add({
-                                              type: "error",
-                                              title: `Could not log out of ${providerDisplayName}`,
-                                              description:
-                                                "Tabs could not clear the provider credentials. The logout command was not started.",
+                                                : providerCard.provider === "kilo"
+                                                  ? {
+                                                      providers: {
+                                                        kilo: { serverPassword: "" },
+                                                      },
+                                                    }
+                                                  : {};
+                                          void api.server
+                                            .updateSettings(secretPatch)
+                                            .then(() => {
+                                              const isCopilot = providerCard.provider === "copilot";
+                                              startProviderAction(
+                                                isCopilot
+                                                  ? {
+                                                      provider: "copilot",
+                                                      providerName: providerDisplayName,
+                                                      command: "copilot",
+                                                      followUpCommand: "/logout",
+                                                      kind: "logout",
+                                                    }
+                                                  : {
+                                                      provider: providerCard.provider,
+                                                      providerName: providerDisplayName,
+                                                      command: providerCard.logoutCommand!,
+                                                      kind: "logout",
+                                                    },
+                                              );
+                                            })
+                                            .catch(() => {
+                                              toastManager.add({
+                                                type: "error",
+                                                title: `Could not log out of ${providerDisplayName}`,
+                                                description:
+                                                  "Tabs could not clear the provider credentials. The logout command was not started.",
+                                              });
                                             });
-                                          });
-                                      }}
-                                      aria-label={`Log out of ${providerDisplayName}`}
-                                    >
-                                      <LogOutIcon className="size-3.5" />
-                                      Log out
-                                    </Button>
-                                  ) : null}
+                                        }}
+                                        aria-label={`Log out of ${providerDisplayName}`}
+                                      >
+                                        <LogOutIcon className="size-3.5" />
+                                        Log out
+                                      </Button>
+                                    ) : null}
 
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
-                                    onClick={() =>
-                                      setOpenProviderDetails((existing) => {
-                                        const isCurrentlyOpen = Boolean(
-                                          existing[providerCard.provider],
-                                        );
-                                        if (isCurrentlyOpen) {
-                                          return {};
-                                        }
-                                        return {
-                                          [providerCard.provider]: true,
-                                        };
-                                      })
-                                    }
-                                    aria-label={`Toggle ${providerDisplayName} details`}
-                                  >
-                                    <ChevronDownIcon
-                                      className={cn(
-                                        "size-3.5 transition-transform duration-200",
-                                        openProviderDetails[providerCard.provider] && "rotate-180",
-                                      )}
-                                    />
-                                  </Button>
-                                  {isLastEnabledProvider ? (
-                                    <Tooltip>
-                                      <TooltipTrigger
-                                        render={
-                                          <span className="inline-flex items-center cursor-not-allowed">
-                                            <Switch
-                                              checked={true}
-                                              disabled={true}
-                                              className="opacity-50 cursor-not-allowed"
-                                              aria-label={`Enable ${providerDisplayName}`}
-                                            />
-                                          </span>
-                                        }
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                                      onClick={() =>
+                                        setOpenProviderDetails((existing) => {
+                                          const isCurrentlyOpen = Boolean(
+                                            existing[providerCard.provider],
+                                          );
+                                          if (isCurrentlyOpen) {
+                                            return {};
+                                          }
+                                          return {
+                                            [providerCard.provider]: true,
+                                          };
+                                        })
+                                      }
+                                      aria-label={`Toggle ${providerDisplayName} details`}
+                                    >
+                                      <ChevronDownIcon
+                                        className={cn(
+                                          "size-3.5 transition-transform duration-200",
+                                          openProviderDetails[providerCard.provider] &&
+                                            "rotate-180",
+                                        )}
                                       />
-                                      <TooltipPopup side="left">
-                                        At least one provider must remain enabled.
-                                      </TooltipPopup>
-                                    </Tooltip>
-                                  ) : (
-                                    <Switch
-                                      checked={providerCard.providerConfig.enabled}
-                                      onCheckedChange={(checked) => {
-                                        if (!checked && enabledProvidersCount <= 1) {
-                                          return;
-                                        }
-                                        const isDisabling = !checked;
-                                        // When disabling the provider that's currently used for
-                                        // text generation, clear the selection so it falls back to
-                                        // the next available provider's default model.
-                                        const shouldClearModelSelection =
-                                          isDisabling && textGenInstanceId === providerCard.provider;
-                                        updateSettings({
-                                          providers: {
-                                            ...settings.providers,
-                                            [providerCard.provider]: {
-                                              ...(settings.providers[providerCard.provider] ??
-                                                DEFAULT_UNIFIED_SETTINGS.providers[
-                                                  providerCard.provider
-                                                ]),
-                                              enabled: Boolean(checked),
+                                    </Button>
+                                    {isLastEnabledProvider ? (
+                                      <Tooltip>
+                                        <TooltipTrigger
+                                          render={
+                                            <span className="inline-flex items-center cursor-not-allowed">
+                                              <Switch
+                                                checked={true}
+                                                disabled={true}
+                                                className="opacity-50 cursor-not-allowed"
+                                                aria-label={`Enable ${providerDisplayName}`}
+                                              />
+                                            </span>
+                                          }
+                                        />
+                                        <TooltipPopup side="left">
+                                          At least one provider must remain enabled.
+                                        </TooltipPopup>
+                                      </Tooltip>
+                                    ) : (
+                                      <Switch
+                                        checked={providerCard.providerConfig.enabled}
+                                        onCheckedChange={(checked) => {
+                                          if (!checked && enabledProvidersCount <= 1) {
+                                            return;
+                                          }
+                                          const isDisabling = !checked;
+                                          // When disabling the provider that's currently used for
+                                          // text generation, clear the selection so it falls back to
+                                          // the next available provider's default model.
+                                          const shouldClearModelSelection =
+                                            isDisabling &&
+                                            textGenInstanceId === providerCard.provider;
+                                          updateSettings({
+                                            providers: {
+                                              ...settings.providers,
+                                              [providerCard.provider]: {
+                                                ...(settings.providers[providerCard.provider] ??
+                                                  DEFAULT_UNIFIED_SETTINGS.providers[
+                                                    providerCard.provider
+                                                  ]),
+                                                enabled: Boolean(checked),
+                                              },
                                             },
-                                          },
-                                          ...(shouldClearModelSelection
-                                            ? {
-                                                textGenerationModelSelection:
-                                                  DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                                              }
-                                            : {}),
-                                        });
-                                      }}
-                                      aria-label={`Enable ${providerDisplayName}`}
-                                    />
-                                  )}
+                                            ...(shouldClearModelSelection
+                                              ? {
+                                                  textGenerationModelSelection:
+                                                    DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
+                                                }
+                                              : {}),
+                                          });
+                                        }}
+                                        aria-label={`Enable ${providerDisplayName}`}
+                                      />
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            <Collapsible
-                              open={Boolean(openProviderDetails[providerCard.provider])}
-                              onOpenChange={(open) =>
-                                setOpenProviderDetails((existing) => {
-                                  const isCurrentlyOpen = Boolean(existing[providerCard.provider]);
-                                  if (open && !isCurrentlyOpen) {
-                                    return { [providerCard.provider]: true };
-                                  }
-                                  if (!open && isCurrentlyOpen) {
-                                    return {};
-                                  }
-                                  return existing;
-                                })
-                              }
-                            >
-                              <CollapsibleContent>
-                                <div className="space-y-0">
-                                  {/* Binary path */}
-                                  {providerCard.hasBinaryPath ? (
-                                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                      <label
-                                        htmlFor={`provider-install-${providerCard.provider}-binary-path`}
-                                        className="block"
-                                      >
-                                        <span className="text-xs font-medium text-foreground">
-                                          {providerDisplayName} binary path
-                                        </span>
-                                        <Input
-                                          id={`provider-install-${providerCard.provider}-binary-path`}
-                                          className="mt-1.5"
-                                          value={providerCard.binaryPathValue}
-                                          onChange={(event) =>
-                                            updateSettings({
-                                              providers: {
-                                                ...settings.providers,
-                                                [providerCard.provider]: {
-                                                  ...(settings.providers[providerCard.provider] ??
-                                                    DEFAULT_UNIFIED_SETTINGS.providers[
-                                                      providerCard.provider
-                                                    ]),
-                                                  binaryPath: event.target.value,
-                                                },
-                                              },
-                                            })
-                                          }
-                                          placeholder={providerCard.binaryPlaceholder}
-                                          spellCheck={false}
-                                        />
-                                        <span className="mt-1 block text-xs text-muted-foreground">
-                                          {providerCard.binaryDescription}
-                                        </span>
-                                      </label>
-                                    </div>
-                                  ) : null}
-
-                                  {providerCard.hasApiKey ? (
-                                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                      <label className="block">
-                                        <span className="text-xs font-medium text-foreground">
-                                          API key
-                                        </span>
-                                        <Input
-                                          aria-label={`${providerDisplayName} API key`}
-                                          className="mt-1.5"
-                                          type="password"
-                                          value={
-                                            "apiKey" in providerCard.providerConfig
-                                              ? providerCard.providerConfig.apiKey
-                                              : ""
-                                          }
-                                          onChange={(event) =>
-                                            updateSettings({
-                                              providers: {
-                                                ...settings.providers,
-                                                [providerCard.provider]: {
-                                                  ...providerCard.providerConfig,
-                                                  apiKey: event.target.value,
-                                                },
-                                              },
-                                            })
-                                          }
-                                          placeholder={
-                                            providerCard.provider === "openrouter"
-                                              ? "sk-or-v1-..."
-                                              : "FACTORY_API_KEY"
-                                          }
-                                          spellCheck={false}
-                                        />
-                                        <span className="mt-1 block text-xs text-muted-foreground">
-                                          Stored in the operating system credential store and never
-                                          written to settings.json.
-                                        </span>
-                                      </label>
-                                    </div>
-                                  ) : null}
-
-                                  {/* Home path (Codex only) */}
-                                  {providerCard.homePathKey ? (
-                                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                      <label
-                                        htmlFor={`provider-install-${providerCard.homePathKey}`}
-                                        className="block"
-                                      >
-                                        <span className="text-xs font-medium text-foreground">
-                                          CODEX_HOME path
-                                        </span>
-                                        <Input
-                                          id={`provider-install-${providerCard.homePathKey}`}
-                                          className="mt-1.5"
-                                          value={codexHomePath}
-                                          onChange={(event) =>
-                                            updateSettings({
-                                              providers: {
-                                                ...settings.providers,
-                                                codex: {
-                                                  ...settings.providers.codex,
-                                                  homePath: event.target.value,
-                                                },
-                                              },
-                                            })
-                                          }
-                                          placeholder={providerCard.homePlaceholder}
-                                          spellCheck={false}
-                                        />
-                                        {providerCard.homeDescription ? (
-                                          <span className="mt-1 block text-xs text-muted-foreground">
-                                            {providerCard.homeDescription}
-                                          </span>
-                                        ) : null}
-                                      </label>
-                                    </div>
-                                  ) : null}
-
-                                  {/* GitHub Enterprise Host & Token (Copilot only) */}
-                                  {providerCard.provider === "copilot" ? (
-                                    <>
+                              <Collapsible
+                                open={Boolean(openProviderDetails[providerCard.provider])}
+                                onOpenChange={(open) =>
+                                  setOpenProviderDetails((existing) => {
+                                    const isCurrentlyOpen = Boolean(
+                                      existing[providerCard.provider],
+                                    );
+                                    if (open && !isCurrentlyOpen) {
+                                      return { [providerCard.provider]: true };
+                                    }
+                                    if (!open && isCurrentlyOpen) {
+                                      return {};
+                                    }
+                                    return existing;
+                                  })
+                                }
+                              >
+                                <CollapsibleContent>
+                                  <div className="space-y-0">
+                                    {/* Binary path */}
+                                    {providerCard.hasBinaryPath ? (
                                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                                         <label
-                                          htmlFor="provider-copilot-ghe-host"
+                                          htmlFor={`provider-install-${providerCard.provider}-binary-path`}
                                           className="block"
                                         >
                                           <span className="text-xs font-medium text-foreground">
-                                            GitHub Enterprise Host (optional)
+                                            {providerDisplayName} binary path
                                           </span>
                                           <Input
-                                            id="provider-copilot-ghe-host"
+                                            id={`provider-install-${providerCard.provider}-binary-path`}
                                             className="mt-1.5"
-                                            value={settings.providers.copilot?.gheHost ?? ""}
+                                            value={providerCard.binaryPathValue}
                                             onChange={(event) =>
                                               updateSettings({
                                                 providers: {
                                                   ...settings.providers,
-                                                  copilot: {
-                                                    ...(settings.providers.copilot ??
-                                                      DEFAULT_UNIFIED_SETTINGS.providers.copilot),
-                                                    gheHost: event.target.value,
+                                                  [providerCard.provider]: {
+                                                    ...(settings.providers[providerCard.provider] ??
+                                                      DEFAULT_UNIFIED_SETTINGS.providers[
+                                                        providerCard.provider
+                                                      ]),
+                                                    binaryPath: event.target.value,
                                                   },
                                                 },
                                               })
                                             }
-                                            placeholder="https://example.ghe.com"
+                                            placeholder={providerCard.binaryPlaceholder}
                                             spellCheck={false}
                                           />
                                           <span className="mt-1 block text-xs text-muted-foreground">
-                                            Leave blank for github.com. Appends --host to terminal
-                                            sign-in automatically.
+                                            {providerCard.binaryDescription}
                                           </span>
                                         </label>
                                       </div>
-                                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                                        <label htmlFor="provider-copilot-token" className="block">
-                                          <span className="text-xs font-medium text-foreground">
-                                            GitHub Token (optional)
-                                          </span>
-                                          <Input
-                                            id="provider-copilot-token"
-                                            type="password"
-                                            className="mt-1.5"
-                                            value={settings.providers.copilot?.token ?? ""}
-                                            onChange={(event) =>
-                                              updateSettings({
-                                                providers: {
-                                                  ...settings.providers,
-                                                  copilot: {
-                                                    ...(settings.providers.copilot ??
-                                                      DEFAULT_UNIFIED_SETTINGS.providers.copilot),
-                                                    token: event.target.value,
-                                                  },
-                                                },
-                                              })
-                                            }
-                                            placeholder="ghp_... or gho_... token"
-                                            spellCheck={false}
-                                          />
-                                          <span className="mt-1 block text-xs text-muted-foreground">
-                                            For token-based authentication instead of interactive
-                                            web login.
-                                          </span>
-                                        </label>
-                                      </div>
-                                    </>
-                                  ) : null}
+                                    ) : null}
 
-                                  {/* Models Section */}
-                                  <div className="border-t border-border/60 px-4 py-4 sm:px-5">
-                                    <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
-                                      {/* Section Header */}
-                                      <div className="flex items-center justify-between px-3.5 py-2.5 bg-muted/20 border-b border-border/40">
-                                        <div>
-                                          <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                                            Models
-                                            <Badge
-                                              variant="outline"
-                                              className="text-[10px] px-1.5 py-0 font-mono"
-                                            >
-                                              {providerCard.models.length}
-                                            </Badge>
-                                            {providerCard.liveProvider?.catalogStatus ===
-                                            "stale" ? (
+                                    {providerCard.hasApiKey ? (
+                                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                        <label className="block">
+                                          <span className="text-xs font-medium text-foreground">
+                                            API key
+                                          </span>
+                                          <Input
+                                            aria-label={`${providerDisplayName} API key`}
+                                            className="mt-1.5"
+                                            type="password"
+                                            value={
+                                              "apiKey" in providerCard.providerConfig
+                                                ? providerCard.providerConfig.apiKey
+                                                : ""
+                                            }
+                                            onChange={(event) =>
+                                              updateSettings({
+                                                providers: {
+                                                  ...settings.providers,
+                                                  [providerCard.provider]: {
+                                                    ...providerCard.providerConfig,
+                                                    apiKey: event.target.value,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            placeholder={
+                                              providerCard.provider === "openrouter"
+                                                ? "sk-or-v1-..."
+                                                : "FACTORY_API_KEY"
+                                            }
+                                            spellCheck={false}
+                                          />
+                                          <span className="mt-1 block text-xs text-muted-foreground">
+                                            Stored in the operating system credential store and
+                                            never written to settings.json.
+                                          </span>
+                                        </label>
+                                      </div>
+                                    ) : null}
+
+                                    {/* Home path (Codex only) */}
+                                    {providerCard.homePathKey ? (
+                                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                        <label
+                                          htmlFor={`provider-install-${providerCard.homePathKey}`}
+                                          className="block"
+                                        >
+                                          <span className="text-xs font-medium text-foreground">
+                                            CODEX_HOME path
+                                          </span>
+                                          <Input
+                                            id={`provider-install-${providerCard.homePathKey}`}
+                                            className="mt-1.5"
+                                            value={codexHomePath}
+                                            onChange={(event) =>
+                                              updateSettings({
+                                                providers: {
+                                                  ...settings.providers,
+                                                  codex: {
+                                                    ...settings.providers.codex,
+                                                    homePath: event.target.value,
+                                                  },
+                                                },
+                                              })
+                                            }
+                                            placeholder={providerCard.homePlaceholder}
+                                            spellCheck={false}
+                                          />
+                                          {providerCard.homeDescription ? (
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                              {providerCard.homeDescription}
+                                            </span>
+                                          ) : null}
+                                        </label>
+                                      </div>
+                                    ) : null}
+
+                                    {/* GitHub Enterprise Host & Token (Copilot only) */}
+                                    {providerCard.provider === "copilot" ? (
+                                      <>
+                                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                          <label
+                                            htmlFor="provider-copilot-ghe-host"
+                                            className="block"
+                                          >
+                                            <span className="text-xs font-medium text-foreground">
+                                              GitHub Enterprise Host (optional)
+                                            </span>
+                                            <Input
+                                              id="provider-copilot-ghe-host"
+                                              className="mt-1.5"
+                                              value={settings.providers.copilot?.gheHost ?? ""}
+                                              onChange={(event) =>
+                                                updateSettings({
+                                                  providers: {
+                                                    ...settings.providers,
+                                                    copilot: {
+                                                      ...(settings.providers.copilot ??
+                                                        DEFAULT_UNIFIED_SETTINGS.providers.copilot),
+                                                      gheHost: event.target.value,
+                                                    },
+                                                  },
+                                                })
+                                              }
+                                              placeholder="https://example.ghe.com"
+                                              spellCheck={false}
+                                            />
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                              Leave blank for github.com. Appends --host to terminal
+                                              sign-in automatically.
+                                            </span>
+                                          </label>
+                                        </div>
+                                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                                          <label htmlFor="provider-copilot-token" className="block">
+                                            <span className="text-xs font-medium text-foreground">
+                                              GitHub Token (optional)
+                                            </span>
+                                            <Input
+                                              id="provider-copilot-token"
+                                              type="password"
+                                              className="mt-1.5"
+                                              value={settings.providers.copilot?.token ?? ""}
+                                              onChange={(event) =>
+                                                updateSettings({
+                                                  providers: {
+                                                    ...settings.providers,
+                                                    copilot: {
+                                                      ...(settings.providers.copilot ??
+                                                        DEFAULT_UNIFIED_SETTINGS.providers.copilot),
+                                                      token: event.target.value,
+                                                    },
+                                                  },
+                                                })
+                                              }
+                                              placeholder="ghp_... or gho_... token"
+                                              spellCheck={false}
+                                            />
+                                            <span className="mt-1 block text-xs text-muted-foreground">
+                                              For token-based authentication instead of interactive
+                                              web login.
+                                            </span>
+                                          </label>
+                                        </div>
+                                      </>
+                                    ) : null}
+
+                                    {/* Models Section */}
+                                    <div className="border-t border-border/60 px-4 py-4 sm:px-5">
+                                      <div className="rounded-xl border border-border/50 bg-muted/10 overflow-hidden shadow-2xs">
+                                        {/* Section Header */}
+                                        <div className="flex items-center justify-between px-3.5 py-2.5 bg-muted/20 border-b border-border/40">
+                                          <div>
+                                            <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                              Models
                                               <Badge
-                                                variant="secondary"
-                                                className="text-[10px] px-1.5 py-0"
+                                                variant="outline"
+                                                className="text-[10px] px-1.5 py-0 font-mono"
                                               >
-                                                Stale
+                                                {providerCard.models.length}
                                               </Badge>
+                                              {providerCard.liveProvider?.catalogStatus ===
+                                              "stale" ? (
+                                                <Badge
+                                                  variant="secondary"
+                                                  className="text-[10px] px-1.5 py-0"
+                                                >
+                                                  Stale
+                                                </Badge>
+                                              ) : null}
+                                            </div>
+                                            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                              {providerCard.liveProvider?.catalogStatus === "stale"
+                                                ? "Showing the last successful catalog. Refresh to retry discovery."
+                                                : "Drag handles to reorder model preference."}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            {providerCard.hasPendingOrderChanges ? (
+                                              <Button
+                                                size="xs"
+                                                variant="default"
+                                                className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
+                                                onClick={() =>
+                                                  handleSaveModelOrder(providerCard.provider)
+                                                }
+                                                title="Save model order changes"
+                                              >
+                                                <SaveIcon className="size-3" />
+                                                Save Order
+                                              </Button>
+                                            ) : null}
+                                            {settings.providerModelPreferences?.[
+                                              providerCard.provider as any
+                                            ]?.modelOrder?.length ? (
+                                              <Button
+                                                size="xs"
+                                                variant="ghost"
+                                                className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                                                onClick={() => {
+                                                  setDraftModelOrders((existing) => {
+                                                    const next = { ...existing };
+                                                    delete next[providerCard.provider];
+                                                    return next;
+                                                  });
+                                                  const nextPrefs = resetModelOrder(
+                                                    settings.providerModelPreferences,
+                                                    providerCard.provider,
+                                                  );
+                                                  updateSettings({
+                                                    providerModelPreferences: nextPrefs as any,
+                                                  });
+                                                }}
+                                                title="Restore default model order"
+                                              >
+                                                <RotateCcwIcon className="size-3" />
+                                                Restore Default Order
+                                              </Button>
                                             ) : null}
                                           </div>
-                                          <div className="mt-0.5 text-[11px] text-muted-foreground">
-                                            {providerCard.liveProvider?.catalogStatus === "stale"
-                                              ? "Showing the last successful catalog. Refresh to retry discovery."
-                                              : "Drag handles to reorder model preference."}
-                                          </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                          {providerCard.hasPendingOrderChanges ? (
+
+                                        {/* Sortable Model List */}
+                                        <div
+                                          ref={(el) => {
+                                            modelListRefs.current[providerCard.provider] = el;
+                                          }}
+                                          className="divide-y divide-border/30 p-1"
+                                        >
+                                          {providerCard.models.length === 0 ? (
+                                            <div className="py-4 px-3 text-center text-xs text-muted-foreground">
+                                              {providerCard.provider === "copilot"
+                                                ? "Copilot is not currently advertising any selectable models."
+                                                : "No models available."}
+                                            </div>
+                                          ) : null}
+                                          <DndContext
+                                            collisionDetection={closestCenter}
+                                            modifiers={[
+                                              restrictToVerticalAxis,
+                                              restrictToParentElement,
+                                            ]}
+                                            onDragEnd={(event: DragEndEvent) => {
+                                              const { active, over } = event;
+                                              if (!over || active.id === over.id) return;
+                                              const oldIndex = providerCard.models.findIndex(
+                                                (m: ServerProviderModel) => m.slug === active.id,
+                                              );
+                                              const newIndex = providerCard.models.findIndex(
+                                                (m: ServerProviderModel) => m.slug === over.id,
+                                              );
+                                              if (oldIndex !== -1 && newIndex !== -1) {
+                                                const reordered = arrayMove(
+                                                  [...providerCard.models],
+                                                  oldIndex,
+                                                  newIndex,
+                                                );
+                                                const newOrder = reordered.map(
+                                                  (m: ServerProviderModel) => m.slug,
+                                                );
+                                                setDraftModelOrders((existing) => ({
+                                                  ...existing,
+                                                  [providerCard.provider]: newOrder,
+                                                }));
+                                              }
+                                            }}
+                                          >
+                                            <SortableContext
+                                              items={providerCard.models.map(
+                                                (m: ServerProviderModel) => m.slug,
+                                              )}
+                                              strategy={verticalListSortingStrategy}
+                                            >
+                                              {providerCard.models.map(
+                                                (model: ServerProviderModel) => {
+                                                  const caps = model.capabilities;
+                                                  const capLabels: string[] = [];
+                                                  if (caps?.supportsFastMode)
+                                                    capLabels.push("Fast");
+                                                  if (caps?.supportsThinkingToggle)
+                                                    capLabels.push("Thinking");
+                                                  if (
+                                                    caps?.reasoningEffortLevels &&
+                                                    caps.reasoningEffortLevels.length > 0
+                                                  )
+                                                    capLabels.push("Reasoning");
+                                                  const isPinned = isPinnedModel(
+                                                    getPinnedModels(settings),
+                                                    providerCard.provider,
+                                                    model.slug,
+                                                  );
+
+                                                  return (
+                                                    <SortableModelRowItem
+                                                      key={`${providerCard.provider}:${model.slug}`}
+                                                      id={model.slug}
+                                                    >
+                                                      {(handle) => (
+                                                        <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
+                                                          <div className="flex items-center gap-2 min-w-0">
+                                                            <button
+                                                              type="button"
+                                                              className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
+                                                              aria-label={`Reorder ${model.name}`}
+                                                              {...handle.attributes}
+                                                              {...handle.listeners}
+                                                            >
+                                                              <GripVerticalIcon className="size-3.5" />
+                                                            </button>
+                                                            <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
+                                                              {model.name}
+                                                            </span>
+                                                            {capLabels.map((label) => (
+                                                              <span
+                                                                key={label}
+                                                                className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
+                                                              >
+                                                                {label}
+                                                              </span>
+                                                            ))}
+                                                          </div>
+
+                                                          <div className="flex items-center gap-1 shrink-0">
+                                                            <button
+                                                              type="button"
+                                                              aria-label={
+                                                                isPinned
+                                                                  ? `Unpin ${model.name}`
+                                                                  : `Pin ${model.name}`
+                                                              }
+                                                              className={cn(
+                                                                "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
+                                                                isPinned
+                                                                  ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
+                                                                  : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
+                                                              )}
+                                                              onClick={() => {
+                                                                const nextPinned =
+                                                                  togglePinnedModel(
+                                                                    settings,
+                                                                    providerCard.provider,
+                                                                    model.slug,
+                                                                  );
+                                                                updateSettings({
+                                                                  pinnedModels: nextPinned as any,
+                                                                });
+                                                              }}
+                                                            >
+                                                              <PinIcon className="size-3.5 fill-current" />
+                                                            </button>
+
+                                                            {model.name !== model.slug ? (
+                                                              <Tooltip>
+                                                                <TooltipTrigger
+                                                                  render={
+                                                                    <button
+                                                                      type="button"
+                                                                      className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
+                                                                      aria-label={`Details for ${model.name}`}
+                                                                    >
+                                                                      <InfoIcon className="size-3.5" />
+                                                                    </button>
+                                                                  }
+                                                                />
+                                                                <TooltipPopup
+                                                                  side="top"
+                                                                  className="max-w-56"
+                                                                >
+                                                                  <code className="text-[11px] text-foreground">
+                                                                    {model.slug}
+                                                                  </code>
+                                                                </TooltipPopup>
+                                                              </Tooltip>
+                                                            ) : null}
+
+                                                            {model.isCustom ? (
+                                                              <div className="flex items-center gap-1 pl-1">
+                                                                <Badge
+                                                                  variant="secondary"
+                                                                  className="text-[9px] px-1 py-0 font-normal"
+                                                                >
+                                                                  custom
+                                                                </Badge>
+                                                                <button
+                                                                  type="button"
+                                                                  className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                                                                  aria-label={`Remove ${model.slug}`}
+                                                                  onClick={() =>
+                                                                    removeCustomModel(
+                                                                      providerCard.provider,
+                                                                      model.slug,
+                                                                    )
+                                                                  }
+                                                                >
+                                                                  <XIcon className="size-3" />
+                                                                </button>
+                                                              </div>
+                                                            ) : null}
+                                                          </div>
+                                                        </div>
+                                                      )}
+                                                    </SortableModelRowItem>
+                                                  );
+                                                },
+                                              )}
+                                            </SortableContext>
+                                          </DndContext>
+                                        </div>
+
+                                        {/* Copilot model identifiers are authoritative and account-scoped. */}
+                                        {providerCard.provider !== "copilot" ? (
+                                          <div className="p-2.5 bg-muted/20 border-t border-border/40">
+                                            <div className="flex items-center gap-2">
+                                              <Input
+                                                value={customModelInput ?? ""}
+                                                onChange={(event) =>
+                                                  setCustomModelInputByProvider((existing) => ({
+                                                    ...existing,
+                                                    [providerCard.provider]: event.target.value,
+                                                  }))
+                                                }
+                                                placeholder="gpt-6.7-codex-ultra-preview"
+                                                className="h-8 text-xs font-mono bg-background"
+                                                onKeyDown={(event) => {
+                                                  if (event.key === "Enter") {
+                                                    event.preventDefault();
+                                                    addCustomModel(providerCard.provider);
+                                                  }
+                                                }}
+                                              />
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 gap-1 text-xs shrink-0 cursor-pointer"
+                                                onClick={() =>
+                                                  addCustomModel(providerCard.provider)
+                                                }
+                                              >
+                                                <PlusIcon className="size-3.5" />
+                                                Add
+                                              </Button>
+                                            </div>
+                                            {customModelError ? (
+                                              <div className="mt-1.5 text-[11px] font-medium text-destructive">
+                                                {customModelError}
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ) : null}
+
+                                        {/* Save Order Footer Bar */}
+                                        {providerCard.hasPendingOrderChanges ? (
+                                          <div className="flex items-center justify-between p-2.5 bg-primary/10 border-t border-primary/20">
+                                            <span className="text-xs text-primary font-medium">
+                                              Model preference order changed.
+                                            </span>
                                             <Button
-                                              size="xs"
+                                              size="sm"
                                               variant="default"
-                                              className="h-6 gap-1 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 font-medium cursor-pointer shadow-xs"
+                                              className="h-7 gap-1.5 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
                                               onClick={() =>
                                                 handleSaveModelOrder(providerCard.provider)
                                               }
-                                              title="Save model order changes"
                                             >
-                                              <SaveIcon className="size-3" />
+                                              <SaveIcon className="size-3.5" />
                                               Save Order
                                             </Button>
-                                          ) : null}
-                                          {settings.providerModelPreferences?.[
-                                            providerCard.provider as any
-                                          ]?.modelOrder?.length ? (
-                                            <Button
-                                              size="xs"
-                                              variant="ghost"
-                                              className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                                              onClick={() => {
-                                                setDraftModelOrders((existing) => {
-                                                  const next = { ...existing };
-                                                  delete next[providerCard.provider];
-                                                  return next;
-                                                });
-                                                const nextPrefs = resetModelOrder(
-                                                  settings.providerModelPreferences,
-                                                  providerCard.provider,
-                                                );
-                                                updateSettings({
-                                                  providerModelPreferences: nextPrefs as any,
-                                                });
-                                              }}
-                                              title="Restore default model order"
-                                            >
-                                              <RotateCcwIcon className="size-3" />
-                                              Restore Default Order
-                                            </Button>
-                                          ) : null}
-                                        </div>
-                                      </div>
-
-                                      {/* Sortable Model List */}
-                                      <div
-                                        ref={(el) => {
-                                          modelListRefs.current[providerCard.provider] = el;
-                                        }}
-                                        className="divide-y divide-border/30 p-1"
-                                      >
-                                        {providerCard.models.length === 0 ? (
-                                          <div className="py-4 px-3 text-center text-xs text-muted-foreground">
-                                            {providerCard.provider === "copilot"
-                                              ? "Copilot is not currently advertising any selectable models."
-                                              : "No models available."}
                                           </div>
                                         ) : null}
-                                        <DndContext
-                                          collisionDetection={closestCenter}
-                                          modifiers={[
-                                            restrictToVerticalAxis,
-                                            restrictToParentElement,
-                                          ]}
-                                          onDragEnd={(event: DragEndEvent) => {
-                                            const { active, over } = event;
-                                            if (!over || active.id === over.id) return;
-                                            const oldIndex = providerCard.models.findIndex(
-                                              (m: ServerProviderModel) => m.slug === active.id,
-                                            );
-                                            const newIndex = providerCard.models.findIndex(
-                                              (m: ServerProviderModel) => m.slug === over.id,
-                                            );
-                                            if (oldIndex !== -1 && newIndex !== -1) {
-                                              const reordered = arrayMove(
-                                                [...providerCard.models],
-                                                oldIndex,
-                                                newIndex,
-                                              );
-                                              const newOrder = reordered.map(
-                                                (m: ServerProviderModel) => m.slug,
-                                              );
-                                              setDraftModelOrders((existing) => ({
-                                                ...existing,
-                                                [providerCard.provider]: newOrder,
-                                              }));
-                                            }
-                                          }}
-                                        >
-                                          <SortableContext
-                                            items={providerCard.models.map(
-                                              (m: ServerProviderModel) => m.slug,
-                                            )}
-                                            strategy={verticalListSortingStrategy}
-                                          >
-                                            {providerCard.models.map(
-                                              (model: ServerProviderModel) => {
-                                                const caps = model.capabilities;
-                                                const capLabels: string[] = [];
-                                                if (caps?.supportsFastMode) capLabels.push("Fast");
-                                                if (caps?.supportsThinkingToggle)
-                                                  capLabels.push("Thinking");
-                                                if (
-                                                  caps?.reasoningEffortLevels &&
-                                                  caps.reasoningEffortLevels.length > 0
-                                                )
-                                                  capLabels.push("Reasoning");
-                                                const isPinned = isPinnedModel(
-                                                  getPinnedModels(settings),
-                                                  providerCard.provider,
-                                                  model.slug,
-                                                );
-
-                                                return (
-                                                  <SortableModelRowItem
-                                                    key={`${providerCard.provider}:${model.slug}`}
-                                                    id={model.slug}
-                                                  >
-                                                    {(handle) => (
-                                                      <div className="group/modelrow flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-accent/40 transition-all">
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                          <button
-                                                            type="button"
-                                                            className="cursor-grab active:cursor-grabbing text-muted-foreground/30 group-hover/modelrow:opacity-100 opacity-0 hover:text-foreground transition-all p-0.5 rounded"
-                                                            aria-label={`Reorder ${model.name}`}
-                                                            {...handle.attributes}
-                                                            {...handle.listeners}
-                                                          >
-                                                            <GripVerticalIcon className="size-3.5" />
-                                                          </button>
-                                                          <span className="min-w-0 truncate text-xs font-medium text-foreground/90">
-                                                            {model.name}
-                                                          </span>
-                                                          {capLabels.map((label) => (
-                                                            <span
-                                                              key={label}
-                                                              className="text-[9px] font-mono px-1.2 py-0.2 rounded bg-muted/60 text-muted-foreground border border-border/30 shrink-0"
-                                                            >
-                                                              {label}
-                                                            </span>
-                                                          ))}
-                                                        </div>
-
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                          <button
-                                                            type="button"
-                                                            aria-label={
-                                                              isPinned
-                                                                ? `Unpin ${model.name}`
-                                                                : `Pin ${model.name}`
-                                                            }
-                                                            className={cn(
-                                                              "size-6 p-1 rounded-md flex items-center justify-center transition-all cursor-pointer",
-                                                              isPinned
-                                                                ? "text-amber-500 hover:text-amber-600 bg-amber-500/10"
-                                                                : "text-muted-foreground/40 opacity-0 group-hover/modelrow:opacity-100 hover:text-foreground hover:bg-muted",
-                                                            )}
-                                                            onClick={() => {
-                                                              const nextPinned = togglePinnedModel(
-                                                                settings,
-                                                                providerCard.provider,
-                                                                model.slug,
-                                                              );
-                                                              updateSettings({
-                                                                pinnedModels: nextPinned as any,
-                                                              });
-                                                            }}
-                                                          >
-                                                            <PinIcon className="size-3.5 fill-current" />
-                                                          </button>
-
-                                                          {model.name !== model.slug ? (
-                                                            <Tooltip>
-                                                              <TooltipTrigger
-                                                                render={
-                                                                  <button
-                                                                    type="button"
-                                                                    className="size-6 p-1 rounded-md flex items-center justify-center text-muted-foreground/40 transition-colors hover:text-muted-foreground hover:bg-muted"
-                                                                    aria-label={`Details for ${model.name}`}
-                                                                  >
-                                                                    <InfoIcon className="size-3.5" />
-                                                                  </button>
-                                                                }
-                                                              />
-                                                              <TooltipPopup
-                                                                side="top"
-                                                                className="max-w-56"
-                                                              >
-                                                                <code className="text-[11px] text-foreground">
-                                                                  {model.slug}
-                                                                </code>
-                                                              </TooltipPopup>
-                                                            </Tooltip>
-                                                          ) : null}
-
-                                                          {model.isCustom ? (
-                                                            <div className="flex items-center gap-1 pl-1">
-                                                              <Badge
-                                                                variant="secondary"
-                                                                className="text-[9px] px-1 py-0 font-normal"
-                                                              >
-                                                                custom
-                                                              </Badge>
-                                                              <button
-                                                                type="button"
-                                                                className="size-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                                                                aria-label={`Remove ${model.slug}`}
-                                                                onClick={() =>
-                                                                  removeCustomModel(
-                                                                    providerCard.provider,
-                                                                    model.slug,
-                                                                  )
-                                                                }
-                                                              >
-                                                                <XIcon className="size-3" />
-                                                              </button>
-                                                            </div>
-                                                          ) : null}
-                                                        </div>
-                                                      </div>
-                                                    )}
-                                                  </SortableModelRowItem>
-                                                );
-                                              },
-                                            )}
-                                          </SortableContext>
-                                        </DndContext>
                                       </div>
-
-                                      {/* Copilot model identifiers are authoritative and account-scoped. */}
-                                      {providerCard.provider !== "copilot" ? (
-                                        <div className="p-2.5 bg-muted/20 border-t border-border/40">
-                                          <div className="flex items-center gap-2">
-                                            <Input
-                                              value={customModelInput ?? ""}
-                                              onChange={(event) =>
-                                                setCustomModelInputByProvider((existing) => ({
-                                                  ...existing,
-                                                  [providerCard.provider]: event.target.value,
-                                                }))
-                                              }
-                                              placeholder="gpt-6.7-codex-ultra-preview"
-                                              className="h-8 text-xs font-mono bg-background"
-                                              onKeyDown={(event) => {
-                                                if (event.key === "Enter") {
-                                                  event.preventDefault();
-                                                  addCustomModel(providerCard.provider);
-                                                }
-                                              }}
-                                            />
-                                            <Button
-                                              size="sm"
-                                              variant="outline"
-                                              className="h-8 gap-1 text-xs shrink-0 cursor-pointer"
-                                              onClick={() => addCustomModel(providerCard.provider)}
-                                            >
-                                              <PlusIcon className="size-3.5" />
-                                              Add
-                                            </Button>
-                                          </div>
-                                          {customModelError ? (
-                                            <div className="mt-1.5 text-[11px] font-medium text-destructive">
-                                              {customModelError}
-                                            </div>
-                                          ) : null}
-                                        </div>
-                                      ) : null}
-
-                                      {/* Save Order Footer Bar */}
-                                      {providerCard.hasPendingOrderChanges ? (
-                                        <div className="flex items-center justify-between p-2.5 bg-primary/10 border-t border-primary/20">
-                                          <span className="text-xs text-primary font-medium">
-                                            Model preference order changed.
-                                          </span>
-                                          <Button
-                                            size="sm"
-                                            variant="default"
-                                            className="h-7 gap-1.5 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
-                                            onClick={() =>
-                                              handleSaveModelOrder(providerCard.provider)
-                                            }
-                                          >
-                                            <SaveIcon className="size-3.5" />
-                                            Save Order
-                                          </Button>
-                                        </div>
-                                      ) : null}
                                     </div>
                                   </div>
-                                </div>
-                              </CollapsibleContent>
-                            </Collapsible>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 ) : null}
                 {activeSettingsSection === "keybindings" ? (
@@ -6185,9 +6203,7 @@ function SettingsRouteView() {
                     availableEditors={(availableEditors as any) ?? []}
                   />
                 ) : null}
-                {activeSettingsSection === "usage" ? (
-                  <UsageLimitsPage />
-                ) : null}
+                {activeSettingsSection === "usage" ? <UsageLimitsPage /> : null}
                 {activeSettingsSection === "about" ? (
                   <div className="space-y-6">
                     <div>

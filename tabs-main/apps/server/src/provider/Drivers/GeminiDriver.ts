@@ -28,23 +28,40 @@ const decodeGeminiSettings = Schema.decodeSync(GeminiSettings);
 const DRIVER_KIND = "gemini" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
-const GEMINI_BUILT_IN_MODELS = validateServerProviderModelList([
-  {
-    slug: "gemini-3.6-flash",
-    name: "Gemini 3.6 Flash",
-    isCustom: false,
-  },
-  {
-    slug: "gemini-2.5-pro",
-    name: "Gemini 2.5 Pro",
-    isCustom: false,
-  },
-  {
-    slug: "gemini-2.0-flash",
-    name: "Gemini 2.0 Flash",
-    isCustom: false,
-  },
-]);
+export async function discoverGeminiModels(apiKey: string, fetchImpl: typeof fetch = fetch) {
+  const normalizedKey = apiKey.trim();
+  if (!normalizedKey) return { kind: "missing" as const, models: [] };
+  const response = await fetchImpl(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(normalizedKey)}`,
+  );
+  if (!response.ok) return { kind: "rejected" as const, status: response.status, models: [] };
+  const payload = (await response.json()) as {
+    models?: ReadonlyArray<{
+      name?: unknown;
+      displayName?: unknown;
+      supportedGenerationMethods?: unknown;
+    }>;
+  };
+  const models = validateServerProviderModelList(
+    (payload.models ?? []).flatMap((model) => {
+      const name = typeof model.name === "string" ? model.name.trim() : "";
+      if (!name || !name.startsWith("models/")) return [];
+      if (
+        Array.isArray(model.supportedGenerationMethods) &&
+        !model.supportedGenerationMethods.includes("generateContent")
+      ) {
+        return [];
+      }
+      const slug = name.slice("models/".length);
+      const displayName =
+        typeof model.displayName === "string" && model.displayName.trim()
+          ? model.displayName.trim()
+          : slug;
+      return [{ slug, name: displayName, isCustom: false, capabilities: null }];
+    }),
+  );
+  return { kind: "authenticated" as const, models };
+}
 
 const withInstanceIdentity =
   (input: {
@@ -97,28 +114,60 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
 
       const textGeneration = yield* makeGeminiTextGeneration(effectiveConfig);
 
-      const hasApiKey = Boolean(effectiveConfig.apiKey?.trim());
-
-      const checkProvider = Effect.succeed(
-        stampIdentity(
-          buildServerProvider({
-            presentation: { displayName: displayName || "Google Gemini" },
-            enabled: effectiveConfig.enabled,
-            checkedAt: new Date().toISOString(),
-            catalogStatus: "ready",
-            catalogSource: "curated",
-            catalogCheckedAt: new Date().toISOString(),
-            models: GEMINI_BUILT_IN_MODELS,
-            probe: {
-              installed: true,
-              version: "2.5",
-              status: hasApiKey ? "ready" : "warning",
-              auth: {
-                status: hasApiKey ? "authenticated" : "unauthenticated",
+      const checkProvider = Effect.tryPromise(() =>
+        discoverGeminiModels(effectiveConfig.apiKey),
+      ).pipe(
+        Effect.map((discovery) =>
+          stampIdentity(
+            buildServerProvider({
+              presentation: { displayName: displayName || "Google Gemini" },
+              enabled: effectiveConfig.enabled,
+              checkedAt: new Date().toISOString(),
+              catalogStatus: discovery.kind === "authenticated" ? "ready" : "failed",
+              catalogSource: "gemini-models-api",
+              catalogCheckedAt: new Date().toISOString(),
+              models: discovery.models,
+              probe: {
+                installed: true,
+                version: "2.5",
+                status: discovery.kind === "authenticated" ? "ready" : "warning",
+                auth: {
+                  status: discovery.kind === "authenticated" ? "authenticated" : "unauthenticated",
+                  ...(discovery.kind === "authenticated"
+                    ? { type: "apiKey", label: "Gemini API Key (usage-based)" }
+                    : {}),
+                },
+                ...(discovery.kind === "missing"
+                  ? { message: "Gemini API key is not configured." }
+                  : discovery.kind === "rejected"
+                    ? {
+                        message: `Gemini rejected the configured API key (HTTP ${discovery.status}).`,
+                      }
+                    : {}),
               },
-              ...(hasApiKey ? {} : { message: "Gemini API key is not configured." }),
-            },
-          }),
+            }),
+          ),
+        ),
+        Effect.catch((cause) =>
+          Effect.succeed(
+            stampIdentity(
+              buildServerProvider({
+                presentation: { displayName: displayName || "Google Gemini" },
+                enabled: effectiveConfig.enabled,
+                checkedAt: new Date().toISOString(),
+                catalogStatus: "failed",
+                catalogSource: "gemini-models-api",
+                models: [],
+                probe: {
+                  installed: true,
+                  version: null,
+                  status: "error",
+                  auth: { status: "unknown" },
+                  message: `Gemini model discovery failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+                },
+              }),
+            ),
+          ),
         ),
       );
 
@@ -186,7 +235,7 @@ export const GeminiDriver: ProviderDriver<GeminiSettings, never> = {
         accentColor,
         enabled,
         capabilities: makeProviderInstanceCapabilities({
-          modelDiscovery: "curated",
+          modelDiscovery: "runtime",
           textGeneration: "supported",
           structuredGeneration: "supported",
           login: "supported",

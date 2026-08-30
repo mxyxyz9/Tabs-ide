@@ -25,10 +25,8 @@ const EMBED_CHROME_DEFAULTS = {
   "workbench.startupEditor": "none",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,
   "workbench.welcome.enabled": false,
-  // No watermark / key-tips in the empty editor: the native chrome already
-  // signals state, and the spec requires the VS Code logo/watermark gone with no
-  // trace (codeOssThemeCss.ts also hides it as a CSS backstop).
-  "workbench.tips.enabled": false,
+  // Keep the branded empty-editor identity and its keyboard shortcuts visible.
+  "workbench.tips.enabled": true,
   "workbench.editor.empty.hint": "hidden",
   "security.workspace.trust.enabled": false,
   // Don't nag about recommended extensions inside the embed.
@@ -626,7 +624,7 @@ function startCodeControlChannel(context) {
       );
 
       const cacheKey = customContainers
-        .map((c) => `${c.id}:${c.commandId}:${c.order || 0}`)
+        .map((c) => `${c.id}:${c.commandId}:${c.location}:${c.order || 0}`)
         .join("|");
       if (cacheKey === lastRegistryCacheKey) {
         if (activeViewChanged) pushState();

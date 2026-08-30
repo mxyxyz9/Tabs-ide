@@ -90,7 +90,7 @@ export type PinnedModelEntry = typeof PinnedModelEntry.Type;
 
 export const AiProvider = Schema.Literals(["tabs", "copilot"]);
 export type AiProvider = typeof AiProvider.Type;
-export const DEFAULT_AI_PROVIDER: AiProvider = "tabs";
+export const DEFAULT_AI_PROVIDER: AiProvider = "copilot";
 
 export const BrowserProfileDefinition = Schema.Struct({
   id: TrimmedNonEmptyString,

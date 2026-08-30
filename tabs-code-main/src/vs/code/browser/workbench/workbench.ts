@@ -615,8 +615,8 @@ function readCookie(name: string): string | undefined {
 	const secretStorageCrypto = secretStorageKeyPath && ServerKeyedAESCrypto.supported()
 		? new ServerKeyedAESCrypto(secretStorageKeyPath) : new TransparentCrypto();
 
-	// Create workbench
-	create(mainWindow.document.body, {
+	// Create workbench and expose its awaited shutdown path to the Tabs host.
+	const workbench = create(mainWindow.document.body, {
 		...config,
 		windowIndicator: config.windowIndicator ?? { label: '$(remote)', tooltip: `${product.nameShort} Web` },
 		settingsSyncOptions: config.settingsSyncOptions ? { enabled: config.settingsSyncOptions.enabled, } : undefined,
@@ -626,4 +626,7 @@ function readCookie(name: string): string | undefined {
 			? undefined /* with a remote without embedder-preferred storage, store on the remote */
 			: new LocalStorageSecretStorageProvider(secretStorageCrypto),
 	});
+	(mainWindow as unknown as Record<string, unknown>)['__tabs_codehost_shutdown'] = async () => {
+		workbench.dispose();
+	};
 })();
