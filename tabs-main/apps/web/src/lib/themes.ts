@@ -744,7 +744,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "syn",
     serifText: "thetic ",
     sansText2: "mind",
-        sansClass: "font-black tracking-tighter lowercase",
+        sansClass: "font-extrabold tracking-tighter lowercase",
     serifClass: "italic font-light normal-case",
   },
   {

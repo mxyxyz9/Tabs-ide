@@ -18,6 +18,8 @@
   <a href="#contributing">Contributing</a>
 </p>
 
+
+
 ---
 
 ## What is Tabs?
@@ -33,7 +35,7 @@ It supports multiple AI providers:
 - 🤖 **AI-Powered Chat** — Provider-backed agent threads with streaming responses
 - 📝 **Embedded Code Editor** — Full VS Code (Code-OSS) workbench inside the Code tab
 - 💻 **Integrated Terminals** — Embedded terminal sessions with PTY support
-- 🌐 **Browser Tooling** — Built-in browser surfaces for web development
+- 🌐 **Browser Tooling** — Built-in browser surfaces with persistent, isolated login sessions
 - 🔀 **Git Controls** — Full git workflow: branches, commits, diffs, stash, merge, rebase, PRs
 - 🛡️ **Tailscale & Connections** — Secure remote network access and Tailscale VPN status integration
 - ⚙️ **Source Control Settings** — Discover and configure Git/source control repositories and credentials
@@ -82,7 +84,7 @@ It supports multiple AI providers:
 | **Frontend** | React 19, Vite 8, TailwindCSS 4, Zustand, TanStack Router & Query |
 | **Editor** | Lexical (composer), xterm.js 6 (terminal), @pierre/diffs |
 | **Backend** | Node.js, Effect-TS, WebSocket, SQLite |
-| **Desktop** | Electron 40, embedded VS Code (Code-OSS) workbench |
+| **Desktop** | Electron 44, embedded VS Code (Code-OSS) workbench |
 | **AI Providers** | Codex CLI (JSON-RPC), Claude Agent SDK |
 | **Build** | Bun, Turborepo, tsdown, electron-builder |
 | **Quality** | Vitest, Playwright, oxlint, oxfmt |
@@ -132,6 +134,24 @@ bun run lint         # Run linter
 bun run typecheck    # TypeScript type checking
 bun run test         # Run all tests
 ```
+
+### Browser sessions and Google sign-in
+
+Browser tabs use persistent Electron storage partitions, so cookies, local storage, and other
+site data can survive tab switches and application restarts:
+
+- **Shared (Project)** uses one partition for every browser tab in the current project. Signing in
+  to Google through one tab, such as Figma, can let another tab in that project, such as ChatGPT,
+  reuse the existing Google session.
+- **Isolated** gives the browser tab its own partition. Its login is not shared with other tabs.
+- **Named Profile** shares a persistent partition across every project and tab assigned to that
+  profile, while remaining isolated from other profiles.
+
+Google may reject a fresh third-party OAuth flow inside an embedded browser. Reusing an existing
+Google session in the same Shared or Named Profile partition can work because the account has
+already been authenticated there. Tabs persists successful browser cookies to disk, but individual
+sites can still expire sessions, revoke cookies, require verification again, or block embedded
+authentication. Tabs never copies cookies from Chrome, Safari, or another external browser.
 
 ## Building Installers
 

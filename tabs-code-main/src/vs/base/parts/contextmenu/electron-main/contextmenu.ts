@@ -3,17 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { IpcMainEvent, Menu, MenuItem } from 'electron';
+import { BrowserWindow, IpcMainEvent, Menu, MenuItem } from 'electron';
 import { validatedIpcMain } from '../../ipc/electron-main/ipcMain.js';
 import { CONTEXT_MENU_CHANNEL, CONTEXT_MENU_CLOSE_CHANNEL, IPopupOptions, ISerializableContextMenuItem } from '../common/contextmenu.js';
 
-export function registerContextMenuListener(): void {
+export interface IContextMenuPopupContext {
+	readonly window?: BrowserWindow;
+	readonly offsetX?: number;
+	readonly offsetY?: number;
+}
+
+export function registerContextMenuListener(resolvePopupContext?: (event: IpcMainEvent) => IContextMenuPopupContext | undefined): void {
 	validatedIpcMain.on(CONTEXT_MENU_CHANNEL, (event: IpcMainEvent, contextMenuId: number, items: ISerializableContextMenuItem[], onClickChannel: string, options?: IPopupOptions) => {
 		const menu = createMenu(event, onClickChannel, items);
+		const popupContext = resolvePopupContext?.(event);
 
 		menu.popup({
-			x: options ? options.x : undefined,
-			y: options ? options.y : undefined,
+			window: popupContext?.window,
+			x: options?.x !== undefined ? options.x + (popupContext?.offsetX ?? 0) : undefined,
+			y: options?.y !== undefined ? options.y + (popupContext?.offsetY ?? 0) : undefined,
 			positioningItem: options ? options.positioningItem : undefined,
 			callback: () => {
 				// Workaround for https://github.com/microsoft/vscode/issues/72447

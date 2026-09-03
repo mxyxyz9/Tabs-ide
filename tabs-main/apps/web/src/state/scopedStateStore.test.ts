@@ -141,8 +141,8 @@ describe("scopedStateStore", () => {
     });
   });
 
-  describe("Global Settings View State", () => {
-    it("should persist active settings section and draft model orders globally", () => {
+  describe("Settings View State", () => {
+    it("should persist the active settings section and draft model orders", () => {
       const store = useScopedStateStore.getState();
 
       store.updateSettingsState({

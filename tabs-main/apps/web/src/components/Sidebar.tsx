@@ -10,8 +10,10 @@ import {
   SquarePenIcon,
   TerminalIcon,
   TriangleAlertIcon,
+  PinIcon,
+  Clock3Icon,
+  CircleCheckIcon,
 } from "lucide-react";
-import { autoAnimate } from "@formkit/auto-animate";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   DndContext,
@@ -124,6 +126,13 @@ import {
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useConfirm } from "~/hooks/useConfirm";
+import {
+  isSnoozed,
+  isSettled,
+  lifecycleFor,
+  threadLifecycleActions,
+  useThreadLifecycle,
+} from "../state/threadLifecycle";
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -135,10 +144,6 @@ const SIDEBAR_THREAD_SORT_LABELS: Record<SidebarThreadSortOrder, string> = {
   updated_at: "Last user message",
   created_at: "Created at",
 };
-const SIDEBAR_LIST_ANIMATION_OPTIONS = {
-  duration: 180,
-  easing: "ease-out",
-} as const;
 const loadedProjectFaviconSrcs = new Set<string>();
 
 function formatRelativeTime(iso: string): string {
@@ -415,6 +420,7 @@ export default function Sidebar() {
   const [addProjectError, setAddProjectError] = useState<string | null>(null);
   const addProjectInputRef = useRef<HTMLInputElement | null>(null);
   const [renamingThreadId, setRenamingThreadId] = useState<ThreadId | null>(null);
+  const lifecycle = useThreadLifecycle();
   const [renamingTitle, setRenamingTitle] = useState("");
   const [expandedThreadListsByProject, setExpandedThreadListsByProject] = useState<
     ReadonlySet<ProjectId>
@@ -836,6 +842,20 @@ export default function Sidebar() {
         [
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
+          {
+            id: "pin",
+            label: lifecycleFor(lifecycle, threadId).pinnedAt ? "Unpin thread" : "Pin thread",
+          },
+          {
+            id: "settle",
+            label: lifecycleFor(lifecycle, threadId).settledAt
+              ? "Return to active"
+              : "Settle thread",
+          },
+          {
+            id: "snooze",
+            label: isSnoozed(lifecycleFor(lifecycle, threadId)) ? "Wake now" : "Snooze for 1 hour",
+          },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
           { id: "delete", label: "Delete", destructive: true },
@@ -852,6 +872,33 @@ export default function Sidebar() {
 
       if (clicked === "mark-unread") {
         markThreadUnread(threadId);
+        return;
+      }
+      if (clicked === "pin") {
+        if (lifecycleFor(lifecycle, threadId).pinnedAt) {
+          threadLifecycleActions.unpin(threadId);
+        } else {
+          threadLifecycleActions.pin(threadId);
+        }
+        return;
+      }
+      if (clicked === "settle") {
+        if (lifecycleFor(lifecycle, threadId).settledAt) {
+          threadLifecycleActions.unsettle(threadId);
+        } else {
+          threadLifecycleActions.settle(threadId);
+        }
+        return;
+      }
+      if (clicked === "snooze") {
+        if (isSnoozed(lifecycleFor(lifecycle, threadId))) {
+          threadLifecycleActions.unsnooze(threadId);
+        } else {
+          threadLifecycleActions.snooze(
+            threadId,
+            new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          );
+        }
         return;
       }
       if (clicked === "copy-path") {
@@ -889,6 +936,7 @@ export default function Sidebar() {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      lifecycle,
       markThreadUnread,
       projectCwdById,
       threads,
@@ -1087,23 +1135,10 @@ export default function Sidebar() {
     dragInProgressRef.current = false;
   }, []);
 
-  const animatedProjectListsRef = useRef(new WeakSet<HTMLElement>());
-  const attachProjectListAutoAnimateRef = useCallback((node: HTMLElement | null) => {
-    if (!node || animatedProjectListsRef.current.has(node)) {
-      return;
-    }
-    autoAnimate(node, SIDEBAR_LIST_ANIMATION_OPTIONS);
-    animatedProjectListsRef.current.add(node);
-  }, []);
-
-  const animatedThreadListsRef = useRef(new WeakSet<HTMLElement>());
-  const attachThreadListAutoAnimateRef = useCallback((node: HTMLElement | null) => {
-    if (!node || animatedThreadListsRef.current.has(node)) {
-      return;
-    }
-    autoAnimate(node, SIDEBAR_LIST_ANIMATION_OPTIONS);
-    animatedThreadListsRef.current.add(node);
-  }, []);
+  // Long sidebar lists must not install per-row geometry polling. CSS handles
+  // the small hover/state transitions without keeping the renderer busy while idle.
+  const attachProjectListAutoAnimateRef = useCallback((_node: HTMLElement | null) => {}, []);
+  const attachThreadListAutoAnimateRef = useCallback((_node: HTMLElement | null) => {}, []);
 
   const handleProjectTitlePointerDownCapture = useCallback(() => {
     suppressProjectClickAfterDragRef.current = false;
@@ -1122,7 +1157,22 @@ export default function Sidebar() {
     const projectThreads = sortThreadsForSidebar(
       threads.filter((thread) => thread.projectId === project.id),
       appSettings.sidebarThreadSortOrder,
-    );
+    ).toSorted((left, right) => {
+      const rank = (thread: (typeof threads)[number]) => {
+        const status = resolveThreadStatusPill({
+          thread,
+          hasPendingApprovals: derivePendingApprovals(thread.activities).length > 0,
+          hasPendingUserInput: derivePendingUserInputs(thread.activities).length > 0,
+        });
+        if (status) return 0;
+        const entry = lifecycleFor(lifecycle, thread.id);
+        if (entry.pinnedAt) return 1;
+        if (isSnoozed(entry)) return 3;
+        if (isSettled(entry, thread.updatedAt ?? thread.createdAt)) return 4;
+        return 2;
+      };
+      return rank(left) - rank(right);
+    });
     const projectStatus = resolveProjectStatusIndicator(
       projectThreads.map((thread) =>
         resolveThreadStatusPill({
@@ -1160,6 +1210,7 @@ export default function Sidebar() {
       const terminalStatus = terminalStatusFromRunningIds(
         selectThreadTerminalState(terminalStateByThreadId, thread.id).runningTerminalIds,
       );
+      const lifecycleEntry = lifecycleFor(lifecycle, thread.id);
 
       return (
         <SidebarMenuSubItem key={thread.id} className="w-full" data-thread-item>
@@ -1235,6 +1286,15 @@ export default function Sidebar() {
                   />
                   <span className="hidden md:inline">{threadStatus.label}</span>
                 </span>
+              )}
+              {!threadStatus && lifecycleEntry.pinnedAt && (
+                <PinIcon aria-label="Pinned" className="size-3 text-primary" />
+              )}
+              {!threadStatus && isSnoozed(lifecycleEntry) && (
+                <Clock3Icon aria-label="Snoozed" className="size-3 text-blue-500" />
+              )}
+              {!threadStatus && isSettled(lifecycleEntry, thread.updatedAt ?? thread.createdAt) && (
+                <CircleCheckIcon aria-label="Settled" className="size-3 text-muted-foreground/50" />
               )}
               {renamingThreadId === thread.id ? (
                 <input

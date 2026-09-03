@@ -3,10 +3,8 @@ import { DownloadIcon, FolderGitIcon, GitBranchIcon, TerminalIcon } from "lucide
 
 import type { GitEnvironmentResult } from "@tabs/contracts";
 import { isWindowsPlatform } from "../../lib/utils";
-import { useMinimumDuration } from "../../hooks/useMinimumDuration";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
-import { MercuryChromeLoader } from "../MercuryChromeLoader";
 import { GitCheckingState } from "./GitCheckingState";
 
 const GIT_DOWNLOAD_URL = "https://git-scm.com/downloads";
@@ -42,8 +40,6 @@ function GateShell(props: {
   );
 }
 
-let hasGitInitialLoadCompleted = false;
-
 /**
  * Gates the Git workspace behind friendly setup states: a calm loading state, a
  * "Git isn't installed" guide, and a "not a repository yet" call-to-action.
@@ -53,33 +49,13 @@ export function GitEnvironmentGate(props: {
   environment: GitEnvironmentResult | undefined;
   isRepo: boolean | undefined;
   isLoading: boolean;
-  minDurationMs?: number;
   initPending: boolean;
   onInitRepo: () => void;
   children: ReactNode;
 }) {
-  const { environment, isRepo, isLoading, minDurationMs = 4000, initPending, onInitRepo, children } = props;
-
-  const alwaysAnimate = (() => {
-    try {
-      return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
-    } catch {
-      return false;
-    }
-  })();
-
-  const effectiveMinDuration = alwaysAnimate
-    ? minDurationMs
-    : hasGitInitialLoadCompleted
-      ? 0
-      : minDurationMs;
+  const { environment, isRepo, isLoading, initPending, onInitRepo, children } = props;
 
   const isDataReady = !isLoading && environment !== undefined && isRepo !== undefined;
-  const isGateReady = useMinimumDuration(isDataReady, effectiveMinDuration);
-
-  if (isGateReady) {
-    hasGitInitialLoadCompleted = true;
-  }
 
   // Git missing is a definitive, blocking state.
   if (environment && !environment.git.installed) {
@@ -122,8 +98,9 @@ export function GitEnvironmentGate(props: {
     );
   }
 
-  // Block on loading while core environment and repository data are resolving or minimum duration floor is active
-  if (!isGateReady) {
+  // Block only while core data is resolving, unless the user explicitly opted
+  // into displaying the complete loading animation.
+  if (!isDataReady) {
     return (
       <div className="flex h-full min-h-0 flex-col items-center justify-center p-12 text-center">
         <GitCheckingState rotateMessages size={56} />

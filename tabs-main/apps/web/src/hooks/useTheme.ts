@@ -161,7 +161,8 @@ function applyTheme(
   const foreground = evaluatedTokens["foreground"] || config.colors.foreground;
   const border = evaluatedTokens["sideBar.border"] || config.colors.border;
   const primary = evaluatedTokens["app.primaryBackground"] || config.colors.primary;
-  const primaryFg = evaluatedTokens["app.primaryForeground"] || getOptimalPrimaryForeground(primary);
+  const primaryFg =
+    evaluatedTokens["app.primaryForeground"] || getOptimalPrimaryForeground(primary);
 
   const secondaryBg = evaluatedTokens["app.secondaryBackground"] || cardBg;
   const secondaryFg = evaluatedTokens["app.secondaryForeground"] || foreground;
@@ -248,7 +249,12 @@ function applyTheme(
     style.setProperty("--code-oss-accent", primary);
   }
 
-  syncDesktopTheme(activeThemeId, activeThemeId === "custom" ? config : undefined, fonts);
+  syncDesktopTheme(
+    activeThemeId,
+    preference,
+    activeThemeId === "custom" ? config : undefined,
+    fonts,
+  );
 
   if (typeof document !== "undefined" && document.documentElement) {
     // Synchronous layout reflow to flush DOM style recalculation
@@ -273,6 +279,7 @@ function applyTheme(
 
 function syncDesktopTheme(
   themeId: string,
+  preference: ThemePreference,
   customConfig?: CustomThemeConfig,
   fontPreferences?: FontPreferences,
 ) {
@@ -284,8 +291,8 @@ function syncDesktopTheme(
   const fonts = fontPreferences ?? getStoredFontPreferences();
   const payload =
     themeId === "custom" && customConfig
-      ? { themeId, customConfig, fontPreferences: fonts }
-      : { themeId, fontPreferences: fonts };
+      ? { themeId, preference, customConfig, fontPreferences: fonts }
+      : { themeId, preference, fontPreferences: fonts };
   lastDesktopTheme = themeId;
   void bridge.setTheme(payload as any).catch(() => {
     if (lastDesktopTheme === themeId) {

@@ -10,8 +10,6 @@ const rates: RateTable = new Map([
     {
       inputCostPerToken: 1e-5,
       outputCostPerToken: 5e-5,
-      inputCostPerMillion: 10,
-      outputCostPerMillion: 50,
       cacheReadCostPerToken: 1e-6,
       cacheCreationCostPerToken: 1.25e-5,
     },
@@ -55,6 +53,39 @@ describe("UsageAggregator", () => {
     expect(result.buckets).toHaveLength(1);
     expect(result.buckets[0]?.outputTokens).toBe(100);
     expect(result.buckets[0]?.turnCount).toBe(2);
+    expect(result.distinctSessions).toBe(1);
+  });
+
+  it("prices fresh input, cache reads, cache writes, and output separately", () => {
+    const result = aggregate([record()]);
+
+    expect(result.buckets[0]?.estimatedCostUsd).toBeCloseTo(0.004625, 9);
+    expect(result.buckets[0]?.cacheSavingsUsd).toBeCloseTo(0.009, 9);
+    expect(result.buckets[0]?.costSource).toBe("modelPriced");
+  });
+
+  it("prefers a provider-reported cost", () => {
+    const result = aggregate([record({ reportedCostUsd: 1.25 })]);
+
+    expect(result.buckets[0]?.estimatedCostUsd).toBe(1.25);
+    expect(result.buckets[0]?.costSource).toBe("providerReported");
+  });
+
+  it("leaves unknown models unpriced instead of inventing a fallback rate", () => {
+    const result = aggregate([record({ model: "unknown-model" })]);
+
+    expect(result.buckets[0]?.estimatedCostUsd).toBe(0);
+    expect(result.buckets[0]?.unpricedTokens).toBe(1160);
+    expect(result.buckets[0]?.costSource).toBe("unpriced");
+  });
+
+  it("keeps only the first record with the same dedupe key", () => {
+    const result = aggregate([
+      record({ dedupeKey: "message-1" }),
+      record({ dedupeKey: "message-1" }),
+    ]);
+
+    expect(result.buckets[0]?.turnCount).toBe(1);
   });
 
   it("buckets by the day in the requested time zone", () => {

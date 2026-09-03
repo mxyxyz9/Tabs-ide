@@ -1,7 +1,4 @@
-import {
-  type ProjectWorkspaceSettings,
-  type BrowserPartitionMode,
-} from "@tabs/contracts/settings";
+import { type ProjectWorkspaceSettings, type BrowserPartitionMode } from "@tabs/contracts/settings";
 import {
   DndContext,
   type DragEndEvent,
@@ -25,14 +22,10 @@ import {
   ChevronUpIcon,
   GripVerticalIcon,
   PlusIcon,
-  RotateCcwIcon,
-  SaveIcon,
   Trash2Icon,
   InfoIcon,
   LockIcon,
   CheckIcon,
-  GlobeIcon,
-  LayersIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -85,7 +78,7 @@ import {
   useWorkspaceActiveProjectId,
   workspaceShellActions,
 } from "../state/workspaceShell";
-import { useGlobalSettingsViewState } from "~/state/scopedStateStore";
+import { useSettingsViewState } from "~/state/scopedStateStore";
 import { SettingsHeaderPortal } from "../routes/_chat.settings";
 
 function createCustomEmbedId() {
@@ -98,6 +91,21 @@ function createCustomEmbedToolId(embedId: string) {
 
 function createServerProcessId() {
   return `process-${crypto.randomUUID()}`;
+}
+
+function BrowserGoogleSignInGuidance() {
+  return (
+    <Alert className="border-blue-500/25 bg-blue-500/5 text-foreground">
+      <InfoIcon aria-hidden="true" className="size-4 text-blue-500" />
+      <AlertDescription className="text-xs leading-relaxed text-muted-foreground">
+        <span className="font-medium text-foreground">Google sign-in workaround:</span> Google may
+        block a fresh third-party login inside an embedded browser. Choose Shared (Project), or
+        assign both tabs to the same Named Profile, then sign in to Google through a tab such as
+        Figma or YouTube. ChatGPT can reuse that existing Google session. The session is stored for
+        future app restarts, although the website can expire it or request verification again.
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 function createServerProcessToolId(processId: string) {
@@ -192,7 +200,9 @@ function BrowserProfileSelector({
                 className="size-3 rounded-full shrink-0 ring-1 ring-border"
                 style={{ backgroundColor: selectedProfile?.color || "#3b82f6" }}
               />
-              <span className="font-medium truncate">{selectedProfile?.label || "Select profile"}</span>
+              <span className="font-medium truncate">
+                {selectedProfile?.label || "Select profile"}
+              </span>
               <span className="text-[11px] text-muted-foreground font-mono truncate">
                 ({selectedProfile?.id})
               </span>
@@ -214,9 +224,7 @@ function BrowserProfileSelector({
                       style={{ backgroundColor: p.color || "#3b82f6" }}
                     />
                     <span className="font-medium truncate">{p.label}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      ({p.id})
-                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono">({p.id})</span>
                   </div>
                   {isSelected && <CheckIcon className="size-3.5 text-primary shrink-0" />}
                 </MenuItem>
@@ -276,7 +284,9 @@ function BrowserProfileSelector({
                     onClick={() => setNewColor(c)}
                     className={cn(
                       "size-7 rounded-full transition-all cursor-pointer flex items-center justify-center ring-offset-2 ring-offset-background",
-                      newColor === c ? "ring-2 ring-primary scale-105" : "hover:scale-105 opacity-80 hover:opacity-100",
+                      newColor === c
+                        ? "ring-2 ring-primary scale-105"
+                        : "hover:scale-105 opacity-80 hover:opacity-100",
                     )}
                     style={{ backgroundColor: c }}
                   >
@@ -516,13 +526,7 @@ function isServerProcessDraftDirty(draft: ServerProcessDraft) {
   );
 }
 
-export function ProjectWorkspaceSettingsSection({
-  scope,
-  onScopeChange,
-}: {
-  scope?: "project" | "global";
-  onScopeChange?: (scope: "project" | "global") => void;
-} = {}) {
+export function ProjectWorkspaceSettingsSection() {
   const { fontPreferences } = useTheme();
   const activeFontCombo = getActiveFontCombo(fontPreferences);
   const { confirm, confirmDialog } = useConfirm();
@@ -533,12 +537,6 @@ export function ProjectWorkspaceSettingsSection({
   const projectSettings = useProjectWorkspaceSettings(activeProjectId);
   const upsertProjectSettings = workspaceShellActions.upsertProjectSettings;
   const [customEmbedDrafts, setCustomEmbedDrafts] = useState<CustomEmbedDraft[]>([]);
-  const [internalScope, setInternalScope] = useState<"project" | "global">("project");
-  const workspaceScope = scope ?? internalScope;
-  const setWorkspaceScope = (next: "project" | "global") => {
-    setInternalScope(next);
-    onScopeChange?.(next);
-  };
   const [serverProcessDrafts, setServerProcessDrafts] = useState<ServerProcessDraft[]>([]);
   const [expandedToolbarToolIds, setExpandedToolbarToolIds] = useState<Record<string, boolean>>({});
 
@@ -578,20 +576,6 @@ export function ProjectWorkspaceSettingsSection({
     } catch {}
   };
 
-  const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
-    try {
-      return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleAlwaysAnimateGitLoader = (checked: boolean) => {
-    setAlwaysAnimateGitLoader(checked);
-    try {
-      window.localStorage?.setItem("tabs.alwaysAnimateGitLoader", String(checked));
-    } catch {}
-  };
   const isBrowserDefaultUrlDirty = projectSettings
     ? browserDefaultUrlDraft !== projectSettings.browser.defaultUrl
     : false;
@@ -625,7 +609,7 @@ export function ProjectWorkspaceSettingsSection({
   ]);
 
   const [serverPresetDrafts, setServerPresetDrafts] = useState<ServerProcessDraft[]>([]);
-  const [settingsViewState, updateSettingsViewState] = useGlobalSettingsViewState();
+  const [settingsViewState, updateSettingsViewState] = useSettingsViewState();
   const projectIdKey = activeProjectId ?? "default";
   const projectMasterDetail = settingsViewState.projectWorkspaceMasterDetail[projectIdKey] ?? {
     activeSection: "tools",
@@ -855,7 +839,10 @@ export function ProjectWorkspaceSettingsSection({
           </h2>
         ) : (
           <h2
-            className={cn("text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3", activeFontCombo.serifClass)}
+            className={cn(
+              "text-[18px] leading-relaxed pb-1 text-foreground/80 mb-3",
+              activeFontCombo.serifClass,
+            )}
             style={{ fontFamily: "var(--font-display)" }}
           >
             Project Workspace
@@ -948,6 +935,35 @@ export function ProjectWorkspaceSettingsSection({
     });
   };
 
+  const saveCustomEmbedPartition = (
+    embedId: string,
+    partitionMode: BrowserPartitionMode,
+    partitionProfile?: string,
+  ) => {
+    const nextDrafts = customEmbedDrafts.map((entry) =>
+      entry.id === embedId
+        ? {
+            ...entry,
+            partitionMode,
+            partitionProfile:
+              partitionMode === "profile" ? (partitionProfile ?? entry.partitionProfile) : "",
+          }
+        : entry,
+    );
+    setCustomEmbedDrafts(nextDrafts);
+    saveCustomEmbeds(nextDrafts);
+    toastManager.add({
+      type: "success",
+      title: "Browser session assignment saved",
+      description:
+        partitionMode === "profile"
+          ? `This tab now uses the "${partitionProfile ?? nextDrafts.find((entry) => entry.id === embedId)?.partitionProfile ?? "default"}" profile.`
+          : partitionMode === "isolated"
+            ? "This tab now uses its own isolated session."
+            : "This tab now shares the project's browser session.",
+    });
+  };
+
   const saveServerProcesses = (overrideDrafts?: ServerProcessDraft[]) => {
     const draftsToSave = Array.isArray(overrideDrafts) ? overrideDrafts : serverProcessDrafts;
     upsertProjectSettings(projectId, (current) => {
@@ -1036,118 +1052,19 @@ export function ProjectWorkspaceSettingsSection({
             <div className="space-y-1.5">
               <div className="flex items-center gap-3">
                 <h2
-                  className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+                  className={cn(
+                    "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+                    activeFontCombo.sansClass,
+                  )}
                   style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
                 >
                   Workspace
                 </h2>
               </div>
               <p className="text-sm text-muted-foreground">
-                {workspaceScope === "project"
-                  ? `Configure tools, browser tabs, terminals, and workspace settings for ${activeProject?.name || "this project"}.`
-                  : "Configure application-wide default browser tabs, custom embeds, terminals, and tools template."}
+                Configure tools, browser tabs, terminals, and workspace settings for
+                {` ${activeProject?.name || "this project"}.`}
               </p>
-            </div>
-          </div>
-
-          {/* Scope Segmented Control */}
-          <div className="flex items-center justify-between gap-3 p-1.5 bg-muted/40 border border-border/60 rounded-xl my-4">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setWorkspaceScope("project")}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2",
-                  workspaceScope === "project"
-                    ? "bg-background text-foreground shadow-xs border border-border/80"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <LayersIcon className="size-3.5" />
-                <span>Project: {activeProject?.name || "Active Project"}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setWorkspaceScope("global")}
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer flex items-center gap-2",
-                  workspaceScope === "global"
-                    ? "bg-background text-foreground shadow-xs border border-border/80"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <GlobeIcon className="size-3.5 text-primary" />
-                <span>Global Workspace Defaults</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {workspaceScope === "project" ? (
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="cursor-pointer gap-1.5 text-xs h-7"
-                  onClick={async () => {
-                    if (!activeProjectId) return;
-                    const confirmed = await confirm(
-                      "Apply Global Workspace Defaults to this project?\n\nThis will replace custom browser embeds, server presets, terminal processes, and tool arrangements with your global template.",
-                    );
-                    if (confirmed) {
-                      try {
-                        const raw = localStorage.getItem("tabs:global-workspace-defaults:v1");
-                        const parsed = raw ? JSON.parse(raw) : null;
-                        if (parsed) {
-                          workspaceShellActions.upsertProjectSettings(activeProjectId, parsed);
-                          toastManager.add({
-                            type: "success",
-                            title: "Applied Global Defaults",
-                            description: "Workspace configuration updated from global template.",
-                          });
-                        } else {
-                          toastManager.add({
-                            type: "info",
-                            title: "No custom global template found",
-                            description:
-                              "Switch to 'Global Workspace Defaults' to configure and save a template.",
-                          });
-                        }
-                      } catch {
-                        toastManager.add({
-                          type: "error",
-                          title: "Failed to apply defaults",
-                          description: "Could not parse global defaults.",
-                        });
-                      }
-                    }
-                  }}
-                  title="Import and apply global workspace defaults into this project"
-                >
-                  <RotateCcwIcon className="size-3" />
-                  Apply Global Defaults
-                </Button>
-              ) : (
-                <Button
-                  size="xs"
-                  variant="default"
-                  className="cursor-pointer gap-1.5 text-xs h-7"
-                  onClick={() => {
-                    if (projectSettings) {
-                      localStorage.setItem(
-                        "tabs:global-workspace-defaults:v1",
-                        JSON.stringify(projectSettings),
-                      );
-                      toastManager.add({
-                        type: "success",
-                        title: "Global Defaults Saved",
-                        description: "Current workspace layout saved as application-wide template.",
-                      });
-                    }
-                  }}
-                >
-                  <SaveIcon className="size-3" />
-                  Save as Global Defaults
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -1356,7 +1273,8 @@ export function ProjectWorkspaceSettingsSection({
                   <div className="flex flex-col gap-0.5">
                     <div className="text-sm font-medium">Session & Account Isolation</div>
                     <div className="text-xs text-muted-foreground">
-                      Choose whether the browser shares cookies and logins across this project, runs in an isolated sandbox, or connects to a named profile.
+                      Choose whether the browser shares cookies and logins across this project, runs
+                      in an isolated sandbox, or connects to a named profile.
                     </div>
                   </div>
                   <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1 shrink-0 self-start sm:self-auto">
@@ -1404,6 +1322,7 @@ export function ProjectWorkspaceSettingsSection({
                     onChange={setBrowserPartitionProfileDraft}
                   />
                 )}
+                {browserPartitionModeDraft !== "isolated" && <BrowserGoogleSignInGuidance />}
               </div>
             </div>
           </CardContent>
@@ -1412,9 +1331,7 @@ export function ProjectWorkspaceSettingsSection({
         <Card>
           <CardHeader>
             <CardTitle>Sidebar Defaults</CardTitle>
-            <CardDescription>
-              Set initial collapse state when opening a workspace.
-            </CardDescription>
+            <CardDescription>Set initial collapse state when opening a workspace.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3.5">
             <div className="flex items-center justify-between">
@@ -1424,10 +1341,7 @@ export function ProjectWorkspaceSettingsSection({
                   Start thread sidebar collapsed by default.
                 </div>
               </div>
-              <Switch
-                checked={alwaysMinAgents}
-                onCheckedChange={handleToggleAlwaysMinAgents}
-              />
+              <Switch checked={alwaysMinAgents} onCheckedChange={handleToggleAlwaysMinAgents} />
             </div>
 
             <Separator />
@@ -1439,10 +1353,7 @@ export function ProjectWorkspaceSettingsSection({
                   Start Git panel collapsed by default.
                 </div>
               </div>
-              <Switch
-                checked={alwaysMinGit}
-                onCheckedChange={handleToggleAlwaysMinGit}
-              />
+              <Switch checked={alwaysMinGit} onCheckedChange={handleToggleAlwaysMinGit} />
             </div>
           </CardContent>
         </Card>
@@ -1627,20 +1538,15 @@ export function ProjectWorkspaceSettingsSection({
                                         Session & Account Isolation
                                       </div>
                                       <div className="text-xs text-muted-foreground">
-                                        Choose whether this tab shares cookies and logins with this project, stays isolated, or links to a named profile.
+                                        Choose whether this tab shares cookies and logins with this
+                                        project, stays isolated, or links to a named profile.
                                       </div>
                                     </div>
                                     <div className="flex bg-muted/40 border border-border/60 rounded-lg p-1 shrink-0 self-start sm:self-auto">
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          setCustomEmbedDrafts((current) =>
-                                            current.map((entry) =>
-                                              entry.id === activeDraft.id
-                                                ? { ...entry, partitionMode: "shared" }
-                                                : entry,
-                                            ),
-                                          )
+                                          saveCustomEmbedPartition(activeDraft.id, "shared")
                                         }
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
@@ -1654,13 +1560,7 @@ export function ProjectWorkspaceSettingsSection({
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          setCustomEmbedDrafts((current) =>
-                                            current.map((entry) =>
-                                              entry.id === activeDraft.id
-                                                ? { ...entry, partitionMode: "isolated" }
-                                                : entry,
-                                            ),
-                                          )
+                                          saveCustomEmbedPartition(activeDraft.id, "isolated")
                                         }
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
@@ -1674,13 +1574,7 @@ export function ProjectWorkspaceSettingsSection({
                                       <button
                                         type="button"
                                         onClick={() =>
-                                          setCustomEmbedDrafts((current) =>
-                                            current.map((entry) =>
-                                              entry.id === activeDraft.id
-                                                ? { ...entry, partitionMode: "profile" }
-                                                : entry,
-                                            ),
-                                          )
+                                          saveCustomEmbedPartition(activeDraft.id, "profile")
                                         }
                                         className={cn(
                                           "text-xs px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer",
@@ -1697,15 +1591,12 @@ export function ProjectWorkspaceSettingsSection({
                                     <BrowserProfileSelector
                                       value={activeDraft.partitionProfile}
                                       onChange={(val) =>
-                                        setCustomEmbedDrafts((current) =>
-                                          current.map((entry) =>
-                                            entry.id === activeDraft.id
-                                              ? { ...entry, partitionProfile: val }
-                                              : entry,
-                                          ),
-                                        )
+                                        saveCustomEmbedPartition(activeDraft.id, "profile", val)
                                       }
                                     />
+                                  )}
+                                  {activeDraft.partitionMode !== "isolated" && (
+                                    <BrowserGoogleSignInGuidance />
                                   )}
                                 </div>
                               </div>

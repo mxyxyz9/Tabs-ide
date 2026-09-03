@@ -1,7 +1,7 @@
 import {
-  BrowserView,
   BrowserWindow,
   Menu,
+  WebContentsView,
   session as electronSession,
   shell,
   type MenuItemConstructorOptions,
@@ -26,31 +26,120 @@ const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
 const DOCKED_DEVTOOLS_MODE = "bottom";
 
 const DEFAULT_SESSION_ID = "browser";
+const PROFILE_PARTITION_PREFIX = "persist:tabs-browser:profile:";
+const configuredSessions = new WeakSet<Session>();
+const ALLOWED_REMOTE_PERMISSIONS = new Set([
+  "clipboard-read",
+  "clipboard-write",
+  "clipboard-sanitized-write",
+  "pointerLock",
+  "notifications",
+]);
+const BROWSER_PROFILE_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/u;
+
+export function normalizeBrowserProfileId(profileId: string): string {
+  const normalized = profileId.trim().toLowerCase();
+  if (!BROWSER_PROFILE_ID_PATTERN.test(normalized)) {
+    throw new Error("Invalid browser profile identifier.");
+  }
+  return normalized;
+}
+
+export function normalizeRemoteBrowserUrl(value: string): string {
+  const parsed = new URL(value.trim());
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("Browser profiles only support HTTP and HTTPS URLs.");
+  }
+  return parsed.toString();
+}
+
+const AUTHENTICATION_HOST_PREFIXES = ["accounts.", "auth.", "id.", "login.", "sso."];
+const AUTHENTICATION_PATH_SEGMENTS = new Set([
+  "auth",
+  "authorize",
+  "login",
+  "oauth",
+  "signin",
+  "sso",
+]);
+
+function normalizeAuthenticationHostname(hostname: string): string {
+  return hostname.toLowerCase().replace(/^www\./u, "");
+}
+
+export function isLikelyAuthenticationUrl(value: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (AUTHENTICATION_HOST_PREFIXES.some((prefix) => hostname.startsWith(prefix))) return true;
+
+  const pathSegments = parsed.pathname.toLowerCase().split("/").filter(Boolean);
+  return pathSegments.some((segment) => AUTHENTICATION_PATH_SEGMENTS.has(segment));
+}
+
+export function hasReturnedToAuthenticationOrigin(
+  candidateUrl: string,
+  originatingUrl: string,
+): boolean {
+  try {
+    const candidate = new URL(candidateUrl);
+    const originating = new URL(originatingUrl);
+    return (
+      (candidate.protocol === "https:" || candidate.protocol === "http:") &&
+      normalizeAuthenticationHostname(candidate.hostname) ===
+        normalizeAuthenticationHostname(originating.hostname) &&
+      !isLikelyAuthenticationUrl(candidate.toString())
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeBrowserCookieDomain(value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/^\./u, "");
+  if (
+    normalized.length === 0 ||
+    normalized.length > 253 ||
+    normalized.includes("..") ||
+    !/^[a-z0-9.-]+$/u.test(normalized)
+  ) {
+    throw new Error("Invalid browser cookie domain.");
+  }
+  return normalized;
+}
 
 export function getCleanDesktopUserAgent(): string {
-  return process.platform === "darwin"
-    ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-    : process.platform === "win32"
-      ? "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-      : "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+  const chromeVersion = process.versions.chrome ?? "140.0.0.0";
+  const platform =
+    process.platform === "darwin"
+      ? "Macintosh; Intel Mac OS X 10_15_7"
+      : process.platform === "win32"
+        ? "Windows NT 10.0; Win64; x64"
+        : "X11; Linux x86_64";
+  return `Mozilla/5.0 (${platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36`;
 }
 
 export function configurePartitionSession(s: Session): void {
-  const cleanUA = getCleanDesktopUserAgent();
+  if (configuredSessions.has(s)) return;
+  configuredSessions.add(s);
   try {
-    s.setUserAgent(cleanUA);
-    s.webRequest.onBeforeSendHeaders((details, callback) => {
-      const headers = { ...details.requestHeaders };
-      headers["User-Agent"] = cleanUA;
-      headers["sec-ch-ua"] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
-      headers["sec-ch-ua-mobile"] = "?0";
-      headers["sec-ch-ua-platform"] =
-        process.platform === "darwin"
-          ? '"macOS"'
-          : process.platform === "win32"
-            ? '"Windows"'
-            : '"Linux"';
-      callback({ requestHeaders: headers });
+    s.setUserAgent(sanitizeEmbeddedBrowserUserAgent(s.getUserAgent()));
+    s.cookies.on("changed", () => {
+      void s.cookies.flushStore().catch((err) => {
+        console.error("[browserHostManager] Failed to persist browser cookies:", err);
+      });
+    });
+    s.setPermissionRequestHandler((_webContents, permission, callback) => {
+      callback(ALLOWED_REMOTE_PERMISSIONS.has(permission));
+    });
+    s.setPermissionCheckHandler((_webContents, permission) => {
+      return ALLOWED_REMOTE_PERMISSIONS.has(permission);
     });
   } catch (err) {
     console.error("[browserHostManager] Failed to configure partition session:", err);
@@ -66,7 +155,7 @@ type BrowserSession = {
   sessionId: string;
   partition: string;
   key: string;
-  view: BrowserView;
+  view: WebContentsView;
   bounds: Rectangle | null;
   currentUrl: string | null;
   pageTitle: string | null;
@@ -82,9 +171,10 @@ type BrowserSession = {
 
 export class BrowserHostManager {
   // Keyed by `${projectId}::${sessionId}` so each browser tab keeps its own
-  // BrowserView alive — switching tabs shows/hides instead of reloading.
+  // WebContentsView alive — switching tabs shows/hides instead of reloading.
   private readonly sessions = new Map<string, BrowserSession>();
   private activeKey: string | null = null;
+  private readonly observedProfileSessions = new WeakSet<Session>();
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
 
@@ -135,7 +225,7 @@ export class BrowserHostManager {
     }
 
     const sessionId = input.sessionId ?? DEFAULT_SESSION_ID;
-    const view = new BrowserView({
+    const view = new WebContentsView({
       webPreferences: {
         contextIsolation: true,
         sandbox: true,
@@ -143,26 +233,12 @@ export class BrowserHostManager {
         partition,
       },
     });
+    configurePartitionSession(view.webContents.session);
+    this.observeProfileSession(partition, view.webContents.session);
     view.setBackgroundColor("#111111");
 
     const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
     view.webContents?.setZoomFactor(initialZoom);
-
-    const allowedPermissions = new Set([
-      "clipboard-read",
-      "clipboard-write",
-      "clipboard-sanitized-write",
-      "pointerLock",
-      "notifications",
-    ]);
-    if (view.webContents?.session) {
-      view.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
-        callback(allowedPermissions.has(permission));
-      });
-      view.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-        return allowedPermissions.has(permission);
-      });
-    }
 
     view.webContents.setUserAgent(
       sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
@@ -212,7 +288,11 @@ export class BrowserHostManager {
     }
   }
 
-  async recreateSession(projectId: string, sessionId?: string, partitionInput?: string): Promise<void> {
+  async recreateSession(
+    projectId: string,
+    sessionId?: string,
+    partitionInput?: string,
+  ): Promise<void> {
     const key = this.sessionKey(projectId, sessionId);
     const session = this.sessions.get(key);
     if (!session) return;
@@ -223,7 +303,7 @@ export class BrowserHostManager {
     this.detachSession(session);
     session.view.webContents.close({ waitForBeforeUnload: false });
 
-    const view = new BrowserView({
+    const view = new WebContentsView({
       webPreferences: {
         contextIsolation: true,
         sandbox: true,
@@ -231,26 +311,12 @@ export class BrowserHostManager {
         partition,
       },
     });
+    configurePartitionSession(view.webContents.session);
+    this.observeProfileSession(partition, view.webContents.session);
     view.setBackgroundColor("#111111");
 
     const initialZoom = this.getWindow()?.webContents?.getZoomFactor() ?? 1.0;
     view.webContents?.setZoomFactor(initialZoom);
-
-    const allowedPermissions = new Set([
-      "clipboard-read",
-      "clipboard-write",
-      "clipboard-sanitized-write",
-      "pointerLock",
-      "notifications",
-    ]);
-    if (view.webContents?.session) {
-      view.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
-        callback(allowedPermissions.has(permission));
-      });
-      view.webContents.session.setPermissionCheckHandler((_webContents, permission) => {
-        return allowedPermissions.has(permission);
-      });
-    }
 
     view.webContents.setUserAgent(
       sanitizeEmbeddedBrowserUserAgent(view.webContents.getUserAgent()),
@@ -273,11 +339,23 @@ export class BrowserHostManager {
   }
 
   async clearProfileData(profileId: string): Promise<void> {
-    const trimmed = profileId.trim();
-    if (!trimmed) return;
+    const trimmed = normalizeBrowserProfileId(profileId);
     const partition = `persist:tabs-browser:profile:${trimmed}`;
     const s = electronSession.fromPartition(partition);
-    await s.clearStorageData();
+    this.observeProfileSession(partition, s);
+    await s.closeAllConnections();
+    await s.clearData({
+      dataTypes: [
+        "cache",
+        "cookies",
+        "fileSystems",
+        "indexedDB",
+        "localStorage",
+        "serviceWorkers",
+        "webSQL",
+      ],
+    });
+    s.flushStorageData();
     for (const session of this.sessions.values()) {
       if (session.partition === partition && session.currentUrl) {
         await this.loadUrl(session, session.currentUrl);
@@ -286,19 +364,32 @@ export class BrowserHostManager {
   }
 
   async getProfileDomains(profileId: string): Promise<BrowserProfileDomainInfo[]> {
-    const trimmed = profileId.trim();
-    if (!trimmed) return [];
+    const trimmed = normalizeBrowserProfileId(profileId);
     const partition = `persist:tabs-browser:profile:${trimmed}`;
     const s = electronSession.fromPartition(partition);
+    this.observeProfileSession(partition, s);
     try {
       const cookies = await s.cookies.get({});
-      const map = new Map<string, { count: number; isAuth: boolean }>();
+      const map = new Map<string, { count: number; hasSessionHint: boolean }>();
 
       const AUTH_COOKIE_NAMES = [
-        "sid", "hsid", "ssid", "apisid", "sapisid", "osid",
-        "user_session", "logged_in", "dotcom_user",
-        "__secure-next-auth.session-token", "auth_token", "figma.session",
-        "figma.login", "linear_session", "token_v2", "jwt", "sessionid",
+        "sid",
+        "hsid",
+        "ssid",
+        "apisid",
+        "sapisid",
+        "osid",
+        "user_session",
+        "logged_in",
+        "dotcom_user",
+        "__secure-next-auth.session-token",
+        "auth_token",
+        "figma.session",
+        "figma.login",
+        "linear_session",
+        "token_v2",
+        "jwt",
+        "sessionid",
       ];
 
       for (const cookie of cookies) {
@@ -306,33 +397,30 @@ export class BrowserHostManager {
         if (domain.startsWith(".")) domain = domain.slice(1);
         if (!domain) continue;
 
-        const parts = domain.split(".");
-        const baseDomain = parts.length > 2 ? parts.slice(-2).join(".") : domain;
-
-        const existing = map.get(baseDomain) ?? { count: 0, isAuth: false };
+        const existing = map.get(domain) ?? { count: 0, hasSessionHint: false };
         existing.count += 1;
 
         const cName = cookie.name.toLowerCase();
-        const isAuthCookie =
+        const hasSessionHint =
           AUTH_COOKIE_NAMES.some((name) => cName === name || cName.includes(name)) ||
           ((cName.includes("session") || cName.includes("token") || cName.includes("auth")) &&
             Boolean(cookie.value && cookie.value.length > 10));
 
-        if (isAuthCookie) {
-          existing.isAuth = true;
+        if (hasSessionHint) {
+          existing.hasSessionHint = true;
         }
-        map.set(baseDomain, existing);
+        map.set(domain, existing);
       }
 
       return Array.from(map.entries())
         .map(([domain, data]) => ({
           domain,
           cookieCount: data.count,
-          isAuthenticated: data.isAuth,
+          hasSessionHint: data.hasSessionHint,
         }))
-        .sort((a, b) => {
-          if (a.isAuthenticated && !b.isAuthenticated) return -1;
-          if (!a.isAuthenticated && b.isAuthenticated) return 1;
+        .toSorted((a, b) => {
+          if (a.hasSessionHint && !b.hasSessionHint) return -1;
+          if (!a.hasSessionHint && b.hasSessionHint) return 1;
           return a.domain.localeCompare(b.domain);
         });
     } catch (err) {
@@ -342,11 +430,11 @@ export class BrowserHostManager {
   }
 
   async clearProfileDomain(profileId: string, domainToClear: string): Promise<void> {
-    const trimmed = profileId.trim();
-    const domain = domainToClear.trim().toLowerCase();
-    if (!trimmed || !domain) return;
+    const trimmed = normalizeBrowserProfileId(profileId);
+    const domain = normalizeBrowserCookieDomain(domainToClear);
     const partition = `persist:tabs-browser:profile:${trimmed}`;
     const s = electronSession.fromPartition(partition);
+    this.observeProfileSession(partition, s);
     try {
       const cookies = await s.cookies.get({});
       for (const cookie of cookies) {
@@ -357,12 +445,26 @@ export class BrowserHostManager {
           await s.cookies.remove(url, cookie.name);
         }
       }
-      await s.clearStorageData({
-        origin: `https://${domain}`,
-        storages: ["cookies", "localstorage", "indexdb", "serviceworkers"],
+      await s.closeAllConnections();
+      await s.clearData({
+        origins: [`https://${domain}`, `http://${domain}`],
+        dataTypes: [
+          "cookies",
+          "fileSystems",
+          "indexedDB",
+          "localStorage",
+          "serviceWorkers",
+          "webSQL",
+        ],
+        originMatchingMode: "third-parties-included",
       });
+      s.flushStorageData();
       for (const session of this.sessions.values()) {
-        if (session.partition === partition && session.currentUrl && session.currentUrl.includes(domain)) {
+        if (
+          session.partition === partition &&
+          session.currentUrl &&
+          session.currentUrl.includes(domain)
+        ) {
           await this.loadUrl(session, session.currentUrl);
         }
       }
@@ -371,18 +473,32 @@ export class BrowserHostManager {
     }
   }
 
-  openProfileLoginWindow(profileId: string, targetUrl?: string): void {
-    const trimmed = profileId.trim() || "default";
+  async openProfileLoginWindow(profileId: string, targetUrl?: string): Promise<void> {
+    const trimmed = normalizeBrowserProfileId(profileId);
     const partition = `persist:tabs-browser:profile:${trimmed}`;
-    const url = targetUrl?.trim() || "https://accounts.google.com";
+    await this.openLoginWindow(
+      partition,
+      trimmed,
+      targetUrl?.trim() || "https://accounts.google.com",
+    );
+  }
+
+  private async openLoginWindow(
+    partition: string,
+    label: string,
+    targetUrl: string,
+    completionOriginUrl?: string,
+  ): Promise<void> {
+    const url = normalizeRemoteBrowserUrl(targetUrl);
 
     const s = electronSession.fromPartition(partition);
+    this.observeProfileSession(partition, s);
     configurePartitionSession(s);
 
     const win = new BrowserWindow({
       width: 1024,
       height: 768,
-      title: `Tabs Profile Login — ${trimmed}`,
+      title: `Tabs Profile Login - ${label}`,
       webPreferences: {
         partition,
         nodeIntegration: false,
@@ -391,10 +507,71 @@ export class BrowserHostManager {
       },
     });
 
-    win.webContents.setUserAgent(getCleanDesktopUserAgent());
+    win.webContents.setUserAgent(sanitizeEmbeddedBrowserUserAgent(win.webContents.getUserAgent()));
+    let authenticationCompleted = false;
+    const closeAfterAuthentication = (candidateUrl: string) => {
+      if (
+        authenticationCompleted ||
+        !completionOriginUrl ||
+        !hasReturnedToAuthenticationOrigin(candidateUrl, completionOriginUrl)
+      ) {
+        return;
+      }
+      authenticationCompleted = true;
+      void s.cookies
+        .flushStore()
+        .catch((err) => {
+          console.error("[browserHostManager] Failed to persist authenticated session:", err);
+        })
+        .finally(() => {
+          if (!win.isDestroyed()) win.close();
+        });
+    };
+    win.webContents.on("did-navigate", (_event, navigatedUrl) => {
+      closeAfterAuthentication(navigatedUrl);
+    });
+    win.webContents.on("did-navigate-in-page", (_event, navigatedUrl) => {
+      closeAfterAuthentication(navigatedUrl);
+    });
+    win.webContents.on("before-input-event", (event, input) => {
+      if (input.type === "keyDown" && input.key === "Escape") {
+        event.preventDefault();
+        win.close();
+      }
+    });
+    win.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
+      let protocol = "";
+      try {
+        protocol = new URL(popupUrl).protocol;
+      } catch {
+        return { action: "deny" };
+      }
+      if (protocol !== "https:" && protocol !== "http:") {
+        return { action: "deny" };
+      }
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          webPreferences: {
+            partition,
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: true,
+          },
+        },
+      };
+    });
 
-    win.loadURL(url).catch((err) => {
+    await win.loadURL(url).catch((err) => {
       console.error("[browserHostManager] Failed to load login URL:", err);
+    });
+    await new Promise<void>((resolve) => {
+      if (win.isDestroyed()) {
+        resolve();
+        return;
+      }
+      win.once("closed", resolve);
     });
   }
 
@@ -567,12 +744,26 @@ export class BrowserHostManager {
     window.webContents.send("desktop:browser-host:session-state", this.snapshotSession(session));
   }
 
+  private observeProfileSession(partition: string, s: Session): void {
+    if (!partition.startsWith(PROFILE_PARTITION_PREFIX) || this.observedProfileSessions.has(s)) {
+      return;
+    }
+    const profileId = partition.slice(PROFILE_PARTITION_PREFIX.length);
+    if (!BROWSER_PROFILE_ID_PATTERN.test(profileId)) return;
+    this.observedProfileSessions.add(s);
+    s.cookies.on("changed", () => {
+      const window = this.getWindow();
+      if (!window || window.isDestroyed()) return;
+      window.webContents.send("desktop:browser-host:profile-data-changed", profileId);
+    });
+  }
+
   private attachSession(session: BrowserSession): void {
     const window = this.getWindow();
     if (!window) return;
-    const currentViews = window.getBrowserViews();
+    const currentViews = window.contentView.children;
     if (!currentViews.includes(session.view)) {
-      window.addBrowserView(session.view);
+      window.contentView.addChildView(session.view);
     }
     session.view.webContents.focus?.();
   }
@@ -580,9 +771,9 @@ export class BrowserHostManager {
   private detachSession(session: BrowserSession): void {
     const window = this.getWindow();
     if (!window) return;
-    const currentViews = window.getBrowserViews();
+    const currentViews = window.contentView.children;
     if (currentViews.includes(session.view)) {
-      window.removeBrowserView(session.view);
+      window.contentView.removeChildView(session.view);
     }
   }
 
@@ -592,6 +783,25 @@ export class BrowserHostManager {
       session.canGoBack = contents.canGoBack();
       session.canGoForward = contents.canGoForward();
     };
+    let authenticationWindowPending = false;
+    const openAuthenticationWindow = (url: string, originatingUrl: string) => {
+      if (authenticationWindowPending) return;
+      authenticationWindowPending = true;
+      const profileId = session.partition.startsWith(PROFILE_PARTITION_PREFIX)
+        ? session.partition.slice(PROFILE_PARTITION_PREFIX.length)
+        : session.projectId;
+      void this.openLoginWindow(session.partition, profileId, url, originatingUrl).finally(() => {
+        authenticationWindowPending = false;
+        if (!contents.isDestroyed()) contents.reload();
+      });
+    };
+
+    contents.on("will-navigate", (event, url) => {
+      const currentUrl = contents.getURL();
+      if (!isLikelyAuthenticationUrl(url) || isLikelyAuthenticationUrl(currentUrl)) return;
+      event.preventDefault();
+      openAuthenticationWindow(url, currentUrl);
+    });
 
     contents.on("did-start-loading", () => {
       session.loading = true;
@@ -647,7 +857,7 @@ export class BrowserHostManager {
       },
     );
     // A blank embed used to be indistinguishable from a crash: if the page's
-    // renderer process died, the BrowserView just painted its background color
+    // renderer process died, the WebContentsView just painted its background color
     // with no indication. Surface it as an error (which the UI shows with a
     // reload affordance) instead of a silent black void.
     contents.on("render-process-gone", (_event, details) => {
@@ -685,6 +895,10 @@ export class BrowserHostManager {
       // session partition — otherwise the auth completes in the external
       // browser (different cookies, no window.opener) and can never hand the
       // session back. Allow them as a child window on the same partition.
+      if (disposition === "new-window" && isLikelyAuthenticationUrl(url)) {
+        openAuthenticationWindow(url, contents.getURL());
+        return { action: "deny" };
+      }
       if (disposition === "new-window") {
         return {
           action: "allow",

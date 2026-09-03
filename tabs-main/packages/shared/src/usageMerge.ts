@@ -45,6 +45,7 @@ export interface MergedUsage {
   readonly costUsd: number;
   readonly uncachedInputTokens: number;
   readonly cachedInputTokens: number;
+  readonly cacheCreationTokens: number;
   readonly outputTokens: number;
   readonly reasoningTokens: number;
   readonly totalTokens: number;
@@ -58,10 +59,7 @@ export interface MergedUsage {
 }
 
 function bucketTokens(bucket: UsageBucket): number {
-  return (
-    bucket.inputTokens +
-    bucket.outputTokens
-  );
+  return bucket.inputTokens + bucket.outputTokens;
 }
 
 export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsage {
@@ -70,6 +68,7 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
       costUsd: 0,
       uncachedInputTokens: 0,
       cachedInputTokens: 0,
+      cacheCreationTokens: 0,
       outputTokens: 0,
       reasoningTokens: 0,
       totalTokens: 0,
@@ -91,10 +90,13 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
   let costUsd = 0;
   let uncachedInputTokens = 0;
   let cachedInputTokens = 0;
+  let cacheCreationTokens = 0;
   let outputTokens = 0;
   let reasoningTokens = 0;
   let records = 0;
-  let sessions = 0;
+  let providerReportedTokens = 0;
+  let modelPricedTokens = 0;
+  let unpricedTokens = 0;
   let cacheSavingsUsd = 0;
 
   const providerAccumulator = new Map<
@@ -103,7 +105,7 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
   >();
   const modelAccumulator = new Map<
     string,
-    { provider: string; costUsd: number; totalTokens: number; records: number }
+    { model: string; provider: string; costUsd: number; totalTokens: number; records: number }
   >();
   const dailyAccumulator = new Map<
     string,
@@ -126,20 +128,21 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
   for (const bucket of summary.buckets) {
     const totalTokensInBucket = bucketTokens(bucket);
     costUsd += bucket.estimatedCostUsd;
-    uncachedInputTokens += Math.max(0, bucket.inputTokens - bucket.cachedInputTokens);
+    uncachedInputTokens += Math.max(
+      0,
+      bucket.inputTokens - bucket.cachedInputTokens - bucket.cacheCreationTokens,
+    );
     cachedInputTokens += bucket.cachedInputTokens;
+    cacheCreationTokens += bucket.cacheCreationTokens;
     outputTokens += bucket.outputTokens;
     reasoningTokens += bucket.reasoningTokens;
     records += bucket.turnCount;
-    sessions += bucket.sessionCount;
-
-    // Cache savings: estimate standard input rate vs cached rate (roughly 50-75% discount)
-    if (bucket.cachedInputTokens > 0) {
-      const impliedInputRate =
-        bucket.inputTokens > 0
-          ? bucket.estimatedCostUsd / (bucket.inputTokens + bucket.outputTokens * 3)
-          : 0.000003;
-      cacheSavingsUsd += bucket.cachedInputTokens * impliedInputRate * 0.75;
+    cacheSavingsUsd += bucket.cacheSavingsUsd;
+    unpricedTokens += bucket.unpricedTokens;
+    if (bucket.costSource === "providerReported") {
+      providerReportedTokens += bucket.pricedTokens;
+    } else if (bucket.costSource === "modelPriced") {
+      modelPricedTokens += bucket.pricedTokens;
     }
 
     // Provider aggregation
@@ -159,12 +162,14 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
     // Model aggregation
     const modelKey = `${bucket.provider}:${bucket.model}`;
     const prevModel = modelAccumulator.get(modelKey) ?? {
+      model: bucket.model,
       provider: bucket.provider,
       costUsd: 0,
       totalTokens: 0,
       records: 0,
     };
     modelAccumulator.set(modelKey, {
+      model: bucket.model,
       provider: bucket.provider,
       costUsd: prevModel.costUsd + bucket.estimatedCostUsd,
       totalTokens: prevModel.totalTokens + totalTokensInBucket,
@@ -211,7 +216,8 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
     }
   }
 
-  const totalTokens = uncachedInputTokens + cachedInputTokens + outputTokens;
+  const totalTokens = uncachedInputTokens + cachedInputTokens + cacheCreationTokens + outputTokens;
+  const qualityTokens = providerReportedTokens + modelPricedTokens + unpricedTokens;
 
   const providers: ProviderTotals[] = Array.from(providerAccumulator.entries())
     .map(([provider, data]) => ({
@@ -226,10 +232,9 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
     .sort((a, b) => b.costUsd - a.costUsd);
 
   const models: ModelTotals[] = Array.from(modelAccumulator.entries())
-    .map(([key, data]) => {
-      const model = key.split(":")[1] ?? key;
+    .map(([, data]) => {
       return {
-        model,
+        model: data.model,
         provider: data.provider,
         costUsd: data.costUsd,
         totalTokens: data.totalTokens,
@@ -262,19 +267,20 @@ export function mergeUsage(summary: UsageSummary | null | undefined): MergedUsag
     costUsd,
     uncachedInputTokens,
     cachedInputTokens,
+    cacheCreationTokens,
     outputTokens,
     reasoningTokens,
     totalTokens,
     records,
-    sessions,
+    sessions: summary.distinctSessions,
     providers,
     models,
     daily,
     hourly,
     costQuality: {
-      providerReportedShare: 0.85,
-      modelPricedShare: 0.95,
-      unpricedShare: 0.05,
+      providerReportedShare: qualityTokens > 0 ? providerReportedTokens / qualityTokens : 0,
+      modelPricedShare: qualityTokens > 0 ? modelPricedTokens / qualityTokens : 0,
+      unpricedShare: qualityTokens > 0 ? unpricedTokens / qualityTokens : 0,
       cacheSavingsUsd,
     },
   };

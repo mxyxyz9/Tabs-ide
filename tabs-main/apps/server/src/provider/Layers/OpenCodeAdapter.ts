@@ -52,6 +52,17 @@ import {
 import * as Option from "effect/Option";
 
 const PROVIDER = "opencode" as ProviderDriverKind;
+const OPENCODE_RESUME_VERSION = 1 as const;
+
+export function parseOpenCodeResume(raw: unknown): { readonly sessionId: string } | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const cursor = raw as Record<string, unknown>;
+  if (cursor.schemaVersion !== OPENCODE_RESUME_VERSION) return undefined;
+  if (typeof cursor.sessionId !== "string" || cursor.sessionId.trim().length === 0) {
+    return undefined;
+  }
+  return { sessionId: cursor.sessionId.trim() };
+}
 
 interface OpenCodeTurnSnapshot {
   readonly id: TurnId;
@@ -64,6 +75,18 @@ type OpenCodeSubscribedEvent =
   }
     ? TEvent
     : never;
+
+export function isOpenCodeIdleEvent(event: unknown): boolean {
+  if (!event || typeof event !== "object") return false;
+  const candidate = event as {
+    readonly type?: unknown;
+    readonly properties?: { readonly status?: { readonly type?: unknown } };
+  };
+  return (
+    candidate.type === "session.idle" ||
+    (candidate.type === "session.status" && candidate.properties?.status?.type === "idle")
+  );
+}
 
 interface OpenCodeSessionContext {
   session: ProviderSession;
@@ -659,6 +682,31 @@ export function makeOpenCodeAdapter(
       }
     });
 
+    const completeActiveTurn = Effect.fn("completeActiveOpenCodeTurn")(function* (
+      context: OpenCodeSessionContext,
+      raw: OpenCodeSubscribedEvent,
+    ) {
+      const activeTurnId = context.activeTurnId;
+      context.activeTurnId = undefined;
+      context.activeAgent = undefined;
+      context.activeVariant = undefined;
+      yield* updateProviderSession(context, { status: "ready" }, { clearActiveTurnId: true });
+      if (!activeTurnId) {
+        return;
+      }
+      yield* emit({
+        ...(yield* buildEventBase({
+          threadId: context.session.threadId,
+          turnId: activeTurnId,
+          raw,
+        })),
+        type: "turn.completed",
+        payload: {
+          state: "completed",
+        },
+      });
+    });
+
     const handleSubscribedEvent = Effect.fn("handleSubscribedEvent")(function* (
       context: OpenCodeSessionContext,
       event: OpenCodeSubscribedEvent,
@@ -948,21 +996,17 @@ export function makeOpenCodeAdapter(
             break;
           }
 
-          if (event.properties.status.type === "idle" && turnId) {
-            context.activeTurnId = undefined;
-            yield* updateProviderSession(context, { status: "ready" }, { clearActiveTurnId: true });
-            yield* emit({
-              ...(yield* buildEventBase({
-                threadId: context.session.threadId,
-                turnId,
-                raw: event,
-              })),
-              type: "turn.completed",
-              payload: {
-                state: "completed",
-              },
-            });
+          if (isOpenCodeIdleEvent(event)) {
+            yield* completeActiveTurn(context, event);
           }
+          break;
+        }
+
+        // OpenCode 1.17 emits this dedicated event after the final assistant
+        // message. Older releases represented the same transition as
+        // `session.status: idle`; both must settle the shared turn lifecycle.
+        case "session.idle": {
+          yield* completeActiveTurn(context, event);
           break;
         }
 
@@ -1082,6 +1126,7 @@ export function makeOpenCodeAdapter(
         const serverUrl = openCodeSettings.serverUrl;
         const serverPassword = openCodeSettings.serverPassword;
         const directory = input.cwd ?? serverConfig.cwd;
+        const resumeSessionId = parseOpenCodeResume(input.resumeCursor)?.sessionId;
         const existing = sessions.get(input.threadId);
         if (existing) {
           yield* stopOpenCodeContext(existing);
@@ -1106,17 +1151,31 @@ export function makeOpenCodeAdapter(
                 directory,
                 ...(server.external && serverPassword ? { serverPassword } : {}),
               });
-              const openCodeSession = yield* runOpenCodeSdk("session.create", () =>
-                client.session.create({
-                  title: `T3 Code ${input.threadId}`,
-                  permission: buildOpenCodePermissionRules(input.runtimeMode),
-                }),
-              );
+              const openCodeSession = resumeSessionId
+                ? yield* runOpenCodeSdk("session.get", () =>
+                    client.session.get({ sessionID: resumeSessionId }),
+                  )
+                : yield* runOpenCodeSdk("session.create", () =>
+                    client.session.create({
+                      title: `Tabs ${input.threadId}`,
+                      permission: buildOpenCodePermissionRules(input.runtimeMode),
+                    }),
+                  );
               if (!openCodeSession.data) {
                 return yield* new OpenCodeRuntimeError({
-                  operation: "session.create",
-                  detail: "OpenCode session.create returned no session payload.",
+                  operation: resumeSessionId ? "session.get" : "session.create",
+                  detail: resumeSessionId
+                    ? "OpenCode session.get returned no session payload."
+                    : "OpenCode session.create returned no session payload.",
                 });
+              }
+              if (resumeSessionId) {
+                yield* runOpenCodeSdk("session.update", () =>
+                  client.session.update({
+                    sessionID: openCodeSession.data!.id,
+                    permission: buildOpenCodePermissionRules(input.runtimeMode),
+                  }),
+                );
               }
               return {
                 sessionScope,
@@ -1157,6 +1216,10 @@ export function makeOpenCodeAdapter(
           cwd: directory,
           ...(input.modelSelection ? { model: input.modelSelection.model } : {}),
           threadId: input.threadId,
+          resumeCursor: {
+            schemaVersion: OPENCODE_RESUME_VERSION,
+            sessionId: started.openCodeSession.id,
+          },
           createdAt,
           updatedAt: createdAt,
         };

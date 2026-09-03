@@ -77,6 +77,12 @@ export const SplashLoaderTheme = Schema.Literals(["system", "light", "dark"]);
 export type SplashLoaderTheme = typeof SplashLoaderTheme.Type;
 export const DEFAULT_SPLASH_LOADER_THEME: SplashLoaderTheme = "system";
 
+export const SplashMinimumHoldSeconds = Schema.Literals([0, 1, 2, 3]);
+export type SplashMinimumHoldSeconds = typeof SplashMinimumHoldSeconds.Type;
+// Legacy persisted preference. Startup now uses a fixed two-second animation
+// hold, but older settings files must continue to decode without migration.
+export const DEFAULT_SPLASH_MINIMUM_HOLD_SECONDS: SplashMinimumHoldSeconds = 2;
+
 // Close animation — independent from startup, reuses same enum types
 export const DEFAULT_CLOSE_LOADER_STYLE: SplashLoaderStyle = "glass";
 export const DEFAULT_CLOSE_LOADER_PALETTE: SplashLoaderPalette = "mono";
@@ -171,6 +177,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   splashLoaderTheme: SplashLoaderTheme.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_LOADER_THEME)),
+  ),
+  splashMinimumHoldSeconds: SplashMinimumHoldSeconds.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_SPLASH_MINIMUM_HOLD_SECONDS)),
   ),
   closeLoaderStyle: SplashLoaderStyle.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_CLOSE_LOADER_STYLE)),
@@ -1043,6 +1052,7 @@ export const ClientSettingsPatch = Schema.Struct({
   splashLoaderStyle: Schema.optionalKey(SplashLoaderStyle),
   splashLoaderPalette: Schema.optionalKey(SplashLoaderPalette),
   splashLoaderTheme: Schema.optionalKey(SplashLoaderTheme),
+  splashMinimumHoldSeconds: Schema.optionalKey(SplashMinimumHoldSeconds),
   closeLoaderStyle: Schema.optionalKey(SplashLoaderStyle),
   closeLoaderPalette: Schema.optionalKey(SplashLoaderPalette),
   closeLoaderTheme: Schema.optionalKey(SplashLoaderTheme),

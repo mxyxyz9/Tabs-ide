@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
+import { useAtomValue } from "@effect/atom-react";
 
 import { APP_DISPLAY_NAME } from "../branding";
 import { Button } from "../components/ui/button";
@@ -22,10 +23,12 @@ import { terminalRunningSubprocessFromEvent } from "../terminalActivity";
 import { onServerConfigUpdated, onServerProvidersUpdated, onServerWelcome } from "../wsNativeApi";
 import { migrateLocalSettingsToServer, useSettings } from "../hooks/useSettings";
 import { useMinimumDuration } from "../hooks/useMinimumDuration";
-import { SplashScreen } from "../components/SplashScreen";
+import {
+  SplashScreen,
+  STARTUP_ANIMATION_EXIT_MS,
+  STARTUP_ANIMATION_HOLD_MS,
+} from "../components/SplashScreen";
 import { cn } from "../lib/utils";
-import { useAtomValue } from "@effect/atom-react";
-import { threadsHydratedAtom } from "../state/threads";
 import { providerQueryKeys } from "../lib/providerReactQuery";
 import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
@@ -37,6 +40,7 @@ import { readModelStateAtom } from "../state/readModel";
 import { composerDraftActions, composerDraftsAtom } from "../state/composerDrafts";
 import { workspaceShellAtom } from "../state/workspaceShell";
 import { applyServerConfigUpdate, refreshServerConfig } from "../state/settings";
+import { threadsHydratedAtom } from "../state/threads";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -51,13 +55,16 @@ export const Route = createRootRouteWithContext<{
 function RootRouteView() {
   const isNativeApiReady = !!readNativeApi();
   const threadsHydrated = useAtomValue(threadsHydratedAtom);
-  const ready = useMinimumDuration(isNativeApiReady && threadsHydrated, 4000);
-  const [mounted, setMounted] = useState(true);
   const settings = useSettings();
+  const ready = useMinimumDuration(
+    isNativeApiReady && threadsHydrated,
+    STARTUP_ANIMATION_HOLD_MS,
+  );
+  const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
     if (ready) {
-      const timer = setTimeout(() => setMounted(false), 1200);
+      const timer = setTimeout(() => setMounted(false), STARTUP_ANIMATION_EXIT_MS + 200);
       return () => clearTimeout(timer);
     } else {
       setMounted(true);

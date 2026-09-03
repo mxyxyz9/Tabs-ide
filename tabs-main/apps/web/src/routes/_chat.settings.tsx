@@ -1,5 +1,5 @@
 import { CustomThemeStudioModal } from "../components/CustomThemeStudioModal";
-import { useGlobalSettingsViewState } from "~/state/scopedStateStore";
+import { useSettingsViewState } from "~/state/scopedStateStore";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -39,7 +39,6 @@ import {
   ShuffleIcon,
   Trash2Icon,
   FingerprintIcon,
-  GlobeIcon,
   GaugeIcon,
 } from "lucide-react";
 import { UsageLimitsPage } from "../components/settings/usage/UsageLimitsPage";
@@ -192,14 +191,16 @@ import { SourceControlSettingsPanel } from "../components/settings/SourceControl
 import { ConnectionsSettings } from "../components/settings/ConnectionsSettings";
 import { Equal } from "effect";
 import { refreshServerConfig, useServerConfig } from "../state/settings";
-import { SplashScreen } from "../components/SplashScreen";
+import {
+  SplashScreen,
+  STARTUP_ANIMATION_EXIT_MS,
+  STARTUP_ANIMATION_HOLD_MS,
+} from "../components/SplashScreen";
 import { CloseScreen } from "../components/CloseScreen";
 import { useConfirm } from "~/hooks/useConfirm";
 import { createPortal } from "react-dom";
 import { useZoomFactor, ZOOM_SNAP_POINTS } from "../state/zoom";
 import { useWorkspaceActiveProjectId } from "../state/workspaceShell";
-import { useAtomValue } from "@effect/atom-react";
-import { projectsAtom } from "../state/threads";
 
 export function SettingsHeaderPortal({ children }: { children: React.ReactNode }) {
   const [target, setTarget] = useState<Element | null>(null);
@@ -1892,7 +1893,7 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
   useEffect(() => {
     const exitTimer = setTimeout(() => {
       setIsExiting(true);
-    }, 4000);
+    }, STARTUP_ANIMATION_HOLD_MS);
 
     return () => clearTimeout(exitTimer);
   }, []);
@@ -1901,7 +1902,7 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
     if (isExiting) {
       const closeTimer = setTimeout(() => {
         onCloseRef.current();
-      }, 700);
+      }, STARTUP_ANIMATION_EXIT_MS + 200);
       return () => clearTimeout(closeTimer);
     }
   }, [isExiting]);
@@ -1909,7 +1910,7 @@ function StartupPreviewOverlay({ loader, palette, theme, fontComboId, customFont
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[99999] cursor-pointer will-change-transform transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        "fixed inset-0 z-[99999] cursor-pointer will-change-transform transition-transform duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]",
         isExiting ? "-translate-y-full" : "translate-y-0",
       )}
       onClick={() => setIsExiting(true)}
@@ -2063,12 +2064,6 @@ function SettingsRouteView() {
   const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
   const [zoomFactor, updateZoom] = useZoomFactor();
   const activeProjectId = useWorkspaceActiveProjectId();
-  const [settingsScope, setSettingsScope] = useState<"project" | "global">("project");
-  const projects = useAtomValue(projectsAtom);
-  const activeProject = useMemo(
-    () => (activeProjectId ? (projects.find((p) => p.id === activeProjectId) ?? null) : null),
-    [projects, activeProjectId],
-  );
   const settings = useSettings();
   const { updateSettings, resetSettings } = useUpdateSettings();
   const [confirmBeforeQuit, setConfirmBeforeQuit] = useState(true);
@@ -2094,7 +2089,7 @@ function SettingsRouteView() {
   const serverConfig = useServerConfig();
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
-  const [settingsViewState, updateSettingsViewState] = useGlobalSettingsViewState();
+  const [settingsViewState, updateSettingsViewState] = useSettingsViewState();
   const activeSettingsSection = (settingsViewState.activeSection as SettingsSectionId) || "general";
   const setActiveSettingsSection = useCallback(
     (s: SettingsSectionId) => {
@@ -2283,13 +2278,6 @@ function SettingsRouteView() {
       ? setPreviewStartupCustomAnimationFont
       : setPreviewCloseCustomAnimationFont;
 
-  const [alwaysAnimateGitLoader, setAlwaysAnimateGitLoader] = useState<boolean>(() => {
-    try {
-      return window.localStorage?.getItem("tabs.alwaysAnimateGitLoader") === "true";
-    } catch {
-      return false;
-    }
-  });
   const [fullscreenClosePreview, setFullscreenClosePreview] = useState(false);
   const [fullscreenStartupPreview, setFullscreenStartupPreview] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
@@ -2985,36 +2973,6 @@ function SettingsRouteView() {
                 Back
               </Button>
               <span className="text-sm font-medium text-foreground">Settings</span>
-              {activeProject ? (
-                <div className="ml-3 flex items-center p-0.5 bg-muted/60 border border-border/60 rounded-lg text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setSettingsScope("project")}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
-                      settingsScope === "project"
-                        ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <span className="size-2 rounded-full bg-primary" />
-                    <span>{activeProject.name}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsScope("global")}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
-                      settingsScope === "global"
-                        ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <GlobeIcon className="size-3.5 text-primary" />
-                    <span>Global Settings</span>
-                  </button>
-                </div>
-              ) : null}
               <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
             </div>
           </header>
@@ -3034,36 +2992,6 @@ function SettingsRouteView() {
             <span className="ml-2 text-xs font-medium tracking-wide text-muted-foreground/70">
               Settings
             </span>
-            {activeProject ? (
-              <div className="ml-3 flex items-center p-0.5 bg-muted/60 border border-border/60 rounded-lg no-drag text-xs">
-                <button
-                  type="button"
-                  onClick={() => setSettingsScope("project")}
-                  className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
-                    settingsScope === "project"
-                      ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <span className="size-2 rounded-full bg-primary" />
-                  <span>{activeProject.name}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSettingsScope("global")}
-                  className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
-                    settingsScope === "global"
-                      ? "bg-background text-foreground shadow-xs border border-border/80 font-semibold"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <GlobeIcon className="size-3.5 text-primary" />
-                  <span>Global Settings</span>
-                </button>
-              </div>
-            ) : null}
             <div id="settings-header-actions" className="ms-auto flex items-center gap-2"></div>
           </div>
         )}
@@ -4375,6 +4303,8 @@ function SettingsRouteView() {
                             )}
                             <div className="flex bg-muted p-1 rounded-lg gap-1">
                               <button
+                                type="button"
+                                aria-pressed={animationTab === "startup"}
                                 onClick={() => setAnimationTab("startup")}
                                 className={cn(
                                   "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
@@ -4386,6 +4316,8 @@ function SettingsRouteView() {
                                 Startup
                               </button>
                               <button
+                                type="button"
+                                aria-pressed={animationTab === "close"}
                                 onClick={() => setAnimationTab("close")}
                                 className={cn(
                                   "px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap",
@@ -5006,38 +4938,12 @@ function SettingsRouteView() {
                               />
                             }
                           />
-
-                          <SettingsRow
-                            title="Always show Git loading animation"
-                            description="Play Mercury Chrome loading animation every time Git tab is selected. When disabled, animation plays once on initial load and subsequent tab switches load instantly."
-                            control={
-                              <Switch
-                                checked={alwaysAnimateGitLoader}
-                                onCheckedChange={(checked) => {
-                                  const val = Boolean(checked);
-                                  setAlwaysAnimateGitLoader(val);
-                                  try {
-                                    window.localStorage?.setItem(
-                                      "tabs.alwaysAnimateGitLoader",
-                                      String(val),
-                                    );
-                                  } catch {}
-                                }}
-                                aria-label="Always show Git loading animation"
-                              />
-                            }
-                          />
                         </div>
                       </div>
                     </SettingsSection>
                   </div>
                 ) : null}
-                {activeSettingsSection === "workspace" ? (
-                  <ProjectWorkspaceSettingsSection
-                    scope={settingsScope}
-                    onScopeChange={setSettingsScope}
-                  />
-                ) : null}
+                {activeSettingsSection === "workspace" ? <ProjectWorkspaceSettingsSection /> : null}
                 {activeSettingsSection === "profiles" ? <BrowserProfilesSettings /> : null}
                 {activeSettingsSection === "source-control" ? (
                   <SourceControlSettingsPanel

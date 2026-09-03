@@ -373,7 +373,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         }
       }
 
-      if (!hasResumeCursor) {
+      const canRecoverLegacySessionWithoutCursor =
+        input.binding.provider === ("opencode" as ProviderDriverKind) ||
+        input.binding.provider === ("kilo" as ProviderDriverKind);
+      if (!hasResumeCursor && !canRecoverLegacySessionWithoutCursor) {
         return yield* toValidationError(
           input.operation,
           `Cannot recover thread '${input.binding.threadId}' because no provider resume state is persisted.`,
@@ -405,7 +408,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       );
       yield* analytics.record("provider.session.recovered", {
         provider: resumed.provider,
-        strategy: "resume-thread",
+        strategy: hasResumeCursor ? "resume-thread" : "replace-legacy-session",
         hasResumeCursor: resumed.resumeCursor !== undefined,
       });
       return { adapter, session: resumed } as const;

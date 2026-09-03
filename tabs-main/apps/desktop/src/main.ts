@@ -161,7 +161,11 @@ function resolveRootDir(): string {
   return Path.resolve(__dirname, "../../..");
 }
 
-type PersistedDesktopTheme = { themeId: string; customConfig?: unknown };
+type PersistedDesktopTheme = {
+  themeId: string;
+  preference?: string;
+  customConfig?: unknown;
+};
 
 function loadPersistedDesktopTheme(): PersistedDesktopTheme | null {
   try {
@@ -170,7 +174,14 @@ function loadPersistedDesktopTheme(): PersistedDesktopTheme | null {
       unknown
     >;
     const themeId = getSafeTheme(parsed.themeId);
-    return themeId ? { themeId, customConfig: parsed.customConfig } : null;
+    const preference = getSafeTheme(parsed.preference);
+    return themeId
+      ? {
+          themeId,
+          ...(preference ? { preference } : null),
+          customConfig: parsed.customConfig,
+        }
+      : null;
   } catch {
     return null;
   }
@@ -251,16 +262,13 @@ const codeControlChannel = new CodeControlChannel();
 const codeHostManager = new CodeHostManager(() => mainWindow, codeHostConfig, codeControlChannel);
 const persistedDesktopTheme = loadPersistedDesktopTheme();
 if (persistedDesktopTheme) {
-  nativeTheme.themeSource = isLightDesktopTheme(
-    persistedDesktopTheme.themeId,
-    persistedDesktopTheme.customConfig,
-  )
-    ? "light"
-    : "dark";
-  codeHostManager.setTheme(
-    persistedDesktopTheme.themeId,
-    persistedDesktopTheme.customConfig,
-  );
+  nativeTheme.themeSource =
+    !persistedDesktopTheme.preference || persistedDesktopTheme.preference === "system"
+      ? "system"
+      : isLightDesktopTheme(persistedDesktopTheme.themeId, persistedDesktopTheme.customConfig)
+        ? "light"
+        : "dark";
+  codeHostManager.setTheme(persistedDesktopTheme.themeId, persistedDesktopTheme.customConfig);
 }
 const browserHostManager = new BrowserHostManager(() => mainWindow);
 const CODE_OSS_PRIMARY_STATE_DIR = Path.join(STATE_DIR, "code-oss-main");
@@ -1710,10 +1718,12 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(SET_THEME_CHANNEL);
   ipcMain.handle(SET_THEME_CHANNEL, async (_event, payload: unknown) => {
     let themeId: string | null = null;
+    let preference: string | null = null;
     let customConfig: any = null;
 
     if (typeof payload === "object" && payload !== null && "themeId" in payload) {
       themeId = getSafeTheme((payload as any).themeId);
+      preference = getSafeTheme((payload as any).preference);
       customConfig = (payload as any).customConfig ?? null;
     } else {
       themeId = getSafeTheme(payload);
@@ -1723,10 +1733,13 @@ function registerIpcHandlers(): void {
       return;
     }
 
-    const isLight = isLightDesktopTheme(themeId, customConfig);
-
-    nativeTheme.themeSource = isLight ? "light" : "dark";
-    savePersistedDesktopTheme({ themeId, customConfig });
+    const isSystem = preference === "system";
+    nativeTheme.themeSource = isSystem
+      ? "system"
+      : isLightDesktopTheme(themeId, customConfig)
+        ? "light"
+        : "dark";
+    savePersistedDesktopTheme({ themeId, preference: preference ?? themeId, customConfig });
     codeControlChannel.setTheme(themeId, customConfig);
     codeHostManager.setTheme(themeId, customConfig);
   });
@@ -2237,7 +2250,7 @@ function registerIpcHandlers(): void {
       typeof (input as { url?: unknown }).url === "string"
         ? (input as { url: string }).url
         : undefined;
-    browserHostManager.openProfileLoginWindow(profileId, url);
+    await browserHostManager.openProfileLoginWindow(profileId, url);
   });
 
   ipcMain.removeHandler(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL);
@@ -2286,7 +2299,6 @@ function registerIpcHandlers(): void {
 
   ipcMain.removeHandler(VSCODE_NOTIFY_ZOOM_LEVEL_CHANNEL);
   ipcMain.handle(VSCODE_NOTIFY_ZOOM_LEVEL_CHANNEL, async () => undefined);
-
 }
 
 function getIconOption(): { icon: string } | Record<string, never> {
@@ -2303,6 +2315,7 @@ function createTabsWindow(): BrowserWindow {
     minWidth: 840,
     minHeight: 620,
     show: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#141414" : "#f8f8f8",
     autoHideMenuBar: true,
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
@@ -2312,7 +2325,6 @@ function createTabsWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webviewTag: true,
     },
   });
 
@@ -2516,8 +2528,8 @@ async function bootstrap(): Promise<void> {
       codeHostConfig.runtime.vscodeRoot,
       codeHostConfig.runtime.stateDir,
     );
-    codeHostManager.setNativeWebContentsRegistrar((webContents) => {
-      nativeCodeHostMainBackend?.registerWebContents(webContents);
+    codeHostManager.setNativeWebContentsRegistrar((webContents, getBounds) => {
+      nativeCodeHostMainBackend?.registerWebContents(webContents, getBounds);
     });
     writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
   }

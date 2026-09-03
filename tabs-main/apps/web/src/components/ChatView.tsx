@@ -116,6 +116,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleAlertIcon,
+  CircleCheckIcon,
   ImageIcon,
   ListTodoIcon,
   LockIcon,
@@ -130,6 +131,12 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { cn, randomUUID } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { toastManager } from "./ui/toast";
+import {
+  isSettled,
+  lifecycleFor,
+  threadLifecycleActions,
+  useThreadLifecycle,
+} from "../state/threadLifecycle";
 import {
   projectScriptCwd,
   projectScriptRuntimeEnv,
@@ -614,6 +621,13 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     [draftThread, fallbackDraftProject?.defaultModelSelection, localDraftError, threadId],
   );
   const activeThread = serverThread ?? localDraftThread;
+  const lifecycle = useThreadLifecycle();
+  const activeLifecycle = activeThread ? lifecycleFor(lifecycle, activeThread.id) : null;
+  const activeThreadIsSettled = Boolean(
+    activeThread &&
+      activeLifecycle &&
+      isSettled(activeLifecycle, activeThread.updatedAt ?? activeThread.createdAt),
+  );
   const runtimeMode =
     composerDraft.runtimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
   const interactionMode =
@@ -2616,6 +2630,9 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     }
 
     const threadIdForSend = activeThread.id;
+    if (activeThreadIsSettled) {
+      threadLifecycleActions.activate(activeThread.id);
+    }
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
       isFirstMessage && envMode === "worktree" && !activeThread.worktreePath
@@ -3728,9 +3745,32 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
             }
           }}
         />
+        {activeThreadIsSettled && (
+          <div
+            className="flex items-center gap-2 rounded-t-xl border border-b-0 border-primary/35 bg-primary/5 px-3 py-2 text-sm"
+            role="status"
+          >
+            <CircleCheckIcon aria-hidden="true" className="size-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-foreground">This thread is settled</p>
+              <p className="text-xs text-muted-foreground">
+                Sending a message returns it to Unsettled.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => threadLifecycleActions.unsettle(activeThread.id)}
+            >
+              Unsettle
+            </Button>
+          </div>
+        )}
         <div
           className={cn(
             "group rounded-2xl p-0.5 transition-all duration-200",
+            activeThreadIsSettled && "rounded-t-none",
             composerProviderState.composerFrameClassName,
           )}
           onDragEnter={onComposerDragEnter}
@@ -3742,6 +3782,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
             ref={composerCardRef}
             className={cn(
               "rounded-2xl border bg-card/90 shadow-md transition-all duration-200 overflow-hidden flex flex-col",
+              activeThreadIsSettled && "rounded-t-none",
               isDragOverComposer
                 ? "border-foreground/40 bg-accent/30"
                 : "border-border/60 hover:border-border/80 has-focus-visible:border-foreground/30 has-focus-visible:ring-1 has-focus-visible:ring-foreground/20",

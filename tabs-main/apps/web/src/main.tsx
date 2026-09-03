@@ -4,6 +4,7 @@ import { createHashHistory, createBrowserHistory } from "@tanstack/react-router"
 
 import "@xterm/xterm/css/xterm.css";
 import "@vscode/codicons/dist/codicon.css";
+import "./localFonts.css";
 import "./index.css";
 
 import { isElectron } from "./env";

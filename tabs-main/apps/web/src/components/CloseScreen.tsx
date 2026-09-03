@@ -89,7 +89,7 @@ function RotatingLabel({
     >
       <span
         key={phase === "holding" ? "goodbye" : messages[idx]}
-        className="absolute inset-x-0 whitespace-nowrap text-[11px] font-semibold tracking-[0.22em] uppercase transition-opacity duration-300"
+        className="absolute inset-x-0 whitespace-nowrap text-[11px] font-light tracking-[0.22em] uppercase transition-opacity duration-300"
       >
         {phase === "holding" ? "GOODBYE." : messages[idx]}
       </span>
@@ -224,7 +224,7 @@ function MoltenGlassClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAn
           {/* Word with drain animation */}
           <div
             className={cn(
-              "text-[80px] font-[800] tracking-[-0.02em] transform-origin-[center_bottom]",
+              "text-[80px] font-light tracking-[-0.02em] transform-origin-[center_bottom]",
               animating && "cq-word-drain",
               isBlock
                 ? (isDark ? "text-[#1c0f0e]" : "text-white")
@@ -307,7 +307,7 @@ function SolariGridClose({ phase, palette, isDark, onIntroEnd, fonts }: CloseAni
               <div
                 key={i}
                 className={cn(
-                  "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-bold transition-all duration-[280ms]",
+                  "relative flex h-[64px] w-[52px] items-center justify-center rounded-[6px] border text-[26px] font-light transition-all duration-[280ms]",
                   animating && (isDark ? "cq-tile-dim" : "cq-tile-dim-light"),
                   isBlock
                     ? "border-white/24 bg-white/12"

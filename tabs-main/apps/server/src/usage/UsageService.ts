@@ -28,10 +28,7 @@ import { resolveClaudeHomePath } from "../provider/Drivers/ClaudeHome.ts";
 import { resolveCodexHomeLayout } from "../provider/Drivers/CodexHomeLayout.ts";
 import { UsageAggregator } from "./usageAggregation.ts";
 import { parseRateTable, type RateTable } from "./usagePricing.ts";
-import {
-  listTranscriptFiles,
-  readTranscriptRecords,
-} from "./usageTranscriptReader.ts";
+import { listTranscriptFiles, readTranscriptRecords } from "./usageTranscriptReader.ts";
 import {
   decodeScanCache,
   dedupeWithinFile,
@@ -57,9 +54,7 @@ const MTIME_SLACK_MS = 36 * 60 * 60 * 1000;
 const CACHE_RETENTION_DAYS = 90;
 
 export interface UsageServiceShape {
-  readonly readSummary: (
-    input: UsageSummaryInput,
-  ) => Effect.Effect<UsageSummary, UsageReadError>;
+  readonly readSummary: (input: UsageSummaryInput) => Effect.Effect<UsageSummary, UsageReadError>;
 }
 
 export class UsageService extends Context.Service<UsageService, UsageServiceShape>()(
@@ -136,13 +131,12 @@ export const make = Effect.gen(function* () {
 
   const resolveTranscriptDirs = Effect.fn("UsageService.resolveTranscriptDirs")(function* () {
     const settings = yield* settingsService.getSettings.pipe(
-      Effect.catchCause(
-        () =>
-          Effect.fail(
-            new UsageReadError({
-              message: "Server settings could not be read.",
-            }),
-          ),
+      Effect.catchCause(() =>
+        Effect.fail(
+          new UsageReadError({
+            message: "Server settings could not be read.",
+          }),
+        ),
       ),
     );
 
@@ -152,15 +146,18 @@ export const make = Effect.gen(function* () {
 
     return [
       { provider: "claude" as UsageProviderKind, dir: claudeDir },
-      { provider: "codex" as UsageProviderKind, dir: path.join(codexLayout.sharedHomePath, "sessions") },
+      {
+        provider: "codex" as UsageProviderKind,
+        dir: path.join(codexLayout.sharedHomePath, "sessions"),
+      },
     ];
   });
 
   const ensureScanCacheLoaded = yield* Effect.cached(
     Effect.gen(function* () {
-      const rawString = yield* fileSystem.readFileString(scanCachePath).pipe(
-        Effect.catchCause(() => Effect.succeed(null)),
-      );
+      const rawString = yield* fileSystem
+        .readFileString(scanCachePath)
+        .pipe(Effect.catchCause(() => Effect.succeed(null)));
       if (rawString !== null) {
         const doc = parseJsonSafe(rawString);
         if (doc !== null) {
@@ -290,6 +287,7 @@ export const make = Effect.gen(function* () {
         ...(input.sinceTime ? { sinceTime: input.sinceTime } : {}),
         ...(input.untilTime ? { untilTime: input.untilTime } : {}),
         buckets: aggregated.buckets,
+        distinctSessions: aggregated.distinctSessions,
         sources,
         pricing: {
           status: ratesStatus,

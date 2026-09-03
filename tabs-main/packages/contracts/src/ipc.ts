@@ -1074,7 +1074,8 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
 export interface BrowserProfileDomainInfo {
   domain: string;
   cookieCount: number;
-  isAuthenticated: boolean;
+  /** A session-shaped cookie exists. This is only a hint, never proof of a valid login. */
+  hasSessionHint: boolean;
 }
 
 export interface DesktopBridge {
@@ -1139,6 +1140,7 @@ export interface DesktopBridge {
   openBrowserProfileLoginWindow: (input: { profileId: string; url?: string }) => Promise<void>;
   getBrowserProfileDomains: (input: { profileId: string }) => Promise<BrowserProfileDomainInfo[]>;
   clearBrowserProfileDomain: (input: { profileId: string; domain: string }) => Promise<void>;
+  onBrowserProfileDataChanged: (listener: (profileId: string) => void) => () => void;
   onBrowserSessionState: (listener: (state: DesktopBrowserSessionState) => void) => () => void;
   getTailscaleStatus: () => Promise<{
     available: boolean;
@@ -1276,7 +1278,9 @@ export interface LocalApi {
     ) => Promise<ServerProcessResourceHistoryResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
     readUsageSummary: (input: UsageSummaryInput) => Promise<UsageSummary>;
-    listUsageSnapshots: (input?: ServerListProviderUsageInput) => Promise<ServerListProviderUsageResult>;
+    listUsageSnapshots: (
+      input?: ServerListProviderUsageInput,
+    ) => Promise<ServerListProviderUsageResult>;
     refreshAllUsageSnapshots: () => Promise<ServerListProviderUsageResult>;
   };
 }

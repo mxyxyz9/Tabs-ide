@@ -48,10 +48,11 @@ export function LimitsTab() {
         provider: provider as any,
         updatedAt: new Date().toISOString(),
         source: "local",
-        status: "ok",
+        status: "unsupported",
         planName: undefined,
         limits: [],
         usageLines: [],
+        detail: "Live quota integration is not available for this provider.",
       };
       return { snapshot: fallback, isEnabled };
     });
@@ -81,7 +82,11 @@ export function LimitsTab() {
   return (
     <div className="space-y-6">
       {snapshotsState.loading && snapshots.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground">
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground"
+        >
           <LoaderIcon className="size-6 animate-spin" />
           <span className="text-sm">Fetching live provider quotas and limits...</span>
         </div>
@@ -103,8 +108,8 @@ export function LimitsTab() {
             <InfoIcon className="mt-0.5 size-4 shrink-0 text-primary" />
             <p className="leading-relaxed">
               Usage is read locally from each provider CLI&apos;s stored credentials and fetched
-              directly from the provider. Short-lived tokens are refreshed through the provider&apos;s
-              own CLI or official token endpoint.
+              directly from the provider. Short-lived tokens are refreshed through the
+              provider&apos;s own CLI or official token endpoint.
             </p>
           </div>
         </>

@@ -2,14 +2,23 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ProviderInstanceId } from "./providerInstance.ts";
 
-export const USAGE_CONTRACT_VERSION = 1;
+export const USAGE_CONTRACT_VERSION = 2;
 
-export const UsageProviderKind = Schema.Literals(["codex", "claude", "cursor", "copilot", "grok", "antigravity", "droid", "kilo", "opencode", "openrouter"]);
+export const UsageProviderKind = Schema.Literals([
+  "codex",
+  "claude",
+  "cursor",
+  "copilot",
+  "grok",
+  "antigravity",
+  "droid",
+  "kilo",
+  "opencode",
+  "openrouter",
+]);
 export type UsageProviderKind = typeof UsageProviderKind.Type;
 
-export const IsoDateString = TrimmedNonEmptyString.check(
-  Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/),
-);
+export const IsoDateString = TrimmedNonEmptyString.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/));
 export type IsoDateString = typeof IsoDateString.Type;
 
 export const UsageTimeWindow = Schema.Struct({
@@ -39,10 +48,8 @@ export interface UsageTokenTotals {
   readonly reasoningTokens: number;
 }
 
-export interface UsageCostSource {
-  readonly provider: string;
-  readonly model: string;
-}
+export const UsageCostSource = Schema.Literals(["providerReported", "modelPriced", "unpriced"]);
+export type UsageCostSource = typeof UsageCostSource.Type;
 
 export const UsageBucket = Schema.Struct({
   provider: Schema.String,
@@ -53,7 +60,10 @@ export const UsageBucket = Schema.Struct({
   outputTokens: Schema.Number,
   reasoningTokens: Schema.Number,
   cachedInputTokens: Schema.Number,
+  cacheCreationTokens: Schema.Number,
   estimatedCostUsd: Schema.Number,
+  cacheSavingsUsd: Schema.Number,
+  costSource: UsageCostSource,
   pricedTokens: Schema.Number,
   unpricedTokens: Schema.Number,
   hasCustomPrice: Schema.Boolean,
@@ -88,23 +98,27 @@ export const UsageSummary = Schema.Struct({
   sinceTime: Schema.optional(Schema.String),
   untilTime: Schema.optional(Schema.String),
   buckets: Schema.Array(UsageBucket),
+  distinctSessions: Schema.Number,
   sources: Schema.Array(UsageSource),
   pricing: UsagePricingStatus,
   scanDurationMs: Schema.Number,
 });
 export type UsageSummary = typeof UsageSummary.Type;
 
-export class UsageReadError extends Schema.TaggedErrorClass<UsageReadError>()(
-  "UsageReadError",
-  {
-    message: Schema.String,
-    detail: Schema.optional(Schema.String),
-  },
-) {}
+export class UsageReadError extends Schema.TaggedErrorClass<UsageReadError>()("UsageReadError", {
+  message: Schema.String,
+  detail: Schema.optional(Schema.String),
+}) {}
 
 // --- Live Limits / Quota Schemas (ported from synara) ---
 
-export const ProviderUsageStatus = Schema.Literals(["ok", "needs-auth", "unsupported", "error"]);
+export const ProviderUsageStatus = Schema.Literals([
+  "ok",
+  "needs-auth",
+  "quota-unavailable",
+  "unsupported",
+  "error",
+]);
 export type ProviderUsageStatus = typeof ProviderUsageStatus.Type;
 
 export const ServerProviderUsageLimit = Schema.Struct({

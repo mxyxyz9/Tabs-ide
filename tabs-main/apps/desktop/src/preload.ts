@@ -50,15 +50,16 @@ const BROWSER_HOST_SESSION_STATE_CHANNEL = "desktop:browser-host:session-state";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
 const BROWSER_HOST_RECREATE_SESSION_CHANNEL = "desktop:browser-host:recreate-session";
 const BROWSER_HOST_CLEAR_PROFILE_DATA_CHANNEL = "desktop:browser-host:clear-profile-data";
-const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL = "desktop:browser-host:open-profile-login-window";
+const BROWSER_HOST_OPEN_PROFILE_LOGIN_WINDOW_CHANNEL =
+  "desktop:browser-host:open-profile-login-window";
 const BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL = "desktop:browser-host:get-profile-domains";
 const BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL = "desktop:browser-host:clear-profile-domain";
+const BROWSER_HOST_PROFILE_DATA_CHANGED_CHANNEL = "desktop:browser-host:profile-data-changed";
 
 // Persistence channels
 const GET_PERSISTED_ITEM_CHANNEL = "desktop:get-persisted-item";
 const SET_PERSISTED_ITEM_CHANNEL = "desktop:set-persisted-item";
 const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
-
 
 contextBridge.exposeInMainWorld("desktopBridge", {
   getWsUrl: () => {
@@ -139,6 +140,15 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_GET_PROFILE_DOMAINS_CHANNEL, input),
   clearBrowserProfileDomain: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_CLEAR_PROFILE_DOMAIN_CHANNEL, input),
+  onBrowserProfileDataChanged: (listener) => {
+    const wrappedListener = (_event: Electron.IpcRendererEvent, profileId: unknown) => {
+      if (typeof profileId === "string") listener(profileId);
+    };
+    ipcRenderer.on(BROWSER_HOST_PROFILE_DATA_CHANGED_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(BROWSER_HOST_PROFILE_DATA_CHANGED_CHANNEL, wrappedListener);
+    };
+  },
   onBrowserSessionState: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, state: unknown) => {
       if (typeof state !== "object" || state === null) return;

@@ -34,6 +34,22 @@ describe("ClientSettings word wrap", () => {
   });
 });
 
+describe("ClientSettings startup animation", () => {
+  it("defaults the legacy startup hold preference to two seconds", () => {
+    expect(decodeClientSettings({}).splashMinimumHoldSeconds).toBe(2);
+  });
+
+  it.each([0, 1, 2, 3] as const)("accepts a %s second minimum hold", (seconds) => {
+    expect(
+      decodeClientSettings({ splashMinimumHoldSeconds: seconds }).splashMinimumHoldSeconds,
+    ).toBe(seconds);
+  });
+
+  it("rejects unsupported minimum holds", () => {
+    expect(() => decodeClientSettings({ splashMinimumHoldSeconds: 4 })).toThrow();
+  });
+});
+
 describe("ServerSettings.providerInstances (slice-2 invariant)", () => {
   it("defaults to an empty record so legacy configs without the key still decode", () => {
     expect(DEFAULT_SERVER_SETTINGS.providerInstances).toEqual({});

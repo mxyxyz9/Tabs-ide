@@ -13,29 +13,21 @@ import {
   XIcon,
   ShieldCheckIcon,
   SparklesIcon,
-  Maximize2Icon,
-  Minimize2Icon,
-  LockIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useAtomValue } from "@effect/atom-react";
 import { projectsAtom } from "../../state/threads";
-import { workspaceShellAtom } from "../../state/workspaceShell";
+import { workspaceShellActions, workspaceShellAtom } from "../../state/workspaceShell";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { useConfirm } from "../../hooks/useConfirm";
 import { toastManager } from "../ui/toast";
 import { cn } from "../../lib/utils";
+import { removeBrowserProfileAssignments } from "./browserProfileAssignments";
 
 const PRESET_COLORS = [
   "#3b82f6", // Blue
@@ -119,9 +111,15 @@ export function BrowserProfilesSettings() {
     }
     return map;
   }, [projects, shellState.projectSettingsByProjectId]);
+  const hasNamedProfileAssignments = useMemo(
+    () => Array.from(usageByProfileId.values()).some((assignments) => assignments.length > 0),
+    [usageByProfileId],
+  );
 
   // Live domain & auth inspection per profile
-  const [profileDomains, setProfileDomains] = useState<Record<string, BrowserProfileDomainInfo[]>>({});
+  const [profileDomains, setProfileDomains] = useState<Record<string, BrowserProfileDomainInfo[]>>(
+    {},
+  );
   const refreshDomains = useCallback(async () => {
     if (!window.desktopBridge?.getBrowserProfileDomains) return;
     const res: Record<string, BrowserProfileDomainInfo[]> = {};
@@ -138,6 +136,12 @@ export function BrowserProfilesSettings() {
 
   useEffect(() => {
     refreshDomains();
+  }, [refreshDomains]);
+
+  useEffect(() => {
+    const subscribe = window.desktopBridge?.onBrowserProfileDataChanged;
+    if (!subscribe) return;
+    return subscribe(() => void refreshDomains());
   }, [refreshDomains]);
 
   // Quick portals customized by user
@@ -183,8 +187,8 @@ export function BrowserProfilesSettings() {
   // In-Dialog Interactive Login & Session Tester
   const [testingProfile, setTestingProfile] = useState<BrowserProfileDefinition | null>(null);
   const [testUrl, setTestUrl] = useState<string>("https://accounts.google.com");
-  const [activeWebviewUrl, setActiveWebviewUrl] = useState<string>("https://accounts.google.com");
-  const [isModalExpanded, setIsModalExpanded] = useState(false);
+  const [selectedLoginUrl, setSelectedLoginUrl] = useState<string>("https://accounts.google.com");
+  const [loginWindowOpen, setLoginWindowOpen] = useState(false);
 
   const openCreateModal = () => {
     setEditingProfile(null);
@@ -208,7 +212,7 @@ export function BrowserProfilesSettings() {
     const trimmedLabel = labelDraft.trim();
     if (!trimmedLabel) return;
 
-    const finalId = (editingProfile ? idDraft : (idDraft.trim() || slugifyProfileId(trimmedLabel)))
+    const finalId = (editingProfile ? idDraft : idDraft.trim() || slugifyProfileId(trimmedLabel))
       .toLowerCase()
       .trim();
 
@@ -254,13 +258,36 @@ export function BrowserProfilesSettings() {
     const confirmed = await confirm(message);
     if (!confirmed) return;
 
-    const nextProfiles = profiles.filter((p) => p.id !== profile.id);
-    updateSettings({ browserProfiles: nextProfiles });
-    toastManager.add({
-      type: "success",
-      title: "Profile deleted",
-      description: `Profile "${profile.label}" was removed.`,
-    });
+    try {
+      for (const project of projects) {
+        const current = shellState.projectSettingsByProjectId[project.id];
+        if (!current) continue;
+        const browserUsesProfile =
+          current.browser.partitionMode === "profile" &&
+          current.browser.partitionProfile === profile.id;
+        const embedsUseProfile = current.customEmbeds.some(
+          (embed) => embed.partitionMode === "profile" && embed.partitionProfile === profile.id,
+        );
+        if (!browserUsesProfile && !embedsUseProfile) continue;
+        workspaceShellActions.upsertProjectSettings(project.id, (settings) =>
+          removeBrowserProfileAssignments(settings, profile.id),
+        );
+      }
+      await window.desktopBridge?.clearBrowserProfileData?.({ profileId: profile.id });
+      const nextProfiles = profiles.filter((p) => p.id !== profile.id);
+      updateSettings({ browserProfiles: nextProfiles });
+      toastManager.add({
+        type: "success",
+        title: "Profile deleted",
+        description: `Profile "${profile.label}" was cleared and its assigned tabs now use their project session.`,
+      });
+    } catch {
+      toastManager.add({
+        type: "error",
+        title: "Could not delete profile",
+        description: "The profile was kept because its session data could not be cleared safely.",
+      });
+    }
   };
 
   const handleClearSessionData = async (profile: BrowserProfileDefinition) => {
@@ -320,13 +347,49 @@ export function BrowserProfilesSettings() {
     }
   };
 
-  const openLoginModal = (profile: BrowserProfileDefinition, initialUrl = "https://accounts.google.com") => {
+  const openLoginModal = (
+    profile: BrowserProfileDefinition,
+    initialUrl = "https://accounts.google.com",
+  ) => {
     setTestingProfile(profile);
     setTestUrl(initialUrl);
-    setActiveWebviewUrl(initialUrl);
-    setIsModalExpanded(false);
-    refreshDomains();
+    setSelectedLoginUrl(initialUrl);
+    void refreshDomains();
   };
+
+  const openNativeProfileWindow = async (profile: BrowserProfileDefinition, rawUrl: string) => {
+    let url = rawUrl.trim();
+    if (!url) return;
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      url = `https://${url}`;
+    }
+    setTestUrl(url);
+    setSelectedLoginUrl(url);
+    setLoginWindowOpen(true);
+    try {
+      await window.desktopBridge?.openBrowserProfileLoginWindow?.({ profileId: profile.id, url });
+      await refreshDomains();
+      toastManager.add({
+        type: "success",
+        title: "Profile window closed",
+        description: `Stored-site information for "${profile.label}" has been refreshed.`,
+      });
+    } catch {
+      toastManager.add({
+        type: "error",
+        title: "Could not open profile window",
+        description: "The native browser session could not be opened.",
+      });
+    } finally {
+      setLoginWindowOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!testingProfile) return;
+    const timer = window.setInterval(() => void refreshDomains(), 2_000);
+    return () => window.clearInterval(timer);
+  }, [refreshDomains, testingProfile]);
 
   return (
     <div className="space-y-6">
@@ -349,12 +412,24 @@ export function BrowserProfilesSettings() {
         </Button>
       </div>
 
+      {!hasNamedProfileAssignments ? (
+        <div
+          role="note"
+          className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
+        >
+          <span className="font-medium text-foreground">Your current logins are per project.</span>{" "}
+          Personal and Work are optional named profiles and currently have no assigned browser tabs,
+          so project cookies do not appear in these cards. Per-project sessions remain isolated and
+          do not keep an extra browser process running.
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {profiles.map((profile) => {
           const usage = usageByProfileId.get(profile.id) ?? [];
           const domains = profileDomains[profile.id] ?? [];
-          const authDomains = domains.filter((d) => d.isAuthenticated);
-          const otherDomains = domains.filter((d) => !d.isAuthenticated);
+          const sessionHintDomains = domains.filter((d) => d.hasSessionHint);
+          const otherDomains = domains.filter((d) => !d.hasSessionHint);
           const isClearing = clearingProfileId === profile.id;
 
           return (
@@ -422,9 +497,9 @@ export function BrowserProfilesSettings() {
                   </div>
                   {usage.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5 pt-0.5">
-                      {usage.map((u, idx) => (
+                      {usage.map((u) => (
                         <span
-                          key={idx}
+                          key={`${u.projectName}:${u.tabName}`}
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-background/80 border border-border/60 text-[11px] text-foreground"
                         >
                           <span className="font-medium">{u.projectName}:</span>
@@ -444,25 +519,25 @@ export function BrowserProfilesSettings() {
                   <div className="font-medium text-foreground flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <ShieldCheckIcon className="size-3.5 text-primary" />
-                      {authDomains.length > 0
-                        ? "Active Authenticated Logins"
-                        : "Stored Session Data"}
+                      Stored Sites in This Profile
                     </span>
                     <span className="font-mono text-[11px]">
-                      {authDomains.length > 0
-                        ? `${authDomains.length} logged in`
-                        : `${domains.length} sites`}
+                      {domains.length} {domains.length === 1 ? "site" : "sites"}
                     </span>
                   </div>
-                  {authDomains.length > 0 ? (
+                  {sessionHintDomains.length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {authDomains.map((item) => (
+                      {sessionHintDomains.map((item) => (
                         <span
                           key={item.domain}
                           className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground group"
                         >
-                          <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span
+                            className="size-1.5 rounded-full bg-amber-500 shrink-0"
+                            aria-hidden="true"
+                          />
                           <span className="font-medium">{item.domain}</span>
+                          <span className="text-[10px] text-muted-foreground">session data</span>
                           <button
                             type="button"
                             onClick={() => handleClearSingleDomain(profile, item.domain)}
@@ -482,7 +557,9 @@ export function BrowserProfilesSettings() {
                           className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-background/90 border border-border/70 text-[11px] text-muted-foreground group"
                         >
                           <span>{item.domain}</span>
-                          <span className="text-[10px] opacity-60 font-mono">({item.cookieCount})</span>
+                          <span className="text-[10px] opacity-60 font-mono">
+                            ({item.cookieCount})
+                          </span>
                           <button
                             type="button"
                             onClick={() => handleClearSingleDomain(profile, item.domain)}
@@ -496,7 +573,8 @@ export function BrowserProfilesSettings() {
                     </div>
                   ) : (
                     <div className="text-[11px] text-muted-foreground/70">
-                      No authenticated accounts stored yet. Click "Log In & Test" to authenticate.
+                      No site data in this named profile. Existing per-project logins are stored
+                      separately.
                     </div>
                   )}
                 </div>
@@ -514,7 +592,7 @@ export function BrowserProfilesSettings() {
                       title="Log in or test website logins for this profile"
                     >
                       <GlobeIcon className="size-3 text-primary" />
-                      Log In & Test
+                      Open Profile
                     </Button>
                     <Button
                       size="xs"
@@ -535,7 +613,7 @@ export function BrowserProfilesSettings() {
         })}
       </div>
 
-      {/* In-Dialog Interactive Webview / Login Popup */}
+      {/* Native profile-window launcher and stored-site inspector */}
       <Dialog
         open={testingProfile !== null}
         onOpenChange={(open) => {
@@ -545,15 +623,7 @@ export function BrowserProfilesSettings() {
           }
         }}
       >
-        <DialogContent
-          showCloseButton={false}
-          className={cn(
-            "p-6 space-y-4 transition-all duration-150",
-            isModalExpanded
-              ? "sm:max-w-5xl h-[88vh] flex flex-col"
-              : "sm:max-w-3xl",
-          )}
-        >
+        <DialogContent showCloseButton={false} className="p-6 space-y-4 sm:max-w-3xl">
           <DialogHeader className="p-0 space-y-1">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -573,64 +643,36 @@ export function BrowserProfilesSettings() {
                 <Button
                   size="icon-xs"
                   variant="ghost"
-                  onClick={() => setIsModalExpanded(!isModalExpanded)}
-                  className="size-7 text-muted-foreground hover:text-foreground cursor-pointer rounded-md hover:bg-accent/60 transition-colors"
-                  title={isModalExpanded ? "Collapse dialog" : "Expand to full size"}
-                >
-                  {isModalExpanded ? (
-                    <Minimize2Icon className="size-3.5" />
-                  ) : (
-                    <Maximize2Icon className="size-3.5" />
-                  )}
-                </Button>
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
                   onClick={() => {
                     setTestingProfile(null);
                     refreshDomains();
                   }}
                   className="size-7 text-muted-foreground hover:text-foreground cursor-pointer rounded-md hover:bg-accent/60 transition-colors"
                   title="Close"
+                  aria-label="Close profile session dialog"
                 >
                   <XIcon className="size-4" />
                 </Button>
               </div>
             </div>
             <DialogDescription className="text-xs">
-              Log into web services directly below. Credentials securely persist in this profile
-              partition and automatically apply across all tabs using it.
+              Open a native browser window backed by this profile. Chromium stores its cookies and
+              site data in the profile partition and shares them only with tabs assigned to it.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Dedicated Login Window Tip for Google/SSO */}
-          <div className="flex items-center justify-between gap-3 px-3 py-1.5 bg-muted/30 border border-border/50 rounded-lg text-xs">
+          <div
+            className="flex items-start gap-2 px-3 py-2.5 bg-muted/30 border border-border/50 rounded-lg text-xs"
+            role="note"
+          >
+            <ShieldCheckIcon className="mt-0.5 size-3.5 text-primary shrink-0" aria-hidden="true" />
             <div className="flex items-center gap-2 min-w-0">
-              <ShieldCheckIcon className="size-3.5 text-primary shrink-0" />
-              <span className="text-muted-foreground text-[11px] truncate">
-                For Google, Apple, or OAuth providers that restrict embedded webviews, open a dedicated window.
+              <span className="text-muted-foreground text-[11px] leading-relaxed">
+                A stored cookie is not proof that an account is currently signed in. Google and some
+                OAuth providers may reject application-controlled browser windows; use their native
+                Tabs integration when available.
               </span>
             </div>
-            <Button
-              size="xs"
-              variant="outline"
-              className="h-6 px-2 text-[11px] cursor-pointer shrink-0 gap-1 font-medium"
-              onClick={() => {
-                if (!testingProfile) return;
-                window.desktopBridge?.openBrowserProfileLoginWindow?.({
-                  profileId: testingProfile.id,
-                  url: activeWebviewUrl,
-                });
-                toastManager.add({
-                  type: "info",
-                  title: "Popup Window Opened",
-                  description: `Opened window for "${testingProfile.label}".`,
-                });
-              }}
-            >
-              <ExternalLinkIcon className="size-3 text-primary" />
-              Open Popout
-            </Button>
           </div>
 
           {/* Quick Login Portals Bar */}
@@ -657,11 +699,11 @@ export function BrowserProfilesSettings() {
                 <Button
                   key={item.name}
                   size="xs"
-                  variant={activeWebviewUrl === item.url ? "default" : "outline"}
+                  variant={selectedLoginUrl === item.url ? "default" : "outline"}
                   className="text-xs h-7 gap-1.5 cursor-pointer"
                   onClick={() => {
                     setTestUrl(item.url);
-                    setActiveWebviewUrl(item.url);
+                    setSelectedLoginUrl(item.url);
                   }}
                 >
                   <ExternalLinkIcon className="size-3 opacity-70" />
@@ -707,12 +749,7 @@ export function BrowserProfilesSettings() {
               onChange={(e) => setTestUrl(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  let url = testUrl.trim();
-                  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
-                    url = "https://" + url;
-                    setTestUrl(url);
-                  }
-                  setActiveWebviewUrl(url);
+                  if (testingProfile) void openNativeProfileWindow(testingProfile, testUrl);
                 }
               }}
               placeholder="Enter URL to log in (e.g. https://chatgpt.com)..."
@@ -721,83 +758,48 @@ export function BrowserProfilesSettings() {
             <Button
               size="xs"
               className="h-8 px-3 text-xs cursor-pointer shrink-0"
-              onClick={() => {
-                let url = testUrl.trim();
-                if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
-                  url = "https://" + url;
-                  setTestUrl(url);
-                }
-                setActiveWebviewUrl(url);
-              }}
-            >
-              Go
-            </Button>
-            <Button
-              size="xs"
-              variant="outline"
-              className="h-8 px-3 text-xs cursor-pointer shrink-0"
-              onClick={() => {
-                if (!testingProfile) return;
-                window.desktopBridge?.openBrowserProfileLoginWindow?.({
-                  profileId: testingProfile.id,
-                  url: activeWebviewUrl,
-                });
-                toastManager.add({
-                  type: "info",
-                  title: "Popup Window Opened",
-                  description: `Opened window for "${testingProfile.label}".`,
-                });
-              }}
-              title="Pop out into separate window"
+              onClick={() =>
+                testingProfile && void openNativeProfileWindow(testingProfile, testUrl)
+              }
+              disabled={loginWindowOpen}
             >
               <ExternalLinkIcon className="size-3.5" />
+              {loginWindowOpen ? "Window open…" : "Open native window"}
             </Button>
           </div>
 
-          {/* Embedded Interactive Webview */}
-          <div
-            className={cn(
-              "relative w-full rounded-lg border border-border/80 bg-background overflow-hidden shadow-inner",
-              isModalExpanded ? "flex-1 min-h-[460px]" : "h-[420px]",
-            )}
-          >
-            {typeof window !== "undefined" && (
-              <webview
-                src={activeWebviewUrl}
-                partition={`persist:tabs-browser:profile:${testingProfile?.id || "default"}`}
-                useragent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-                style={{ width: "100%", height: "100%", border: "none" }}
-                allowpopups={true}
-              />
-            )}
-          </div>
-
-          {/* Active Logged-In Domains summary in Modal */}
-          {testingProfile && (profileDomains[testingProfile.id]?.length ?? 0) > 0 && (
-            <div className="rounded-lg border border-border/60 bg-muted/20 p-2.5 text-xs flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <LockIcon className="size-3.5 text-primary shrink-0" />
-                <span>Authenticated Sessions:</span>
-              </div>
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-foreground">Stored sites</span>
+              <span className="text-[11px] text-muted-foreground" aria-live="polite">
+                {loginWindowOpen ? "Watching for session changes…" : "Up to date"}
+              </span>
+            </div>
+            {testingProfile && (profileDomains[testingProfile.id]?.length ?? 0) > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {(profileDomains[testingProfile.id] ?? []).map((item) => (
                   <span
                     key={item.domain}
                     className={cn(
                       "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px]",
-                      item.isAuthenticated
-                        ? "bg-primary/10 border border-primary/30 text-foreground font-medium"
+                      item.hasSessionHint
+                        ? "bg-amber-500/10 border border-amber-500/30 text-foreground font-medium"
                         : "bg-background border border-border/70 text-muted-foreground",
                     )}
                   >
-                    {item.isAuthenticated && (
-                      <span className="size-1.5 rounded-full bg-emerald-500 shrink-0" />
+                    {item.hasSessionHint && (
+                      <span
+                        className="size-1.5 rounded-full bg-amber-500 shrink-0"
+                        aria-hidden="true"
+                      />
                     )}
                     <span>{item.domain}</span>
+                    <span className="text-[10px] opacity-70">{item.cookieCount} cookies</span>
                     <button
                       type="button"
                       onClick={() => handleClearSingleDomain(testingProfile, item.domain)}
-                      title={`Log out of ${item.domain}`}
+                      title={`Clear stored data for ${item.domain}`}
+                      aria-label={`Clear stored data for ${item.domain}`}
                       className="text-muted-foreground hover:text-destructive cursor-pointer"
                     >
                       <XIcon className="size-3" />
@@ -805,8 +807,12 @@ export function BrowserProfilesSettings() {
                   </span>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                No cookies or stored sites have been detected for this profile.
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
             <Button
@@ -915,7 +921,9 @@ export function BrowserProfilesSettings() {
                     )}
                     style={{ backgroundColor: color }}
                   >
-                    {colorDraft === color && <CheckIcon className="size-4 text-white drop-shadow-md stroke-[2.5]" />}
+                    {colorDraft === color && (
+                      <CheckIcon className="size-4 text-white drop-shadow-md stroke-[2.5]" />
+                    )}
                   </button>
                 ))}
               </div>

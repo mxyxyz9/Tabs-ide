@@ -9,6 +9,15 @@ import * as OS from "node:os";
 import { loadNativeCodeHostStorage, saveNativeCodeHostStorage } from "./nativeCodeHostStorage";
 
 type NativeCodeHostModules = {
+  registerContextMenuListener(
+    resolvePopupContext?: (event: { sender: WebContents }) =>
+      | {
+          window?: BrowserWindow;
+          offsetX?: number;
+          offsetY?: number;
+        }
+      | undefined,
+  ): void;
   ElectronIPCServer: new () => {
     registerChannel(name: string, channel: unknown): void;
     dispose(): void;
@@ -93,7 +102,7 @@ function passiveChannel(
 
 export interface NativeCodeHostMainBackend {
   registerWindow(window: BrowserWindow): void;
-  registerWebContents(webContents: WebContents): void;
+  registerWebContents(webContents: WebContents, getBounds?: () => Electron.Rectangle | null): void;
   unregisterWindow(windowId: number): void;
   dispose(): void;
 }
@@ -105,6 +114,7 @@ function moduleUrl(vscodeRoot: string, relativePath: string): string {
 async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCodeHostModules> {
   const [
     electronIpc,
+    contextMenu,
     ipc,
     lifecycle,
     events,
@@ -131,6 +141,7 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     encryptionMain,
   ] = await Promise.all([
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.electron.js")),
+    import(moduleUrl(vscodeRoot, "vs/base/parts/contextmenu/electron-main/contextmenu.js")),
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/common/ipc.js")),
     import(moduleUrl(vscodeRoot, "vs/base/common/lifecycle.js")),
     import(moduleUrl(vscodeRoot, "vs/base/common/event.js")),
@@ -167,6 +178,7 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
   ]);
 
   return {
+    registerContextMenuListener: contextMenu.registerContextMenuListener,
     ElectronIPCServer: electronIpc.Server,
     ProxyChannel: ipc.ProxyChannel,
     DisposableStore: lifecycle.DisposableStore,
@@ -256,6 +268,25 @@ export async function createNativeCodeHostMainBackend(
       on(event: string, listener: () => void): unknown;
     }
   >();
+  const embeddedBounds = new Map<number, () => Electron.Rectangle | null>();
+
+  // The stock Code-OSS main process installs this application-level IPC
+  // listener during startup. Tabs replaces that main process, so embedded
+  // workbenches otherwise send native menu requests into an unhandled channel.
+  // Code-OSS reports coordinates relative to its WebContentsView; native menus
+  // need coordinates relative to the owning Tabs window.
+  modules.registerContextMenuListener((event) => {
+    const bounds = embeddedBounds.get(event.sender.id)?.();
+    if (!bounds) return undefined;
+    const ownerWindow =
+      BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow();
+
+    return {
+      ...(ownerWindow ? { window: ownerWindow } : null),
+      offsetX: bounds.x,
+      offsetY: bounds.y,
+    };
+  });
 
   Object.assign(globalThis, {
     _VSCODE_FILE_ROOT: pathToFileURL(Path.join(vscodeRoot, "out") + Path.sep).href,
@@ -588,15 +619,17 @@ export async function createNativeCodeHostMainBackend(
       windows.set(window.webContents.id, window);
       window.once("closed", () => windows.delete(window.webContents.id));
     },
-    registerWebContents(webContents) {
+    registerWebContents(webContents, getBounds) {
       const embeddedWindow = Object.assign(new EventEmitter(), {
         webContents,
         isDestroyed: () => webContents.isDestroyed(),
       });
       windows.set(webContents.id, embeddedWindow);
+      if (getBounds) embeddedBounds.set(webContents.id, getBounds);
       webContents.once("destroyed", () => {
         embeddedWindow.emit("closed");
         windows.delete(webContents.id);
+        embeddedBounds.delete(webContents.id);
       });
     },
     unregisterWindow(windowId) {
@@ -608,6 +641,7 @@ export async function createNativeCodeHostMainBackend(
         join: (_id: string, promise: Promise<void>) => void promise.catch(() => undefined),
       });
       windows.clear();
+      embeddedBounds.clear();
       ptyHostService.dispose();
       (loggerService as { dispose(): void }).dispose();
       utilityProcessWorkerService.dispose();

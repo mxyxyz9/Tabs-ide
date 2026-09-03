@@ -69,8 +69,6 @@ export interface GitToolV2Props {
 
 /* ============================== OverviewPanel & ChangesPanel moved to ./git/ ============================== */
 
-
-
 /* ============================== DiffPage moved to ./git/DiffPage ============================== */
 
 /* ============================== BranchesPanel moved to ./git/BranchesPanel ============================== */
@@ -189,7 +187,8 @@ export function GitToolV2({
   const watchedBranchStatuses = watchedBranchesQuery.data?.branches ?? [];
 
   const [isFullScanning, setIsFullScanning] = useState(false);
-  const [fullScanResult, setFullScanResult] = useState<ReadonlyArray<GitWatchedBranchStatus> | null>(null);
+  const [fullScanResult, setFullScanResult] =
+    useState<ReadonlyArray<GitWatchedBranchStatus> | null>(null);
 
   const handleScanAllBranches = useCallback(async () => {
     if (!api || !cwd) return;
@@ -216,7 +215,6 @@ export function GitToolV2({
       setIsFullScanning(false);
     }
   }, [api, cwd, excludedWatchedBranches]);
-
 
   const statusData = gitStatusQuery.data ?? null;
   const environmentData = gitEnvironmentQuery.data ?? null;
@@ -271,7 +269,11 @@ export function GitToolV2({
         closeModal();
         toastManager.add({ type: "success", title: "Stashed changes" });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Stash failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Stash failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       }
     },
     [api, closeModal, cwd, queryClient],
@@ -285,7 +287,11 @@ export function GitToolV2({
       closeModal();
       toastManager.add({ type: "success", title: "Discarded all changes" });
     } catch (error) {
-      toastManager.add({ type: "error", title: "Discard failed", description: toGitUserFacingErrorMessage(error) });
+      toastManager.add({
+        type: "error",
+        title: "Discard failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
     }
   }, [api, closeModal, cwd, queryClient]);
 
@@ -305,11 +311,18 @@ export function GitToolV2({
           await invalidateGitQueries(queryClient);
         }
         closeModal();
-        toastManager.add({ type: "success", title: `Pulled from origin/${sourceBranch} and reapplied stash` });
+        toastManager.add({
+          type: "success",
+          title: `Pulled from origin/${sourceBranch} and reapplied stash`,
+        });
       } catch (error) {
         await invalidateGitQueries(queryClient);
         closeModal();
-        toastManager.add({ type: "error", title: "Stash, pull & reapply failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Stash, pull & reapply failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       }
     },
     [api, closeModal, cwd, queryClient, stagedFiles.length, unstagedFiles.length],
@@ -323,7 +336,11 @@ export function GitToolV2({
         await invalidateGitQueries(queryClient);
         toastManager.add({ type: "success", title: `Applied ${ref}` });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Apply stash failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Apply stash failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       }
     },
     [api, cwd, queryClient],
@@ -337,7 +354,11 @@ export function GitToolV2({
         await invalidateGitQueries(queryClient);
         toastManager.add({ type: "success", title: `Dropped ${ref}` });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Drop stash failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Drop stash failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       }
     },
     [api, cwd, queryClient],
@@ -363,7 +384,10 @@ export function GitToolV2({
     return (
       <>
         <PanelErrorBoundary panelName="Overview">
-          <div className={cn(panel === "overview" ? "block" : "hidden")} aria-hidden={panel !== "overview"}>
+          <div
+            className={cn(panel === "overview" ? "block" : "hidden")}
+            aria-hidden={panel !== "overview"}
+          >
             <OverviewPanel
               cwd={cwd}
               repoName={repoName}
@@ -385,7 +409,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Changes">
-          <div className={cn(panel === "changes" ? "block" : "hidden")} aria-hidden={panel !== "changes"}>
+          <div
+            className={cn(panel === "changes" ? "block" : "hidden")}
+            aria-hidden={panel !== "changes"}
+          >
             <ChangesPanel
               cwd={cwd}
               statusData={statusData}
@@ -398,7 +425,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Review">
-          <div className={cn(panel === "review" ? "block" : "hidden")} aria-hidden={panel !== "review"}>
+          <div
+            className={cn(panel === "review" ? "block" : "hidden")}
+            aria-hidden={panel !== "review"}
+          >
             <ReviewPanel cwd={cwd} activePanel={panel} />
           </div>
         </PanelErrorBoundary>
@@ -410,7 +440,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Divergence">
-          <div className={cn(panel === "divergence" ? "block" : "hidden")} aria-hidden={panel !== "divergence"}>
+          <div
+            className={cn(panel === "divergence" ? "block" : "hidden")}
+            aria-hidden={panel !== "divergence"}
+          >
             <DivergencePanel
               cwd={cwd}
               watchedBranchStatuses={fullScanResult ?? watchedBranchStatuses}
@@ -422,7 +455,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Branches">
-          <div className={cn(panel === "branches" ? "block" : "hidden")} aria-hidden={panel !== "branches"}>
+          <div
+            className={cn(panel === "branches" ? "block" : "hidden")}
+            aria-hidden={panel !== "branches"}
+          >
             <BranchesPanel
               cwd={cwd}
               activeBranch={activeBranch}
@@ -439,7 +475,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="History">
-          <div className={cn(panel === "history" ? "block" : "hidden")} aria-hidden={panel !== "history"}>
+          <div
+            className={cn(panel === "history" ? "block" : "hidden")}
+            aria-hidden={panel !== "history"}
+          >
             <HistoryPanel
               cwd={cwd}
               commits={commits}
@@ -454,7 +493,12 @@ export function GitToolV2({
 
         <PanelErrorBoundary panelName="PRs">
           <div className={cn(panel === "prs" ? "block" : "hidden")} aria-hidden={panel !== "prs"}>
-            <PRsPanel cwd={cwd} branchName={branchName} onOpenCreatePR={() => setModal("createPR")} onRunInTerminal={onRunInTerminal} />
+            <PRsPanel
+              cwd={cwd}
+              branchName={branchName}
+              onOpenCreatePR={() => setModal("createPR")}
+              onRunInTerminal={onRunInTerminal}
+            />
           </div>
         </PanelErrorBoundary>
 
@@ -471,7 +515,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Stashes">
-          <div className={cn(panel === "stashes" ? "block" : "hidden")} aria-hidden={panel !== "stashes"}>
+          <div
+            className={cn(panel === "stashes" ? "block" : "hidden")}
+            aria-hidden={panel !== "stashes"}
+          >
             <StashesPanel
               stashes={stashes}
               hasChanges={changeCount > 0}
@@ -486,7 +533,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Accounts">
-          <div className={cn(panel === "accounts" ? "block" : "hidden")} aria-hidden={panel !== "accounts"}>
+          <div
+            className={cn(panel === "accounts" ? "block" : "hidden")}
+            aria-hidden={panel !== "accounts"}
+          >
             <AccountsPanel
               accounts={accounts}
               activeAccountLogin={activeAccountLogin}
@@ -500,7 +550,10 @@ export function GitToolV2({
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Settings">
-          <div className={cn(panel === "settings" ? "block" : "hidden")} aria-hidden={panel !== "settings"}>
+          <div
+            className={cn(panel === "settings" ? "block" : "hidden")}
+            aria-hidden={panel !== "settings"}
+          >
             <SettingsPanel
               cwd={cwd}
               environmentData={environmentData}
@@ -516,32 +569,19 @@ export function GitToolV2({
     );
   };
 
-
-  const hasOriginRemote = branchList?.hasOriginRemote ?? false;
-  const currentPushAccess = branchList?.pushAccess ?? "unknown";
-  const isGhAuthed = environmentData?.gitHub.authenticated ?? false;
-  const isPushAccessPending = hasOriginRemote && isGhAuthed && currentPushAccess === "unknown";
-  const isRepoFolder = branchList?.isRepo ?? true;
-  const isHistoryPending = isRepoFolder && (historyQuery.isLoading || !historyQuery.data);
-
   return (
     <GitEnvironmentGate
       key={cwd}
       environment={environmentData ?? undefined}
       isRepo={branchList?.isRepo}
-      isLoading={
-        gitEnvironmentQuery.isLoading ||
-        branchesQuery.isLoading ||
-        gitStatusQuery.isLoading ||
-        isHistoryPending ||
-        isPushAccessPending
-      }
+      isLoading={gitEnvironmentQuery.isLoading || branchesQuery.isLoading}
       initPending={gitInitMutation.isPending}
       onInitRepo={() => void gitInitMutation.mutateAsync()}
     >
-      <div className="git-tool-v2 flex h-full min-h-0 overflow-hidden" style={{ backgroundColor: "var(--bg-base)", color: "var(--fg)" }}>
-
-
+      <div
+        className="git-tool-v2 flex h-full min-h-0 overflow-hidden"
+        style={{ backgroundColor: "var(--bg-base)", color: "var(--fg)" }}
+      >
         {/* Sidebar (w-64 expanded, w-16 collapsed) */}
         <Sidebar
           repoName={repoName}
@@ -571,13 +611,20 @@ export function GitToolV2({
           <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
             <div className="w-full max-w-[1400px] mx-auto">{renderPanel()}</div>
           </div>
-
         </div>
       </div>
 
       {/* Modals */}
-      {modal === "stash" && <StashModal onClose={closeModal} onStash={(msg) => void doStash(msg)} />}
-      {modal === "discardAll" && <DiscardAllModal count={changeCount} onClose={closeModal} onConfirm={() => void doDiscardAll()} />}
+      {modal === "stash" && (
+        <StashModal onClose={closeModal} onStash={(msg) => void doStash(msg)} />
+      )}
+      {modal === "discardAll" && (
+        <DiscardAllModal
+          count={changeCount}
+          onClose={closeModal}
+          onConfirm={() => void doDiscardAll()}
+        />
+      )}
       {modal === "forcePush" && (
         <ForcePushModal
           branch={branchName}
@@ -609,11 +656,15 @@ export function GitToolV2({
             try {
               await api?.projects.writeFile({ cwd, relativePath: bodyFilePath, contents: pr.body });
             } catch {
-              toastManager.add({ type: "error", title: "Could not prepare PR body", description: "Failed to write body to temp file." });
+              toastManager.add({
+                type: "error",
+                title: "Could not prepare PR body",
+                description: "Failed to write body to temp file.",
+              });
               return;
             }
             onRunInTerminal(
-              `gh pr create --title '${safeTitle}' --head '${pr.head}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`
+              `gh pr create --title '${safeTitle}' --head '${pr.head}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`,
             );
             closeModal();
           }}
@@ -655,7 +706,9 @@ export function GitToolV2({
           commits={commits}
           onClose={closeModal}
           onPublish={(rel) => {
-            onRunInTerminal(`gh release create ${rel.tag} --title "${rel.title}" --notes "${rel.notes}"${rel.prerelease ? " --prerelease" : ""}`);
+            onRunInTerminal(
+              `gh release create ${rel.tag} --title "${rel.title}" --notes "${rel.notes}"${rel.prerelease ? " --prerelease" : ""}`,
+            );
             closeModal();
           }}
         />

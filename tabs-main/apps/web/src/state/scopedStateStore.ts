@@ -323,7 +323,7 @@ export function createDefaultBrowserState(): ProjectBrowserState {
   };
 }
 
-export interface GlobalSettingsViewState {
+export interface SettingsViewState {
   activeSection: string;
   searchQuery: string;
   activeProviderFilter: string | null;
@@ -342,7 +342,7 @@ export interface GlobalSettingsViewState {
   >;
 }
 
-export function createDefaultSettingsState(): GlobalSettingsViewState {
+export function createDefaultSettingsState(): SettingsViewState {
   return {
     activeSection: "general",
     searchQuery: "",
@@ -361,7 +361,7 @@ export interface ScopedStateStore {
   agentsStateByProjectId: Record<string, ProjectAgentsState>;
   serverStateByProjectId: Record<string, ProjectServerState>;
   browserStateByProjectId: Record<string, ProjectBrowserState>;
-  settingsState: GlobalSettingsViewState;
+  settingsState: SettingsViewState;
 
   // Actions
   updateTestingState: (
@@ -386,8 +386,8 @@ export interface ScopedStateStore {
   ) => void;
   updateSettingsState: (
     updater:
-      | Partial<GlobalSettingsViewState>
-      | ((prev: GlobalSettingsViewState) => Partial<GlobalSettingsViewState>),
+      | Partial<SettingsViewState>
+      | ((prev: SettingsViewState) => Partial<SettingsViewState>),
   ) => void;
 }
 
@@ -618,12 +618,12 @@ export function useProjectBrowserState(projectId: ProjectId | string) {
   return [browserState, setBrowserState] as const;
 }
 
-export function useGlobalSettingsViewState() {
+export function useSettingsViewState() {
   const settingsState = useScopedStateStore((state) => state.settingsState);
   const update = useScopedStateStore((state) => state.updateSettingsState);
 
   const setSettingsState = useCallback(
-    (updater: Partial<GlobalSettingsViewState> | ((prev: GlobalSettingsViewState) => Partial<GlobalSettingsViewState>)) => {
+    (updater: Partial<SettingsViewState> | ((prev: SettingsViewState) => Partial<SettingsViewState>)) => {
       update(updater);
     },
     [update],

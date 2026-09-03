@@ -31,6 +31,7 @@ import {
 } from "../opencodeRuntime";
 import {
   appendOpenCodeAssistantTextDelta,
+  isOpenCodeIdleEvent,
   makeOpenCodeAdapter,
   mergeOpenCodeAssistantText,
 } from "./OpenCodeAdapter";
@@ -54,6 +55,8 @@ const runtimeMock = {
   state: {
     startCalls: [] as string[],
     sessionCreateUrls: [] as string[],
+    sessionGetIds: [] as string[],
+    sessionUpdateIds: [] as string[],
     authHeaders: [] as Array<string | null>,
     abortCalls: [] as string[],
     closeCalls: [] as string[],
@@ -67,6 +70,8 @@ const runtimeMock = {
   reset() {
     this.state.startCalls.length = 0;
     this.state.sessionCreateUrls.length = 0;
+    this.state.sessionGetIds.length = 0;
+    this.state.sessionUpdateIds.length = 0;
     this.state.authHeaders.length = 0;
     this.state.abortCalls.length = 0;
     this.state.closeCalls.length = 0;
@@ -128,6 +133,14 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
             serverPassword ? `Basic ${btoa(`opencode:${serverPassword}`)}` : null,
           );
           return { data: { id: `${baseUrl}/session` } };
+        },
+        get: async ({ sessionID }: { sessionID: string }) => {
+          runtimeMock.state.sessionGetIds.push(sessionID);
+          return { data: { id: sessionID } };
+        },
+        update: async ({ sessionID }: { sessionID: string }) => {
+          runtimeMock.state.sessionUpdateIds.push(sessionID);
+          return { data: { id: sessionID } };
         },
         abort: async ({ sessionID }: { sessionID: string }) => {
           runtimeMock.state.abortCalls.push(sessionID);
@@ -492,6 +505,50 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       assert.equal(sessions[0]?.status, "ready");
       assert.equal(sessions[0]?.activeTurnId, undefined);
       assert.equal(sessions[0]?.lastError, "prompt failed");
+    }),
+  );
+
+  it.effect("recognizes both OpenCode idle event formats", () =>
+    Effect.sync(() => {
+      assert.equal(isOpenCodeIdleEvent({ type: "session.idle" }), true);
+      assert.equal(
+        isOpenCodeIdleEvent({ type: "session.status", properties: { status: { type: "idle" } } }),
+        true,
+      );
+      assert.equal(
+        isOpenCodeIdleEvent({ type: "session.status", properties: { status: { type: "busy" } } }),
+        false,
+      );
+      assert.equal(isOpenCodeIdleEvent({ type: "message.updated" }), false);
+    }),
+  );
+
+  it.effect("persists and re-adopts the native OpenCode session", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-resume");
+      const first = yield* adapter.startSession({
+        provider: "opencode" as ProviderDriverKind,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      assert.deepEqual(first.resumeCursor, {
+        schemaVersion: 1,
+        sessionId: "http://127.0.0.1:9999/session",
+      });
+
+      yield* adapter.stopSession(threadId);
+      const resumed = yield* adapter.startSession({
+        provider: "opencode" as ProviderDriverKind,
+        threadId,
+        runtimeMode: "full-access",
+        resumeCursor: first.resumeCursor,
+      });
+
+      assert.deepEqual(resumed.resumeCursor, first.resumeCursor);
+      assert.deepEqual(runtimeMock.state.sessionGetIds, ["http://127.0.0.1:9999/session"]);
+      assert.deepEqual(runtimeMock.state.sessionUpdateIds, ["http://127.0.0.1:9999/session"]);
+      assert.equal(runtimeMock.state.sessionCreateUrls.length, 1);
     }),
   );
 

@@ -22,6 +22,7 @@ import type {
   DesktopCodeHostSetBoundsInput,
   DesktopCodeHostState,
 } from "@tabs/contracts";
+import { RotatingFileSink } from "@tabs/shared/logging";
 
 import type { CodeControlChannel } from "./codeControlChannel";
 
@@ -80,15 +81,15 @@ const DEFAULT_CODE_HOST_STATE_DIR = Path.join(
 // file trace is the only reliable way to distinguish protocol/navigation
 // failures from extension-host handshake failures.
 const CODE_HOST_DIAGNOSTIC_LOG = Path.join(DEFAULT_CODE_HOST_STATE_DIR, "code-host-manager.log");
+const codeHostDiagnosticSink = new RotatingFileSink({
+  filePath: CODE_HOST_DIAGNOSTIC_LOG,
+  maxBytes: 5 * 1024 * 1024,
+  maxFiles: 2,
+});
 function writeCodeHostDiagnostic(message: string, details?: unknown): void {
   try {
-    FS.mkdirSync(Path.dirname(CODE_HOST_DIAGNOSTIC_LOG), { recursive: true });
     const suffix = details === undefined ? "" : ` ${JSON.stringify(details)}`;
-    FS.appendFileSync(
-      CODE_HOST_DIAGNOSTIC_LOG,
-      `${new Date().toISOString()} ${message}${suffix}\n`,
-      "utf8",
-    );
+    codeHostDiagnosticSink.write(`${new Date().toISOString()} ${message}${suffix}\n`);
   } catch {
     // Diagnostics must never affect the host lifecycle.
   }
@@ -275,6 +276,9 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   "workbench.statusBar.visible": true,
   "window.menuBarVisibility": "hidden",
   "window.titleBarStyle": "native",
+  // A WebContentsView is still a native Electron workbench. Keep Code-OSS's
+  // platform menu implementation instead of substituting its HTML menu layer.
+  "window.menuStyle": "native",
   "window.customTitleBarVisibility": "never",
   "workbench.layoutControl.enabled": false,
   "window.commandCenter": false,
@@ -795,16 +799,20 @@ export class CodeHostManager {
   private currentThemeId: string = "tabs-dark";
   private currentCustomConfig: any = null;
   private disposed = false;
-  private registerNativeWebContents: ((webContents: Electron.WebContents) => void) | null = null;
+  private registerNativeWebContents:
+    | ((webContents: Electron.WebContents, getBounds: () => Electron.Rectangle | null) => void)
+    | null = null;
 
   setNativeWebContentsRegistrar(
-    registrar: ((webContents: Electron.WebContents) => void) | null,
+    registrar:
+      | ((webContents: Electron.WebContents, getBounds: () => Electron.Rectangle | null) => void)
+      | null,
   ): void {
     this.registerNativeWebContents = registrar;
     if (registrar) {
       for (const session of this.sessions.values()) {
         if (session.view && !session.view.webContents.isDestroyed()) {
-          registrar(session.view.webContents);
+          registrar(session.view.webContents, () => session.view?.getBounds() ?? null);
         }
       }
     }
@@ -815,6 +823,12 @@ export class CodeHostManager {
   setTheme(themeId: string, customConfig?: any): void {
     this.currentThemeId = themeId;
     this.currentCustomConfig = customConfig ?? null;
+    const backgroundColor = this.isCurrentThemeLight() ? "#f8f8f8" : "#141414";
+    for (const session of this.sessions.values()) {
+      if (session.view && !session.view.webContents.isDestroyed()) {
+        session.view.setBackgroundColor(backgroundColor);
+      }
+    }
   }
 
   private isCurrentThemeLight(): boolean {
@@ -1067,7 +1081,7 @@ export class CodeHostManager {
           : null),
       },
     });
-    this.registerNativeWebContents?.(view.webContents);
+    this.registerNativeWebContents?.(view.webContents, () => view.getBounds());
     view.setBackgroundColor(this.isCurrentThemeLight() ? "#f8f8f8" : "#141414");
 
     const allowedPermissions = new Set([
@@ -1741,25 +1755,12 @@ export class CodeHostManager {
     // real Response and lets Chromium finish the document request reliably.
     browserSession.protocol.handle(CODE_OSS_FILE_PROTOCOL, async (request) => {
       const resolvedPath = this.resolveDesktopProtocolPath(request, allowedRoots);
-      writeCodeHostDiagnostic(`${prefix} protocol-request`, {
-        url: request.url,
-        resolvedPath,
-      });
       if (!resolvedPath) {
         return new Response(null, { status: 404, statusText: "Not Found" });
       }
 
       try {
         const fileResponse = await browserSession.fetch(pathToFileURL(resolvedPath).toString());
-        const size =
-          Number(fileResponse.headers.get("Content-Length")) ||
-          (await FS.promises.stat(resolvedPath)).size;
-        writeCodeHostDiagnostic(`${prefix} protocol-response`, {
-          url: request.url,
-          resolvedPath,
-          bytes: size,
-          contentType: fileResponse.headers.get("Content-Type"),
-        });
         // Return Electron's network response directly. Re-wrapping its body in
         // a global Response leaves the file stream open in Electron 40 and the
         // main-frame navigation never commits.
@@ -2029,33 +2030,6 @@ export class CodeHostManager {
       (extensionPath) => isDirectory(extensionPath, FS),
     );
 
-    // Ensure user settings file has window.customContextMenu and window.dialogStyle set on initial boot
-    try {
-      const userSettingsDir = Path.join(sessionStateRoot, "User");
-      const userSettingsFile = Path.join(userSettingsDir, "settings.json");
-      if (!FS.existsSync(userSettingsDir)) {
-        FS.mkdirSync(userSettingsDir, { recursive: true });
-      }
-      let existingSettings: Record<string, unknown> = {};
-      if (FS.existsSync(userSettingsFile)) {
-        try {
-          existingSettings = JSON.parse(FS.readFileSync(userSettingsFile, "utf8"));
-        } catch {
-          existingSettings = {};
-        }
-      }
-      if (
-        existingSettings["window.customContextMenu"] !== true ||
-        existingSettings["window.dialogStyle"] !== "custom"
-      ) {
-        existingSettings["window.customContextMenu"] = true;
-        existingSettings["window.dialogStyle"] = "custom";
-        FS.writeFileSync(userSettingsFile, JSON.stringify(existingSettings, null, 2), "utf8");
-      }
-    } catch {
-      /* best-effort */
-    }
-
     return configuration;
   }
 
@@ -2245,6 +2219,12 @@ export class CodeHostManager {
       writeCodeHostDiagnostic(`${prefix} webContents responsive`);
     });
     session.view.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+      // Chromium levels 0-2 include routine debug/info/warnings. Forwarding all
+      // of them synchronously produced thousands of writes during startup and
+      // blocked input dispatch in Electron's main process.
+      if (level < 3) {
+        return;
+      }
       writeCodeHostDiagnostic(`${prefix} renderer-console`, {
         level,
         message: message.slice(0, 1000),
@@ -2266,13 +2246,6 @@ export class CodeHostManager {
 
     const prefix = `[code-oss:${session.projectId}]`;
     const browserSession = session.view.webContents.session;
-    browserSession.webRequest.onBeforeRequest({ urls: ["*://*/*"] }, (details, callback) => {
-      writeCodeHostDiagnostic(`${prefix} request-start`, {
-        url: details.url,
-        resourceType: details.resourceType,
-      });
-      callback({ cancel: false });
-    });
     const filter = { urls: [`${CODE_OSS_FILE_PROTOCOL}://*/*`] };
     browserSession.webRequest.onErrorOccurred(filter, (details) => {
       writeCodeHostDiagnostic(`${prefix} request-error`, {

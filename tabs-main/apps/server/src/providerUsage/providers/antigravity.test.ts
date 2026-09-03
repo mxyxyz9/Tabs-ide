@@ -7,7 +7,11 @@ import nodePath from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { antigravityUsageFetcher, parseAntigravityQuota } from "./antigravity";
+import {
+  antigravityStateDbPaths,
+  antigravityUsageFetcher,
+  parseAntigravityQuota,
+} from "./antigravity";
 
 const NOW_MS = 1_780_000_000_000;
 const tempDirs: string[] = [];
@@ -78,6 +82,26 @@ describe("parseAntigravityQuota", () => {
 });
 
 describe("antigravityUsageFetcher", () => {
+  it("reads Antigravity desktop state from the platform user-data directory", () => {
+    expect(
+      antigravityStateDbPaths({
+        homeDir: "/Users/tester",
+        env: {},
+        platform: "darwin",
+      }),
+    ).toContain(
+      nodePath.join(
+        "/Users/tester",
+        "Library",
+        "Application Support",
+        "Antigravity",
+        "User",
+        "globalStorage",
+        "state.vscdb",
+      ),
+    );
+  });
+
   it("returns needs-auth when no Gemini/agy credential is present", async () => {
     const homeDir = mkdtempSync(nodePath.join(os.tmpdir(), "synara-agy-empty-"));
     tempDirs.push(homeDir);
@@ -130,6 +154,40 @@ describe("antigravityUsageFetcher", () => {
     expect(snapshot.planName).toBe("Paid");
     expect(snapshot.limits[0]).toMatchObject({ window: "Pro", usedPercent: 25 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not label a detected desktop account as signed out when quota auth is rejected", async () => {
+    const homeDir = mkdtempSync(nodePath.join(os.tmpdir(), "synara-agy-desktop-"));
+    tempDirs.push(homeDir);
+    const dbDir = nodePath.join(
+      homeDir,
+      "Library",
+      "Application Support",
+      "Antigravity",
+      "User",
+      "globalStorage",
+    );
+    mkdirSync(dbDir, { recursive: true });
+    const { DatabaseSync } = await import("node:sqlite");
+    const db = new DatabaseSync(nodePath.join(dbDir, "state.vscdb"));
+    db.exec("CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)");
+    db.prepare("INSERT INTO ItemTable (key, value) VALUES (?, ?)").run(
+      "antigravityAuthStatus",
+      JSON.stringify({ apiKey: "ya29-desktop", email: "person@example.com" }),
+    );
+    db.close();
+    stubOutboundFetch(async () => jsonResponse({ error: "invalid credentials" }, 401));
+
+    const snapshot = await antigravityUsageFetcher.fetch({
+      homeDir,
+      env: {},
+      platform: "darwin",
+      nowMs: NOW_MS,
+    });
+
+    expect(snapshot.status).toBe("quota-unavailable");
+    expect(snapshot.email).toBe("person@example.com");
+    expect(snapshot.detail).toContain("is signed in");
   });
 
   it("refreshes an expired nested token and persists the rotation", async () => {

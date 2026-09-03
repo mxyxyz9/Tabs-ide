@@ -19,6 +19,7 @@ const EMBED_CHROME_DEFAULTS = {
   "workbench.statusBar.visible": true,
   "window.menuBarVisibility": "hidden",
   "window.titleBarStyle": "native",
+  "window.menuStyle": "native",
   "window.customTitleBarVisibility": "never",
   "workbench.layoutControl.enabled": false,
   "window.commandCenter": false,
@@ -60,7 +61,6 @@ const EMBED_CHROME_DEFAULTS = {
   "editor.overviewRulerBorder": false,
   "editor.hideCursorInOverviewRuler": true,
   "window.dialogStyle": "custom",
-  "window.customContextMenu": true,
 };
 
 // Allowlist of workbench commands the native Tabs chrome (activity rail /
@@ -1099,6 +1099,7 @@ function startCodeControlChannel(context) {
                     border: "rgba(255, 255, 255, 0.12)",
                     primary: "#e5e5e5",
                   },
+                  tokenOverrides: { focusBorder: "#e5e5e573" },
                 },
                 abyss: {
                   baseVariant: "dark",

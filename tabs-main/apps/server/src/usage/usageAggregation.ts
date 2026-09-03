@@ -1,5 +1,10 @@
 import type { UsageBucket } from "@tabs/contracts";
-import { type RateTable } from "./usagePricing.ts";
+import {
+  cacheSavingsUsd,
+  priceUsage,
+  type RateTable,
+  type UsageCostSource,
+} from "./usagePricing.ts";
 import { type UsageRecord } from "./usageTranscripts.ts";
 
 export function makeDayFormatter(timeZone: string): (timestampMs: number) => string {
@@ -27,10 +32,15 @@ interface MutableBucket {
   outputTokens: number;
   reasoningTokens: number;
   cachedInputTokens: number;
+  cacheCreationTokens: number;
   estimatedCostUsd: number;
+  cacheSavingsUsd: number;
   pricedTokens: number;
   unpricedTokens: number;
   hasCustomPrice: boolean;
+  records: number;
+  providerReportedRecords: number;
+  unpricedRecords: number;
   sessions: Set<string>;
   turnCount: number;
 }
@@ -46,6 +56,7 @@ export interface AggregateOptions {
 
 export interface AggregateResult {
   readonly buckets: readonly UsageBucket[];
+  readonly distinctSessions: number;
 }
 
 export class UsageAggregator {
@@ -54,6 +65,8 @@ export class UsageAggregator {
   private readonly untilDay: string;
   private readonly rates: RateTable;
   private readonly buckets = new Map<string, MutableBucket>();
+  private readonly seen = new Set<string>();
+  private readonly sessions = new Set<string>();
 
   constructor(options: AggregateOptions) {
     this.formatDay = makeDayFormatter(options.timeZone);
@@ -68,6 +81,11 @@ export class UsageAggregator {
       return false;
     }
 
+    if (record.dedupeKey !== null) {
+      if (this.seen.has(record.dedupeKey)) return false;
+      this.seen.add(record.dedupeKey);
+    }
+
     const key = `${day}:${record.provider}:${record.model}`;
     let bucket = this.buckets.get(key);
     if (!bucket) {
@@ -76,17 +94,25 @@ export class UsageAggregator {
         outputTokens: 0,
         reasoningTokens: 0,
         cachedInputTokens: 0,
+        cacheCreationTokens: 0,
         estimatedCostUsd: 0,
+        cacheSavingsUsd: 0,
         pricedTokens: 0,
         unpricedTokens: 0,
         hasCustomPrice: false,
+        records: 0,
+        providerReportedRecords: 0,
+        unpricedRecords: 0,
         sessions: new Set<string>(),
         turnCount: 0,
       };
       this.buckets.set(key, bucket);
     }
 
-    const inputTokens = record.totals.uncachedInputTokens + record.totals.cachedInputTokens;
+    const inputTokens =
+      record.totals.uncachedInputTokens +
+      record.totals.cachedInputTokens +
+      record.totals.cacheCreationTokens;
     const outputTokens = record.totals.outputTokens;
     const reasoningTokens = record.totals.reasoningTokens;
     const cachedInputTokens = record.totals.cachedInputTokens;
@@ -95,24 +121,27 @@ export class UsageAggregator {
     bucket.outputTokens += outputTokens;
     bucket.reasoningTokens += reasoningTokens;
     bucket.cachedInputTokens += cachedInputTokens;
+    bucket.cacheCreationTokens += record.totals.cacheCreationTokens;
     bucket.turnCount += 1;
     if (record.sessionId) {
       bucket.sessions.add(record.sessionId);
+      this.sessions.add(record.sessionId);
     }
 
-    // Rate calculation
-    const rate = this.rates.get(record.model) ?? this.rates.get(record.model.toLowerCase());
-    if (rate) {
-      const inputCost = (inputTokens / 1_000_000) * rate.inputCostPerMillion;
-      const outputCost = (outputTokens / 1_000_000) * rate.outputCostPerMillion;
-      bucket.estimatedCostUsd += inputCost + outputCost;
-      bucket.pricedTokens += inputTokens + outputTokens;
+    const priced = priceUsage(this.rates, record.model, record.totals, record.reportedCostUsd);
+    const recordTokens = inputTokens + outputTokens;
+    bucket.estimatedCostUsd += priced.costUsd;
+    bucket.cacheSavingsUsd += cacheSavingsUsd(this.rates, record.model, record.totals);
+    bucket.records += 1;
+    if (priced.costSource === "unpriced") {
+      bucket.unpricedTokens += recordTokens;
+      bucket.unpricedRecords += 1;
     } else {
-      // Default fallback estimate ($3/M input, $15/M output)
-      const inputCost = (inputTokens / 1_000_000) * 3.0;
-      const outputCost = (outputTokens / 1_000_000) * 15.0;
-      bucket.estimatedCostUsd += inputCost + outputCost;
-      bucket.unpricedTokens += inputTokens + outputTokens;
+      bucket.pricedTokens += recordTokens;
+    }
+    if (priced.costSource === "providerReported") {
+      bucket.hasCustomPrice = true;
+      bucket.providerReportedRecords += 1;
     }
 
     return true;
@@ -131,7 +160,10 @@ export class UsageAggregator {
         outputTokens: data.outputTokens,
         reasoningTokens: data.reasoningTokens,
         cachedInputTokens: data.cachedInputTokens,
-        estimatedCostUsd: Number(data.estimatedCostUsd.toFixed(4)),
+        cacheCreationTokens: data.cacheCreationTokens,
+        estimatedCostUsd: data.estimatedCostUsd,
+        cacheSavingsUsd: data.cacheSavingsUsd,
+        costSource: resolveCostSource(data),
         pricedTokens: data.pricedTokens,
         unpricedTokens: data.unpricedTokens,
         hasCustomPrice: data.hasCustomPrice,
@@ -142,6 +174,13 @@ export class UsageAggregator {
 
     return {
       buckets,
+      distinctSessions: this.sessions.size,
     };
   }
+}
+
+function resolveCostSource(bucket: MutableBucket): UsageCostSource {
+  if (bucket.unpricedRecords === bucket.records) return "unpriced";
+  if (bucket.providerReportedRecords === bucket.records) return "providerReported";
+  return "modelPriced";
 }

@@ -52,7 +52,6 @@ import {
   GlobeIcon,
   HelpCircleIcon,
   HistoryIcon,
-  LoaderIcon,
   Maximize2Icon,
   Minimize2Icon,
   MoreHorizontalIcon,
@@ -77,8 +76,13 @@ import {
   XIcon,
   PanelLeftIcon,
   PanelLeftCloseIcon,
+  PinIcon,
+  Clock3Icon,
+  CircleCheckIcon,
+  TriangleAlertIcon,
 } from "lucide-react";
 import {
+  Fragment,
   type ReactNode,
   Suspense,
   lazy,
@@ -141,7 +145,17 @@ const isWindowsDesktop =
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import { openInPreferredEditor } from "../editorPreferences";
 import { ServerPresetFormFields } from "./ServerPresetFormFields";
-import { ClaudeAI, OpenAI, GrokIcon, OpenCodeIcon, KiloIcon, CursorIcon, CopilotIcon, type Icon } from "./Icons";
+import {
+  AntigravityIcon,
+  ClaudeAI,
+  OpenAI,
+  GrokIcon,
+  OpenCodeIcon,
+  KiloIcon,
+  CursorIcon,
+  CopilotIcon,
+  type Icon,
+} from "./Icons";
 import GitCommitComposer from "./GitCommitComposer";
 import { FusedModelPicker } from "./chat/FusedModelPicker";
 import type { ProviderPickerKind } from "../session-logic";
@@ -219,6 +233,14 @@ import { getThreadTerminalState, terminalActions, useThreadTerminalState } from 
 import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
 import { MercuryChromeLoader } from "./MercuryChromeLoader";
+import { Spinner } from "./ui/spinner";
+import {
+  isSnoozed,
+  isSettled,
+  lifecycleFor,
+  threadLifecycleActions,
+  useThreadLifecycle,
+} from "../state/threadLifecycle";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -424,6 +446,11 @@ const CODE_HOST_OVERLAY_SELECTOR = [
   "[data-slot='alert-dialog-popup']",
   "[data-slot='command-dialog-backdrop']",
   "[data-slot='command-dialog-popup']",
+  // Native WebContentsViews are composited above the renderer, regardless of CSS
+  // z-index. Suspend them while a notification is visible so global and anchored
+  // toasts remain readable and interactive over Code, Browser, and Testing views.
+  "[data-slot='toast-root']",
+  "[data-slot='toast-popup']",
   // While the AI side chat is being resized, this transparent overlay is mounted
   // so the embedded BrowserView hides and the drag's pointer events reach the
   // React window instead of being swallowed by the native editor view.
@@ -1097,6 +1124,7 @@ const PROVIDER_COLOR_MAP: Record<string, string> = {
 
 /** Maps provider instanceId → SVG icon component */
 const PROVIDER_ICON_MAP: Record<string, Icon> = {
+  antigravity: AntigravityIcon,
   claudeAgent: ClaudeAI,
   claude: ClaudeAI,
   codex: OpenAI,
@@ -1108,26 +1136,36 @@ const PROVIDER_ICON_MAP: Record<string, Icon> = {
   cursor: CursorIcon,
 };
 
-function ProviderIcon({ instanceId, className }: { instanceId: string; className?: string }) {
-  const normalizedKey = (instanceId ?? "").toLowerCase();
+function ProviderIcon({
+  instanceId,
+  provider,
+  className,
+}: {
+  instanceId: string;
+  provider?: string | undefined;
+  className?: string;
+}) {
+  const normalizedKey = `${instanceId ?? ""} ${provider ?? ""}`.toLowerCase();
   const IconComp =
     PROVIDER_ICON_MAP[instanceId] ??
     PROVIDER_ICON_MAP[normalizedKey] ??
     (normalizedKey.includes("cursor")
       ? CursorIcon
-      : normalizedKey.includes("copilot")
-        ? CopilotIcon
-        : normalizedKey.includes("opencode")
-          ? OpenCodeIcon
-          : normalizedKey.includes("claude")
-            ? ClaudeAI
-            : normalizedKey.includes("codex") ||
-                normalizedKey.includes("openai") ||
-                normalizedKey.includes("gpt")
-              ? OpenAI
-              : normalizedKey.includes("grok")
-                ? GrokIcon
-                : BotIcon);
+      : normalizedKey.includes("antigravity") || normalizedKey.includes("gemini")
+        ? AntigravityIcon
+        : normalizedKey.includes("copilot")
+          ? CopilotIcon
+          : normalizedKey.includes("opencode")
+            ? OpenCodeIcon
+            : normalizedKey.includes("claude")
+              ? ClaudeAI
+              : normalizedKey.includes("codex") ||
+                  normalizedKey.includes("openai") ||
+                  normalizedKey.includes("gpt")
+                ? OpenAI
+                : normalizedKey.includes("grok")
+                  ? GrokIcon
+                  : BotIcon);
 
   // Monotone icon style matching prototype design system
   return <IconComp className={className} />;
@@ -1166,6 +1204,40 @@ function AgentsThreadList(props: {
   children: ReactNode;
 }) {
   const [threadPendingDelete, setThreadPendingDelete] = useState<Thread | null>(null);
+  const lifecycle = useThreadLifecycle();
+  const [lifecycleNow, setLifecycleNow] = useState(() => Date.now());
+  const [showSettledView, setShowSettledView] = useState(false);
+  const [showSnoozedView, setShowSnoozedView] = useState(false);
+  const [threadSearch, setThreadSearch] = useState("");
+  const [openThreadMenuId, setOpenThreadMenuId] = useState<ThreadId | null>(null);
+  const projectGitStatusQuery = useQuery(gitStatusQueryOptions(props.project.cwd));
+  useEffect(() => {
+    threadLifecycleActions.expireSnoozes();
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      threadLifecycleActions.expireSnoozes(now);
+      setLifecycleNow(now);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const nextWakeAt = Object.values(lifecycle).reduce<number | null>((nearest, entry) => {
+      if (entry.snoozedUntil === null) return nearest;
+      const wakeAt = Date.parse(entry.snoozedUntil);
+      if (!Number.isFinite(wakeAt) || wakeAt <= Date.now()) return nearest;
+      return nearest === null || wakeAt < nearest ? wakeAt : nearest;
+    }, null);
+    if (nextWakeAt === null) return;
+    const timer = window.setTimeout(
+      () => {
+        const now = Date.now();
+        threadLifecycleActions.expireSnoozes(now);
+        setLifecycleNow(now);
+      },
+      Math.max(0, nextWakeAt - Date.now()) + 25,
+    );
+    return () => window.clearTimeout(timer);
+  }, [lifecycle]);
   const [agentsState, setAgentsState] = useProjectAgentsState(props.project.id);
   const view = agentsState.threadListView;
   const setView = useCallback(
@@ -1218,7 +1290,92 @@ function AgentsThreadList(props: {
 
   const activeThreads = props.threads.filter((thread) => thread.archivedAt === null);
   const archivedThreads = props.threads.filter((thread) => thread.archivedAt !== null);
-  const visibleThreads = view === "current" ? activeThreads : archivedThreads;
+  const normalizedThreadSearch = threadSearch.trim().toLocaleLowerCase();
+  const matchesThreadSearch = (thread: Thread): boolean => {
+    if (!normalizedThreadSearch) return true;
+    return [
+      thread.title,
+      thread.branch,
+      thread.worktreePath,
+      thread.modelSelection.instanceId,
+      thread.modelSelection.model,
+      thread.session?.provider,
+      thread.runtimeMode,
+      props.project.name,
+      props.project.cwd,
+    ].some((value) => value?.toLocaleLowerCase().includes(normalizedThreadSearch));
+  };
+  const searchedActiveThreads = activeThreads.filter(matchesThreadSearch);
+  const searchedArchivedThreads = archivedThreads.filter(matchesThreadSearch);
+  const threadSections = useMemo(() => {
+    if (view === "archived") {
+      return [{ name: "archived" as const, threads: searchedArchivedThreads }];
+    }
+
+    const pinned: Thread[] = [];
+    const active: Thread[] = [];
+    const snoozed: Thread[] = [];
+    const settled: Thread[] = [];
+    for (const thread of searchedActiveThreads) {
+      const entry = lifecycleFor(lifecycle, thread.id);
+      if (isSnoozed(entry, lifecycleNow)) {
+        snoozed.push(thread);
+      } else if (isSettled(entry, thread.updatedAt ?? thread.createdAt)) {
+        settled.push(thread);
+      } else if (entry.pinnedAt !== null) {
+        pinned.push(thread);
+      } else {
+        active.push(thread);
+      }
+    }
+    const eventTime = (thread: Thread): number =>
+      Date.parse(
+        lifecycleFor(lifecycle, thread.id).lastTransition?.at ??
+          thread.updatedAt ??
+          thread.createdAt,
+      );
+    const byAttentionThenEvent = (left: Thread, right: Thread): number => {
+      const leftAttention = deriveThreadAttention(left) !== null ? 1 : 0;
+      const rightAttention = deriveThreadAttention(right) !== null ? 1 : 0;
+      return rightAttention - leftAttention || eventTime(right) - eventTime(left);
+    };
+    pinned.sort(byAttentionThenEvent);
+    active.sort(byAttentionThenEvent);
+    snoozed.sort((left, right) => {
+      const leftWake = Date.parse(lifecycleFor(lifecycle, left.id).snoozedUntil ?? "");
+      const rightWake = Date.parse(lifecycleFor(lifecycle, right.id).snoozedUntil ?? "");
+      return leftWake - rightWake;
+    });
+    settled.sort((left, right) => eventTime(right) - eventTime(left));
+    if (showSnoozedView) {
+      return [{ name: "snoozed" as const, threads: snoozed }];
+    }
+    if (showSettledView) {
+      return [{ name: "settled" as const, threads: settled }];
+    }
+    return [
+      { name: "pinned" as const, threads: pinned },
+      { name: "active" as const, threads: active },
+    ];
+  }, [
+    lifecycle,
+    lifecycleNow,
+    searchedActiveThreads,
+    searchedArchivedThreads,
+    showSettledView,
+    showSnoozedView,
+    view,
+  ]);
+  const visibleThreads = threadSections.flatMap((section) =>
+    section.threads.map((thread, index) => ({ thread, section: section.name, first: index === 0 })),
+  );
+  const settledCount = activeThreads.filter((thread) =>
+    isSettled(lifecycleFor(lifecycle, thread.id), thread.updatedAt ?? thread.createdAt),
+  ).length;
+  const snoozedCount = activeThreads.filter((thread) =>
+    isSnoozed(lifecycleFor(lifecycle, thread.id), lifecycleNow),
+  ).length;
+  const actionableCount = activeThreads.length - settledCount - snoozedCount;
 
   return (
     <div className="flex h-full min-h-0 min-w-0">
@@ -1318,228 +1475,760 @@ function AgentsThreadList(props: {
               New Thread
             </button>
 
-            {/* Current / Archived pill switcher with clean font-sans typography */}
+            {/* Lifecycle is the primary navigation; archive remains secondary history. */}
+            <div className="mt-2.5 flex items-center gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setView("current");
+                  setShowSettledView(false);
+                  setShowSnoozedView(false);
+                }}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-sans font-medium transition-all",
+                  view === "current" && !showSettledView && !showSnoozedView
+                    ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
+                    : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
+                )}
+              >
+                Active <span className="font-normal opacity-60">{actionableCount}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setView("current");
+                  setShowSettledView(true);
+                  setShowSnoozedView(false);
+                }}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
+                  view === "current" && showSettledView
+                    ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
+                    : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
+                )}
+              >
+                Settled <span className="font-normal opacity-60">{settledCount}</span>
+              </button>
+            </div>
             {archivedThreads.length > 0 && (
-              <div className="mt-2.5 flex items-center gap-1 rounded-xl border border-border/60 bg-muted/30 p-1">
-                <button
-                  type="button"
-                  onClick={() => setView("current")}
-                  className={cn(
-                    "flex-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
-                    view === "current"
-                      ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
-                      : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
-                  )}
-                >
-                  Current
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("archived")}
-                  className={cn(
-                    "flex flex-1 items-center justify-center gap-1 rounded-lg px-3 py-1.5 text-xs font-sans font-medium transition-all",
-                    view === "archived"
-                      ? "bg-background text-foreground font-semibold shadow-sm border border-border/40"
-                      : "text-muted-foreground/70 hover:text-foreground hover:bg-background/40",
-                  )}
-                >
-                  Archived
-                  <span
-                    className={
-                      view === "archived"
-                        ? "text-foreground/70 font-normal"
-                        : "text-muted-foreground/50 font-normal"
-                    }
-                  >
-                    ({archivedThreads.length})
-                  </span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setView(view === "archived" ? "current" : "archived");
+                  setShowSnoozedView(false);
+                }}
+                className={cn(
+                  "mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-lg py-1 text-[11px] transition-colors",
+                  view === "archived"
+                    ? "bg-accent/50 text-foreground"
+                    : "text-muted-foreground/55 hover:bg-accent/30 hover:text-foreground",
+                )}
+              >
+                <ArchiveIcon aria-hidden="true" className="size-3" />
+                {view === "archived" ? "Return to threads" : `Archive (${archivedThreads.length})`}
+              </button>
             )}
+            <div className="relative mt-2">
+              <SearchIcon
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50"
+              />
+              <input
+                type="search"
+                value={threadSearch}
+                onChange={(event) => setThreadSearch(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setThreadSearch("");
+                    event.currentTarget.blur();
+                  }
+                }}
+                aria-label="Search tasks"
+                placeholder="Search tasks, branches, models…"
+                className="h-8 w-full rounded-lg border border-border/50 bg-background/55 pl-8 pr-8 text-xs text-foreground outline-none transition-colors placeholder:text-muted-foreground/45 hover:border-border focus:border-ring focus:ring-2 focus:ring-ring/20"
+              />
+              {threadSearch && (
+                <button
+                  type="button"
+                  aria-label="Clear task search"
+                  onClick={() => setThreadSearch("")}
+                  className="absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground/55 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <XIcon aria-hidden="true" className="size-3" />
+                </button>
+              )}
+              <span className="sr-only" aria-live="polite">
+                {normalizedThreadSearch
+                  ? `${visibleThreads.length} matching task${visibleThreads.length === 1 ? "" : "s"}`
+                  : ""}
+              </span>
+            </div>
           </div>
         )}
 
         {/* ── Thread list ── */}
         <ScrollArea hideScrollbars className="min-h-0 flex-1">
           <div className={cn("space-y-0.5", collapsed ? "p-1.5" : "px-2 pb-2")}>
-            {visibleThreads.length === 0 && !collapsed && (
-              <div className="rounded-xl border border-dashed border-border/60 p-4 text-xs text-muted-foreground/60">
-                {view === "current"
-                  ? "No active threads. Create the first one above."
-                  : "No archived threads."}
+            {showSnoozedView && !collapsed && (
+              <div className="mb-2 flex items-center justify-between border-b border-border/50 px-1 pb-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowSnoozedView(false)}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowLeftIcon aria-hidden="true" className="size-3.5" />
+                  Back to active
+                </button>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                  {snoozedCount}
+                </span>
               </div>
             )}
+            {normalizedThreadSearch && visibleThreads.length === 0 && !collapsed && (
+              <div className="rounded-xl border border-dashed border-border/60 p-4 text-center text-xs text-muted-foreground/65">
+                No tasks match “{threadSearch.trim()}”.
+              </div>
+            )}
+            {(view === "archived"
+              ? archivedThreads.length === 0
+              : showSnoozedView
+                ? snoozedCount === 0
+                : showSettledView
+                  ? settledCount === 0
+                  : actionableCount === 0) &&
+              !normalizedThreadSearch &&
+              !collapsed && (
+                <div className="rounded-xl border border-dashed border-border/60 p-4 text-xs text-muted-foreground/60">
+                  {view === "archived"
+                    ? "No archived threads."
+                    : showSnoozedView
+                      ? "No snoozed threads."
+                      : showSettledView
+                        ? "No settled threads yet."
+                        : "No active threads. Create a new one above."}
+                </div>
+              )}
 
-            {visibleThreads.map((thread) => {
+            {visibleThreads.map(({ thread, section, first }) => {
               const active = props.activeThreadId === thread.id;
               const isArchived = thread.archivedAt !== null;
-
-              return (
-                <div
-                  key={thread.id}
-                  className={cn(
-                    "group relative flex items-center rounded-lg transition-all duration-150",
-                    collapsed ? "justify-center" : "",
-                    "bg-transparent hover:bg-accent/30",
-                  )}
-                >
-                  {/* Single tall left accent line for active thread (expanded) */}
-                  {active && !collapsed && (
-                    <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-foreground" />
-                  )}
-                  {collapsed ? (
-                    // ── Icon-rail: provider logo chip + tooltip matching prototype ──
-                    <Tooltip>
-                      <TooltipTrigger
-                        render={
-                          <button
-                            type="button"
-                            aria-label={thread.title}
-                            onClick={() => props.onSelectThread(thread.id)}
-                            className={cn(
-                              "relative flex size-9 items-center justify-center rounded-lg transition-colors",
-                              active
-                                ? "text-foreground"
-                                : "text-muted-foreground/60 hover:bg-accent/40 hover:text-foreground",
-                            )}
-                          />
-                        }
-                      >
-                        {/* Single tall left accent line for active thread (collapsed) */}
-                        {active && (
-                          <span className="absolute -left-1 top-1.5 bottom-1.5 w-0.5 rounded-full bg-foreground" />
-                        )}
+              const lifecycleEntry = lifecycleFor(lifecycle, thread.id);
+              const threadIsSnoozed = isSnoozed(lifecycleEntry, lifecycleNow);
+              const attention = deriveThreadAttention(thread);
+              const wakeLabel =
+                lifecycleEntry.snoozedUntil === null
+                  ? null
+                  : new Intl.DateTimeFormat(undefined, {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    }).format(new Date(lifecycleEntry.snoozedUntil));
+              const lastWorkedDate = new Date(thread.updatedAt ?? thread.createdAt);
+              const lastWorkedLabel = Number.isNaN(lastWorkedDate.getTime())
+                ? "Unknown"
+                : new Intl.DateTimeFormat(undefined, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }).format(lastWorkedDate);
+              const accessibleState =
+                section === "settled"
+                  ? "settled"
+                  : section === "snoozed"
+                    ? `snoozed until ${wakeLabel ?? "later"}`
+                    : attention?.spin
+                      ? "working"
+                      : attention
+                        ? "needs attention"
+                        : section === "pinned"
+                          ? "pinned"
+                          : "active";
+              const threadInspector = (
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start justify-between gap-3 border-b border-border/50 pb-2">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-muted/40 text-foreground shadow-sm">
                         <ProviderIcon
                           instanceId={thread.modelSelection.instanceId}
-                          className="size-4 shrink-0"
+                          provider={thread.session?.provider}
+                          className="size-4"
                         />
-                        {/* ── Status dot badge (only for active attention like running/error/interrupted) ── */}
-                        {(() => {
-                          const attn = deriveThreadAttention(thread);
-                          if (!attn) return null;
-                          return (
-                            <span className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-background border border-border/40">
-                              {attn.spin ? (
-                                <LoaderIcon className="size-2.5 animate-spin text-primary" />
-                              ) : (
-                                <span
-                                  className={cn(
-                                    "size-2 rounded-full",
-                                    attn.tone === "red"
-                                      ? "bg-red-400"
-                                      : attn.tone === "amber"
-                                        ? "bg-amber-400"
-                                        : "bg-primary",
-                                  )}
-                                />
-                              )}
-                            </span>
-                          );
-                        })()}
-                      </TooltipTrigger>
-                      <TooltipPopup side="right" align="center" className="max-w-[200px]">
-                        <p className="truncate font-semibold text-xs text-foreground">
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold leading-5 text-foreground">
                           {thread.title}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground/70">
-                          {thread.modelSelection.instanceId} · {thread.runtimeMode}
-                        </p>
-                      </TooltipPopup>
-                    </Tooltip>
-                  ) : (
-                    // ── Full expanded row matching prototype ──
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => props.onSelectThread(thread.id)}
-                        className="min-w-0 flex-1 p-2.5 text-left"
-                      >
-                        <div className="flex items-center gap-2 pr-6">
-                          {/* Status dot or spinner for active attention */}
-                          {(() => {
-                            const attn = deriveThreadAttention(thread);
-                            if (!attn) return null;
-                            if (attn.spin) {
-                              return (
-                                <LoaderIcon className="size-3 shrink-0 animate-spin text-primary" />
-                              );
-                            }
-                            return (
-                              <span
-                                className={cn(
-                                  "size-1.5 shrink-0 rounded-full",
-                                  attn.tone === "red"
-                                    ? "bg-red-400"
-                                    : attn.tone === "amber"
-                                      ? "bg-amber-400"
-                                      : "bg-primary",
-                                )}
-                              />
-                            );
-                          })()}
-                          <div
-                            className={cn(
-                              "truncate text-sm font-semibold tracking-tight transition-colors flex-1",
-                              active
-                                ? "text-foreground font-semibold"
-                                : isArchived
-                                  ? "text-muted-foreground/40"
-                                  : "text-muted-foreground/60 group-hover:text-foreground",
-                            )}
-                          >
-                            {thread.title}
-                          </div>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground/50">
-                          <ProviderIcon
-                            instanceId={thread.modelSelection.instanceId}
-                            className="size-3 shrink-0 text-muted-foreground/60 group-hover:text-foreground/75"
-                          />
-                          <span className="truncate">
-                            {thread.modelSelection.instanceId} · {thread.runtimeMode}
-                          </span>
-                        </div>
-                      </button>
-                      <Menu>
-                        <MenuTrigger
+                        </span>
+                        <span className="block truncate text-[10px] text-muted-foreground/70">
+                          {thread.modelSelection.instanceId} · {thread.modelSelection.model}
+                        </span>
+                      </span>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+                      {accessibleState}
+                    </span>
+                  </div>
+                  {thread.branch && projectGitStatusQuery.data?.branch && (
+                    <p
+                      className={cn(
+                        "flex items-start gap-2 rounded-lg border p-2.5 font-medium",
+                        thread.branch === projectGitStatusQuery.data.branch
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+                      )}
+                    >
+                      {thread.branch === projectGitStatusQuery.data.branch ? (
+                        <CircleCheckIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+                      ) : (
+                        <TriangleAlertIcon
+                          aria-hidden="true"
+                          className="mt-0.5 size-3.5 shrink-0"
+                        />
+                      )}
+                      <span>
+                        {thread.branch === projectGitStatusQuery.data.branch
+                          ? `Checked out on this task’s branch: ${thread.branch}`
+                          : `Checked out on ${projectGitStatusQuery.data.branch}; this task uses ${thread.branch}.`}
+                      </span>
+                    </p>
+                  )}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <FolderSearchIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span className="truncate">{props.project.name}</span>
+                  </p>
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <HistoryIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span className="truncate">Last worked {lastWorkedLabel}</span>
+                  </p>
+                  {thread.branch && (
+                    <p className="flex items-center gap-2 text-muted-foreground">
+                      <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                      <span className="truncate">Thread branch: {thread.branch}</span>
+                    </p>
+                  )}
+                  {projectGitStatusQuery.data?.branch && (
+                    <p className="flex items-center gap-2 text-muted-foreground">
+                      <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                      <span className="truncate">
+                        Checked out: {projectGitStatusQuery.data.branch}
+                      </span>
+                    </p>
+                  )}
+                  <p className="flex items-center gap-2 text-muted-foreground">
+                    <MonitorIcon aria-hidden="true" className="size-3.5 shrink-0" />
+                    <span className="truncate">{thread.worktreePath ?? props.project.cwd}</span>
+                  </p>
+                  <p className="text-muted-foreground/70">Local workspace · {thread.runtimeMode}</p>
+                  {section === "snoozed" && wakeLabel && (
+                    <p className="flex items-center gap-2 rounded-md bg-blue-500/10 p-2 text-blue-600 dark:text-blue-400">
+                      <Clock3Icon aria-hidden="true" className="size-3.5 shrink-0" />
+                      Wakes automatically at {wakeLabel}
+                    </p>
+                  )}
+                </div>
+              );
+
+              return (
+                <Fragment key={`${section}:${thread.id}`}>
+                  {!collapsed && first && section === "pinned" && (
+                    <div className="flex items-center gap-2 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
+                      <PinIcon aria-hidden="true" className="size-3" />
+                      Pinned
+                    </div>
+                  )}
+                  {!collapsed && first && section === "snoozed" && (
+                    <div className="mt-2 flex w-full items-center gap-2 border-t border-border/40 px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/55">
+                      <Clock3Icon aria-hidden="true" className="size-3.5" />
+                      <span>Snoozed</span>
+                      <span className="text-muted-foreground/45">{snoozedCount}</span>
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      "group relative flex items-center rounded-lg transition-all duration-150",
+                      collapsed ? "justify-center" : "",
+                      "bg-transparent hover:bg-accent/30",
+                      !collapsed && section === "settled" && "opacity-75",
+                    )}
+                  >
+                    {/* Single tall left accent line for active thread (expanded) */}
+                    {active && !collapsed && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-foreground" />
+                    )}
+                    {collapsed ? (
+                      // ── Icon-rail: provider logo chip + tooltip matching prototype ──
+                      <Tooltip>
+                        <TooltipTrigger
                           render={
                             <button
                               type="button"
-                              aria-label={`Thread actions for ${thread.title}`}
-                              className="mr-2 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/40 opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[popup-open]:opacity-100"
+                              aria-label={`${thread.title}, ${accessibleState}, ${props.project.name}`}
+                              onClick={() => props.onSelectThread(thread.id)}
+                              className={cn(
+                                "relative flex size-9 items-center justify-center rounded-lg transition-colors",
+                                active
+                                  ? "text-foreground"
+                                  : "text-muted-foreground/60 hover:bg-accent/40 hover:text-foreground",
+                              )}
                             />
                           }
                         >
-                          <MoreHorizontalIcon className="size-4" />
-                        </MenuTrigger>
-                        <MenuPopup align="end" side="bottom" className="min-w-40">
-                          {isArchived ? (
-                            <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
-                              <ArchiveRestoreIcon className="size-3.5" />
-                              Unarchive thread
-                            </MenuItem>
-                          ) : (
-                            <MenuItem onClick={() => void props.onArchiveThread(thread)}>
-                              <ArchiveIcon className="size-3.5" />
-                              Archive thread
-                            </MenuItem>
+                          {/* Single tall left accent line for active thread (collapsed) */}
+                          {active && (
+                            <span className="absolute -left-1 top-1.5 bottom-1.5 w-0.5 rounded-full bg-foreground" />
                           )}
-                          <MenuItem
-                            variant="destructive"
-                            onClick={() => setThreadPendingDelete(thread)}
+                          <span
+                            aria-hidden="true"
+                            className="flex size-7 items-center justify-center rounded-md border border-border/50 bg-muted/35 text-muted-foreground"
                           >
-                            <Trash2Icon className="size-3.5" />
-                            Delete thread
-                          </MenuItem>
-                        </MenuPopup>
-                      </Menu>
-                    </>
-                  )}
-                </div>
+                            <ProviderIcon
+                              instanceId={thread.modelSelection.instanceId}
+                              provider={thread.session?.provider}
+                              className="size-4"
+                            />
+                          </span>
+                          {/* ── Status dot badge (only for active attention like running/error/interrupted) ── */}
+                          {(() => {
+                            const attn = deriveThreadAttention(thread);
+                            if (!attn) return null;
+                            return (
+                              <span className="absolute -bottom-1 -right-1 flex size-3.5 items-center justify-center rounded-full bg-background border border-border/40">
+                                {attn.spin ? (
+                                  <Spinner className="size-2.5 text-primary" />
+                                ) : (
+                                  <span
+                                    className={cn(
+                                      "size-2 rounded-full",
+                                      attn.tone === "red"
+                                        ? "bg-red-400"
+                                        : attn.tone === "amber"
+                                          ? "bg-amber-400"
+                                          : "bg-primary",
+                                    )}
+                                  />
+                                )}
+                              </span>
+                            );
+                          })()}
+                        </TooltipTrigger>
+                        <TooltipPopup side="right" align="start" className="w-72 p-3">
+                          {threadInspector}
+                        </TooltipPopup>
+                      </Tooltip>
+                    ) : (
+                      // ── Full expanded row matching prototype ──
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                onClick={() => props.onSelectThread(thread.id)}
+                                className={cn(
+                                  "min-w-0 flex-1 text-left",
+                                  section === "settled" ? "px-2.5 py-1.5" : "px-2.5 py-2",
+                                )}
+                                aria-label={`${thread.title}, ${accessibleState}, ${props.project.name}`}
+                              />
+                            }
+                          >
+                            <div className="flex items-center gap-2">
+                              {section === "pinned" && (
+                                <PinIcon
+                                  aria-hidden="true"
+                                  className="size-3.5 shrink-0 text-muted-foreground/55"
+                                />
+                              )}
+                              {(section === "settled" || section === "snoozed") && (
+                                <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground/50" />
+                              )}
+                              {/* Status dot or spinner for active attention */}
+                              {(() => {
+                                const attn = deriveThreadAttention(thread);
+                                if (!attn) return null;
+                                if (attn.spin) {
+                                  return <Spinner className="size-3 shrink-0 text-primary" />;
+                                }
+                                return (
+                                  <span
+                                    className={cn(
+                                      "size-1.5 shrink-0 rounded-full",
+                                      attn.tone === "red"
+                                        ? "bg-red-400"
+                                        : attn.tone === "amber"
+                                          ? "bg-amber-400"
+                                          : "bg-primary",
+                                    )}
+                                  />
+                                );
+                              })()}
+                              <div
+                                className={cn(
+                                  "truncate text-sm font-semibold tracking-tight transition-colors flex-1",
+                                  active
+                                    ? "text-foreground font-semibold"
+                                    : isArchived
+                                      ? "text-muted-foreground/40"
+                                      : "text-muted-foreground/60 group-hover:text-foreground",
+                                )}
+                              >
+                                {thread.title}
+                              </div>
+                              {section === "settled" && (
+                                <span className="shrink-0 text-[11px] font-normal text-muted-foreground/45 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+                                  {(() => {
+                                    const age =
+                                      Date.now() -
+                                      new Date(thread.updatedAt ?? thread.createdAt).getTime();
+                                    const days = Math.floor(age / 86_400_000);
+                                    if (days > 0) return `${days}d`;
+                                    const hours = Math.floor(age / 3_600_000);
+                                    if (hours > 0) return `${hours}h`;
+                                    return `${Math.max(1, Math.floor(age / 60_000))}m`;
+                                  })()}
+                                </span>
+                              )}
+                            </div>
+                            {section !== "settled" && (
+                              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground/55">
+                                {section === "snoozed" ? (
+                                  <Clock3Icon className="size-3 shrink-0 text-muted-foreground/60" />
+                                ) : thread.branch ? (
+                                  <GitBranchIcon className="size-3 shrink-0 text-muted-foreground/60 group-hover:text-foreground/75" />
+                                ) : (
+                                  <MessageSquareIcon className="size-3 shrink-0 text-muted-foreground/60 group-hover:text-foreground/75" />
+                                )}
+                                <span className="truncate">
+                                  {section === "snoozed"
+                                    ? `Wakes at ${wakeLabel ?? "the scheduled time"}`
+                                    : (thread.branch ??
+                                      (deriveThreadAttention(thread)?.spin
+                                        ? "Working"
+                                        : thread.error
+                                          ? "Needs attention"
+                                          : threadIsSnoozed
+                                            ? "Snoozed"
+                                            : lifecycleEntry.pinnedAt
+                                              ? "Pinned"
+                                              : "Active"))}
+                                </span>
+                              </div>
+                            )}
+                          </TooltipTrigger>
+                          <TooltipPopup side="right" align="start" className="w-72 p-3">
+                            {threadInspector}
+                            <div className="hidden space-y-2 text-xs">
+                              <div className="flex items-start justify-between gap-3 border-b border-border/50 pb-2">
+                                <p className="font-semibold leading-5 text-foreground">
+                                  {thread.title}
+                                </p>
+                                <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+                                  {accessibleState}
+                                </span>
+                              </div>
+                              <p className="flex items-center gap-2 text-muted-foreground">
+                                <FolderSearchIcon aria-hidden="true" className="size-3.5" />
+                                <span className="truncate">{props.project.name}</span>
+                              </p>
+                              {thread.branch && (
+                                <p className="flex items-center gap-2 text-muted-foreground">
+                                  <GitBranchIcon aria-hidden="true" className="size-3.5" />
+                                  <span className="truncate">Thread branch: {thread.branch}</span>
+                                </p>
+                              )}
+                              {projectGitStatusQuery.data?.branch && (
+                                <p className="flex items-center gap-2 text-muted-foreground">
+                                  <GitBranchIcon aria-hidden="true" className="size-3.5" />
+                                  <span className="truncate">
+                                    Checked out: {projectGitStatusQuery.data.branch}
+                                  </span>
+                                </p>
+                              )}
+                              {thread.branch &&
+                                projectGitStatusQuery.data?.branch &&
+                                thread.branch !== projectGitStatusQuery.data.branch && (
+                                  <p className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2 text-amber-500">
+                                    <TriangleAlertIcon
+                                      aria-hidden="true"
+                                      className="mt-0.5 size-3.5 shrink-0"
+                                    />
+                                    <span>You are currently checked out on another branch.</span>
+                                  </p>
+                                )}
+                              <p className="flex items-center gap-2 text-muted-foreground">
+                                <MonitorIcon aria-hidden="true" className="size-3.5" />
+                                <span className="truncate">
+                                  {thread.worktreePath ?? props.project.cwd}
+                                </span>
+                              </p>
+                              <p className="flex items-center gap-2 text-muted-foreground">
+                                <ProviderIcon
+                                  instanceId={thread.modelSelection.instanceId}
+                                  provider={thread.session?.provider}
+                                  className="size-3.5"
+                                />
+                                {thread.modelSelection.instanceId} · {thread.modelSelection.model}
+                              </p>
+                              <p className="text-muted-foreground/70">
+                                Local workspace · {thread.runtimeMode}
+                              </p>
+                              <p className="text-muted-foreground/70">
+                                {section === "settled"
+                                  ? "Settled"
+                                  : threadIsSnoozed
+                                    ? "Snoozed"
+                                    : lifecycleEntry.pinnedAt
+                                      ? "Pinned"
+                                      : "Active"}
+                              </p>
+                              {section === "snoozed" && wakeLabel && (
+                                <p className="flex items-center gap-2 rounded-md bg-blue-500/10 p-2 text-blue-600 dark:text-blue-400">
+                                  <Clock3Icon aria-hidden="true" className="size-3.5 shrink-0" />
+                                  Wakes automatically at {wakeLabel}
+                                </p>
+                              )}
+                            </div>
+                          </TooltipPopup>
+                        </Tooltip>
+                        {!isArchived && (
+                          <div className="pointer-events-none absolute right-7 top-1/2 z-10 flex h-7 -translate-y-1/2 items-center gap-0.5 rounded-l-xl border border-r-0 border-white/20 bg-background/60 px-1 opacity-0 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-xl transition-[opacity,background-color] supports-[backdrop-filter]:bg-background/45 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 dark:border-white/10 dark:ring-white/5">
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"
+                                    }
+                                    aria-pressed={lifecycleEntry.pinnedAt !== null}
+                                    className={cn(
+                                      "flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                                      lifecycleEntry.pinnedAt &&
+                                        "bg-primary/10 text-primary hover:text-primary",
+                                    )}
+                                    onClick={() =>
+                                      lifecycleEntry.pinnedAt
+                                        ? threadLifecycleActions.unpin(thread.id)
+                                        : threadLifecycleActions.pin(thread.id)
+                                    }
+                                  />
+                                }
+                              >
+                                <PinIcon className="size-3.5" />
+                              </TooltipTrigger>
+                              <TooltipPopup side="top">
+                                {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
+                              </TooltipPopup>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      section === "settled"
+                                        ? "Return thread to active"
+                                        : "Settle thread"
+                                    }
+                                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    onClick={() =>
+                                      section === "settled"
+                                        ? threadLifecycleActions.unsettle(thread.id)
+                                        : threadLifecycleActions.settle(thread.id)
+                                    }
+                                  />
+                                }
+                              >
+                                <CircleCheckIcon className="size-3.5" />
+                              </TooltipTrigger>
+                              <TooltipPopup side="top">
+                                {section === "settled" ? "Return to active" : "Settle thread"}
+                              </TooltipPopup>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      threadIsSnoozed ? "Wake thread now" : "Snooze thread"
+                                    }
+                                    className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    onClick={() =>
+                                      threadIsSnoozed
+                                        ? threadLifecycleActions.unsnooze(thread.id)
+                                        : threadLifecycleActions.snooze(
+                                            thread.id,
+                                            new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                                          )
+                                    }
+                                  />
+                                }
+                              >
+                                <Clock3Icon className="size-3.5" />
+                              </TooltipTrigger>
+                              <TooltipPopup side="top">
+                                {threadIsSnoozed ? "Wake now" : "Snooze for 1 hour"}
+                              </TooltipPopup>
+                            </Tooltip>
+                          </div>
+                        )}
+                        <Menu
+                          open={openThreadMenuId === thread.id}
+                          onOpenChange={(open) => setOpenThreadMenuId(open ? thread.id : null)}
+                        >
+                          <MenuTrigger
+                            render={
+                              <button
+                                type="button"
+                                aria-label={`Thread actions for ${thread.title}`}
+                                className="pointer-events-none absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-l-none rounded-r-xl border border-white/20 bg-background/60 text-muted-foreground/60 opacity-0 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-xl transition-[opacity,background-color] supports-[backdrop-filter]:bg-background/45 hover:bg-accent/70 hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 data-[popup-open]:pointer-events-auto data-[popup-open]:bg-accent/70 data-[popup-open]:text-foreground data-[popup-open]:opacity-100 dark:border-white/10 dark:ring-white/5"
+                              />
+                            }
+                          >
+                            <MoreHorizontalIcon className="size-4" />
+                          </MenuTrigger>
+                          <MenuPopup
+                            align="end"
+                            side="bottom"
+                            onPointerLeave={(event) => {
+                              if (event.pointerType !== "mouse") return;
+                              setOpenThreadMenuId(null);
+                              if (document.activeElement instanceof HTMLElement) {
+                                document.activeElement.blur();
+                              }
+                            }}
+                            className="min-w-48 rounded-xl border border-white/20 bg-popover/75 p-1.5 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.55)] ring-1 ring-black/5 backdrop-blur-2xl supports-[backdrop-filter]:bg-popover/65 dark:border-white/10 dark:ring-white/5"
+                          >
+                            {!isArchived && (
+                              <>
+                                <MenuItem
+                                  onClick={() =>
+                                    lifecycleEntry.pinnedAt
+                                      ? threadLifecycleActions.unpin(thread.id)
+                                      : threadLifecycleActions.pin(thread.id)
+                                  }
+                                >
+                                  <PinIcon className="size-3.5" />
+                                  {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
+                                </MenuItem>
+                                {section === "settled" ? (
+                                  <MenuItem
+                                    onClick={() => threadLifecycleActions.unsettle(thread.id)}
+                                  >
+                                    <CircleCheckIcon className="size-3.5" />
+                                    Return to active
+                                  </MenuItem>
+                                ) : (
+                                  <MenuItem
+                                    onClick={() => threadLifecycleActions.settle(thread.id)}
+                                  >
+                                    <CircleCheckIcon className="size-3.5" />
+                                    Settle thread
+                                  </MenuItem>
+                                )}
+                                {threadIsSnoozed ? (
+                                  <MenuItem
+                                    onClick={() => threadLifecycleActions.unsnooze(thread.id)}
+                                  >
+                                    <Clock3Icon className="size-3.5" />
+                                    Wake now
+                                  </MenuItem>
+                                ) : (
+                                  <MenuItem
+                                    onClick={() =>
+                                      threadLifecycleActions.snooze(
+                                        thread.id,
+                                        new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                                      )
+                                    }
+                                  >
+                                    <Clock3Icon className="size-3.5" />
+                                    Snooze for 1 hour
+                                  </MenuItem>
+                                )}
+                                <MenuSeparator />
+                              </>
+                            )}
+                            {isArchived ? (
+                              <MenuItem onClick={() => void props.onUnarchiveThread(thread)}>
+                                <ArchiveRestoreIcon className="size-3.5" />
+                                Unarchive thread
+                              </MenuItem>
+                            ) : (
+                              <MenuItem onClick={() => void props.onArchiveThread(thread)}>
+                                <ArchiveIcon className="size-3.5" />
+                                Archive thread
+                              </MenuItem>
+                            )}
+                            <MenuItem
+                              variant="destructive"
+                              onClick={() => setThreadPendingDelete(thread)}
+                            >
+                              <Trash2Icon className="size-3.5" />
+                              Delete thread
+                            </MenuItem>
+                          </MenuPopup>
+                        </Menu>
+                      </>
+                    )}
+                  </div>
+                </Fragment>
               );
             })}
           </div>
         </ScrollArea>
+        {view === "current" && !showSettledView && !showSnoozedView && snoozedCount > 0 && (
+          <div className={cn("shrink-0 border-t border-border/50", collapsed ? "p-1.5" : "p-2")}>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`Open ${snoozedCount} snoozed thread${snoozedCount === 1 ? "" : "s"}`}
+                    onClick={() => setShowSnoozedView(true)}
+                    className={cn(
+                      "flex items-center rounded-xl border border-border/50 bg-muted/25 text-muted-foreground transition-all hover:border-border hover:bg-accent/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      collapsed
+                        ? "size-9 justify-center"
+                        : "w-full justify-between px-3 py-2.5 shadow-sm",
+                    )}
+                  />
+                }
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <Clock3Icon aria-hidden="true" className="size-4 shrink-0" />
+                  {!collapsed && (
+                    <>
+                      <span className="text-xs font-semibold">Snoozed</span>
+                      <span className="rounded-full bg-background/80 px-1.5 py-0.5 text-[10px] font-semibold">
+                        {snoozedCount}
+                      </span>
+                    </>
+                  )}
+                </span>
+                {!collapsed && <ChevronUpIcon aria-hidden="true" className="size-3.5" />}
+              </TooltipTrigger>
+              <TooltipPopup side={collapsed ? "right" : "top"}>Open snoozed threads</TooltipPopup>
+            </Tooltip>
+          </div>
+        )}
+        {collapsed && view === "current" && showSnoozedView && (
+          <div className="shrink-0 border-t border-border/50 p-1.5">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="Back to active threads"
+                    onClick={() => setShowSnoozedView(false)}
+                    className="flex size-9 items-center justify-center rounded-xl border border-border/50 bg-muted/25 text-muted-foreground transition-colors hover:bg-accent/45 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                }
+              >
+                <ArrowLeftIcon aria-hidden="true" className="size-4" />
+              </TooltipTrigger>
+              <TooltipPopup side="right">Back to active threads</TooltipPopup>
+            </Tooltip>
+          </div>
+        )}
       </div>
 
       {/* ── Main content ── */}
@@ -6439,12 +7128,9 @@ function DesktopBrowserTool(props: {
       chromeExpanded: false,
     } as const;
   });
-  const setBrowserCurrentUrl = useCallback(
-    (projectId: ProjectId, url: string) => {
-      workspaceShellActions.setBrowserCurrentUrl(projectId, url, "browser");
-    },
-    [],
-  );
+  const setBrowserCurrentUrl = useCallback((projectId: ProjectId, url: string) => {
+    workspaceShellActions.setBrowserCurrentUrl(projectId, url, "browser");
+  }, []);
   const setBrowserViewport: typeof workspaceShellActions.setBrowserViewport = useCallback(
     (projectId, input, sessionId) => {
       workspaceShellActions.setBrowserViewport(projectId, input, sessionId ?? "browser");
@@ -6866,7 +7552,7 @@ function DesktopBrowserTool(props: {
                 </div>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[10px] font-medium text-primary">
-                <LoaderIcon className="size-3 animate-spin" />
+                <Spinner className="size-3" />
                 Starting
               </span>
             </div>
@@ -6909,7 +7595,7 @@ function DesktopBrowserTool(props: {
           <div ref={hostRef} className="absolute inset-0 bg-background" />
           {sessionState.loading ? (
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
-              <LoaderIcon className="mr-2 size-4 animate-spin" />
+              <Spinner className="mr-2 size-4" />
               Loading page...
             </div>
           ) : null}
@@ -6978,12 +7664,9 @@ function EmbeddedBrowserTool(props: {
       chromeExpanded: false,
     } as const;
   });
-  const setBrowserCurrentUrl = useCallback(
-    (projectId: ProjectId, url: string) => {
-      workspaceShellActions.setBrowserCurrentUrl(projectId, url, "browser");
-    },
-    [],
-  );
+  const setBrowserCurrentUrl = useCallback((projectId: ProjectId, url: string) => {
+    workspaceShellActions.setBrowserCurrentUrl(projectId, url, "browser");
+  }, []);
   const setBrowserViewport: typeof workspaceShellActions.setBrowserViewport = useCallback(
     (projectId, input, sessionId) => {
       workspaceShellActions.setBrowserViewport(projectId, input, sessionId ?? "browser");
@@ -7149,7 +7832,7 @@ function EmbeddedBrowserTool(props: {
             >
               {loading ? (
                 <div className="flex h-12 items-center justify-center border-b border-border/70 bg-muted/30 text-sm text-muted-foreground">
-                  <LoaderIcon className="mr-2 size-4 animate-spin" />
+                  <Spinner className="mr-2 size-4" />
                   Loading preview...
                 </div>
               ) : null}
@@ -7516,7 +8199,14 @@ function DesktopCustomEmbedTool(props: {
       lastRequestedUrlRef.current = null;
       void bridge.hideBrowserSession().catch(() => undefined);
     };
-  }, [bridge, normalizedUrl, props.project.id, props.sessionId, props.partitionMode, props.partitionProfile]);
+  }, [
+    bridge,
+    normalizedUrl,
+    props.project.id,
+    props.sessionId,
+    props.partitionMode,
+    props.partitionProfile,
+  ]);
 
   useEffect(() => {
     if (!bridge || !hostState.available || normalizedUrl.length === 0) {
@@ -7763,7 +8453,7 @@ function DesktopCustomEmbedTool(props: {
           <div ref={hostRef} className="absolute inset-0 bg-background" />
           {sessionState.loading ? (
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-center justify-center border-b border-border/70 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
-              <LoaderIcon className="mr-2 size-4 animate-spin" />
+              <Spinner className="mr-2 size-4" />
               Loading page...
             </div>
           ) : null}
@@ -7911,7 +8601,7 @@ function CustomEmbedTool(props: {
           <div className="h-full overflow-hidden rounded-2xl border border-border/70 bg-background">
             {loading ? (
               <div className="flex h-12 items-center justify-center border-b border-border/70 bg-muted/30 text-sm text-muted-foreground">
-                <LoaderIcon className="mr-2 size-4 animate-spin" />
+                <Spinner className="mr-2 size-4" />
                 Loading embed...
               </div>
             ) : null}

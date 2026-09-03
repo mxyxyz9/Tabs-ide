@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
 import {
   usageActiveSubTabAtom,
@@ -15,9 +15,13 @@ import { UsageTab } from "./UsageTab";
 import { LimitsTab } from "./LimitsTab";
 import { Button } from "../../ui/button";
 import { cn } from "../../../lib/utils";
-import { ActivityIcon, BarChart3Icon, GaugeIcon, RefreshCwIcon } from "lucide-react";
+import { getActiveFontCombo } from "../../../lib/themes";
+import { useTheme } from "../../../hooks/useTheme";
+import { BarChart3Icon, GaugeIcon, RefreshCwIcon } from "lucide-react";
 
 export function UsageLimitsPage() {
+  const { fontPreferences } = useTheme();
+  const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
   const activeSubTab = useAtomValue(usageActiveSubTabAtom);
   const summaryState = useAtomValue(usageSummaryStateAtom);
   const snapshotsState = useAtomValue(providerUsageSnapshotsAtom);
@@ -51,13 +55,17 @@ export function UsageLimitsPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1.5">
             <h2
-              className="text-[28px] font-bold leading-relaxed pb-1 text-foreground"
+              className={cn(
+                "text-[28px] font-bold leading-relaxed pb-1 text-foreground",
+                activeFontCombo.sansClass,
+              )}
               style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
             >
               Usage & Limits
             </h2>
             <p className="text-sm text-muted-foreground">
-              Monitor your LLM token consumption, estimated full API rates, and provider quota limits.
+              Monitor your LLM token consumption, estimated full API rates, and provider quota
+              limits.
             </p>
           </div>
 
@@ -68,6 +76,7 @@ export function UsageLimitsPage() {
               variant="outline"
               size="sm"
               className="gap-1.5 shadow-xs border-border/80"
+              aria-label={isLoading ? "Refreshing usage and limits" : "Refresh usage and limits"}
             >
               <RefreshCwIcon className={cn("size-3.5", isLoading && "animate-spin")} />
               <span>Refresh</span>
@@ -95,6 +104,7 @@ export function UsageLimitsPage() {
         <button
           type="button"
           onClick={() => setSubTab("usage")}
+          aria-pressed={activeSubTab === "usage"}
           className={cn(
             "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all",
             activeSubTab === "usage"
@@ -109,6 +119,7 @@ export function UsageLimitsPage() {
         <button
           type="button"
           onClick={() => setSubTab("limits")}
+          aria-pressed={activeSubTab === "limits"}
           className={cn(
             "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all",
             activeSubTab === "limits"
@@ -122,9 +133,7 @@ export function UsageLimitsPage() {
       </div>
 
       {/* Main Tab Content */}
-      <div className="min-w-0">
-        {activeSubTab === "usage" ? <UsageTab /> : <LimitsTab />}
-      </div>
+      <div className="min-w-0">{activeSubTab === "usage" ? <UsageTab /> : <LimitsTab />}</div>
     </div>
   );
 }

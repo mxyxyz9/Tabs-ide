@@ -42,11 +42,7 @@ const PROVIDER_ICONS: Record<string, Icon> = {
 
 function normalizeProviderInfo(provider: string) {
   const normKey =
-    provider === "claude"
-      ? "claudeAgent"
-      : provider === "gemini"
-        ? "googleGemini"
-        : provider;
+    provider === "claude" ? "claudeAgent" : provider === "gemini" ? "googleGemini" : provider;
 
   const displayName =
     (PROVIDER_DISPLAY_NAMES as Record<string, string>)[normKey] ??
@@ -139,10 +135,20 @@ export function ProviderQuotaCard({ snapshot, isEnabled = true }: ProviderQuotaC
               <AlertCircleIcon className="size-3" />
               Not signed in
             </span>
+          ) : status === "quota-unavailable" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <AlertCircleIcon className="size-3" />
+              Signed in · quota unavailable
+            </span>
           ) : status === "error" ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 text-[11px] font-medium text-rose-600 dark:text-rose-400">
               <AlertCircleIcon className="size-3" />
               Unavailable
+            </span>
+          ) : status === "unsupported" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+              <AlertCircleIcon className="size-3" />
+              Provider-managed
             </span>
           ) : isEnabled ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
@@ -186,6 +192,7 @@ export function ProviderQuotaCard({ snapshot, isEnabled = true }: ProviderQuotaC
                 <div
                   className="relative h-2 w-full overflow-hidden rounded-full bg-muted/60"
                   role="progressbar"
+                  aria-label={`${displayName} ${limit.label} quota remaining`}
                   aria-valuenow={Math.round(limit.remainingPercent)}
                   aria-valuemin={0}
                   aria-valuemax={100}
@@ -229,7 +236,7 @@ export function ProviderQuotaCard({ snapshot, isEnabled = true }: ProviderQuotaC
           <p className="text-xs leading-relaxed text-muted-foreground">
             {status === "ok"
               ? "No live quota data reported for this provider."
-              : snapshot.detail ?? "Sign in with the provider CLI to see live usage and quota."}
+              : (snapshot.detail ?? "Sign in with the provider CLI to see live usage and quota.")}
           </p>
         </div>
       )}

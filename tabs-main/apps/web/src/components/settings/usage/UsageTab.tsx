@@ -1,11 +1,6 @@
 import { useMemo, useState } from "react";
 import { useAtomValue } from "@effect/atom-react";
-import {
-  formatCount,
-  formatPercent,
-  formatTokens,
-  formatUsd,
-} from "@tabs/shared/usageFormat";
+import { formatCount, formatPercent, formatTokens, formatUsd } from "@tabs/shared/usageFormat";
 import { mergeUsage } from "@tabs/shared/usageMerge";
 import { PROVIDER_DISPLAY_NAMES } from "@tabs/contracts";
 import {
@@ -72,11 +67,7 @@ function normalizeProvider(provider: string): {
   color: string;
 } {
   const normKey =
-    provider === "claude"
-      ? "claudeAgent"
-      : provider === "gemini"
-        ? "googleGemini"
-        : provider;
+    provider === "claude" ? "claudeAgent" : provider === "gemini" ? "googleGemini" : provider;
 
   const name =
     (PROVIDER_DISPLAY_NAMES as Record<string, string>)[normKey] ??
@@ -142,11 +133,11 @@ export function UsageTab() {
 
   const hasActivity = merged.totalTokens > 0 || merged.costUsd > 0;
 
-  // Cache savings multiplier
-  const savingsMultiplier =
-    merged.costUsd > 0 && merged.costQuality.cacheSavingsUsd > 0
-      ? (merged.costQuality.cacheSavingsUsd / merged.costUsd).toFixed(1)
-      : null;
+  const uncachedEquivalentCost = merged.costUsd + merged.costQuality.cacheSavingsUsd;
+  const cacheSavingsShare =
+    uncachedEquivalentCost > 0 ? merged.costQuality.cacheSavingsUsd / uncachedEquivalentCost : 0;
+  const inputTokens =
+    merged.uncachedInputTokens + merged.cachedInputTokens + merged.cacheCreationTokens;
 
   return (
     <div className="space-y-8">
@@ -158,6 +149,7 @@ export function UsageTab() {
               key={preset.id}
               type="button"
               onClick={() => selectWindow(preset.id)}
+              aria-pressed={timeWindow === preset.id}
               className={cn(
                 "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 timeWindow === preset.id
@@ -174,6 +166,7 @@ export function UsageTab() {
           <button
             type="button"
             onClick={() => setMetric("cost")}
+            aria-pressed={metric === "cost"}
             className={cn(
               "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               metric === "cost"
@@ -186,6 +179,7 @@ export function UsageTab() {
           <button
             type="button"
             onClick={() => setMetric("tokens")}
+            aria-pressed={metric === "tokens"}
             className={cn(
               "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
               metric === "tokens"
@@ -206,9 +200,12 @@ export function UsageTab() {
       ) : !hasActivity ? (
         <div className="flex h-56 flex-col items-center justify-center rounded-xl border border-dashed border-border/80 p-8 text-center bg-card/20">
           <DatabaseIcon className="size-8 text-muted-foreground/60 mb-2" />
-          <h3 className="text-sm font-semibold text-foreground">No usage recorded in this time window</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            No usage recorded in this time window
+          </h3>
           <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-            Prompts and model responses executed in Tabs will automatically appear here with full token and cost telemetry.
+            Prompts and model responses executed in Tabs will automatically appear here with full
+            token and cost telemetry.
           </p>
         </div>
       ) : (
@@ -219,19 +216,23 @@ export function UsageTab() {
             <div className="flex flex-col gap-4 rounded-xl border border-border/80 bg-card/40 p-5 backdrop-blur-sm shadow-xs overflow-hidden">
               <div className="space-y-1">
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {metric === "cost" ? "Raw Token Cost" : "Total Processed Tokens"}
+                  {metric === "cost" ? "API-Equivalent Cost" : "Total Processed Tokens"}
                 </span>
                 <div className="overflow-hidden py-0.5">
                   <span
                     className="block text-3xl font-bold tracking-tight text-foreground tabular-nums truncate"
                     style={{ fontFamily: "var(--font-sans, inherit)" }}
                   >
-                    {metric === "cost" ? formatUsd(merged.costUsd) : formatTokens(merged.totalTokens)}
+                    {metric === "cost"
+                      ? formatUsd(merged.costUsd)
+                      : formatTokens(merged.totalTokens)}
                   </span>
                 </div>
                 {metric === "cost" ? (
                   <span className="text-[11px] text-muted-foreground/80 italic">
-                    * if billed at full API rate
+                    {merged.costQuality.unpricedShare > 0
+                      ? `${formatPercent(merged.costQuality.unpricedShare)} of tokens have no known rate and are excluded`
+                      : "Estimate from provider-reported costs and current model rates; not your subscription bill"}
                   </span>
                 ) : (
                   <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -243,11 +244,15 @@ export function UsageTab() {
               <div className="border-t border-border/50 pt-3 space-y-1 text-xs text-muted-foreground">
                 <div className="flex justify-between">
                   <span>Sessions</span>
-                  <span className="font-semibold text-foreground tabular-nums">{formatCount(merged.sessions)}</span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {formatCount(merged.sessions)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Records</span>
-                  <span className="font-semibold text-foreground tabular-nums">{formatCount(merged.records)}</span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {formatCount(merged.records)}
+                  </span>
                 </div>
               </div>
 
@@ -258,7 +263,11 @@ export function UsageTab() {
                 </span>
                 <div className="space-y-3">
                   {merged.providers.map((p) => {
-                    const { name: displayName, icon: IconComp, color } = normalizeProvider(p.provider);
+                    const {
+                      name: displayName,
+                      icon: IconComp,
+                      color,
+                    } = normalizeProvider(p.provider);
                     const share = metric === "cost" ? p.costShare : p.tokenShare;
 
                     return (
@@ -271,12 +280,16 @@ export function UsageTab() {
                               aria-hidden
                             />
                             <IconComp className="size-3.5 shrink-0" />
-                            <span className="truncate font-medium text-foreground">{displayName}</span>
+                            <span className="truncate font-medium text-foreground">
+                              {displayName}
+                            </span>
                           </div>
                           <div className="flex shrink-0 items-center gap-2 tabular-nums">
                             <span className="text-muted-foreground">{formatPercent(share)}</span>
                             <span className="font-semibold text-foreground">
-                              {metric === "cost" ? formatUsd(p.costUsd) : formatTokens(p.totalTokens)}
+                              {metric === "cost"
+                                ? formatUsd(p.costUsd)
+                                : formatTokens(p.totalTokens)}
                             </span>
                           </div>
                         </div>
@@ -306,18 +319,25 @@ export function UsageTab() {
                   {timeWindow === "24h" ? "Past 24 hours" : `${merged.daily.length} active days`}
                 </span>
               </div>
-              <UsageDailyChart
-                days={[]}
-                daily={merged.daily}
-                metric={metric}
-              />
+              <UsageDailyChart days={[]} daily={merged.daily} metric={metric} />
             </div>
           </div>
 
-          {/* 5-Metric Aggregate Stats Row */}
+          {merged.costQuality.unpricedShare > 0 ? (
+            <div
+              role="status"
+              className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-xs text-muted-foreground"
+            >
+              Some model identifiers could not be matched to a reliable price. Their token counts
+              are included, but their cost is intentionally left unpriced instead of using a made-up
+              fallback.
+            </div>
+          ) : null}
+
+          {/* Aggregate Stats Row */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground">Aggregate Token Telemetry</h3>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
               {/* Metric 1: Processed Tokens */}
               <div className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card/30 p-4 shadow-xs backdrop-blur-sm">
                 <div className="flex items-center justify-between text-muted-foreground">
@@ -342,11 +362,8 @@ export function UsageTab() {
                   {formatTokens(merged.cachedInputTokens)}
                 </span>
                 <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {merged.uncachedInputTokens + merged.cachedInputTokens > 0
-                    ? `${formatPercent(
-                        merged.cachedInputTokens /
-                          (merged.uncachedInputTokens + merged.cachedInputTokens),
-                      )} of input`
+                  {inputTokens > 0
+                    ? `${formatPercent(merged.cachedInputTokens / inputTokens)} of input`
                     : "0% of input"}
                 </span>
               </div>
@@ -365,7 +382,21 @@ export function UsageTab() {
                 </span>
               </div>
 
-              {/* Metric 4: Output Tokens */}
+              {/* Metric 4: Cache Writes */}
+              <div className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card/30 p-4 shadow-xs backdrop-blur-sm">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="text-xs font-medium">Cache Writes</span>
+                  <DatabaseIcon className="size-4 text-violet-500" />
+                </div>
+                <span className="text-xl font-bold tracking-tight text-foreground tabular-nums">
+                  {formatTokens(merged.cacheCreationTokens)}
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  New cached context
+                </span>
+              </div>
+
+              {/* Metric 5: Output Tokens */}
               <div className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card/30 p-4 shadow-xs backdrop-blur-sm">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="text-xs font-medium">Output Tokens</span>
@@ -381,7 +412,7 @@ export function UsageTab() {
                 </span>
               </div>
 
-              {/* Metric 5: Cache Savings */}
+              {/* Metric 6: Cache Savings */}
               <div className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card/30 p-4 shadow-xs backdrop-blur-sm bg-gradient-to-br from-emerald-500/5 to-transparent">
                 <div className="flex items-center justify-between text-muted-foreground">
                   <span className="text-xs font-medium">Cache Savings</span>
@@ -391,7 +422,9 @@ export function UsageTab() {
                   {formatUsd(merged.costQuality.cacheSavingsUsd)}
                 </span>
                 <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {savingsMultiplier ? `${savingsMultiplier}x raw token cost` : "From prompt caching"}
+                  {cacheSavingsShare > 0
+                    ? `${formatPercent(cacheSavingsShare)} below uncached input pricing`
+                    : "From prompt caching"}
                 </span>
               </div>
             </div>
@@ -405,6 +438,7 @@ export function UsageTab() {
                 <button
                   type="button"
                   onClick={() => setBreakdownView("model")}
+                  aria-pressed={breakdownView === "model"}
                   className={cn(
                     "rounded px-2.5 py-1 font-medium transition-colors",
                     breakdownView === "model"
@@ -417,6 +451,7 @@ export function UsageTab() {
                 <button
                   type="button"
                   onClick={() => setBreakdownView("provider")}
+                  aria-pressed={breakdownView === "provider"}
                   className={cn(
                     "rounded px-2.5 py-1 font-medium transition-colors",
                     breakdownView === "provider"
@@ -446,64 +481,69 @@ export function UsageTab() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {breakdownView === "model" ? (
-                    merged.models.map((m) => {
-                      const { name: providerName, icon: IconComp } = normalizeProvider(m.provider);
+                  {breakdownView === "model"
+                    ? merged.models.map((m) => {
+                        const { name: providerName, icon: IconComp } = normalizeProvider(
+                          m.provider,
+                        );
 
-                      return (
-                        <tr key={`${m.provider}-${m.model}`} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-2.5 px-4 font-medium text-foreground font-mono">
-                            {m.model}
-                          </td>
-                          <td className="py-2.5 px-4 text-muted-foreground">
-                            <div className="flex items-center gap-1.5">
-                              <IconComp className="size-3.5" />
-                              <span>{providerName}</span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-4 text-right font-semibold text-foreground tabular-nums">
-                            {formatUsd(m.costUsd)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
-                            {formatPercent(m.costShare)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
-                            {formatTokens(m.totalTokens)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
-                            {formatCount(m.records)}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    merged.providers.map((p) => {
-                      const { name: providerName, icon: IconComp } = normalizeProvider(p.provider);
+                        return (
+                          <tr
+                            key={`${m.provider}-${m.model}`}
+                            className="hover:bg-muted/30 transition-colors"
+                          >
+                            <td className="py-2.5 px-4 font-medium text-foreground font-mono">
+                              {m.model}
+                            </td>
+                            <td className="py-2.5 px-4 text-muted-foreground">
+                              <div className="flex items-center gap-1.5">
+                                <IconComp className="size-3.5" />
+                                <span>{providerName}</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-semibold text-foreground tabular-nums">
+                              {formatUsd(m.costUsd)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
+                              {formatPercent(m.costShare)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
+                              {formatTokens(m.totalTokens)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
+                              {formatCount(m.records)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    : merged.providers.map((p) => {
+                        const { name: providerName, icon: IconComp } = normalizeProvider(
+                          p.provider,
+                        );
 
-                      return (
-                        <tr key={p.provider} className="hover:bg-muted/30 transition-colors">
-                          <td className="py-2.5 px-4 font-medium text-foreground">
-                            <div className="flex items-center gap-2">
-                              <IconComp className="size-4" />
-                              <span>{providerName}</span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-4 text-right font-semibold text-foreground tabular-nums">
-                            {formatUsd(p.costUsd)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
-                            {formatPercent(p.costShare)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
-                            {formatTokens(p.totalTokens)}
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
-                            {formatCount(p.records)}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                        return (
+                          <tr key={p.provider} className="hover:bg-muted/30 transition-colors">
+                            <td className="py-2.5 px-4 font-medium text-foreground">
+                              <div className="flex items-center gap-2">
+                                <IconComp className="size-4" />
+                                <span>{providerName}</span>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-semibold text-foreground tabular-nums">
+                              {formatUsd(p.costUsd)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
+                              {formatPercent(p.costShare)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
+                              {formatTokens(p.totalTokens)}
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-muted-foreground tabular-nums">
+                              {formatCount(p.records)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                 </tbody>
               </table>
             </div>

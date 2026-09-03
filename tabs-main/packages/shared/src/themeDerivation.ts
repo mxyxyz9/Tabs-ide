@@ -30,6 +30,7 @@ export const BUILTIN_THEME_CONFIGS: Record<string, CustomThemeConfig> = {
   "tabs-monotone": {
     baseVariant: "dark",
     colors: { background: "#09090b", card: "#18181b", foreground: "#fafafa", border: "rgba(255, 255, 255, 0.12)", primary: "#e5e5e5" },
+    tokenOverrides: { focusBorder: "#e5e5e573" },
     fonts: { uiFont: "Inter, sans-serif", editorFont: "Geist Mono, monospace" },
   },
   "tabs-light": {

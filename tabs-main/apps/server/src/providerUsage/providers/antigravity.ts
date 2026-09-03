@@ -27,6 +27,7 @@ import {
   titleCase,
   toUsedPercent,
 } from "../parse";
+import { readItemTableValues } from "../sqlite";
 import type { ProviderUsageContext, ProviderUsageFetcher } from "../types";
 
 const SOURCE = "antigravity-cloudcode";
@@ -50,6 +51,67 @@ interface GeminiOAuthCreds {
   accessToken: string;
   refreshToken?: string;
   expiresAtMs?: number;
+  email?: string;
+}
+
+const ANTIGRAVITY_AUTH_STATUS_KEY = "antigravityAuthStatus";
+
+export function antigravityStateDbPaths(
+  ctx: Pick<ProviderUsageContext, "homeDir" | "env" | "platform">,
+): string[] {
+  const products = ["Antigravity", "Antigravity IDE"];
+  if (ctx.platform === "darwin") {
+    return products.map((product) =>
+      nodePath.join(
+        ctx.homeDir,
+        "Library",
+        "Application Support",
+        product,
+        "User",
+        "globalStorage",
+        "state.vscdb",
+      ),
+    );
+  }
+  if (ctx.platform === "win32") {
+    const roaming = ctx.env.APPDATA?.trim() || nodePath.join(ctx.homeDir, "AppData", "Roaming");
+    return products.map((product) =>
+      nodePath.join(roaming, product, "User", "globalStorage", "state.vscdb"),
+    );
+  }
+  const configHome = ctx.env.XDG_CONFIG_HOME?.trim() || nodePath.join(ctx.homeDir, ".config");
+  return products.map((product) =>
+    nodePath.join(configHome, product, "User", "globalStorage", "state.vscdb"),
+  );
+}
+
+async function resolveAntigravityDesktopCreds(
+  ctx: ProviderUsageContext,
+): Promise<GeminiOAuthCreds | null> {
+  for (const dbPath of antigravityStateDbPaths(ctx)) {
+    const values = await readItemTableValues({
+      dbPath,
+      keys: [ANTIGRAVITY_AUTH_STATUS_KEY],
+    });
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(values[ANTIGRAVITY_AUTH_STATUS_KEY] ?? "null") as unknown;
+    } catch {
+      parsed = null;
+    }
+    const auth = asRecord(parsed);
+    const accessToken = asString(auth?.apiKey);
+    if (accessToken) {
+      const email = asString(auth?.email);
+      return {
+        path: dbPath,
+        record: auth ?? {},
+        accessToken,
+        ...(email ? { email } : {}),
+      };
+    }
+  }
+  return null;
 }
 
 function geminiCredPaths(ctx: ProviderUsageContext): string[] {
@@ -99,6 +161,8 @@ function readGeminiCreds(path: string, value: unknown): GeminiOAuthCreds | null 
 }
 
 async function resolveGeminiCreds(ctx: ProviderUsageContext): Promise<GeminiOAuthCreds | null> {
+  const desktopCreds = await resolveAntigravityDesktopCreds(ctx);
+  if (desktopCreds) return desktopCreds;
   for (const credPath of geminiCredPaths(ctx)) {
     const creds = readGeminiCreds(credPath, await readJsonFile(credPath));
     if (creds) return creds;
@@ -146,6 +210,7 @@ export function parseAntigravityQuota(input: {
   loadAssist: unknown;
   quota: unknown;
   nowMs: number;
+  email?: string;
 }) {
   const planName = antigravityPlanName(input.loadAssist);
   const quota = asRecord(input.quota);
@@ -190,6 +255,7 @@ export function parseAntigravityQuota(input: {
     source: SOURCE,
     limits,
     ...(planName ? { planName } : {}),
+    ...(input.email ? { email: input.email } : {}),
   });
 }
 
@@ -265,6 +331,19 @@ function apiKeySnapshot(nowMs: number) {
   });
 }
 
+function desktopQuotaUnavailableSnapshot(creds: GeminiOAuthCreds, nowMs: number) {
+  return buildSnapshot({
+    provider: "antigravity",
+    nowMs,
+    status: "quota-unavailable",
+    source: SOURCE,
+    planName: "Desktop session",
+    ...(creds.email ? { email: creds.email } : {}),
+    detail:
+      "Antigravity is signed in, but its reusable quota credential was rejected. Antigravity can still work through its private desktop session; reopen it and refresh Limits to retry quota access.",
+  });
+}
+
 export const antigravityUsageFetcher: ProviderUsageFetcher = {
   provider: "antigravity",
   async cacheKey(ctx) {
@@ -314,7 +393,15 @@ export const antigravityUsageFetcher: ProviderUsageFetcher = {
         },
       });
       if (isAuthFailureStatus(loadResult.status)) {
-        return needsAuthSnapshot("antigravity", ctx.nowMs, SOURCE);
+        if (creds.path.endsWith("state.vscdb")) {
+          return desktopQuotaUnavailableSnapshot(creds, ctx.nowMs);
+        }
+        return needsAuthSnapshot(
+          "antigravity",
+          ctx.nowMs,
+          SOURCE,
+          "The Gemini CLI session is no longer valid. Sign in again, then refresh limits.",
+        );
       }
       if (!loadResult.ok) {
         return errorSnapshot(
@@ -349,6 +436,7 @@ export const antigravityUsageFetcher: ProviderUsageFetcher = {
         loadAssist: loadResult.json,
         quota: quotaJson,
         nowMs: ctx.nowMs,
+        ...(creds.email ? { email: creds.email } : {}),
       });
     } catch {
       return errorSnapshot(

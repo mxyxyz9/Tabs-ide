@@ -35,7 +35,7 @@ import {
 } from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderSnapshot } from "../../providerModels";
-import { useGlobalSettingsViewState } from "~/state/scopedStateStore";
+import { useSettingsViewState } from "~/state/scopedStateStore";
 
 function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): option is {
   value: ProviderPickerKind;
@@ -101,7 +101,7 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
   onProviderModelChange: (provider: ProviderPickerKind, model: ModelSlug) => void;
 }) {
   const navigate = useNavigate();
-  const [, updateSettingsViewState] = useGlobalSettingsViewState();
+  const [, updateSettingsViewState] = useSettingsViewState();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const activeProvider = props.lockedProvider ?? props.provider;
   const selectedProviderOptions = props.modelOptionsByProvider[activeProvider] ?? [];
