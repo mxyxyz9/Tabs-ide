@@ -79,6 +79,46 @@
     "./httpReadiness": {
       "types": "./src/httpReadiness.ts",
       "import": "./src/httpReadiness.ts"
+    },
+    "./oauthScope": {
+      "types": "./src/oauthScope.ts",
+      "import": "./src/oauthScope.ts"
+    },
+    "./observability": {
+      "types": "./src/observability.ts",
+      "import": "./src/observability.ts"
+    },
+    "./connectAuth": {
+      "types": "./src/connectAuth.ts",
+      "import": "./src/connectAuth.ts"
+    },
+    "./remote": {
+      "types": "./src/remote.ts",
+      "import": "./src/remote.ts"
+    },
+    "./relayAuth": {
+      "types": "./src/relayAuth.ts",
+      "import": "./src/relayAuth.ts"
+    },
+    "./relayClient": {
+      "types": "./src/relayClient.ts",
+      "import": "./src/relayClient.ts"
+    },
+    "./relayJwt": {
+      "types": "./src/relayJwt.ts",
+      "import": "./src/relayJwt.ts"
+    },
+    "./relaySigning": {
+      "types": "./src/relaySigning.ts",
+      "import": "./src/relaySigning.ts"
+    },
+    "./relayTracing": {
+      "types": "./src/relayTracing.ts",
+      "import": "./src/relayTracing.ts"
+    },
+    "./relayUrl": {
+      "types": "./src/relayUrl.ts",
+      "import": "./src/relayUrl.ts"
     }
   },
   "scripts": {
@@ -87,11 +127,14 @@
   },
   "dependencies": {
     "@tabs/contracts": "workspace:*",
-    "effect": "catalog:"
+    "effect": "catalog:",
+    "jose": "^6.2.2"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/language-service": "catalog:",
     "@effect/vitest": "catalog:",
+    "@noble/hashes": "^1.8.0",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
