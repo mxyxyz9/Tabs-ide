@@ -229,6 +229,33 @@
         "vitest": "catalog:",
       },
     },
+    "packages/ssh": {
+      "name": "@tabs/ssh",
+      "dependencies": {
+        "@tabs/contracts": "workspace:*",
+        "@tabs/shared": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/platform-node": "catalog:",
+        "@effect/vitest": "catalog:",
+        "@types/node": "catalog:",
+        "vite-plus": "catalog:",
+      },
+    },
+    "packages/tailscale": {
+      "name": "@tabs/tailscale",
+      "dependencies": {
+        "@effect/platform-node": "catalog:",
+        "@tabs/shared": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "@types/node": "catalog:",
+        "vite-plus": "catalog:",
+      },
+    },
     "scripts": {
       "name": "@tabs/scripts",
       "dependencies": {
@@ -916,6 +943,10 @@
     "@tabs/scripts": ["@tabs/scripts@workspace:scripts"],
 
     "@tabs/shared": ["@tabs/shared@workspace:packages/shared"],
+
+    "@tabs/ssh": ["@tabs/ssh@workspace:packages/ssh"],
+
+    "@tabs/tailscale": ["@tabs/tailscale@workspace:packages/tailscale"],
 
     "@tabs/web": ["@tabs/web@workspace:apps/web"],
 

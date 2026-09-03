@@ -73,6 +73,9 @@ export interface NetServiceShape {
    */
   readonly isPortAvailableOnLoopback: (port: number) => Effect.Effect<boolean>;
 
+  /** Returns true when something accepts TCP connections on {host, port}. */
+  readonly hasListenerOnHost: (port: number, host: string) => Effect.Effect<boolean>;
+
   /**
    * Reserve an ephemeral loopback port and release it immediately.
    */
@@ -169,6 +172,24 @@ export const make = () => {
       });
     });
 
+  const hasListenerOnHost = (port: number, host: string): Effect.Effect<boolean> =>
+    Effect.callback<boolean>((resume) => {
+      const socket = NodeNet.createConnection({ host, port });
+      let settled = false;
+      const settle = (value: boolean) => {
+        if (settled) return;
+        settled = true;
+        socket.destroy();
+        resume(Effect.succeed(value));
+      };
+      socket.unref();
+      socket.setTimeout(250);
+      socket.once("connect", () => settle(true));
+      socket.once("error", () => settle(false));
+      socket.once("timeout", () => settle(false));
+      return Effect.sync(() => socket.destroy());
+    });
+
   return {
     canListenOnHost,
     isPortAvailableOnLoopback: (port) =>
@@ -177,6 +198,7 @@ export const make = () => {
         canListenOnHost(port, "::1"),
         (ipv4, ipv6) => ipv4 && ipv6,
       ),
+    hasListenerOnHost,
     reserveLoopbackPort,
     findAvailablePort: (preferred) =>
       Effect.catch(tryReservePort(preferred), () => tryReservePort(0)),
