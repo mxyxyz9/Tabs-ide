@@ -130,6 +130,7 @@ import { TestingService } from "./testing/TestingService";
 import { TextGeneration } from "./textGeneration/TextGeneration";
 import { UsageService } from "./usage/UsageService.ts";
 import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
+import { PreviewManager } from "./preview/Manager.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -282,7 +283,8 @@ export type ServerRuntimeServices =
   | TextGeneration
   | UsageService
   | Open
-  | AnalyticsService;
+  | AnalyticsService
+  | PreviewManager;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -335,6 +337,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const path = yield* Path.Path;
   const textGeneration = yield* TextGeneration;
   const usageService = yield* UsageService;
+  const previewManager = yield* PreviewManager;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -729,6 +732,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         providers,
       });
     }),
+  ).pipe(Effect.forkIn(subscriptionsScope));
+
+  yield* Stream.runForEach(previewManager.events, (event) =>
+    pushBus.publishAll(WS_CHANNELS.previewEvent, event),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Scope.provide(subscriptionsScope)(orchestrationReactor.start);
@@ -1584,6 +1591,21 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const body = stripRequestTag(request.body);
         return yield* terminalManager.close(body);
       }
+
+      case WS_METHODS.previewOpen:
+        return yield* previewManager.open(stripRequestTag(request.body));
+      case WS_METHODS.previewNavigate:
+        return yield* previewManager.navigate(stripRequestTag(request.body));
+      case WS_METHODS.previewReportStatus:
+        return yield* previewManager.reportStatus(stripRequestTag(request.body));
+      case WS_METHODS.previewResize:
+        return yield* previewManager.resize(stripRequestTag(request.body));
+      case WS_METHODS.previewRefresh:
+        return yield* previewManager.refresh(stripRequestTag(request.body));
+      case WS_METHODS.previewClose:
+        return yield* previewManager.close(stripRequestTag(request.body));
+      case WS_METHODS.previewList:
+        return yield* previewManager.list(stripRequestTag(request.body));
 
       case WS_METHODS.serverGetConfig: {
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;

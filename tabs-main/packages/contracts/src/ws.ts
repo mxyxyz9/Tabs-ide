@@ -90,6 +90,16 @@ import {
 } from "./sourceControl";
 import { ReviewProgressEvent } from "./review";
 import {
+  PreviewCloseInput,
+  PreviewEvent,
+  PreviewListInput,
+  PreviewNavigateInput,
+  PreviewOpenInput,
+  PreviewRefreshInput,
+  PreviewReportStatusInput,
+  PreviewResizeInput,
+} from "./preview";
+import {
   TestingCaseCreateInput,
   TestingCaseDeleteInput,
   TestingCaseGroupUpdateInput,
@@ -319,6 +329,7 @@ export const WS_CHANNELS = {
   serverConfigUpdated: "server.configUpdated",
   serverProvidersUpdated: "server.providersUpdated",
   usageUpdated: "usage.updated",
+  previewEvent: "preview.event",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -473,6 +484,14 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.terminalRestart, TerminalRestartInput),
   tagRequestBody(WS_METHODS.terminalClose, TerminalCloseInput),
 
+  tagRequestBody(WS_METHODS.previewOpen, PreviewOpenInput),
+  tagRequestBody(WS_METHODS.previewNavigate, PreviewNavigateInput),
+  tagRequestBody(WS_METHODS.previewReportStatus, PreviewReportStatusInput),
+  tagRequestBody(WS_METHODS.previewResize, PreviewResizeInput),
+  tagRequestBody(WS_METHODS.previewRefresh, PreviewRefreshInput),
+  tagRequestBody(WS_METHODS.previewClose, PreviewCloseInput),
+  tagRequestBody(WS_METHODS.previewList, PreviewListInput),
+
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverRefreshProviders, Schema.Struct({})),
@@ -530,6 +549,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.reviewProgress]: ReviewProgressEvent;
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
   readonly [WS_CHANNELS.usageUpdated]: ServerListProviderUsageResult;
+  readonly [WS_CHANNELS.previewEvent]: PreviewEvent;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -573,6 +593,7 @@ export const WsPushUsageUpdated = makeWsPushSchema(
   WS_CHANNELS.usageUpdated,
   ServerListProviderUsageResult,
 );
+export const WsPushPreviewEvent = makeWsPushSchema(WS_CHANNELS.previewEvent, PreviewEvent);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -587,6 +608,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.serverProvidersUpdated,
   WS_CHANNELS.terminalEvent,
   WS_CHANNELS.usageUpdated,
+  WS_CHANNELS.previewEvent,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -600,6 +622,7 @@ export const WsPush = Schema.Union([
   WsPushReviewProgress,
   WsPushTerminalEvent,
   WsPushUsageUpdated,
+  WsPushPreviewEvent,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

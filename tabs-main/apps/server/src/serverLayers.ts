@@ -39,6 +39,7 @@ import { layer as UsageServiceLive } from "./usage/UsageService.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as PreviewManager from "./preview/Manager.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -165,6 +166,7 @@ export function makeServerRuntimeServicesLayer() {
     KeybindingsLive,
     ProviderMaintenanceRunnerLive,
     usageLayer,
+    PreviewManager.layer,
   );
 }
 
