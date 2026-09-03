@@ -42,6 +42,7 @@ const testLayer = Layer.mergeAll(
   Layer.succeed(NetService, {
     canListenOnHost: () => Effect.succeed(true),
     isPortAvailableOnLoopback: () => Effect.succeed(true),
+    hasListenerOnHost: () => Effect.succeed(false),
     reserveLoopbackPort: () => Effect.succeed(0),
     findAvailablePort,
   }),

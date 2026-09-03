@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
 import type * as Brand from "effect/Brand";
@@ -18,8 +19,34 @@ export const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 export const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 export const PortSchema = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }));
 
+export const DpopFailureReason = Schema.Literals([
+  "time_window",
+  "key_mismatch",
+  "request_mismatch",
+  "token_mismatch",
+  "replay",
+  "invalid_proof",
+]);
+export type DpopFailureReason = typeof DpopFailureReason.Type;
+
 export const IsoDateTime = Schema.String;
 export type IsoDateTime = typeof IsoDateTime.Type;
+
+export const ForwardCompatibleArray = <Element extends Schema.Top>(element: Element) => {
+  const decodeElement = Schema.decodeUnknownOption(element as never);
+  return Schema.Array(Schema.Unknown).pipe(
+    Schema.decodeTo(
+      Schema.Array(element),
+      SchemaTransformation.transform<ReadonlyArray<Element["Encoded"]>, ReadonlyArray<unknown>>({
+        decode: (values) =>
+          values.filter((value) => Option.isSome(decodeElement(value))) as ReadonlyArray<
+            Element["Encoded"]
+          >,
+        encode: (values) => values,
+      }),
+    ),
+  );
+};
 
 /**
  * Construct a branded identifier. Enforces non-empty trimmed strings
@@ -47,6 +74,28 @@ export const TurnId = makeEntityId("TurnId");
 export type TurnId = typeof TurnId.Type;
 export const AuthSessionId = makeEntityId("AuthSessionId");
 export type AuthSessionId = typeof AuthSessionId.Type;
+export const RpcClientId = NonNegativeInt.pipe(Schema.brand("RpcClientId"));
+export type RpcClientId = typeof RpcClientId.Type;
+
+export const ClientSurface = Schema.Literals(["web", "desktop", "mobile", "cli"]);
+export type ClientSurface = typeof ClientSurface.Type;
+export const ClientOs = Schema.Literals([
+  "macOS",
+  "Windows",
+  "Linux",
+  "iOS",
+  "Android",
+  "ChromeOS",
+  "other",
+  "unknown",
+]);
+export type ClientOs = typeof ClientOs.Type;
+export const ClientDeviceType = Schema.Literals(["desktop", "phone", "tablet", "unknown"]);
+export type ClientDeviceType = typeof ClientDeviceType.Type;
+export const ClientWebDeployment = Schema.Literals(["hosted", "server"]);
+export type ClientWebDeployment = typeof ClientWebDeployment.Type;
+export const ClientConnectionMethod = Schema.Literals(["direct", "ssh", "relay", "unknown"]);
+export type ClientConnectionMethod = typeof ClientConnectionMethod.Type;
 
 export const ProviderItemId = makeEntityId("ProviderItemId");
 export type ProviderItemId = typeof ProviderItemId.Type;

@@ -32,6 +32,12 @@ import Migration0016 from "./Migrations/016_CanonicalizeModelSelections.ts";
 import Migration0017 from "./Migrations/017_ProviderSessionRuntimeInstanceId.ts";
 import Migration0018 from "./Migrations/018_ProjectionThreadsArchivedAt.ts";
 import Migration0019 from "./Migrations/019_BackfillLegacyEventUpdatedAt.ts";
+import Migration0020 from "./Migrations/020_AuthAccessManagement.ts";
+import Migration0021 from "./Migrations/021_AuthSessionClientMetadata.ts";
+import Migration0022 from "./Migrations/022_AuthSessionLastConnectedAt.ts";
+import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
+import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
+import Migration0041 from "./Migrations/041_AuthSessionClientConnection.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -63,6 +69,12 @@ export const migrationEntries = [
   [17, "ProviderSessionRuntimeInstanceId", Migration0017],
   [18, "ProjectionThreadsArchivedAt", Migration0018],
   [19, "BackfillLegacyEventUpdatedAt", Migration0019],
+  [20, "AuthAccessManagement", Migration0020],
+  [21, "AuthSessionClientMetadata", Migration0021],
+  [22, "AuthSessionLastConnectedAt", Migration0022],
+  [31, "AuthAuthorizationScopes", Migration0031],
+  [32, "AuthPairingProofKeyThumbprint", Migration0032],
+  [41, "AuthSessionClientConnection", Migration0041],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

@@ -119,6 +119,14 @@
     "./relayUrl": {
       "types": "./src/relayUrl.ts",
       "import": "./src/relayUrl.ts"
+    },
+    "./dpop": {
+      "types": "./src/dpop.ts",
+      "import": "./src/dpop.ts"
+    },
+    "./dpopCommon": {
+      "types": "./src/dpopCommon.ts",
+      "import": "./src/dpopCommon.ts"
     }
   },
   "scripts": {
@@ -127,6 +135,8 @@
   },
   "dependencies": {
     "@tabs/contracts": "workspace:*",
+    "@noble/curves": "^1.9.1",
+    "@noble/hashes": "^1.8.0",
     "effect": "catalog:",
     "jose": "^6.2.2"
   },

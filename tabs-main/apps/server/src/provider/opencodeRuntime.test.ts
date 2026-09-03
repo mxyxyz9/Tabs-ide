@@ -128,6 +128,7 @@ function openCodeRuntimePoolTestLayer(state: {
       netService: {
         canListenOnHost: () => Effect.succeed(true),
         isPortAvailableOnLoopback: () => Effect.succeed(true),
+        hasListenerOnHost: () => Effect.succeed(false),
         reserveLoopbackPort: () => Effect.succeed(59_000),
         findAvailablePort: () => Effect.succeed(59_000),
       },
@@ -322,6 +323,7 @@ describe("OpenCodeRuntime local server pool", () => {
       netService: {
         canListenOnHost: () => Effect.succeed(true),
         isPortAvailableOnLoopback: () => Effect.succeed(true),
+        hasListenerOnHost: () => Effect.succeed(false),
         reserveLoopbackPort: () => Effect.succeed(59_000),
         findAvailablePort: () => Effect.succeed(59_000),
       },
