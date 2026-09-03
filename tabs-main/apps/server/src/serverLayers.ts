@@ -36,6 +36,9 @@ import { GitEnvironmentLive } from "./git/Layers/GitEnvironment";
 import { PtyAdapter } from "./terminal/Services/PTY";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { layer as UsageServiceLive } from "./usage/UsageService.ts";
+import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
+import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -163,4 +166,13 @@ export function makeServerRuntimeServicesLayer() {
     ProviderMaintenanceRunnerLive,
     usageLayer,
   );
+}
+
+/** Stable environment identity plus the persisted pairing/session authority used by remote clients. */
+export function makeRemoteAccessServicesLayer() {
+  const authLayer = EnvironmentAuth.layer.pipe(
+    Layer.provideMerge(ServerSecretStore.layer),
+  );
+
+  return Layer.mergeAll(ServerEnvironment.layer, authLayer, ServerSecretStore.layer);
 }

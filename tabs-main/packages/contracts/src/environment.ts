@@ -20,8 +20,35 @@ export const ExecutionEnvironmentPlatform = Schema.Struct({
 });
 export type ExecutionEnvironmentPlatform = typeof ExecutionEnvironmentPlatform.Type;
 
+export const ServerSelfUpdateMethod = Schema.Literals(["boot-service", "respawn"]);
+export type ServerSelfUpdateMethod = typeof ServerSelfUpdateMethod.Type;
+export const ServerSelfUpdateCapability = Schema.Literals([
+  "boot-service",
+  "respawn",
+  "desktop-managed",
+]);
+export type ServerSelfUpdateCapability = typeof ServerSelfUpdateCapability.Type;
+
 export const ExecutionEnvironmentCapabilities = Schema.Struct({
   repositoryIdentity: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  connectionProbe: Schema.optionalKey(Schema.Boolean),
+  attachmentUploads: Schema.optionalKey(Schema.Boolean),
+  fileAttachments: Schema.optionalKey(
+    Schema.Struct({
+      maxUploadBytes: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+    }),
+  ),
+  pullRequests: Schema.optionalKey(Schema.Boolean),
+  threadSettlement: Schema.optionalKey(Schema.Boolean),
+  threadSnooze: Schema.optionalKey(Schema.Boolean),
+  environmentThemes: Schema.optionalKey(Schema.Boolean),
+  threadPinning: Schema.optionalKey(Schema.Boolean),
+  threadPinReorder: Schema.optionalKey(Schema.Boolean),
+  threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
+  threadPullRequestLinking: Schema.optionalKey(Schema.Boolean),
+  serverSelfUpdate: Schema.optionalKey(ServerSelfUpdateCapability),
+  serverSelfUpdateProgress: Schema.optionalKey(Schema.Boolean),
+  agentActivityPublishing: Schema.optionalKey(Schema.Boolean),
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

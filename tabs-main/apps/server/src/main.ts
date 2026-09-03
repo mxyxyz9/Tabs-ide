@@ -23,6 +23,7 @@ import { Open } from "./open";
 import * as SqlitePersistence from "./persistence/Layers/Sqlite";
 import {
   makeProviderInstanceRegistryLayer,
+  makeRemoteAccessServicesLayer,
   makeServerProviderLayer,
   makeServerRuntimeServicesLayer,
 } from "./serverLayers";
@@ -322,6 +323,7 @@ const LayerLive = (input: CliInput) =>
       ),
     ),
     Layer.provideMerge(makeProviderInstanceRegistryLayer()),
+    Layer.provideMerge(makeRemoteAccessServicesLayer()),
     Layer.provideMerge(
       Layer.effectDiscard(
         Effect.sync(() => {
