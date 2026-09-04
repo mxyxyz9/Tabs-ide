@@ -24,6 +24,7 @@ function scopeForKnownMethod(method: string): AuthEnvironmentScope {
   if (method.startsWith("review.")) return AuthReviewWriteScope;
   if (method === WS_METHODS.cloudGetRelayClientStatus) return AuthRelayReadScope;
   if (method === WS_METHODS.cloudInstallRelayClient) return AuthRelayWriteScope;
+  if (method === WS_METHODS.serverCreateSupportBundle) return AuthOrchestrationReadScope;
 
   const readOperation =
     method.startsWith("subscribe") ||
@@ -51,4 +52,3 @@ export function requiredScopeForRpcMethod(method: string): AuthEnvironmentScope 
   }
   return requiredScope;
 }
-

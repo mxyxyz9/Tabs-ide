@@ -14,6 +14,10 @@ describe("ProcessDiagnostics", () => {
     expect(result.processes.some((entry) => entry.pid === process.pid)).toBe(true);
     expect(result.processCount).toBe(result.processes.length);
     expect(result.totalRssBytes).toBeGreaterThan(0);
+    expect(result.processes.find((entry) => entry.pid === process.pid)).toMatchObject({
+      category: "server",
+      attribution: "Tabs backend",
+    });
   });
 
   it("refuses to signal the server process", async () => {

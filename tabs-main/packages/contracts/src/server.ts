@@ -396,6 +396,16 @@ export type ServerTraceDiagnosticsResult = typeof ServerTraceDiagnosticsResult.T
 export const ServerProcessSignal = Schema.Literals(["SIGINT", "SIGKILL"]);
 export type ServerProcessSignal = typeof ServerProcessSignal.Type;
 
+export const ServerProcessCategory = Schema.Literals([
+  "server",
+  "provider",
+  "terminal",
+  "git",
+  "browser",
+  "other",
+]);
+export type ServerProcessCategory = typeof ServerProcessCategory.Type;
+
 export const ServerProcessDiagnosticsEntry = Schema.Struct({
   pid: PositiveInt,
   ppid: NonNegativeInt,
@@ -407,6 +417,8 @@ export const ServerProcessDiagnosticsEntry = Schema.Struct({
   command: TrimmedNonEmptyString,
   depth: NonNegativeInt,
   childPids: Schema.Array(PositiveInt),
+  category: ServerProcessCategory,
+  attribution: TrimmedNonEmptyString,
 });
 export type ServerProcessDiagnosticsEntry = typeof ServerProcessDiagnosticsEntry.Type;
 
@@ -457,6 +469,8 @@ export const ServerProcessResourceHistorySummary = Schema.Struct({
   currentRssBytes: NonNegativeInt,
   maxRssBytes: NonNegativeInt,
   sampleCount: NonNegativeInt,
+  category: ServerProcessCategory,
+  attribution: TrimmedNonEmptyString,
 });
 export type ServerProcessResourceHistorySummary = typeof ServerProcessResourceHistorySummary.Type;
 
@@ -501,6 +515,14 @@ export const ServerSignalProcessResult = Schema.Struct({
   message: Schema.Option(TrimmedNonEmptyString),
 });
 export type ServerSignalProcessResult = typeof ServerSignalProcessResult.Type;
+
+export const ServerSupportBundleResult = Schema.Struct({
+  filename: TrimmedNonEmptyString,
+  mediaType: Schema.Literal("application/json"),
+  byteLength: NonNegativeInt,
+  content: Schema.String,
+});
+export type ServerSupportBundleResult = typeof ServerSupportBundleResult.Type;
 
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,

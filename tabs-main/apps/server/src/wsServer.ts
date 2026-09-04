@@ -156,6 +156,7 @@ import {
   readProcessResourceHistory,
   signalProcess,
 } from "./diagnostics/ProcessDiagnostics.ts";
+import { createSupportBundle } from "./diagnostics/SupportBundle.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -1993,6 +1994,21 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           traceFilePath: serverConfig.serverTracePath,
           maxFiles: 5,
         });
+      }
+
+      case WS_METHODS.serverCreateSupportBundle: {
+        const descriptor = yield* serverEnvironment.getDescriptor;
+        const traces = yield* TraceDiagnostics.readTraceDiagnostics({
+          traceFilePath: serverConfig.serverTracePath,
+          maxFiles: 5,
+        });
+        return yield* Effect.tryPromise(() =>
+          createSupportBundle({
+            environmentId: descriptor.environmentId,
+            appVersion: descriptor.serverVersion,
+            traces,
+          }),
+        );
       }
 
       case WS_METHODS.serverReportClientActivity: {

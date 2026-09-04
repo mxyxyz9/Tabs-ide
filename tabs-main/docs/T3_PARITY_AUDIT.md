@@ -92,7 +92,9 @@ an adapter over that engine.
       reporting, configurable power profiles, policy streaming, and demand-gated provider polling.
 - [x] Environment process-tree diagnostics, bounded history, safe descendant process signaling,
       and an accessible diagnostics settings panel.
-- [ ] Native resource attribution, trace-file aggregation, and support bundles.
+- [x] Resource attribution, trace-file aggregation, and support bundles: live descendants are
+      categorized across backend, provider, terminal, Git, and browser ownership; history retains
+      attribution; and authorized clients can export a redacted environment/process/trace bundle.
 - [x] Replace the advertised trace-diagnostics placeholder with bounded rotating structured trace
       capture, multi-file aggregation, parse/failure summaries, and an accessible diagnostics view.
 - [x] Desktop self-update state machine, download/install actions, sidebar notification, and

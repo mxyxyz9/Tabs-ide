@@ -5,7 +5,7 @@ import type {
   ServerTraceDiagnosticsResult,
 } from "@tabs/contracts";
 import * as Option from "effect/Option";
-import { ActivityIcon, RefreshCwIcon } from "lucide-react";
+import { ActivityIcon, DownloadIcon, RefreshCwIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { ensureNativeApi } from "../../nativeApi";
@@ -26,6 +26,24 @@ export function DiagnosticsSettings() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [backgroundProfile, setBackgroundProfile] = useState<BackgroundActivityProfile>("balanced");
+  const [exporting, setExporting] = useState(false);
+
+  const exportSupportBundle = useCallback(async () => {
+    setExporting(true);
+    try {
+      const bundle = await ensureNativeApi().server.createSupportBundle();
+      const url = URL.createObjectURL(new Blob([bundle.content], { type: bundle.mediaType }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = bundle.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The support bundle could not be created.");
+    } finally {
+      setExporting(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -65,10 +83,21 @@ export function DiagnosticsSettings() {
           Inspect resource use by the active environment and its provider or terminal processes.
         </p>
         <SettingsHeaderPortal>
-          <Button size="xs" variant="outline" disabled={loading} onClick={() => void refresh()}>
-            <RefreshCwIcon className={`mr-1 size-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={exporting}
+              onClick={() => void exportSupportBundle()}
+            >
+              <DownloadIcon className="mr-1 size-3.5" />
+              {exporting ? "Exporting…" : "Export support bundle"}
+            </Button>
+            <Button size="xs" variant="outline" disabled={loading} onClick={() => void refresh()}>
+              <RefreshCwIcon className={`mr-1 size-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
         </SettingsHeaderPortal>
       </div>
 
@@ -199,6 +228,9 @@ export function DiagnosticsSettings() {
                   PID
                 </th>
                 <th scope="col" className="px-3 py-2">
+                  Owner
+                </th>
+                <th scope="col" className="px-3 py-2">
                   CPU
                 </th>
                 <th scope="col" className="px-3 py-2">
@@ -220,6 +252,14 @@ export function DiagnosticsSettings() {
                     {process.command}
                   </td>
                   <td className="px-3 py-2 tabular-nums">{process.pid}</td>
+                  <td className="px-3 py-2">
+                    <span
+                      className="rounded-full bg-muted px-2 py-1 text-[10px] font-medium uppercase tracking-wide"
+                      title={process.attribution}
+                    >
+                      {process.category}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 tabular-nums">{process.cpuPercent.toFixed(1)}%</td>
                   <td className="px-3 py-2 tabular-nums">{formatBytes(process.rssBytes)}</td>
                   <td className="px-3 py-2 tabular-nums">{process.elapsed}</td>

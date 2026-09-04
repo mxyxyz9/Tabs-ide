@@ -6,6 +6,7 @@ import type {
   ServerProcessDiagnosticsResult,
   ServerProcessResourceHistoryInput,
   ServerProcessResourceHistoryResult,
+  ServerProcessCategory,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
 } from "@tabs/contracts";
@@ -126,6 +127,32 @@ function entries(rows: readonly ProcessRow[]): ServerProcessDiagnosticsEntry[] {
     }
     return depth;
   };
+  const categoryOf = (
+    row: ProcessRow,
+  ): { category: ServerProcessCategory; attribution: string } => {
+    if (row.pid === process.pid) return { category: "server", attribution: "Tabs backend" };
+    const command = row.command.toLowerCase();
+    if (/\b(codex|claude|gemini|copilot|cursor|droid|grok|opencode|amp)\b/u.test(command)) {
+      return { category: "provider", attribution: "AI provider runtime" };
+    }
+    if (/\b(git|gh|glab)\b/u.test(command))
+      return { category: "git", attribution: "Source control" };
+    if (/\b(chromium|chrome|playwright|puppeteer)\b/u.test(command))
+      return { category: "browser", attribution: "Browser automation" };
+    const parent = rows.find((candidate) => candidate.pid === row.ppid);
+    if (
+      parent &&
+      /\b(shell|terminal|pty|zsh|bash|fish|pwsh|powershell|cmd\.exe)\b/u.test(
+        parent.command.toLowerCase(),
+      )
+    ) {
+      return { category: "terminal", attribution: "Interactive terminal" };
+    }
+    if (/\b(zsh|bash|fish|pwsh|powershell|cmd\.exe)\b/u.test(command)) {
+      return { category: "terminal", attribution: "Interactive terminal" };
+    }
+    return { category: "other", attribution: "Backend child process" };
+  };
   return rows.map((row) => ({
     pid: row.pid,
     ppid: row.ppid,
@@ -137,6 +164,7 @@ function entries(rows: readonly ProcessRow[]): ServerProcessDiagnosticsEntry[] {
     command: row.command,
     depth: depthOf(row),
     childPids: children.get(row.pid) ?? [],
+    ...categoryOf(row),
   }));
 }
 
@@ -215,6 +243,8 @@ export async function readProcessResourceHistory(
         currentRssBytes: last.process.rssBytes,
         maxRssBytes: Math.max(...observations.map((item) => item.process.rssBytes)),
         sampleCount: observations.length,
+        category: last.process.category,
+        attribution: last.process.attribution,
       };
     })
     .sort((left, right) => right.currentCpuPercent - left.currentCpuPercent);

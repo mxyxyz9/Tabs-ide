@@ -127,6 +127,7 @@ import type {
   ServerRemoveKeybindingResult,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
+  ServerSupportBundleResult,
   ServerTraceDiagnosticsResult,
   ServerUpsertKeybindingResult,
   ServerRunProviderMaintenanceInput,
@@ -1325,6 +1326,7 @@ export interface LocalApi {
       input: ServerProcessResourceHistoryInput,
     ) => Promise<ServerProcessResourceHistoryResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
+    createSupportBundle: () => Promise<ServerSupportBundleResult>;
     reportClientActivity: (input: ClientActivityReportInput) => Promise<void>;
     reportHostPowerState: (input: HostPowerSnapshot) => Promise<void>;
     getBackgroundPolicy: () => Promise<BackgroundPolicySnapshot>;

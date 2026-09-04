@@ -439,6 +439,7 @@ export function createWsNativeApi(options?: {
       getProcessResourceHistory: (input) =>
         transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
       signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
+      createSupportBundle: () => transport.request(WS_METHODS.serverCreateSupportBundle),
       reportClientActivity: (input) =>
         transport.request(WS_METHODS.serverReportClientActivity, input),
       reportHostPowerState: (input) =>

@@ -134,6 +134,7 @@ import {
   ServerProcessResourceHistoryResult,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
+  ServerSupportBundleResult,
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
@@ -222,6 +223,7 @@ export const WS_METHODS = {
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverSignalProcess: "server.signalProcess",
+  serverCreateSupportBundle: "server.createSupportBundle",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -323,6 +325,12 @@ export const WsServerGetProcessResourceHistoryRpc = Rpc.make(
 export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsServerCreateSupportBundleRpc = Rpc.make(WS_METHODS.serverCreateSupportBundle, {
+  payload: Schema.Struct({}),
+  success: ServerSupportBundleResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -721,6 +729,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
   WsServerSignalProcessRpc,
+  WsServerCreateSupportBundleRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsSourceControlLookupRepositoryRpc,
