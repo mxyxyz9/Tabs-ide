@@ -18,8 +18,9 @@ import {
   ChevronRightIcon,
   TerminalIcon,
   PlusIcon,
-  TriangleAlertIcon,
   RotateCcwIcon,
+  Trash2Icon,
+  LoaderCircleIcon,
 } from "lucide-react";
 import {
   Dialog,
@@ -32,6 +33,13 @@ import {
   DialogClose,
 } from "~/components/ui/dialog";
 import { cn } from "~/lib/utils";
+import {
+  listManualConnections,
+  registerManualRemote,
+  registerManualSsh,
+  removeManualConnection,
+  type SavedManualConnection,
+} from "~/connection/manualConnections";
 
 interface TailscaleStatus {
   available: boolean;
@@ -65,6 +73,8 @@ export function ConnectionsSettings() {
   const [pairingCode, setPairingCode] = useState("");
   const [sshHost, setSshHost] = useState("");
   const [sshPort, setSshPort] = useState("22");
+  const [savedConnections, setSavedConnections] = useState<readonly SavedManualConnection[]>([]);
+  const [isSavingConnection, setIsSavingConnection] = useState(false);
 
   // Initialize network access toggle
   useEffect(() => {
@@ -94,6 +104,19 @@ export function ConnectionsSettings() {
     return () => clearInterval(interval);
   }, [isDesktop]);
 
+  useEffect(() => {
+    if (!isDesktop) return;
+    void listManualConnections()
+      .then(setSavedConnections)
+      .catch(() => undefined);
+    return window.desktopBridge!.onSshPasswordPrompt((request) => {
+      const password = window.prompt(
+        `${request.prompt}\n\n${request.username ? `${request.username}@` : ""}${request.destination}`,
+      );
+      void window.desktopBridge!.resolveSshPasswordPrompt(request.requestId, password);
+    });
+  }, [isDesktop]);
+
   const handleNetworkAccessChange = (checked: boolean) => {
     if (!isDesktop) return;
     setNetworkAccess(checked);
@@ -108,19 +131,41 @@ export function ConnectionsSettings() {
     }
   };
 
-  const handleAddEnvironment = () => {
-    toastManager.add({
-      type: "success",
-      title: "Connecting to environment...",
-      description:
-        addMode === "remote"
-          ? `Attempting connection to remote link at ${remoteHost}`
-          : `Connecting via SSH to ${sshHost}:${sshPort}`,
-    });
-    setIsAddOpen(false);
-    setRemoteHost("");
-    setPairingCode("");
-    setSshHost("");
+  const handleAddEnvironment = async () => {
+    setIsSavingConnection(true);
+    try {
+      if (addMode === "remote") {
+        await registerManualRemote({ host: remoteHost, pairingCode });
+      } else {
+        const at = sshHost.lastIndexOf("@");
+        const hostname = at >= 0 ? sshHost.slice(at + 1) : sshHost;
+        const username = at >= 0 ? sshHost.slice(0, at) : null;
+        await registerManualSsh({
+          alias: sshHost,
+          hostname,
+          username,
+          port: Number.parseInt(sshPort, 10) || 22,
+        });
+      }
+      setSavedConnections(await listManualConnections());
+      toastManager.add({
+        type: "success",
+        title: "Environment connected",
+        description: "The remote environment was verified and saved.",
+      });
+      setIsAddOpen(false);
+      setRemoteHost("");
+      setPairingCode("");
+      setSshHost("");
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not connect environment",
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsSavingConnection(false);
+    }
   };
 
   const toggleSwitch = (
@@ -140,7 +185,10 @@ export function ConnectionsSettings() {
       <div>
         <div className="space-y-1.5">
           <h2
-            className={cn("text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold", activeFontCombo.sansClass)}
+            className={cn(
+              "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
+              activeFontCombo.sansClass,
+            )}
             style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
           >
             Connections
@@ -149,8 +197,14 @@ export function ConnectionsSettings() {
             Configure network access, Tailscale HTTPS tunnels, and remote environment connections.
           </p>
         </div>
-        <div className="h-[5px] w-full my-5 rounded-full dark:block hidden" style={{ background: 'linear-gradient(to right, rgba(255,255,255,0.25), transparent)' }} />
-        <div className="h-[5px] w-full my-5 rounded-full dark:hidden block" style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.12), transparent)' }} />
+        <div
+          className="h-[5px] w-full my-5 rounded-full dark:block hidden"
+          style={{ background: "linear-gradient(to right, rgba(255,255,255,0.25), transparent)" }}
+        />
+        <div
+          className="h-[5px] w-full my-5 rounded-full dark:hidden block"
+          style={{ background: "linear-gradient(to right, rgba(0,0,0,0.12), transparent)" }}
+        />
       </div>
 
       <SettingsSection
@@ -564,11 +618,50 @@ export function ConnectionsSettings() {
       >
         <div className="px-6 py-12 text-center border-t border-border/60 first:border-t-0">
           <div className="mx-auto max-w-sm space-y-3">
-            <h3 className="text-sm font-semibold text-foreground">No saved remote environments</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {savedConnections.length === 0
+                ? "No saved remote environments"
+                : `${savedConnections.length} saved environment${savedConnections.length === 1 ? "" : "s"}`}
+            </h3>
             <p className="text-xs text-muted-foreground/80 leading-relaxed">
               Connect to remote servers, virtual machines, or other instances of the editor running
               in different environments.
             </p>
+            {savedConnections.length > 0 && (
+              <div className="space-y-2 pt-2 text-left">
+                {savedConnections.map((connection) => (
+                  <div
+                    key={connection.environmentId}
+                    className="flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 px-3 py-2.5"
+                  >
+                    {connection.kind === "ssh" ? (
+                      <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <Link2Icon className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold text-foreground">
+                        {connection.label}
+                      </div>
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {connection.kind.toUpperCase()} · {connection.environmentId}
+                      </div>
+                    </div>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={`Remove ${connection.label}`}
+                      onClick={async () => {
+                        await removeManualConnection(connection.environmentId);
+                        setSavedConnections(await listManualConnections());
+                      }}
+                    >
+                      <Trash2Icon className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="pt-2">
               <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
                 <DialogTrigger
@@ -590,168 +683,132 @@ export function ConnectionsSettings() {
                       Add Environment
                     </DialogTitle>
                     <DialogDescription className="text-[13px]">
-                      {!isTailscaleReady
-                        ? "Prerequisite Required"
-                        : "Pair another environment to this client."}
+                      Pair another environment directly or through SSH.
                     </DialogDescription>
                   </DialogHeader>
                   <DialogPanel className="space-y-6 pt-2 pb-3">
-                    {!isTailscaleReady ? (
-                      <div className="space-y-4 text-center py-4">
-                        <div className="mx-auto size-16 rounded-full bg-warning/10 flex items-center justify-center border border-warning/20 text-warning">
-                          <TriangleAlertIcon className="size-8 text-amber-500" />
-                        </div>
-                        <div className="space-y-2">
-                          <h4 className="text-[16px] font-bold text-foreground">
-                            Tailscale Connection Required
-                          </h4>
-                          <p className="text-[13px] text-muted-foreground leading-relaxed px-6">
-                            Connecting to remote environments requires an active mesh network.
-                            Please install and connect Tailscale under **This Environment** before
-                            continuing.
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-center gap-2 pt-4 border-t border-border/40 w-full">
-                          <DialogClose
-                            render={
-                              <Button size="sm" variant="ghost" className="text-xs h-8">
-                                Cancel
-                              </Button>
-                            }
-                          />
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => {
-                              setIsAddOpen(false);
-                              openUrl("https://tailscale.com/download");
-                            }}
-                            className="text-xs h-8 font-semibold bg-amber-500 hover:bg-amber-600 border-amber-600 text-white"
-                          >
-                            Get Tailscale
-                          </Button>
-                        </div>
+                    <>
+                      {/* Connection Type Toggle */}
+                      <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1 rounded-lg border border-border/60">
+                        <button
+                          type="button"
+                          onClick={() => setAddMode("remote")}
+                          className={cn(
+                            "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
+                            addMode === "remote"
+                              ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <Link2Icon className="size-3.5" />
+                          Remote link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAddMode("ssh")}
+                          className={cn(
+                            "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
+                            addMode === "ssh"
+                              ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          <TerminalIcon className="size-3.5" />
+                          SSH Connection
+                        </button>
                       </div>
-                    ) : (
-                      <>
-                        {/* Connection Type Toggle */}
-                        <div className="grid grid-cols-2 gap-2 bg-muted/40 p-1 rounded-lg border border-border/60">
-                          <button
-                            type="button"
-                            onClick={() => setAddMode("remote")}
-                            className={cn(
-                              "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
-                              addMode === "remote"
-                                ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
-                                : "text-muted-foreground hover:text-foreground",
-                            )}
-                          >
-                            <Link2Icon className="size-3.5" />
-                            Remote link
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setAddMode("ssh")}
-                            className={cn(
-                              "flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all",
-                              addMode === "ssh"
-                                ? "bg-background text-foreground shadow-xs ring-1 ring-black/5 dark:bg-accent dark:border dark:border-primary dark:shadow-[0_0_15px_var(--color-primary)] dark:ring-0 font-semibold"
-                                : "text-muted-foreground hover:text-foreground",
-                            )}
-                          >
-                            <TerminalIcon className="size-3.5" />
-                            SSH Connection
-                          </button>
-                        </div>
 
-                        {/* Fields */}
-                        {addMode === "remote" ? (
-                          <div className="space-y-4 text-left">
-                            <div className="space-y-1">
-                              <label className="text-xs font-semibold text-foreground">
-                                Backend Host Address
-                              </label>
-                              <Input
-                                value={remoteHost}
-                                onChange={(e) => setRemoteHost(e.target.value)}
-                                placeholder="e.g. https://my-server.tailnet.ts.net"
-                                className="text-xs h-9 bg-background/50"
-                              />
-                              <span className="text-[11px] text-muted-foreground block mt-0.5">
-                                Enter the URL or MagicDNS address of your remote editor instance.
-                              </span>
-                            </div>
-
-                            <div className="space-y-1">
-                              <label className="text-xs font-semibold text-foreground">
-                                Pairing Code
-                              </label>
-                              <Input
-                                type="password"
-                                value={pairingCode}
-                                onChange={(e) => setPairingCode(e.target.value)}
-                                placeholder="Enter pairing verification token"
-                                className="text-xs h-9 bg-background/50"
-                              />
-                              <span className="text-[11px] text-muted-foreground block mt-0.5">
-                                The access token shown in the host environment settings.
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-4 text-left">
-                            <div className="grid grid-cols-3 gap-3">
-                              <div className="col-span-2 space-y-1">
-                                <label className="text-xs font-semibold text-foreground">
-                                  SSH Host / Alias
-                                </label>
-                                <Input
-                                  value={sshHost}
-                                  onChange={(e) => setSshHost(e.target.value)}
-                                  placeholder="e.g. user@hostname"
-                                  className="text-xs h-9 bg-background/50"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-xs font-semibold text-foreground">
-                                  Port
-                                </label>
-                                <Input
-                                  value={sshPort}
-                                  disabled
-                                  placeholder="22"
-                                  className="text-xs h-9 bg-background/50"
-                                />
-                              </div>
-                            </div>
-                            <span className="text-[11px] text-muted-foreground block">
-                              Uses local SSH config files, credentials, and secure port-forwarding
-                              tunnels.
+                      {/* Fields */}
+                      {addMode === "remote" ? (
+                        <div className="space-y-4 text-left">
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-foreground">
+                              Backend Host Address
+                            </label>
+                            <Input
+                              value={remoteHost}
+                              onChange={(e) => setRemoteHost(e.target.value)}
+                              placeholder="e.g. https://my-server.tailnet.ts.net"
+                              className="text-xs h-9 bg-background/50"
+                            />
+                            <span className="text-[11px] text-muted-foreground block mt-0.5">
+                              Enter the URL or MagicDNS address of your remote editor instance.
                             </span>
                           </div>
-                        )}
 
-                        {/* Footer Actions */}
-                        <div className="flex items-center justify-end gap-2 pt-5 border-t border-border/40">
-                          <DialogClose
-                            render={
-                              <Button size="sm" variant="ghost" className="text-xs h-8">
-                                Cancel
-                              </Button>
-                            }
-                          />
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={handleAddEnvironment}
-                            disabled={addMode === "remote" ? !remoteHost || !pairingCode : !sshHost}
-                            className="text-xs h-8 font-semibold"
-                          >
-                            Add environment
-                          </Button>
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-foreground">
+                              Pairing Code
+                            </label>
+                            <Input
+                              type="password"
+                              value={pairingCode}
+                              onChange={(e) => setPairingCode(e.target.value)}
+                              placeholder="Enter pairing verification token"
+                              className="text-xs h-9 bg-background/50"
+                            />
+                            <span className="text-[11px] text-muted-foreground block mt-0.5">
+                              The access token shown in the host environment settings.
+                            </span>
+                          </div>
                         </div>
-                      </>
-                    )}
+                      ) : (
+                        <div className="space-y-4 text-left">
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="col-span-2 space-y-1">
+                              <label className="text-xs font-semibold text-foreground">
+                                SSH Host / Alias
+                              </label>
+                              <Input
+                                value={sshHost}
+                                onChange={(e) => setSshHost(e.target.value)}
+                                placeholder="e.g. user@hostname"
+                                className="text-xs h-9 bg-background/50"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-foreground">Port</label>
+                              <Input
+                                value={sshPort}
+                                disabled
+                                placeholder="22"
+                                className="text-xs h-9 bg-background/50"
+                              />
+                            </div>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground block">
+                            Uses local SSH config files, credentials, and secure port-forwarding
+                            tunnels.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Footer Actions */}
+                      <div className="flex items-center justify-end gap-2 pt-5 border-t border-border/40">
+                        <DialogClose
+                          render={
+                            <Button size="sm" variant="ghost" className="text-xs h-8">
+                              Cancel
+                            </Button>
+                          }
+                        />
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={handleAddEnvironment}
+                          disabled={
+                            isSavingConnection ||
+                            (addMode === "remote" ? !remoteHost || !pairingCode : !sshHost)
+                          }
+                          className="text-xs h-8 font-semibold"
+                        >
+                          {isSavingConnection && (
+                            <LoaderCircleIcon className="mr-1 size-3.5 animate-spin" />
+                          )}
+                          {isSavingConnection ? "Connecting…" : "Add environment"}
+                        </Button>
+                      </div>
+                    </>
                   </DialogPanel>
                 </DialogContent>
               </Dialog>
@@ -761,7 +818,8 @@ export function ConnectionsSettings() {
       </SettingsSection>
 
       <p className="text-xs text-muted-foreground/60 px-0.5">
-        Remote environments let Tabs connect to other machines, VMs, or instances running the editor. Use Tailscale for secure encrypted access without port forwarding.
+        Remote environments let Tabs connect to other machines, VMs, or instances running the
+        editor. Use Tailscale for secure encrypted access without port forwarding.
       </p>
     </div>
   );
