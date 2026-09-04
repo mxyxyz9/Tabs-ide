@@ -35,6 +35,7 @@ import {
 import { Card, Select } from "./gitPrimitives";
 import { useProjectGitState } from "../../state/scopedStateStore";
 import { useGitApi, useGitScopeKey } from "./gitApiContext";
+import ChatMarkdown from "../ChatMarkdown";
 
 interface PullRequestRow {
   n: number;
@@ -580,9 +581,7 @@ export function PRsPanel({
                               </Button>
                             ) : null}
                             {detailQuery.data.pullRequest.body ? (
-                              <p className="whitespace-pre-wrap text-foreground/90">
-                                {detailQuery.data.pullRequest.body}
-                              </p>
+                              <ChatMarkdown text={detailQuery.data.pullRequest.body} cwd={cwd} />
                             ) : (
                               <p className="text-muted-foreground">No description provided.</p>
                             )}
@@ -863,9 +862,7 @@ export function PRsPanel({
                                                     ? `@${comment.author.login}`
                                                     : "Unknown author"}
                                                 </p>
-                                                <p className="mt-0.5 whitespace-pre-wrap">
-                                                  {comment.body}
-                                                </p>
+                                                <ChatMarkdown text={comment.body} cwd={cwd} />
                                               </div>
                                             ))}
                                           </div>
@@ -999,9 +996,7 @@ export function PRsPanel({
                                   {review.author ? `@${review.author.login}` : "Unknown reviewer"} ·{" "}
                                   {review.state.toLowerCase().replaceAll("_", " ")}
                                 </p>
-                                {review.body ? (
-                                  <p className="mt-1 whitespace-pre-wrap">{review.body}</p>
-                                ) : null}
+                                {review.body ? <ChatMarkdown text={review.body} cwd={cwd} /> : null}
                               </div>
                             ))}
                             {(detailQuery.data.pullRequest.comments ?? []).map((comment) => (
@@ -1009,7 +1004,7 @@ export function PRsPanel({
                                 <p className="font-medium">
                                   {comment.author ? `@${comment.author.login}` : "Unknown author"}
                                 </p>
-                                <p className="mt-1 whitespace-pre-wrap">{comment.body}</p>
+                                <ChatMarkdown text={comment.body} cwd={cwd} />
                               </div>
                             ))}
                             {(detailQuery.data.pullRequest.reviews ?? []).length === 0 &&
