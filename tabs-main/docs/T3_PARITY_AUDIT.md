@@ -37,7 +37,7 @@ an adapter over that engine.
 - [x] Projection migrations, upgrade catch-up, snapshots, and renderer hydration.
 - [x] Sidebar, Agents workspace, and composer use server lifecycle commands.
 - [x] New user work wakes settled and snoozed threads.
-- [ ] Enforce pending-approval, pending-input, and queued-turn guards for settle/snooze.
+- [x] Enforce pending-approval, pending-input, and queued-turn guards for settle/snooze.
 - [ ] Finish automatic activity/session wake behavior and server-side summary counters.
 - [ ] Add drag ordering for pinned threads and T3 snooze presets.
 - [ ] Finish title regeneration worker, interruption recovery, and action-menu UI.

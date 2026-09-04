@@ -16,6 +16,79 @@ import {
 } from "./commandInvariants.ts";
 
 const nowIso = () => new Date().toISOString();
+const QUEUED_TURN_START_GRACE_MS = 2 * 60 * 1_000;
+
+function isStaleRequestFailureDetail(payload: Record<string, unknown> | null): boolean {
+  const detail = typeof payload?.detail === "string" ? payload.detail.toLowerCase() : null;
+  return (
+    detail !== null &&
+    [
+      "stale pending approval request",
+      "unknown pending approval request",
+      "unknown pending permission request",
+      "stale pending user-input request",
+      "unknown pending user-input request",
+      "unknown pending user input request",
+      "unknown pending codex user input request",
+    ].some((candidate) => detail.includes(candidate))
+  );
+}
+
+function hasOpenBlockingRequest(thread: {
+  readonly activities: ReadonlyArray<{ readonly kind: string; readonly payload: unknown }>;
+}): boolean {
+  const openRequestIds = new Set<string>();
+  for (const activity of thread.activities) {
+    const payload =
+      typeof activity.payload === "object" && activity.payload !== null
+        ? (activity.payload as Record<string, unknown>)
+        : null;
+    const requestId = typeof payload?.requestId === "string" ? payload.requestId : null;
+    if (requestId === null) continue;
+    if (activity.kind === "approval.requested" || activity.kind === "user-input.requested") {
+      openRequestIds.add(requestId);
+    } else if (
+      activity.kind === "approval.resolved" ||
+      activity.kind === "user-input.resolved" ||
+      ((activity.kind === "provider.approval.respond.failed" ||
+        activity.kind === "provider.user-input.respond.failed") &&
+        isStaleRequestFailureDetail(payload))
+    ) {
+      openRequestIds.delete(requestId);
+    }
+  }
+  return openRequestIds.size > 0;
+}
+
+function threadHasQueuedTurnStart(
+  thread: OrchestrationReadModel["threads"][number],
+  occurredAt: string,
+): boolean {
+  const latestUserMessageAtMs = thread.messages.reduce(
+    (latest, message) =>
+      message.role === "user" ? Math.max(latest, Date.parse(message.createdAt)) : latest,
+    Number.NEGATIVE_INFINITY,
+  );
+  const latestTurnAtMs =
+    thread.latestTurn === null
+      ? Number.NEGATIVE_INFINITY
+      : Math.max(
+          ...[
+            thread.latestTurn.requestedAt,
+            thread.latestTurn.startedAt,
+            thread.latestTurn.completedAt,
+          ].map((candidate) =>
+            candidate == null ? Number.NEGATIVE_INFINITY : Date.parse(candidate),
+          ),
+        );
+  const queuedAgeMs = Date.parse(occurredAt) - latestUserMessageAtMs;
+  return (
+    thread.session?.status !== "error" &&
+    Number.isFinite(latestUserMessageAtMs) &&
+    latestUserMessageAtMs > latestTurnAtMs &&
+    Math.abs(queuedAgeMs) <= QUEUED_TURN_START_GRACE_MS
+  );
+}
 
 const defaultMetadata: Omit<OrchestrationEvent, "sequence" | "type" | "payload"> = {
   eventId: crypto.randomUUID() as OrchestrationEvent["eventId"],
@@ -256,6 +329,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
       const occurredAt = nowIso();
+      if (hasOpenBlockingRequest(thread)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a pending approval or user-input request and cannot be settled`,
+        });
+      }
+      if (threadHasQueuedTurnStart(thread, occurredAt)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a queued turn start and cannot be settled`,
+        });
+      }
       const alreadySettled = thread.settledOverride === "settled" && thread.settledAt !== null;
       const settled = {
         ...withEventBase({
@@ -335,6 +420,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: "snooze wake time must be in the future",
         });
       }
+      if (hasOpenBlockingRequest(thread)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a pending approval or user-input request and cannot be snoozed`,
+        });
+      }
+      if (threadHasQueuedTurnStart(thread, occurredAt)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has a queued turn start and cannot be snoozed`,
+        });
+      }
       return {
         ...withEventBase({
           aggregateKind: "thread",
@@ -385,14 +482,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         threadId: command.threadId,
       });
       const occurredAt = nowIso();
-      return {
+      const pinnedEvent = {
         ...withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
           occurredAt,
           commandId: command.commandId,
         }),
-        type: "thread.pinned",
+        type: "thread.pinned" as const,
         payload: {
           threadId: command.threadId,
           pinnedAt: thread.pinnedAt ?? occurredAt,
@@ -400,6 +497,32 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: occurredAt,
         },
       };
+      const companions: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      if (thread.settledOverride === "settled") {
+        companions.push({
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.unsettled",
+          payload: { threadId: command.threadId, reason: "user", updatedAt: occurredAt },
+        });
+      }
+      if (thread.snoozedUntil != null) {
+        companions.push({
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.unsnoozed",
+          payload: { threadId: command.threadId, reason: "user", updatedAt: occurredAt },
+        });
+      }
+      return companions.length > 0 ? [pinnedEvent, ...companions] : pinnedEvent;
     }
 
     case "thread.unpin": {
