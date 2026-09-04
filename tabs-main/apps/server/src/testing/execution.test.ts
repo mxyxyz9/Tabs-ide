@@ -127,7 +127,7 @@ describe("TestingExecutor", () => {
       store.close();
     }
   });
-  it.runIf(process.env.TABS_VERIFY_GENERATED_SUITE === "1")(
+  it.skipIf(process.env.TABS_VERIFY_GENERATED_SUITE !== "1")(
     "executes a generated Playwright test end to end and persists evidence",
     async () => {
       const root = await mkdtemp(join(process.cwd(), "tabs-testing-execution-"));
@@ -277,6 +277,47 @@ describe("TestingExecutor", () => {
         consecutiveAttempts: 3,
       });
       expect(await readFile(join(root, "generated.spec.ts"), "utf8")).toBe(sourceBefore);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("aborts active and queued test cases on cancellation and marks run as blocked", async () => {
+    const root = await mkdtemp(join(process.cwd(), "tabs-testing-cancel-"));
+    roots.push(root);
+    const { store, jobId } = await seedExecutableArtifact(root, "http://127.0.0.1:4173/");
+    let executorRef: TestingExecutor | null = null;
+    const executor = new TestingExecutor(store, join(root, "testing"), async (_cmd, _args, opts) => {
+      // Simulate slow execution that gets cancelled
+      if (executorRef) {
+        // Trigger cancellation while running
+        const runs = store.executionRuns("project").runs;
+        const currentRun = runs[0];
+        if (currentRun) {
+          executorRef.cancel("project", currentRun.id);
+        }
+      }
+      if (opts?.signal?.aborted) {
+        throw new Error("Execution cancelled");
+      }
+      return {
+        stdout: "",
+        stderr: "cancelled",
+        code: 1,
+        signal: "SIGTERM",
+        timedOut: false,
+      };
+    });
+    executorRef = executor;
+    try {
+      const run = await executor.execute({
+        projectId: "project",
+        generationJobId: jobId,
+        targetUrl: "http://127.0.0.1:4173/",
+        mode: "standalone",
+      });
+      expect(run.status).toBe("blocked");
+      expect(run.results[0]?.status).toBe("blocked");
     } finally {
       store.close();
     }

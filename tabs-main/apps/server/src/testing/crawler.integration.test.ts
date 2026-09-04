@@ -19,7 +19,7 @@ afterEach(async () => {
   );
 });
 
-describe.runIf(runIntegration)("Testing crawler Playwright MCP integration", () => {
+describe.skipIf(!runIntegration)("Testing crawler Playwright MCP integration", () => {
   it("crawls the fixture and stores only sanitized, tokenized accessibility content", async () => {
     const fixture = await readFile(new URL("./fixtures/hidden-injection.html", import.meta.url));
     const server = createServer((_request, response) => {

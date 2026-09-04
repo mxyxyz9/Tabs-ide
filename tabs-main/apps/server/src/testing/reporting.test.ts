@@ -109,7 +109,7 @@ async function seedRun(root: string) {
 }
 
 describe("TestingReporter", () => {
-  it.runIf(process.env.TABS_VERIFY_REPORT === "1")(
+  it.skipIf(process.env.TABS_VERIFY_REPORT !== "1")(
     "creates openable DOCX/PDF reports and resolves exact case traceability",
     async () => {
       const configured = process.env.TABS_VERIFY_REPORT_OUTPUT;

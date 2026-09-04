@@ -9,7 +9,7 @@ import { TestingService } from "./TestingService";
 
 const runIntegration = process.env.TESTING_CRAWLER_INTEGRATION === "1";
 
-describe.runIf(runIntegration)("TestingService Phase 2 integration", () => {
+describe.skipIf(!runIntegration)("TestingService Phase 2 integration", () => {
   it("imports the controlled workbook after crawling and persists reviewable results", async () => {
     const server = createServer((request, response) => {
       response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
