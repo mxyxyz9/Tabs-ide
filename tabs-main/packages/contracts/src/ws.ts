@@ -82,6 +82,8 @@ import {
   ServerConfigUpdatedPayload,
   ServerProviderUpdatedPayload,
   ServerRunProviderMaintenanceInput,
+  ServerProcessResourceHistoryInput,
+  ServerSignalProcessInput,
 } from "./server";
 import { ServerSettingsPatch } from "./settings";
 import {
@@ -513,6 +515,10 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverDiscoverSourceControl, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverCloneRepository, SourceControlCloneRepositoryInput),
   tagRequestBody(WS_METHODS.serverLookupRepository, SourceControlRepositoryLookupInput),
+  tagRequestBody(WS_METHODS.serverGetTraceDiagnostics, Schema.Struct({})),
+  tagRequestBody(WS_METHODS.serverGetProcessDiagnostics, Schema.Struct({})),
+  tagRequestBody(WS_METHODS.serverGetProcessResourceHistory, ServerProcessResourceHistoryInput),
+  tagRequestBody(WS_METHODS.serverSignalProcess, ServerSignalProcessInput),
 
   // Usage & Limits
   tagRequestBody(WS_METHODS.usageReadSummary, UsageSummaryInput),

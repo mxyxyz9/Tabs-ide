@@ -63,6 +63,8 @@ import {
   type TestingWorkbookImportInput,
   type UsageSummaryInput,
   type ServerListProviderUsageInput,
+  type ServerProcessResourceHistoryInput,
+  type ServerSignalProcessInput,
   WS_CHANNELS,
   WS_METHODS,
   WebSocketRequest,
@@ -143,6 +145,11 @@ import { SessionStore } from "./auth/SessionStore.ts";
 import * as DateTime from "effect/DateTime";
 import { verifyDpopRequestFields } from "./auth/dpop.ts";
 import { ServerSecretStore } from "./auth/ServerSecretStore.ts";
+import {
+  readProcessDiagnostics,
+  readProcessResourceHistory,
+  signalProcess,
+} from "./diagnostics/ProcessDiagnostics.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -1906,6 +1913,49 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             otlpMetricsEnabled: false,
           },
           settings,
+        };
+      }
+
+      case WS_METHODS.serverGetProcessDiagnostics:
+        return yield* Effect.tryPromise(() => readProcessDiagnostics());
+
+      case WS_METHODS.serverGetProcessResourceHistory:
+        return yield* Effect.tryPromise(() =>
+          readProcessResourceHistory(
+            stripRequestTag(request.body) as ServerProcessResourceHistoryInput,
+          ),
+        );
+
+      case WS_METHODS.serverSignalProcess:
+        return yield* Effect.tryPromise(() =>
+          signalProcess(stripRequestTag(request.body) as ServerSignalProcessInput),
+        );
+
+      case WS_METHODS.serverGetTraceDiagnostics: {
+        const readAt = yield* DateTime.now;
+        return {
+          traceFilePath: "unavailable",
+          scannedFilePaths: [],
+          readAt,
+          recordCount: 0,
+          parseErrorCount: 0,
+          firstSpanAt: Option.none(),
+          lastSpanAt: Option.none(),
+          failureCount: 0,
+          interruptionCount: 0,
+          slowSpanThresholdMs: 1_000,
+          slowSpanCount: 0,
+          logLevelCounts: {},
+          topSpansByCount: [],
+          slowestSpans: [],
+          commonFailures: [],
+          latestFailures: [],
+          latestWarningAndErrorLogs: [],
+          partialFailure: Option.none(),
+          error: Option.some({
+            kind: "trace-file-not-found" as const,
+            message: "Structured trace collection is not enabled for this server.",
+          }),
         };
       }
 
