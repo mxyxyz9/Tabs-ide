@@ -42,7 +42,7 @@ an adapter over that engine.
 - [x] Automatic wake behavior for new turns, active sessions, approvals, and user input.
 - [x] T3 snooze presets in the desktop thread context menu.
 - [x] Persisted, keyboard-accessible Move Up/Down ordering for pinned threads.
-- [ ] Add pointer drag ordering for pinned threads.
+- [x] Pointer drag ordering for pinned threads.
 - [x] Title regeneration worker, interruption recovery, correlation, and sidebar action.
 - [x] Linked pull-request metadata command, projection, persistence, and hydration.
 - [x] Automatically discover/update linked pull requests and render their shared status.

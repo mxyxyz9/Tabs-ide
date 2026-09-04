@@ -39,6 +39,27 @@ function spreadKeys(count: number): string[] {
   });
 }
 
+export function planPinnedReorder(input: {
+  readonly orderedIds: readonly string[];
+  readonly keysById: ReadonlyMap<string, string | null | undefined>;
+  readonly movedId: string;
+}): ReadonlyArray<{ readonly id: string; readonly orderKey: string }> {
+  const index = input.orderedIds.indexOf(input.movedId);
+  if (index < 0) return [];
+  const beforeId = index > 0 ? input.orderedIds[index - 1]! : null;
+  const afterId = index < input.orderedIds.length - 1 ? input.orderedIds[index + 1]! : null;
+  const before = beforeId === null ? null : (input.keysById.get(beforeId) ?? null);
+  const after = afterId === null ? null : (input.keysById.get(afterId) ?? null);
+  if ((beforeId === null || before !== null) && (afterId === null || after !== null)) {
+    const key = pinOrderKeyBetween(before, after);
+    if (key !== null) return [{ id: input.movedId, orderKey: key }];
+  }
+  const keys = spreadKeys(input.orderedIds.length);
+  return input.orderedIds.flatMap((id, keyIndex) =>
+    input.keysById.get(id) === keys[keyIndex] ? [] : [{ id, orderKey: keys[keyIndex]! }],
+  );
+}
+
 export function planPinnedMove(input: {
   readonly orderedIds: readonly string[];
   readonly keysById: ReadonlyMap<string, string | null | undefined>;

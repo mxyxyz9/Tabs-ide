@@ -245,7 +245,7 @@ import { MercuryChromeLoader } from "./MercuryChromeLoader";
 import { Spinner } from "./ui/spinner";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
 import { resolveSnoozePresets } from "../state/snoozePresets";
-import { planPinnedMove, sortPinnedThreads } from "../state/pinnedThreadOrder";
+import { planPinnedMove, planPinnedReorder, sortPinnedThreads } from "../state/pinnedThreadOrder";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -1214,6 +1214,7 @@ function AgentsThreadList(props: {
   const [showSnoozedView, setShowSnoozedView] = useState(false);
   const [threadSearch, setThreadSearch] = useState("");
   const [openThreadMenuId, setOpenThreadMenuId] = useState<ThreadId | null>(null);
+  const [draggedPinnedThreadId, setDraggedPinnedThreadId] = useState<ThreadId | null>(null);
   const projectGitStatusQuery = useQuery(gitStatusQueryOptions(props.project.cwd));
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -1274,6 +1275,36 @@ function AgentsThreadList(props: {
       }
     },
     [props.threads],
+  );
+  const dropPinnedThread = useCallback(
+    async (targetId: ThreadId) => {
+      const movedId = draggedPinnedThreadId;
+      setDraggedPinnedThreadId(null);
+      if (movedId === null || movedId === targetId) return;
+      const ordered = sortPinnedThreads(props.threads.filter((candidate) => candidate.pinnedAt));
+      const desired = ordered.map((candidate) => candidate.id);
+      const from = desired.indexOf(movedId);
+      const to = desired.indexOf(targetId);
+      if (from < 0 || to < 0) return;
+      desired.splice(from, 1);
+      desired.splice(to, 0, movedId);
+      const assignments = planPinnedReorder({
+        orderedIds: desired,
+        keysById: new Map(ordered.map((candidate) => [candidate.id, candidate.pinOrderKey])),
+        movedId,
+      });
+      const api = readNativeApi();
+      if (!api) return;
+      for (const assignment of assignments) {
+        await api.orchestration.dispatchCommand({
+          type: "thread.pin.reorder",
+          commandId: newCommandId(),
+          threadId: ThreadId.makeUnsafe(assignment.id),
+          orderKey: assignment.orderKey,
+        });
+      }
+    },
+    [draggedPinnedThreadId, props.threads],
   );
   const [agentsState, setAgentsState] = useProjectAgentsState(props.project.id);
   const view = agentsState.threadListView;
@@ -1782,6 +1813,18 @@ function AgentsThreadList(props: {
                     </div>
                   )}
                   <div
+                    draggable={section === "pinned"}
+                    onDragStart={() => section === "pinned" && setDraggedPinnedThreadId(thread.id)}
+                    onDragEnd={() => setDraggedPinnedThreadId(null)}
+                    onDragOver={(event) => {
+                      if (section === "pinned" && draggedPinnedThreadId !== null)
+                        event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (section !== "pinned") return;
+                      event.preventDefault();
+                      void dropPinnedThread(thread.id);
+                    }}
                     className={cn(
                       "group relative flex items-center rounded-lg transition-all duration-150",
                       collapsed ? "justify-center" : "",
