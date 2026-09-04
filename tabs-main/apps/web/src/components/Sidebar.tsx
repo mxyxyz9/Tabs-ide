@@ -128,6 +128,7 @@ import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useConfirm } from "~/hooks/useConfirm";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
 import { resolveSnoozePresets } from "../state/snoozePresets";
+import { sortPinnedThreads } from "../state/pinnedThreadOrder";
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -1203,7 +1204,12 @@ export default function Sidebar() {
         if (isSettled(entry, thread.updatedAt ?? thread.createdAt)) return 4;
         return 2;
       };
-      return rank(left) - rank(right);
+      const rankDelta = rank(left) - rank(right);
+      if (rankDelta !== 0) return rankDelta;
+      if (left.pinnedAt && right.pinnedAt) {
+        return sortPinnedThreads([left, right])[0]?.id === left.id ? -1 : 1;
+      }
+      return 0;
     });
     const projectStatus = resolveProjectStatusIndicator(
       projectThreads.map((thread) =>

@@ -245,6 +245,7 @@ import { MercuryChromeLoader } from "./MercuryChromeLoader";
 import { Spinner } from "./ui/spinner";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
 import { resolveSnoozePresets } from "../state/snoozePresets";
+import { sortPinnedThreads } from "../state/pinnedThreadOrder";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -1360,7 +1361,7 @@ function AgentsThreadList(props: {
       const rightAttention = deriveThreadAttention(right) !== null ? 1 : 0;
       return rightAttention - leftAttention || eventTime(right) - eventTime(left);
     };
-    pinned.sort(byAttentionThenEvent);
+    pinned.splice(0, pinned.length, ...sortPinnedThreads(pinned));
     active.sort(byAttentionThenEvent);
     snoozed.sort((left, right) => {
       const leftWake = Date.parse(left.snoozedUntil ?? "");
