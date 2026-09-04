@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ThreadId } from "@tabs/contracts";
 
 import {
+  buildPreviewStatusReport,
   resolveAutomationViewport,
   startNativeBrowserRecording,
   stopNativeBrowserRecording,
@@ -53,6 +55,51 @@ describe("resolveAutomationViewport", () => {
       presetId: "nest-hub-max",
       width: 1280,
       height: 800,
+    });
+  });
+});
+
+describe("buildPreviewStatusReport", () => {
+  const threadId = ThreadId.make("thread-1");
+  const state = {
+    projectId: "project-1",
+    sessionId: "tab-1",
+    currentUrl: "https://example.com/dashboard",
+    pageTitle: "Dashboard",
+    loading: false,
+    canGoBack: true,
+    canGoForward: false,
+    devToolsOpen: false,
+    lastError: null,
+    transientError: null,
+  };
+
+  it("reports human navigation and history state", () => {
+    expect(buildPreviewStatusReport(state, { threadId, tabId: "tab-1" })).toEqual({
+      threadId: "thread-1",
+      tabId: "tab-1",
+      canGoBack: true,
+      canGoForward: false,
+      navStatus: {
+        _tag: "Success",
+        url: "https://example.com/dashboard",
+        title: "Dashboard",
+      },
+    });
+  });
+
+  it("reports native load failures instead of presenting stale success", () => {
+    expect(
+      buildPreviewStatusReport(
+        { ...state, lastError: "ERR_NAME_NOT_RESOLVED" },
+        { threadId, tabId: "tab-1" },
+      ),
+    ).toMatchObject({
+      navStatus: {
+        _tag: "LoadFailed",
+        url: "https://example.com/dashboard",
+        description: "ERR_NAME_NOT_RESOLVED",
+      },
     });
   });
 });

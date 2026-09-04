@@ -1,11 +1,13 @@
 import {
   PREVIEW_AUTOMATION_OPERATIONS,
+  type DesktopBrowserSessionState,
   type PreviewAutomationResizeInput,
   type PreviewAutomationResizeResult,
   type PreviewAutomationRecordingArtifact,
   type PreviewAutomationRecordingStatus,
   type PreviewAutomationRequest,
   type PreviewAutomationResponse,
+  type PreviewReportStatusInput,
   type PreviewViewportPresetId,
   type PreviewViewportSetting,
 } from "@tabs/contracts";
@@ -26,6 +28,33 @@ interface ActiveBrowserRecording {
 }
 
 const activeRecordings = new Map<string, ActiveBrowserRecording>();
+
+export function buildPreviewStatusReport(
+  state: DesktopBrowserSessionState,
+  target: { threadId: PreviewReportStatusInput["threadId"]; tabId: string },
+): PreviewReportStatusInput | null {
+  if (!state.currentUrl) return null;
+  const title = state.pageTitle ?? "";
+  return {
+    threadId: target.threadId,
+    tabId: target.tabId,
+    canGoBack: state.canGoBack,
+    canGoForward: state.canGoForward,
+    navStatus: state.lastError
+      ? {
+          _tag: "LoadFailed",
+          url: state.currentUrl,
+          title,
+          code: -1,
+          description: state.lastError,
+        }
+      : {
+          _tag: state.loading ? "Loading" : "Success",
+          url: state.currentUrl,
+          title,
+        },
+  };
+}
 
 function recordingKey(projectId: string, sessionId: string): string {
   return `${projectId}::${sessionId}`;
@@ -203,6 +232,32 @@ export function NativePreviewAutomationHost() {
     const clientId = `tabs-desktop-${crypto.randomUUID()}`;
     let disposed = false;
     let connectionId: string | null = null;
+    const previewTargets = new Map<
+      string,
+      { threadId: PreviewAutomationRequest["threadId"]; tabId: string }
+    >();
+    const lastReportedState = new Map<string, string>();
+
+    const unsubscribeState = bridge.onBrowserSessionState((state) => {
+      const key = recordingKey(state.projectId, state.sessionId);
+      const target = previewTargets.get(key);
+      if (!target) return;
+      const report = buildPreviewStatusReport(state, target);
+      if (!report) return;
+      const signature = JSON.stringify([
+        state.currentUrl,
+        state.pageTitle,
+        state.loading,
+        state.canGoBack,
+        state.canGoForward,
+        state.lastError,
+      ]);
+      if (lastReportedState.get(key) === signature) return;
+      lastReportedState.set(key, signature);
+      void api.preview.reportStatus(report).catch(() => {
+        lastReportedState.delete(key);
+      });
+    });
 
     const run = async (request: PreviewAutomationRequest): Promise<unknown> => {
       const thread = appAtomRegistry
@@ -210,6 +265,10 @@ export function NativePreviewAutomationHost() {
         .threads.find((candidate) => candidate.id === request.threadId);
       if (!thread) throw new Error(`Thread ${request.threadId} is not available in this client.`);
       const sessionId = request.tabId ?? "browser";
+      previewTargets.set(recordingKey(thread.projectId, sessionId), {
+        threadId: request.threadId,
+        tabId: sessionId,
+      });
       const input =
         typeof request.input === "object" && request.input !== null
           ? (request.input as Record<string, unknown>)
@@ -325,6 +384,7 @@ export function NativePreviewAutomationHost() {
     return () => {
       disposed = true;
       unsubscribe();
+      unsubscribeState();
     };
   }, []);
 

@@ -31,7 +31,9 @@ verification evidence, not just a matching type or placeholder.
       guest-viewport readiness.
 - [x] Populate automation snapshots with bounded live console, network, and action diagnostics
       instead of placeholder arrays.
-- [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
+- [x] Report real native URL/title/loading/history/failure changes back to the authoritative
+      preview session, including redirects and human navigation.
+- [ ] Synchronize live cursor position and human-input ownership between clients.
 - [x] Capture browser screenshots as real managed artifacts, with typed renderer IPC and
       artifact-directory-restricted reveal/copy operations.
 - [x] Record the live Chromium guest through its native media-source ID and persist non-empty
