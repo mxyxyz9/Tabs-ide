@@ -390,6 +390,57 @@ export function GitToolV2({
     [api, cwd, queryClient],
   );
 
+  const runCommitOperation = useCallback(
+    async (action: "revert" | "cherry-pick", commit: GitHistoryCommit) => {
+      if (!api) return;
+      try {
+        if (action === "revert") await api.git.revertCommit({ cwd, sha: commit.sha });
+        else await api.git.cherryPick({ cwd, sha: commit.sha });
+        await invalidateGitQueries(queryClient);
+        toastManager.add({
+          type: "success",
+          title: `${action === "revert" ? "Reverted" : "Cherry-picked"} ${commit.shortSha}`,
+        });
+      } catch (error) {
+        await invalidateGitQueries(queryClient);
+        toastManager.add({
+          type: "error",
+          title: `${action === "revert" ? "Revert" : "Cherry-pick"} failed`,
+          description: toGitUserFacingErrorMessage(error),
+        });
+      }
+    },
+    [api, cwd, queryClient],
+  );
+
+  const createWorktree = useCallback(
+    async (input: { base: string; branch: string; path: string }) => {
+      if (!api) return;
+      try {
+        const created = await api.git.createWorktree({
+          cwd,
+          branch: input.base,
+          ...(input.branch !== input.base ? { newBranch: input.branch } : {}),
+          path: input.path,
+        });
+        await invalidateGitQueries(queryClient);
+        closeModal();
+        toastManager.add({
+          type: "success",
+          title: `Created worktree for ${created.worktree.branch}`,
+          description: created.worktree.path,
+        });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Create worktree failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
+      }
+    },
+    [api, closeModal, cwd, queryClient],
+  );
+
   const switchAccount = useCallback(
     (login: string) => {
       void switchMutation.mutateAsync({ host: "github.com", login });
@@ -510,8 +561,8 @@ export function GitToolV2({
               commits={commits}
               loadingHistory={historyQuery.isLoading}
               onReset={(c) => setModal({ kind: "reset", commit: c })}
-              onRevert={(c) => onRunInTerminal(`git revert ${c.sha}`)}
-              onCherryPick={(c) => onRunInTerminal(`git cherry-pick ${c.sha}`)}
+              onRevert={(c) => void runCommitOperation("revert", c)}
+              onCherryPick={(c) => void runCommitOperation("cherry-pick", c)}
               onLoadMoreHistory={() => setHistoryLimit((l) => l + 50)}
             />
           </div>
@@ -716,10 +767,7 @@ export function GitToolV2({
             branches={allBranches}
             currentBranch={branchName}
             onClose={closeModal}
-            onCreate={(wt) => {
-              onRunInTerminal(`git worktree add -b ${wt.branch} ${wt.path} ${wt.base}`);
-              closeModal();
-            }}
+            onCreate={createWorktree}
           />
         )}
         {modal === "draftRelease" && (
