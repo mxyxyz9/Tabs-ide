@@ -51,7 +51,8 @@ an adapter over that engine.
 
 - [ ] Multi-environment renderer state and environment-scoped queries/mutations.
 - [ ] Project filesystem/workspace services and environment-aware file operations.
-- [ ] HTTP MCP server lifecycle, discovery, authorization, and complete tool exposure.
+- [x] Provider-scoped MCP credential issuance, liveness refresh, resolution, and revocation.
+- [ ] HTTP MCP transport lifecycle, provider injection, discovery, and complete tool exposure.
 - [x] Desktop resume events force stale renderer WebSocket transports to reconnect.
 - [ ] Background activity reporting and full power/thermal-aware liveness policy.
 - [ ] Resource telemetry, diagnostics, tracing UI, and support bundles.
