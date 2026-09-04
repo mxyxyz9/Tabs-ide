@@ -59,7 +59,8 @@ an adapter over that engine.
 - [x] HTTP MCP transport lifecycle, provider injection, discovery, and complete preview tool
       exposure.
 - [x] Desktop resume events force stale renderer WebSocket transports to reconnect.
-- [ ] Background activity reporting and full power/thermal-aware liveness policy.
+- [x] Background activity leases, disconnect cleanup, desktop suspend/lock/battery/thermal
+      reporting, configurable power profiles, policy streaming, and demand-gated provider polling.
 - [x] Environment process-tree diagnostics, bounded history, safe descendant process signaling,
       and an accessible diagnostics settings panel.
 - [ ] Native resource attribution, trace-file aggregation, and support bundles.
