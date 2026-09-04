@@ -40,6 +40,7 @@ import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as PreviewManager from "./preview/Manager.ts";
+import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -167,6 +168,7 @@ export function makeServerRuntimeServicesLayer() {
     ProviderMaintenanceRunnerLive,
     usageLayer,
     PreviewManager.layer,
+    PreviewAutomationBroker.layer,
   );
 }
 
