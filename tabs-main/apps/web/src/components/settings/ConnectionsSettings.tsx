@@ -1,3 +1,4 @@
+import type { DesktopSshPasswordPromptRequest } from "@tabs/contracts";
 import { type ReactNode, useEffect, useState } from "react";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
@@ -75,6 +76,10 @@ export function ConnectionsSettings() {
   const [sshPort, setSshPort] = useState("22");
   const [savedConnections, setSavedConnections] = useState<readonly SavedManualConnection[]>([]);
   const [isSavingConnection, setIsSavingConnection] = useState(false);
+  const [sshPasswordPrompts, setSshPasswordPrompts] = useState<
+    readonly DesktopSshPasswordPromptRequest[]
+  >([]);
+  const [sshPassword, setSshPassword] = useState("");
 
   // Initialize network access toggle
   useEffect(() => {
@@ -110,12 +115,41 @@ export function ConnectionsSettings() {
       .then(setSavedConnections)
       .catch(() => undefined);
     return window.desktopBridge!.onSshPasswordPrompt((request) => {
-      const password = window.prompt(
-        `${request.prompt}\n\n${request.username ? `${request.username}@` : ""}${request.destination}`,
+      setSshPasswordPrompts((current) =>
+        current.some((prompt) => prompt.requestId === request.requestId)
+          ? current
+          : [...current, request],
       );
-      void window.desktopBridge!.resolveSshPasswordPrompt(request.requestId, password);
     });
   }, [isDesktop]);
+
+  const activeSshPasswordPrompt = sshPasswordPrompts[0] ?? null;
+
+  const resolveActiveSshPasswordPrompt = (password: string | null) => {
+    if (!activeSshPasswordPrompt || !window.desktopBridge) return;
+    const requestId = activeSshPasswordPrompt.requestId;
+    setSshPasswordPrompts((current) =>
+      current.filter((request) => request.requestId !== requestId),
+    );
+    setSshPassword("");
+    void window.desktopBridge
+      .resolveSshPasswordPrompt(requestId, password)
+      .then((resolved) => {
+        if (resolved) return;
+        toastManager.add({
+          type: "error",
+          title: "SSH password request expired",
+          description: "Try connecting to the environment again.",
+        });
+      })
+      .catch((error) => {
+        toastManager.add({
+          type: "error",
+          title: "Could not answer SSH password request",
+          description: error instanceof Error ? error.message : String(error),
+        });
+      });
+  };
 
   const handleNetworkAccessChange = (checked: boolean) => {
     if (!isDesktop) return;
@@ -181,6 +215,68 @@ export function ConnectionsSettings() {
   return (
     <div className="space-y-6">
       {confirmDialog}
+
+      <Dialog
+        open={activeSshPasswordPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) resolveActiveSshPasswordPrompt(null);
+        }}
+      >
+        <DialogContent className="max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>SSH authentication</DialogTitle>
+            <DialogDescription>
+              Enter the password for{" "}
+              <span className="font-medium text-foreground">
+                {activeSshPasswordPrompt?.username
+                  ? activeSshPasswordPrompt.username + "@"
+                  : ""}
+                {activeSshPasswordPrompt?.destination}
+              </span>
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <form
+              className="space-y-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                resolveActiveSshPasswordPrompt(sshPassword);
+              }}
+            >
+              <div className="space-y-2">
+                <label htmlFor="ssh-password" className="text-xs font-semibold text-foreground">
+                  {activeSshPasswordPrompt?.prompt || "Password"}
+                </label>
+                <Input
+                  id="ssh-password"
+                  type="password"
+                  autoComplete="current-password"
+                  autoFocus
+                  value={sshPassword}
+                  onChange={(event) => setSshPassword(event.target.value)}
+                />
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  Your password is sent directly to the local SSH process and is not saved by Tabs.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-4">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => resolveActiveSshPasswordPrompt(null)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={sshPassword.length === 0}>
+                  Continue
+                </Button>
+              </div>
+            </form>
+          </DialogPanel>
+        </DialogContent>
+      </Dialog>
 
       <div>
         <div className="space-y-1.5">

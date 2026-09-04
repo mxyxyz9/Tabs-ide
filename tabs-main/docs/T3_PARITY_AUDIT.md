@@ -13,7 +13,7 @@ verification evidence, not just a matching type or placeholder.
 - [ ] Route each project/thread runtime through its selected environment instead of the current
       process-wide transport.
 - [ ] Surface relay/Tailscale reachability and connection repair in the main workspace.
-- [ ] Replace the native SSH password prompt with an accessible in-app credential dialog.
+- [x] Replace the native SSH password prompt with an accessible in-app credential dialog.
 
 ## Collaborative browser and computer use
 
