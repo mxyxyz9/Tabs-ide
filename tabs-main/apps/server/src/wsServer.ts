@@ -131,6 +131,8 @@ import { TextGeneration } from "./textGeneration/TextGeneration";
 import { UsageService } from "./usage/UsageService.ts";
 import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
 import { PreviewManager } from "./preview/Manager.ts";
+import { ServerEnvironment } from "./environment/ServerEnvironment.ts";
+import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -284,7 +286,9 @@ export type ServerRuntimeServices =
   | UsageService
   | Open
   | AnalyticsService
-  | PreviewManager;
+  | PreviewManager
+  | ServerEnvironment
+  | EnvironmentAuth;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -338,6 +342,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const textGeneration = yield* TextGeneration;
   const usageService = yield* UsageService;
   const previewManager = yield* PreviewManager;
+  const serverEnvironment = yield* ServerEnvironment;
+  const environmentAuth = yield* EnvironmentAuth;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -1612,12 +1618,20 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const settings = yield* serverSettingsManager.getSettings;
         const providers = yield* Ref.get(providersRef);
         return {
+          environment: yield* serverEnvironment.getDescriptor,
+          auth: yield* environmentAuth.getDescriptor(),
           cwd,
           keybindingsConfigPath,
           keybindings: keybindingsConfig.keybindings,
           issues: keybindingsConfig.issues,
           providers,
           availableEditors,
+          observability: {
+            logsDirectoryPath: serverConfig.logsDir,
+            localTracingEnabled: false,
+            otlpTracesEnabled: false,
+            otlpMetricsEnabled: false,
+          },
           settings,
         };
       }

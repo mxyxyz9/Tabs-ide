@@ -10,6 +10,7 @@ import { createServer } from "./wsServer";
 import WebSocket from "ws";
 import { deriveServerPaths, ServerConfig, type ServerConfigShape } from "./config";
 import {
+  makeRemoteAccessServicesLayer,
   makeProviderInstanceRegistryLayer,
   makeServerProviderLayer,
   makeServerRuntimeServicesLayer,
@@ -581,6 +582,9 @@ describe("WebSocket Server", () => {
       ),
       runtimeOverrides,
     );
+    const remoteAccessLayer = makeRemoteAccessServicesLayer().pipe(
+      Layer.provideMerge(persistenceLayer),
+    );
     // The runtime's internals (orchestration reactors) bind to the real
     // `ProviderRegistry` bundled in `makeServerProviderLayer()` at build time.
     // Merge the test stub last so the transport-facing `yield* ProviderRegistry`
@@ -588,6 +592,7 @@ describe("WebSocket Server", () => {
     // while orchestration keeps the real registry it captured during build.
     const dependenciesLayerBase = Layer.empty.pipe(
       Layer.provideMerge(runtimeLayer),
+      Layer.provideMerge(remoteAccessLayer),
       Layer.provideMerge(providerRegistryLayer),
       Layer.provideMerge(openLayer),
       Layer.provideMerge(ServerSettingsService.layerTest(options.serverSettings)),

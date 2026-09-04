@@ -24,6 +24,7 @@ import {
   AuthWebSocketTicketResult,
   ServerAuthSessionMethod,
 } from "./auth.ts";
+import { DpopFailureReason } from "./baseSchemas.ts";
 import { AuthSessionId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import {
@@ -108,6 +109,7 @@ export class EnvironmentAuthInvalidError extends Schema.TaggedErrorClass<Environ
     code: Schema.Literal("auth_invalid"),
     reason: EnvironmentAuthInvalidReason,
     traceId: TrimmedNonEmptyString,
+    dpopFailureReason: Schema.optionalKey(DpopFailureReason),
   },
   { httpApiStatus: 401 },
 ) {
