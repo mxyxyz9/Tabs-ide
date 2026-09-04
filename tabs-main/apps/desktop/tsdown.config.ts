@@ -17,5 +17,9 @@ export default defineConfig([
   {
     ...shared,
     entry: ["src/preload.ts"],
+    // Sandboxed Electron preloads cannot require arbitrary packages at runtime.
+    // Keep Clerk's small preload bridge inside our generated preload bundle so
+    // a navigation or Vite full reload cannot lose every contextBridge API.
+    noExternal: (id) => id.startsWith("@clerk/electron"),
   },
 ]);

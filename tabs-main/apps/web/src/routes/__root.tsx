@@ -72,8 +72,22 @@ function RootRouteView() {
   const isNativeApiReady = !!readNativeApi();
   const threadsHydrated = useAtomValue(threadsHydratedAtom);
   const settings = useSettings();
-  const ready = useMinimumDuration(isNativeApiReady && threadsHydrated, STARTUP_ANIMATION_HOLD_MS);
+  const [startupDeadlineElapsed, setStartupDeadlineElapsed] = useState(false);
+  const bootstrapReady = isNativeApiReady && threadsHydrated;
+  const ready = useMinimumDuration(
+    bootstrapReady || startupDeadlineElapsed,
+    STARTUP_ANIMATION_HOLD_MS,
+  );
   const [mounted, setMounted] = useState(true);
+
+  useEffect(() => {
+    if (bootstrapReady) return;
+    const timer = setTimeout(() => {
+      console.warn("Startup hydration exceeded 8 seconds; revealing the application shell.");
+      setStartupDeadlineElapsed(true);
+    }, 8_000);
+    return () => clearTimeout(timer);
+  }, [bootstrapReady]);
 
   useEffect(() => {
     if (ready) {
