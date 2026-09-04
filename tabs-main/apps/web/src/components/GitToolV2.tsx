@@ -524,7 +524,6 @@ export function GitToolV2({
               environmentId={environmentId}
               branchName={branchName}
               onOpenCreatePR={() => setModal("createPR")}
-              onRunInTerminal={onRunInTerminal}
             />
           </div>
         </PanelErrorBoundary>

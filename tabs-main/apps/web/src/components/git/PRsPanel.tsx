@@ -30,13 +30,16 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Card, Select } from "./gitPrimitives";
+import { useProjectGitState } from "../../state/scopedStateStore";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 
 interface PullRequestRow {
   n: number;
   title: string;
   state: "open" | "draft" | "merged" | "closed";
   branch: string;
-  body: string;
+  url: string;
+  provider?: "github" | "gitlab" | "azure-devops" | "bitbucket" | "unknown";
   isDraft: boolean;
   author: string | null;
   labels: ReadonlyArray<{ name: string; color?: string | undefined }>;
@@ -48,21 +51,31 @@ interface PullRequestRow {
   changedFiles?: number;
 }
 
-import { useProjectGitState } from "../../state/scopedStateStore";
-import { useGitApi, useGitScopeKey } from "./gitApiContext";
+function formatProviderName(provider: PullRequestRow["provider"]): string {
+  switch (provider) {
+    case "github":
+      return "GitHub";
+    case "gitlab":
+      return "GitLab";
+    case "azure-devops":
+      return "Azure DevOps";
+    case "bitbucket":
+      return "Bitbucket";
+    default:
+      return "provider";
+  }
+}
 
 export function PRsPanel({
   cwd,
   environmentId,
   branchName,
   onOpenCreatePR,
-  onRunInTerminal,
 }: {
   cwd: string;
   environmentId?: string | undefined;
   branchName: string;
   onOpenCreatePR: () => void;
-  onRunInTerminal: (cmd: string) => void;
 }) {
   const api = useGitApi();
   const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
@@ -128,7 +141,8 @@ export function PRsPanel({
           title: pr.title,
           state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
           branch: `${pr.headBranch ?? branchName} → ${pr.baseBranch ?? "main"}`,
-          body: pr.url,
+          url: pr.url,
+          ...(pr.provider ? { provider: pr.provider } : {}),
           isDraft: pr.isDraft ?? false,
           author: pr.author?.login ?? null,
           labels: pr.labels ?? [],
@@ -147,7 +161,8 @@ export function PRsPanel({
         title: pr.title,
         state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
         branch: `${pr.headBranch} → ${pr.baseBranch}`,
-        body: pr.url,
+        url: pr.url,
+        ...(pr.provider ? { provider: pr.provider } : {}),
         isDraft: pr.isDraft ?? false,
         author: pr.author?.login ?? null,
         labels: pr.labels ?? [],
@@ -436,9 +451,17 @@ export function PRsPanel({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}
+                    onClick={() => {
+                      void api?.shell.openExternal(pr.url).catch((error) => {
+                        toastManager.add({
+                          type: "error",
+                          title: "Unable to open pull request",
+                          description: toGitUserFacingErrorMessage(error),
+                        });
+                      });
+                    }}
                   >
-                    View on GitHub
+                    Open{pr.provider ? ` on ${formatProviderName(pr.provider)}` : " pull request"}
                   </Button>
                 </div>
               </div>

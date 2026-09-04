@@ -1036,6 +1036,12 @@ export const makeGitManager = Effect.gen(function* () {
           `Action ${input.action} requires a reviewer or label value.`,
         );
       }
+      if (["comment", "request_changes"].includes(input.action) && !input.body?.trim()) {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          `Action ${input.action} requires a non-empty message.`,
+        );
+      }
       yield* gitHubCli.mutatePullRequest({
         cwd: input.cwd,
         reference,
