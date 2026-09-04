@@ -178,7 +178,16 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "./ui/menu";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -235,6 +244,7 @@ import { PatchViewer } from "./PatchViewer";
 import { MercuryChromeLoader } from "./MercuryChromeLoader";
 import { Spinner } from "./ui/spinner";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
+import { resolveSnoozePresets } from "../state/snoozePresets";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -1211,7 +1221,7 @@ function AgentsThreadList(props: {
     return () => window.clearInterval(timer);
   }, []);
   const dispatchLifecycle = useCallback(
-    async (thread: Thread, action: "pin" | "settle" | "snooze") => {
+    async (thread: Thread, action: "pin" | "settle" | "snooze", snoozedUntil?: string) => {
       const api = readNativeApi();
       if (!api) return;
       const commandId = newCommandId();
@@ -1235,7 +1245,7 @@ function AgentsThreadList(props: {
                 type: "thread.snooze",
                 commandId,
                 threadId: thread.id,
-                snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                snoozedUntil: snoozedUntil ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
               },
         );
       }
@@ -2119,12 +2129,28 @@ function AgentsThreadList(props: {
                                     Wake now
                                   </MenuItem>
                                 ) : (
-                                  <MenuItem
-                                    onClick={() => void dispatchLifecycle(thread, "snooze")}
-                                  >
-                                    <Clock3Icon className="size-3.5" />
-                                    Snooze for 1 hour
-                                  </MenuItem>
+                                  <MenuSub>
+                                    <MenuSubTrigger>
+                                      <Clock3Icon className="size-3.5" />
+                                      Snooze
+                                    </MenuSubTrigger>
+                                    <MenuSubPopup>
+                                      {resolveSnoozePresets().map((preset) => (
+                                        <MenuItem
+                                          key={preset.id}
+                                          onClick={() =>
+                                            void dispatchLifecycle(
+                                              thread,
+                                              "snooze",
+                                              preset.snoozedUntil,
+                                            )
+                                          }
+                                        >
+                                          {preset.label} ({preset.whenLabel})
+                                        </MenuItem>
+                                      ))}
+                                    </MenuSubPopup>
+                                  </MenuSub>
                                 )}
                                 <MenuSeparator />
                               </>
