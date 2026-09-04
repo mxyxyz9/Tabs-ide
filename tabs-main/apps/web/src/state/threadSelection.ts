@@ -1,17 +1,16 @@
 import { useAtomValue } from "@effect/atom-react";
-import type { ThreadId } from "@tabs/contracts";
 import { Atom } from "@tabs/client-runtime/state";
 
 import { appAtomRegistry } from "./atomRegistry";
 
 export interface ThreadSelectionState {
-  readonly selectedThreadIds: ReadonlySet<ThreadId>;
-  readonly anchorThreadId: ThreadId | null;
+  readonly selectedThreadKeys: ReadonlySet<string>;
+  readonly anchorThreadKey: string | null;
 }
 
 const emptySelection: ThreadSelectionState = {
-  selectedThreadIds: new Set<ThreadId>(),
-  anchorThreadId: null,
+  selectedThreadKeys: new Set<string>(),
+  anchorThreadKey: null,
 };
 
 export const threadSelectionAtom = Atom.make<ThreadSelectionState>(emptySelection).pipe(
@@ -24,71 +23,71 @@ function update(update: (state: ThreadSelectionState) => ThreadSelectionState) {
 }
 
 export const threadSelectionActions = {
-  toggle(threadId: ThreadId) {
+  toggle(threadKey: string) {
     update((state) => {
-      const selectedThreadIds = new Set(state.selectedThreadIds);
-      if (selectedThreadIds.has(threadId)) selectedThreadIds.delete(threadId);
-      else selectedThreadIds.add(threadId);
+      const selectedThreadKeys = new Set(state.selectedThreadKeys);
+      if (selectedThreadKeys.has(threadKey)) selectedThreadKeys.delete(threadKey);
+      else selectedThreadKeys.add(threadKey);
       return {
-        selectedThreadIds,
-        anchorThreadId: selectedThreadIds.has(threadId) ? threadId : state.anchorThreadId,
+        selectedThreadKeys,
+        anchorThreadKey: selectedThreadKeys.has(threadKey) ? threadKey : state.anchorThreadKey,
       };
     });
   },
-  rangeSelectTo(threadId: ThreadId, orderedThreadIds: readonly ThreadId[]) {
+  rangeSelectTo(threadKey: string, orderedThreadKeys: readonly string[]) {
     update((state) => {
-      const selectedThreadIds = new Set(state.selectedThreadIds);
-      const anchor = state.anchorThreadId;
+      const selectedThreadKeys = new Set(state.selectedThreadKeys);
+      const anchor = state.anchorThreadKey;
       if (anchor === null) {
-        selectedThreadIds.add(threadId);
-        return { selectedThreadIds, anchorThreadId: threadId };
+        selectedThreadKeys.add(threadKey);
+        return { selectedThreadKeys, anchorThreadKey: threadKey };
       }
-      const anchorIndex = orderedThreadIds.indexOf(anchor);
-      const targetIndex = orderedThreadIds.indexOf(threadId);
+      const anchorIndex = orderedThreadKeys.indexOf(anchor);
+      const targetIndex = orderedThreadKeys.indexOf(threadKey);
       if (anchorIndex === -1 || targetIndex === -1) {
-        selectedThreadIds.add(threadId);
-        return { selectedThreadIds, anchorThreadId: threadId };
+        selectedThreadKeys.add(threadKey);
+        return { selectedThreadKeys, anchorThreadKey: threadKey };
       }
       for (
         let index = Math.min(anchorIndex, targetIndex);
         index <= Math.max(anchorIndex, targetIndex);
         index += 1
       ) {
-        const id = orderedThreadIds[index];
-        if (id !== undefined) selectedThreadIds.add(id);
+        const key = orderedThreadKeys[index];
+        if (key !== undefined) selectedThreadKeys.add(key);
       }
-      return { selectedThreadIds, anchorThreadId: anchor };
+      return { selectedThreadKeys, anchorThreadKey: anchor };
     });
   },
   clear() {
     const state = appAtomRegistry.get(threadSelectionAtom);
-    if (state.selectedThreadIds.size > 0 || state.anchorThreadId !== null) {
+    if (state.selectedThreadKeys.size > 0 || state.anchorThreadKey !== null) {
       appAtomRegistry.set(threadSelectionAtom, emptySelection);
     }
   },
-  remove(threadIds: readonly ThreadId[]) {
-    const removals = new Set(threadIds);
+  remove(threadKeys: readonly string[]) {
+    const removals = new Set(threadKeys);
     update((state) => {
-      const selectedThreadIds = new Set(
-        [...state.selectedThreadIds].filter((id) => !removals.has(id)),
+      const selectedThreadKeys = new Set(
+        [...state.selectedThreadKeys].filter((key) => !removals.has(key)),
       );
       if (
-        selectedThreadIds.size === state.selectedThreadIds.size &&
-        !removals.has(state.anchorThreadId as ThreadId)
+        selectedThreadKeys.size === state.selectedThreadKeys.size &&
+        !removals.has(state.anchorThreadKey ?? "")
       )
         return state;
       return {
-        selectedThreadIds,
-        anchorThreadId:
-          state.anchorThreadId !== null && removals.has(state.anchorThreadId)
+        selectedThreadKeys,
+        anchorThreadKey:
+          state.anchorThreadKey !== null && removals.has(state.anchorThreadKey)
             ? null
-            : state.anchorThreadId,
+            : state.anchorThreadKey,
       };
     });
   },
-  setAnchor(threadId: ThreadId) {
+  setAnchor(threadKey: string) {
     update((state) =>
-      state.anchorThreadId === threadId ? state : { ...state, anchorThreadId: threadId },
+      state.anchorThreadKey === threadKey ? state : { ...state, anchorThreadKey: threadKey },
     );
   },
 };

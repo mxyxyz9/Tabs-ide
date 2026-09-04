@@ -43,6 +43,11 @@ import { makeAppModelSelection } from "../modelSelection";
 import type { Project, Thread } from "../types";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtomValue } from "@effect/atom-react";
+import {
+  parseScopedThreadKey,
+  scopedThreadKey,
+  scopeThreadRef,
+} from "@tabs/client-runtime/environment";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
   type SidebarProjectSortOrder,
@@ -432,7 +437,7 @@ export default function Sidebar() {
   const dragInProgressRef = useRef(false);
   const suppressProjectClickAfterDragRef = useRef(false);
   const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
-  const { selectedThreadIds } = useThreadSelection();
+  const { selectedThreadKeys } = useThreadSelection();
   const toggleThreadSelection = threadSelectionActions.toggle;
   const rangeSelectTo = threadSelectionActions.rangeSelectTo;
   const clearSelection = threadSelectionActions.clear;
@@ -1066,9 +1071,17 @@ export default function Sidebar() {
     async (position: { x: number; y: number }) => {
       const api = readNativeApi();
       if (!api) return;
-      const ids = [...selectedThreadIds];
-      if (ids.length === 0) return;
-      const count = ids.length;
+      const selectedThreads = [...selectedThreadKeys].flatMap((key) => {
+        const ref = parseScopedThreadKey(key);
+        if (!ref) return [];
+        const thread = threads.find(
+          (candidate) =>
+            candidate.id === ref.threadId && candidate.environmentId === ref.environmentId,
+        );
+        return thread ? [thread] : [];
+      });
+      if (selectedThreads.length === 0) return;
+      const count = selectedThreads.length;
 
       const clicked = await api.contextMenu.show(
         [
@@ -1079,8 +1092,8 @@ export default function Sidebar() {
       );
 
       if (clicked === "mark-unread") {
-        for (const id of ids) {
-          markThreadUnread(id);
+        for (const thread of selectedThreads) {
+          markThreadUnread(thread.id, thread.environmentId);
         }
         clearSelection();
         return;
@@ -1098,11 +1111,18 @@ export default function Sidebar() {
         if (!confirmed) return;
       }
 
-      const deletedIds = new Set<ThreadId>(ids);
-      for (const id of ids) {
-        await deleteThread(id, { deletedThreadIds: deletedIds });
+      for (const thread of selectedThreads) {
+        const deletedIds = new Set(
+          selectedThreads
+            .filter((candidate) => candidate.environmentId === thread.environmentId)
+            .map((candidate) => candidate.id),
+        );
+        await deleteThread(thread.id, {
+          deletedThreadIds: deletedIds,
+          environmentId: thread.environmentId,
+        });
       }
-      removeFromSelection(ids);
+      removeFromSelection([...selectedThreadKeys]);
     },
     [
       appSettings.confirmThreadDelete,
@@ -1110,7 +1130,8 @@ export default function Sidebar() {
       deleteThread,
       markThreadUnread,
       removeFromSelection,
-      selectedThreadIds,
+      selectedThreadKeys,
+      threads,
     ],
   );
 
@@ -1119,41 +1140,41 @@ export default function Sidebar() {
       event: MouseEvent,
       threadId: ThreadId,
       environmentId: EnvironmentId | undefined,
-      orderedProjectThreadIds: readonly ThreadId[],
+      orderedProjectThreadKeys: readonly string[],
     ) => {
+      if (!environmentId) return;
+      const threadKey = scopedThreadKey(scopeThreadRef(environmentId, threadId));
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const isShiftClick = event.shiftKey;
 
       if (isModClick) {
         event.preventDefault();
-        toggleThreadSelection(threadId);
+        toggleThreadSelection(threadKey);
         return;
       }
 
       if (isShiftClick) {
         event.preventDefault();
-        rangeSelectTo(threadId, orderedProjectThreadIds);
+        rangeSelectTo(threadKey, orderedProjectThreadKeys);
         return;
       }
 
       // Plain click — clear selection, set anchor for future shift-clicks, and navigate
-      if (selectedThreadIds.size > 0) {
+      if (selectedThreadKeys.size > 0) {
         clearSelection();
       }
-      setSelectionAnchor(threadId);
-      if (environmentId) {
-        void navigate({
-          to: "/$environmentId/$threadId",
-          params: { environmentId, threadId },
-        });
-      }
+      setSelectionAnchor(threadKey);
+      void navigate({
+        to: "/$environmentId/$threadId",
+        params: { environmentId, threadId },
+      });
     },
     [
       clearSelection,
       navigate,
       rangeSelectTo,
-      selectedThreadIds.size,
+      selectedThreadKeys.size,
       setSelectionAnchor,
       toggleThreadSelection,
     ],
@@ -1325,18 +1346,25 @@ export default function Sidebar() {
       isThreadListExpanded,
       previewLimit: THREAD_PREVIEW_LIMIT,
     });
-    const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
+    const orderedProjectThreadKeys = projectThreads.flatMap((thread) =>
+      thread.environmentId
+        ? [scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))]
+        : [],
+    );
     const renderedThreads = pinnedCollapsedThread ? [pinnedCollapsedThread] : visibleThreads;
     const renderThreadRow = (thread: (typeof projectThreads)[number]) => {
       const isActive = routeThreadId === thread.id && routeEnvironmentId === thread.environmentId;
-      const isSelected = selectedThreadIds.has(thread.id);
+      const threadKey = thread.environmentId
+        ? scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))
+        : thread.id;
+      const isSelected = selectedThreadKeys.has(threadKey);
       const isHighlighted = isActive || isSelected;
       const threadStatus = resolveThreadStatusPill({
         thread,
         hasPendingApprovals: derivePendingApprovals(thread.activities).length > 0,
         hasPendingUserInput: derivePendingUserInputs(thread.activities).length > 0,
       });
-      const prStatus = prStatusIndicator(prByThreadId.get(thread.id) ?? null);
+      const prStatus = prStatusIndicator(prByThreadId.get(threadKey) ?? null);
       const terminalStatus = terminalStatusFromRunningIds(
         selectThreadTerminalState(terminalStateByThreadId, thread.id).runningTerminalIds,
       );
@@ -1357,15 +1385,15 @@ export default function Sidebar() {
               isSelected,
             })}
             onClick={(event) => {
-              handleThreadClick(event, thread.id, thread.environmentId, orderedProjectThreadIds);
+              handleThreadClick(event, thread.id, thread.environmentId, orderedProjectThreadKeys);
             }}
             onKeyDown={(event) => {
               if (event.key !== "Enter" && event.key !== " ") return;
               event.preventDefault();
-              if (selectedThreadIds.size > 0) {
+              if (selectedThreadKeys.size > 0) {
                 clearSelection();
               }
-              setSelectionAnchor(thread.id);
+              setSelectionAnchor(threadKey);
               if (thread.environmentId) {
                 void navigate({
                   to: "/$environmentId/$threadId",
@@ -1375,13 +1403,13 @@ export default function Sidebar() {
             }}
             onContextMenu={(event) => {
               event.preventDefault();
-              if (selectedThreadIds.size > 0 && selectedThreadIds.has(thread.id)) {
+              if (selectedThreadKeys.size > 0 && selectedThreadKeys.has(threadKey)) {
                 void handleMultiSelectContextMenu({
                   x: event.clientX,
                   y: event.clientY,
                 });
               } else {
-                if (selectedThreadIds.size > 0) {
+                if (selectedThreadKeys.size > 0) {
                   clearSelection();
                 }
                 void handleThreadContextMenu(thread, {
@@ -1635,12 +1663,12 @@ export default function Sidebar() {
         event.stopPropagation();
         return;
       }
-      if (selectedThreadIds.size > 0) {
+      if (selectedThreadKeys.size > 0) {
         clearSelection();
       }
       toggleProject(projectId);
     },
-    [clearSelection, selectedThreadIds.size, toggleProject],
+    [clearSelection, selectedThreadKeys.size, toggleProject],
   );
 
   const handleProjectTitleKeyDown = useCallback(
@@ -1657,7 +1685,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     const onMouseDown = (event: globalThis.MouseEvent) => {
-      if (selectedThreadIds.size === 0) return;
+      if (selectedThreadKeys.size === 0) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       if (!shouldClearThreadSelectionOnMouseDown(target)) return;
       clearSelection();
@@ -1667,7 +1695,7 @@ export default function Sidebar() {
     return () => {
       window.removeEventListener("mousedown", onMouseDown);
     };
-  }, [clearSelection, selectedThreadIds.size]);
+  }, [clearSelection, selectedThreadKeys.size]);
 
   useEffect(() => {
     if (!isElectron) return;

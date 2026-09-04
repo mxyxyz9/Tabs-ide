@@ -53,8 +53,10 @@ export function removeEnvironmentReadModelFromAtoms(environmentId: EnvironmentId
   });
 }
 
-export function markThreadUnreadInAtoms(threadId: ThreadId) {
-  appAtomRegistry.update(readModelStateAtom, (state) => markThreadUnread(state, threadId));
+export function markThreadUnreadInAtoms(threadId: ThreadId, environmentId?: EnvironmentId) {
+  appAtomRegistry.update(readModelStateAtom, (state) =>
+    markThreadUnread(state, threadId, environmentId),
+  );
 }
 
 export function markThreadVisitedInAtoms(threadId: ThreadId, visitedAt?: string) {

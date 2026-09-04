@@ -97,10 +97,13 @@ function updateThread(
   threads: Thread[],
   threadId: ThreadId,
   updater: (t: Thread) => Thread,
+  environmentId?: EnvironmentId,
 ): Thread[] {
   let changed = false;
   const next = threads.map((t) => {
-    if (t.id !== threadId) return t;
+    if (t.id !== threadId || (environmentId !== undefined && t.environmentId !== environmentId)) {
+      return t;
+    }
     const updated = updater(t);
     if (updated !== t) changed = true;
     return updated;
@@ -370,32 +373,47 @@ export function markThreadVisited(
   state: AppState,
   threadId: ThreadId,
   visitedAt?: string,
+  environmentId?: EnvironmentId,
 ): AppState {
   const at = visitedAt ?? new Date().toISOString();
   const visitedAtMs = Date.parse(at);
-  const threads = updateThread(state.threads, threadId, (thread) => {
-    const previousVisitedAtMs = thread.lastVisitedAt ? Date.parse(thread.lastVisitedAt) : NaN;
-    if (
-      Number.isFinite(previousVisitedAtMs) &&
-      Number.isFinite(visitedAtMs) &&
-      previousVisitedAtMs >= visitedAtMs
-    ) {
-      return thread;
-    }
-    return { ...thread, lastVisitedAt: at };
-  });
+  const threads = updateThread(
+    state.threads,
+    threadId,
+    (thread) => {
+      const previousVisitedAtMs = thread.lastVisitedAt ? Date.parse(thread.lastVisitedAt) : NaN;
+      if (
+        Number.isFinite(previousVisitedAtMs) &&
+        Number.isFinite(visitedAtMs) &&
+        previousVisitedAtMs >= visitedAtMs
+      ) {
+        return thread;
+      }
+      return { ...thread, lastVisitedAt: at };
+    },
+    environmentId,
+  );
   return threads === state.threads ? state : { ...state, threads };
 }
 
-export function markThreadUnread(state: AppState, threadId: ThreadId): AppState {
-  const threads = updateThread(state.threads, threadId, (thread) => {
-    if (!thread.latestTurn?.completedAt) return thread;
-    const latestTurnCompletedAtMs = Date.parse(thread.latestTurn.completedAt);
-    if (Number.isNaN(latestTurnCompletedAtMs)) return thread;
-    const unreadVisitedAt = new Date(latestTurnCompletedAtMs - 1).toISOString();
-    if (thread.lastVisitedAt === unreadVisitedAt) return thread;
-    return { ...thread, lastVisitedAt: unreadVisitedAt };
-  });
+export function markThreadUnread(
+  state: AppState,
+  threadId: ThreadId,
+  environmentId?: EnvironmentId,
+): AppState {
+  const threads = updateThread(
+    state.threads,
+    threadId,
+    (thread) => {
+      if (!thread.latestTurn?.completedAt) return thread;
+      const latestTurnCompletedAtMs = Date.parse(thread.latestTurn.completedAt);
+      if (Number.isNaN(latestTurnCompletedAtMs)) return thread;
+      const unreadVisitedAt = new Date(latestTurnCompletedAtMs - 1).toISOString();
+      if (thread.lastVisitedAt === unreadVisitedAt) return thread;
+      return { ...thread, lastVisitedAt: unreadVisitedAt };
+    },
+    environmentId,
+  );
   return threads === state.threads ? state : { ...state, threads };
 }
 
