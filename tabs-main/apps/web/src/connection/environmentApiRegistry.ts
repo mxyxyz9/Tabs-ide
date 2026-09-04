@@ -1,4 +1,4 @@
-import type { NativeApi, ServerConfig } from "@tabs/contracts";
+import type { EnvironmentId, NativeApi, ServerConfig } from "@tabs/contracts";
 
 import { createWsNativeApi } from "../wsNativeApi";
 import { WsTransport } from "../wsTransport";
@@ -14,7 +14,7 @@ interface EnvironmentApiEntry {
 const entries = new Map<string, EnvironmentApiEntry>();
 let primaryEnvironmentId: string | null = null;
 
-export async function initializePrimaryEnvironmentApi(): Promise<string> {
+export async function initializePrimaryEnvironmentApi(): Promise<EnvironmentId> {
   const api = ensureNativeApi();
   const config = await api.server.getConfig();
   const environmentId = config.environment.environmentId;

@@ -222,8 +222,9 @@ function EventRouter() {
   useEffect(() => {
     const api = readNativeApi();
     if (!api) return;
-    void initializePrimaryEnvironmentApi().catch((error) => {
+    const primaryEnvironmentIdPromise = initializePrimaryEnvironmentApi().catch((error) => {
       console.warn("Failed to initialize the primary environment registry", error);
+      return null;
     });
     let disposed = false;
     let latestSequence = 0;
@@ -233,10 +234,11 @@ function EventRouter() {
 
     const flushSnapshotSync = async (): Promise<void> => {
       const snapshot = await api.orchestration.getSnapshot();
+      const primaryEnvironmentId = await primaryEnvironmentIdPromise;
       if (disposed) return;
       latestSequence = Math.max(latestSequence, snapshot.snapshotSequence);
       syncServerReadModel(snapshot);
-      syncServerReadModelToAtoms(snapshot);
+      syncServerReadModelToAtoms(snapshot, primaryEnvironmentId ?? undefined);
       clearPromotedDraftThreads(new Set(snapshot.threads.map((t) => t.id)));
       const draftThreadIds = Object.keys(
         appAtomRegistry.get(composerDraftsAtom).draftThreadsByThreadId,

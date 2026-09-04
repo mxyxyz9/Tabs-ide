@@ -1,5 +1,6 @@
 import {
   DEFAULT_MODEL,
+  EnvironmentId,
   ProjectId,
   ThreadId,
   TurnId,
@@ -203,6 +204,18 @@ describe("store pure functions", () => {
 });
 
 describe("store read model sync", () => {
+  it("attaches the owning environment to hydrated projects and threads", () => {
+    const environmentId = EnvironmentId.makeUnsafe("environment-remote");
+    const next = syncServerReadModel(
+      makeState(makeThread()),
+      makeReadModel(makeReadModelThread({})),
+      environmentId,
+    );
+
+    expect(next.projects[0]?.environmentId).toBe(environmentId);
+    expect(next.threads[0]?.environmentId).toBe(environmentId);
+  });
+
   it("preserves claude model slugs without an active session", () => {
     const initialState = makeState(makeThread());
     const readModel = makeReadModel(

@@ -1,4 +1,5 @@
 import {
+  type EnvironmentId,
   type ProviderKind,
   ThreadId,
   type OrchestrationReadModel,
@@ -110,6 +111,7 @@ function updateThread(
 function mapProjectsFromReadModel(
   incoming: OrchestrationReadModel["projects"],
   previous: Project[],
+  environmentId?: EnvironmentId,
 ): Project[] {
   const previousById = new Map(previous.map((project) => [project.id, project] as const));
   const previousByCwd = new Map(previous.map((project) => [project.cwd, project] as const));
@@ -126,6 +128,7 @@ function mapProjectsFromReadModel(
     const existing = previousById.get(project.id) ?? previousByCwd.get(project.workspaceRoot);
     return {
       id: project.id,
+      environmentId: environmentId ?? existing?.environmentId,
       name: project.title,
       cwd: project.workspaceRoot,
       defaultModelSelection:
@@ -238,10 +241,15 @@ function attachmentPreviewRoutePath(attachmentId: string): string {
 
 // ── Pure state transition functions ────────────────────────────────────
 
-export function syncServerReadModel(state: AppState, readModel: OrchestrationReadModel): AppState {
+export function syncServerReadModel(
+  state: AppState,
+  readModel: OrchestrationReadModel,
+  environmentId?: EnvironmentId,
+): AppState {
   const projects = mapProjectsFromReadModel(
     readModel.projects.filter((project) => project.deletedAt === null),
     state.projects,
+    environmentId,
   );
   const existingThreadById = new Map(state.threads.map((thread) => [thread.id, thread] as const));
   const threads = readModel.threads
@@ -250,6 +258,7 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
       const existing = existingThreadById.get(thread.id);
       return {
         id: thread.id,
+        environmentId: environmentId ?? existing?.environmentId,
         codexThreadId: null,
         projectId: thread.projectId,
         title: thread.title,

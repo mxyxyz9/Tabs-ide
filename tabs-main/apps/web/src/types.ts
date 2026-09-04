@@ -1,4 +1,5 @@
 import type {
+  EnvironmentId,
   ModelSelection,
   OrchestrationLatestTurn,
   OrchestrationProposedPlanId,
@@ -81,6 +82,7 @@ export interface TurnDiffSummary {
 
 export interface Project {
   id: ProjectId;
+  environmentId?: EnvironmentId | undefined;
   name: string;
   cwd: string;
   defaultModelSelection: ModelSelection | null;
@@ -92,6 +94,7 @@ export interface Project {
 
 export interface Thread {
   id: ThreadId;
+  environmentId?: EnvironmentId | undefined;
   codexThreadId: string | null;
   projectId: ProjectId;
   title: string;

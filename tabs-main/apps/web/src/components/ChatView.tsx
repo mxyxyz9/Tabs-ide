@@ -1229,6 +1229,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   );
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
+      environmentId: activeProject?.environmentId,
       cwd: gitCwd,
       query: effectivePathQuery,
       enabled: isPathTrigger,

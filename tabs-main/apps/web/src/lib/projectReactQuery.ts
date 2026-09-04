@@ -1,13 +1,13 @@
 import type { ProjectReadFileResult, ProjectSearchEntriesResult } from "@tabs/contracts";
 import { queryOptions } from "@tanstack/react-query";
-import { ensureNativeApi } from "~/nativeApi";
+import { environmentApi } from "~/connection/environmentApiRegistry";
 
 export const projectQueryKeys = {
   all: ["projects"] as const,
-  searchEntries: (cwd: string | null, query: string, limit: number) =>
-    ["projects", "search-entries", cwd, query, limit] as const,
-  readFile: (cwd: string | null, relativePath: string | null) =>
-    ["projects", "read-file", cwd, relativePath] as const,
+  searchEntries: (environmentId: string | null, cwd: string | null, query: string, limit: number) =>
+    ["projects", environmentId, "search-entries", cwd, query, limit] as const,
+  readFile: (environmentId: string | null, cwd: string | null, relativePath: string | null) =>
+    ["projects", environmentId, "read-file", cwd, relativePath] as const,
 };
 
 const DEFAULT_SEARCH_ENTRIES_LIMIT = 80;
@@ -29,12 +29,18 @@ export function projectSearchEntriesQueryOptions(input: {
   enabled?: boolean;
   limit?: number;
   staleTime?: number;
+  environmentId?: string | null | undefined;
 }) {
   const limit = input.limit ?? DEFAULT_SEARCH_ENTRIES_LIMIT;
   return queryOptions({
-    queryKey: projectQueryKeys.searchEntries(input.cwd, input.query, limit),
+    queryKey: projectQueryKeys.searchEntries(
+      input.environmentId ?? null,
+      input.cwd,
+      input.query,
+      limit,
+    ),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(input.environmentId);
       if (!input.cwd) {
         throw new Error("Workspace entry search is unavailable.");
       }
@@ -55,11 +61,12 @@ export function projectReadFileQueryOptions(input: {
   relativePath: string | null;
   enabled?: boolean;
   staleTime?: number;
+  environmentId?: string | null | undefined;
 }) {
   return queryOptions({
-    queryKey: projectQueryKeys.readFile(input.cwd, input.relativePath),
+    queryKey: projectQueryKeys.readFile(input.environmentId ?? null, input.cwd, input.relativePath),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(input.environmentId);
       if (!input.cwd || !input.relativePath) {
         throw new Error("Workspace file read is unavailable.");
       }

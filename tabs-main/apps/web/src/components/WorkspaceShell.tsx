@@ -2370,6 +2370,7 @@ function FallbackCodeTool(props: { project: Project }) {
   const focusedRelativePath = codeState.lastFocusedPath;
   const searchEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
+      environmentId: props.project.environmentId,
       cwd: props.project.cwd,
       query,
       enabled: trimmedQuery.length > 0,
@@ -2377,6 +2378,7 @@ function FallbackCodeTool(props: { project: Project }) {
   );
   const focusedFileQuery = useQuery(
     projectReadFileQueryOptions({
+      environmentId: props.project.environmentId,
       cwd: props.project.cwd,
       relativePath: focusedRelativePath,
       enabled: focusedRelativePath !== null,
@@ -3577,6 +3579,7 @@ function GitTool(props: {
   );
   const conflictFileQuery = useQuery(
     projectReadFileQueryOptions({
+      environmentId: project.environmentId,
       cwd: project.cwd,
       relativePath: resolverFilePath,
       enabled: resolverFilePath !== null,

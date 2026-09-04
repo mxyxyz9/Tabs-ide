@@ -1,4 +1,4 @@
-import type { OrchestrationReadModel } from "@tabs/contracts";
+import type { EnvironmentId, OrchestrationReadModel } from "@tabs/contracts";
 import { Atom } from "@tabs/client-runtime/state";
 
 import {
@@ -30,9 +30,12 @@ export const readModelStateAtom = Atom.make(EMPTY_APP_STATE).pipe(
   Atom.keepAlive,
 );
 
-export function syncServerReadModelToAtoms(readModel: OrchestrationReadModel) {
+export function syncServerReadModelToAtoms(
+  readModel: OrchestrationReadModel,
+  environmentId?: EnvironmentId,
+) {
   appAtomRegistry.update(readModelStateAtom, (state) => {
-    const next = syncServerReadModel(state, readModel);
+    const next = syncServerReadModel(state, readModel, environmentId);
     persistAppState(next);
     return next;
   });
