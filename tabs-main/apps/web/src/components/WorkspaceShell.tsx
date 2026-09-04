@@ -10005,9 +10005,8 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     async (projectId: ProjectId): Promise<boolean> => {
       const project = projects.find((p) => p.id === projectId);
       if (!project) return false;
-      const api = readNativeApi();
-      if (!api) return true; // Offline or no API, assume true to avoid breaking state
       try {
+        const api = await environmentApi(project.environmentId);
         await api.projects.filesystemBrowse({
           partialPath:
             project.cwd.endsWith("/") || project.cwd.endsWith("\\")
@@ -10016,17 +10015,29 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         });
         return true;
       } catch (err) {
+        const detail = err instanceof Error ? err.message.toLowerCase() : "";
+        const pathIsMissing =
+          detail.includes("enoent") ||
+          detail.includes("no such file") ||
+          detail.includes("path does not exist") ||
+          detail.includes("directory does not exist");
+        if (!pathIsMissing) {
+          // An offline remote must not be mistaken for a deleted workspace.
+          return true;
+        }
         toastManager.add({
           type: "error",
           title: "Project folder not found",
           description: `The folder at "${project.cwd}" does not exist. Removing it from recents.`,
         });
-        void api.orchestration
-          .dispatchCommand({
-            type: "project.delete",
-            commandId: newCommandId(),
-            projectId,
-          })
+        void environmentApi(project.environmentId)
+          .then((api) =>
+            api.orchestration.dispatchCommand({
+              type: "project.delete",
+              commandId: newCommandId(),
+              projectId,
+            }),
+          )
           .catch(() => undefined);
         closeProject(projectId);
         return false;
