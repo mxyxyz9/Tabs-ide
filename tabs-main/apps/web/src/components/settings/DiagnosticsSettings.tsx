@@ -1,4 +1,5 @@
 import type {
+  BackgroundActivityProfile,
   ServerProcessDiagnosticsResult,
   ServerProcessResourceHistoryResult,
 } from "@tabs/contracts";
@@ -22,18 +23,25 @@ export function DiagnosticsSettings() {
   const [history, setHistory] = useState<ServerProcessResourceHistoryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [backgroundProfile, setBackgroundProfile] = useState<BackgroundActivityProfile>("balanced");
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const api = ensureNativeApi();
-      const [nextProcesses, nextHistory] = await Promise.all([
+      const [nextProcesses, nextHistory, settings] = await Promise.all([
         api.server.getProcessDiagnostics(),
         api.server.getProcessResourceHistory({ windowMs: 15 * 60_000, bucketMs: 30_000 }),
+        api.server.getSettings(),
       ]);
       setProcesses(nextProcesses);
       setHistory(nextHistory);
+      setBackgroundProfile(
+        settings.backgroundActivity.profile === "custom"
+          ? (settings.backgroundActivity.baseProfile ?? "balanced")
+          : settings.backgroundActivity.profile,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Diagnostics could not be loaded.");
     } finally {
@@ -87,6 +95,34 @@ export function DiagnosticsSettings() {
             {processes.error.value.message}
           </p>
         ) : null}
+      </SettingsSection>
+
+      <SettingsSection title="Background activity">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Balance provider checks and repository refreshes against power consumption for this
+          environment.
+        </p>
+        <div role="group" aria-label="Background activity profile" className="flex flex-wrap gap-2">
+          {(["battery-saver", "balanced", "performance"] as const).map((profile) => (
+            <Button
+              key={profile}
+              size="sm"
+              variant={backgroundProfile === profile ? "default" : "outline"}
+              aria-pressed={backgroundProfile === profile}
+              onClick={async () => {
+                await ensureNativeApi().server.updateSettings({
+                  backgroundActivity: { schemaVersion: 1, profile, overrides: {} },
+                  backgroundActivityProfile: profile,
+                });
+                setBackgroundProfile(profile);
+              }}
+            >
+              {profile === "battery-saver"
+                ? "Battery saver"
+                : profile[0]!.toUpperCase() + profile.slice(1)}
+            </Button>
+          ))}
+        </div>
       </SettingsSection>
 
       <SettingsSection title="Process tree">

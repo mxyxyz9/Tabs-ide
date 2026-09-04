@@ -79,6 +79,7 @@ import {
   Cause,
   Crypto,
   Deferred,
+  Duration,
   Effect,
   Exit,
   Fiber,
@@ -1020,6 +1021,23 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   yield* Stream.runForEach(backgroundPolicy.streamChanges, (snapshot) =>
     pushBus.publishAll(WS_CHANNELS.backgroundPolicyUpdated, snapshot),
+  ).pipe(Effect.forkIn(subscriptionsScope));
+
+  yield* Effect.forever(
+    Effect.gen(function* () {
+      const settings = yield* serverSettingsManager.getSettings;
+      yield* Effect.sleep(settings.providerHealthRefreshInterval);
+      if (!(yield* backgroundPolicy.shouldRunScopeWork({ type: "provider-status" }))) return;
+      const providers = yield* providerRegistry.refresh();
+      yield* Ref.set(providersRef, providers);
+      yield* pushBus.publishAll(WS_CHANNELS.serverProvidersUpdated, { providers });
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("background provider refresh failed", {
+          cause: Cause.pretty(cause),
+        }).pipe(Effect.andThen(Effect.sleep(Duration.seconds(30)))),
+      ),
+    ),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Scope.provide(subscriptionsScope)(orchestrationReactor.start);
