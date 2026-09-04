@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { exposeClerkBridge } from "@clerk/electron/preload";
 import type { DesktopBridge } from "@tabs/contracts";
+
+exposeClerkBridge({ passkeys: true });
 
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
 const CLONE_REPOSITORY_CHANNEL = "desktop:clone-repository";

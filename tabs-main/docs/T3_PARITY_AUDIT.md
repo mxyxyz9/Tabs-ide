@@ -18,7 +18,9 @@ verification evidence, not just a matching type or placeholder.
 - [x] Scope environment routes, read-model hydration, chat commands, Git operations, code-file
       queries, and command-palette workspace browsing/project creation to the selected environment.
 - [x] Surface direct/SSH/Tailscale reachability and connection repair in settings.
-- [ ] Add managed cloud relay account discovery and status to the main workspace.
+- [x] Add managed cloud relay account discovery and status to the main workspace, backed by Clerk
+      sessions, persistent browser DPoP identity, relay status requests, durable relay targets, and
+      proof-bound environment/WebSocket authorization on desktop and web.
 - [x] Replace the native SSH password prompt with an accessible in-app credential dialog.
 
 ## Collaborative browser and computer use
@@ -95,7 +97,8 @@ an adapter over that engine.
       capture, multi-file aggregation, parse/failure summaries, and an accessible diagnostics view.
 - [x] Desktop self-update state machine, download/install actions, sidebar notification, and
       settings UI. Tabs retains its existing updater because it is already more complete.
-- [ ] Cloud relay account and managed-server status UI parity.
+- [x] Cloud relay account and managed-server status UI parity, including sign-in/avatar state,
+      refresh, availability, connect, account-switch cleanup, and server deregistration.
 - [x] Environment-aware themes and appearance synchronization with bounded server-published
       palettes, hot reload, remote theme selection, and retained local custom presets.
 - [x] Searchable keyboard-accessible command palette with project, thread, navigation, and action

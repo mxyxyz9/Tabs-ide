@@ -46,6 +46,8 @@ import {
   connectedEnvironmentIds,
   disconnectEnvironmentApi,
 } from "~/connection/environmentApiRegistry";
+import { hasCloudPublicConfig } from "~/cloud/publicConfig";
+import { ManagedCloudConnections } from "./ManagedCloudConnections";
 
 interface TailscaleStatus {
   available: boolean;
@@ -718,6 +720,7 @@ export function ConnectionsSettings() {
           </Dialog>
         }
       >
+        {hasCloudPublicConfig() ? <ManagedCloudConnections /> : null}
         <div className="px-6 py-12 text-center border-t border-border/60 first:border-t-0">
           <div className="mx-auto max-w-sm space-y-3">
             <h3 className="text-sm font-semibold text-foreground">

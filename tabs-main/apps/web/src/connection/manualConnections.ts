@@ -7,6 +7,8 @@ import {
   BearerConnectionProfile,
   BearerConnectionRegistration,
   BearerConnectionTarget,
+  RelayConnectionRegistration,
+  RelayConnectionTarget,
   SshConnectionProfile,
   SshConnectionRegistration,
   SshConnectionTarget,
@@ -18,7 +20,11 @@ import {
   registerConnectionInCatalog,
   removeConnectionFromCatalog,
 } from "@tabs/client-runtime/platform";
-import { AuthStandardClientScopes, type DesktopSshEnvironmentTarget } from "@tabs/contracts";
+import {
+  AuthStandardClientScopes,
+  type DesktopSshEnvironmentTarget,
+  type EnvironmentId,
+} from "@tabs/contracts";
 import { resolveRemotePairingTarget } from "@tabs/shared/remote";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -27,6 +33,7 @@ import { FetchHttpClient } from "effect/unstable/http";
 const CatalogJson = Schema.fromJsonString(ConnectionCatalogDocument);
 const decodeCatalog = Schema.decodeUnknownSync(CatalogJson);
 const encodeCatalog = Schema.encodeSync(CatalogJson);
+const WEB_CONNECTION_CATALOG_KEY = "tabs:connection-catalog";
 
 export interface SavedManualConnection {
   readonly environmentId: string;
@@ -35,7 +42,9 @@ export interface SavedManualConnection {
 }
 
 async function readCatalog() {
-  const raw = await window.desktopBridge?.getConnectionCatalog?.();
+  const raw = window.desktopBridge?.getConnectionCatalog
+    ? await window.desktopBridge.getConnectionCatalog()
+    : localStorage.getItem(WEB_CONNECTION_CATALOG_KEY);
   if (!raw) return EMPTY_CONNECTION_CATALOG_DOCUMENT;
   try {
     return decodeCatalog(raw);
@@ -45,8 +54,21 @@ async function readCatalog() {
 }
 
 async function writeCatalog(catalog: typeof ConnectionCatalogDocument.Type) {
-  const stored = await window.desktopBridge?.setConnectionCatalog?.(encodeCatalog(catalog));
-  if (stored !== true) throw new Error("Desktop connection storage is unavailable.");
+  const encoded = encodeCatalog(catalog);
+  if (window.desktopBridge?.setConnectionCatalog) {
+    const stored = await window.desktopBridge.setConnectionCatalog(encoded);
+    if (stored !== true) throw new Error("Desktop connection storage is unavailable.");
+    return;
+  }
+  localStorage.setItem(WEB_CONNECTION_CATALOG_KEY, encoded);
+}
+
+export async function removeRelayConnections(): Promise<void> {
+  const catalog = await readCatalog();
+  const next = catalog.targets
+    .filter((target) => target._tag === "RelayConnectionTarget")
+    .reduce((current, target) => removeConnectionFromCatalog(current, target), catalog);
+  if (next !== catalog) await writeCatalog(next);
 }
 
 export async function listManualConnections(): Promise<readonly SavedManualConnection[]> {
@@ -123,6 +145,20 @@ export async function registerManualSsh(target: DesktopSshEnvironmentTarget) {
   return descriptor.environmentId;
 }
 
+export async function registerRelayConnection(input: {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+}): Promise<void> {
+  await writeCatalog(
+    registerConnectionInCatalog(
+      await readCatalog(),
+      new RelayConnectionRegistration({
+        target: new RelayConnectionTarget(input),
+      }),
+    ),
+  );
+}
+
 export async function removeManualConnection(environmentId: string) {
   const catalog = await readCatalog();
   const target = catalog.targets.find((entry) => entry.environmentId === environmentId);
@@ -195,7 +231,8 @@ export async function resolveManualConnectionSocketUrl(environmentId: string): P
       }).pipe(Effect.provide(FetchHttpClient.layer)),
     );
   } else {
-    throw new Error("Relay connections require the cloud connection runtime.");
+    const { resolveRelayConnectionSocketUrl } = await import("~/cloud/runtime");
+    socketUrl = await resolveRelayConnectionSocketUrl(target.environmentId);
   }
 
   return socketUrl;

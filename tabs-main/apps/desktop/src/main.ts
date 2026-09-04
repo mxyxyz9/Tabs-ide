@@ -3,6 +3,8 @@ import * as Crypto from "node:crypto";
 import * as FS from "node:fs";
 import * as OS from "node:os";
 import * as Path from "node:path";
+import { createClerkBridge } from "@clerk/electron";
+import { storage as clerkStorage } from "@clerk/electron/storage";
 
 import {
   app,
@@ -183,7 +185,6 @@ const DESKTOP_SCHEME = "tabs";
 // a static external and folds the branch away.  A function body is opaque to the bundler.
 function resolveRootDir(): string {
   // Dynamic require ensures the bundler cannot statically evaluate this branch.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const _electron = require("electron") as typeof import("electron");
   if (_electron.app.isPackaged && process.resourcesPath) {
     return process.resourcesPath;
@@ -2753,10 +2754,18 @@ app.setPath("userData", resolveUserDataPath());
 
 configureAppIdentity();
 
-const hasSingleInstanceLock = app.requestSingleInstanceLock();
-if (!hasSingleInstanceLock) {
+// Clerk owns the single-instance lock so OAuth callbacks are forwarded to the
+// running process on Windows and Linux. Re-acquiring it here would make the
+// primary instance reject itself.
+const clerkBridge = createClerkBridge({
+  storage: clerkStorage({ path: STATE_DIR }),
+  passkeys: true,
+  renderer: { scheme: DESKTOP_SCHEME, host: "app" },
+});
+if (!clerkBridge.isPrimaryInstance) {
   app.quit();
 }
+app.once("will-quit", () => clerkBridge.cleanup());
 
 app.on("second-instance", () => {
   const targetWindow = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null;
@@ -3091,7 +3100,7 @@ app.on("before-quit", (event) => {
   })();
 });
 
-if (hasSingleInstanceLock) {
+if (clerkBridge.isPrimaryInstance) {
   app
     .whenReady()
     .then(() => {

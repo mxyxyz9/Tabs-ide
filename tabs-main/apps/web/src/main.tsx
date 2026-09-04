@@ -1,5 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { ClerkProvider } from "@clerk/react";
+import { ClerkProvider as ElectronClerkProvider } from "@clerk/electron/react";
+import { passkeys } from "@clerk/electron/passkeys";
 import { createHashHistory, createBrowserHistory } from "@tanstack/react-router";
 
 import "@xterm/xterm/css/xterm.css";
@@ -11,6 +14,8 @@ import { isElectron } from "./env";
 import { getRouter } from "./router";
 import { APP_DISPLAY_NAME } from "./branding";
 import { AppRoot } from "./AppRoot";
+import { ManagedRelayAuthProvider } from "./cloud/managedAuth";
+import { hasCloudPublicConfig, resolveCloudPublicConfig } from "./cloud/publicConfig";
 
 // Electron loads the app from a file-backed shell, so hash history avoids path resolution issues.
 const history = isElectron ? createHashHistory() : createBrowserHistory();
@@ -28,6 +33,25 @@ initializeWorkspaceShellState();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <AppRoot router={router} />
+    {hasCloudPublicConfig() ? (
+      isElectron ? (
+        <ElectronClerkProvider
+          publishableKey={resolveCloudPublicConfig().clerkPublishableKey!}
+          passkeys={passkeys}
+        >
+          <ManagedRelayAuthProvider>
+            <AppRoot router={router} />
+          </ManagedRelayAuthProvider>
+        </ElectronClerkProvider>
+      ) : (
+        <ClerkProvider publishableKey={resolveCloudPublicConfig().clerkPublishableKey!}>
+          <ManagedRelayAuthProvider>
+            <AppRoot router={router} />
+          </ManagedRelayAuthProvider>
+        </ClerkProvider>
+      )
+    ) : (
+      <AppRoot router={router} />
+    )}
   </React.StrictMode>,
 );
