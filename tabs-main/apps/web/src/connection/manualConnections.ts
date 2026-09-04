@@ -139,7 +139,7 @@ export async function removeManualConnection(environmentId: string) {
   await writeCatalog(removeConnectionFromCatalog(catalog, target));
 }
 
-export async function connectManualConnection(environmentId: string): Promise<never> {
+export async function resolveManualConnectionSocketUrl(environmentId: string): Promise<string> {
   const catalog = await readCatalog();
   const target = catalog.targets.find((entry) => entry.environmentId === environmentId);
   if (!target) throw new Error("The saved environment no longer exists.");
@@ -198,8 +198,14 @@ export async function connectManualConnection(environmentId: string): Promise<ne
     throw new Error("Relay connections require the cloud connection runtime.");
   }
 
+  return socketUrl;
+}
+
+export async function connectManualConnection(environmentId: string): Promise<never> {
+  const socketUrl = await resolveManualConnectionSocketUrl(environmentId);
   const destination = new URL(window.location.href);
   destination.searchParams.set("tabsWsUrl", socketUrl);
+  destination.searchParams.set("tabsEnvironmentId", environmentId);
   window.location.assign(destination);
   return await new Promise<never>(() => undefined);
 }

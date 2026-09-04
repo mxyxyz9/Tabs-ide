@@ -78,6 +78,7 @@ export class WsTransport {
   private state: TransportState = "connecting";
   private url: string;
   private readonly configuredUrl: string | undefined;
+  private refreshingRemoteTicket = false;
 
   constructor(url?: string) {
     this.configuredUrl = url;
@@ -231,6 +232,35 @@ export class WsTransport {
       return;
     }
 
+    const environmentId =
+      this.configuredUrl === undefined && typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("tabsEnvironmentId")
+        : null;
+    if (this.reconnectAttempt > 0 && environmentId && !this.refreshingRemoteTicket) {
+      this.refreshingRemoteTicket = true;
+      void import("./connection/manualConnections")
+        .then(({ resolveManualConnectionSocketUrl }) =>
+          resolveManualConnectionSocketUrl(environmentId),
+        )
+        .then((socketUrl) => {
+          this.url = socketUrl;
+          this.refreshingRemoteTicket = false;
+          this.openSocket();
+        })
+        .catch((error) => {
+          this.refreshingRemoteTicket = false;
+          console.warn("Failed to refresh the remote WebSocket ticket", { error });
+          this.scheduleReconnect();
+        });
+      return;
+    }
+
+    this.openSocket();
+  }
+
+  private openSocket() {
+    if (this.disposed) return;
+
     this.state = this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
     // Resolving the URL (a sync IPC to the desktop main) or constructing the
     // socket can throw — e.g. during a fresh `dev:desktop` launch when the
@@ -240,7 +270,9 @@ export class WsTransport {
     // permanently — leaving the renderer stuck until a manual refresh.
     let ws: WebSocket;
     try {
-      this.url = this.resolveUrl(this.configuredUrl);
+      if (this.reconnectAttempt === 0 || this.configuredUrl !== undefined) {
+        this.url = this.resolveUrl(this.configuredUrl);
+      }
       ws = new WebSocket(this.url);
     } catch (error) {
       console.warn("WebSocket failed to initialize; scheduling reconnect", {
