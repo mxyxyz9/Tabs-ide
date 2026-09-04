@@ -14,6 +14,8 @@ verification evidence, not just a matching type or placeholder.
       and renew those tickets after disconnects or system resume.
 - [ ] Route each project/thread runtime through its selected environment instead of the current
       process-wide transport.
+- [x] Scope environment routes, read-model hydration, chat commands, Git operations, code-file
+      queries, and command-palette workspace browsing/project creation to the selected environment.
 - [x] Surface direct/SSH/Tailscale reachability and connection repair in settings.
 - [ ] Add managed cloud relay account discovery and status to the main workspace.
 - [x] Replace the native SSH password prompt with an accessible in-app credential dialog.

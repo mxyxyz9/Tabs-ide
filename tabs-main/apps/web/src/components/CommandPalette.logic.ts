@@ -53,6 +53,27 @@ export interface CommandPaletteView {
 
 export type CommandPaletteMode = "root" | "root-browse" | "submenu" | "submenu-browse";
 
+export function resolveCommandPaletteWorkspaceContext(input: {
+  projects: ReadonlyArray<Project>;
+  threads: ReadonlyArray<Thread>;
+  threadId: string | null;
+  environmentId: string | null;
+}): { project: Project | null; thread: Thread | null } {
+  const thread =
+    input.threads.find(
+      (candidate) =>
+        candidate.id === input.threadId &&
+        (input.environmentId === null || candidate.environmentId === input.environmentId),
+    ) ?? null;
+  const project =
+    input.projects.find(
+      (candidate) =>
+        candidate.id === thread?.projectId &&
+        (input.environmentId === null || candidate.environmentId === input.environmentId),
+    ) ?? null;
+  return { project, thread };
+}
+
 export function filterBrowseEntries(input: {
   browseEntries: ReadonlyArray<FilesystemBrowseEntry>;
   browseFilterQuery: string;

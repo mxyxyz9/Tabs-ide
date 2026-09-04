@@ -28,6 +28,7 @@ import { Badge } from "~/components/ui/badge";
 import { toastManager } from "~/components/ui/toast";
 import { GitHubIcon, GitLabIcon, AzureDevOpsIcon, BitbucketIcon } from "~/components/Icons";
 import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { useSourceControlDiscovery } from "~/lib/sourceControlReactQuery";
@@ -50,6 +51,7 @@ import {
   getCommandPaletteMode,
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
+  resolveCommandPaletteWorkspaceContext,
   type CommandPaletteActionItem,
   type CommandPaletteGroup,
   type CommandPaletteSubmenuItem,
@@ -197,10 +199,16 @@ function OpenCommandPaletteDialog(props: {
 
   const params = useParams({ strict: false });
   const currentThreadId = (params as any).threadId ?? null;
-  const currentThread = threads.find((thread) => thread.id === currentThreadId);
+  const routeEnvironmentId = (params as any).environmentId ?? null;
+  const { project: currentProject, thread: currentThread } = resolveCommandPaletteWorkspaceContext({
+    projects,
+    threads,
+    threadId: currentThreadId,
+    environmentId: routeEnvironmentId,
+  });
   const currentProjectId = currentThread?.projectId ?? null;
-  const currentProjectCwd =
-    projects.find((project) => project.id === currentProjectId)?.cwd ?? null;
+  const currentProjectCwd = currentProject?.cwd ?? null;
+  const currentEnvironmentId = currentProject?.environmentId ?? routeEnvironmentId;
 
   // Checks if the search query is a local path query
   const isFilesystemBrowseQuery = (val: string): boolean => {
@@ -246,17 +254,16 @@ function OpenCommandPaletteDialog(props: {
       return;
     }
 
-    const api = readNativeApi();
-    if (!api) return;
-
     let active = true;
     setIsBrowsePending(true);
 
-    api.projects
-      .filesystemBrowse({
-        partialPath: browseDirectoryPath,
-        ...(currentProjectCwd ? { cwd: currentProjectCwd } : {}),
-      })
+    void environmentApi(currentEnvironmentId)
+      .then((api) =>
+        api.projects.filesystemBrowse({
+          partialPath: browseDirectoryPath,
+          ...(currentProjectCwd ? { cwd: currentProjectCwd } : {}),
+        }),
+      )
       .then((res) => {
         if (!active) return;
         setBrowseEntries([...res.entries]);
@@ -272,12 +279,11 @@ function OpenCommandPaletteDialog(props: {
     return () => {
       active = false;
     };
-  }, [isBrowsing, browseDirectoryPath, currentProjectCwd]);
+  }, [isBrowsing, browseDirectoryPath, currentEnvironmentId, currentProjectCwd]);
 
   const addProjectFromPath = useCallback(
     async (cwd: string) => {
-      const api = readNativeApi();
-      if (!api) return;
+      const api = await environmentApi(currentEnvironmentId);
 
       const projectId = newProjectId();
       const createdAt = new Date().toISOString();
@@ -293,12 +299,15 @@ function OpenCommandPaletteDialog(props: {
           defaultModelSelection: makeAppModelSelection("codex", DEFAULT_MODEL),
           createdAt,
         });
-        await handleNewThread(projectId).catch(() => undefined);
+        await handleNewThread(
+          projectId,
+          currentEnvironmentId ? { environmentId: currentEnvironmentId } : undefined,
+        ).catch(() => undefined);
       } catch (error) {
         console.error("Failed to add project", error);
       }
     },
-    [handleNewThread],
+    [currentEnvironmentId, handleNewThread],
   );
 
   const openProjectFromSearch = useMemo(
