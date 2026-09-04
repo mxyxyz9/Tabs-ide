@@ -1,5 +1,6 @@
 import {
   CODEX_REASONING_EFFORT_OPTIONS,
+  type EnvironmentId,
   type ClaudeCodeEffort,
   type CodexReasoningEffort,
   type ModelSlug,
@@ -2398,11 +2399,27 @@ export function useEffectiveComposerModelState(input: {
  * sees the server thread before the draft is removed — avoids a redirect
  * to `/` caused by a gap where neither draft nor server thread exists.
  */
-export function clearPromotedDraftThreads(serverThreadIds: ReadonlySet<ThreadId>): void {
+export function clearPromotedDraftThreads(
+  serverThreadIds: ReadonlySet<ThreadId>,
+  environmentId?: EnvironmentId | null,
+): void {
   const store = useComposerDraftStore.getState();
   const draftThreadIds = Object.keys(store.draftThreadsByThreadId) as ThreadId[];
+  const environmentPrefix = environmentId ? `${encodeURIComponent(environmentId)}::` : null;
   for (const draftId of draftThreadIds) {
-    if (serverThreadIds.has(draftId)) {
+    const separator = draftId.indexOf("::");
+    if (separator >= 0 && environmentPrefix && !draftId.startsWith(environmentPrefix)) {
+      continue;
+    }
+    let semanticDraftId = draftId;
+    if (separator >= 0) {
+      try {
+        semanticDraftId = ThreadId.makeUnsafe(decodeURIComponent(draftId.slice(separator + 2)));
+      } catch {
+        semanticDraftId = ThreadId.makeUnsafe(draftId.slice(separator + 2));
+      }
+    }
+    if (serverThreadIds.has(draftId) || serverThreadIds.has(semanticDraftId)) {
       store.clearDraftThread(draftId);
     }
   }

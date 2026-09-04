@@ -43,7 +43,13 @@ import {
 } from "../state/readModel";
 import { appAtomRegistry } from "../state/atomRegistry";
 import { readModelStateAtom } from "../state/readModel";
-import { composerDraftActions, composerDraftsAtom } from "../state/composerDrafts";
+import {
+  composerDraftActions,
+  composerDraftsAtom,
+  createScopedComposerDraftActions,
+  scopedComposerThreadId,
+  scopedComposerProjectId,
+} from "../state/composerDrafts";
 import { workspaceShellAtom } from "../state/workspaceShell";
 import { applyServerConfigUpdate, refreshServerConfig } from "../state/settings";
 import { threadsHydratedAtom } from "../state/threads";
@@ -246,7 +252,7 @@ function EventRouter() {
       if (disposed) return;
       latestSequence = Math.max(latestSequence, snapshot.snapshotSequence);
       syncServerReadModel(snapshot, primaryEnvironmentId ?? undefined);
-      clearPromotedDraftThreads(new Set(snapshot.threads.map((t) => t.id)));
+      clearPromotedDraftThreads(new Set(snapshot.threads.map((t) => t.id)), primaryEnvironmentId);
       const draftThreadIds = Object.keys(
         appAtomRegistry.get(composerDraftsAtom).draftThreadsByThreadId,
       ) as ThreadId[];
@@ -366,17 +372,26 @@ function EventRouter() {
           appAtomRegistry.get(readModelStateAtom).threads.map((thread) => thread.id),
         );
         const composerDraftStore = appAtomRegistry.get(composerDraftsAtom);
+        const scopedCurrentThreadId =
+          currentThreadId && primaryEnvironmentId
+            ? scopedComposerThreadId(primaryEnvironmentId, currentThreadId)
+            : currentThreadId;
         const activeDraftThread = currentThreadId
-          ? composerDraftStore.draftThreadsByThreadId[currentThreadId]
+          ? (composerDraftStore.draftThreadsByThreadId[scopedCurrentThreadId!] ??
+            composerDraftStore.draftThreadsByThreadId[currentThreadId])
           : null;
         const activeComposerDraft = currentThreadId
-          ? composerDraftStore.draftsByThreadId[currentThreadId]
+          ? (composerDraftStore.draftsByThreadId[scopedCurrentThreadId!] ??
+            composerDraftStore.draftsByThreadId[currentThreadId])
           : null;
         const shouldReplaceEmptyDraftSelection = Boolean(
           currentThreadId &&
           activeDraftThread &&
           !snapshotThreadIds.has(currentThreadId) &&
-          activeDraftThread.projectId === payload.bootstrapProjectId &&
+          (activeDraftThread.projectId === payload.bootstrapProjectId ||
+            (primaryEnvironmentId &&
+              activeDraftThread.projectId ===
+                scopedComposerProjectId(primaryEnvironmentId, payload.bootstrapProjectId))) &&
           !draftHasVisibleContent(activeComposerDraft),
         );
 
@@ -391,7 +406,10 @@ function EventRouter() {
         }
 
         if (shouldReplaceEmptyDraftSelection && currentThreadId) {
-          composerDraftActions.clearDraftThread(currentThreadId);
+          (primaryEnvironmentId
+            ? createScopedComposerDraftActions(primaryEnvironmentId)
+            : composerDraftActions
+          ).clearDraftThread(currentThreadId);
         }
         if (primaryEnvironmentId) {
           await navigate({

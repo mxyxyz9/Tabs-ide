@@ -161,7 +161,9 @@ import {
 } from "../composerDraftStore";
 import {
   composerDraftActions,
+  createScopedComposerDraftActions,
   composerDraftsAtom,
+  scopedComposerThreadId,
   useComposerDraft,
   useDraftThread,
 } from "../state/composerDrafts";
@@ -400,7 +402,7 @@ export default function ChatView({
   });
   const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
-  const composerDraft = useComposerDraft(threadId);
+  const composerDraft = useComposerDraft(threadId, environmentId);
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
   const composerTerminalContexts = composerDraft.terminalContexts;
@@ -439,8 +441,12 @@ export default function ChatView({
     getDraftThread,
     setProjectDraftThreadId,
     clearProjectDraftThreadId,
-  } = composerDraftActions;
-  const draftThread = useDraftThread(threadId);
+    setProviderModelOptions: setComposerProviderModelOptions,
+  } = useMemo(
+    () => (environmentId ? createScopedComposerDraftActions(environmentId) : composerDraftActions),
+    [environmentId],
+  );
+  const draftThread = useDraftThread(threadId, environmentId);
   const promptRef = useRef(prompt);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isDragOverComposer, setIsDragOverComposer] = useState(false);
@@ -831,7 +837,7 @@ export default function ChatView({
   const selectedProvider: ProviderKind = (lockedProvider ??
     unlockedSelectedProvider) as ProviderKind;
   const { modelOptions: composerModelOptions, selectedModel } = useEffectiveComposerModelState({
-    threadId,
+    threadId: environmentId ? scopedComposerThreadId(environmentId, threadId) : threadId,
     providers: providerStatuses,
     selectedProvider,
     threadModelSelection: activeThread?.modelSelection,
@@ -1724,7 +1730,7 @@ export default function ChatView({
         const nextOptions = currentOptions.map((o) =>
           o.id === "mode" ? { ...o, currentValue: mode } : o,
         );
-        composerDraftActions.setProviderModelOptions(threadId, selectedProvider, nextOptions, {
+        setComposerProviderModelOptions(threadId, selectedProvider, nextOptions, {
           persistSticky: true,
           model: selectedModel,
         });
@@ -1742,7 +1748,7 @@ export default function ChatView({
       composerModelOptions,
       selectedProvider,
       selectedModel,
-      composerDraftActions,
+      setComposerProviderModelOptions,
     ],
   );
   const toggleInteractionMode = useCallback(() => {
@@ -2178,9 +2184,12 @@ export default function ChatView({
         clearComposerDraftPersistedAttachments(threadId);
         return;
       }
+      const composerStorageThreadId = environmentId
+        ? scopedComposerThreadId(environmentId, threadId)
+        : threadId;
       const getPersistedAttachmentsForThread = () =>
-        appAtomRegistry.get(composerDraftsAtom).draftsByThreadId[threadId]?.persistedAttachments ??
-        [];
+        appAtomRegistry.get(composerDraftsAtom).draftsByThreadId[composerStorageThreadId]
+          ?.persistedAttachments ?? [];
       try {
         const currentPersistedAttachments = getPersistedAttachmentsForThread();
         const existingPersistedById = new Map(
@@ -2236,6 +2245,7 @@ export default function ChatView({
     composerImages,
     syncComposerDraftPersistedAttachments,
     threadId,
+    environmentId,
   ]);
 
   const closeExpandedImage = useCallback(() => {
@@ -3546,7 +3556,7 @@ export default function ChatView({
         handleInteractionModeChange(newMode);
       }
 
-      composerDraftActions.setProviderModelOptions(threadId, selectedProvider, nextOptions, {
+      setComposerProviderModelOptions(threadId, selectedProvider, nextOptions, {
         persistSticky: true,
         model: selectedModel,
       });
@@ -3557,7 +3567,7 @@ export default function ChatView({
       selectedModel,
       interactionMode,
       handleInteractionModeChange,
-      composerDraftActions,
+      setComposerProviderModelOptions,
     ],
   );
   const providerTraitsMenuContent = renderProviderTraitsMenuContent({

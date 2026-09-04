@@ -11,7 +11,7 @@ import {
   type DiffPanelMode,
 } from "../components/DiffPanelShell";
 import { useComposerDraftStore } from "../composerDraftStore";
-import { composerDraftsAtom } from "../state/composerDrafts";
+import { composerDraftsAtom, scopedComposerThreadId } from "../state/composerDrafts";
 import { threadsAtom, threadsHydratedAtom } from "../state/threads";
 import { useAtomValue } from "@effect/atom-react";
 import {
@@ -175,8 +175,13 @@ function ChatThreadRouteView() {
   const threadExists = useAtomValue(threadsAtom, (threads) =>
     threads.some((thread) => thread.id === threadId && thread.environmentId === environmentId),
   );
-  const draftThreadExists = useAtomValue(composerDraftsAtom, (state) =>
-    Object.hasOwn(state.draftThreadsByThreadId, threadId),
+  const draftThreadExists = useAtomValue(
+    composerDraftsAtom,
+    (state) =>
+      Object.hasOwn(
+        state.draftThreadsByThreadId,
+        scopedComposerThreadId(environmentId, threadId),
+      ) || Object.hasOwn(state.draftThreadsByThreadId, threadId),
   );
   const routeThreadExists = threadExists || draftThreadExists;
   const diffOpen = search.diff === "1";

@@ -5,7 +5,7 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
 import { projectsAtom, threadsAtom } from "../state/threads";
 import { useWorkspaceActiveProjectId, useRememberedThreadId } from "../state/workspaceShell";
-import { composerDraftActions } from "../state/composerDrafts";
+import { composerDraftActions, createScopedComposerDraftActions } from "../state/composerDrafts";
 import { useAtomValue } from "@effect/atom-react";
 
 function ChatIndexRouteView() {
@@ -21,6 +21,9 @@ function ChatIndexRouteView() {
   const activeProject = activeProjectId
     ? (projects.find((project) => project.id === activeProjectId) ?? null)
     : null;
+  const draftActions = activeProject?.environmentId
+    ? createScopedComposerDraftActions(activeProject.environmentId)
+    : composerDraftActions;
   const projectThreads = activeProject
     ? threads.filter(
         (thread) =>
@@ -30,7 +33,7 @@ function ChatIndexRouteView() {
     : [];
 
   const rememberedDraft = rememberedThreadId
-    ? composerDraftActions.getDraftThread(rememberedThreadId)
+    ? draftActions.getDraftThread(rememberedThreadId)
     : null;
   const isRememberedDraft = Boolean(rememberedDraft);
   const isRememberedSaved = Boolean(
@@ -38,7 +41,7 @@ function ChatIndexRouteView() {
   );
 
   const projectDraft = activeProjectId
-    ? composerDraftActions.getDraftThreadByProjectId(activeProjectId)
+    ? draftActions.getDraftThreadByProjectId(activeProjectId)
     : null;
 
   const targetThreadId =
