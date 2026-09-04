@@ -26,6 +26,11 @@ verification evidence, not just a matching type or placeholder.
 - [x] Adapt the broker host protocol to Tabs' `WebContentsView` browser sessions.
 - [x] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
       the browser host.
+- [x] Route automation viewport changes through the same persistent per-session state as human
+      controls, including fill, freeform, named Chrome-device presets, orientation, and measured
+      guest-viewport readiness.
+- [x] Populate automation snapshots with bounded live console, network, and action diagnostics
+      instead of placeholder arrays.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
 - [ ] Add annotation picking, recordings, and artifact reveal/copy. Automation snapshots already
       include PNG screenshots.
