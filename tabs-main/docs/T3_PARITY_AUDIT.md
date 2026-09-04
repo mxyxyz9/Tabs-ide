@@ -45,8 +45,9 @@ verification evidence, not just a matching type or placeholder.
 - [x] Persist picked preview context, render removable accessible composer cards, include the real
       screenshot through the production image path, validate the expanded provider prompt, and
       restore annotation state after failed dispatch.
-- [ ] Add T3's richer annotation editor for authoring regions, ink strokes, style changes, and
-      comments. The contract and composer transport already preserve these fields.
+- [x] Add a screenshot-coordinate annotation editor for pointer and keyboard-authored regions,
+      ink strokes, real-element style changes, and comments, then attach the enriched payload
+      through the existing composer transport.
 - [x] Expose preview automation through the authenticated HTTP MCP transport.
 
 Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;

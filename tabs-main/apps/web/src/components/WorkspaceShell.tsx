@@ -9,6 +9,7 @@ import {
   type DesktopCodeHostState,
   type GitApplyHunkMode,
   type ProjectId,
+  type PreviewAnnotationPayload,
   ThreadId,
   type GitBranch,
   type GitStatusFile,
@@ -18,6 +19,7 @@ import {
 } from "@tabs/contracts";
 import { makeAppModelSelection } from "../modelSelection";
 import { TestingTool } from "./testing/TestingTool";
+import { PreviewAnnotationEditor } from "./PreviewAnnotationEditor";
 import {
   type ProjectToolKind,
   type ProjectWorkspaceSettings,
@@ -6970,6 +6972,7 @@ function DesktopBrowserChrome(props: {
   const bridge = window.desktopBridge;
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
   const [pickingElement, setPickingElement] = useState(false);
+  const [pendingAnnotation, setPendingAnnotation] = useState<PreviewAnnotationPayload | null>(null);
 
   const sessionArg = props.sessionId
     ? { projectId: props.projectId, sessionId: props.sessionId }
@@ -7009,16 +7012,7 @@ function DesktopBrowserChrome(props: {
           : { projectId: props.projectId },
       );
       if (!annotation) return;
-      window.dispatchEvent(
-        new CustomEvent<PreviewAnnotationPickedDetail>(PREVIEW_ANNOTATION_PICKED_EVENT, {
-          detail: { projectId: props.projectId, annotation },
-        }),
-      );
-      toastManager.add({
-        type: "success",
-        title: "Element attached to chat",
-        description: "Review or remove the preview context in the composer before sending.",
-      });
+      setPendingAnnotation(annotation);
     } catch (cause) {
       toastManager.add({
         type: "error",
@@ -7029,6 +7023,22 @@ function DesktopBrowserChrome(props: {
       setPickingElement(false);
     }
   }, [bridge, pickingElement, props.projectId, props.sessionId]);
+  const attachAnnotation = useCallback(
+    (annotation: PreviewAnnotationPayload) => {
+      window.dispatchEvent(
+        new CustomEvent<PreviewAnnotationPickedDetail>(PREVIEW_ANNOTATION_PICKED_EVENT, {
+          detail: { projectId: props.projectId, annotation },
+        }),
+      );
+      toastManager.add({
+        type: "success",
+        title: "Element attached to chat",
+        description: "Review or remove the preview context in the composer before sending.",
+      });
+      setPendingAnnotation(null);
+    },
+    [props.projectId],
+  );
 
   return (
     <div
@@ -7323,6 +7333,14 @@ function DesktopBrowserChrome(props: {
         )}
       >
         {props.children}
+        {pendingAnnotation ? (
+          <PreviewAnnotationEditor
+            key={pendingAnnotation.id}
+            annotation={pendingAnnotation}
+            onCancel={() => setPendingAnnotation(null)}
+            onAttach={attachAnnotation}
+          />
+        ) : null}
       </div>
     </div>
   );
