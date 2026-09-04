@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./state": {
+      "types": "./src/state.ts",
+      "default": "./src/state.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"

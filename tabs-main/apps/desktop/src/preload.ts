@@ -24,6 +24,10 @@ const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
 const GET_WS_URL_CHANNEL = "desktop:get-ws-url";
+const GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL = "desktop:get-local-environment-bootstraps";
+const GET_CONNECTION_CATALOG_CHANNEL = "desktop:get-connection-catalog";
+const SET_CONNECTION_CATALOG_CHANNEL = "desktop:set-connection-catalog";
+const CLEAR_CONNECTION_CATALOG_CHANNEL = "desktop:clear-connection-catalog";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -62,6 +66,15 @@ const SET_PERSISTED_ITEM_CHANNEL = "desktop:set-persisted-item";
 const REMOVE_PERSISTED_ITEM_CHANNEL = "desktop:remove-persisted-item";
 
 contextBridge.exposeInMainWorld("desktopBridge", {
+  getClientPlatform: () => process.platform,
+  getLocalEnvironmentBootstraps: () => {
+    const result = ipcRenderer.sendSync(GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL);
+    return Array.isArray(result) ? result : [];
+  },
+  getConnectionCatalog: () => ipcRenderer.invoke(GET_CONNECTION_CATALOG_CHANNEL),
+  setConnectionCatalog: (catalog: string) =>
+    ipcRenderer.invoke(SET_CONNECTION_CATALOG_CHANNEL, catalog),
+  clearConnectionCatalog: () => ipcRenderer.invoke(CLEAR_CONNECTION_CATALOG_CHANNEL),
   getWsUrl: () => {
     const result = ipcRenderer.sendSync(GET_WS_URL_CHANNEL);
     return typeof result === "string" ? result : null;

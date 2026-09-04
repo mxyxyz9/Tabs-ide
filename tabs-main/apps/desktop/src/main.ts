@@ -98,6 +98,10 @@ const UPDATE_GET_STATE_CHANNEL = "desktop:update-get-state";
 const UPDATE_DOWNLOAD_CHANNEL = "desktop:update-download";
 const UPDATE_INSTALL_CHANNEL = "desktop:update-install";
 const GET_WS_URL_CHANNEL = "desktop:get-ws-url";
+const GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL = "desktop:get-local-environment-bootstraps";
+const GET_CONNECTION_CATALOG_CHANNEL = "desktop:get-connection-catalog";
+const SET_CONNECTION_CATALOG_CHANNEL = "desktop:set-connection-catalog";
+const CLEAR_CONNECTION_CATALOG_CHANNEL = "desktop:clear-connection-catalog";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -1579,6 +1583,39 @@ function registerIpcHandlers(): void {
   ipcMain.removeAllListeners(GET_WS_URL_CHANNEL);
   ipcMain.on(GET_WS_URL_CHANNEL, (event) => {
     event.returnValue = backendWsUrl;
+  });
+
+  ipcMain.removeAllListeners(GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL);
+  ipcMain.on(GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL, (event) => {
+    event.returnValue = backendHttpUrl && backendWsUrl
+      ? [{
+          id: "primary",
+          label: OS.hostname() || "This Mac",
+          httpBaseUrl: backendHttpUrl,
+          wsBaseUrl: backendWsUrl,
+        }]
+      : [];
+  });
+
+  const connectionCatalogPath = Path.join(app.getPath("userData"), "connection-catalog.json");
+  ipcMain.removeHandler(GET_CONNECTION_CATALOG_CHANNEL);
+  ipcMain.handle(GET_CONNECTION_CATALOG_CHANNEL, async () => {
+    try {
+      return await FS.promises.readFile(connectionCatalogPath, "utf8");
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ENOENT" ? null : Promise.reject(error);
+    }
+  });
+  ipcMain.removeHandler(SET_CONNECTION_CATALOG_CHANNEL);
+  ipcMain.handle(SET_CONNECTION_CATALOG_CHANNEL, async (_event, catalog: unknown) => {
+    if (typeof catalog !== "string") return false;
+    await FS.promises.mkdir(Path.dirname(connectionCatalogPath), { recursive: true });
+    await FS.promises.writeFile(connectionCatalogPath, catalog, { encoding: "utf8", mode: 0o600 });
+    return true;
+  });
+  ipcMain.removeHandler(CLEAR_CONNECTION_CATALOG_CHANNEL);
+  ipcMain.handle(CLEAR_CONNECTION_CATALOG_CHANNEL, async () => {
+    await FS.promises.rm(connectionCatalogPath, { force: true });
   });
 
   ipcMain.removeHandler(GET_CONFIRM_BEFORE_QUIT_CHANNEL);

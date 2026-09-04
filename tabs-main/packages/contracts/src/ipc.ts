@@ -1079,6 +1079,11 @@ export interface BrowserProfileDomainInfo {
 }
 
 export interface DesktopBridge {
+  getClientPlatform?: () => string;
+  getLocalEnvironmentBootstraps: () => readonly DesktopEnvironmentBootstrap[];
+  getConnectionCatalog?: () => Promise<string | null>;
+  setConnectionCatalog?: (catalog: string) => Promise<boolean>;
+  clearConnectionCatalog?: () => Promise<void>;
   getWsUrl: () => string | null;
   cloneRepository: (input: DesktopCloneRepositoryInput) => Promise<DesktopCloneRepositoryResult>;
   getPersistedItem: (key: string) => Promise<string | null>;
