@@ -27,7 +27,8 @@ child.stderr.on("data", (chunk) => {
 });
 
 const timeout = setTimeout(() => {
-  child.kill();
+  child.kill("SIGTERM");
+  setTimeout(() => child.kill("SIGKILL"), 2_000).unref();
 }, 8_000);
 
 child.on("exit", () => {
