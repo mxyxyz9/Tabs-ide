@@ -176,6 +176,8 @@ import { shouldUseCompactComposerFooter } from "./composerFooterLayout";
 import { terminalActions, useThreadTerminalState } from "../state/terminal";
 import { projectsAtom, threadsAtom } from "../state/threads";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
+import { ComposerPromptLengthValidation } from "./chat/ComposerPromptLengthValidation";
+import { getComposerPromptLengthValidationMessage } from "./chat/composerSubmission";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { ChatHeader } from "./chat/ChatHeader";
@@ -437,6 +439,9 @@ export default function ChatView({
     Record<ThreadId, string | null>
   >({});
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
+  const [submissionValidationMessage, setSubmissionValidationMessage] = useState<string | null>(
+    null,
+  );
   const [sendStartedAt, setSendStartedAt] = useState<string | null>(null);
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
@@ -2586,6 +2591,12 @@ export default function ChatView({
         draftText: trimmed,
         planMarkdown: activeProposedPlan.planMarkdown,
       });
+      const validationMessage = getComposerPromptLengthValidationMessage(followUp.text);
+      if (validationMessage) {
+        setSubmissionValidationMessage(validationMessage);
+        return;
+      }
+      setSubmissionValidationMessage(null);
       promptRef.current = "";
       clearComposerDraftContent(activeThread.id);
       setComposerHighlightedItemId(null);
@@ -2624,6 +2635,21 @@ export default function ChatView({
       }
       return;
     }
+    const providerInputForValidation = formatOutgoingPrompt({
+      provider: selectedProvider,
+      model: selectedModel,
+      models: selectedProviderModels,
+      effort: selectedPromptEffort,
+      text:
+        appendTerminalContextsToPrompt(promptForSend, sendableComposerTerminalContexts) ||
+        IMAGE_ONLY_BOOTSTRAP_PROMPT,
+    });
+    const validationMessage = getComposerPromptLengthValidationMessage(providerInputForValidation);
+    if (validationMessage) {
+      setSubmissionValidationMessage(validationMessage);
+      return;
+    }
+    setSubmissionValidationMessage(null);
     if (!activeProject) return;
 
     // Check provider entitlement & authentication before initiating turn dispatch
@@ -3398,6 +3424,7 @@ export default function ChatView({
         return;
       }
       promptRef.current = nextPrompt;
+      setSubmissionValidationMessage(null);
       setPrompt(nextPrompt);
       const nextCursor = collapseExpandedComposerCursor(nextPrompt, nextPrompt.length);
       setComposerCursor(nextCursor);
@@ -3779,6 +3806,8 @@ export default function ChatView({
     hasTimelineEntries,
     isWorking,
   });
+  const composerPromptLengthValidationMessage =
+    submissionValidationMessage ?? getComposerPromptLengthValidationMessage(prompt);
   const composerSection = (
     <div className={cn("px-3 pt-1.5 sm:px-5 sm:pt-2", isGitRepo ? "pb-1" : "pb-3 sm:pb-4")}>
       <form
@@ -4245,7 +4274,11 @@ export default function ChatView({
                         type="submit"
                         size="sm"
                         className="h-9 rounded-full px-4 sm:h-8"
-                        disabled={isSendBusy || isConnecting}
+                        disabled={
+                          isSendBusy ||
+                          isConnecting ||
+                          Boolean(composerPromptLengthValidationMessage)
+                        }
                       >
                         {isConnecting || isSendBusy ? "Sending..." : "Refine"}
                       </Button>
@@ -4288,7 +4321,12 @@ export default function ChatView({
                     <button
                       type="submit"
                       className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-lg bg-foreground text-background transition-all duration-150 hover:bg-foreground/90 hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
-                      disabled={isSendBusy || isConnecting || !composerSendState.hasSendableContent}
+                      disabled={
+                        isSendBusy ||
+                        isConnecting ||
+                        !composerSendState.hasSendableContent ||
+                        Boolean(composerPromptLengthValidationMessage)
+                      }
                       aria-label={
                         isConnecting
                           ? "Connecting"
@@ -4339,6 +4377,7 @@ export default function ChatView({
                 ) : null}
               </div>
             </div>
+            <ComposerPromptLengthValidation message={composerPromptLengthValidationMessage} />
           </div>
         </div>
       </form>

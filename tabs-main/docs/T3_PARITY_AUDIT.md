@@ -86,6 +86,8 @@ an adapter over that engine.
       palettes, hot reload, remote theme selection, and retained local custom presets.
 - [x] Searchable keyboard-accessible command palette with project, thread, navigation, and action
       submenus. Tabs retains its existing implementation because it is already more complete.
+- [x] Enforce the provider contract's 120,000-character turn limit before side effects, preserve
+      oversized drafts, disable invalid submissions, and render accessible actionable feedback.
 - [ ] Remaining T3 chat actions and in-application documentation surfaces.
 
 Mobile applications and mobile-only protocol/UI work are explicitly excluded.
