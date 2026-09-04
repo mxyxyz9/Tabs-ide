@@ -100,6 +100,12 @@ import {
   PreviewResizeInput,
 } from "./preview";
 import {
+  PreviewAutomationHost,
+  PreviewAutomationHostFocus,
+  PreviewAutomationResponse,
+  PreviewAutomationStreamEvent,
+} from "./previewAutomation";
+import {
   TestingCaseCreateInput,
   TestingCaseDeleteInput,
   TestingCaseGroupUpdateInput,
@@ -330,6 +336,7 @@ export const WS_CHANNELS = {
   serverProvidersUpdated: "server.providersUpdated",
   usageUpdated: "usage.updated",
   previewEvent: "preview.event",
+  previewAutomationEvent: "preview.automationEvent",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -491,6 +498,9 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.previewRefresh, PreviewRefreshInput),
   tagRequestBody(WS_METHODS.previewClose, PreviewCloseInput),
   tagRequestBody(WS_METHODS.previewList, PreviewListInput),
+  tagRequestBody(WS_METHODS.previewAutomationConnect, PreviewAutomationHost),
+  tagRequestBody(WS_METHODS.previewAutomationFocusHost, PreviewAutomationHostFocus),
+  tagRequestBody(WS_METHODS.previewAutomationRespond, PreviewAutomationResponse),
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),
@@ -550,6 +560,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.terminalEvent]: typeof TerminalEvent.Type;
   readonly [WS_CHANNELS.usageUpdated]: ServerListProviderUsageResult;
   readonly [WS_CHANNELS.previewEvent]: PreviewEvent;
+  readonly [WS_CHANNELS.previewAutomationEvent]: PreviewAutomationStreamEvent;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -594,6 +605,10 @@ export const WsPushUsageUpdated = makeWsPushSchema(
   ServerListProviderUsageResult,
 );
 export const WsPushPreviewEvent = makeWsPushSchema(WS_CHANNELS.previewEvent, PreviewEvent);
+export const WsPushPreviewAutomationEvent = makeWsPushSchema(
+  WS_CHANNELS.previewAutomationEvent,
+  PreviewAutomationStreamEvent,
+);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -609,6 +624,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.terminalEvent,
   WS_CHANNELS.usageUpdated,
   WS_CHANNELS.previewEvent,
+  WS_CHANNELS.previewAutomationEvent,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -623,6 +639,7 @@ export const WsPush = Schema.Union([
   WsPushTerminalEvent,
   WsPushUsageUpdated,
   WsPushPreviewEvent,
+  WsPushPreviewAutomationEvent,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

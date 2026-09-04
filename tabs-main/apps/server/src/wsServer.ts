@@ -75,6 +75,7 @@ import {
   Deferred,
   Effect,
   Exit,
+  Fiber,
   FileSystem,
   Layer,
   Option,
@@ -133,6 +134,7 @@ import { listProviderUsageSnapshotsEffect } from "./providerUsage/index.ts";
 import { PreviewManager } from "./preview/Manager.ts";
 import { ServerEnvironment } from "./environment/ServerEnvironment.ts";
 import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
+import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -288,7 +290,8 @@ export type ServerRuntimeServices =
   | AnalyticsService
   | PreviewManager
   | ServerEnvironment
-  | EnvironmentAuth;
+  | EnvironmentAuth
+  | PreviewAutomationBroker;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -344,6 +347,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const previewManager = yield* PreviewManager;
   const serverEnvironment = yield* ServerEnvironment;
   const environmentAuth = yield* EnvironmentAuth;
+  const previewAutomationBroker = yield* PreviewAutomationBroker;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -360,6 +364,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providersRef = yield* Ref.make(yield* providerRegistry.getProviders);
 
   const clients = yield* Ref.make(new Set<WebSocket>());
+  const previewAutomationFibers = new Map<
+    WebSocket,
+    Set<Fiber.Fiber<void, unknown>>
+  >();
   const logger = createLogger("ws");
   const readiness = yield* makeServerReadiness;
 
@@ -1612,6 +1620,20 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* previewManager.close(stripRequestTag(request.body));
       case WS_METHODS.previewList:
         return yield* previewManager.list(stripRequestTag(request.body));
+      case WS_METHODS.previewAutomationConnect: {
+        const stream = yield* previewAutomationBroker.connect(stripRequestTag(request.body));
+        const fiber = yield* Stream.runForEach(stream, (event) =>
+          pushBus.publishClient(ws, WS_CHANNELS.previewAutomationEvent, event).pipe(Effect.asVoid),
+        ).pipe(Effect.forkIn(subscriptionsScope));
+        const fibers = previewAutomationFibers.get(ws) ?? new Set();
+        fibers.add(fiber);
+        previewAutomationFibers.set(ws, fibers);
+        return { connected: true };
+      }
+      case WS_METHODS.previewAutomationFocusHost:
+        return yield* previewAutomationBroker.focusHost(stripRequestTag(request.body));
+      case WS_METHODS.previewAutomationRespond:
+        return yield* previewAutomationBroker.respond(stripRequestTag(request.body));
 
       case WS_METHODS.serverGetConfig: {
         const keybindingsConfig = yield* keybindingsManager.loadConfigState;
@@ -2038,10 +2060,18 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
     ws.on("close", () => {
       void runPromise(
-        Ref.update(clients, (clients) => {
-          clients.delete(ws);
-          return clients;
-        }),
+        Effect.all(
+          [
+            Ref.update(clients, (clients) => {
+              clients.delete(ws);
+              return clients;
+            }),
+            Effect.forEach(previewAutomationFibers.get(ws) ?? [], Fiber.interrupt, {
+              discard: true,
+            }),
+          ],
+          { discard: true },
+        ).pipe(Effect.ensuring(Effect.sync(() => previewAutomationFibers.delete(ws)))),
       );
     });
 
