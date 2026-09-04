@@ -25,6 +25,12 @@ interface RequestOptions {
   readonly timeoutMs?: number | null;
 }
 
+export interface WsTransportOptions {
+  readonly url?: string;
+  readonly environmentId?: string;
+  readonly refreshUrl?: () => Promise<string>;
+}
+
 type TransportState = "connecting" | "open" | "reconnecting" | "closed" | "disposed";
 
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -78,11 +84,16 @@ export class WsTransport {
   private state: TransportState = "connecting";
   private url: string;
   private readonly configuredUrl: string | undefined;
+  private readonly environmentId: string | undefined;
+  private readonly refreshUrl: (() => Promise<string>) | undefined;
   private refreshingRemoteTicket = false;
 
-  constructor(url?: string) {
-    this.configuredUrl = url;
-    this.url = this.resolveUrl(url);
+  constructor(input?: string | WsTransportOptions) {
+    const options = typeof input === "string" ? { url: input } : (input ?? {});
+    this.configuredUrl = options.url;
+    this.environmentId = options.environmentId;
+    this.refreshUrl = options.refreshUrl;
+    this.url = this.resolveUrl(options.url);
     this.connect();
   }
 
@@ -233,19 +244,23 @@ export class WsTransport {
     }
 
     const environmentId =
-      this.configuredUrl === undefined && typeof window !== "undefined"
+      this.environmentId ??
+      (this.configuredUrl === undefined && typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("tabsEnvironmentId")
-        : null;
+        : null);
     if (this.reconnectAttempt > 0 && environmentId && !this.refreshingRemoteTicket) {
       this.refreshingRemoteTicket = true;
-      void import("./connection/manualConnections")
-        .then(({ resolveManualConnectionSocketUrl }) =>
-          resolveManualConnectionSocketUrl(environmentId),
-        )
+      const refresh =
+        this.refreshUrl ??
+        (() =>
+          import("./connection/manualConnections").then(({ resolveManualConnectionSocketUrl }) =>
+            resolveManualConnectionSocketUrl(environmentId),
+          ));
+      void refresh()
         .then((socketUrl) => {
           this.url = socketUrl;
           this.refreshingRemoteTicket = false;
-          this.openSocket();
+          this.openSocket(true);
         })
         .catch((error) => {
           this.refreshingRemoteTicket = false;
@@ -258,7 +273,7 @@ export class WsTransport {
     this.openSocket();
   }
 
-  private openSocket() {
+  private openSocket(useCurrentUrl = false) {
     if (this.disposed) return;
 
     this.state = this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
@@ -270,7 +285,7 @@ export class WsTransport {
     // permanently — leaving the renderer stuck until a manual refresh.
     let ws: WebSocket;
     try {
-      if (this.reconnectAttempt === 0 || this.configuredUrl !== undefined) {
+      if (!useCurrentUrl && (this.reconnectAttempt === 0 || this.configuredUrl !== undefined)) {
         this.url = this.resolveUrl(this.configuredUrl);
       }
       ws = new WebSocket(this.url);

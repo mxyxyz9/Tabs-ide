@@ -118,6 +118,25 @@ describe("WsTransport", () => {
     vi.useRealTimers();
   });
 
+  it("refreshes an environment ticket before reconnecting", async () => {
+    vi.useFakeTimers();
+    const refreshUrl = vi.fn(async () => "ws://remote.example.test/fresh-ticket");
+    const transport = new WsTransport({
+      url: "ws://remote.example.test/initial-ticket",
+      environmentId: "environment-remote",
+      refreshUrl,
+    });
+    getSocket().open();
+    getSocket().close();
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(refreshUrl).toHaveBeenCalledOnce();
+    expect(getSocket().url).toBe("ws://remote.example.test/fresh-ticket");
+    transport.dispose();
+    vi.useRealTimers();
+  });
+
   it("routes valid push envelopes to channel listeners", () => {
     const transport = new WsTransport("ws://localhost:3020");
     const socket = getSocket();

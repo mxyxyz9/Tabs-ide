@@ -43,6 +43,7 @@ import { composerDraftActions, composerDraftsAtom } from "../state/composerDraft
 import { workspaceShellAtom } from "../state/workspaceShell";
 import { applyServerConfigUpdate, refreshServerConfig } from "../state/settings";
 import { threadsHydratedAtom } from "../state/threads";
+import { initializePrimaryEnvironmentApi } from "../connection/environmentApiRegistry";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -221,6 +222,9 @@ function EventRouter() {
   useEffect(() => {
     const api = readNativeApi();
     if (!api) return;
+    void initializePrimaryEnvironmentApi().catch((error) => {
+      console.warn("Failed to initialize the primary environment registry", error);
+    });
     let disposed = false;
     let latestSequence = 0;
     let syncing = false;

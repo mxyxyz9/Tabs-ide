@@ -35,13 +35,17 @@ import {
 } from "~/components/ui/dialog";
 import { cn } from "~/lib/utils";
 import {
-  connectManualConnection,
   listManualConnections,
   registerManualRemote,
   registerManualSsh,
   removeManualConnection,
   type SavedManualConnection,
 } from "~/connection/manualConnections";
+import {
+  connectEnvironmentApi,
+  connectedEnvironmentIds,
+  disconnectEnvironmentApi,
+} from "~/connection/environmentApiRegistry";
 
 interface TailscaleStatus {
   available: boolean;
@@ -76,6 +80,9 @@ export function ConnectionsSettings() {
   const [sshHost, setSshHost] = useState("");
   const [sshPort, setSshPort] = useState("22");
   const [savedConnections, setSavedConnections] = useState<readonly SavedManualConnection[]>([]);
+  const [connectedIds, setConnectedIds] = useState<ReadonlySet<string>>(
+    () => new Set(connectedEnvironmentIds()),
+  );
   const [isSavingConnection, setIsSavingConnection] = useState(false);
   const [sshPasswordPrompts, setSshPasswordPrompts] = useState<
     readonly DesktopSshPasswordPromptRequest[]
@@ -748,7 +755,8 @@ export function ConnectionsSettings() {
                       aria-label={`Connect to ${connection.label}`}
                       onClick={async () => {
                         try {
-                          await connectManualConnection(connection.environmentId);
+                          await connectEnvironmentApi(connection.environmentId);
+                          setConnectedIds(new Set(connectedEnvironmentIds()));
                         } catch (error) {
                           toastManager.add({
                             title: "Could not connect",
@@ -759,15 +767,17 @@ export function ConnectionsSettings() {
                         }
                       }}
                     >
-                      Connect
+                      {connectedIds.has(connection.environmentId) ? "Connected" : "Connect"}
                     </Button>
                     <Button
                       size="icon-xs"
                       variant="ghost"
                       aria-label={`Remove ${connection.label}`}
                       onClick={async () => {
+                        disconnectEnvironmentApi(connection.environmentId);
                         await removeManualConnection(connection.environmentId);
                         setSavedConnections(await listManualConnections());
+                        setConnectedIds(new Set(connectedEnvironmentIds()));
                       }}
                     >
                       <Trash2Icon className="size-3.5" />

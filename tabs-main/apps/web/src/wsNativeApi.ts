@@ -102,74 +102,80 @@ export function getWsTransport(): WsTransport | null {
   return instance?.transport ?? null;
 }
 
-export function createWsNativeApi(): NativeApi {
-  if (instance) return instance.api;
+export function createWsNativeApi(options?: {
+  readonly transport?: WsTransport;
+  readonly singleton?: boolean;
+}): NativeApi {
+  const singleton = options?.singleton !== false;
+  if (singleton && instance) return instance.api;
 
-  const transport = new WsTransport();
-  window.desktopBridge?.onSystemResume?.(() => {
-    transport.reconnectAfterSystemResume();
-  });
+  const transport = options?.transport ?? new WsTransport();
+  if (singleton) {
+    window.desktopBridge?.onSystemResume?.(() => {
+      transport.reconnectAfterSystemResume();
+    });
 
-  transport.subscribe(WS_CHANNELS.serverWelcome, (message) => {
-    const payload = message.data;
-    for (const listener of welcomeListeners) {
-      try {
-        listener(payload);
-      } catch {
-        // Swallow listener errors
+    transport.subscribe(WS_CHANNELS.serverWelcome, (message) => {
+      const payload = message.data;
+      for (const listener of welcomeListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // Swallow listener errors
+        }
       }
-    }
-  });
-  transport.subscribe(WS_CHANNELS.serverConfigUpdated, (message) => {
-    const payload = message.data;
-    for (const listener of serverConfigUpdatedListeners) {
-      try {
-        listener(payload);
-      } catch {
-        // Swallow listener errors
+    });
+    transport.subscribe(WS_CHANNELS.serverConfigUpdated, (message) => {
+      const payload = message.data;
+      for (const listener of serverConfigUpdatedListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // Swallow listener errors
+        }
       }
-    }
-  });
-  transport.subscribe(WS_CHANNELS.serverProvidersUpdated, (message) => {
-    const payload = message.data;
-    for (const listener of providersUpdatedListeners) {
-      try {
-        listener(payload);
-      } catch {
-        // Swallow listener errors
+    });
+    transport.subscribe(WS_CHANNELS.serverProvidersUpdated, (message) => {
+      const payload = message.data;
+      for (const listener of providersUpdatedListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // Swallow listener errors
+        }
       }
-    }
-  });
-  transport.subscribe(WS_CHANNELS.gitActionProgress, (message) => {
-    const payload = message.data;
-    for (const listener of gitActionProgressListeners) {
-      try {
-        listener(payload);
-      } catch {
-        // Swallow listener errors
+    });
+    transport.subscribe(WS_CHANNELS.gitActionProgress, (message) => {
+      const payload = message.data;
+      for (const listener of gitActionProgressListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // Swallow listener errors
+        }
       }
-    }
-  });
-  transport.subscribe(WS_CHANNELS.reviewProgress, (message) => {
-    const payload = message.data;
-    for (const listener of reviewProgressListeners) {
-      try {
-        listener(payload);
-      } catch {
-        // Swallow listener errors
+    });
+    transport.subscribe(WS_CHANNELS.reviewProgress, (message) => {
+      const payload = message.data;
+      for (const listener of reviewProgressListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // Swallow listener errors
+        }
       }
-    }
-  });
-  transport.subscribe(WS_CHANNELS.usageUpdated, (message) => {
-    const payload = message.data;
-    for (const listener of usageUpdatedListeners) {
-      try {
-        listener(payload);
-      } catch {
-        // Swallow listener errors
+    });
+    transport.subscribe(WS_CHANNELS.usageUpdated, (message) => {
+      const payload = message.data;
+      for (const listener of usageUpdatedListeners) {
+        try {
+          listener(payload);
+        } catch {
+          // Swallow listener errors
+        }
       }
-    }
-  });
+    });
+  }
 
   const api: NativeApi = {
     testing: {
@@ -512,6 +518,6 @@ export function createWsNativeApi(): NativeApi {
     },
   };
 
-  instance = { api, transport };
+  if (singleton) instance = { api, transport };
   return api;
 }
