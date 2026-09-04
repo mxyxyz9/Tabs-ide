@@ -20,7 +20,7 @@ verification evidence, not just a matching type or placeholder.
 - [x] Server preview-session synchronization and automation request broker.
 - [x] Authenticated WebSocket broker channels for host registration, focus, requests, and replies.
 - [x] Tabs persistent browser host with isolated profiles, login windows, navigation, and DevTools.
-- [ ] Adapt the broker host protocol to Tabs' `WebContentsView` browser sessions.
+- [x] Adapt the broker host protocol to Tabs' `WebContentsView` browser sessions.
 - [x] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
       the browser host.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.

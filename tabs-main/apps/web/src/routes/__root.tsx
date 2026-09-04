@@ -34,6 +34,7 @@ import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
 import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 import { CommandPalette } from "../components/CommandPalette";
+import { NativePreviewAutomationHost } from "../components/NativePreviewAutomationHost";
 import { setProjectExpandedInAtoms, syncServerReadModelToAtoms } from "../state/readModel";
 import { appAtomRegistry } from "../state/atomRegistry";
 import { readModelStateAtom } from "../state/readModel";
@@ -90,6 +91,7 @@ function RootRouteView() {
       <ToastProvider>
         <AnchoredToastProvider>
           <EventRouter />
+          <NativePreviewAutomationHost />
           <DesktopProjectBootstrap />
           <CommandPalette>
             <Outlet />

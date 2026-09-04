@@ -317,6 +317,47 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("connects preview automation hosts and forwards broker events", async () => {
+    requestMock.mockResolvedValue(undefined);
+    const { createWsNativeApi } = await import("./wsNativeApi");
+    const api = createWsNativeApi();
+    const listener = vi.fn();
+    const host = {
+      clientId: "desktop-client",
+      environmentId: "environment-1",
+      supportedOperations: ["status", "snapshot"],
+    } as never;
+
+    const unsubscribe = api.preview.automation.connect(host, listener);
+    emitPush(WS_CHANNELS.previewAutomationEvent, {
+      type: "connected",
+      connectionId: "connection-1",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      WS_METHODS.previewAutomationConnect,
+      host,
+      { timeoutMs: null },
+    );
+    expect(listener).toHaveBeenCalledWith({
+      type: "connected",
+      connectionId: "connection-1",
+    });
+
+    await api.preview.automation.respond({
+      clientId: "desktop-client",
+      connectionId: "connection-1",
+      requestId: "request-1",
+      ok: true,
+      result: { available: true },
+    });
+    expect(requestMock).toHaveBeenLastCalledWith(
+      WS_METHODS.previewAutomationRespond,
+      expect.objectContaining({ requestId: "request-1", ok: true }),
+    );
+    unsubscribe();
+  });
+
   it("wraps orchestration dispatch commands in the command envelope", async () => {
     requestMock.mockResolvedValue(undefined);
     const { createWsNativeApi } = await import("./wsNativeApi");

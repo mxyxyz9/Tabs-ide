@@ -108,7 +108,7 @@ export function createWsNativeApi(): NativeApi {
   if (instance) return instance.api;
 
   const transport = new WsTransport();
-  window.desktopBridge?.onSystemResume(() => {
+  window.desktopBridge?.onSystemResume?.(() => {
     transport.reconnectAfterSystemResume();
   });
 
@@ -470,7 +470,33 @@ export function createWsNativeApi(): NativeApi {
         throw new Error("Unsupported in web");
       },
     } as any,
-    preview: {} as any,
+    preview: {
+      open: (input) => transport.request(WS_METHODS.previewOpen, input),
+      navigate: (input) => transport.request(WS_METHODS.previewNavigate, input),
+      resize: (input) => transport.request(WS_METHODS.previewResize, input),
+      refresh: (input) => transport.request(WS_METHODS.previewRefresh, input),
+      close: (input) => transport.request(WS_METHODS.previewClose, input),
+      list: (input) => transport.request(WS_METHODS.previewList, input),
+      reportStatus: (input) => transport.request(WS_METHODS.previewReportStatus, input),
+      automation: {
+        connect: (input, callback, options) => {
+          const unsubscribe = transport.subscribe(
+            WS_CHANNELS.previewAutomationEvent,
+            (message) => callback(message.data),
+          );
+          void transport
+            .request(WS_METHODS.previewAutomationConnect, input, { timeoutMs: null })
+            .then(() => options?.onResubscribe?.())
+            .catch(() => undefined);
+          return unsubscribe;
+        },
+        respond: (input) => transport.request(WS_METHODS.previewAutomationRespond, input),
+        focusHost: (input) => transport.request(WS_METHODS.previewAutomationFocusHost, input),
+      },
+      onEvent: (callback) =>
+        transport.subscribe(WS_CHANNELS.previewEvent, (message) => callback(message.data)),
+      subscribePorts: () => () => {},
+    },
   };
 
   instance = { api, transport };
