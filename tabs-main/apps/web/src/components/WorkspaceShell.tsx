@@ -1227,8 +1227,7 @@ function AgentsThreadList(props: {
   }, []);
   const dispatchLifecycle = useCallback(
     async (thread: Thread, action: "pin" | "settle" | "snooze", snoozedUntil?: string) => {
-      const api = readNativeApi();
-      if (!api) return;
+      const api = await environmentApi(thread.environmentId);
       const commandId = newCommandId();
       if (action === "pin") {
         await api.orchestration.dispatchCommand(
@@ -1266,9 +1265,11 @@ function AgentsThreadList(props: {
         movedId: thread.id,
         direction,
       });
-      const api = readNativeApi();
-      if (!api || assignments === null) return;
+      if (assignments === null) return;
       for (const assignment of assignments) {
+        const assignedThread = props.threads.find((candidate) => candidate.id === assignment.id);
+        if (!assignedThread) continue;
+        const api = await environmentApi(assignedThread.environmentId);
         await api.orchestration.dispatchCommand({
           type: "thread.pin.reorder",
           commandId: newCommandId(),
@@ -1296,9 +1297,10 @@ function AgentsThreadList(props: {
         keysById: new Map(ordered.map((candidate) => [candidate.id, candidate.pinOrderKey])),
         movedId,
       });
-      const api = readNativeApi();
-      if (!api) return;
       for (const assignment of assignments) {
+        const assignedThread = props.threads.find((candidate) => candidate.id === assignment.id);
+        if (!assignedThread) continue;
+        const api = await environmentApi(assignedThread.environmentId);
         await api.orchestration.dispatchCommand({
           type: "thread.pin.reorder",
           commandId: newCommandId(),
