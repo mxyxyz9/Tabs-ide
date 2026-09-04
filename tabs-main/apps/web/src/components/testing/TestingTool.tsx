@@ -74,6 +74,12 @@ import {
   testingReasoningTierFromOptions,
 } from "./TestingWidgets";
 import { testingLocatorCode } from "./utils";
+import {
+  captureTestingPreview,
+  locatorPageForCapture,
+  normalizeLocatorUrl,
+} from "./locatorPreview";
+import { useConfirm } from "~/hooks/useConfirm";
 import type {
   TestingAuthenticationMode,
   TestingBusyAction,
@@ -107,6 +113,7 @@ export function TestingTool(props: {
   defaultModelSelection: ModelSelection | null;
 }) {
   const serverConfig = useServerConfig();
+  const { confirm, confirmDialog } = useConfirm();
   const [testingTerminalOpen, setTestingTerminalOpen] = useState(false);
   const testingTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const [testingState, setTestingState] = useProjectTestingState(
@@ -545,6 +552,7 @@ export function TestingTool(props: {
   const [message, setMessage] = useState("Ready to explore a UAT application.");
   const [locatorLibrary, setLocatorLibrary] = useState<TestingLocatorLibraryResult | null>(null);
   const [locatorSession, setLocatorSession] = useState<TestingLocatorDiscoverySession | null>(null);
+  const previewLocatorSessionId = useRef<string | null>(null);
 
   const locatorMode = testingState.locatorMode;
   const setLocatorMode = useCallback(
@@ -1150,10 +1158,7 @@ export function TestingTool(props: {
   );
 
   const selectedLocatorPage = useMemo(
-    () =>
-      locatorLibrary?.pages.find((page) => page.id === selectedLocatorPageId) ??
-      locatorLibrary?.pages[0] ??
-      null,
+    () => locatorLibrary?.pages.find((page) => page.id === selectedLocatorPageId) ?? null,
     [locatorLibrary?.pages, selectedLocatorPageId],
   );
 
@@ -1392,7 +1397,9 @@ export function TestingTool(props: {
 
   const startLocatorDiscovery = useCallback(
     async (targetUrlOverride?: string): Promise<boolean> => {
-      const discoveryTarget = targetUrlOverride ?? normalizedTarget;
+      const discoveryTarget = targetUrlOverride ?? (locatorNavigateUrl || normalizedTarget);
+      const discoveryMode = targetUrlOverride ? "manual" : locatorMode;
+      const captureScope = targetUrlOverride ? "page" : locatorCaptureScope;
       if (!discoveryTarget) return false;
       const maxElementsPerPage = Number(locatorMaxElements);
       const maxPagesPerSession = Number(locatorMaxPages);
@@ -1411,13 +1418,18 @@ export function TestingTool(props: {
       setMessage("Opening the locator discovery workspace...");
       try {
         const api = ensureNativeApi().testing;
+        const previewSnapshot =
+          discoveryMode !== "automatic" && authenticationMode !== "connected-session"
+            ? await captureTestingPreview(props.projectId)
+            : undefined;
         let result = await api.startLocatorDiscovery({
+          ...(previewSnapshot ? { previewSnapshot } : {}),
           projectId: props.projectId,
-          targetUrl: discoveryTarget,
+          targetUrl: previewSnapshot?.url ?? normalizeLocatorUrl(discoveryTarget),
           ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
             ? { cdpEndpoint: normalizedCdpEndpoint }
             : {}),
-          mode: locatorMode,
+          mode: discoveryMode,
           scope:
             locatorCaptureScope === "origin"
               ? "origin"
@@ -1426,8 +1438,8 @@ export function TestingTool(props: {
                 : "page",
           coverage: locatorCoverage,
           safetyProfile: locatorSafety,
-          captureScope: locatorCaptureScope,
-          ...(locatorCaptureScope === "task" && locatorTaskContext.trim()
+          captureScope,
+          ...(captureScope === "task" && locatorTaskContext.trim()
             ? { taskContext: locatorTaskContext.trim() }
             : {}),
           maxElementsPerPage,
@@ -1440,17 +1452,20 @@ export function TestingTool(props: {
             ? { maxDurationSeconds: normalizedMaxDurationSeconds }
             : {}),
         });
-        if (locatorMode === "manual" && result.status === "running") {
+        if (!previewSnapshot && discoveryMode === "manual" && result.status === "running") {
           result = await api.captureLocatorPage({
             projectId: props.projectId,
             sessionId: result.id,
-            captureMode: locatorCaptureScope === "task" ? "relevant" : "page",
+            captureMode: captureScope === "task" ? "relevant" : "all",
           });
         }
         setLocatorSession(result);
+        previewLocatorSessionId.current = previewSnapshot ? result.id : null;
         setLocatorLibrary(result.library);
-        setLocatorNavigateUrl(result.currentUrl ?? discoveryTarget);
-        const capturedPage = result.library.pages[0];
+        setLocatorNavigateUrl(previewSnapshot?.url ?? discoveryTarget);
+        const capturedPage = locatorPageForCapture(result);
+        setSelectedLocatorPageId(capturedPage?.id ?? null);
+        setSelectedLocatorEntryIds(new Set());
         if (capturedPage) {
           setSelectedLocatorPageId(capturedPage.id);
           setSelectedLocatorEntryIds(
@@ -1467,7 +1482,7 @@ export function TestingTool(props: {
         }
         setMessage(
           capturedPage
-            ? `Found ${capturedPage.entries.length} locator candidates. Choose which ones belong in the page object.`
+            ? `${result.message}. Choose which locators belong in the page object.`
             : result.message,
         );
         return Boolean(capturedPage);
@@ -1487,6 +1502,7 @@ export function TestingTool(props: {
       locatorMode,
       locatorSafety,
       locatorTaskContext,
+      locatorNavigateUrl,
       normalizedCdpEndpoint,
       normalizedMaxDurationSeconds,
       normalizedMaxStates,
@@ -1500,7 +1516,7 @@ export function TestingTool(props: {
       const page =
         locatorLibrary?.pages.find((candidate) => candidate.id === pageId) ?? selectedLocatorPage;
       if (!page) return;
-      const confirmed = await ensureNativeApi().dialogs.confirm(
+      const confirmed = await confirm(
         `Delete the ${page.name} page and its ${page.entries.length} saved locator${page.entries.length === 1 ? "" : "s"}? This does not delete any repository files.`,
       );
       if (!confirmed) return;
@@ -1521,7 +1537,7 @@ export function TestingTool(props: {
         setBusyAction(null);
       }
     },
-    [locatorLibrary?.pages, locatorSession?.status, props.projectId, selectedLocatorPage],
+    [confirm, locatorLibrary?.pages, props.projectId, selectedLocatorPage],
   );
 
   const rescanLocatorPage = useCallback(
@@ -1529,12 +1545,12 @@ export function TestingTool(props: {
       const page =
         locatorLibrary?.pages.find((candidate) => candidate.id === pageId) ?? selectedLocatorPage;
       if (!page) return;
-      const rescanUrl = (locatorNavigateUrl.trim() || page.urlPattern).trim();
+      const rescanUrl = page.urlPattern.trim();
       if (!rescanUrl || rescanUrl.includes("<")) {
         setMessage("Open the saved page in the preview before rescanning it.");
         return;
       }
-      const confirmed = await ensureNativeApi().dialogs.confirm(
+      const confirmed = await confirm(
         `Rescan ${page.name}? Its current saved locators will be replaced with a fresh capture. Repository files will not be changed.`,
       );
       if (!confirmed) return;
@@ -1549,13 +1565,13 @@ export function TestingTool(props: {
             }),
           );
         }
-        const library = await api.deleteLocatorPage({
-          projectId: props.projectId,
-          pageId: page.id,
-        });
-        setLocatorLibrary(library);
-        setSelectedLocatorPageId(null);
-        setSelectedLocatorEntryIds(new Set());
+        if (window.desktopBridge) {
+          await window.desktopBridge.navigateBrowserSession({
+            projectId: props.projectId,
+            sessionId: `testing:${props.projectId}`,
+            url: rescanUrl,
+          });
+        }
         setLocatorRepositoryProposal(null);
         setTargetUrl(rescanUrl);
         setLocatorNavigateUrl(rescanUrl);
@@ -1571,7 +1587,7 @@ export function TestingTool(props: {
     },
     [
       locatorLibrary?.pages,
-      locatorNavigateUrl,
+      confirm,
       locatorSession,
       props.projectId,
       selectedLocatorPage,
@@ -1579,34 +1595,70 @@ export function TestingTool(props: {
     ],
   );
 
-  const navigateLocatorDiscovery = useCallback(async () => {
-    if (!locatorSession || !locatorNavigateUrl.trim()) return;
-    setBusyAction("locator-capture");
-    try {
-      const result = await ensureNativeApi().testing.navigateLocatorDiscovery({
-        projectId: props.projectId,
-        sessionId: locatorSession.id,
-        targetUrl: locatorNavigateUrl.trim(),
-      });
-      setLocatorSession(result);
-      setLocatorLibrary(result.library);
-      setMessage(result.message);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not navigate discovery.");
-    } finally {
-      setBusyAction(null);
-    }
-  }, [locatorNavigateUrl, locatorSession, props.projectId]);
+  const navigateLocatorDiscovery = useCallback(
+    async (url?: string) => {
+      if (!(url ?? locatorNavigateUrl).trim()) return;
+      setBusyAction("locator-capture");
+      try {
+        const target = normalizeLocatorUrl(url ?? locatorNavigateUrl);
+        if (window.desktopBridge) {
+          await window.desktopBridge.ensureBrowserSession({
+            projectId: props.projectId,
+            sessionId: `testing:${props.projectId}`,
+            initialUrl: target,
+          });
+          await window.desktopBridge.navigateBrowserSession({
+            projectId: props.projectId,
+            sessionId: `testing:${props.projectId}`,
+            url: target,
+          });
+          setLocatorNavigateUrl(target);
+          setTargetUrl(target);
+          setMessage("Page opened. Scan controls to choose locators from this page.");
+          return;
+        }
+        if (!locatorSession || locatorSession.status !== "running") {
+          setLocatorNavigateUrl(target);
+          setTargetUrl(target);
+          return;
+        }
+        const result = await ensureNativeApi().testing.navigateLocatorDiscovery({
+          projectId: props.projectId,
+          sessionId: locatorSession.id,
+          targetUrl: target,
+        });
+        setLocatorSession(result);
+        setLocatorLibrary(result.library);
+        setLocatorNavigateUrl(target);
+        setSelectedLocatorPageId(locatorPageForCapture(result)?.id ?? null);
+        setSelectedLocatorEntryIds(new Set());
+        setMessage(result.message);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not navigate discovery.");
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [locatorNavigateUrl, locatorSession, props.projectId, setTargetUrl],
+  );
 
   const captureLocatorPage = useCallback(
-    async (captureMode: "relevant" | "page" = "relevant"): Promise<boolean> => {
+    async (captureMode: "relevant" | "page" | "all" = "all"): Promise<boolean> => {
       if (!locatorSession) return false;
       setBusyAction("locator-capture");
       try {
         const api = ensureNativeApi().testing;
         let result = locatorSession;
+        const previewSnapshot =
+          previewLocatorSessionId.current === locatorSession.id
+            ? await captureTestingPreview(props.projectId)
+            : undefined;
         const previewUrl = locatorNavigateUrl.trim();
-        if (previewUrl && !isSameWebUrl(previewUrl, locatorSession.currentUrl)) {
+        if (
+          !previewSnapshot &&
+          previewUrl &&
+          !isSameWebUrl(previewUrl, locatorSession.currentUrl)
+        ) {
           result = await api.navigateLocatorDiscovery({
             projectId: props.projectId,
             sessionId: locatorSession.id,
@@ -1614,6 +1666,7 @@ export function TestingTool(props: {
           });
         }
         if (
+          previewSnapshot ||
           result.mode !== "guided" ||
           isSameWebUrl(result.currentUrl, locatorSession.currentUrl)
         ) {
@@ -1621,13 +1674,15 @@ export function TestingTool(props: {
             projectId: props.projectId,
             sessionId: locatorSession.id,
             captureMode,
+            ...(previewSnapshot ? { previewSnapshot } : {}),
           });
         }
         setLocatorSession(result);
         setLocatorLibrary(result.library);
-        const capturedPage =
-          result.library.pages.find((page) => isSameWebUrl(page.urlPattern, result.currentUrl)) ??
-          result.library.pages[0];
+        const capturedPage = locatorPageForCapture(result);
+        setLocatorNavigateUrl(previewSnapshot?.url ?? previewUrl);
+        setSelectedLocatorPageId(capturedPage?.id ?? null);
+        setSelectedLocatorEntryIds(new Set());
         if (capturedPage) {
           setSelectedLocatorPageId(capturedPage.id);
           setSelectedLocatorEntryIds(
@@ -1644,7 +1699,7 @@ export function TestingTool(props: {
         }
         setMessage(
           capturedPage
-            ? `Found ${capturedPage.entries.length} locator candidates. Review the selection before adding them to code.`
+            ? `${result.message}. Review the selection before adding them to code.`
             : result.message,
         );
         return Boolean(capturedPage);
@@ -2322,81 +2377,93 @@ export function TestingTool(props: {
     }
   }, [props.projectId]);
 
-  const generateTests = useCallback(async () => {
-    const maxCasesValue = Number(generationMaxCases);
-    const maxTokensValue = Number(generationMaxTokens);
-    const maxCostValue = Number(generationMaxCost);
-    if (
-      !Number.isSafeInteger(maxCasesValue) ||
-      maxCasesValue < 1 ||
-      !Number.isSafeInteger(maxTokensValue) ||
-      maxTokensValue < 1 ||
-      !Number.isFinite(maxCostValue) ||
-      maxCostValue <= 0
-    ) {
-      setMessage("Enter positive generation limits.");
-      return;
-    }
-    if (selectedGenerationCaseIds.size === 0) {
-      setMessage("Select at least one reviewed case to build.");
-      return;
-    }
-    setBusyAction("generate-tests");
-    setMessage("Generating Playwright tests from reviewed graph paths...");
-    try {
-      const job = await ensureNativeApi().testing.generateTests({
-        projectId: props.projectId,
-        projectPath: props.projectPath,
-        caseIds: [...selectedGenerationCaseIds],
-        ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
-        ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
-          ? { cdpEndpoint: normalizedCdpEndpoint }
-          : {}),
-        framework: "playwright-ts",
-        modelSelection: generationModelSelection,
-        reasoningTier: generationReasoning,
-        outputMode: generationOutputMode,
-        ...(generationOutputMode === "repository"
-          ? { repositoryOutputPath: repositoryOutputPath.trim() || "tests/e2e/generated" }
-          : {}),
-        ...(templatePath.trim() ? { templatePath: templatePath.trim() } : {}),
-        captureReplay,
-        maxCases: maxCasesValue,
-        maxEstimatedTokens: maxTokensValue,
-        maxEstimatedCostUsd: maxCostValue,
-      });
-      await refreshGenerationJobs();
-      setMessage(
-        job.status === "queued" || job.status === "running"
-          ? `Playwright generation started. Output will be written to ${job.outputDirectory}.`
-          : job.status === "completed"
-            ? `Generated ${job.completedCases} Playwright test case${job.completedCases === 1 ? "" : "s"} in ${job.outputDirectory}.`
-            : `Generation stopped with status ${job.status}${job.error ? `: ${job.error}` : "."}`,
-      );
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Test generation failed.");
-      await refreshGenerationJobs().catch(() => undefined);
-    } finally {
-      setBusyAction(null);
-    }
-  }, [
-    authenticationMode,
-    captureReplay,
-    generationMaxCases,
-    generationMaxCost,
-    generationMaxTokens,
-    generationModelSelection,
-    generationOutputMode,
-    generationReasoning,
-    normalizedCdpEndpoint,
-    normalizedTarget,
-    props.projectId,
-    props.projectPath,
-    refreshGenerationJobs,
-    repositoryOutputPath,
-    selectedGenerationCaseIds,
-    templatePath,
-  ]);
+  const generateTests = useCallback(
+    async (failureRunId?: string, engine: "standard" | "official-playwright" = "standard") => {
+      const selectedCaseIds = failureRunId
+        ? (executionRuns
+            .find((run) => run.id === failureRunId)
+            ?.results.filter((result) => result.status === "failed" || result.status === "blocked")
+            .map((result) => result.caseId) ?? [])
+        : [...selectedGenerationCaseIds];
+      const maxCasesValue = Number(generationMaxCases);
+      const maxTokensValue = Number(generationMaxTokens);
+      const maxCostValue = Number(generationMaxCost);
+      if (
+        !Number.isSafeInteger(maxCasesValue) ||
+        maxCasesValue < 1 ||
+        !Number.isSafeInteger(maxTokensValue) ||
+        maxTokensValue < 1 ||
+        !Number.isFinite(maxCostValue) ||
+        maxCostValue <= 0
+      ) {
+        setMessage("Enter positive generation limits.");
+        return;
+      }
+      if (selectedCaseIds.length === 0) {
+        setMessage("Select at least one reviewed case to build.");
+        return;
+      }
+      setBusyAction("generate-tests");
+      setMessage("Generating Playwright tests from reviewed graph paths...");
+      try {
+        const job = await ensureNativeApi().testing.generateTests({
+          projectId: props.projectId,
+          projectPath: props.projectPath,
+          caseIds: selectedCaseIds,
+          ...(failureRunId ? { failureRunId } : {}),
+          engine,
+          ...(normalizedTarget ? { targetUrl: normalizedTarget } : {}),
+          ...(authenticationMode === "connected-session" && normalizedCdpEndpoint
+            ? { cdpEndpoint: normalizedCdpEndpoint }
+            : {}),
+          framework: "playwright-ts",
+          modelSelection: generationModelSelection,
+          reasoningTier: generationReasoning,
+          outputMode: failureRunId ? "managed" : generationOutputMode,
+          ...(generationOutputMode === "repository"
+            ? { repositoryOutputPath: repositoryOutputPath.trim() || "tests/e2e/generated" }
+            : {}),
+          ...(templatePath.trim() ? { templatePath: templatePath.trim() } : {}),
+          captureReplay,
+          maxCases: maxCasesValue,
+          maxEstimatedTokens: maxTokensValue,
+          maxEstimatedCostUsd: maxCostValue,
+        });
+        await refreshGenerationJobs();
+        setMessage(
+          job.status === "queued" || job.status === "running"
+            ? `Playwright generation started. Output will be written to ${job.outputDirectory}.`
+            : job.status === "completed"
+              ? `Generated ${job.completedCases} Playwright test case${job.completedCases === 1 ? "" : "s"} in ${job.outputDirectory}.`
+              : `Generation stopped with status ${job.status}${job.error ? `: ${job.error}` : "."}`,
+        );
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Test generation failed.");
+        await refreshGenerationJobs().catch(() => undefined);
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [
+      authenticationMode,
+      captureReplay,
+      generationMaxCases,
+      executionRuns,
+      generationMaxCost,
+      generationMaxTokens,
+      generationModelSelection,
+      generationOutputMode,
+      generationReasoning,
+      normalizedCdpEndpoint,
+      normalizedTarget,
+      props.projectId,
+      props.projectPath,
+      refreshGenerationJobs,
+      repositoryOutputPath,
+      selectedGenerationCaseIds,
+      templatePath,
+    ],
+  );
 
   const cancelGeneration = useCallback(
     async (jobId: string) => {
@@ -2415,7 +2482,7 @@ export function TestingTool(props: {
   );
 
   const runGeneratedTests = useCallback(
-    async (caseIds?: ReadonlyArray<string>) => {
+    async (caseIds?: ReadonlyArray<string>, concurrency = 1) => {
       const job = generationJobs.find((candidate) => candidate.status === "completed");
       if (!job || !normalizedTarget) return;
       setBusyAction("run-tests");
@@ -2429,12 +2496,13 @@ export function TestingTool(props: {
           generationJobId: job.id,
           targetUrl: normalizedTarget,
           mode: executionMode,
+          concurrency,
           ...(caseIds ? { caseIds: [...caseIds] } : {}),
           visualComparison,
         });
         await Promise.all([refreshExecution(), refreshCases()]);
         setMessage(
-          `Run ${run.status}: ${run.results.filter((result) => result.status === "passed").length} passed, ${run.results.filter((result) => result.status === "failed").length} failed in ${(run.durationMs / 1000).toFixed(1)} seconds.`,
+          `Run ${run.status}: ${run.results.filter((result) => result.status === "passed").length} passed, ${run.results.filter((result) => result.status === "failed").length} failed, ${run.results.filter((result) => result.status === "blocked").length} blocked in ${(run.durationMs / 1000).toFixed(1)} seconds.`,
         );
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Generated test execution failed.");
@@ -3095,6 +3163,7 @@ export function TestingTool(props: {
 
   return (
     <TestingDataContext.Provider value={contextValue}>
+      {confirmDialog}
       <main
         className="relative flex h-full min-h-0 overflow-hidden bg-background"
         aria-labelledby="testing-heading"

@@ -78,7 +78,7 @@ export async function createPlaywrightMcpSession(input: {
             ...(executablePath ? { executablePath } : {}),
           },
         },
-    capabilities: ["core"],
+    capabilities: ["core", "storage"],
     outputDir: input.outputPath,
     saveSession: false,
     sharedBrowserContext: true,

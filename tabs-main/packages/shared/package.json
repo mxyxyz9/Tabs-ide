@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./testingLocatorDom": {
+      "types": "./src/testingLocatorDom.ts",
+      "import": "./src/testingLocatorDom.ts"
+    },
     "./model": {
       "types": "./src/model.ts",
       "import": "./src/model.ts"

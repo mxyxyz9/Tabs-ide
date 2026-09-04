@@ -2,9 +2,11 @@ import type {
   TestingLocatorCoverageMode,
   TestingLocatorEntry,
   TestingLocatorVerificationStatus,
+  TestingLocatorPreviewSnapshot,
 } from "@tabs/contracts";
 
 import type { LocatorCandidate } from "./locatorLibrary";
+import { TESTING_LOCATOR_DOM_FUNCTION } from "@tabs/shared/testingLocatorDom";
 import {
   extractAccessibilityYaml,
   extractPageUrl,
@@ -15,6 +17,7 @@ import {
   redactCredentialLikeText,
   sanitizeAccessibilitySnapshot,
   structuralHash,
+  shortDigest,
   tokenizePii,
 } from "./security";
 
@@ -56,7 +59,8 @@ function candidateKey(role: string, name: string, index: number): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
-  return index === 0 ? base : `${base}-${index + 1}`;
+  const key = /[^\x00-\x7f]/.test(name) ? `${base}-${shortDigest(name)}` : base;
+  return index === 0 ? key : `${key}-${index + 1}`;
 }
 
 function classificationForRole(role: string): TestingLocatorEntry["classification"] {
@@ -66,6 +70,7 @@ function classificationForRole(role: string): TestingLocatorEntry["classificatio
 }
 
 export interface LocatorCaptureSnapshot {
+  readonly resolvedCounts?: ReadonlyMap<string, number>;
   readonly rawUrl: string;
   readonly fingerprint: string;
   readonly storedSnapshot: string;
@@ -95,7 +100,8 @@ export function locatorCandidatesFromSnapshot(input: {
     const classification = classificationForRole(role);
     if (input.coverage === "actions-only" && classification !== "action") continue;
     if (input.coverage === "actions-assertions" && classification === "content") continue;
-    if (!name && input.coverage !== "everything-accessible") continue;
+    if (!name && classification !== "action" && input.coverage !== "everything-accessible")
+      continue;
     nodes.push({ role, name });
   }
   const taskWords = new Set(
@@ -147,14 +153,18 @@ export function locatorCandidatesFromSnapshot(input: {
 
 export async function captureLocatorSnapshot(input: {
   readonly projectId: string;
-  readonly session: PlaywrightMcpSession;
+  readonly session: PlaywrightMcpSession | null;
+  readonly previewSnapshot?: TestingLocatorPreviewSnapshot;
   readonly coverage: TestingLocatorCoverageMode;
   readonly maxElements: number;
   readonly fallbackUrl: string;
   readonly taskContext?: string;
 }): Promise<LocatorCaptureSnapshot> {
-  const response = await input.session.call("browser_snapshot", { depth: 12, boxes: true });
-  const rawSnapshot = extractAccessibilityYaml(response);
+  if (!input.previewSnapshot && !input.session) throw new Error("No browser available for capture");
+  const response = input.previewSnapshot
+    ? ""
+    : await input.session!.call("browser_snapshot", { depth: 12, boxes: true });
+  const rawSnapshot = input.previewSnapshot?.snapshot ?? extractAccessibilityYaml(response);
   const parsed = locatorCandidatesFromSnapshot({
     projectId: input.projectId,
     snapshot: rawSnapshot,
@@ -162,10 +172,95 @@ export async function captureLocatorSnapshot(input: {
     maxElements: input.maxElements,
     ...(input.taskContext ? { taskContext: input.taskContext } : {}),
   });
+  const domSnapshot = input.previewSnapshot?.elements
+    ? input.previewSnapshot
+    : input.session
+      ? parseLocatorDomResult(
+          await input.session.call("browser_evaluate", { function: TESTING_LOCATOR_DOM_FUNCTION }),
+        )
+      : undefined;
+  if (domSnapshot?.elements) {
+    const dom = locatorCandidatesFromDom({
+      projectId: input.projectId,
+      elements: domSnapshot.elements,
+      coverage: input.coverage,
+      maxElements: input.maxElements,
+      ...(input.taskContext ? { taskContext: input.taskContext } : {}),
+    });
+    const snapshotUrl = input.previewSnapshot?.url ?? extractPageUrl(response);
+    if (snapshotUrl && snapshotUrl !== domSnapshot.url)
+      throw new Error("The browser navigated during capture. Scan again when the page is ready.");
+    return {
+      ...parsed,
+      ...dom,
+      rawUrl: domSnapshot.url,
+      fingerprint: structuralHash(parsed.storedSnapshot),
+    };
+  }
   return {
     ...parsed,
-    rawUrl: extractPageUrl(response) ?? input.fallbackUrl,
+    rawUrl: input.previewSnapshot?.url ?? extractPageUrl(response) ?? input.fallbackUrl,
     fingerprint: structuralHash(parsed.storedSnapshot),
+  };
+}
+
+export function parseLocatorDomResult(
+  response: string,
+): Pick<TestingLocatorPreviewSnapshot, "url" | "elements"> {
+  const json = response.match(/### Result\s*\n([\s\S]*?)(?=\n### |$)/)?.[1] ?? response;
+  const value = JSON.parse(json.trim()) as Pick<TestingLocatorPreviewSnapshot, "url" | "elements">;
+  if (typeof value.url !== "string" || !Array.isArray(value.elements))
+    throw new Error("Playwright did not return DOM locator details.");
+  return value;
+}
+
+export function locatorCandidatesFromDom(input: {
+  readonly projectId: string;
+  readonly elements: NonNullable<TestingLocatorPreviewSnapshot["elements"]>;
+  readonly coverage: TestingLocatorCoverageMode;
+  readonly maxElements: number;
+  readonly taskContext?: string;
+}) {
+  const relevant = input.elements.filter((element) => {
+    const classification = classificationForRole(element.role);
+    if (input.coverage === "actions-only" && classification !== "action") return false;
+    if (input.coverage === "actions-assertions" && classification === "content") return false;
+    if (
+      input.taskContext &&
+      !input.taskContext
+        .toLocaleLowerCase()
+        .split(/\s+/)
+        .some((word) => word.length > 2 && element.name.toLocaleLowerCase().includes(word))
+    )
+      return false;
+    return true;
+  });
+  const resolvedCounts = new Map<string, number>();
+  const candidates: LocatorCandidate[] = relevant.slice(0, input.maxElements).map((element) => {
+    const locatorKey = `${candidateKey(element.role || element.tag, element.name, 0).slice(0, 44)}-${shortDigest(element.selector)}`;
+    const sanitize = (text: string) =>
+      tokenizePii(input.projectId, redactCredentialLikeText(text)).tokenized;
+    const name = sanitize(element.name);
+    const selector = sanitize(element.selector);
+    const testId = sanitize(element.testId);
+    const sensitive = /<(?:PII_|REDACTED_)/.test(`${name} ${selector} ${testId}`);
+    resolvedCounts.set(locatorKey, element.matchCount);
+    return {
+      locatorKey,
+      classification: classificationForRole(element.role),
+      strategy: testId ? "test-id" : "css",
+      arguments: testId ? { testId } : { selector },
+      semanticContext: `${element.role || element.tag} ${name}`,
+      source: "discovered",
+      fragile: element.fragile || element.matchCount !== 1,
+      lifecycleStatus: sensitive ? "manual-required" : "draft",
+    };
+  });
+  return {
+    candidates,
+    resolvedCounts,
+    observedElements: relevant.length,
+    truncatedElements: Math.max(0, relevant.length - candidates.length),
   };
 }
 

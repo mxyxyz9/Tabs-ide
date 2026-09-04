@@ -1,4 +1,6 @@
 import * as Effect from "effect/Effect";
+import { playwrightToolConfig } from "./playwrightToolConfig";
+import type { StructuredTestingGenerationInput } from "./TextGeneration";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
@@ -163,6 +165,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     imagePaths = [],
     cleanupPaths = [],
     modelSelection,
+    playwrightTools,
   }: {
     operation:
       | "generateCommitMessage"
@@ -177,6 +180,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     imagePaths?: ReadonlyArray<string>;
     cleanupPaths?: ReadonlyArray<string>;
     modelSelection: ModelSelection;
+    playwrightTools?: StructuredTestingGenerationInput<Schema.Top>["playwrightTools"];
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
     yield* logStructuredGenerationRequest({
       operation,
@@ -214,6 +218,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
           schemaPath,
           "--output-last-message",
           outputPath,
+          ...playwrightToolConfig(playwrightTools),
           ...imagePaths.flatMap((imagePath) => ["--image", imagePath]),
           "-",
         ],
@@ -459,6 +464,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       operation: "generateStructuredTesting",
       cwd: input.cwd,
       prompt: buildStructuredTestingPrompt(input),
+      playwrightTools: input.playwrightTools,
       outputSchemaJson: input.outputSchema,
       modelSelection,
     });

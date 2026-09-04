@@ -240,7 +240,21 @@ export const TestingAutomate = memo(function TestingAutomate({ onNavigate }: Tes
               Build {selectedGenerationCaseIds.size || "selected"} test
               {selectedGenerationCaseIds.size === 1 ? "" : "s"}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busyAction !== null || selectedGenerationCaseIds.size !== 1}
+              onClick={() => void generateTests(undefined, "official-playwright")}
+            >
+              Build with official Playwright tools
+            </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Official tools use the selected provider (currently Codex supported), perform the
+            reviewed case in a headless browser, and save a managed candidate for review. Select one
+            case. AI usage is billed or quota-metered by your provider; the estimated budget is not
+            a hard spend limit. No provider is switched.
+          </p>
           <div className="border-t border-border/60 pt-3">
             <Button
               type="button"

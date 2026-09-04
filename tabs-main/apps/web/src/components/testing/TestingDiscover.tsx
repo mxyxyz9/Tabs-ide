@@ -77,12 +77,14 @@ import { useTestingData } from "./context";
 import { InfoTooltip, NumberStepperInput, TestingApplicationPreview } from "./TestingWidgets";
 import { testingLocatorCode, testingLocatorHasRedactedArgument } from "./utils";
 import type { TestingAuthenticationMode } from "./types";
+import { TestingJourneyRecorder } from "./TestingJourneyRecorder";
 
 interface TestingDiscoverProps {
   projectId: ProjectId;
 }
 
 export const TestingDiscover = memo(function TestingDiscover({ projectId }: TestingDiscoverProps) {
+  const [addressDraft, setAddressDraft] = useState<string | null>(null);
   const {
     locatorLibrary,
     targetUrl,
@@ -933,19 +935,17 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                             />
                           </CollapsibleTrigger>
 
-                          {locatorSession?.status === "running" ? (
-                            <Badge
-                              role="status"
-                              className="w-full justify-center gap-2 py-2 sm:w-auto"
-                            >
-                              <PlayIcon aria-hidden="true" className="size-4" />
-                              Discovery active
-                            </Badge>
-                          ) : (
+                          {
                             <Button
                               type="button"
                               onClick={async () => {
-                                if (await startLocatorDiscovery()) setWorkflowStep(2);
+                                const captured =
+                                  locatorSession?.status === "running"
+                                    ? await captureLocatorPage(
+                                        locatorCaptureScope === "task" ? "relevant" : "all",
+                                      )
+                                    : await startLocatorDiscovery();
+                                if (captured) setWorkflowStep(2);
                               }}
                               disabled={
                                 !normalizedTarget ||
@@ -961,7 +961,7 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                               )}
                               Scan this page
                             </Button>
-                          )}
+                          }
                         </div>
 
                         <CollapsibleContent className="mt-3">
@@ -1161,20 +1161,34 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                       <Input
                         id="locator-target-url"
                         type="url"
-                        value={locatorNavigateUrl || targetUrl}
+                        value={addressDraft ?? (locatorNavigateUrl || targetUrl)}
                         onChange={(event) => {
-                          setLocatorNavigateUrl(event.target.value);
-                          if (!locatorSession) setTargetUrl(event.target.value);
+                          setAddressDraft(event.target.value);
                         }}
                         onKeyDown={(event) => {
-                          if (event.key === "Enter" && locatorSession) {
-                            void navigateLocatorDiscovery();
+                          if (event.key === "Enter") {
+                            void navigateLocatorDiscovery(
+                              addressDraft ?? (locatorNavigateUrl || targetUrl),
+                            );
+                            setAddressDraft(null);
                           }
                         }}
                         placeholder="https://uat.example.com/account"
                         aria-label="Testing preview URL"
                         className="min-w-56 flex-1"
                       />
+                      <Button
+                        type="button"
+                        disabled={busyAction !== null}
+                        onClick={() => {
+                          void navigateLocatorDiscovery(
+                            addressDraft ?? (locatorNavigateUrl || targetUrl),
+                          );
+                          setAddressDraft(null);
+                        }}
+                      >
+                        Open
+                      </Button>
                       <SegmentedControl
                         size="sm"
                         value={locatorViewport}
@@ -1251,6 +1265,7 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                         )}
                       </div>
                     </div>
+                    <TestingJourneyRecorder />
                     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 p-3">
                       <div className="text-xs text-muted-foreground" aria-live="polite">
                         <span className="block">
@@ -1266,11 +1281,16 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                               type="button"
                               size="sm"
                               onClick={async () => {
-                                if (await captureLocatorPage("relevant")) setWorkflowStep(2);
+                                if (
+                                  await captureLocatorPage(
+                                    locatorCaptureScope === "task" ? "relevant" : "all",
+                                  )
+                                )
+                                  setWorkflowStep(2);
                               }}
                               disabled={busyAction !== null}
                             >
-                              Scan controls
+                              Scan this page
                             </Button>
                             <Menu>
                               <MenuTrigger
@@ -1288,7 +1308,7 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                                 Actions
                               </MenuTrigger>
                               <MenuPopup align="end">
-                                <MenuItem onClick={() => void captureLocatorPage("page")}>
+                                <MenuItem onClick={() => void captureLocatorPage("all")}>
                                   Scan all elements on this page
                                 </MenuItem>
                                 <MenuSeparator />
@@ -1345,6 +1365,11 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                           {selectedLocatorEntryIds.size} selected
                         </Badge>
                       </div>
+                      <p className="mt-2 text-sm text-muted-foreground" aria-live="polite">
+                        {selectedLocatorPage
+                          ? `${selectedLocatorPage.name} - ${selectedLocatorPage.urlPattern}`
+                          : "Open and scan a page to choose its locators."}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1355,7 +1380,6 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                 >
                   {(selectedLocatorPage?.entries ?? [])
                     .filter((entry) => entry.lifecycleStatus !== "archived")
-                    .slice(0, 100)
                     .map((entry) => {
                       const manualRequired =
                         entry.lifecycleStatus === "manual-required" ||
@@ -1400,6 +1424,9 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                                 <span className="truncate font-mono text-xs font-medium">
                                   {entry.locatorKey}
                                 </span>
+                              </span>
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                {entry.semanticContext}
                               </span>
                               <code className="mt-2 block overflow-x-auto rounded-md bg-muted/70 px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
                                 {testingLocatorCode(entry)}

@@ -1,4 +1,4 @@
-import { readFile, realpath, stat } from "node:fs/promises";
+import { chmod, copyFile, readFile, realpath, stat, mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type {
@@ -34,6 +34,7 @@ import type {
   TestingLocatorDiscoveryNavigateInput,
   TestingLocatorDiscoverySession,
   TestingLocatorDiscoverySessionInput,
+  TestingLocatorPreviewSnapshot,
   TestingLocatorEntryReviewInput,
   TestingLocatorPageDeleteInput,
   TestingLocatorPageSelectionInput,
@@ -69,6 +70,7 @@ import type {
   TestingWorkbookImportResult,
 } from "@tabs/contracts";
 import { DEFAULT_TESTING_MAX_STATES } from "@tabs/contracts";
+import { sanitizePersistedUrl } from "./security";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
@@ -113,11 +115,13 @@ function isPathInside(root: string, candidate: string): boolean {
 interface AuthCapture {
   readonly session: PlaywrightMcpSession;
   readonly profilePath: string;
+  readonly outputPath: string;
 }
 
 interface LocatorCaptureSession {
-  readonly session: PlaywrightMcpSession;
+  readonly session: PlaywrightMcpSession | null;
   readonly input: TestingLocatorDiscoveryInput;
+  readonly capturedUrls: Set<string>;
   currentUrl: string;
 }
 
@@ -246,7 +250,7 @@ export class TestingService {
     }
     this.#authCaptures.clear();
     for (const locatorSession of this.#locatorSessions.values()) {
-      void locatorSession.session.close();
+      void locatorSession.session?.close();
     }
     this.#locatorSessions.clear();
     this.#locatorStore.close();
@@ -386,6 +390,32 @@ export class TestingService {
       }
       return this.#locatorSessionResult(input.projectId, sessionId);
     }
+    if (input.previewSnapshot) {
+      this.#locatorSessions.set(sessionId, {
+        session: null,
+        input,
+        capturedUrls: new Set(),
+        currentUrl: input.previewSnapshot.url,
+      });
+      try {
+        return await this.#captureLocatorPage(
+          input.projectId,
+          sessionId,
+          input.captureScope === "task" ? "relevant" : "all",
+          input.previewSnapshot,
+        );
+      } catch (error) {
+        this.#locatorSessions.delete(sessionId);
+        this.#locatorStore.finishSession(
+          input.projectId,
+          sessionId,
+          "failed",
+          "failed",
+          error instanceof Error ? error.message : String(error),
+        );
+        throw error;
+      }
+    }
     const session = await createPlaywrightMcpSession({
       profilePath: join(this.#testingRoot, "auth", shortDigest(input.projectId)),
       outputPath: join(this.#testingRoot, "mcp-output", `locator-${sessionId}`),
@@ -393,7 +423,12 @@ export class TestingService {
       ...(input.cdpEndpoint ? { cdpEndpoint: input.cdpEndpoint } : {}),
     });
     await session.call("browser_navigate", { url: input.targetUrl });
-    this.#locatorSessions.set(sessionId, { session, input, currentUrl: input.targetUrl });
+    this.#locatorSessions.set(sessionId, {
+      session,
+      input,
+      currentUrl: input.targetUrl,
+      capturedUrls: new Set(),
+    });
     if (input.mode === "guided") await this.#captureLocatorPage(input.projectId, sessionId);
     return this.#locatorSessionResult(input.projectId, sessionId);
   }
@@ -402,6 +437,7 @@ export class TestingService {
     input: TestingLocatorDiscoveryNavigateInput,
   ): Promise<TestingLocatorDiscoverySession> {
     const active = await this.#activeLocatorSession(input.projectId, input.sessionId);
+    if (!active.session) throw new Error("Navigate in the preview, then scan the current page.");
     await active.session.call("browser_navigate", { url: input.targetUrl });
     if (!this.#locatorStore.isFeatureEnabled()) {
       await this.cancelLocatorDiscovery(input);
@@ -420,6 +456,7 @@ export class TestingService {
       input.projectId,
       input.sessionId,
       input.captureMode ?? "relevant",
+      input.previewSnapshot,
     );
   }
 
@@ -428,7 +465,7 @@ export class TestingService {
   ): Promise<TestingLocatorDiscoverySession> {
     const active = await this.#activeLocatorSession(input.projectId, input.sessionId);
     this.#locatorSessions.delete(input.sessionId);
-    await active.session.close();
+    await active.session?.close();
     this.#locatorStore.finishSession(
       input.projectId,
       input.sessionId,
@@ -445,7 +482,7 @@ export class TestingService {
     const active = this.#locatorSessions.get(input.sessionId);
     if (active?.input.projectId === input.projectId) {
       this.#locatorSessions.delete(input.sessionId);
-      await active.session.close();
+      await active.session?.close();
     }
     this.#locatorStore.finishSession(
       input.projectId,
@@ -556,7 +593,9 @@ export class TestingService {
           fallbackUrl: rawTarget.href,
         });
         for (const entry of page.entries.filter((item) => requested.has(item.id))) {
-          const count = countLocatorMatches(capture.storedSnapshot, entry);
+          const count =
+            capture.resolvedCounts?.get(entry.locatorKey) ??
+            countLocatorMatches(capture.storedSnapshot, entry);
           this.#locatorStore.recordVerification({
             projectId: input.projectId,
             entryId: entry.id,
@@ -682,13 +721,14 @@ export class TestingService {
     }
     const projectKey = shortDigest(input.projectId);
     const profilePath = join(this.#testingRoot, "auth", projectKey);
+    const outputPath = join(this.#testingRoot, "mcp-output", `auth-${projectKey}`);
     const session = await createPlaywrightMcpSession({
       profilePath,
-      outputPath: join(this.#testingRoot, "mcp-output", `auth-${projectKey}`),
+      outputPath,
       headless: false,
     });
     await session.call("browser_navigate", { url: target.href });
-    this.#authCaptures.set(input.projectId, { session, profilePath });
+    this.#authCaptures.set(input.projectId, { session, profilePath, outputPath });
     return { started: true, profilePath };
   }
 
@@ -698,7 +738,16 @@ export class TestingService {
       throw new Error("No authentication capture browser is open for this project");
     }
     this.#authCaptures.delete(input.projectId);
-    await capture.session.close();
+    try {
+      const exportedStatePath = join(capture.outputPath, "storage-state.json");
+      await capture.session.call("browser_storage_state", { filename: exportedStatePath });
+      await chmod(exportedStatePath, 0o600);
+      const storageStatePath = join(capture.profilePath, "storage-state.json");
+      await copyFile(exportedStatePath, storageStatePath);
+      await chmod(storageStatePath, 0o600);
+    } finally {
+      await capture.session.close();
+    }
     this.#store.recordAuthSession(input.projectId, capture.profilePath);
     return this.#store.summary(input.projectId);
   }
@@ -930,6 +979,73 @@ export class TestingService {
   }
 
   async generateTests(input: TestingGenerationInput): Promise<TestingGenerationJob> {
+    if (input.engine === "recording") {
+      const code = input.recordedCode?.trim();
+      const expected = input.recordedExpectedResult?.trim();
+      if (!code || !expected || code.includes('throw new Error("Add expected-result assertions'))
+        throw new Error("Review the recording and add an expected-result assertion before saving.");
+      const jobId = crypto.randomUUID();
+      const outputDirectory = join(
+        this.#testingRoot,
+        "generated",
+        shortDigest(input.projectId),
+        jobId,
+      );
+      await mkdir(outputDirectory, { recursive: true });
+      const specPath = join(outputDirectory, "recorded.spec.ts");
+      const pageObjectPath = join(outputDirectory, "page.ts");
+      const dataPath = join(outputDirectory, "data.ts");
+      await Promise.all([
+        writeFile(specPath, code, { flag: "wx" }),
+        writeFile(pageObjectPath, "// Self-contained reviewed recording.\nexport {};\n", {
+          flag: "wx",
+        }),
+        writeFile(
+          dataPath,
+          "// Input placeholders must be supplied before execution.\nexport {};\n",
+          { flag: "wx" },
+        ),
+      ]);
+      const externalId = `REC-${jobId.slice(0, 8)}`;
+      const testCase = this.createCase({
+        projectId: input.projectId,
+        externalId,
+        description: "Recorded browser journey",
+        steps: ["Replay the reviewed browser recording"],
+        expectedResult: expected,
+      }).cases.find((item) => item.externalId === externalId)!;
+      this.#store.createGenerationJob({
+        id: jobId,
+        projectId: input.projectId,
+        outputDirectory,
+        totalCases: 1,
+        modelSelection: input.modelSelection,
+      });
+      this.#store.addGeneratedArtifact({
+        jobId,
+        caseId: testCase.id,
+        externalId,
+        featureSlug: "recorded-journey",
+        specPath,
+        pageObjectPath,
+        dataPath,
+        fingerprints: [],
+        captureReplay: true,
+      });
+      this.#store.updateGenerationJob(jobId, {
+        status: "completed",
+        completedCases: 1,
+        estimatedTokens: 0,
+        estimatedCostUsd: 0,
+      });
+      return this.#store.generationJob(input.projectId, jobId)!;
+    }
+    if (
+      input.failureRunId &&
+      !this.#store.executionRuns(input.projectId).runs.some((run) => run.id === input.failureRunId)
+    ) {
+      throw new Error("The failure run does not belong to this project.");
+    }
     if (!this.#generator) {
       throw new Error("No configured coding-agent text-generation backend is available");
     }
@@ -949,7 +1065,7 @@ export class TestingService {
     ];
     return this.#generator.generate(input, {
       background: true,
-      ...(entryIds.length > 0
+      ...(entryIds.length > 0 && input.engine !== "official-playwright"
         ? {
             beforeRun: async () => {
               if (!input.targetUrl) {
@@ -1171,27 +1287,17 @@ export class TestingService {
   async #captureLocatorPage(
     projectId: string,
     sessionId: string,
-    captureMode: "relevant" | "page" = "relevant",
+    captureMode: "relevant" | "page" | "all" = "relevant",
+    previewSnapshot?: TestingLocatorPreviewSnapshot,
   ): Promise<TestingLocatorDiscoverySession> {
     const active = await this.#activeLocatorSession(projectId, sessionId);
-    const storedSession = this.#locatorStore.session(projectId, sessionId);
-    const capturedPages = Number(storedSession?.captured_pages ?? 0);
-    if (capturedPages >= active.input.maxPagesPerSession) {
-      this.#locatorSessions.delete(sessionId);
-      await active.session.close();
-      this.#locatorStore.finishSession(
-        projectId,
-        sessionId,
-        "completed",
-        "page-limit",
-        `Reached the ${active.input.maxPagesPerSession}-page session limit`,
-      );
-      return this.#locatorSessionResult(projectId, sessionId);
-    }
+    if (!active.session && !previewSnapshot)
+      throw new Error("Capture the current preview before scanning.");
     const capture = await captureLocatorSnapshot({
       projectId,
       session: active.session,
-      coverage: active.input.coverage,
+      ...(previewSnapshot ? { previewSnapshot } : {}),
+      coverage: captureMode === "all" ? "everything-accessible" : active.input.coverage,
       maxElements: active.input.maxElementsPerPage,
       fallbackUrl: active.currentUrl,
       ...(captureMode === "relevant" &&
@@ -1200,6 +1306,15 @@ export class TestingService {
         ? { taskContext: active.input.taskContext.trim() }
         : {}),
     });
+    const capturedUrl = sanitizePersistedUrl(capture.rawUrl);
+    if (
+      active.capturedUrls.size >= active.input.maxPagesPerSession &&
+      !active.capturedUrls.has(capturedUrl)
+    ) {
+      throw new Error(
+        `Reached the ${active.input.maxPagesPerSession}-page session limit. Finish discovery and start a new session to scan this page.`,
+      );
+    }
     if (!this.#locatorStore.isFeatureEnabled()) {
       await this.cancelLocatorDiscovery({ projectId, sessionId });
       throw new Error("Locator discovery was cancelled because the feature was disabled");
@@ -1215,14 +1330,21 @@ export class TestingService {
       candidates: capture.candidates,
       observedElements: capture.observedElements,
       truncatedElements: capture.truncatedElements,
+      replaceMissing:
+        captureMode !== "relevant" &&
+        capture.truncatedElements === 0 &&
+        capture.candidates.length > 0,
     });
+    active.capturedUrls.add(capturedUrl);
     const library = this.#locatorStore.library(projectId);
     const capturedPage = library.pages.find(
-      (page) => page.structuralFingerprint === capture.fingerprint,
+      (page) => page.urlPattern === sanitizePersistedUrl(capture.rawUrl),
     );
     if (capturedPage) {
       for (const entry of capturedPage.entries) {
-        const count = countLocatorMatches(capture.storedSnapshot, entry);
+        const count =
+          capture.resolvedCounts?.get(entry.locatorKey) ??
+          countLocatorMatches(capture.storedSnapshot, entry);
         this.#locatorStore.recordVerification({
           projectId,
           entryId: entry.id,

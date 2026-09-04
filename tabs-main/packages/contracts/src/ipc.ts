@@ -1682,7 +1682,18 @@ export interface DesktopBrowserHostControlInput {
 }
 
 export interface DesktopBrowserAutomationInput extends DesktopBrowserHostControlInput {
-  operation: "status" | "snapshot" | "click" | "type" | "press" | "scroll" | "evaluate" | "waitFor";
+  operation:
+    | "status"
+    | "snapshot"
+    | "click"
+    | "type"
+    | "press"
+    | "scroll"
+    | "evaluate"
+    | "waitFor"
+    | "recordStart"
+    | "recordStop"
+    | "recordStatus";
   input?: unknown;
 }
 

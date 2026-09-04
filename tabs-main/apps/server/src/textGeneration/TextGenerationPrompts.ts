@@ -294,11 +294,11 @@ export function buildDiffSummaryPrompt(input: DiffSummaryPromptInput) {
 export function buildStructuredTestingPrompt(
   input: Pick<
     StructuredTestingGenerationInput<Schema.Top>,
-    "taskKind" | "sanitizedPrompt" | "reasoningTier" | "budget"
+    "taskKind" | "sanitizedPrompt" | "reasoningTier" | "budget" | "playwrightTools"
   >,
 ): string {
   const fieldGuidance =
-    input.taskKind === "test-generation"
+    !input.playwrightTools && input.taskKind === "test-generation"
       ? [
           "Field guidance:",
           "- featureSlug: non-empty, lowercase slug-compatible text naming the tested feature.",
@@ -323,8 +323,9 @@ export function buildStructuredTestingPrompt(
             "- inference: concise explanation connecting the observed facts to the classification.",
             "- recommendation: concrete next action for resolving or investigating the failure.",
           ];
-  const taskInstruction =
-    input.taskKind === "test-generation"
+  const taskInstruction = input.playwrightTools
+    ? "Use the supplied official Playwright MCP tools to carry out the reviewed testing workflow in the managed candidate directory. Return the structured summary only after using tools. Do not modify original repository files."
+    : input.taskKind === "test-generation"
       ? [
           "This is a Testing workspace generation request, not an Agents conversation.",
           "Do not edit repository files, run commands, or respond conversationally.",

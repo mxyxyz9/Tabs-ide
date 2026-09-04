@@ -41,10 +41,12 @@ import {
   FingerprintIcon,
   GaugeIcon,
   ActivityIcon,
+  BookOpenIcon,
 } from "lucide-react";
 import { UsageLimitsPage } from "../components/settings/usage/UsageLimitsPage";
 import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesSettings";
 import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
+import { DocumentationSettings } from "../components/settings/DocumentationSettings";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
@@ -425,7 +427,8 @@ type SettingsSectionId =
   | "startup-animation"
   | "keybindings"
   | "about"
-  | "diagnostics";
+  | "diagnostics"
+  | "documentation";
 
 const SETTINGS_NAV: ReadonlyArray<{
   id: SettingsSectionId;
@@ -438,6 +441,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   { id: "providers", label: "Providers", icon: BotIcon },
   { id: "usage", label: "Usage & Limits", icon: GaugeIcon },
   { id: "diagnostics", label: "Diagnostics", icon: ActivityIcon },
+  { id: "documentation", label: "Documentation", icon: BookOpenIcon },
   { id: "source-control", label: "Source Control", icon: GitBranchIcon },
   { id: "connections", label: "Connections", icon: Link2Icon },
   { id: "workspace", label: "Workspace", icon: FolderIcon },
@@ -1025,41 +1029,179 @@ export function generateAestheticThemeName(): string {
 }
 
 const CURATED_PASTEL_HARMONIES = [
-  { bg: "#faf4f6", card: "#ffffff", border: "#f3dbe3", fg: "#2d1b22", primary: "#d9658b" }, // Sakura Bloom
-  { bg: "#f5f7f3", card: "#ffffff", border: "#dbe4d5", fg: "#182615", primary: "#4f8045" }, // Matcha Latte
-  { bg: "#f6f5fa", card: "#ffffff", border: "#e0dcf2", fg: "#1d162d", primary: "#6c56ce" }, // Lavender Haze
-  { bg: "#faf5f3", card: "#ffffff", border: "#f5dfd6", fg: "#2e1c15", primary: "#d46b50" }, // Peach Fizz
-  { bg: "#f4f7fb", card: "#ffffff", border: "#d9e4f5", fg: "#122033", primary: "#3174ed" }, // Sky Cloud
-  { bg: "#1a1721", card: "#231f2d", border: "#352e45", fg: "#ebdff7", primary: "#b388ff" }, // Muted Lilac
-  { bg: "#151a17", card: "#1d2420", border: "#2c3831", fg: "#dcf2e6", primary: "#70c497" }, // Sage Twilight
+  {
+    bg: "#faf4f6",
+    card: "#ffffff",
+    border: "#f3dbe3",
+    fg: "#2d1b22",
+    primary: "#d9658b",
+  }, // Sakura Bloom
+  {
+    bg: "#f5f7f3",
+    card: "#ffffff",
+    border: "#dbe4d5",
+    fg: "#182615",
+    primary: "#4f8045",
+  }, // Matcha Latte
+  {
+    bg: "#f6f5fa",
+    card: "#ffffff",
+    border: "#e0dcf2",
+    fg: "#1d162d",
+    primary: "#6c56ce",
+  }, // Lavender Haze
+  {
+    bg: "#faf5f3",
+    card: "#ffffff",
+    border: "#f5dfd6",
+    fg: "#2e1c15",
+    primary: "#d46b50",
+  }, // Peach Fizz
+  {
+    bg: "#f4f7fb",
+    card: "#ffffff",
+    border: "#d9e4f5",
+    fg: "#122033",
+    primary: "#3174ed",
+  }, // Sky Cloud
+  {
+    bg: "#1a1721",
+    card: "#231f2d",
+    border: "#352e45",
+    fg: "#ebdff7",
+    primary: "#b388ff",
+  }, // Muted Lilac
+  {
+    bg: "#151a17",
+    card: "#1d2420",
+    border: "#2c3831",
+    fg: "#dcf2e6",
+    primary: "#70c497",
+  }, // Sage Twilight
 ];
 
 const CURATED_VIVID_HARMONIES = [
-  { bg: "#090d16", card: "#111827", border: "#1f2937", fg: "#f9fafb", primary: "#6366f1" }, // Vibe Check (Indigo)
-  { bg: "#06111e", card: "#0b1d32", border: "#143254", fg: "#f0f9ff", primary: "#06b6d4" }, // Electric Cyan
-  { bg: "#130a10", card: "#20101b", border: "#381a2f", fg: "#fdf2f8", primary: "#f43f5e" }, // Hot Coral
-  { bg: "#041410", card: "#08241d", border: "#104236", fg: "#ecfdf5", primary: "#10b981" }, // Emerald Pulse
-  { bg: "#161108", card: "#241c0e", border: "#3f3018", fg: "#fffbeb", primary: "#f59e0b" }, // Amber Gold
+  {
+    bg: "#090d16",
+    card: "#111827",
+    border: "#1f2937",
+    fg: "#f9fafb",
+    primary: "#6366f1",
+  }, // Vibe Check (Indigo)
+  {
+    bg: "#06111e",
+    card: "#0b1d32",
+    border: "#143254",
+    fg: "#f0f9ff",
+    primary: "#06b6d4",
+  }, // Electric Cyan
+  {
+    bg: "#130a10",
+    card: "#20101b",
+    border: "#381a2f",
+    fg: "#fdf2f8",
+    primary: "#f43f5e",
+  }, // Hot Coral
+  {
+    bg: "#041410",
+    card: "#08241d",
+    border: "#104236",
+    fg: "#ecfdf5",
+    primary: "#10b981",
+  }, // Emerald Pulse
+  {
+    bg: "#161108",
+    card: "#241c0e",
+    border: "#3f3018",
+    fg: "#fffbeb",
+    primary: "#f59e0b",
+  }, // Amber Gold
 ];
 
 const CURATED_MINIMAL_HARMONIES = [
-  { bg: "#0f172a", card: "#1e293b", border: "#334155", fg: "#f8fafc", primary: "#38bdf8" }, // Slate Blue
-  { bg: "#121212", card: "#1e1e1e", border: "#2d2d2d", fg: "#ededed", primary: "#f5f5f5" }, // Pure Charcoal
-  { bg: "#fafafa", card: "#ffffff", border: "#e5e5e5", fg: "#171717", primary: "#2563eb" }, // Minimal Studio Light
+  {
+    bg: "#0f172a",
+    card: "#1e293b",
+    border: "#334155",
+    fg: "#f8fafc",
+    primary: "#38bdf8",
+  }, // Slate Blue
+  {
+    bg: "#121212",
+    card: "#1e1e1e",
+    border: "#2d2d2d",
+    fg: "#ededed",
+    primary: "#f5f5f5",
+  }, // Pure Charcoal
+  {
+    bg: "#fafafa",
+    card: "#ffffff",
+    border: "#e5e5e5",
+    fg: "#171717",
+    primary: "#2563eb",
+  }, // Minimal Studio Light
 ];
 
 const CURATED_CYBERPUNK_HARMONIES = [
-  { bg: "#080711", card: "#100e20", border: "#221c3d", fg: "#f3f0ff", primary: "#d946ef" }, // Cyber Haze
-  { bg: "#0d021a", card: "#190533", border: "#340a66", fg: "#fae8ff", primary: "#00f0ff" }, // Neon Synthwave
-  { bg: "#020d07", card: "#051a0e", border: "#0b381d", fg: "#dcffe4", primary: "#00ff66" }, // Matrix Terminal
-  { bg: "#0a0e1a", card: "#12192e", border: "#1e294d", fg: "#e0e8ff", primary: "#7aa2f7" }, // Tokyo Night
+  {
+    bg: "#080711",
+    card: "#100e20",
+    border: "#221c3d",
+    fg: "#f3f0ff",
+    primary: "#d946ef",
+  }, // Cyber Haze
+  {
+    bg: "#0d021a",
+    card: "#190533",
+    border: "#340a66",
+    fg: "#fae8ff",
+    primary: "#00f0ff",
+  }, // Neon Synthwave
+  {
+    bg: "#020d07",
+    card: "#051a0e",
+    border: "#0b381d",
+    fg: "#dcffe4",
+    primary: "#00ff66",
+  }, // Matrix Terminal
+  {
+    bg: "#0a0e1a",
+    card: "#12192e",
+    border: "#1e294d",
+    fg: "#e0e8ff",
+    primary: "#7aa2f7",
+  }, // Tokyo Night
 ];
 
 const CURATED_WARM_HARMONIES = [
-  { bg: "#18120e", card: "#251c16", border: "#3c2d24", fg: "#f7ede8", primary: "#e07a5f" }, // Chai Midnight
-  { bg: "#120e0b", card: "#1c1612", border: "#30261f", fg: "#f4eae1", primary: "#d4a373" }, // Espresso Dark
-  { bg: "#fcf8f5", card: "#ffffff", border: "#f0dfd5", fg: "#2c1a11", primary: "#c85a32" }, // Terracotta Sunset
-  { bg: "#fdfbf7", card: "#ffffff", border: "#f2e9d8", fg: "#241c10", primary: "#b58900" }, // Golden Oat
+  {
+    bg: "#18120e",
+    card: "#251c16",
+    border: "#3c2d24",
+    fg: "#f7ede8",
+    primary: "#e07a5f",
+  }, // Chai Midnight
+  {
+    bg: "#120e0b",
+    card: "#1c1612",
+    border: "#30261f",
+    fg: "#f4eae1",
+    primary: "#d4a373",
+  }, // Espresso Dark
+  {
+    bg: "#fcf8f5",
+    card: "#ffffff",
+    border: "#f0dfd5",
+    fg: "#2c1a11",
+    primary: "#c85a32",
+  }, // Terracotta Sunset
+  {
+    bg: "#fdfbf7",
+    card: "#ffffff",
+    border: "#f2e9d8",
+    fg: "#241c10",
+    primary: "#b58900",
+  }, // Golden Oat
 ];
 
 function generateHarmonizedPalette(
@@ -1366,7 +1508,9 @@ function ThemePickerGrid({
                     <div className="flex items-center gap-1.5">
                       <div
                         className="size-2 rounded-full"
-                        style={{ backgroundColor: preset.config.colors.primary }}
+                        style={{
+                          backgroundColor: preset.config.colors.primary,
+                        }}
                       />
                     </div>
                     <div className="h-1.5 w-10 rounded-full opacity-50 bg-foreground" />
@@ -1379,7 +1523,9 @@ function ThemePickerGrid({
                     />
                     <div
                       className="h-1.5 w-20 rounded-full opacity-70"
-                      style={{ backgroundColor: preset.config.colors.foreground }}
+                      style={{
+                        backgroundColor: preset.config.colors.foreground,
+                      }}
                     />
                   </div>
                 </div>
@@ -2431,8 +2577,12 @@ function SettingsRouteView() {
           localStorage.setItem("tabs_last_models_refresh_time", String(Date.now()));
         } catch {}
         void refreshServerConfig();
-        void queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
-        void queryClient.invalidateQueries({ queryKey: ["source-control-discovery"] });
+        void queryClient.invalidateQueries({
+          queryKey: serverQueryKeys.config(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["source-control-discovery"],
+        });
 
         const providersList: ReadonlyArray<ServerProvider> = res?.providers ?? [];
         if (providersList.length > 0) {
@@ -2559,7 +2709,11 @@ function SettingsRouteView() {
         const api = readNativeApi();
         if (!api) return;
         void api.terminal
-          .write({ threadId, terminalId: DEFAULT_THREAD_TERMINAL_ID, data: `${command}\r` })
+          .write({
+            threadId,
+            terminalId: DEFAULT_THREAD_TERMINAL_ID,
+            data: `${command}\r`,
+          })
           .catch(() => undefined);
         if (followUpCommand) {
           setTimeout(() => {
@@ -2697,7 +2851,9 @@ function SettingsRouteView() {
       run
         .then(() => {
           void refreshServerConfig();
-          return queryClient.invalidateQueries({ queryKey: serverQueryKeys.config() });
+          return queryClient.invalidateQueries({
+            queryKey: serverQueryKeys.config(),
+          });
         })
         .catch((error: unknown) => {
           toastManager.add({
@@ -3058,7 +3214,10 @@ function SettingsRouteView() {
                               "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
                               activeFontCombo.sansClass,
                             )}
-                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                            style={{
+                              fontFamily: "var(--font-sans)",
+                              textTransform: "capitalize",
+                            }}
                           >
                             General
                           </h2>
@@ -3232,7 +3391,9 @@ function SettingsRouteView() {
                               value={settings.desktopIconTheme}
                               onValueChange={(val) => {
                                 if (val !== "dark" && val !== "light" && val !== "system") return;
-                                updateSettings({ desktopIconTheme: val as "dark" | "light" });
+                                updateSettings({
+                                  desktopIconTheme: val as "dark" | "light",
+                                });
                               }}
                               options={DESKTOP_ICON_OPTIONS}
                               aria-label="Desktop icon theme"
@@ -3631,7 +3792,9 @@ function SettingsRouteView() {
                               try {
                                 const bridge = window.desktopBridge;
                                 if (bridge) {
-                                  await bridge.recreateCodeSession({ projectId: activeProjectId });
+                                  await bridge.recreateCodeSession({
+                                    projectId: activeProjectId,
+                                  });
                                   toastManager.add({
                                     type: "success",
                                     title: "Code OSS reloaded",
@@ -3702,7 +3865,10 @@ function SettingsRouteView() {
                               "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
                               activeFontCombo.sansClass,
                             )}
-                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                            style={{
+                              fontFamily: "var(--font-sans)",
+                              textTransform: "capitalize",
+                            }}
                           >
                             Themes
                           </h2>
@@ -4026,7 +4192,10 @@ function SettingsRouteView() {
                                       value={fontPreferences.uiFont}
                                       onValueChange={(val) =>
                                         val &&
-                                        setFontPreferences((prev) => ({ ...prev, uiFont: val }))
+                                        setFontPreferences((prev) => ({
+                                          ...prev,
+                                          uiFont: val,
+                                        }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
@@ -4093,7 +4262,10 @@ function SettingsRouteView() {
                                       value={fontPreferences.editorFont}
                                       onValueChange={(val) =>
                                         val &&
-                                        setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                                        setFontPreferences((prev) => ({
+                                          ...prev,
+                                          editorFont: val,
+                                        }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-lg bg-background border-border/80">
@@ -4133,7 +4305,10 @@ function SettingsRouteView() {
                                       value={fontPreferences.editorFont}
                                       onValueChange={(val) =>
                                         val &&
-                                        setFontPreferences((prev) => ({ ...prev, editorFont: val }))
+                                        setFontPreferences((prev) => ({
+                                          ...prev,
+                                          editorFont: val,
+                                        }))
                                       }
                                     >
                                       <SelectTrigger className="w-full text-xs rounded-xl bg-background border-border/80">
@@ -4257,7 +4432,10 @@ function SettingsRouteView() {
                               "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
                               activeFontCombo.sansClass,
                             )}
-                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                            style={{
+                              fontFamily: "var(--font-sans)",
+                              textTransform: "capitalize",
+                            }}
                           >
                             Animations
                           </h2>
@@ -4654,9 +4832,18 @@ function SettingsRouteView() {
                                     </p>
                                     <div className="flex flex-wrap gap-1 pt-0.5">
                                       {[
-                                        { name: "Syne", font: "'Syne', sans-serif" },
-                                        { name: "Unbounded", font: "'Unbounded', sans-serif" },
-                                        { name: "Outfit", font: "'Outfit', sans-serif" },
+                                        {
+                                          name: "Syne",
+                                          font: "'Syne', sans-serif",
+                                        },
+                                        {
+                                          name: "Unbounded",
+                                          font: "'Unbounded', sans-serif",
+                                        },
+                                        {
+                                          name: "Outfit",
+                                          font: "'Outfit', sans-serif",
+                                        },
                                         {
                                           name: "Space Grotesk",
                                           font: "'Space Grotesk', sans-serif",
@@ -4932,7 +5119,9 @@ function SettingsRouteView() {
                               <Switch
                                 checked={settings.animatedTrackFillEnabled}
                                 onCheckedChange={(checked) =>
-                                  updateSettings({ animatedTrackFillEnabled: Boolean(checked) })
+                                  updateSettings({
+                                    animatedTrackFillEnabled: Boolean(checked),
+                                  })
                                 }
                                 aria-label="Animated slider fill"
                               />
@@ -4959,7 +5148,9 @@ function SettingsRouteView() {
                               <Switch
                                 checked={settings.nyanCatSliderMode}
                                 onCheckedChange={(checked) =>
-                                  updateSettings({ nyanCatSliderMode: Boolean(checked) })
+                                  updateSettings({
+                                    nyanCatSliderMode: Boolean(checked),
+                                  })
                                 }
                                 aria-label="Nyan Cat slider"
                               />
@@ -4979,6 +5170,7 @@ function SettingsRouteView() {
                   />
                 ) : null}
                 {activeSettingsSection === "connections" ? <ConnectionsSettings /> : null}
+                {activeSettingsSection === "documentation" ? <DocumentationSettings /> : null}
                 {activeSettingsSection === "providers" ? (
                   <div className="space-y-6">
                     <div>
@@ -4989,7 +5181,10 @@ function SettingsRouteView() {
                               "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
                               activeFontCombo.sansClass,
                             )}
-                            style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                            style={{
+                              fontFamily: "var(--font-sans)",
+                              textTransform: "capitalize",
+                            }}
                           >
                             Providers
                           </h2>
@@ -5130,7 +5325,9 @@ function SettingsRouteView() {
                                                   index,
                                                   index - 1,
                                                 );
-                                                updateSettings({ pinnedModels: nextPinned as any });
+                                                updateSettings({
+                                                  pinnedModels: nextPinned as any,
+                                                });
                                               }}
                                               aria-label={`Move ${displayName} up`}
                                             >
@@ -5154,7 +5351,9 @@ function SettingsRouteView() {
                                                   index,
                                                   index + 1,
                                                 );
-                                                updateSettings({ pinnedModels: nextPinned as any });
+                                                updateSettings({
+                                                  pinnedModels: nextPinned as any,
+                                                });
                                               }}
                                               aria-label={`Move ${displayName} down`}
                                             >
@@ -5177,7 +5376,9 @@ function SettingsRouteView() {
                                                   entry.provider,
                                                   entry.model,
                                                 );
-                                                updateSettings({ pinnedModels: nextPinned as any });
+                                                updateSettings({
+                                                  pinnedModels: nextPinned as any,
+                                                });
                                               }}
                                               aria-label={`Unpin ${displayName}`}
                                             >
@@ -5450,19 +5651,26 @@ function SettingsRouteView() {
                                             providerCard.provider === "copilot"
                                               ? {
                                                   providers: {
-                                                    copilot: { token: "", byokApiKey: "" },
+                                                    copilot: {
+                                                      token: "",
+                                                      byokApiKey: "",
+                                                    },
                                                   },
                                                 }
                                               : providerCard.provider === "opencode"
                                                 ? {
                                                     providers: {
-                                                      opencode: { serverPassword: "" },
+                                                      opencode: {
+                                                        serverPassword: "",
+                                                      },
                                                     },
                                                   }
                                                 : providerCard.provider === "kilo"
                                                   ? {
                                                       providers: {
-                                                        kilo: { serverPassword: "" },
+                                                        kilo: {
+                                                          serverPassword: "",
+                                                        },
                                                       },
                                                     }
                                                   : {};
@@ -5847,7 +6055,9 @@ function SettingsRouteView() {
                                                 className="h-6 gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
                                                 onClick={() => {
                                                   setDraftModelOrders((existing) => {
-                                                    const next = { ...existing };
+                                                    const next = {
+                                                      ...existing,
+                                                    };
                                                     delete next[providerCard.provider];
                                                     return next;
                                                   });
@@ -6147,7 +6357,10 @@ function SettingsRouteView() {
                             "text-[28px] leading-relaxed pb-1 text-foreground mb-2 font-bold",
                             activeFontCombo.sansClass,
                           )}
-                          style={{ fontFamily: "var(--font-sans)", textTransform: "capitalize" }}
+                          style={{
+                            fontFamily: "var(--font-sans)",
+                            textTransform: "capitalize",
+                          }}
                         >
                           About
                         </h2>
@@ -6193,7 +6406,9 @@ function SettingsRouteView() {
                               <div className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-border">
                                 <div
                                   className="h-full rounded-full bg-primary transition-[width]"
-                                  style={{ width: `${Math.floor(updateState.downloadPercent)}%` }}
+                                  style={{
+                                    width: `${Math.floor(updateState.downloadPercent)}%`,
+                                  }}
                                 />
                               </div>
                             ) : null

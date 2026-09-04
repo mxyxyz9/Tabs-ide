@@ -72,7 +72,27 @@ export type TestingLocatorStorageMode = typeof TestingLocatorStorageMode.Type;
 export const TestingDiscoveryExperience = Schema.Literals(["classic", "locator-first"]);
 export type TestingDiscoveryExperience = typeof TestingDiscoveryExperience.Type;
 
+export const TestingLocatorPreviewSnapshot = Schema.Struct({
+  url: Schema.String,
+  snapshot: Schema.String.check(Schema.isMaxLength(2_000_000)),
+  elements: Schema.optionalKey(
+    Schema.Array(
+      Schema.Struct({
+        selector: Schema.String,
+        name: Schema.String,
+        tag: Schema.String,
+        role: Schema.String,
+        testId: Schema.String,
+        matchCount: Schema.Int,
+        fragile: Schema.Boolean,
+      }),
+    ),
+  ),
+});
+export type TestingLocatorPreviewSnapshot = typeof TestingLocatorPreviewSnapshot.Type;
+
 export const TestingLocatorDiscoveryInput = Schema.Struct({
+  previewSnapshot: Schema.optionalKey(TestingLocatorPreviewSnapshot),
   projectId: Schema.String,
   targetUrl: Schema.String,
   cdpEndpoint: Schema.optionalKey(Schema.String),
@@ -104,9 +124,10 @@ export const TestingLocatorDiscoveryInput = Schema.Struct({
 export type TestingLocatorDiscoveryInput = typeof TestingLocatorDiscoveryInput.Type;
 
 export const TestingLocatorDiscoverySessionInput = Schema.Struct({
+  previewSnapshot: Schema.optionalKey(TestingLocatorPreviewSnapshot),
   projectId: Schema.String,
   sessionId: Schema.String,
-  captureMode: Schema.optionalKey(Schema.Literals(["relevant", "page"])),
+  captureMode: Schema.optionalKey(Schema.Literals(["relevant", "page", "all"])),
 });
 export type TestingLocatorDiscoverySessionInput = typeof TestingLocatorDiscoverySessionInput.Type;
 
@@ -302,6 +323,10 @@ export const DEFAULT_TESTING_BATCH_MAX_TOKENS = 200_000;
 export const DEFAULT_TESTING_BATCH_MAX_COST_USD = 5;
 
 export const TestingGenerationInput = Schema.Struct({
+  engine: Schema.optionalKey(Schema.Literals(["standard", "official-playwright", "recording"])),
+  recordedCode: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(1_000_000))),
+  recordedExpectedResult: Schema.optionalKey(Schema.String),
+  failureRunId: Schema.optionalKey(Schema.String),
   projectId: Schema.String,
   projectPath: Schema.String,
   targetUrl: Schema.optionalKey(Schema.String),
@@ -343,6 +368,9 @@ export const TestingArtifactReadResult = Schema.Struct({
 export type TestingArtifactReadResult = typeof TestingArtifactReadResult.Type;
 
 export const TestingExecutionInput = Schema.Struct({
+  concurrency: Schema.optionalKey(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(Schema.isLessThanOrEqualTo(4)),
+  ),
   projectId: Schema.String,
   generationJobId: Schema.String,
   targetUrl: Schema.String,

@@ -297,8 +297,8 @@ export interface TestingDataContextValue {
   clearGraph: () => Promise<void>;
 
   startLocatorDiscovery: () => Promise<boolean>;
-  navigateLocatorDiscovery: () => Promise<void>;
-  captureLocatorPage: (captureMode?: "relevant" | "page") => Promise<boolean>;
+  navigateLocatorDiscovery: (url?: string) => Promise<void>;
+  captureLocatorPage: (captureMode?: "relevant" | "page" | "all") => Promise<boolean>;
   finishLocatorDiscovery: (cancel: boolean) => Promise<void>;
   rescanLocatorPage: (pageId?: string) => Promise<void>;
   deleteLocatorPage: (pageId?: string) => Promise<void>;
@@ -342,10 +342,13 @@ export interface TestingDataContextValue {
   moveEditedStep: (index: number, direction: -1 | 1) => void;
   saveCaseIdPolicy: () => Promise<void>;
 
-  generateTests: () => Promise<void>;
+  generateTests: (
+    failureRunId?: string,
+    engine?: "standard" | "official-playwright",
+  ) => Promise<void>;
   cancelGeneration: (jobId: string) => Promise<void>;
 
-  runGeneratedTests: (caseIds?: ReadonlyArray<string>) => Promise<void>;
+  runGeneratedTests: (caseIds?: ReadonlyArray<string>, concurrency?: number) => Promise<void>;
   decideHealing: (proposalId: string, decision: "accepted" | "rejected") => Promise<void>;
   createTestingSchedule: () => Promise<void>;
 

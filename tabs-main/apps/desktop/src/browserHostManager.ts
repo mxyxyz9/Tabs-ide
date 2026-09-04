@@ -1,5 +1,6 @@
 import * as FS from "node:fs/promises";
 import * as Path from "node:path";
+import { JourneyRecorder } from "./journeyRecorder";
 
 import {
   app,
@@ -186,6 +187,7 @@ type BrowserSession = {
   dispatchingAgentInput: boolean;
   humanControlTimer: ReturnType<typeof setTimeout> | null;
   automationTail: Promise<void>;
+  journeyRecorder?: JourneyRecorder;
 };
 
 interface BrowserConsoleEntry {
@@ -797,6 +799,17 @@ export class BrowserHostManager {
     const contents = session.view.webContents;
     if (contents.isDestroyed()) throw new Error("The requested browser session is unavailable.");
     const input = automationInput(request.input);
+    if (request.operation === "recordStart") {
+      session.journeyRecorder ??= new JourneyRecorder(contents);
+      await this.trackAutomation(session, "recordStart", () => session.journeyRecorder!.start());
+      return session.journeyRecorder.status();
+    }
+    if (request.operation === "recordStatus")
+      return session.journeyRecorder?.status() ?? { recording: false, count: 0 };
+    if (request.operation === "recordStop") {
+      if (!session.journeyRecorder) throw new Error("No recorded journey is available");
+      return this.trackAutomation(session, "recordStop", () => session.journeyRecorder!.stop());
+    }
 
     if (request.operation === "status") {
       return {

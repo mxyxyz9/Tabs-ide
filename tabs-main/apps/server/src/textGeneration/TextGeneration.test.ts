@@ -161,4 +161,42 @@ describe("makeTextGenerationFromRegistry", () => {
       expect(calls).toEqual(["test-generation:medium:Reviewed case without credentials"]);
     }),
   );
+
+  it.effect("does not switch providers when official Playwright tools are unavailable", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.makeUnsafe("claude_selected");
+      let called = false;
+      const provider = makeStubInstance(
+        instanceId,
+        makeStubTextGeneration({
+          generateStructuredTesting: () => {
+            called = true;
+            return Effect.succeed({ title: "must not run" });
+          },
+        }),
+      );
+      const tg = makeTextGenerationFromRegistry(makeStubRegistry([provider]));
+      const result = yield* tg
+        .generateStructuredTesting({
+          cwd: process.cwd(),
+          taskKind: "test-generation",
+          sanitizedPrompt: "Reviewed case",
+          outputSchema: Schema.Struct({ title: Schema.String }),
+          modelSelection: createModelSelection(instanceId, "selected-model"),
+          reasoningTier: "medium",
+          budget: { maxEstimatedTokens: 2_000, maxEstimatedCostUsd: 1 },
+          playwrightTools: {
+            command: process.execPath,
+            args: [],
+            cwd: process.cwd(),
+            nodePath: process.cwd(),
+          },
+        })
+        .pipe(Effect.result);
+
+      expect(Result.isFailure(result)).toBe(true);
+      expect(called).toBe(false);
+      if (Result.isFailure(result)) expect(result.failure.detail).toContain("not changed");
+    }),
+  );
 });

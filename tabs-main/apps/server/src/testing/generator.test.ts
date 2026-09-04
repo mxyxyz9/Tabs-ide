@@ -9,7 +9,7 @@ import * as Effect from "effect/Effect";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TextGenerationShape } from "../textGeneration/TextGeneration";
-import { TestingGenerator } from "./generator";
+import { TestingGenerator, renderGenerationSteps } from "./generator";
 import { TestingGraphStore } from "./graphStore";
 import { LocatorLibraryStore } from "./locatorLibrary";
 
@@ -36,6 +36,7 @@ function textGeneration(generate = vi.fn()) {
         featureSlug: "account-settings",
         testTitle: "opens account settings",
         assertionText: "Account settings",
+        steps: [{ locatorKey: "account1", action: "click", value: "" }],
       }),
     ),
   };
@@ -109,6 +110,42 @@ function generationInput(projectPath: string) {
 }
 
 describe("TestingGenerator", () => {
+  it("renders the reviewed action types instead of clicking every locator", () => {
+    expect(
+      renderGenerationSteps(
+        {
+          featureSlug: "form",
+          testTitle: "fills form",
+          assertionText: "Saved",
+          steps: [
+            { locatorKey: "name", action: "fill", value: "Rushil" },
+            { locatorKey: "country", action: "selectOption", value: "India" },
+            { locatorKey: "terms", action: "check", value: "" },
+            { locatorKey: "save", action: "click", value: "" },
+            { locatorKey: "notice", action: "assertText", value: "Saved" },
+          ],
+        },
+        ["name", "country", "terms", "save", "notice"].map((key) => ({ key })),
+      ),
+    ).toEqual([
+      '  await app.name.fill("Rushil");',
+      '  await app.country.selectOption("India");',
+      "  await app.terms.check();",
+      "  await app.save.click();",
+      '  await expect(app.notice).toHaveText("Saved");',
+    ]);
+    expect(() =>
+      renderGenerationSteps(
+        {
+          featureSlug: "x",
+          testTitle: "x",
+          assertionText: "x",
+          steps: [{ locatorKey: "invented", action: "click", value: "" }],
+        },
+        [{ key: "real" }],
+      ),
+    ).toThrow("Unknown locator");
+  });
   it("generates separate POM, data, and spec artifacts with locator fingerprints", async () => {
     const root = await mkdtemp(
       join(
@@ -148,7 +185,7 @@ describe("TestingGenerator", () => {
       expect(data).toContain('caseId": "QA-101"');
       expect(data).toContain('"expectedResult"');
       expect(data).toContain('"assertionText"');
-      expect(spec).toContain("await app.activateAccount1()");
+      expect(spec).toContain("await app.account1.click()");
       expect(spec).not.toContain("Open account settings");
       // Verify the prompt sent to the LLM was enriched with the expected result.
       const promptArg =

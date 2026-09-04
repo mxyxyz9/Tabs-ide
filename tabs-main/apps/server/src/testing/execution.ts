@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, delimiter, dirname, join } from "node:path";
 
 import type {
   TestingExecutionCaseResult,
@@ -13,6 +14,7 @@ import type {
 import { runProcess, type ProcessRunResult } from "../processRunner";
 import type { StoredGraphEdge, TestingExecutionArtifact, TestingGraphStore } from "./graphStore";
 import { shortDigest } from "./security";
+import { playwrightOutcome, runBounded } from "./batchExecution";
 
 export const TESTING_HEAL_CONFIDENCE = 0.9;
 export const TESTING_HEAL_MARGIN = 0.1;
@@ -81,11 +83,6 @@ async function findEvidence(root: string, suffix: string): Promise<string | null
   return null;
 }
 
-function statusFor(result: ProcessRunResult): TestingExecutionCaseResult["status"] {
-  if (result.timedOut) return "blocked";
-  return result.code === 0 ? "passed" : "failed";
-}
-
 export class TestingExecutor {
   readonly #store: TestingGraphStore;
   readonly #testingRoot: string;
@@ -98,6 +95,10 @@ export class TestingExecutor {
   }
 
   async execute(input: TestingExecutionInput): Promise<TestingExecutionRun> {
+    const concurrency = input.concurrency ?? 1;
+    if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
+      throw new Error("Test concurrency must be an integer between 1 and 4");
+    }
     const target = new URL(input.targetUrl);
     if (target.protocol !== "http:" && target.protocol !== "https:") {
       throw new Error("Test execution requires an http:// or https:// target URL");
@@ -125,106 +126,152 @@ export class TestingExecutor {
     const results: TestingExecutionCaseResult[] = [];
     const proposals: Array<Omit<TestingHealingProposal, "id">> = [];
     const outputs: ProcessRunResult[] = [];
-    const cliPath = resolve(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../../..",
-      "node_modules/playwright/cli.js",
+    const playwrightRoot = dirname(
+      createRequire(import.meta.url).resolve("playwright/package.json"),
     );
+    const cliPath = join(playwrightRoot, "cli.js");
     const graph = this.#store.graph(input.projectId);
 
-    for (const artifact of artifacts) {
-      const caseOutput = join(runRoot, artifact.caseId);
-      await mkdir(caseOutput, { recursive: true });
-      const configPath = join(runRoot, `${artifact.caseId}.playwright.config.mjs`);
-      await writeFile(
-        configPath,
-        `export default { testDir: ${JSON.stringify(dirname(artifact.specPath))}, reporter: "line", outputDir: ${JSON.stringify(caseOutput)}, use: { trace: "retain-on-failure", screenshot: ${JSON.stringify(input.visualComparison ? "on" : "only-on-failure")} } };\n`,
-        "utf8",
-      );
-      const caseStartedAt = Date.now();
-      const processResult = await this.#run(
-        process.execPath,
-        [cliPath, "test", basename(artifact.specPath), "--config", configPath, "--workers=1"],
-        {
-          cwd: dirname(artifact.specPath),
-          timeoutMs: (input.timeoutSeconds ?? 120) * 1_000,
-          maxBufferBytes: 512 * 1024,
-          outputMode: "truncate",
-          allowNonZeroExit: true,
-          env: { ...process.env, TESTING_BASE_URL: target.href },
-        },
-      );
-      outputs.push(processResult);
-      const tracePath = await findEvidence(caseOutput, ".zip");
-      const screenshotPath = await findEvidence(caseOutput, ".png");
-      const status = statusFor(processResult);
-      const history = [
-        ...this.#store.comparableCaseStatuses(artifact.caseId, artifactRevision),
-        status,
-      ].filter((value): value is "passed" | "failed" => value === "passed" || value === "failed");
-      const flaky = history.length >= 3 && history.includes("passed") && history.includes("failed");
-      let visualStatus: TestingExecutionCaseResult["visualStatus"] = "disabled";
-      if (input.visualComparison && screenshotPath) {
-        const hash = createHash("sha256")
-          .update(await readFile(screenshotPath))
-          .digest("hex");
-        visualStatus = this.#store.compareVisualBaseline(artifact.caseId, hash, screenshotPath);
-      }
-      results.push({
-        caseId: artifact.caseId,
-        externalId: artifact.externalId,
-        status,
-        durationMs: Date.now() - caseStartedAt,
-        error:
-          status === "passed" ? null : (processResult.stderr || processResult.stdout).slice(-8_000),
-        tracePath,
-        screenshotPath,
-        flaky,
-        quarantined: flaky,
-        visualStatus,
-      });
-
-      if (
-        status === "failed" &&
-        /locator|getByRole|element|waiting for/i.test(
-          `${processResult.stdout}\n${processResult.stderr}`,
-        )
-      ) {
-        for (const fingerprint of artifact.fingerprints) {
-          const ranked = rankHealingCandidates(fingerprint, graph.edges);
-          const best = ranked[0];
-          if (
-            !best ||
-            (best.edge.role === fingerprint.role && best.edge.name === fingerprint.accessibleName)
-          )
-            continue;
-          const margin = best.confidence - (ranked[1]?.confidence ?? 0);
-          const attempts =
-            this.#store.consecutiveHealingAttempts(artifact.caseId, fingerprint.locatorKey) + 1;
-          const eligible =
-            best.confidence >= TESTING_HEAL_CONFIDENCE &&
-            margin >= TESTING_HEAL_MARGIN &&
-            attempts <= TESTING_HEAL_ATTEMPT_CAP;
-          proposals.push({
-            caseId: artifact.caseId,
-            locatorKey: fingerprint.locatorKey,
-            previousRole: fingerprint.role,
-            previousName: fingerprint.accessibleName,
-            proposedRole: best.edge.role,
-            proposedName: best.edge.name,
-            confidence: best.confidence,
-            margin,
-            diff: `- getByRole(${JSON.stringify(fingerprint.role)}, { name: ${JSON.stringify(fingerprint.accessibleName)} })\n+ getByRole(${JSON.stringify(best.edge.role)}, { name: ${JSON.stringify(best.edge.name)} })`,
-            status: eligible ? "pending" : "below-threshold",
-            consecutiveAttempts: attempts,
-            ...(fingerprint.locatorEntryId ? { locatorEntryId: fingerprint.locatorEntryId } : {}),
-            ...(fingerprint.locatorVersionId
-              ? { locatorVersionId: fingerprint.locatorVersionId }
-              : {}),
-          });
+    await runBounded(artifacts, concurrency, async (artifact) => {
+      try {
+        const caseOutput = join(runRoot, artifact.caseId);
+        await mkdir(caseOutput, { recursive: true });
+        const configPath = join(runRoot, `${artifact.caseId}.playwright.config.mjs`);
+        const reportPath = join(runRoot, `${artifact.caseId}.results.json`);
+        const storageStatePath = join(
+          this.#testingRoot,
+          "auth",
+          shortDigest(input.projectId),
+          "storage-state.json",
+        );
+        const useOptions = {
+          trace: "retain-on-failure",
+          screenshot: input.visualComparison ? "on" : "only-on-failure",
+          ...(existsSync(storageStatePath) ? { storageState: storageStatePath } : {}),
+        };
+        await writeFile(
+          configPath,
+          `export default { testDir: ${JSON.stringify(dirname(artifact.specPath))}, testMatch: ${JSON.stringify(basename(artifact.specPath))}, forbidOnly: true, retries: 0, reporter: [["line"], ["json", { outputFile: ${JSON.stringify(reportPath)} }]], outputDir: ${JSON.stringify(caseOutput)}, use: ${JSON.stringify(useOptions)} };\n`,
+          "utf8",
+        );
+        const caseStartedAt = Date.now();
+        const processResult = await this.#run(
+          process.execPath,
+          [cliPath, "test", basename(artifact.specPath), "--config", configPath, "--workers=1"],
+          {
+            cwd: dirname(artifact.specPath),
+            timeoutMs: (input.timeoutSeconds ?? 120) * 1_000,
+            maxBufferBytes: 512 * 1024,
+            outputMode: "truncate",
+            allowNonZeroExit: true,
+            env: {
+              ...process.env,
+              ELECTRON_RUN_AS_NODE: "1",
+              NODE_PATH: [dirname(playwrightRoot), process.env.NODE_PATH]
+                .filter(Boolean)
+                .join(delimiter),
+              TESTING_BASE_URL: target.href,
+            },
+          },
+        );
+        outputs.push(processResult);
+        const tracePath = await findEvidence(caseOutput, ".zip");
+        const screenshotPath = await findEvidence(caseOutput, ".png");
+        let report: unknown;
+        try {
+          report = JSON.parse(await readFile(reportPath, "utf8"));
+        } catch {
+          // Missing/incomplete evidence is blocked, never a successful test.
         }
+        const status = playwrightOutcome(processResult, report);
+        const history = [
+          ...this.#store.comparableCaseStatuses(artifact.caseId, artifactRevision),
+          status,
+        ].filter((value): value is "passed" | "failed" => value === "passed" || value === "failed");
+        const flaky =
+          history.length >= 3 && history.includes("passed") && history.includes("failed");
+        let visualStatus: TestingExecutionCaseResult["visualStatus"] = "disabled";
+        if (input.visualComparison && screenshotPath) {
+          const hash = createHash("sha256")
+            .update(await readFile(screenshotPath))
+            .digest("hex");
+          visualStatus = this.#store.compareVisualBaseline(artifact.caseId, hash, screenshotPath);
+        }
+        results.push({
+          caseId: artifact.caseId,
+          externalId: artifact.externalId,
+          status,
+          durationMs: Date.now() - caseStartedAt,
+          error:
+            status === "passed"
+              ? null
+              : `${status === "blocked" ? "Execution incomplete: timeout, missing report, skipped or flaky tests.\n" : ""}${processResult.stderr || processResult.stdout}`.slice(
+                  -8_000,
+                ),
+          tracePath,
+          screenshotPath,
+          flaky,
+          quarantined: flaky,
+          visualStatus,
+        });
+
+        if (
+          status === "failed" &&
+          /locator|getByRole|element|waiting for/i.test(
+            `${processResult.stdout}\n${processResult.stderr}`,
+          )
+        ) {
+          for (const fingerprint of artifact.fingerprints) {
+            const ranked = rankHealingCandidates(fingerprint, graph.edges);
+            const best = ranked[0];
+            if (
+              !best ||
+              (best.edge.role === fingerprint.role && best.edge.name === fingerprint.accessibleName)
+            )
+              continue;
+            const margin = best.confidence - (ranked[1]?.confidence ?? 0);
+            const attempts =
+              this.#store.consecutiveHealingAttempts(artifact.caseId, fingerprint.locatorKey) + 1;
+            const eligible =
+              best.confidence >= TESTING_HEAL_CONFIDENCE &&
+              margin >= TESTING_HEAL_MARGIN &&
+              attempts <= TESTING_HEAL_ATTEMPT_CAP;
+            proposals.push({
+              caseId: artifact.caseId,
+              locatorKey: fingerprint.locatorKey,
+              previousRole: fingerprint.role,
+              previousName: fingerprint.accessibleName,
+              proposedRole: best.edge.role,
+              proposedName: best.edge.name,
+              confidence: best.confidence,
+              margin,
+              diff: `- getByRole(${JSON.stringify(fingerprint.role)}, { name: ${JSON.stringify(fingerprint.accessibleName)} })\n+ getByRole(${JSON.stringify(best.edge.role)}, { name: ${JSON.stringify(best.edge.name)} })`,
+              status: eligible ? "pending" : "below-threshold",
+              consecutiveAttempts: attempts,
+              ...(fingerprint.locatorEntryId ? { locatorEntryId: fingerprint.locatorEntryId } : {}),
+              ...(fingerprint.locatorVersionId
+                ? { locatorVersionId: fingerprint.locatorVersionId }
+                : {}),
+            });
+          }
+        }
+      } catch (error) {
+        results.push({
+          caseId: artifact.caseId,
+          externalId: artifact.externalId,
+          status: "blocked",
+          durationMs: 0,
+          error: error instanceof Error ? error.message : String(error),
+          tracePath: null,
+          screenshotPath: null,
+          flaky: false,
+          quarantined: false,
+          visualStatus: "disabled",
+        });
       }
-    }
+    });
+    const order = new Map(artifacts.map((artifact, index) => [artifact.caseId, index]));
+    results.sort((a, b) => order.get(a.caseId)! - order.get(b.caseId)!);
 
     const durationMs = Date.now() - startedAt;
     const runStatus = results.every((result) => result.status === "passed") ? "passed" : "failed";

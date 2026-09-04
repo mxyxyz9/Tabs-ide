@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { countLocatorMatches, locatorCandidatesFromSnapshot } from "./locatorDiscovery";
+import {
+  countLocatorMatches,
+  locatorCandidatesFromSnapshot,
+  locatorCandidatesFromDom,
+} from "./locatorDiscovery";
 
 describe("locator discovery snapshot parsing", () => {
   it("keeps task-focused capture limited to matching accessible controls", () => {
@@ -86,5 +90,45 @@ describe("locator discovery snapshot parsing", () => {
     expect(parsed.storedSnapshot).not.toContain("previous instructions");
     expect(parsed.storedSnapshot).not.toContain("qa@example.com");
     expect(parsed.injectionFlags.length).toBeGreaterThan(0);
+  });
+});
+describe("DOM locator coverage", () => {
+  it("does not collapse distinct non-ASCII accessible names", () => {
+    const parsed = locatorCandidatesFromSnapshot({
+      projectId: "p",
+      coverage: "actions-only",
+      maxElements: 50,
+      snapshot: '- link "管理"\n- link "时间"\n- link "员工"',
+    });
+    expect(new Set(parsed.candidates.map((item) => item.locatorKey)).size).toBe(3);
+  });
+  it("includes all 150 individually addressable controls and content with real match counts", () => {
+    const elements = Array.from({ length: 150 }, (_, index) => ({
+      selector: `table > tbody > tr:nth-of-type(${index + 1}) > td`,
+      name: `Cell ${index}`,
+      tag: "td",
+      role: "cell",
+      testId: "",
+      fragile: true,
+      matchCount: 1,
+    }));
+    const parsed = locatorCandidatesFromDom({
+      projectId: "p",
+      elements,
+      coverage: "everything-accessible",
+      maxElements: 500,
+    });
+    expect(parsed.candidates).toHaveLength(150);
+    expect(new Set(parsed.candidates.map((item) => item.locatorKey)).size).toBe(150);
+    expect([...parsed.resolvedCounts.values()].every((count) => count === 1)).toBe(true);
+    expect(parsed.truncatedElements).toBe(0);
+    expect(
+      locatorCandidatesFromDom({
+        projectId: "p",
+        elements,
+        coverage: "everything-accessible",
+        maxElements: 50,
+      }).truncatedElements,
+    ).toBe(100);
   });
 });

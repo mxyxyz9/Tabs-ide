@@ -74,16 +74,15 @@ function RootRouteView() {
   const settings = useSettings();
   const [startupDeadlineElapsed, setStartupDeadlineElapsed] = useState(false);
   const bootstrapReady = isNativeApiReady && threadsHydrated;
-  const ready = useMinimumDuration(
-    bootstrapReady || startupDeadlineElapsed,
-    STARTUP_ANIMATION_HOLD_MS,
-  );
+  const ready = useMinimumDuration(bootstrapReady, STARTUP_ANIMATION_HOLD_MS);
   const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
     if (bootstrapReady) return;
     const timer = setTimeout(() => {
-      console.warn("Startup hydration exceeded 8 seconds; revealing the application shell.");
+      console.warn(
+        "Startup hydration is taking longer than expected; keeping the startup animation visible.",
+      );
       setStartupDeadlineElapsed(true);
     }, 8_000);
     return () => clearTimeout(timer);
@@ -112,6 +111,15 @@ function RootRouteView() {
             palette={settings.splashLoaderPalette}
             theme={settings.splashLoaderTheme}
           />
+          {startupDeadlineElapsed && !bootstrapReady ? (
+            <p
+              className="absolute inset-x-0 bottom-8 text-center text-xs text-muted-foreground"
+              role="status"
+            >
+              Still connecting to your workspace. Your saved projects will appear when loading
+              finishes.
+            </p>
+          ) : null}
         </div>
       )}
       <ToastProvider>

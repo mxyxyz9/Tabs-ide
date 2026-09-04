@@ -49,6 +49,7 @@ function statusTone(status?: string) {
 export const TestingRuns = memo(function TestingRuns() {
   const data = useTestingData();
   const [filter, setFilter] = useState("");
+  const [concurrency, setConcurrency] = useState(1);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<ArtifactFile | null>(null);
   const artifacts = data.completedGenerationJob?.artifacts ?? [];
@@ -166,10 +167,31 @@ export const TestingRuns = memo(function TestingRuns() {
           </h2>
           <p className="text-sm text-muted-foreground">
             Browse generated Playwright tests, inspect their source, and run all tests or one case.
+            Use parallel cases only when tests have independent accounts and data.
           </p>
         </div>
         <div className="flex gap-1" aria-label="Test explorer actions">
-          <Button size="sm" onClick={() => void data.runGeneratedTests()} disabled={!canRun}>
+          <label className="text-sm">
+            Parallel cases
+            <select
+              aria-label="Parallel test cases"
+              className="ml-2 rounded border bg-background p-1"
+              value={concurrency}
+              disabled={!canRun}
+              onChange={(event) => setConcurrency(Number(event.target.value))}
+            >
+              {[1, 2, 3, 4].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            size="sm"
+            onClick={() => void data.runGeneratedTests(undefined, concurrency)}
+            disabled={!canRun}
+          >
             {data.busyAction === "run-tests" ? (
               <LoaderIcon aria-hidden="true" className="animate-spin" />
             ) : (
@@ -180,7 +202,7 @@ export const TestingRuns = memo(function TestingRuns() {
           <Button
             size="icon"
             variant="outline"
-            onClick={() => void data.runGeneratedTests()}
+            onClick={() => void data.runGeneratedTests(undefined, concurrency)}
             disabled={!canRun}
             aria-label="Rerun all generated tests"
             title="Rerun all"
@@ -491,6 +513,32 @@ export const TestingRuns = memo(function TestingRuns() {
                 </CardDescription>
               </div>
               <Badge variant={run.status === "passed" ? "success" : "outline"}>{run.status}</Badge>
+              {run.results.some(
+                (result) => result.status === "failed" || result.status === "blocked",
+              ) ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={data.busyAction !== null}
+                    onClick={() => void data.generateTests(run.id)}
+                  >
+                    Rebuild failed cases with evidence
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={
+                      data.busyAction !== null ||
+                      run.results.filter(
+                        (result) => result.status === "failed" || result.status === "blocked",
+                      ).length !== 1
+                    }
+                    onClick={() => void data.generateTests(run.id, "official-playwright")}
+                  >
+                    Propose repair with official tools (AI usage)
+                  </Button>
+                </>
+              ) : null}
             </div>
           </CardHeader>
           <CardContent>
@@ -498,6 +546,14 @@ export const TestingRuns = memo(function TestingRuns() {
               {run.results.map((result) => (
                 <li key={result.caseId} className="text-sm text-muted-foreground">
                   {result.externalId}: {result.status} · {result.durationMs}ms
+                  {result.error ? (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer">Failure details</summary>
+                      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-xs">
+                        {result.error}
+                      </pre>
+                    </details>
+                  ) : null}
                 </li>
               ))}
             </ul>

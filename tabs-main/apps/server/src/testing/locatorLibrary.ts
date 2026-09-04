@@ -111,7 +111,10 @@ function pageName(urlPattern: string): string {
   try {
     const url = new URL(urlPattern);
     const hashPath = url.hash.replace(/^#\/?/u, "").split(/[?#]/u)[0] ?? "";
-    const segment = (hashPath || url.pathname).split("/").filter(Boolean).at(-1);
+    const segments = (hashPath || url.pathname).split("/").filter(Boolean);
+    const segment = segments.findLast(
+      (part) => !/^(?:index|default|web)(?:\.[a-z]+)?$/iu.test(part),
+    );
     return segment ? humanizePageSegment(decodeURIComponent(segment)) : "Landing page";
   } catch {
     return "Captured page";
@@ -815,6 +818,7 @@ export class LocatorLibraryStore {
   }
 
   saveCapturedPage(input: {
+    readonly replaceMissing?: boolean;
     readonly projectId: string;
     readonly sessionId: string | null;
     readonly rawUrl: string;
@@ -864,12 +868,28 @@ export class LocatorLibraryStore {
       for (const candidate of input.candidates) {
         this.#upsertCandidate(input.projectId, pageId, candidate, now);
       }
+      if (input.replaceMissing) {
+        const keys = new Set(input.candidates.map((candidate) => safeName(candidate.locatorKey)));
+        const entries = this.#database
+          .query<{ id: string; locator_key: string }, [string]>(
+            "SELECT e.id, e.locator_key FROM locator_entries e JOIN locator_entry_versions v ON v.id = e.current_version_id WHERE e.page_id = ? AND v.source = 'discovered'",
+          )
+          .all(pageId);
+        for (const entry of entries) {
+          if (!keys.has(entry.locator_key))
+            this.#database
+              .query(
+                "UPDATE locator_entries SET lifecycle_status = 'archived', updated_at = ? WHERE id = ?",
+              )
+              .run(now, entry.id);
+        }
+      }
       if (input.sessionId) {
         this.#database
           .query(
             `UPDATE locator_discovery_sessions SET current_url_pattern = ?, current_page_name = ?,
               observed_elements = observed_elements + ?, stored_elements = stored_elements + ?,
-              truncated_elements = truncated_elements + ?, captured_pages = captured_pages + 1,
+              truncated_elements = truncated_elements + ?, captured_pages = (SELECT COUNT(*) FROM locator_pages WHERE session_id = ?),
               message = ? WHERE id = ? AND project_id = ?`,
           )
           .run(
@@ -878,7 +898,8 @@ export class LocatorLibraryStore {
             input.observedElements,
             input.candidates.length,
             input.truncatedElements,
-            `Captured ${input.candidates.length} locators from ${pageName(urlPattern)}`,
+            input.sessionId,
+            `Captured ${input.candidates.length} of ${input.observedElements} elements from ${pageName(urlPattern)}${input.truncatedElements ? `. ${input.truncatedElements} omitted by the element limit; increase the limit and rescan.` : ""}`,
             input.sessionId,
             input.projectId,
           );

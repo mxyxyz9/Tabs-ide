@@ -104,6 +104,29 @@ async function seedExecutableArtifact(root: string, targetUrl: string) {
 }
 
 describe("TestingExecutor", () => {
+  it("records launch failures as blocked instead of leaving the run running", async () => {
+    const root = await mkdtemp(join(process.cwd(), "tabs-testing-launch-"));
+    roots.push(root);
+    const { store, jobId } = await seedExecutableArtifact(root, "http://127.0.0.1:4173/");
+    try {
+      const executor = new TestingExecutor(store, join(root, "testing"), async () => {
+        throw new Error("Browser executable missing");
+      });
+      const run = await executor.execute({
+        projectId: "project",
+        generationJobId: jobId,
+        targetUrl: "http://127.0.0.1:4173/",
+        mode: "standalone",
+        concurrency: 2,
+      });
+      expect(run.status).toBe("failed");
+      expect(run.results).toMatchObject([
+        { status: "blocked", error: "Browser executable missing" },
+      ]);
+    } finally {
+      store.close();
+    }
+  });
   it.runIf(process.env.TABS_VERIFY_GENERATED_SUITE === "1")(
     "executes a generated Playwright test end to end and persists evidence",
     async () => {
@@ -177,13 +200,25 @@ describe("TestingExecutor", () => {
     roots.push(root);
     const { store, jobId } = await seedExecutableArtifact(root, "http://127.0.0.1:4173/");
     const exitCodes = [1, 0, 1];
-    const executor = new TestingExecutor(store, join(root, "testing"), async () => ({
-      stdout: exitCodes[0] === 0 ? "1 passed" : "1 failed",
-      stderr: "",
-      code: exitCodes.shift() ?? 1,
-      signal: null,
-      timedOut: false,
-    }));
+    const executor = new TestingExecutor(store, join(root, "testing"), async (_command, args) => {
+      const config = await readFile(args[args.indexOf("--config") + 1]!, "utf8");
+      const reportPath = JSON.parse(config.match(/outputFile: ("[^"]+")/)![1]!);
+      await writeFile(
+        reportPath,
+        JSON.stringify({
+          stats: { expected: 1, skipped: 0, unexpected: 0, flaky: 0 },
+          errors: [],
+          suites: [{ specs: [{ tests: [{ expectedStatus: "passed", status: "expected" }] }] }],
+        }),
+      );
+      return {
+        stdout: exitCodes[0] === 0 ? "1 passed" : "1 failed",
+        stderr: "",
+        code: exitCodes.shift() ?? 1,
+        signal: null,
+        timedOut: false,
+      };
+    });
     try {
       const runs = [];
       for (let index = 0; index < 3; index += 1) {

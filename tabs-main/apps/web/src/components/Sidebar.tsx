@@ -928,6 +928,9 @@ export default function Sidebar() {
       const snoozePresets = resolveSnoozePresets();
       const clicked = await api.contextMenu.show(
         [
+          ...(thread.branch
+            ? [{ id: "new-thread-on-branch", label: "New thread on this branch" }]
+            : []),
           { id: "rename", label: "Rename thread" },
           {
             id: "regenerate-title",
@@ -956,11 +959,23 @@ export default function Sidebar() {
                 }),
           },
           { id: "copy-path", label: "Copy Path" },
+          ...(thread.branch ? [{ id: "copy-branch", label: "Copy Branch" }] : []),
           { id: "copy-thread-id", label: "Copy Thread ID" },
+          { id: "archive", label: "Archive" },
           { id: "delete", label: "Delete", destructive: true },
         ],
         position,
       );
+
+      if (clicked === "new-thread-on-branch") {
+        await handleNewThread(thread.projectId, {
+          branch: thread.branch,
+          worktreePath: thread.worktreePath,
+          envMode: thread.worktreePath ? "worktree" : "local",
+          environmentId: thread.environmentId,
+        });
+        return;
+      }
 
       if (clicked === "rename") {
         setRenamingThreadId(threadId);
@@ -1043,6 +1058,21 @@ export default function Sidebar() {
         copyThreadIdToClipboard(threadId, { threadId });
         return;
       }
+      if (clicked === "copy-branch" && thread.branch) {
+        await navigator.clipboard.writeText(thread.branch);
+        toastManager.add({ type: "success", title: "Branch copied", description: thread.branch });
+        return;
+      }
+      if (clicked === "archive") {
+        const confirmed = await confirm(`Archive thread "${thread.title}"?`);
+        if (!confirmed) return;
+        await api.orchestration.dispatchCommand({
+          type: "thread.archive",
+          commandId: newCommandId(),
+          threadId,
+        });
+        return;
+      }
       if (clicked !== "delete") return;
       if (appSettings.confirmThreadDelete) {
         const confirmed = await confirm(
@@ -1062,6 +1092,7 @@ export default function Sidebar() {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      handleNewThread,
       markThreadUnread,
       projectCwdById,
       threads,

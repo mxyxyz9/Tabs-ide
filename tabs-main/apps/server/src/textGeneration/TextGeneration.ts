@@ -118,6 +118,12 @@ export type TestingTaskKind =
 export type TestingReasoningTier = "low" | "medium" | "high";
 
 export interface StructuredTestingGenerationInput<S extends Schema.Top> {
+  readonly playwrightTools?: {
+    readonly command: string;
+    readonly args: readonly string[];
+    readonly cwd: string;
+    readonly nodePath: string;
+  };
   readonly cwd: string;
   readonly taskKind: TestingTaskKind;
   readonly sanitizedPrompt: string;
@@ -244,8 +250,25 @@ export const makeTextGenerationFromRegistry = (
       Effect.flatMap((textGeneration) => textGeneration.generateDiffSummary(input)),
     ),
   generateStructuredTesting: (input) =>
-    resolveInstance(registry, "generateStructuredTesting", input.modelSelection.instanceId).pipe(
-      Effect.flatMap((textGeneration) => textGeneration.generateStructuredTesting(input)),
+    registry.getInstance(input.modelSelection.instanceId).pipe(
+      Effect.flatMap((instance) => {
+        if (!instance)
+          return Effect.fail(
+            new TextGenerationError({
+              operation: "generateStructuredTesting",
+              detail: "Selected provider is unavailable",
+            }),
+          );
+        if (input.playwrightTools && instance.driverKind !== "codex")
+          return Effect.fail(
+            new TextGenerationError({
+              operation: "generateStructuredTesting",
+              detail:
+                "Official Playwright tool integration currently supports the Codex provider only. Your selected provider was not changed. Use the standard builder or choose a supported provider explicitly.",
+            }),
+          );
+        return instance.textGeneration.generateStructuredTesting(input);
+      }),
     ),
 });
 

@@ -11563,7 +11563,16 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     (!activeProject || activeProject.cwd !== embeddedMode.workspaceRoot || !activeProjectSettings);
 
   let content: ReactNode;
-  if (isEmbeddedWorkspacePending) {
+  if (!threadsHydrated) {
+    content = (
+      <div
+        className="flex h-full items-center justify-center text-sm text-muted-foreground"
+        role="status"
+      >
+        Loading your projects...
+      </div>
+    );
+  } else if (isEmbeddedWorkspacePending) {
     content = (
       <div className="flex h-full items-center justify-center bg-background px-6 text-center">
         <div className="max-w-md space-y-3">
