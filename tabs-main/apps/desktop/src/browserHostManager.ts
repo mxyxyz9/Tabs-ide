@@ -167,7 +167,44 @@ type BrowserSession = {
   /** Transient error set when ERR_CONNECTION_REFUSED fires (dev server not ready yet).
    * Cleared as soon as any successful navigation or page load occurs. */
   transientError: string | null;
+  consoleEntries: BrowserConsoleEntry[];
+  networkEntries: BrowserNetworkEntry[];
+  actionTimeline: BrowserActionEvent[];
 };
+
+interface BrowserConsoleEntry {
+  readonly level: string;
+  readonly text: string;
+  readonly timestamp: string;
+  readonly source?: string;
+}
+
+interface BrowserNetworkEntry {
+  readonly url: string;
+  readonly method: string;
+  readonly status: number | null;
+  readonly failed: boolean;
+  readonly errorText?: string;
+  readonly timestamp: string;
+}
+
+interface BrowserActionEvent {
+  readonly id: string;
+  readonly action: string;
+  status: "running" | "succeeded" | "failed" | "interrupted";
+  readonly startedAt: string;
+  completedAt?: string;
+  error?: string;
+}
+
+const AUTOMATION_OBSERVATION_LIMIT = 200;
+
+function appendBounded<T>(entries: T[], entry: T): void {
+  entries.push(entry);
+  if (entries.length > AUTOMATION_OBSERVATION_LIMIT) {
+    entries.splice(0, entries.length - AUTOMATION_OBSERVATION_LIMIT);
+  }
+}
 
 interface BrowserAutomationRequest {
   readonly projectId: string;
@@ -214,6 +251,7 @@ export class BrowserHostManager {
   private readonly sessions = new Map<string, BrowserSession>();
   private activeKey: string | null = null;
   private readonly observedProfileSessions = new WeakSet<Session>();
+  private readonly observedAutomationSessions = new WeakSet<Session>();
 
   constructor(private readonly getWindow: () => BrowserWindow | null) {}
 
@@ -298,10 +336,14 @@ export class BrowserHostManager {
       devToolsOpen: view.webContents.isDevToolsOpened(),
       lastError: null,
       transientError: null,
+      consoleEntries: [],
+      networkEntries: [],
+      actionTimeline: [],
     };
 
-    this.registerSessionEvents(session);
     this.sessions.set(key, session);
+    this.registerSessionEvents(session);
+    this.observeAutomationNetwork(view.webContents.session);
     if (input.initialUrl) {
       await this.loadUrl(session, input.initialUrl);
     }
@@ -366,6 +408,7 @@ export class BrowserHostManager {
     session.lastError = null;
     session.transientError = null;
     this.registerSessionEvents(session);
+    this.observeAutomationNetwork(view.webContents.session);
 
     if (this.activeKey === key && session.bounds) {
       this.attachSession(session);
@@ -751,7 +794,9 @@ export class BrowserHostManager {
       if (typeof input.expression !== "string" || input.expression.trim().length === 0) {
         throw new Error("A JavaScript expression is required.");
       }
-      return contents.executeJavaScript(input.expression, true);
+      return this.trackAutomation(session, "evaluate", () =>
+        contents.executeJavaScript(input.expression as string, true),
+      );
     }
 
     if (request.operation === "snapshot") {
@@ -792,9 +837,9 @@ export class BrowserHostManager {
         visibleText: page.visibleText,
         interactiveElements: page.interactiveElements,
         accessibilityTree,
-        consoleEntries: [],
-        networkEntries: [],
-        actionTimeline: [],
+        consoleEntries: [...(session.consoleEntries ?? [])],
+        networkEntries: [...(session.networkEntries ?? [])],
+        actionTimeline: [...(session.actionTimeline ?? [])],
         screenshot: {
           mimeType: "image/png",
           data: image.toPNG().toString("base64"),
@@ -821,24 +866,40 @@ export class BrowserHostManager {
               : [],
           )
         : [];
-      contents.sendInputEvent({ type: "keyDown", keyCode: input.key, modifiers });
-      contents.sendInputEvent({ type: "keyUp", keyCode: input.key, modifiers });
-      return { pressed: true };
+      return this.trackAutomation(session, "press", async () => {
+        contents.sendInputEvent({ type: "keyDown", keyCode: input.key as string, modifiers });
+        contents.sendInputEvent({ type: "keyUp", keyCode: input.key as string, modifiers });
+        return { pressed: true };
+      });
     }
 
     if (request.operation === "click") {
-      if (typeof input.x === "number" && typeof input.y === "number") {
-        contents.sendInputEvent({ type: "mouseDown", x: input.x, y: input.y, button: "left", clickCount: 1 });
-        contents.sendInputEvent({ type: "mouseUp", x: input.x, y: input.y, button: "left", clickCount: 1 });
-      } else {
-        const target = pageTargetExpression(input);
-        const clicked = await contents.executeJavaScript(
-          `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return false; element.click(); return true; })()`,
-          true,
-        );
-        if (!clicked) throw new Error("The browser click target was not found.");
-      }
-      return { clicked: true };
+      return this.trackAutomation(session, "click", async () => {
+        if (typeof input.x === "number" && typeof input.y === "number") {
+          contents.sendInputEvent({
+            type: "mouseDown",
+            x: input.x,
+            y: input.y,
+            button: "left",
+            clickCount: 1,
+          });
+          contents.sendInputEvent({
+            type: "mouseUp",
+            x: input.x,
+            y: input.y,
+            button: "left",
+            clickCount: 1,
+          });
+        } else {
+          const target = pageTargetExpression(input);
+          const clicked = await contents.executeJavaScript(
+            `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return false; element.click(); return true; })()`,
+            true,
+          );
+          if (!clicked) throw new Error("The browser click target was not found.");
+        }
+        return { clicked: true };
+      });
     }
 
     if (request.operation === "type") {
@@ -846,8 +907,9 @@ export class BrowserHostManager {
       const target = pageTargetExpression(input);
       const encodedText = JSON.stringify(input.text);
       const clear = input.clear === true;
-      const typed = await contents.executeJavaScript(
-        `(() => {
+      return this.trackAutomation(session, "type", async () => {
+        const typed = await contents.executeJavaScript(
+          `(() => {
           const element = ${target};
           if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLElement && element.isContentEditable)) return false;
           element.focus();
@@ -861,33 +923,40 @@ export class BrowserHostManager {
           element.dispatchEvent(new Event("change", { bubbles: true }));
           return true;
         })()`,
-        true,
-      );
-      if (!typed) throw new Error("The browser type target is not editable.");
-      return { typed: true };
+          true,
+        );
+        if (!typed) throw new Error("The browser type target is not editable.");
+        return { typed: true };
+      });
     }
 
     if (request.operation === "scroll") {
       const target = pageTargetExpression(input);
       const deltaX = typeof input.deltaX === "number" ? input.deltaX : 0;
       const deltaY = typeof input.deltaY === "number" ? input.deltaY : 0;
-      await contents.executeJavaScript(
-        `(() => { const target = ${target}; (target || window).scrollBy(${deltaX}, ${deltaY}); })()`,
-        true,
-      );
-      return { scrolled: true };
+      return this.trackAutomation(session, "scroll", async () => {
+        await contents.executeJavaScript(
+          `(() => { const target = ${target}; (target || window).scrollBy(${deltaX}, ${deltaY}); })()`,
+          true,
+        );
+        return { scrolled: true };
+      });
     }
 
     if (request.operation === "waitFor") {
       const timeoutMs =
-        typeof input.timeoutMs === "number" ? Math.min(60_000, Math.max(1, input.timeoutMs)) : 15_000;
+        typeof input.timeoutMs === "number"
+          ? Math.min(60_000, Math.max(1, input.timeoutMs))
+          : 15_000;
       const deadline = Date.now() + timeoutMs;
-      while (Date.now() <= deadline) {
-        const target = pageTargetExpression(input);
-        const text = typeof input.text === "string" ? JSON.stringify(input.text) : "null";
-        const url = typeof input.urlIncludes === "string" ? JSON.stringify(input.urlIncludes) : "null";
-        const matched = await contents.executeJavaScript(
-          `(() => {
+      return this.trackAutomation(session, "waitFor", async () => {
+        while (Date.now() <= deadline) {
+          const target = pageTargetExpression(input);
+          const text = typeof input.text === "string" ? JSON.stringify(input.text) : "null";
+          const url =
+            typeof input.urlIncludes === "string" ? JSON.stringify(input.urlIncludes) : "null";
+          const matched = await contents.executeJavaScript(
+            `(() => {
             const target = ${target};
             const text = ${text};
             const url = ${url};
@@ -895,15 +964,79 @@ export class BrowserHostManager {
               && (!text || (document.body?.innerText || "").includes(text))
               && (!url || location.href.includes(url));
           })()`,
-          true,
-        );
-        if (matched) return { matched: true };
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      throw new Error(`Browser wait timed out after ${timeoutMs}ms.`);
+            true,
+          );
+          if (matched) return { matched: true };
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        throw new Error(`Browser wait timed out after ${timeoutMs}ms.`);
+      });
     }
 
     throw new Error(`Unsupported browser automation operation: ${request.operation}`);
+  }
+
+  private sessionForWebContentsId(webContentsId: number | undefined): BrowserSession | undefined {
+    if (webContentsId === undefined) return undefined;
+    return [...this.sessions.values()].find(
+      (candidate) => candidate.view.webContents.id === webContentsId,
+    );
+  }
+
+  private async trackAutomation<T>(
+    session: BrowserSession,
+    action: string,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const event: BrowserActionEvent = {
+      id: crypto.randomUUID(),
+      action,
+      status: "running",
+      startedAt: new Date().toISOString(),
+    };
+    session.actionTimeline ??= [];
+    appendBounded(session.actionTimeline, event);
+    try {
+      const result = await run();
+      event.status = "succeeded";
+      event.completedAt = new Date().toISOString();
+      return result;
+    } catch (cause) {
+      event.status = "failed";
+      event.completedAt = new Date().toISOString();
+      event.error = cause instanceof Error ? cause.message : String(cause);
+      throw cause;
+    }
+  }
+
+  private observeAutomationNetwork(browserSession: Session): void {
+    if (this.observedAutomationSessions.has(browserSession)) return;
+    this.observedAutomationSessions.add(browserSession);
+    browserSession.webRequest.onCompleted((details) => {
+      const target = this.sessionForWebContentsId(details.webContentsId);
+      if (!target) return;
+      target.networkEntries ??= [];
+      appendBounded(target.networkEntries, {
+        url: details.url,
+        method: details.method,
+        status: details.statusCode,
+        failed: false,
+        timestamp: new Date().toISOString(),
+      });
+    });
+    browserSession.webRequest.onErrorOccurred((details) => {
+      const target = this.sessionForWebContentsId(details.webContentsId);
+      if (!target) return;
+      target.networkEntries ??= [];
+      appendBounded(target.networkEntries, {
+        url: details.url,
+        method: details.method,
+        status: null,
+        failed: true,
+        errorText: details.error,
+        timestamp: new Date().toISOString(),
+      });
+    });
   }
 
   syncSessions(projectIds: readonly string[]): void {
@@ -1093,6 +1226,15 @@ export class BrowserHostManager {
     // (e.g. figma); capturing it here makes those diagnosable without manually
     // opening DevTools on the BrowserView.
     contents.on("console-message", (details) => {
+      session.consoleEntries ??= [];
+      appendBounded(session.consoleEntries, {
+        level: details.level,
+        text: details.message,
+        timestamp: new Date().toISOString(),
+        ...(details.sourceId.length > 0
+          ? { source: `${details.sourceId}:${details.lineNumber}` }
+          : {}),
+      });
       if (details.level === "error") {
         console.error(
           `[browser-host] page console error ${session.key} (${details.sourceId}:${details.lineNumber}): ${details.message}`,

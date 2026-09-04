@@ -145,7 +145,7 @@ describe("BrowserHostManager automation", () => {
         sessions: Map<string, unknown>;
       }
     ).sessions;
-    sessions.set("project-1::preview-1", {
+    const browserSession = {
       projectId: "project-1",
       sessionId: "preview-1",
       key: "project-1::preview-1",
@@ -159,7 +159,11 @@ describe("BrowserHostManager automation", () => {
       currentUrl: "https://example.com/",
       pageTitle: "Example",
       loading: false,
-    });
+      consoleEntries: [],
+      networkEntries: [],
+      actionTimeline: [],
+    };
+    sessions.set("project-1::preview-1", browserSession);
 
     await expect(
       manager.runAutomation({
@@ -182,6 +186,58 @@ describe("BrowserHostManager automation", () => {
       }),
     ).resolves.toEqual({ heading: "Ready" });
     expect(executeJavaScript).toHaveBeenCalledWith("({ heading: document.title })", true);
+    expect(browserSession.actionTimeline).toEqual([
+      expect.objectContaining({
+        action: "evaluate",
+        status: "succeeded",
+        startedAt: expect.any(String),
+        completedAt: expect.any(String),
+      }),
+    ]);
+  });
+
+  it("retains failed automation details for the next diagnostic snapshot", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const browserSession = {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      view: {
+        webContents: {
+          isDestroyed: () => false,
+          executeJavaScript: vi.fn().mockRejectedValue(new Error("page execution failed")),
+        },
+      },
+      bounds: null,
+      currentUrl: "https://example.com/",
+      pageTitle: "Example",
+      loading: false,
+      consoleEntries: [],
+      networkEntries: [],
+      actionTimeline: [],
+    };
+    (
+      manager as unknown as {
+        sessions: Map<string, unknown>;
+      }
+    ).sessions.set("project-1::preview-1", browserSession);
+
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "preview-1",
+        operation: "evaluate",
+        input: { expression: "broken()" },
+      }),
+    ).rejects.toThrow("page execution failed");
+    expect(browserSession.actionTimeline).toEqual([
+      expect.objectContaining({
+        action: "evaluate",
+        status: "failed",
+        error: "page execution failed",
+        completedAt: expect.any(String),
+      }),
+    ]);
   });
 
   it("rejects automation for a missing session", async () => {
