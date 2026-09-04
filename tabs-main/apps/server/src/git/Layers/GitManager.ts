@@ -1027,6 +1027,15 @@ export const makeGitManager = Effect.gen(function* () {
   const mutatePullRequest: GitManagerShape["mutatePullRequest"] = Effect.fnUntraced(
     function* (input) {
       const reference = normalizePullRequestReference(input.reference);
+      if (
+        ["add_reviewer", "remove_reviewer", "add_label", "remove_label"].includes(input.action) &&
+        !input.value?.trim()
+      ) {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          `Action ${input.action} requires a reviewer or label value.`,
+        );
+      }
       yield* gitHubCli.mutatePullRequest({
         cwd: input.cwd,
         reference,
@@ -1034,6 +1043,7 @@ export const makeGitManager = Effect.gen(function* () {
         ...(input.mergeMethod ? { mergeMethod: input.mergeMethod } : {}),
         ...(input.deleteBranch !== undefined ? { deleteBranch: input.deleteBranch } : {}),
         ...(input.body !== undefined ? { body: input.body } : {}),
+        ...(input.value !== undefined ? { value: input.value } : {}),
       });
       const pullRequest = yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference });
       return { pullRequest: toResolvedPullRequest(pullRequest) };

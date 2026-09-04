@@ -90,6 +90,8 @@ export function PRsPanel({
     "summary",
   );
   const [actionBody, setActionBody] = useState("");
+  const [reviewerInput, setReviewerInput] = useState("");
+  const [labelInput, setLabelInput] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Query 1: Branch PR query
@@ -169,8 +171,13 @@ export function PRsPanel({
       | "draft"
       | "comment"
       | "approve"
-      | "request_changes",
+      | "request_changes"
+      | "add_reviewer"
+      | "remove_reviewer"
+      | "add_label"
+      | "remove_label",
     body?: string,
+    value?: string,
   ) => {
     if (!api) return false;
     setPendingAction(action);
@@ -181,6 +188,7 @@ export function PRsPanel({
         action,
         ...(action === "merge" ? { mergeMethod, deleteBranch } : {}),
         ...(body !== undefined ? { body } : {}),
+        ...(value !== undefined ? { value } : {}),
       });
       await Promise.all([branchPrQuery.refetch(), allPrsQuery.refetch(), detailQuery.refetch()]);
       toastManager.add({
@@ -509,12 +517,117 @@ export function PRsPanel({
                               <p className="text-muted-foreground">No description provided.</p>
                             )}
                             {(detailQuery.data.pullRequest.reviewers ?? []).length > 0 ? (
-                              <p className="text-muted-foreground">
-                                Reviewers:{" "}
-                                {detailQuery.data.pullRequest.reviewers
-                                  ?.map((reviewer) => `@${reviewer.login}`)
-                                  .join(", ")}
-                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-muted-foreground">Reviewers:</span>
+                                {detailQuery.data.pullRequest.reviewers?.map((reviewer) => (
+                                  <Button
+                                    key={reviewer.login}
+                                    size="sm"
+                                    variant="ghost"
+                                    disabled={pendingAction !== null}
+                                    aria-label={`Remove reviewer ${reviewer.login}`}
+                                    onClick={() =>
+                                      void mutatePullRequest(
+                                        pr.n,
+                                        "remove_reviewer",
+                                        undefined,
+                                        reviewer.login,
+                                      )
+                                    }
+                                  >
+                                    @{reviewer.login} ×
+                                  </Button>
+                                ))}
+                              </div>
+                            ) : null}
+                            {detailQuery.data.pullRequest.state === "open" ? (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <form
+                                  className="flex gap-1"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    const value = reviewerInput.trim().replace(/^@/, "");
+                                    if (!value) return;
+                                    void mutatePullRequest(
+                                      pr.n,
+                                      "add_reviewer",
+                                      undefined,
+                                      value,
+                                    ).then((ok) => {
+                                      if (ok) setReviewerInput("");
+                                    });
+                                  }}
+                                >
+                                  <input
+                                    value={reviewerInput}
+                                    onChange={(event) => setReviewerInput(event.target.value)}
+                                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2"
+                                    aria-label="Reviewer login"
+                                    placeholder="Reviewer login"
+                                  />
+                                  <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={!reviewerInput.trim() || pendingAction !== null}
+                                  >
+                                    Add
+                                  </Button>
+                                </form>
+                                <form
+                                  className="flex gap-1"
+                                  onSubmit={(event) => {
+                                    event.preventDefault();
+                                    const value = labelInput.trim();
+                                    if (!value) return;
+                                    void mutatePullRequest(
+                                      pr.n,
+                                      "add_label",
+                                      undefined,
+                                      value,
+                                    ).then((ok) => {
+                                      if (ok) setLabelInput("");
+                                    });
+                                  }}
+                                >
+                                  <input
+                                    value={labelInput}
+                                    onChange={(event) => setLabelInput(event.target.value)}
+                                    className="min-w-0 flex-1 rounded-md border border-border bg-background px-2"
+                                    aria-label="Label name"
+                                    placeholder="Label name"
+                                  />
+                                  <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={!labelInput.trim() || pendingAction !== null}
+                                  >
+                                    Add
+                                  </Button>
+                                </form>
+                              </div>
+                            ) : null}
+                            {(detailQuery.data.pullRequest.labels ?? []).length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {detailQuery.data.pullRequest.labels?.map((label) => (
+                                  <Button
+                                    key={label.name}
+                                    size="sm"
+                                    variant="secondary"
+                                    disabled={pendingAction !== null}
+                                    aria-label={`Remove label ${label.name}`}
+                                    onClick={() =>
+                                      void mutatePullRequest(
+                                        pr.n,
+                                        "remove_label",
+                                        undefined,
+                                        label.name,
+                                      )
+                                    }
+                                  >
+                                    {label.name} ×
+                                  </Button>
+                                ))}
+                              </div>
                             ) : null}
                           </div>
                         ) : detailTab === "checks" ? (

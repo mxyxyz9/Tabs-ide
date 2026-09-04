@@ -41,7 +41,7 @@ The current Tabs implementation is therefore a strong base, but it is not yet a 
 
 2. **Add a native PR detail workspace.** Implement Summary, Code, Checks, Commits, and Timeline tabs. Preserve Tabs' existing local AI Review panel as a complementary workflow rather than merging the two concepts.
 
-3. **Typed PR mutation — partially completed.** Create, merge, close/reopen, draft/ready, comments, approvals, and change requests now use a typed environment API whose provider adapter passes argument arrays directly to the host CLI. Reviewer assignment, label editing, and non-GitHub adapters remain.
+3. **Typed PR mutation — GitHub completed.** Create, merge, close/reopen, draft/ready, comments, approvals, change requests, reviewer assignment, and label editing use a typed environment API whose provider adapter passes argument arrays directly to the host CLI. Equivalent GitLab, Azure DevOps, and Bitbucket adapters remain.
 
 4. **Eliminate shell interpolation.** Worktree paths, release titles/notes, remote names/URLs, branch names, and tags are interpolated into terminal commands in several paths. Move these actions behind typed API methods with argument arrays. Escaping individual strings is only an interim mitigation.
 

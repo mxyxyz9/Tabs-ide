@@ -468,6 +468,21 @@ const makeGitHubCli = Effect.sync(() => {
         case "request_changes":
           args.push("review", input.reference, "--request-changes", "--body", input.body ?? "");
           break;
+        case "add_reviewer":
+        case "remove_reviewer":
+        case "add_label":
+        case "remove_label": {
+          const flag =
+            input.action === "add_reviewer"
+              ? "--add-reviewer"
+              : input.action === "remove_reviewer"
+                ? "--remove-reviewer"
+                : input.action === "add_label"
+                  ? "--add-label"
+                  : "--remove-label";
+          args.push("edit", input.reference, flag, input.value ?? "");
+          break;
+        }
       }
       return execute({ cwd: input.cwd, args }).pipe(Effect.asVoid);
     },

@@ -205,7 +205,7 @@ layer("GitHubCliLive", (it) => {
 
   it.effect("passes pull request mutations as process arguments without shell interpolation", () =>
     Effect.gen(function* () {
-      mockedRunProcess.mockResolvedValueOnce({
+      mockedRunProcess.mockResolvedValue({
         stdout: "",
         stderr: "",
         code: 0,
@@ -231,6 +231,18 @@ layer("GitHubCliLive", (it) => {
           "--body",
           "Please fix `$(unsafe)`; this must stay literal.",
         ],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+
+      yield* gh.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "add_label",
+        value: "release;$(literal)",
+      });
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "gh",
+        ["pr", "edit", "42", "--add-label", "release;$(literal)"],
         expect.objectContaining({ cwd: "/repo" }),
       );
     }),

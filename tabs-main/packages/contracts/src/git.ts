@@ -753,6 +753,10 @@ export const GitPullRequestAction = Schema.Literals([
   "comment",
   "approve",
   "request_changes",
+  "add_reviewer",
+  "remove_reviewer",
+  "add_label",
+  "remove_label",
 ]);
 export type GitPullRequestAction = typeof GitPullRequestAction.Type;
 
@@ -763,6 +767,7 @@ export const GitMutatePullRequestInput = Schema.Struct({
   mergeMethod: Schema.optional(Schema.Literals(["merge", "squash", "rebase"])),
   deleteBranch: Schema.optional(Schema.Boolean),
   body: Schema.optional(Schema.String.check(Schema.isMaxLength(100_000))),
+  value: Schema.optional(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(256))),
 });
 export type GitMutatePullRequestInput = typeof GitMutatePullRequestInput.Type;
 

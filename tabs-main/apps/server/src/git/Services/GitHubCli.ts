@@ -126,10 +126,15 @@ export interface GitHubCliShape {
       | "draft"
       | "comment"
       | "approve"
-      | "request_changes";
+      | "request_changes"
+      | "add_reviewer"
+      | "remove_reviewer"
+      | "add_label"
+      | "remove_label";
     readonly mergeMethod?: "merge" | "squash" | "rebase";
     readonly deleteBranch?: boolean;
     readonly body?: string;
+    readonly value?: string;
   }) => Effect.Effect<void, GitHubCliError>;
 
   /**
