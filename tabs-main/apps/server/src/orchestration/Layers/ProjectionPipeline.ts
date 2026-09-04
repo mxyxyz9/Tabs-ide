@@ -1,4 +1,9 @@
-import { ApprovalRequestId, type ChatAttachment, type OrchestrationEvent } from "@tabs/contracts";
+import {
+  ApprovalRequestId,
+  type ChatAttachment,
+  type OrchestrationEvent,
+  type ThreadId,
+} from "@tabs/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, FileSystem, Layer, Option, Path, Stream } from "effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -84,6 +89,44 @@ function extractActivityRequestId(payload: unknown): ApprovalRequestId | null {
   }
   const requestId = (payload as Record<string, unknown>).requestId;
   return typeof requestId === "string" ? (requestId as ApprovalRequestId) : null;
+}
+
+function derivePendingUserInputCount(activities: ReadonlyArray<ProjectionThreadActivity>): number {
+  const pending = new Set<string>();
+  for (const activity of [...activities].toSorted(
+    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.activityId.localeCompare(b.activityId),
+  )) {
+    const requestId = extractActivityRequestId(activity.payload);
+    if (requestId === null) continue;
+    if (activity.kind === "user-input.requested") pending.add(requestId);
+    if (activity.kind === "user-input.resolved") pending.delete(requestId);
+    if (activity.kind === "provider.user-input.respond.failed") {
+      const detail =
+        typeof activity.payload === "object" && activity.payload !== null
+          ? String((activity.payload as Record<string, unknown>).detail ?? "").toLowerCase()
+          : "";
+      if (detail.includes("stale pending") || detail.includes("unknown pending")) {
+        pending.delete(requestId);
+      }
+    }
+  }
+  return pending.size;
+}
+
+function hasActionablePlan(
+  latestTurnId: string | null,
+  plans: ReadonlyArray<ProjectionThreadProposedPlan>,
+): boolean {
+  const ordered = [...plans].toSorted(
+    (a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.planId.localeCompare(b.planId),
+  );
+  const plan =
+    (latestTurnId === null
+      ? null
+      : ordered.findLast((candidate) => candidate.turnId === latestTurnId)) ??
+    ordered.at(-1) ??
+    null;
+  return plan !== null && plan.implementedAt === null;
 }
 
 function retainProjectionMessagesAfterRevert(
@@ -346,6 +389,32 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
   const projectionTurnRepository = yield* ProjectionTurnRepository;
   const projectionPendingApprovalRepository = yield* ProjectionPendingApprovalRepository;
 
+  const refreshThreadShellSummary = Effect.fn("refreshThreadShellSummary")(function* (
+    threadId: ThreadId,
+  ) {
+    const thread = yield* projectionThreadRepository.getById({ threadId });
+    if (Option.isNone(thread)) return;
+    const [messages, plans, activities, approvals] = yield* Effect.all([
+      projectionThreadMessageRepository.listByThreadId({ threadId }),
+      projectionThreadProposedPlanRepository.listByThreadId({ threadId }),
+      projectionThreadActivityRepository.listByThreadId({ threadId }),
+      projectionPendingApprovalRepository.listByThreadId({ threadId }),
+    ]);
+    const latestUserMessageAt =
+      messages
+        .filter((message) => message.role === "user")
+        .map((message) => message.createdAt)
+        .toSorted()
+        .at(-1) ?? null;
+    yield* projectionThreadRepository.upsert({
+      ...thread.value,
+      latestUserMessageAt,
+      pendingApprovalCount: approvals.filter((approval) => approval.status === "pending").length,
+      pendingUserInputCount: derivePendingUserInputCount(activities),
+      hasActionableProposedPlan: hasActionablePlan(thread.value.latestTurnId, plans) ? 1 : 0,
+    });
+  });
+
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const serverConfig = yield* ServerConfig;
@@ -408,7 +477,7 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
       }
     });
 
-  const applyThreadsProjection: ProjectorDefinition["apply"] = (event, attachmentSideEffects) =>
+  const applyThreadsProjectionBase: ProjectorDefinition["apply"] = (event, attachmentSideEffects) =>
     Effect.gen(function* () {
       switch (event.type) {
         case "thread.created":
@@ -718,6 +787,14 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
 
         default:
           return;
+      }
+    });
+
+  const applyThreadsProjection: ProjectorDefinition["apply"] = (event, attachmentSideEffects) =>
+    Effect.gen(function* () {
+      yield* applyThreadsProjectionBase(event, attachmentSideEffects);
+      if (event.aggregateKind === "thread") {
+        yield* refreshThreadShellSummary(event.aggregateId as ThreadId);
       }
     });
 
