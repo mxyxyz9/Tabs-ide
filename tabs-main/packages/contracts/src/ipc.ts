@@ -1084,6 +1084,24 @@ export interface DesktopBridge {
   getConnectionCatalog?: () => Promise<string | null>;
   setConnectionCatalog?: (catalog: string) => Promise<boolean>;
   clearConnectionCatalog?: () => Promise<void>;
+  discoverSshHosts: () => Promise<readonly DesktopDiscoveredSshHost[]>;
+  ensureSshEnvironment: (
+    target: DesktopSshEnvironmentTarget,
+    options?: { readonly issuePairingToken?: boolean },
+  ) => Promise<DesktopSshEnvironmentBootstrap>;
+  disconnectSshEnvironment: (target: DesktopSshEnvironmentTarget) => Promise<void>;
+  fetchSshEnvironmentDescriptor: (httpBaseUrl: string) => Promise<ExecutionEnvironmentDescriptor>;
+  bootstrapSshBearerSession: (
+    httpBaseUrl: string,
+    credential: string,
+  ) => Promise<AuthAccessTokenResult>;
+  fetchSshSessionState: (httpBaseUrl: string, bearerToken: string) => Promise<AuthSessionState>;
+  issueSshWebSocketTicket: (
+    httpBaseUrl: string,
+    bearerToken: string,
+  ) => Promise<AuthWebSocketTicketResult>;
+  onSshPasswordPrompt: (listener: (request: DesktopSshPasswordPromptRequest) => void) => () => void;
+  resolveSshPasswordPrompt: (requestId: string, password: string | null) => Promise<boolean>;
   getWsUrl: () => string | null;
   cloneRepository: (input: DesktopCloneRepositoryInput) => Promise<DesktopCloneRepositoryResult>;
   getPersistedItem: (key: string) => Promise<string | null>;

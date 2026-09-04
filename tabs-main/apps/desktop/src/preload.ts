@@ -28,6 +28,15 @@ const GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL = "desktop:get-local-environment-
 const GET_CONNECTION_CATALOG_CHANNEL = "desktop:get-connection-catalog";
 const SET_CONNECTION_CATALOG_CHANNEL = "desktop:set-connection-catalog";
 const CLEAR_CONNECTION_CATALOG_CHANNEL = "desktop:clear-connection-catalog";
+const DISCOVER_SSH_HOSTS_CHANNEL = "desktop:discover-ssh-hosts";
+const ENSURE_SSH_ENVIRONMENT_CHANNEL = "desktop:ensure-ssh-environment";
+const DISCONNECT_SSH_ENVIRONMENT_CHANNEL = "desktop:disconnect-ssh-environment";
+const FETCH_SSH_ENVIRONMENT_DESCRIPTOR_CHANNEL = "desktop:fetch-ssh-environment-descriptor";
+const BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL = "desktop:bootstrap-ssh-bearer-session";
+const FETCH_SSH_SESSION_STATE_CHANNEL = "desktop:fetch-ssh-session-state";
+const ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL = "desktop:issue-ssh-websocket-token";
+const SSH_PASSWORD_PROMPT_CHANNEL = "desktop:ssh-password-prompt";
+const RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL = "desktop:resolve-ssh-password-prompt";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -75,6 +84,52 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   setConnectionCatalog: (catalog: string) =>
     ipcRenderer.invoke(SET_CONNECTION_CATALOG_CHANNEL, catalog),
   clearConnectionCatalog: () => ipcRenderer.invoke(CLEAR_CONNECTION_CATALOG_CHANNEL),
+  discoverSshHosts: () => ipcRenderer.invoke(DISCOVER_SSH_HOSTS_CHANNEL),
+  ensureSshEnvironment: async (target, options) => {
+    const result = await ipcRenderer.invoke(ENSURE_SSH_ENVIRONMENT_CHANNEL, {
+      target,
+      options,
+    });
+    if (result?.type === "ssh-password-prompt-cancelled") {
+      throw new Error(result.message ?? "SSH authentication cancelled.");
+    }
+    return result;
+  },
+  disconnectSshEnvironment: (target) =>
+    ipcRenderer.invoke(DISCONNECT_SSH_ENVIRONMENT_CHANNEL, target),
+  fetchSshEnvironmentDescriptor: (httpBaseUrl) =>
+    ipcRenderer.invoke(FETCH_SSH_ENVIRONMENT_DESCRIPTOR_CHANNEL, {
+      httpBaseUrl,
+    }),
+  bootstrapSshBearerSession: (httpBaseUrl, credential) =>
+    ipcRenderer.invoke(BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL, {
+      httpBaseUrl,
+      credential,
+    }),
+  fetchSshSessionState: (httpBaseUrl, bearerToken) =>
+    ipcRenderer.invoke(FETCH_SSH_SESSION_STATE_CHANNEL, {
+      httpBaseUrl,
+      bearerToken,
+    }),
+  issueSshWebSocketTicket: (httpBaseUrl, bearerToken) =>
+    ipcRenderer.invoke(ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL, {
+      httpBaseUrl,
+      bearerToken,
+    }),
+  onSshPasswordPrompt: (listener) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, request: unknown) => {
+      if (typeof request === "object" && request !== null) {
+        listener(request as Parameters<typeof listener>[0]);
+      }
+    };
+    ipcRenderer.on(SSH_PASSWORD_PROMPT_CHANNEL, wrapped);
+    return () => ipcRenderer.removeListener(SSH_PASSWORD_PROMPT_CHANNEL, wrapped);
+  },
+  resolveSshPasswordPrompt: (requestId, password) =>
+    ipcRenderer.invoke(RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL, {
+      requestId,
+      password,
+    }),
   getWsUrl: () => {
     const result = ipcRenderer.sendSync(GET_WS_URL_CHANNEL);
     return typeof result === "string" ? result : null;

@@ -23,6 +23,7 @@ import type {
   DesktopTheme,
   DesktopUpdateActionResult,
   DesktopUpdateState,
+  DesktopSshEnvironmentTarget,
 } from "@tabs/contracts";
 import { DEFAULT_DESKTOP_ICON_THEME } from "@tabs/contracts/settings";
 import { autoUpdater } from "electron-updater";
@@ -70,6 +71,11 @@ import {
   createNativeCodeHostMainBackend,
   type NativeCodeHostMainBackend,
 } from "./nativeCodeHostMain";
+import {
+  createSshEnvironmentBridge,
+  resolveSshPasswordPrompt,
+  type SshEnvironmentBridge,
+} from "./sshEnvironmentBridge";
 
 // Prevent EPIPE crashes when pipes are closed unexpectedly (e.g. parent process killed)
 process.stdout.on("error", () => {});
@@ -102,6 +108,14 @@ const GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL = "desktop:get-local-environment-
 const GET_CONNECTION_CATALOG_CHANNEL = "desktop:get-connection-catalog";
 const SET_CONNECTION_CATALOG_CHANNEL = "desktop:set-connection-catalog";
 const CLEAR_CONNECTION_CATALOG_CHANNEL = "desktop:clear-connection-catalog";
+const DISCOVER_SSH_HOSTS_CHANNEL = "desktop:discover-ssh-hosts";
+const ENSURE_SSH_ENVIRONMENT_CHANNEL = "desktop:ensure-ssh-environment";
+const DISCONNECT_SSH_ENVIRONMENT_CHANNEL = "desktop:disconnect-ssh-environment";
+const FETCH_SSH_ENVIRONMENT_DESCRIPTOR_CHANNEL = "desktop:fetch-ssh-environment-descriptor";
+const BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL = "desktop:bootstrap-ssh-bearer-session";
+const FETCH_SSH_SESSION_STATE_CHANNEL = "desktop:fetch-ssh-session-state";
+const ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL = "desktop:issue-ssh-websocket-token";
+const RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL = "desktop:resolve-ssh-password-prompt";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -235,6 +249,15 @@ const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 
 let mainWindow: BrowserWindow | null = null;
+let sshEnvironmentBridgePromise: Promise<SshEnvironmentBridge> | null = null;
+
+function getSshEnvironmentBridge(): Promise<SshEnvironmentBridge> {
+  sshEnvironmentBridgePromise ??= createSshEnvironmentBridge({
+    getWindow: () => mainWindow,
+    cliPackageSpec: `tabs@${app.getVersion()}`,
+  });
+  return sshEnvironmentBridgePromise;
+}
 let currentDesktopIconTheme = loadDesktopIconThemePreference();
 let backendProcess: ChildProcess.ChildProcess | null = null;
 let backendPort = 0;
@@ -491,7 +514,10 @@ function resolveTitleBarOptions(): Pick<
   "titleBarStyle" | "trafficLightPosition" | "titleBarOverlay"
 > {
   if (process.platform === "darwin") {
-    return { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 18 } };
+    return {
+      titleBarStyle: "hiddenInset",
+      trafficLightPosition: { x: 16, y: 18 },
+    };
   }
   if (process.platform === "win32") {
     return {
@@ -1212,7 +1238,10 @@ async function checkForUpdates(reason: string): Promise<void> {
   }
 }
 
-async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed: boolean }> {
+async function downloadAvailableUpdate(): Promise<{
+  accepted: boolean;
+  completed: boolean;
+}> {
   if (!updaterConfigured || updateDownloadInFlight || updateState.status !== "available") {
     return { accepted: false, completed: false };
   }
@@ -1234,7 +1263,10 @@ async function downloadAvailableUpdate(): Promise<{ accepted: boolean; completed
   }
 }
 
-async function installDownloadedUpdate(): Promise<{ accepted: boolean; completed: boolean }> {
+async function installDownloadedUpdate(): Promise<{
+  accepted: boolean;
+  completed: boolean;
+}> {
   if (isQuitting || !updaterConfigured || updateState.status !== "downloaded") {
     return { accepted: false, completed: false };
   }
@@ -1587,14 +1619,17 @@ function registerIpcHandlers(): void {
 
   ipcMain.removeAllListeners(GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL);
   ipcMain.on(GET_LOCAL_ENVIRONMENT_BOOTSTRAPS_CHANNEL, (event) => {
-    event.returnValue = backendHttpUrl && backendWsUrl
-      ? [{
-          id: "primary",
-          label: OS.hostname() || "This Mac",
-          httpBaseUrl: backendHttpUrl,
-          wsBaseUrl: backendWsUrl,
-        }]
-      : [];
+    event.returnValue =
+      backendHttpUrl && backendWsUrl
+        ? [
+            {
+              id: "primary",
+              label: OS.hostname() || "This Mac",
+              httpBaseUrl: backendHttpUrl,
+              wsBaseUrl: backendWsUrl,
+            },
+          ]
+        : [];
   });
 
   const connectionCatalogPath = Path.join(app.getPath("userData"), "connection-catalog.json");
@@ -1609,14 +1644,97 @@ function registerIpcHandlers(): void {
   ipcMain.removeHandler(SET_CONNECTION_CATALOG_CHANNEL);
   ipcMain.handle(SET_CONNECTION_CATALOG_CHANNEL, async (_event, catalog: unknown) => {
     if (typeof catalog !== "string") return false;
-    await FS.promises.mkdir(Path.dirname(connectionCatalogPath), { recursive: true });
-    await FS.promises.writeFile(connectionCatalogPath, catalog, { encoding: "utf8", mode: 0o600 });
+    await FS.promises.mkdir(Path.dirname(connectionCatalogPath), {
+      recursive: true,
+    });
+    await FS.promises.writeFile(connectionCatalogPath, catalog, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
     return true;
   });
   ipcMain.removeHandler(CLEAR_CONNECTION_CATALOG_CHANNEL);
   ipcMain.handle(CLEAR_CONNECTION_CATALOG_CHANNEL, async () => {
     await FS.promises.rm(connectionCatalogPath, { force: true });
   });
+
+  ipcMain.removeHandler(DISCOVER_SSH_HOSTS_CHANNEL);
+  ipcMain.handle(DISCOVER_SSH_HOSTS_CHANNEL, async () =>
+    (await getSshEnvironmentBridge()).discoverHosts(),
+  );
+  ipcMain.removeHandler(ENSURE_SSH_ENVIRONMENT_CHANNEL);
+  ipcMain.handle(
+    ENSURE_SSH_ENVIRONMENT_CHANNEL,
+    async (
+      _event,
+      input: {
+        target: DesktopSshEnvironmentTarget;
+        options?: { issuePairingToken?: boolean };
+      },
+    ) =>
+      (await getSshEnvironmentBridge()).ensureEnvironment(
+        input.target,
+        input.options?.issuePairingToken ?? true,
+      ),
+  );
+  ipcMain.removeHandler(DISCONNECT_SSH_ENVIRONMENT_CHANNEL);
+  ipcMain.handle(
+    DISCONNECT_SSH_ENVIRONMENT_CHANNEL,
+    async (_event, target: DesktopSshEnvironmentTarget) =>
+      (await getSshEnvironmentBridge()).disconnectEnvironment(target),
+  );
+  ipcMain.removeHandler(FETCH_SSH_ENVIRONMENT_DESCRIPTOR_CHANNEL);
+  ipcMain.handle(
+    FETCH_SSH_ENVIRONMENT_DESCRIPTOR_CHANNEL,
+    async (_event, input: { httpBaseUrl: string }) =>
+      (await getSshEnvironmentBridge()).fetchDescriptor(input.httpBaseUrl),
+  );
+  ipcMain.removeHandler(BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL);
+  ipcMain.handle(
+    BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL,
+    async (
+      _event,
+      input: {
+        httpBaseUrl: string;
+        credential: string;
+      },
+    ) =>
+      (await getSshEnvironmentBridge()).bootstrapBearerSession(input.httpBaseUrl, input.credential),
+  );
+  ipcMain.removeHandler(FETCH_SSH_SESSION_STATE_CHANNEL);
+  ipcMain.handle(
+    FETCH_SSH_SESSION_STATE_CHANNEL,
+    async (
+      _event,
+      input: {
+        httpBaseUrl: string;
+        bearerToken: string;
+      },
+    ) => (await getSshEnvironmentBridge()).fetchSessionState(input.httpBaseUrl, input.bearerToken),
+  );
+  ipcMain.removeHandler(ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL);
+  ipcMain.handle(
+    ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL,
+    async (
+      _event,
+      input: {
+        httpBaseUrl: string;
+        bearerToken: string;
+      },
+    ) =>
+      (await getSshEnvironmentBridge()).issueWebSocketTicket(input.httpBaseUrl, input.bearerToken),
+  );
+  ipcMain.removeHandler(RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL);
+  ipcMain.handle(
+    RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL,
+    async (
+      _event,
+      input: {
+        requestId: string;
+        password: string | null;
+      },
+    ) => resolveSshPasswordPrompt(input.requestId, input.password),
+  );
 
   ipcMain.removeHandler(GET_CONFIRM_BEFORE_QUIT_CHANNEL);
   ipcMain.handle(GET_CONFIRM_BEFORE_QUIT_CHANNEL, async () => shouldConfirmBeforeQuit());
@@ -1697,7 +1815,10 @@ function registerIpcHandlers(): void {
       const isPlausibleGitUrl =
         /^(?:https?|git|ssh):\/\/.+/i.test(url) || /^[^@\s]+@[^:\s]+:.+/.test(url);
       if (!isPlausibleGitUrl) {
-        return { ok: false, error: "Enter a valid git URL (https://…, git@…:…, or ssh://…)." };
+        return {
+          ok: false,
+          error: "Enter a valid git URL (https://…, git@…:…, or ssh://…).",
+        };
       }
       if (!parentDir || !isDirectory(parentDir)) {
         return { ok: false, error: "Choose a valid destination folder." };
@@ -1711,12 +1832,18 @@ function registerIpcHandlers(): void {
         .pop()
         ?.replace(/[^A-Za-z0-9._-]/g, "");
       if (!dirName) {
-        return { ok: false, error: "Could not derive a folder name from that URL." };
+        return {
+          ok: false,
+          error: "Could not derive a folder name from that URL.",
+        };
       }
 
       const dest = Path.join(parentDir, dirName);
       if (FS.existsSync(dest) && FS.readdirSync(dest).length > 0) {
-        return { ok: false, error: `"${dirName}" already exists and is not empty.` };
+        return {
+          ok: false,
+          error: `"${dirName}" already exists and is not empty.`,
+        };
       }
 
       try {
@@ -1724,7 +1851,12 @@ function registerIpcHandlers(): void {
           ChildProcess.execFile(
             "git",
             ["clone", "--progress", "--", url, dest],
-            { cwd: parentDir, env: process.env, timeout: 10 * 60_000, maxBuffer: 32 * 1024 * 1024 },
+            {
+              cwd: parentDir,
+              env: process.env,
+              timeout: 10 * 60_000,
+              maxBuffer: 32 * 1024 * 1024,
+            },
             (error, _stdout, stderr) => {
               if (error) {
                 const detail = stderr ? stderr.toString().trim() : "";
@@ -1737,7 +1869,10 @@ function registerIpcHandlers(): void {
         });
         return { ok: true, path: dest };
       } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : "git clone failed." };
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "git clone failed.",
+        };
       }
     },
   );
@@ -1776,7 +1911,11 @@ function registerIpcHandlers(): void {
       : isLightDesktopTheme(themeId, customConfig)
         ? "light"
         : "dark";
-    savePersistedDesktopTheme({ themeId, preference: preference ?? themeId, customConfig });
+    savePersistedDesktopTheme({
+      themeId,
+      preference: preference ?? themeId,
+      customConfig,
+    });
     codeControlChannel.setTheme(themeId, customConfig);
     codeHostManager.setTheme(themeId, customConfig);
   });
@@ -2312,12 +2451,17 @@ function registerIpcHandlers(): void {
     ) {
       return;
     }
-    const { profileId, domain } = input as { profileId: string; domain: string };
+    const { profileId, domain } = input as {
+      profileId: string;
+      domain: string;
+    };
     await browserHostManager.clearProfileDomain(profileId, domain);
   });
 
   ipcMain.removeHandler(VSCODE_FETCH_SHELL_ENV_CHANNEL);
-  ipcMain.handle(VSCODE_FETCH_SHELL_ENV_CHANNEL, async () => ({ ...process.env }));
+  ipcMain.handle(VSCODE_FETCH_SHELL_ENV_CHANNEL, async () => ({
+    ...process.env,
+  }));
 
   ipcMain.removeAllListeners(VSCODE_TOGGLE_DEVTOOLS_CHANNEL);
   ipcMain.on(VSCODE_TOGGLE_DEVTOOLS_CHANNEL, (event) => {
@@ -2540,7 +2684,10 @@ function ensureDownloadedCodeOssRuntime(): void {
   })
     .then(() => {
       process.env.TABS_CODE_OSS_BUILD_DIR = resolveInstalledRuntimeDir(appVersion);
-      const next = resolveCodeHostConfig({ rootDir: ROOT_DIR, env: process.env });
+      const next = resolveCodeHostConfig({
+        rootDir: ROOT_DIR,
+        env: process.env,
+      });
       if (next.state.available) {
         codeHostManager.reconfigure(next);
         writeDesktopLogHeader("code-oss runtime downloaded and activated");
@@ -2597,7 +2744,10 @@ async function bootstrap(): Promise<void> {
     process.env.TABS_CODE_CONTROL_FILE = controlUrlFile;
     codeControlChannel.onChromeState((projectId: string, state: CodeChromeState) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, { projectId, state });
+        mainWindow.webContents.send(CODE_HOST_CHROME_STATE_CHANNEL, {
+          projectId,
+          state,
+        });
       }
     });
     codeControlChannel.onOpenTabsProjectTab(() => {
@@ -2649,13 +2799,15 @@ async function bootstrap(): Promise<void> {
         return;
       }
       win.webContents
-        .executeJavaScript(`
+        .executeJavaScript(
+          `
         (() => {
           const entries = window.__SLIDER_LOGS || [];
           window.__SLIDER_LOGS = [];
           return JSON.stringify(entries);
         })();
-      `)
+      `,
+        )
         .then((result: string) => {
           const logs = JSON.parse(result) as string[];
           if (logs.length > 0) {
@@ -2740,6 +2892,13 @@ app.on("before-quit", (event) => {
     nativeCodeHostMainBackend?.dispose();
     nativeCodeHostMainBackend = null;
     codeHostManager.setNativeWebContentsRegistrar(null);
+
+    try {
+      await sshEnvironmentBridgePromise?.then((bridge) => bridge.close());
+      sshEnvironmentBridgePromise = null;
+    } catch (error) {
+      writeDesktopLogHeader(`SSH environment shutdown failed: ${error}`);
+    }
 
     try {
       await Effect.runPromise(resolvedShutdown.request);
