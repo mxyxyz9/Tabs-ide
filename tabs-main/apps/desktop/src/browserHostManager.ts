@@ -25,6 +25,7 @@ import type {
   DesktopBrowserSessionState,
   BrowserProfileDomainInfo,
   DesktopPreviewScreenshotArtifact,
+  DesktopPreviewRecordingArtifact,
 } from "@tabs/contracts";
 
 const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
@@ -1005,6 +1006,38 @@ export class BrowserHostManager {
       path: artifactPath,
       mimeType: "image/png",
       sizeBytes: data.byteLength,
+      createdAt,
+    };
+  }
+
+  getMediaSourceId(input: DesktopBrowserHostControlInput): string {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session || session.view.webContents.isDestroyed()) {
+      throw new Error("The requested browser session is unavailable.");
+    }
+    const requestContents = this.getWindow()?.webContents;
+    if (!requestContents) throw new Error("The browser recording renderer is unavailable.");
+    return session.view.webContents.getMediaSourceId(requestContents);
+  }
+
+  async saveRecording(
+    input: DesktopBrowserHostControlInput & { mimeType: string; data: Uint8Array },
+  ): Promise<DesktopPreviewRecordingArtifact> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session) throw new Error("The requested browser session is unavailable.");
+    const extension = input.mimeType.includes("mp4") ? "mp4" : "webm";
+    const createdAt = new Date().toISOString();
+    const id = `browser-recording-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+    const artifactDirectory = this.artifactDirectory();
+    const artifactPath = Path.join(artifactDirectory, `${id}.${extension}`);
+    await FS.mkdir(artifactDirectory, { recursive: true });
+    await FS.writeFile(artifactPath, input.data, { flag: "wx" });
+    return {
+      id,
+      tabId: session.sessionId,
+      path: artifactPath,
+      mimeType: input.mimeType,
+      sizeBytes: input.data.byteLength,
       createdAt,
     };
   }

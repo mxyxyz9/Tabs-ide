@@ -34,8 +34,9 @@ verification evidence, not just a matching type or placeholder.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
 - [x] Capture browser screenshots as real managed artifacts, with typed renderer IPC and
       artifact-directory-restricted reveal/copy operations.
-- [ ] Add annotation picking and recordings. Automation snapshots already include inline PNG
-      screenshots.
+- [x] Record the live Chromium guest through its native media-source ID and persist non-empty
+      recording bytes as managed artifacts through the automation broker.
+- [ ] Add annotation picking. Automation snapshots already include inline PNG screenshots.
 - [x] Expose preview automation through the authenticated HTTP MCP transport.
 
 Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;

@@ -2,6 +2,8 @@ import {
   PREVIEW_AUTOMATION_OPERATIONS,
   type PreviewAutomationResizeInput,
   type PreviewAutomationResizeResult,
+  type PreviewAutomationRecordingArtifact,
+  type PreviewAutomationRecordingStatus,
   type PreviewAutomationRequest,
   type PreviewAutomationResponse,
   type PreviewViewportPresetId,
@@ -14,9 +16,96 @@ import { appAtomRegistry } from "../state/atomRegistry";
 import { readModelStateAtom } from "../state/readModel";
 import { workspaceShellActions } from "../state/workspaceShell";
 
-const SUPPORTED_OPERATIONS = PREVIEW_AUTOMATION_OPERATIONS.filter(
-  (operation) => operation !== "recordingStart" && operation !== "recordingStop",
-);
+const SUPPORTED_OPERATIONS = PREVIEW_AUTOMATION_OPERATIONS;
+
+interface ActiveBrowserRecording {
+  readonly recorder: MediaRecorder;
+  readonly stream: MediaStream;
+  readonly chunks: Blob[];
+  readonly startedAt: string;
+}
+
+const activeRecordings = new Map<string, ActiveBrowserRecording>();
+
+function recordingKey(projectId: string, sessionId: string): string {
+  return `${projectId}::${sessionId}`;
+}
+
+function preferredRecordingMimeType(): string | undefined {
+  return ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((mimeType) =>
+    MediaRecorder.isTypeSupported(mimeType),
+  );
+}
+
+export async function startNativeBrowserRecording(
+  bridge: NonNullable<Window["desktopBridge"]>,
+  projectId: string,
+  sessionId: string,
+): Promise<PreviewAutomationRecordingStatus> {
+  const key = recordingKey(projectId, sessionId);
+  const existing = activeRecordings.get(key);
+  if (existing) return { tabId: sessionId, recording: true, startedAt: existing.startedAt };
+  const sourceId = await bridge.getBrowserMediaSourceId({ projectId, sessionId });
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: {
+      mandatory: {
+        chromeMediaSource: "desktop",
+        chromeMediaSourceId: sourceId,
+        maxFrameRate: 30,
+      },
+    } as MediaTrackConstraints,
+  });
+  try {
+    const mimeType = preferredRecordingMimeType();
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    const chunks: Blob[] = [];
+    recorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    });
+    const startedAt = new Date().toISOString();
+    recorder.start(1_000);
+    activeRecordings.set(key, { recorder, stream, chunks, startedAt });
+    return { tabId: sessionId, recording: true, startedAt };
+  } catch (cause) {
+    for (const track of stream.getTracks()) track.stop();
+    throw cause;
+  }
+}
+
+export async function stopNativeBrowserRecording(
+  bridge: NonNullable<Window["desktopBridge"]>,
+  projectId: string,
+  sessionId: string,
+): Promise<PreviewAutomationRecordingArtifact> {
+  const key = recordingKey(projectId, sessionId);
+  const active = activeRecordings.get(key);
+  if (!active) throw new Error(`No browser recording is active for tab ${sessionId}.`);
+  try {
+    if (active.recorder.state !== "inactive") {
+      await new Promise<void>((resolve, reject) => {
+        active.recorder.addEventListener("stop", () => resolve(), { once: true });
+        active.recorder.addEventListener(
+          "error",
+          (event) =>
+            reject(
+              (event as Event & { error?: DOMException }).error ??
+                new Error("The browser recording failed."),
+            ),
+          { once: true },
+        );
+        active.recorder.stop();
+      });
+    }
+    const mimeType = active.recorder.mimeType || active.chunks[0]?.type || "video/webm";
+    const data = new Uint8Array(await new Blob(active.chunks, { type: mimeType }).arrayBuffer());
+    if (data.byteLength === 0) throw new Error("The browser recording did not produce video data.");
+    return await bridge.saveBrowserRecording({ projectId, sessionId, mimeType, data });
+  } finally {
+    activeRecordings.delete(key);
+    for (const track of active.stream.getTracks()) track.stop();
+  }
+}
 
 const PREVIEW_PRESET_SIZES = {
   "iphone-se": [375, 667],
@@ -152,8 +241,11 @@ export function NativePreviewAutomationHost() {
           operation: "status",
         });
       }
-      if (request.operation === "recordingStart" || request.operation === "recordingStop") {
-        throw new Error(`Native preview operation ${request.operation} is not available yet.`);
+      if (request.operation === "recordingStart") {
+        return startNativeBrowserRecording(bridge, thread.projectId, sessionId);
+      }
+      if (request.operation === "recordingStop") {
+        return stopNativeBrowserRecording(bridge, thread.projectId, sessionId);
       }
       if (request.operation === "resize") {
         const resizeInput = request.input as PreviewAutomationResizeInput;

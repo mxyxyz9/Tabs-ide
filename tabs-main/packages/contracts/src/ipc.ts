@@ -1168,6 +1168,10 @@ export interface DesktopBridge {
   captureBrowserScreenshot: (
     input: DesktopBrowserHostControlInput,
   ) => Promise<DesktopPreviewScreenshotArtifact>;
+  getBrowserMediaSourceId: (input: DesktopBrowserHostControlInput) => Promise<string>;
+  saveBrowserRecording: (
+    input: DesktopBrowserHostControlInput & { mimeType: string; data: Uint8Array },
+  ) => Promise<DesktopPreviewRecordingArtifact>;
   revealBrowserArtifact: (path: string) => Promise<void>;
   copyBrowserArtifactToClipboard: (path: string) => Promise<void>;
   setBrowserBounds: (input: DesktopBrowserHostSetBoundsInput) => Promise<void>;

@@ -146,6 +146,8 @@ const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-sessi
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
 const BROWSER_HOST_AUTOMATION_CHANNEL = "desktop:browser-host:automation";
 const BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL = "desktop:browser-host:capture-screenshot";
+const BROWSER_HOST_MEDIA_SOURCE_CHANNEL = "desktop:browser-host:media-source";
+const BROWSER_HOST_SAVE_RECORDING_CHANNEL = "desktop:browser-host:save-recording";
 const BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL = "desktop:browser-host:reveal-artifact";
 const BROWSER_HOST_COPY_ARTIFACT_CHANNEL = "desktop:browser-host:copy-artifact";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
@@ -2412,6 +2414,40 @@ function registerIpcHandlers(): void {
     return browserHostManager.captureScreenshot({
       projectId: (input as { projectId: string }).projectId,
       sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_MEDIA_SOURCE_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_MEDIA_SOURCE_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      throw new Error("Invalid browser media-source request.");
+    }
+    return browserHostManager.getMediaSourceId({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_SAVE_RECORDING_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_SAVE_RECORDING_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
+      typeof (input as { mimeType?: unknown }).mimeType !== "string" ||
+      !((input as { data?: unknown }).data instanceof Uint8Array)
+    ) {
+      throw new Error("Invalid browser recording artifact.");
+    }
+    return browserHostManager.saveRecording({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+      mimeType: (input as { mimeType: string }).mimeType,
+      data: (input as { data: Uint8Array }).data,
     });
   });
 
