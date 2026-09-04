@@ -10,6 +10,8 @@ verification evidence, not just a matching type or placeholder.
       WebSocket tickets.
 - [x] SSH discovery, managed remote startup, tunnels, pairing, and desktop environment catalog.
 - [x] Renderer connection settings create, list, reconnect, and remove remote environments.
+- [x] Saved direct and SSH environments can be activated, mint authenticated WebSocket tickets,
+      and renew those tickets after disconnects or system resume.
 - [ ] Route each project/thread runtime through its selected environment instead of the current
       process-wide transport.
 - [ ] Surface relay/Tailscale reachability and connection repair in the main workspace.
@@ -24,8 +26,9 @@ verification evidence, not just a matching type or placeholder.
 - [x] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
       the browser host.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
-- [ ] Add annotation picking, screenshots, recordings, and artifact reveal/copy.
-- [ ] Expose the preview automation operations through the MCP server.
+- [ ] Add annotation picking, recordings, and artifact reveal/copy. Automation snapshots already
+      include PNG screenshots.
+- [x] Expose preview automation through the authenticated HTTP MCP transport.
 
 Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;
 it already provides stronger persistent profiles and session switching. Parity is implemented as
@@ -52,7 +55,8 @@ an adapter over that engine.
 - [ ] Multi-environment renderer state and environment-scoped queries/mutations.
 - [ ] Project filesystem/workspace services and environment-aware file operations.
 - [x] Provider-scoped MCP credential issuance, liveness refresh, resolution, and revocation.
-- [ ] HTTP MCP transport lifecycle, provider injection, discovery, and complete tool exposure.
+- [x] HTTP MCP transport lifecycle, provider injection, discovery, and complete preview tool
+      exposure.
 - [x] Desktop resume events force stale renderer WebSocket transports to reconnect.
 - [ ] Background activity reporting and full power/thermal-aware liveness policy.
 - [ ] Resource telemetry, diagnostics, tracing UI, and support bundles.
