@@ -767,23 +767,50 @@ const make = Effect.gen(function* () {
 
   const worker = yield* makeDrainableWorker(processDomainEventSafely);
 
-  const start: ProviderCommandReactorShape["start"] = Effect.forkScoped(
-    Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
-      if (
-        event.type !== "thread.meta-updated" &&
-        event.type !== "thread.runtime-mode-set" &&
-        event.type !== "thread.turn-start-requested" &&
-        event.type !== "thread.turn-interrupt-requested" &&
-        event.type !== "thread.approval-response-requested" &&
-        event.type !== "thread.user-input-response-requested" &&
-        event.type !== "thread.session-stop-requested"
-      ) {
-        return Effect.void;
-      }
+  const start: ProviderCommandReactorShape["start"] = Effect.gen(function* () {
+    const readModel = yield* orchestrationEngine.getReadModel();
+    yield* Effect.forEach(
+      readModel.threads,
+      (thread) => {
+        const requestId = thread.titleRegeneration?.requestId;
+        if (requestId === undefined) return Effect.void;
+        return orchestrationEngine
+          .dispatch({
+            type: "thread.title.regeneration.complete",
+            commandId: serverCommandId("thread-title-regeneration-recovery"),
+            threadId: thread.id,
+            requestId,
+          })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("failed to clear interrupted thread title regeneration", {
+                threadId: thread.id,
+                cause: Cause.pretty(cause),
+              }),
+            ),
+          );
+      },
+      { discard: true },
+    );
 
-      return worker.enqueue(event);
-    }),
-  ).pipe(Effect.asVoid);
+    yield* Effect.forkScoped(
+      Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
+        if (
+          event.type !== "thread.meta-updated" &&
+          event.type !== "thread.runtime-mode-set" &&
+          event.type !== "thread.turn-start-requested" &&
+          event.type !== "thread.turn-interrupt-requested" &&
+          event.type !== "thread.approval-response-requested" &&
+          event.type !== "thread.user-input-response-requested" &&
+          event.type !== "thread.session-stop-requested"
+        ) {
+          return Effect.void;
+        }
+
+        return worker.enqueue(event);
+      }),
+    );
+  });
 
   return {
     start,
