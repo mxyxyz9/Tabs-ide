@@ -56,6 +56,8 @@ import {
 import { type EventNdjsonLogger } from "./EventNdjsonLogger";
 import { ProviderEventLoggers } from "./ProviderEventLoggers";
 import { AnalyticsService } from "../../telemetry/Services/AnalyticsService";
+import * as McpProviderSession from "../../mcp/McpProviderSession";
+import * as McpSessionRegistry from "../../mcp/McpSessionRegistry";
 const isModelSelection = Schema.is(ModelSelection);
 
 /**
@@ -210,6 +212,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
 
   const registry = yield* ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory;
+  const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
+    McpSessionRegistry.issueActiveMcpCredential({ threadId, providerInstanceId }).pipe(
+      Effect.tap((credential) =>
+        Effect.sync(() => {
+          if (credential) McpProviderSession.setMcpProviderSession(credential.config);
+          else McpProviderSession.clearMcpProviderSession(threadId);
+        }),
+      ),
+    );
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
@@ -386,6 +397,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const persistedCwd = readPersistedCwd(input.binding.runtimePayload);
       const persistedModelSelection = readPersistedModelSelection(input.binding.runtimePayload);
 
+      yield* prepareMcpSession(input.binding.threadId, bindingInstanceId);
       const resumed = yield* adapter.startSession({
         threadId: input.binding.threadId,
         provider: input.binding.provider,
@@ -575,6 +587,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "provider.cwd.effective": effectiveCwd ?? "",
         });
         const adapter = yield* registry.getByInstance(resolvedInstanceId);
+        yield* prepareMcpSession(threadId, resolvedInstanceId);
         const session = yield* adapter.startSession({
           ...input,
           providerInstanceId: resolvedInstanceId,
@@ -634,6 +647,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       ...parsed,
       attachments: parsed.attachments ?? [],
     };
+    yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
     if (!input.input && input.attachments.length === 0) {
       return yield* toValidationError(
         "ProviderService.sendTurn",
@@ -849,6 +863,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         yield* analytics.record("provider.session.stopped", {
           provider: routed.adapter.provider,
         });
+        yield* McpSessionRegistry.revokeActiveMcpThread(input.threadId);
+        yield* Effect.sync(() => McpProviderSession.clearMcpProviderSession(input.threadId));
       }).pipe(
         withMetrics({
           counter: providerSessionsTotal,

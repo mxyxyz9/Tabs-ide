@@ -24,6 +24,10 @@ const makeRegistry = (now: () => number, httpServer = fakeHttpServer) =>
     .make({
       now,
       livenessWindowMs: 100,
+      endpoint:
+        httpServer.address._tag === "TcpAddress"
+          ? `http://${httpServer.address.hostname === "0.0.0.0" ? "127.0.0.1" : httpServer.address.hostname}:${httpServer.address.port}/mcp`
+          : "http://127.0.0.1/mcp",
     })
     .pipe(
       Effect.provideService(HttpServer.HttpServer, httpServer),
@@ -127,4 +131,3 @@ it.effect("does not keep credentials of other threads alive", () =>
     expect(yield* registry.resolve(token)).toBeUndefined();
   }),
 );
-

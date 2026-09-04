@@ -53,6 +53,7 @@ import {
 import { type CodexAdapterShape } from "../Services/CodexAdapter";
 import { resolveAttachmentPath } from "../../attachmentStore";
 import { ServerConfig } from "../../config";
+import * as McpProviderSession from "../../mcp/McpProviderSession";
 import {
   CodexResumeCursorSchema,
   CodexSessionRuntimeThreadIdMissingError,
@@ -1382,12 +1383,27 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           yield* Effect.suspend(() => stopSessionInternal(existing));
         }
 
+        const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
           providerInstanceId: boundInstanceId,
           cwd: input.cwd ?? process.cwd(),
           binaryPath: codexConfig.binaryPath,
-          ...(options?.environment ? { environment: options.environment } : {}),
+          ...(mcpSession
+            ? {
+                environment: {
+                  ...(options?.environment ?? process.env),
+                  TABS_MCP_BEARER_TOKEN: mcpSession.authorizationHeader.replace(/^Bearer\s+/, ""),
+                },
+                launchArgs: [
+                  "-c",
+                  `mcp_servers.tabs.url=${mcpSession.endpoint}`,
+                  "-c",
+                  'mcp_servers.tabs.bearer_token_env_var="TABS_MCP_BEARER_TOKEN"',
+                ],
+              }
+            : {}),
+          ...(!mcpSession && options?.environment ? { environment: options.environment } : {}),
           ...(codexConfig.homePath ? { homePath: codexConfig.homePath } : {}),
           ...(isCodexResumeCursorSchema(input.resumeCursor)
             ? { resumeCursor: input.resumeCursor }

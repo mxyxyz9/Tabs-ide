@@ -5,9 +5,8 @@ import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SynchronizedRef from "effect/SynchronizedRef";
-import { HttpServer } from "effect/unstable/http";
-
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import { ServerConfig } from "../config.ts";
 import * as McpInvocationContext from "./McpInvocationContext.ts";
 import * as McpProviderSession from "./McpProviderSession.ts";
 
@@ -54,6 +53,7 @@ interface RegistryState {
 export interface McpSessionRegistryOptions {
   readonly livenessWindowMs?: number;
   readonly now?: () => number;
+  readonly endpoint: string;
 }
 
 /**
@@ -89,19 +89,15 @@ const getHttpMcpEndpointHost = (hostname: string): string => {
 };
 
 const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
-  options: McpSessionRegistryOptions = {},
+  options: McpSessionRegistryOptions,
 ) {
   const crypto = yield* Crypto.Crypto;
   const environment = yield* ServerEnvironment.ServerEnvironment;
   const environmentId = yield* environment.getEnvironmentId;
-  const httpServer = yield* HttpServer.HttpServer;
   const state = yield* SynchronizedRef.make<RegistryState>({ records: new Map() });
   const currentTimeMillis = options.now ? Effect.sync(options.now) : Clock.currentTimeMillis;
   const livenessWindowMs = options.livenessWindowMs ?? DEFAULT_LIVENESS_WINDOW_MS;
-  const endpoint =
-    httpServer.address._tag === "TcpAddress"
-      ? `http://${getHttpMcpEndpointHost(httpServer.address.hostname)}:${httpServer.address.port}/mcp`
-      : "http://127.0.0.1/mcp";
+  const endpoint = options.endpoint;
 
   const hashToken = (token: string) =>
     crypto
@@ -204,21 +200,26 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
 
 let activeMcpSessionRegistry: McpSessionRegistryShape | undefined;
 
-const make = Effect.acquireRelease(
-  makeWithOptions().pipe(
-    Effect.tap((registry) =>
-      Effect.sync(() => {
-        activeMcpSessionRegistry = registry;
-      }),
+const make = Effect.gen(function* () {
+  const config = yield* ServerConfig;
+  return yield* Effect.acquireRelease(
+    makeWithOptions({
+      endpoint: `http://${getHttpMcpEndpointHost(config.host ?? "127.0.0.1")}:${config.port}/mcp`,
+    }).pipe(
+      Effect.tap((registry) =>
+        Effect.sync(() => {
+          activeMcpSessionRegistry = registry;
+        }),
+      ),
     ),
-  ),
-  (registry) =>
-    Effect.sync(() => {
-      if (activeMcpSessionRegistry === registry) {
-        activeMcpSessionRegistry = undefined;
-      }
-    }),
-);
+    (registry) =>
+      Effect.sync(() => {
+        if (activeMcpSessionRegistry === registry) {
+          activeMcpSessionRegistry = undefined;
+        }
+      }),
+  );
+});
 
 export const layer = Layer.effect(McpSessionRegistry, make);
 
@@ -248,4 +249,3 @@ export const revokeAllActiveMcpCredentials = (): Effect.Effect<void> =>
 export const __testing = {
   make: makeWithOptions,
 };
-

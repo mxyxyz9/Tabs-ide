@@ -96,6 +96,7 @@ export interface CodexSessionRuntimeOptions {
   readonly threadId: ThreadId;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
+  readonly launchArgs?: ReadonlyArray<string>;
   readonly homePath?: string;
   readonly environment?: NodeJS.ProcessEnv;
   readonly cwd: string;
@@ -710,7 +711,7 @@ export const makeCodexSessionRuntime = (
     };
     const child = yield* spawner
       .spawn(
-        ChildProcess.make(options.binaryPath, ["app-server"], {
+        ChildProcess.make(options.binaryPath, ["app-server", ...(options.launchArgs ?? [])], {
           cwd: options.cwd,
           env,
           forceKillAfter: CODEX_APP_SERVER_FORCE_KILL_AFTER,
@@ -722,7 +723,7 @@ export const makeCodexSessionRuntime = (
         Effect.mapError(
           (cause) =>
             new CodexErrors.CodexAppServerSpawnError({
-              command: `${options.binaryPath} app-server`,
+              command: `${options.binaryPath} app-server ${(options.launchArgs ?? []).join(" ")}`.trim(),
               cause,
             }),
         ),

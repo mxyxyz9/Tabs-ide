@@ -34,6 +34,7 @@ import { ServerLoggerLive } from "./serverLogger";
 import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { readBootstrapEnvelope } from "./bootstrap";
+import * as McpSessionRegistry from "./mcp/McpSessionRegistry";
 import { ServerSettingsLive } from "./serverSettings";
 
 export class StartupError extends Data.TaggedError("StartupError")<{
@@ -313,7 +314,9 @@ const LayerLive = (input: CliInput) =>
         }),
       ),
     ),
-    Layer.provideMerge(makeServerProviderLayer()),
+    Layer.provideMerge(
+      makeServerProviderLayer().pipe(Layer.provideMerge(McpSessionRegistry.layer)),
+    ),
     Layer.provideMerge(
       Layer.effectDiscard(
         Effect.sync(() => {
