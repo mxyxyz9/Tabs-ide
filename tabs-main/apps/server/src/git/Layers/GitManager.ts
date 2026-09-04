@@ -1357,25 +1357,49 @@ export const makeGitManager = Effect.gen(function* () {
     function* (input) {
       const normalizedReference = normalizePullRequestReference(input.reference);
       const rootWorktreePath = canonicalizeExistingPath(input.cwd);
-      const pullRequestSummary = yield* gitHubCli.getPullRequest({
-        cwd: input.cwd,
-        reference: normalizedReference,
-      });
-      const pullRequest = toResolvedPullRequest(pullRequestSummary);
+      const provider = yield* requireSupportedPullRequestProvider(input.cwd);
+      const pullRequestSummary =
+        provider === "github"
+          ? yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference: normalizedReference })
+          : null;
+      const pullRequest = pullRequestSummary
+        ? toResolvedPullRequest(pullRequestSummary)
+        : provider === "gitlab"
+          ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: normalizedReference })
+          : provider === "azure-devops"
+            ? yield* azureDevOpsCli.getPullRequest({
+                cwd: input.cwd,
+                reference: normalizedReference,
+              })
+            : yield* bitbucketApi.getPullRequest({
+                cwd: input.cwd,
+                reference: normalizedReference,
+              });
+      const pullRequestWithRemoteInfo = {
+        ...pullRequest,
+        ...(pullRequestSummary ? toPullRequestHeadRemoteInfo(pullRequestSummary) : {}),
+      } as const;
 
       if (input.mode === "local") {
-        yield* gitHubCli.checkoutPullRequest({
-          cwd: input.cwd,
-          reference: normalizedReference,
-          force: true,
-        });
+        if (provider === "github") {
+          yield* gitHubCli.checkoutPullRequest({
+            cwd: input.cwd,
+            reference: normalizedReference,
+            force: true,
+          });
+        } else {
+          const localBranch = resolvePullRequestWorktreeLocalBranchName(pullRequestWithRemoteInfo);
+          yield* materializePullRequestHeadBranch(
+            input.cwd,
+            pullRequestWithRemoteInfo,
+            localBranch,
+          );
+          yield* Effect.scoped(gitCore.checkoutBranch({ cwd: input.cwd, branch: localBranch }));
+        }
         const details = yield* gitCore.statusDetails(input.cwd);
         yield* configurePullRequestHeadUpstream(
           input.cwd,
-          {
-            ...pullRequest,
-            ...toPullRequestHeadRemoteInfo(pullRequestSummary),
-          },
+          pullRequestWithRemoteInfo,
           details.branch ?? pullRequest.headBranch,
         );
         return {
@@ -1390,18 +1414,11 @@ export const makeGitManager = Effect.gen(function* () {
           const details = yield* gitCore.statusDetails(worktreePath);
           yield* configurePullRequestHeadUpstream(
             worktreePath,
-            {
-              ...pullRequest,
-              ...toPullRequestHeadRemoteInfo(pullRequestSummary),
-            },
+            pullRequestWithRemoteInfo,
             details.branch ?? pullRequest.headBranch,
           );
         });
 
-      const pullRequestWithRemoteInfo = {
-        ...pullRequest,
-        ...toPullRequestHeadRemoteInfo(pullRequestSummary),
-      } as const;
       const localPullRequestBranch =
         resolvePullRequestWorktreeLocalBranchName(pullRequestWithRemoteInfo);
 

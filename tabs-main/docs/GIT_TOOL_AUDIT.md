@@ -67,4 +67,4 @@ T3 Code is the stronger reference for multi-provider contracts, review filters, 
 
 ## Release gate
 
-The Git tool now routes the four T3 providers through real adapters. Full fine-grained parity still requires advanced Azure auto-merge/edit actions, Bitbucket reviewer/edit/search refinements, and provider-aware PR workspace checkout. GitHub/GitLab have reactions and rich review collaboration; Bitbucket has real diffs and inline collaboration; Azure has capability-gated list/detail/create and lifecycle/reviewer actions.
+The Git tool now routes the four T3 providers through real adapters, including provider-aware local/worktree preparation instead of unconditionally invoking GitHub. Full fine-grained parity still requires advanced Azure auto-merge/edit actions and Bitbucket reviewer/edit/search refinements. GitHub/GitLab have reactions and rich review collaboration; Bitbucket has real diffs and inline collaboration; Azure has capability-gated list/detail/create and lifecycle/reviewer actions.
