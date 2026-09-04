@@ -322,7 +322,7 @@ function OpenCommandPaletteDialog(props: {
           return;
         }
       }
-      await handleNewThread(project.id);
+      await handleNewThread(project.id, { environmentId: project.environmentId });
     },
     [navigate, handleNewThread, threads],
   );
@@ -348,7 +348,7 @@ function OpenCommandPaletteDialog(props: {
         description: project.cwd,
         icon: <ProjectFavicon cwd={project.cwd} className={ITEM_ICON_CLASS} />,
         run: async () => {
-          await handleNewThread(project.id);
+          await handleNewThread(project.id, { environmentId: project.environmentId });
         },
       })),
     [handleNewThread, projects],
@@ -624,7 +624,9 @@ function OpenCommandPaletteDialog(props: {
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
         shortcutCommand: "chat.new",
         run: async () => {
-          await handleNewThread(activeProject.id);
+          await handleNewThread(activeProject.id, {
+            environmentId: activeProject.environmentId,
+          });
         },
       });
     }

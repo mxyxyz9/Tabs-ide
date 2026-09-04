@@ -1,4 +1,9 @@
-import { DEFAULT_RUNTIME_MODE, type ProjectId, ThreadId } from "@tabs/contracts";
+import {
+  DEFAULT_RUNTIME_MODE,
+  type EnvironmentId,
+  type ProjectId,
+  ThreadId,
+} from "@tabs/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { type DraftThreadEnvMode, type DraftThreadState } from "../composerDraftStore";
@@ -16,10 +21,16 @@ export function useHandleNewThread() {
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeEnvironmentId = useParams({
+    strict: false,
+    select: (params) => (params.environmentId as EnvironmentId | undefined) ?? null,
+  });
   const activeDraftThread = useDraftThread(routeThreadId);
 
   const activeThread = routeThreadId
-    ? threads.find((thread) => thread.id === routeThreadId)
+    ? threads.find(
+        (thread) => thread.id === routeThreadId && thread.environmentId === routeEnvironmentId,
+      )
     : undefined;
 
   const handleNewThread = useCallback(
@@ -29,6 +40,7 @@ export function useHandleNewThread() {
         branch?: string | null;
         worktreePath?: string | null;
         envMode?: DraftThreadEnvMode;
+        environmentId?: EnvironmentId | undefined;
         // When true, create/select the draft thread WITHOUT navigating the app to
         // its `/$threadId` route. The Code-tab side chat uses this so starting a
         // new chat there stays in the Code tab instead of being thrown into the
@@ -44,6 +56,9 @@ export function useHandleNewThread() {
         setDraftThreadContext,
         setProjectDraftThreadId,
       } = composerDraftActions;
+      const projectEnvironmentId =
+        options?.environmentId ??
+        projects.find((project) => project.id === projectId)?.environmentId;
       const hasBranchOption = options?.branch !== undefined;
       const hasWorktreePathOption = options?.worktreePath !== undefined;
       const hasEnvModeOption = options?.envMode !== undefined;
@@ -65,10 +80,15 @@ export function useHandleNewThread() {
           if (options?.skipNavigation || routeThreadId === storedDraftThread.threadId) {
             return;
           }
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: storedDraftThread.threadId },
-          });
+          if (projectEnvironmentId) {
+            await navigate({
+              to: "/$environmentId/$threadId",
+              params: {
+                environmentId: projectEnvironmentId,
+                threadId: storedDraftThread.threadId,
+              },
+            });
+          }
         })();
       }
 
@@ -107,13 +127,15 @@ export function useHandleNewThread() {
         if (options?.skipNavigation) {
           return;
         }
-        await navigate({
-          to: "/$threadId",
-          params: { threadId },
-        });
+        if (projectEnvironmentId) {
+          await navigate({
+            to: "/$environmentId/$threadId",
+            params: { environmentId: projectEnvironmentId, threadId },
+          });
+        }
       })();
     },
-    [navigate, routeThreadId],
+    [navigate, projects, routeThreadId],
   );
 
   return {

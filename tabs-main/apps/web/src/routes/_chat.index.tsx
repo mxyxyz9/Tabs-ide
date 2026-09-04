@@ -73,6 +73,7 @@ function ChatIndexRouteView() {
               className="rounded-full px-5"
               onClick={() =>
                 void handleNewThread(activeProject.id, {
+                  environmentId: activeProject.environmentId,
                   envMode: settings.defaultThreadEnvMode,
                 })
               }

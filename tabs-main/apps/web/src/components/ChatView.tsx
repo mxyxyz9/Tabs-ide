@@ -1386,17 +1386,17 @@ export default function ChatView({
   const onToggleDiff = useCallback(() => {
     // The diff panel is a full Agents-tab feature driven by route search params.
     // The compact side chat has no diff route, so don't navigate the app there.
-    if (compact) return;
+    if (compact || !environmentId) return;
     void navigate({
-      to: "/$threadId",
-      params: { threadId },
+      to: "/$environmentId/$threadId",
+      params: { environmentId, threadId },
       replace: true,
       search: (previous) => {
         const rest = stripDiffSearchParams(previous);
         return diffOpen ? { ...rest, diff: undefined } : { ...rest, diff: "1" };
       },
     });
-  }, [compact, diffOpen, navigate, threadId]);
+  }, [compact, diffOpen, environmentId, navigate, threadId]);
 
   const envLocked = Boolean(
     activeThread &&
@@ -3699,10 +3699,10 @@ export default function ChatView({
     (turnId: TurnId, filePath?: string) => {
       // The diff panel is a full Agents-tab feature driven by route search
       // params; the compact side chat has no diff route, so don't navigate there.
-      if (compact) return;
+      if (compact || !environmentId) return;
       void navigate({
-        to: "/$threadId",
-        params: { threadId },
+        to: "/$environmentId/$threadId",
+        params: { environmentId, threadId },
         search: (previous) => {
           const rest = stripDiffSearchParams(previous);
           return filePath
@@ -3711,7 +3711,7 @@ export default function ChatView({
         },
       });
     },
-    [compact, navigate, threadId],
+    [compact, environmentId, navigate, threadId],
   );
   const onRevertUserMessage = (messageId: MessageId) => {
     const targetTurnCount = revertTurnCountByUserMessageId.get(messageId);

@@ -1543,6 +1543,7 @@ export default function Sidebar() {
                     event.preventDefault();
                     event.stopPropagation();
                     void handleNewThread(project.id, {
+                      environmentId: project.environmentId,
                       envMode: resolveSidebarNewThreadEnvMode({
                         defaultEnvMode: appSettings.defaultThreadEnvMode,
                       }),

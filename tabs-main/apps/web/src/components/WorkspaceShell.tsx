@@ -11626,6 +11626,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         }}
         onCreateThread={() =>
           void handleNewThread(activeProject.id, {
+            environmentId: activeProject.environmentId,
             envMode: settings.defaultThreadEnvMode,
           })
         }
