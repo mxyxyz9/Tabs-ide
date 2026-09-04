@@ -136,7 +136,7 @@ import {
   newThreadId,
 } from "../lib/utils";
 import { APP_VERSION } from "../branding";
-import { environmentApi } from "../connection/environmentApiRegistry";
+import { environmentApi, isPrimaryEnvironment } from "../connection/environmentApiRegistry";
 
 // On Windows the native title bar is hidden and the caption buttons are overlaid
 // (Window Controls Overlay) at the top-right, so the top bar reserves space on
@@ -3310,6 +3310,9 @@ function DesktopCodeTool(props: { project: Project }) {
                 >
                   <ChatView
                     key={sideChatThreadId}
+                    {...(props.project.environmentId
+                      ? { environmentId: props.project.environmentId }
+                      : {})}
                     threadId={sideChatThreadId}
                     compact
                     onRequestThread={setSideChatThreadIdOverride}
@@ -3336,7 +3339,7 @@ function DesktopCodeTool(props: { project: Project }) {
 }
 
 function CodeTool(props: { project: Project }) {
-  if (window.desktopBridge) {
+  if (window.desktopBridge && isPrimaryEnvironment(props.project.environmentId)) {
     return <DesktopCodeTool project={props.project} />;
   }
 

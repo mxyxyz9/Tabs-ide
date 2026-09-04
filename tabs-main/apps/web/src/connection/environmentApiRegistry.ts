@@ -88,6 +88,13 @@ export function connectedEnvironmentIds(): ReadonlyArray<string> {
   return [...entries.keys()];
 }
 
+export function isPrimaryEnvironment(environmentId?: string): boolean {
+  return (
+    environmentId === undefined ||
+    (primaryEnvironmentId !== null && environmentId === primaryEnvironmentId)
+  );
+}
+
 export function disconnectEnvironmentApi(environmentId: string): void {
   if (environmentId === primaryEnvironmentId) return;
   const entry = entries.get(environmentId);
