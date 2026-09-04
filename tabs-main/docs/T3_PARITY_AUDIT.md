@@ -41,9 +41,12 @@ verification evidence, not just a matching type or placeholder.
 - [x] Record the live Chromium guest through its native media-source ID and persist non-empty
       recording bytes as managed artifacts through the automation broker.
 - [x] Add a native element picker with hover targeting, Escape cancellation, selector/HTML/style
-      context, element bounds, screenshot capture, and copy-to-chat workflow.
-- [ ] Add T3's richer annotation editor for regions, ink strokes, style changes, comments, and
-      direct composer attachment. Automation snapshots already include inline PNG screenshots.
+      context, element bounds, screenshot capture, and direct composer attachment.
+- [x] Persist picked preview context, render removable accessible composer cards, include the real
+      screenshot through the production image path, validate the expanded provider prompt, and
+      restore annotation state after failed dispatch.
+- [ ] Add T3's richer annotation editor for authoring regions, ink strokes, style changes, and
+      comments. The contract and composer transport already preserve these fields.
 - [x] Expose preview automation through the authenticated HTTP MCP transport.
 
 Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;
