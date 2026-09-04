@@ -1476,6 +1476,34 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     }),
   );
 
+  it.effect("honors bounded pull request list limits and reports more results", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-manager-");
+      yield* initRepo(repoDir);
+      const pullRequests = [1, 2].map((number) => ({
+        number,
+        title: `PR ${number}`,
+        url: `https://github.com/tabs/app/pull/${number}`,
+        baseRefName: "main",
+        headRefName: `feature/${number}`,
+        state: "open" as const,
+      }));
+      const { manager, ghCalls } = yield* makeManager({
+        ghScenario: { prListSequence: [JSON.stringify(pullRequests)] },
+      });
+
+      const result = yield* manager.listPullRequests({
+        cwd: repoDir,
+        state: "open",
+        limit: 2,
+      });
+
+      expect(result.pullRequests).toHaveLength(2);
+      expect(result.hasMore).toBe(true);
+      expect(ghCalls.some((call) => call.includes("--limit 2"))).toBe(true);
+    }),
+  );
+
   it.effect("mutates a pull request and returns refreshed provider state", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("tabs-git-manager-");

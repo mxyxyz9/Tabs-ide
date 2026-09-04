@@ -7,6 +7,8 @@ import {
   GitRunStackedActionResult,
   GitRunStackedActionInput,
   GitResolvePullRequestResult,
+  GitListPullRequestsInput,
+  GitListPullRequestsResult,
 } from "./git.ts";
 
 const decodeCreateWorktreeInput = Schema.decodeUnknownSync(VcsCreateWorktreeInput);
@@ -16,6 +18,8 @@ const decodePreparePullRequestThreadInput = Schema.decodeUnknownSync(
 const decodeRunStackedActionInput = Schema.decodeUnknownSync(GitRunStackedActionInput);
 const decodeRunStackedActionResult = Schema.decodeUnknownSync(GitRunStackedActionResult);
 const decodeResolvePullRequestResult = Schema.decodeUnknownSync(GitResolvePullRequestResult);
+const decodeListPullRequestsInput = Schema.decodeUnknownSync(GitListPullRequestsInput);
+const decodeListPullRequestsResult = Schema.decodeUnknownSync(GitListPullRequestsResult);
 
 describe("VcsCreateWorktreeInput", () => {
   it("accepts omitted newRefName for existing-refName worktrees", () => {
@@ -81,6 +85,16 @@ describe("GitResolvePullRequestResult", () => {
     expect(parsed.pullRequest.number).toBe(42);
     expect(parsed.pullRequest.headBranch).toBe("feature/pr-threads");
     expect(parsed.pullRequest.files?.[0]?.path).toBe("src/app.ts");
+  });
+});
+
+describe("GitListPullRequests", () => {
+  it("accepts a bounded list size and a server-authored continuation signal", () => {
+    expect(decodeListPullRequestsInput({ cwd: "/repo", state: "open", limit: 100 }).limit).toBe(
+      100,
+    );
+    expect(decodeListPullRequestsResult({ pullRequests: [], hasMore: false }).hasMore).toBe(false);
+    expect(() => decodeListPullRequestsInput({ cwd: "/repo", limit: 201 })).toThrow();
   });
 });
 

@@ -129,6 +129,7 @@ export function PRsPanel({
   const [reviewerInput, setReviewerInput] = useState("");
   const [labelInput, setLabelInput] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [listLimit, setListLimit] = useState(50);
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
@@ -141,7 +142,7 @@ export function PRsPanel({
 
   // Query 2: Repository PRs query (supports state filter for past merged/closed PRs)
   const allPrsQuery = useQuery(
-    gitAllPullRequestsQueryOptions(cwd || null, filterState, environmentId),
+    gitAllPullRequestsQueryOptions(cwd || null, filterState, environmentId, listLimit),
   );
   const detailQuery = useQuery(
     gitResolvePullRequestQueryOptions({
@@ -900,6 +901,18 @@ export function PRsPanel({
               ) : null}
             </Card>
           ))}
+          {viewMode === "all" && allPrsQuery.data?.hasMore ? (
+            <div className="flex justify-center pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={allPrsQuery.isFetching || listLimit >= 200}
+                onClick={() => setListLimit((current) => Math.min(200, current + 50))}
+              >
+                {allPrsQuery.isFetching ? "Loading more…" : "Load 50 more pull requests"}
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 

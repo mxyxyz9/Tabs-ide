@@ -748,11 +748,13 @@ export const GitListPullRequestsInput = Schema.Struct({
       Schema.Literal("all"),
     ]),
   ),
+  limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(200))),
 });
 export type GitListPullRequestsInput = typeof GitListPullRequestsInput.Type;
 
 export const GitListPullRequestsResult = Schema.Struct({
   pullRequests: Schema.Array(GitResolvedPullRequest),
+  hasMore: Schema.Boolean,
 });
 export type GitListPullRequestsResult = typeof GitListPullRequestsResult.Type;
 

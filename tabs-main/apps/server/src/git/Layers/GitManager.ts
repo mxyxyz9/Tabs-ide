@@ -1069,18 +1069,19 @@ export const makeGitManager = Effect.gen(function* () {
   const listPullRequests: GitManagerShape["listPullRequests"] = Effect.fnUntraced(
     function* (input) {
       const provider = yield* requireSupportedPullRequestProvider(input.cwd);
+      const limit = input.limit ?? 50;
       const pullRequests =
         provider === "github"
           ? yield* gitHubCli
-              .listOpenPullRequests({ cwd: input.cwd, state: input.state ?? "all", limit: 50 })
+              .listOpenPullRequests({ cwd: input.cwd, state: input.state ?? "all", limit })
               .pipe(Effect.map((list) => list.map(toResolvedPullRequest)))
           : yield* gitLabCli.listPullRequests({
               cwd: input.cwd,
               state: input.state ?? "all",
-              limit: 50,
+              limit,
             });
 
-      return { pullRequests };
+      return { pullRequests, hasMore: pullRequests.length >= limit && limit < 200 };
     },
   );
 
