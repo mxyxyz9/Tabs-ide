@@ -21,7 +21,7 @@ verification evidence, not just a matching type or placeholder.
 - [x] Authenticated WebSocket broker channels for host registration, focus, requests, and replies.
 - [x] Tabs persistent browser host with isolated profiles, login windows, navigation, and DevTools.
 - [ ] Adapt the broker host protocol to Tabs' `WebContentsView` browser sessions.
-- [ ] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
+- [x] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
       the browser host.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
 - [ ] Add annotation picking, screenshots, recordings, and artifact reveal/copy.

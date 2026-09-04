@@ -58,6 +58,7 @@ const BROWSER_HOST_RELOAD_SESSION_CHANNEL = "desktop:browser-host:reload-session
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
+const BROWSER_HOST_AUTOMATION_CHANNEL = "desktop:browser-host:automation";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const BROWSER_HOST_SESSION_STATE_CHANNEL = "desktop:browser-host:session-state";
@@ -201,6 +202,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   goForwardBrowserSession: (input) =>
     ipcRenderer.invoke(BROWSER_HOST_FORWARD_SESSION_CHANNEL, input),
   toggleBrowserDevTools: (input) => ipcRenderer.invoke(BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL, input),
+  runBrowserAutomation: (input) => ipcRenderer.invoke(BROWSER_HOST_AUTOMATION_CHANNEL, input),
   setBrowserBounds: (input) => ipcRenderer.invoke(BROWSER_HOST_SET_BOUNDS_CHANNEL, input),
   syncBrowserSessions: (projectIds) =>
     ipcRenderer.invoke(BROWSER_HOST_SYNC_SESSIONS_CHANNEL, projectIds),

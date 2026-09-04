@@ -136,6 +136,62 @@ describe("BrowserHostManager profile storage", () => {
   });
 });
 
+describe("BrowserHostManager automation", () => {
+  it("routes status and evaluation to the requested persistent session", async () => {
+    const executeJavaScript = vi.fn().mockResolvedValue({ heading: "Ready" });
+    const manager = new BrowserHostManager(() => null);
+    const sessions = (
+      manager as unknown as {
+        sessions: Map<string, unknown>;
+      }
+    ).sessions;
+    sessions.set("project-1::preview-1", {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      view: {
+        webContents: {
+          isDestroyed: () => false,
+          executeJavaScript,
+        },
+      },
+      bounds: { x: 0, y: 0, width: 800, height: 600 },
+      currentUrl: "https://example.com/",
+      pageTitle: "Example",
+      loading: false,
+    });
+
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "preview-1",
+        operation: "status",
+      }),
+    ).resolves.toMatchObject({
+      available: true,
+      tabId: "preview-1",
+      url: "https://example.com/",
+      viewport: { width: 800, height: 600 },
+    });
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "preview-1",
+        operation: "evaluate",
+        input: { expression: "({ heading: document.title })" },
+      }),
+    ).resolves.toEqual({ heading: "Ready" });
+    expect(executeJavaScript).toHaveBeenCalledWith("({ heading: document.title })", true);
+  });
+
+  it("rejects automation for a missing session", async () => {
+    const manager = new BrowserHostManager(() => null);
+    await expect(
+      manager.runAutomation({ projectId: "missing", operation: "status" }),
+    ).rejects.toThrow("browser session was not found");
+  });
+});
+
 describe("configurePartitionSession", () => {
   it("configures a partition once without forging Chromium client hints", () => {
     const flushStore = vi.fn().mockResolvedValue(undefined);

@@ -1153,6 +1153,7 @@ export interface DesktopBridge {
   goBackBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   goForwardBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
+  runBrowserAutomation: (input: DesktopBrowserAutomationInput) => Promise<unknown>;
   setBrowserBounds: (input: DesktopBrowserHostSetBoundsInput) => Promise<void>;
   syncBrowserSessions: (projectIds: readonly string[]) => Promise<void>;
   recreateBrowserSession: (input: {
@@ -1647,6 +1648,11 @@ export interface DesktopBrowserHostNavigateInput {
 export interface DesktopBrowserHostControlInput {
   projectId: string;
   sessionId?: string | undefined;
+}
+
+export interface DesktopBrowserAutomationInput extends DesktopBrowserHostControlInput {
+  operation: "status" | "snapshot" | "click" | "type" | "press" | "scroll" | "evaluate" | "waitFor";
+  input?: unknown;
 }
 
 export interface DesktopBrowserHostSetBoundsInput {

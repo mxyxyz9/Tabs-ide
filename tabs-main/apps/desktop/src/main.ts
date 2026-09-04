@@ -141,6 +141,7 @@ const BROWSER_HOST_RELOAD_SESSION_CHANNEL = "desktop:browser-host:reload-session
 const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
+const BROWSER_HOST_AUTOMATION_CHANNEL = "desktop:browser-host:automation";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
@@ -2347,6 +2348,25 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.removeHandler(BROWSER_HOST_SET_BOUNDS_CHANNEL);
+  ipcMain.removeHandler(BROWSER_HOST_AUTOMATION_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_AUTOMATION_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string" ||
+      typeof (input as { operation?: unknown }).operation !== "string"
+    ) {
+      throw new Error("Invalid browser automation request.");
+    }
+    const request = input as {
+      projectId: string;
+      sessionId?: string;
+      operation: string;
+      input?: unknown;
+    };
+    return browserHostManager.runAutomation(request);
+  });
+
   ipcMain.handle(BROWSER_HOST_SET_BOUNDS_CHANNEL, async (_event, input: unknown) => {
     if (
       typeof input !== "object" ||

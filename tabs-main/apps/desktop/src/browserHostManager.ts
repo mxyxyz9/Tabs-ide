@@ -169,6 +169,45 @@ type BrowserSession = {
   transientError: string | null;
 };
 
+interface BrowserAutomationRequest {
+  readonly projectId: string;
+  readonly sessionId?: string;
+  readonly operation: string;
+  readonly input?: unknown;
+}
+
+function automationInput(input: unknown): Record<string, unknown> {
+  return typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {};
+}
+
+function pageTargetExpression(input: Record<string, unknown>): string {
+  const selector = typeof input.selector === "string" ? input.selector : null;
+  const locator = typeof input.locator === "string" ? input.locator : null;
+  const encodedSelector = JSON.stringify(selector);
+  const encodedLocator = JSON.stringify(locator);
+  return `(() => {
+    const selector = ${encodedSelector};
+    const locator = ${encodedLocator};
+    if (selector) return document.querySelector(selector);
+    if (!locator) return document.activeElement;
+    if (locator.startsWith("text=")) {
+      const text = locator.slice(5);
+      return [...document.querySelectorAll("*")].find((element) =>
+        element instanceof HTMLElement && element.innerText.trim().includes(text)
+      ) ?? null;
+    }
+    const roleMatch = /^role=([^\\[]+)(?:\\[name=['"]?(.+?)['"]?\\])?$/.exec(locator);
+    if (roleMatch) {
+      const role = roleMatch[1];
+      const name = roleMatch[2];
+      return [...document.querySelectorAll('[role="' + CSS.escape(role) + '"], ' + role)].find(
+        (element) => !name || ((element.getAttribute("aria-label") || element.textContent || "").trim() === name)
+      ) ?? null;
+    }
+    return document.querySelector(locator);
+  })()`;
+}
+
 export class BrowserHostManager {
   // Keyed by `${projectId}::${sessionId}` so each browser tab keeps its own
   // WebContentsView alive — switching tabs shows/hides instead of reloading.
@@ -685,6 +724,186 @@ export class BrowserHostManager {
     } else {
       session.view.webContents.openDevTools({ mode: DOCKED_DEVTOOLS_MODE, activate: false });
     }
+  }
+
+  async runAutomation(request: BrowserAutomationRequest): Promise<unknown> {
+    const session = this.sessions.get(this.sessionKey(request.projectId, request.sessionId));
+    if (!session) throw new Error("The requested browser session was not found.");
+    const contents = session.view.webContents;
+    if (contents.isDestroyed()) throw new Error("The requested browser session is unavailable.");
+    const input = automationInput(request.input);
+
+    if (request.operation === "status") {
+      return {
+        available: true,
+        visible: this.activeKey === session.key && session.bounds !== null,
+        tabId: session.sessionId,
+        url: session.currentUrl,
+        title: session.pageTitle,
+        loading: session.loading,
+        viewport: session.bounds
+          ? { width: session.bounds.width, height: session.bounds.height }
+          : undefined,
+      };
+    }
+
+    if (request.operation === "evaluate") {
+      if (typeof input.expression !== "string" || input.expression.trim().length === 0) {
+        throw new Error("A JavaScript expression is required.");
+      }
+      return contents.executeJavaScript(input.expression, true);
+    }
+
+    if (request.operation === "snapshot") {
+      const page = await contents.executeJavaScript(
+        `(() => ({
+          visibleText: (document.body?.innerText || "").slice(0, 20000),
+          interactiveElements: [...document.querySelectorAll(
+            'a[href],button,input,select,textarea,[role="button"],[role="link"],[tabindex]'
+          )].slice(0, 200).map((element, index) => {
+            const rect = element.getBoundingClientRect();
+            const html = element;
+            return {
+              tag: element.tagName.toLowerCase(),
+              role: element.getAttribute("role"),
+              name: (element.getAttribute("aria-label") || element.textContent || "").trim().slice(0, 500),
+              selector: element.id ? "#" + CSS.escape(element.id) : element.tagName.toLowerCase() + ":nth-of-type(" + (index + 1) + ")",
+              x: rect.x, y: rect.y, width: rect.width, height: rect.height
+            };
+          })
+        }))()`,
+        true,
+      );
+      let accessibilityTree: unknown = null;
+      const debuggerApi = contents.debugger;
+      const wasAttached = debuggerApi.isAttached();
+      try {
+        if (!wasAttached) debuggerApi.attach("1.3");
+        accessibilityTree = await debuggerApi.sendCommand("Accessibility.getFullAXTree");
+      } finally {
+        if (!wasAttached && debuggerApi.isAttached()) debuggerApi.detach();
+      }
+      const image = await contents.capturePage();
+      const size = image.getSize();
+      return {
+        url: contents.getURL(),
+        title: contents.getTitle(),
+        loading: session.loading,
+        visibleText: page.visibleText,
+        interactiveElements: page.interactiveElements,
+        accessibilityTree,
+        consoleEntries: [],
+        networkEntries: [],
+        actionTimeline: [],
+        screenshot: {
+          mimeType: "image/png",
+          data: image.toPNG().toString("base64"),
+          width: size.width,
+          height: size.height,
+        },
+      };
+    }
+
+    if (request.operation === "press") {
+      if (typeof input.key !== "string" || input.key.length === 0) {
+        throw new Error("A key is required.");
+      }
+      const modifierMap = {
+        Alt: "alt",
+        Control: "control",
+        Meta: "meta",
+        Shift: "shift",
+      } as const;
+      const modifiers = Array.isArray(input.modifiers)
+        ? input.modifiers.flatMap((value) =>
+            typeof value === "string" && value in modifierMap
+              ? [modifierMap[value as keyof typeof modifierMap]]
+              : [],
+          )
+        : [];
+      contents.sendInputEvent({ type: "keyDown", keyCode: input.key, modifiers });
+      contents.sendInputEvent({ type: "keyUp", keyCode: input.key, modifiers });
+      return { pressed: true };
+    }
+
+    if (request.operation === "click") {
+      if (typeof input.x === "number" && typeof input.y === "number") {
+        contents.sendInputEvent({ type: "mouseDown", x: input.x, y: input.y, button: "left", clickCount: 1 });
+        contents.sendInputEvent({ type: "mouseUp", x: input.x, y: input.y, button: "left", clickCount: 1 });
+      } else {
+        const target = pageTargetExpression(input);
+        const clicked = await contents.executeJavaScript(
+          `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return false; element.click(); return true; })()`,
+          true,
+        );
+        if (!clicked) throw new Error("The browser click target was not found.");
+      }
+      return { clicked: true };
+    }
+
+    if (request.operation === "type") {
+      if (typeof input.text !== "string") throw new Error("Text is required.");
+      const target = pageTargetExpression(input);
+      const encodedText = JSON.stringify(input.text);
+      const clear = input.clear === true;
+      const typed = await contents.executeJavaScript(
+        `(() => {
+          const element = ${target};
+          if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLElement && element.isContentEditable)) return false;
+          element.focus();
+          if (${clear}) {
+            if ("value" in element) element.value = "";
+            else element.textContent = "";
+          }
+          if ("value" in element) element.value += ${encodedText};
+          else element.textContent = (element.textContent || "") + ${encodedText};
+          element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: ${encodedText} }));
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
+        })()`,
+        true,
+      );
+      if (!typed) throw new Error("The browser type target is not editable.");
+      return { typed: true };
+    }
+
+    if (request.operation === "scroll") {
+      const target = pageTargetExpression(input);
+      const deltaX = typeof input.deltaX === "number" ? input.deltaX : 0;
+      const deltaY = typeof input.deltaY === "number" ? input.deltaY : 0;
+      await contents.executeJavaScript(
+        `(() => { const target = ${target}; (target || window).scrollBy(${deltaX}, ${deltaY}); })()`,
+        true,
+      );
+      return { scrolled: true };
+    }
+
+    if (request.operation === "waitFor") {
+      const timeoutMs =
+        typeof input.timeoutMs === "number" ? Math.min(60_000, Math.max(1, input.timeoutMs)) : 15_000;
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() <= deadline) {
+        const target = pageTargetExpression(input);
+        const text = typeof input.text === "string" ? JSON.stringify(input.text) : "null";
+        const url = typeof input.urlIncludes === "string" ? JSON.stringify(input.urlIncludes) : "null";
+        const matched = await contents.executeJavaScript(
+          `(() => {
+            const target = ${target};
+            const text = ${text};
+            const url = ${url};
+            return (!${Boolean(input.selector || input.locator)} || Boolean(target))
+              && (!text || (document.body?.innerText || "").includes(text))
+              && (!url || location.href.includes(url));
+          })()`,
+          true,
+        );
+        if (matched) return { matched: true };
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(`Browser wait timed out after ${timeoutMs}ms.`);
+    }
+
+    throw new Error(`Unsupported browser automation operation: ${request.operation}`);
   }
 
   syncSessions(projectIds: readonly string[]): void {
