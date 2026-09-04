@@ -29,6 +29,7 @@ import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli, type GitHubPullRequestSummary } from "../Services/GitHubCli.ts";
 import { makeGitLabCli } from "./GitLabCli.ts";
 import { makeAzureDevOpsCli } from "./AzureDevOpsCli.ts";
+import { makeBitbucketPullRequestApi } from "./BitbucketPullRequestApi.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { runStaticAnalysis } from "../../staticAnalysis/StaticAnalysisService.ts";
@@ -401,12 +402,31 @@ const AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES = {
   mergeMethods: ["merge", "squash"] as const,
 };
 
-function pullRequestCapabilities(provider: "github" | "gitlab" | "azure-devops") {
+const BITBUCKET_PULL_REQUEST_CAPABILITIES = {
+  provider: "bitbucket" as const,
+  diff: true,
+  create: true,
+  actions: [
+    "merge",
+    "close",
+    "comment",
+    "approve",
+    "request_changes",
+    "inline_comment",
+    "reply_to_thread",
+    "resolve_thread",
+  ] as const,
+  mergeMethods: ["merge", "squash", "rebase"] as const,
+};
+
+function pullRequestCapabilities(provider: "github" | "gitlab" | "azure-devops" | "bitbucket") {
   return provider === "github"
     ? GITHUB_PULL_REQUEST_CAPABILITIES
     : provider === "gitlab"
       ? GITLAB_PULL_REQUEST_CAPABILITIES
-      : AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES;
+      : provider === "azure-devops"
+        ? AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES
+        : BITBUCKET_PULL_REQUEST_CAPABILITIES;
 }
 
 function canonicalizeExistingPath(value: string): string {
@@ -480,6 +500,7 @@ export const makeGitManager = Effect.gen(function* () {
   const gitHubCli = yield* GitHubCli;
   const gitLabCli = yield* makeGitLabCli;
   const azureDevOpsCli = yield* makeAzureDevOpsCli;
+  const bitbucketApi = yield* makeBitbucketPullRequestApi;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
 
@@ -519,6 +540,7 @@ export const makeGitManager = Effect.gen(function* () {
         provider === "github" ||
         provider === "gitlab" ||
         provider === "azure-devops" ||
+        provider === "bitbucket" ||
         provider === "unknown"
           ? Effect.succeed(provider === "unknown" ? ("github" as const) : provider)
           : Effect.fail(
@@ -1154,7 +1176,9 @@ export const makeGitManager = Effect.gen(function* () {
                 });
                 return { ...details, ...(reviewThreads.length > 0 ? { reviewThreads } : {}) };
               })
-            : yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference });
+            : provider === "azure-devops"
+              ? yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference })
+              : yield* bitbucketApi.getPullRequest({ cwd: input.cwd, reference });
 
       return { pullRequest, capabilities: pullRequestCapabilities(provider) };
     },
@@ -1175,11 +1199,17 @@ export const makeGitManager = Effect.gen(function* () {
                 state: input.state ?? "all",
                 limit,
               })
-            : yield* azureDevOpsCli.listPullRequests({
-                cwd: input.cwd,
-                state: input.state ?? "all",
-                limit,
-              });
+            : provider === "azure-devops"
+              ? yield* azureDevOpsCli.listPullRequests({
+                  cwd: input.cwd,
+                  state: input.state ?? "all",
+                  limit,
+                })
+              : yield* bitbucketApi.listPullRequests({
+                  cwd: input.cwd,
+                  state: input.state ?? "all",
+                  limit,
+                });
 
       return {
         pullRequests,
@@ -1254,13 +1284,16 @@ export const makeGitManager = Effect.gen(function* () {
       if (provider === "github") {
         yield* gitHubCli.mutatePullRequest({ ...mutation, action: mutation.action });
       } else if (provider === "gitlab") yield* gitLabCli.mutatePullRequest(mutation);
-      else yield* azureDevOpsCli.mutatePullRequest(mutation);
+      else if (provider === "azure-devops") yield* azureDevOpsCli.mutatePullRequest(mutation);
+      else yield* bitbucketApi.mutatePullRequest(mutation);
       const pullRequest =
         provider === "github"
           ? toResolvedPullRequest(yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference }))
           : provider === "gitlab"
             ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference })
-            : yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference });
+            : provider === "azure-devops"
+              ? yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference })
+              : yield* bitbucketApi.getPullRequest({ cwd: input.cwd, reference });
       return { pullRequest };
     },
   );
@@ -1281,6 +1314,7 @@ export const makeGitManager = Effect.gen(function* () {
           ),
         );
       let azureCreated: GitResolvedPullRequest | null = null;
+      let bitbucketCreated: GitResolvedPullRequest | null = null;
       if (provider === "github") {
         yield* gitHubCli
           .createPullRequest({
@@ -1296,8 +1330,12 @@ export const makeGitManager = Effect.gen(function* () {
         yield* gitLabCli
           .createPullRequest({ ...input, bodyFile })
           .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
-      } else {
+      } else if (provider === "azure-devops") {
         azureCreated = yield* azureDevOpsCli
+          .createPullRequest(input)
+          .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
+      } else {
+        bitbucketCreated = yield* bitbucketApi
           .createPullRequest(input)
           .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
       }
@@ -1308,7 +1346,9 @@ export const makeGitManager = Effect.gen(function* () {
             )
           : provider === "gitlab"
             ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch })
-            : azureCreated!;
+            : provider === "azure-devops"
+              ? azureCreated!
+              : bitbucketCreated!;
       return { pullRequest: created };
     },
   );

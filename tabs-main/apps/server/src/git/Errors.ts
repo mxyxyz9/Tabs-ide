@@ -88,6 +88,20 @@ export class AzureDevOpsCliError extends Schema.TaggedErrorClass<AzureDevOpsCliE
   }
 }
 
+export class BitbucketApiError extends Schema.TaggedErrorClass<BitbucketApiError>()(
+  "BitbucketApiError",
+  {
+    operation: Schema.String,
+    detail: Schema.String,
+    status: Schema.optional(Schema.Number),
+    cause: Schema.optional(Schema.Unknown),
+  },
+) {
+  override get message(): string {
+    return `Bitbucket API failed in ${this.operation}: ${this.detail}`;
+  }
+}
+
 /**
  * GitManagerServiceError - Errors emitted by stacked Git workflow orchestration.
  */
@@ -97,4 +111,5 @@ export type GitManagerServiceError =
   | GitHubCliError
   | GitLabCliError
   | AzureDevOpsCliError
+  | BitbucketApiError
   | TextGenerationError;
