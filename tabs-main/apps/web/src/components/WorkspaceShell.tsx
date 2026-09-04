@@ -57,6 +57,7 @@ import {
   Minimize2Icon,
   MoreHorizontalIcon,
   MonitorIcon,
+  MousePointer2Icon,
   PlayIcon,
   PencilIcon,
   PlusIcon,
@@ -6964,6 +6965,7 @@ function DesktopBrowserChrome(props: {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
   const [capturingScreenshot, setCapturingScreenshot] = useState(false);
+  const [pickingElement, setPickingElement] = useState(false);
 
   const sessionArg = props.sessionId
     ? { projectId: props.projectId, sessionId: props.sessionId }
@@ -6993,6 +6995,32 @@ function DesktopBrowserChrome(props: {
       setCapturingScreenshot(false);
     }
   }, [bridge, capturingScreenshot, props.projectId, props.sessionId]);
+  const pickElement = useCallback(async () => {
+    if (!bridge || pickingElement) return;
+    setPickingElement(true);
+    try {
+      const annotation = await bridge.pickBrowserElement(
+        props.sessionId
+          ? { projectId: props.projectId, sessionId: props.sessionId }
+          : { projectId: props.projectId },
+      );
+      if (!annotation) return;
+      await navigator.clipboard.writeText(JSON.stringify(annotation, null, 2));
+      toastManager.add({
+        type: "success",
+        title: "Element annotation copied",
+        description: "Paste it into chat to give the agent exact page context.",
+      });
+    } catch (cause) {
+      toastManager.add({
+        type: "error",
+        title: "Could not pick browser element",
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
+    } finally {
+      setPickingElement(false);
+    }
+  }, [bridge, pickingElement, props.projectId, props.sessionId]);
 
   return (
     <div
@@ -7050,6 +7078,16 @@ function DesktopBrowserChrome(props: {
               >
                 <CameraIcon className="size-3.5" />
                 {capturingScreenshot ? "Capturing…" : "Screenshot"}
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant={pickingElement ? "secondary" : "outline"}
+                disabled={pickingElement}
+                onClick={() => void pickElement()}
+              >
+                <MousePointer2Icon className="size-3.5" />
+                {pickingElement ? "Pick on page…" : "Pick element"}
               </Button>
               <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
                 <Input

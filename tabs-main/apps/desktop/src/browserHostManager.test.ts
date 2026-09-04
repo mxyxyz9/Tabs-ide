@@ -270,6 +270,60 @@ describe("BrowserHostManager artifacts", () => {
       "/tmp/tabs-test-user-data/browser-artifacts/browser-screenshot-test.png",
     );
   });
+
+  it("returns structured element context with a real page capture", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const executeJavaScript = vi.fn().mockResolvedValue({
+      pageUrl: "https://example.com/settings",
+      pageTitle: "Settings",
+      tagName: "button",
+      selector: "#save",
+      htmlPreview: '<button id="save">Save</button>',
+      componentName: null,
+      source: null,
+      stack: [],
+      styles: "display: block;",
+      pickedAt: "2026-09-04T00:00:00.000Z",
+      rect: { x: 10, y: 20, width: 80, height: 32 },
+    });
+    (
+      manager as unknown as {
+        sessions: Map<string, unknown>;
+      }
+    ).sessions.set("project-1::tab-1", {
+      projectId: "project-1",
+      sessionId: "tab-1",
+      key: "project-1::tab-1",
+      view: {
+        webContents: {
+          isDestroyed: () => false,
+          executeJavaScript,
+          capturePage: vi.fn().mockResolvedValue({
+            getSize: () => ({ width: 1024, height: 768 }),
+            toPNG: () => Buffer.from("real-png-bytes"),
+          }),
+        },
+      },
+    });
+
+    await expect(
+      manager.pickElement({ projectId: "project-1", sessionId: "tab-1" }),
+    ).resolves.toMatchObject({
+      pageUrl: "https://example.com/settings",
+      elements: [
+        {
+          element: { selector: "#save", tagName: "button" },
+          rect: { x: 10, y: 20, width: 80, height: 32 },
+        },
+      ],
+      screenshot: {
+        dataUrl: `data:image/png;base64,${Buffer.from("real-png-bytes").toString("base64")}`,
+        width: 1024,
+        height: 768,
+      },
+    });
+    expect(executeJavaScript).toHaveBeenCalledOnce();
+  });
 });
 
 describe("configurePartitionSession", () => {

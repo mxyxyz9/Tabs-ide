@@ -36,7 +36,10 @@ verification evidence, not just a matching type or placeholder.
       artifact-directory-restricted reveal/copy operations.
 - [x] Record the live Chromium guest through its native media-source ID and persist non-empty
       recording bytes as managed artifacts through the automation broker.
-- [ ] Add annotation picking. Automation snapshots already include inline PNG screenshots.
+- [x] Add a native element picker with hover targeting, Escape cancellation, selector/HTML/style
+      context, element bounds, screenshot capture, and copy-to-chat workflow.
+- [ ] Add T3's richer annotation editor for regions, ink strokes, style changes, comments, and
+      direct composer attachment. Automation snapshots already include inline PNG screenshots.
 - [x] Expose preview automation through the authenticated HTTP MCP transport.
 
 Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;

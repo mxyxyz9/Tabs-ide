@@ -64,6 +64,7 @@ const BROWSER_HOST_AUTOMATION_CHANNEL = "desktop:browser-host:automation";
 const BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL = "desktop:browser-host:capture-screenshot";
 const BROWSER_HOST_MEDIA_SOURCE_CHANNEL = "desktop:browser-host:media-source";
 const BROWSER_HOST_SAVE_RECORDING_CHANNEL = "desktop:browser-host:save-recording";
+const BROWSER_HOST_PICK_ELEMENT_CHANNEL = "desktop:browser-host:pick-element";
 const BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL = "desktop:browser-host:reveal-artifact";
 const BROWSER_HOST_COPY_ARTIFACT_CHANNEL = "desktop:browser-host:copy-artifact";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
@@ -221,6 +222,7 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     ipcRenderer.invoke(BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL, input),
   getBrowserMediaSourceId: (input) => ipcRenderer.invoke(BROWSER_HOST_MEDIA_SOURCE_CHANNEL, input),
   saveBrowserRecording: (input) => ipcRenderer.invoke(BROWSER_HOST_SAVE_RECORDING_CHANNEL, input),
+  pickBrowserElement: (input) => ipcRenderer.invoke(BROWSER_HOST_PICK_ELEMENT_CHANNEL, input),
   revealBrowserArtifact: (path) => ipcRenderer.invoke(BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL, path),
   copyBrowserArtifactToClipboard: (path) =>
     ipcRenderer.invoke(BROWSER_HOST_COPY_ARTIFACT_CHANNEL, path),

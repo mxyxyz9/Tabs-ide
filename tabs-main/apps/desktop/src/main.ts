@@ -148,6 +148,7 @@ const BROWSER_HOST_AUTOMATION_CHANNEL = "desktop:browser-host:automation";
 const BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL = "desktop:browser-host:capture-screenshot";
 const BROWSER_HOST_MEDIA_SOURCE_CHANNEL = "desktop:browser-host:media-source";
 const BROWSER_HOST_SAVE_RECORDING_CHANNEL = "desktop:browser-host:save-recording";
+const BROWSER_HOST_PICK_ELEMENT_CHANNEL = "desktop:browser-host:pick-element";
 const BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL = "desktop:browser-host:reveal-artifact";
 const BROWSER_HOST_COPY_ARTIFACT_CHANNEL = "desktop:browser-host:copy-artifact";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
@@ -2448,6 +2449,21 @@ function registerIpcHandlers(): void {
       sessionId: readBrowserSessionId(input),
       mimeType: (input as { mimeType: string }).mimeType,
       data: (input as { data: Uint8Array }).data,
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_PICK_ELEMENT_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_PICK_ELEMENT_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      throw new Error("Invalid browser element-picker request.");
+    }
+    return browserHostManager.pickElement({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
     });
   });
 

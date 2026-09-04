@@ -26,6 +26,8 @@ import type {
   BrowserProfileDomainInfo,
   DesktopPreviewScreenshotArtifact,
   DesktopPreviewRecordingArtifact,
+  PreviewAnnotationPayload,
+  PickedElementPayload,
 } from "@tabs/contracts";
 
 const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
@@ -1039,6 +1041,112 @@ export class BrowserHostManager {
       mimeType: input.mimeType,
       sizeBytes: input.data.byteLength,
       createdAt,
+    };
+  }
+
+  async pickElement(
+    input: DesktopBrowserHostControlInput,
+  ): Promise<PreviewAnnotationPayload | null> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session || session.view.webContents.isDestroyed()) {
+      throw new Error("The requested browser session is unavailable.");
+    }
+    const picked = (await session.view.webContents.executeJavaScript(
+      `(() => new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.setAttribute("data-tabs-element-picker", "");
+        Object.assign(overlay.style, {
+          position: "fixed", pointerEvents: "none", zIndex: "2147483647",
+          border: "2px solid #7c3aed", background: "rgba(124,58,237,.14)",
+          boxSizing: "border-box", display: "none"
+        });
+        const help = document.createElement("div");
+        help.textContent = "Select an element · Esc to cancel";
+        Object.assign(help.style, {
+          position: "fixed", top: "12px", left: "50%", transform: "translateX(-50%)",
+          zIndex: "2147483647", padding: "8px 12px", borderRadius: "8px",
+          color: "white", background: "rgba(17,24,39,.94)", font: "12px system-ui",
+          pointerEvents: "none", boxShadow: "0 4px 16px rgba(0,0,0,.3)"
+        });
+        document.documentElement.append(overlay, help);
+        let hovered = null;
+        const cleanup = () => {
+          document.removeEventListener("mousemove", onMove, true);
+          document.removeEventListener("click", onClick, true);
+          document.removeEventListener("keydown", onKey, true);
+          overlay.remove(); help.remove();
+        };
+        const selectorFor = (element) => {
+          if (element.id) return "#" + CSS.escape(element.id);
+          const parts = [];
+          for (let current = element; current && current.nodeType === 1 && parts.length < 6; current = current.parentElement) {
+            let part = current.tagName.toLowerCase();
+            const stableClasses = [...current.classList].filter((name) => /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(name)).slice(0, 2);
+            if (stableClasses.length) part += stableClasses.map((name) => "." + CSS.escape(name)).join("");
+            const siblings = current.parentElement ? [...current.parentElement.children].filter((child) => child.tagName === current.tagName) : [];
+            if (siblings.length > 1) part += ":nth-of-type(" + (siblings.indexOf(current) + 1) + ")";
+            parts.unshift(part);
+          }
+          return parts.join(" > ") || null;
+        };
+        const onMove = (event) => {
+          const target = event.target;
+          if (!(target instanceof Element) || target === overlay || target === help) return;
+          hovered = target;
+          const rect = target.getBoundingClientRect();
+          Object.assign(overlay.style, { display: "block", left: rect.x + "px", top: rect.y + "px", width: rect.width + "px", height: rect.height + "px" });
+        };
+        const onClick = (event) => {
+          event.preventDefault(); event.stopImmediatePropagation();
+          const target = hovered;
+          if (!(target instanceof HTMLElement)) return;
+          const rect = target.getBoundingClientRect();
+          const computed = getComputedStyle(target);
+          const styles = ["display", "position", "color", "background-color", "font", "margin", "padding", "border", "border-radius", "width", "height"]
+            .map((property) => property + ": " + computed.getPropertyValue(property) + ";").join("\n");
+          const result = {
+            pageUrl: location.href, pageTitle: document.title?.trim() || null,
+            tagName: target.tagName.toLowerCase(), selector: selectorFor(target),
+            htmlPreview: target.outerHTML.slice(0, 12000), componentName: null,
+            source: null, stack: [], styles, pickedAt: new Date().toISOString(),
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+          };
+          cleanup(); resolve(result);
+        };
+        const onKey = (event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault(); event.stopImmediatePropagation(); cleanup(); resolve(null);
+        };
+        document.addEventListener("mousemove", onMove, true);
+        document.addEventListener("click", onClick, true);
+        document.addEventListener("keydown", onKey, true);
+      }))()`,
+      true,
+    )) as
+      | (PickedElementPayload & {
+          rect: { x: number; y: number; width: number; height: number };
+        })
+      | null;
+    if (!picked) return null;
+    const image = await session.view.webContents.capturePage();
+    const size = image.getSize();
+    const { rect, ...element } = picked;
+    return {
+      id: `annotation-${crypto.randomUUID()}`,
+      pageUrl: element.pageUrl as string,
+      pageTitle: element.pageTitle as string | null,
+      comment: "",
+      elements: [{ id: `element-${crypto.randomUUID()}`, element, rect }],
+      regions: [],
+      strokes: [],
+      styleChanges: [],
+      screenshot: {
+        dataUrl: `data:image/png;base64,${image.toPNG().toString("base64")}`,
+        width: size.width,
+        height: size.height,
+        cropRect: rect,
+      },
+      createdAt: new Date().toISOString(),
     };
   }
 
