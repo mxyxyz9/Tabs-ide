@@ -7231,7 +7231,23 @@ function DesktopBrowserTool(props: {
   runningProcessIds?: ReadonlyArray<string> | undefined;
   onRunProcess?: ((processId: string) => void) | undefined;
 }) {
-  const api = readNativeApi();
+  const [api, setBrowserEnvironmentApi] = useState<Awaited<
+    ReturnType<typeof environmentApi>
+  > | null>(null);
+  useEffect(() => {
+    let active = true;
+    setBrowserEnvironmentApi(null);
+    void environmentApi(props.project.environmentId)
+      .then((next) => {
+        if (active) setBrowserEnvironmentApi(next);
+      })
+      .catch(() => {
+        if (active) setBrowserEnvironmentApi(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [props.project.environmentId]);
   const bridge = window.desktopBridge;
   const sessionKey = `${props.project.id}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
@@ -7334,7 +7350,6 @@ function DesktopBrowserTool(props: {
     if (!bridge || !isTransientStartup || !matchingRunningPreset) {
       return;
     }
-    const api = readNativeApi();
     if (!api) return;
     const serverThreadId = `server:${props.project.id}`;
     const targetTerminalId = matchingRunningPreset.id;
@@ -7359,7 +7374,7 @@ function DesktopBrowserTool(props: {
     return () => {
       unsubscribe();
     };
-  }, [bridge, isTransientStartup, matchingRunningPreset, props.project.id]);
+  }, [api, bridge, isTransientStartup, matchingRunningPreset, props.project.id]);
 
   useEffect(() => {
     if (!bridge) {
