@@ -118,6 +118,51 @@ afterEach(() => {
 });
 
 describe("wsNativeApi", () => {
+  it("isolates progress listeners between non-singleton environment transports", async () => {
+    const { createWsNativeApi } = await import("./wsNativeApi");
+    const firstListeners = new Map<string, (message: WsPush) => void>();
+    const secondListeners = new Map<string, (message: WsPush) => void>();
+    const makeTransport = (listeners: Map<string, (message: WsPush) => void>) =>
+      ({
+        request: requestMock,
+        subscribe: (channel: string, listener: (message: WsPush) => void) => {
+          listeners.set(channel, listener);
+          return () => listeners.delete(channel);
+        },
+        onOpen: () => () => undefined,
+      }) as never;
+
+    const firstApi = createWsNativeApi({
+      transport: makeTransport(firstListeners),
+      singleton: false,
+    });
+    const secondApi = createWsNativeApi({
+      transport: makeTransport(secondListeners),
+      singleton: false,
+    });
+    const firstProgress = vi.fn();
+    const secondProgress = vi.fn();
+    firstApi.git.onActionProgress(firstProgress);
+    secondApi.git.onActionProgress(secondProgress);
+
+    firstListeners.get(WS_CHANNELS.gitActionProgress)?.({
+      type: "push",
+      sequence: 1,
+      channel: WS_CHANNELS.gitActionProgress,
+      data: {
+        actionId: "first-action",
+        cwd: "/first",
+        action: "commit",
+        kind: "phase_started",
+        phase: "commit",
+        label: "Committing...",
+      },
+    });
+
+    expect(firstProgress).toHaveBeenCalledTimes(1);
+    expect(secondProgress).not.toHaveBeenCalled();
+  });
+
   it("delivers and caches valid server.welcome payloads", async () => {
     const { createWsNativeApi, onServerWelcome } = await import("./wsNativeApi");
 
@@ -338,11 +383,9 @@ describe("wsNativeApi", () => {
       connectionId: "connection-1",
     });
 
-    expect(requestMock).toHaveBeenCalledWith(
-      WS_METHODS.previewAutomationConnect,
-      host,
-      { timeoutMs: null },
-    );
+    expect(requestMock).toHaveBeenCalledWith(WS_METHODS.previewAutomationConnect, host, {
+      timeoutMs: null,
+    });
     expect(listener).toHaveBeenCalledWith({
       type: "connected",
       connectionId: "connection-1",

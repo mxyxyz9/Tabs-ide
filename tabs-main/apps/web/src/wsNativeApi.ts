@@ -110,72 +110,91 @@ export function createWsNativeApi(options?: {
   if (singleton && instance) return instance.api;
 
   const transport = options?.transport ?? new WsTransport();
+  const activeWelcomeListeners = singleton
+    ? welcomeListeners
+    : new Set<(payload: WsWelcomePayload) => void>();
+  const activeServerConfigUpdatedListeners = singleton
+    ? serverConfigUpdatedListeners
+    : new Set<(payload: ServerConfigUpdatedPayload) => void>();
+  const activeProvidersUpdatedListeners = singleton
+    ? providersUpdatedListeners
+    : new Set<(payload: ServerProviderUpdatedPayload) => void>();
+  const activeGitActionProgressListeners = singleton
+    ? gitActionProgressListeners
+    : new Set<(payload: GitActionProgressEvent) => void>();
+  const activeReviewProgressListeners = singleton
+    ? reviewProgressListeners
+    : new Set<(payload: ReviewProgressEvent) => void>();
+  const activeUsageUpdatedListeners = singleton
+    ? usageUpdatedListeners
+    : new Set<(payload: any) => void>();
+
   if (singleton) {
     window.desktopBridge?.onSystemResume?.(() => {
       transport.reconnectAfterSystemResume();
     });
-
-    transport.subscribe(WS_CHANNELS.serverWelcome, (message) => {
-      const payload = message.data;
-      for (const listener of welcomeListeners) {
-        try {
-          listener(payload);
-        } catch {
-          // Swallow listener errors
-        }
-      }
-    });
-    transport.subscribe(WS_CHANNELS.serverConfigUpdated, (message) => {
-      const payload = message.data;
-      for (const listener of serverConfigUpdatedListeners) {
-        try {
-          listener(payload);
-        } catch {
-          // Swallow listener errors
-        }
-      }
-    });
-    transport.subscribe(WS_CHANNELS.serverProvidersUpdated, (message) => {
-      const payload = message.data;
-      for (const listener of providersUpdatedListeners) {
-        try {
-          listener(payload);
-        } catch {
-          // Swallow listener errors
-        }
-      }
-    });
-    transport.subscribe(WS_CHANNELS.gitActionProgress, (message) => {
-      const payload = message.data;
-      for (const listener of gitActionProgressListeners) {
-        try {
-          listener(payload);
-        } catch {
-          // Swallow listener errors
-        }
-      }
-    });
-    transport.subscribe(WS_CHANNELS.reviewProgress, (message) => {
-      const payload = message.data;
-      for (const listener of reviewProgressListeners) {
-        try {
-          listener(payload);
-        } catch {
-          // Swallow listener errors
-        }
-      }
-    });
-    transport.subscribe(WS_CHANNELS.usageUpdated, (message) => {
-      const payload = message.data;
-      for (const listener of usageUpdatedListeners) {
-        try {
-          listener(payload);
-        } catch {
-          // Swallow listener errors
-        }
-      }
-    });
   }
+
+  transport.subscribe(WS_CHANNELS.serverWelcome, (message) => {
+    const payload = message.data;
+    for (const listener of activeWelcomeListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.serverConfigUpdated, (message) => {
+    const payload = message.data;
+    for (const listener of activeServerConfigUpdatedListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.serverProvidersUpdated, (message) => {
+    const payload = message.data;
+    for (const listener of activeProvidersUpdatedListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.gitActionProgress, (message) => {
+    const payload = message.data;
+    for (const listener of activeGitActionProgressListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.reviewProgress, (message) => {
+    const payload = message.data;
+    for (const listener of activeReviewProgressListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
+  transport.subscribe(WS_CHANNELS.usageUpdated, (message) => {
+    const payload = message.data;
+    for (const listener of activeUsageUpdatedListeners) {
+      try {
+        listener(payload);
+      } catch {
+        // Swallow listener errors
+      }
+    }
+  });
 
   const api: NativeApi = {
     testing: {
@@ -377,15 +396,15 @@ export function createWsNativeApi(options?: {
       getReviewHistory: (input) => transport.request(WS_METHODS.gitGetReviewHistory, input),
 
       onActionProgress: (callback) => {
-        gitActionProgressListeners.add(callback);
+        activeGitActionProgressListeners.add(callback);
         return () => {
-          gitActionProgressListeners.delete(callback);
+          activeGitActionProgressListeners.delete(callback);
         };
       },
       onReviewProgress: (callback) => {
-        reviewProgressListeners.add(callback);
+        activeReviewProgressListeners.add(callback);
         return () => {
-          reviewProgressListeners.delete(callback);
+          activeReviewProgressListeners.delete(callback);
         };
       },
     },
