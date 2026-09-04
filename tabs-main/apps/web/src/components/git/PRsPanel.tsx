@@ -125,6 +125,10 @@ export function PRsPanel({
   const [actionBody, setActionBody] = useState("");
   const [reviewerInput, setReviewerInput] = useState("");
   const [labelInput, setLabelInput] = useState("");
+  const [inlineLine, setInlineLine] = useState("");
+  const [inlineBody, setInlineBody] = useState("");
+  const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [listLimit, setListLimit] = useState(50);
 
@@ -205,21 +209,10 @@ export function PRsPanel({
 
   const mutatePullRequest = async (
     reference: number,
-    action:
-      | "merge"
-      | "close"
-      | "reopen"
-      | "ready"
-      | "draft"
-      | "comment"
-      | "approve"
-      | "request_changes"
-      | "add_reviewer"
-      | "remove_reviewer"
-      | "add_label"
-      | "remove_label",
+    action: GitPullRequestAction,
     body?: string,
     value?: string,
+    inline?: { path?: string; line?: number; side?: "left" | "right"; threadId?: string },
   ) => {
     if (!api) return false;
     setPendingAction(action);
@@ -231,6 +224,10 @@ export function PRsPanel({
         ...(action === "merge" ? { mergeMethod, deleteBranch } : {}),
         ...(body !== undefined ? { body } : {}),
         ...(value !== undefined ? { value } : {}),
+        ...(inline?.path ? { path: inline.path } : {}),
+        ...(inline?.line ? { line: inline.line } : {}),
+        ...(inline?.side ? { side: inline.side } : {}),
+        ...(inline?.threadId ? { threadId: inline.threadId } : {}),
       });
       await Promise.all([branchPrQuery.refetch(), allPrsQuery.refetch(), detailQuery.refetch()]);
       toastManager.add({
@@ -714,6 +711,9 @@ export function PRsPanel({
                             const files = detailQuery.data.pullRequest.files ?? [];
                             const selectedFile =
                               files.find((file) => file.path === selectedFilePath) ?? files[0];
+                            const selectedThreads = (
+                              detailQuery.data.pullRequest.reviewThreads ?? []
+                            ).filter((thread) => thread.path === selectedFile?.path);
                             if (!selectedFile) {
                               return (
                                 <p className="text-muted-foreground">
@@ -780,6 +780,176 @@ export function PRsPanel({
                                       This patch was truncated to keep the review responsive. Open
                                       the pull request on the provider for the complete diff.
                                     </p>
+                                  ) : null}
+                                  {supportsAction("inline_comment") ? (
+                                    <form
+                                      className="space-y-2 border-t border-border/60 p-3"
+                                      onSubmit={(event) => {
+                                        event.preventDefault();
+                                        const line = Number(inlineLine);
+                                        if (!Number.isSafeInteger(line) || line <= 0) return;
+                                        void mutatePullRequest(
+                                          pr.n,
+                                          "inline_comment",
+                                          inlineBody.trim(),
+                                          undefined,
+                                          { path: selectedFile.path, line, side: "right" },
+                                        ).then((ok) => {
+                                          if (ok) {
+                                            setInlineBody("");
+                                            setInlineLine("");
+                                          }
+                                        });
+                                      }}
+                                    >
+                                      <p className="font-medium">Comment on a changed line</p>
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          required
+                                          value={inlineLine}
+                                          onChange={(event) => setInlineLine(event.target.value)}
+                                          aria-label="New file line number"
+                                          placeholder="Line"
+                                          className="w-20 rounded-md border border-border bg-background px-2"
+                                        />
+                                        <textarea
+                                          required
+                                          value={inlineBody}
+                                          onChange={(event) => setInlineBody(event.target.value)}
+                                          aria-label="Inline review comment"
+                                          placeholder="Review this line…"
+                                          className="min-h-16 flex-1 rounded-md border border-border bg-background p-2"
+                                        />
+                                      </div>
+                                      <Button
+                                        type="submit"
+                                        size="sm"
+                                        disabled={
+                                          !inlineBody.trim() ||
+                                          !inlineLine ||
+                                          pendingAction !== null
+                                        }
+                                      >
+                                        Add inline comment
+                                      </Button>
+                                    </form>
+                                  ) : null}
+                                  {selectedThreads.length > 0 ? (
+                                    <section
+                                      aria-label={`Review discussions for ${selectedFile.path}`}
+                                      className="space-y-2 border-t border-border/60 p-3"
+                                    >
+                                      <h4 className="font-medium">
+                                        Inline discussions ({selectedThreads.length})
+                                      </h4>
+                                      {selectedThreads.map((thread) => (
+                                        <article
+                                          key={thread.id}
+                                          className="rounded-md border border-border/70 bg-muted/20 p-2"
+                                        >
+                                          <p className="mb-2 text-[10px] text-muted-foreground">
+                                            {thread.side === "right" ? "New" : "Original"} line{" "}
+                                            {thread.line}
+                                            {thread.resolved ? " · Resolved" : ""}
+                                            {thread.outdated ? " · Outdated" : ""}
+                                          </p>
+                                          <div className="space-y-2">
+                                            {thread.comments.map((comment) => (
+                                              <div key={comment.id}>
+                                                <p className="font-medium">
+                                                  {comment.author
+                                                    ? `@${comment.author.login}`
+                                                    : "Unknown author"}
+                                                </p>
+                                                <p className="mt-0.5 whitespace-pre-wrap">
+                                                  {comment.body}
+                                                </p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                          {replyThreadId === thread.id ? (
+                                            <form
+                                              className="mt-2 space-y-2"
+                                              onSubmit={(event) => {
+                                                event.preventDefault();
+                                                void mutatePullRequest(
+                                                  pr.n,
+                                                  "reply_to_thread",
+                                                  replyBody.trim(),
+                                                  undefined,
+                                                  { threadId: thread.id },
+                                                ).then((ok) => {
+                                                  if (ok) {
+                                                    setReplyBody("");
+                                                    setReplyThreadId(null);
+                                                  }
+                                                });
+                                              }}
+                                            >
+                                              <textarea
+                                                autoFocus
+                                                required
+                                                value={replyBody}
+                                                onChange={(event) =>
+                                                  setReplyBody(event.target.value)
+                                                }
+                                                aria-label={`Reply to discussion on line ${thread.line}`}
+                                                className="min-h-16 w-full rounded-md border border-border bg-background p-2"
+                                              />
+                                              <div className="flex gap-2">
+                                                <Button
+                                                  type="submit"
+                                                  size="sm"
+                                                  disabled={!replyBody.trim()}
+                                                >
+                                                  Reply
+                                                </Button>
+                                                <Button
+                                                  type="button"
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  onClick={() => setReplyThreadId(null)}
+                                                >
+                                                  Cancel
+                                                </Button>
+                                              </div>
+                                            </form>
+                                          ) : (
+                                            <div className="mt-2 flex gap-2">
+                                              {supportsAction("reply_to_thread") ? (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  onClick={() => setReplyThreadId(thread.id)}
+                                                >
+                                                  Reply
+                                                </Button>
+                                              ) : null}
+                                              {!thread.resolved &&
+                                              supportsAction("resolve_thread") ? (
+                                                <Button
+                                                  size="sm"
+                                                  variant="ghost"
+                                                  onClick={() =>
+                                                    void mutatePullRequest(
+                                                      pr.n,
+                                                      "resolve_thread",
+                                                      undefined,
+                                                      undefined,
+                                                      { threadId: thread.id },
+                                                    )
+                                                  }
+                                                >
+                                                  Resolve
+                                                </Button>
+                                              ) : null}
+                                            </div>
+                                          )}
+                                        </article>
+                                      ))}
+                                    </section>
                                   ) : null}
                                 </div>
                               </div>

@@ -1,6 +1,47 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeGitLabMergeRequestChanges, decodeGitLabMergeRequests } from "./GitLabCli.ts";
+import {
+  decodeGitLabMergeRequestChanges,
+  decodeGitLabMergeRequests,
+  decodeGitLabReviewThreads,
+} from "./GitLabCli.ts";
+
+describe("decodeGitLabReviewThreads", () => {
+  it("keeps positioned discussion replies and resolution state", () => {
+    expect(
+      decodeGitLabReviewThreads([
+        {
+          id: "discussion-1",
+          resolved: true,
+          notes: [
+            {
+              id: 20,
+              body: "Can this be simplified?",
+              created_at: "2026-09-01T10:00:00Z",
+              author: { username: "reviewer" },
+              position: { new_path: "src/app.ts", new_line: 12 },
+            },
+            {
+              id: 21,
+              body: "Done.",
+              created_at: "2026-09-01T11:00:00Z",
+              author: { username: "author" },
+            },
+          ],
+        },
+      ]),
+    ).toMatchObject([
+      {
+        id: "discussion-1",
+        path: "src/app.ts",
+        line: 12,
+        side: "right",
+        resolved: true,
+        comments: [{ id: "20" }, { id: "21" }],
+      },
+    ]);
+  });
+});
 
 describe("decodeGitLabMergeRequests", () => {
   it("normalizes real GitLab fields without inventing unavailable data", () => {

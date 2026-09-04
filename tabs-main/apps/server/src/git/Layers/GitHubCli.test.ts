@@ -8,13 +8,49 @@ vi.mock("../../processRunner", () => ({
 
 import { runProcess } from "../../processRunner";
 import { GitHubCli } from "../Services/GitHubCli.ts";
-import { GitHubCliLive } from "./GitHubCli.ts";
+import { decodeGitHubReviewThreads, GitHubCliLive } from "./GitHubCli.ts";
 
 const mockedRunProcess = vi.mocked(runProcess);
 const layer = it.layer(GitHubCliLive);
 
 afterEach(() => {
   mockedRunProcess.mockReset();
+});
+
+it("groups GitHub review replies under their root diff comment", () => {
+  expect(
+    decodeGitHubReviewThreads([
+      {
+        id: 10,
+        node_id: "root-node",
+        path: "src/app.ts",
+        line: 7,
+        side: "RIGHT",
+        body: "Please handle the error.",
+        created_at: "2026-09-01T10:00:00Z",
+        user: { login: "reviewer" },
+      },
+      {
+        id: 11,
+        node_id: "reply-node",
+        in_reply_to_id: 10,
+        path: "src/app.ts",
+        line: 7,
+        side: "RIGHT",
+        body: "Fixed in the latest commit.",
+        created_at: "2026-09-01T11:00:00Z",
+        user: { login: "author" },
+      },
+    ]),
+  ).toMatchObject([
+    {
+      id: "10",
+      path: "src/app.ts",
+      line: 7,
+      side: "right",
+      comments: [{ id: "root-node" }, { id: "reply-node" }],
+    },
+  ]);
 });
 
 layer("GitHubCliLive", (it) => {
@@ -302,6 +338,59 @@ layer("GitHubCliLive", (it) => {
       expect(mockedRunProcess).toHaveBeenCalledWith(
         "gh",
         ["pr", "edit", "42", "--add-label", "release;$(literal)"],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
+  it.effect("creates provider-backed inline comments with the pull request head SHA", () =>
+    Effect.gen(function* () {
+      mockedRunProcess
+        .mockResolvedValueOnce({
+          stdout: "abc123\n",
+          stderr: "",
+          code: 0,
+          signal: null,
+          timedOut: false,
+        })
+        .mockResolvedValueOnce({
+          stdout: "{}",
+          stderr: "",
+          code: 0,
+          signal: null,
+          timedOut: false,
+        });
+
+      const gh = yield* GitHubCli;
+      yield* gh.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "inline_comment",
+        path: "src/app.ts",
+        line: 9,
+        side: "right",
+        body: "Handle `$(literal)` here.",
+      });
+
+      expect(mockedRunProcess).toHaveBeenNthCalledWith(
+        2,
+        "gh",
+        [
+          "api",
+          "--method",
+          "POST",
+          "repos/{owner}/{repo}/pulls/42/comments",
+          "--raw-field",
+          "body=Handle `$(literal)` here.",
+          "--raw-field",
+          "commit_id=abc123",
+          "--raw-field",
+          "path=src/app.ts",
+          "--field",
+          "line=9",
+          "--raw-field",
+          "side=RIGHT",
+        ],
         expect.objectContaining({ cwd: "/repo" }),
       );
     }),

@@ -211,6 +211,75 @@ const RawGitHubPullRequestFileSchema = Schema.Struct({
   patch: Schema.optional(Schema.String),
 });
 
+function object(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function nonEmptyText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function decodeGitHubReviewThreads(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  const comments = value.flatMap((entry) => {
+    const raw = object(entry);
+    const id = raw && (nonEmptyText(raw.node_id) ?? String(raw.id ?? "").trim());
+    const path = raw && nonEmptyText(raw.path);
+    const lineValue = raw && (raw.line ?? raw.original_line);
+    const line = typeof lineValue === "number" && lineValue > 0 ? Math.trunc(lineValue) : null;
+    const body = raw && typeof raw.body === "string" ? raw.body : null;
+    const createdAt = raw && nonEmptyText(raw.created_at);
+    if (!raw || !id || !path || !line || body === null || !createdAt) return [];
+    const user = object(raw.user);
+    const login = nonEmptyText(user?.login);
+    const replyTo = typeof raw.in_reply_to_id === "number" ? String(raw.in_reply_to_id) : null;
+    const rootId = replyTo ?? String(raw.id ?? id);
+    return [
+      {
+        rootId,
+        thread: {
+          id: rootId,
+          path,
+          line,
+          side:
+            nonEmptyText(raw.side)?.toUpperCase() === "LEFT"
+              ? ("left" as const)
+              : ("right" as const),
+          ...(typeof raw.original_line === "number" && raw.original_line > 0
+            ? { originalLine: Math.trunc(raw.original_line) }
+            : {}),
+          ...(raw.position === null ? { outdated: true } : {}),
+        },
+        comment: {
+          id,
+          author: login
+            ? {
+                login,
+                ...(nonEmptyText(user?.avatar_url)
+                  ? { avatarUrl: nonEmptyText(user?.avatar_url)! }
+                  : {}),
+              }
+            : null,
+          body,
+          createdAt,
+          ...(nonEmptyText(raw.updated_at) ? { updatedAt: nonEmptyText(raw.updated_at)! } : {}),
+          ...(nonEmptyText(raw.html_url) ? { url: nonEmptyText(raw.html_url)! } : {}),
+        },
+      },
+    ];
+  });
+  const roots = new Map<
+    string,
+    (typeof comments)[number]["thread"] & { comments: Array<(typeof comments)[number]["comment"]> }
+  >();
+  for (const item of comments) {
+    const existing = roots.get(item.rootId);
+    if (existing) existing.comments.push(item.comment);
+    else roots.set(item.rootId, { ...item.thread, comments: [item.comment] });
+  }
+  return [...roots.values()];
+}
+
 function normalizeFileStatus(
   value: string,
 ): "added" | "modified" | "removed" | "renamed" | "copied" | "changed" {
@@ -504,6 +573,29 @@ const makeGitHubCli = Effect.sync(() => {
           });
         }),
       ),
+    getPullRequestReviewThreads: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: [
+          "api",
+          "--paginate",
+          "--slurp",
+          `repos/{owner}/{repo}/pulls/${input.reference}/comments`,
+        ],
+      }).pipe(
+        Effect.map((result) => result.stdout.trim()),
+        Effect.flatMap((raw) =>
+          Effect.try({
+            try: () => {
+              const pages: unknown = JSON.parse(raw || "[]");
+              return decodeGitHubReviewThreads(
+                Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : pages,
+              );
+            },
+            catch: (error) => normalizeGitHubCliError("stdout", error),
+          }),
+        ),
+      ),
     mutatePullRequest: (input) => {
       const args: string[] = ["pr"];
       switch (input.action) {
@@ -554,6 +646,44 @@ const makeGitHubCli = Effect.sync(() => {
           args.push("edit", input.reference, flag, input.value ?? "");
           break;
         }
+        case "inline_comment":
+          return Effect.gen(function* () {
+            const head = yield* execute({
+              cwd: input.cwd,
+              args: ["api", `repos/{owner}/{repo}/pulls/${input.reference}`, "--jq", ".head.sha"],
+            });
+            yield* execute({
+              cwd: input.cwd,
+              args: [
+                "api",
+                "--method",
+                "POST",
+                `repos/{owner}/{repo}/pulls/${input.reference}/comments`,
+                "--raw-field",
+                `body=${input.body ?? ""}`,
+                "--raw-field",
+                `commit_id=${head.stdout.trim()}`,
+                "--raw-field",
+                `path=${input.path ?? ""}`,
+                "--field",
+                `line=${input.line ?? 0}`,
+                "--raw-field",
+                `side=${(input.side ?? "right").toUpperCase()}`,
+              ],
+            });
+          });
+        case "reply_to_thread":
+          return execute({
+            cwd: input.cwd,
+            args: [
+              "api",
+              "--method",
+              "POST",
+              `repos/{owner}/{repo}/pulls/${input.reference}/comments/${input.threadId ?? ""}/replies`,
+              "--raw-field",
+              `body=${input.body ?? ""}`,
+            ],
+          }).pipe(Effect.asVoid);
       }
       return execute({ cwd: input.cwd, args }).pipe(Effect.asVoid);
     },

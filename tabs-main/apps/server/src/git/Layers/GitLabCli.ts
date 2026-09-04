@@ -166,6 +166,56 @@ export function decodeGitLabMergeRequests(stdout: string): ReadonlyArray<GitReso
   });
 }
 
+export function decodeGitLabReviewThreads(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const discussion = record(entry);
+    const id = text(discussion?.id);
+    const notes = Array.isArray(discussion?.notes) ? discussion.notes : [];
+    const positioned = notes.find((note) => record(record(note)?.position));
+    const position = record(record(positioned)?.position);
+    const path = text(position?.new_path ?? position?.old_path);
+    const lineValue = position?.new_line ?? position?.old_line;
+    const line = typeof lineValue === "number" && lineValue > 0 ? Math.trunc(lineValue) : null;
+    if (!discussion || !id || !path || !line) return [];
+    const comments = notes.flatMap((note) => {
+      const raw = record(note);
+      const noteId = raw ? String(raw.id ?? "").trim() : "";
+      const body = raw && typeof raw.body === "string" ? raw.body : null;
+      const createdAt = raw && text(raw.created_at);
+      if (!raw || !noteId || body === null || !createdAt || raw.system === true) return [];
+      const author = record(raw.author);
+      const login = text(author?.username ?? author?.name);
+      return [
+        {
+          id: noteId,
+          author: login
+            ? {
+                login,
+                ...(text(author?.avatar_url) ? { avatarUrl: text(author?.avatar_url)! } : {}),
+              }
+            : null,
+          body,
+          createdAt,
+          ...(text(raw.updated_at) ? { updatedAt: text(raw.updated_at)! } : {}),
+        },
+      ];
+    });
+    return comments.length > 0
+      ? [
+          {
+            id,
+            path,
+            line,
+            side: position?.new_line ? ("right" as const) : ("left" as const),
+            ...(discussion.resolved === true ? { resolved: true } : {}),
+            comments,
+          },
+        ]
+      : [];
+  });
+}
+
 function normalizeGitLabCliError(operation: string, error: unknown): GitLabCliError {
   if (error instanceof Error) {
     if (error.message.includes("Command not found: glab")) {
@@ -276,6 +326,22 @@ export const makeGitLabCli = Effect.sync(() => {
           catch: (error) => normalizeGitLabCliError("getPullRequest", error),
         });
       }),
+    getPullRequestReviewThreads: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: [
+          "api",
+          "--paginate",
+          `projects/:fullpath/merge_requests/${input.reference}/discussions`,
+        ],
+      }).pipe(
+        Effect.flatMap((result) =>
+          Effect.try({
+            try: () => decodeGitLabReviewThreads(JSON.parse(result.stdout.trim() || "[]")),
+            catch: (error) => normalizeGitLabCliError("getPullRequestReviewThreads", error),
+          }),
+        ),
+      ),
     mutatePullRequest: (input) => {
       const reference = input.reference.trim().replace(/^#/, "");
       let args: ReadonlyArray<string>;
@@ -323,6 +389,67 @@ export const makeGitLabCli = Effect.sync(() => {
               detail: "GitLab does not support a request-changes review verdict.",
             }),
           );
+        case "inline_comment":
+          return Effect.gen(function* () {
+            const versionsResult = yield* execute({
+              cwd: input.cwd,
+              args: ["api", `projects/:fullpath/merge_requests/${reference}/versions`],
+            });
+            const versions: unknown = JSON.parse(versionsResult.stdout.trim() || "[]");
+            const latest = Array.isArray(versions) ? record(versions[0]) : null;
+            const baseSha = text(latest?.base_commit_sha);
+            const startSha = text(latest?.start_commit_sha);
+            const headSha = text(latest?.head_commit_sha);
+            if (!baseSha || !startSha || !headSha) {
+              return yield* new GitLabCliError({
+                operation: "mutatePullRequest",
+                detail: "GitLab did not return merge-request diff version SHAs.",
+              });
+            }
+            yield* execute({
+              cwd: input.cwd,
+              args: [
+                "api",
+                "--method",
+                "POST",
+                `projects/:fullpath/merge_requests/${reference}/discussions`,
+                "--raw-field",
+                `body=${input.body ?? ""}`,
+                "--raw-field",
+                "position[position_type]=text",
+                "--raw-field",
+                `position[base_sha]=${baseSha}`,
+                "--raw-field",
+                `position[start_sha]=${startSha}`,
+                "--raw-field",
+                `position[head_sha]=${headSha}`,
+                "--raw-field",
+                `position[${input.side === "left" ? "old_path" : "new_path"}]=${input.path ?? ""}`,
+                "--field",
+                `position[${input.side === "left" ? "old_line" : "new_line"}]=${input.line ?? 0}`,
+              ],
+            });
+          });
+        case "reply_to_thread":
+          args = [
+            "api",
+            "--method",
+            "POST",
+            `projects/:fullpath/merge_requests/${reference}/discussions/${input.threadId ?? ""}/notes`,
+            "--raw-field",
+            `body=${input.body ?? ""}`,
+          ];
+          break;
+        case "resolve_thread":
+          args = [
+            "api",
+            "--method",
+            "PUT",
+            `projects/:fullpath/merge_requests/${reference}/discussions/${input.threadId ?? ""}`,
+            "--field",
+            "resolved=true",
+          ];
+          break;
       }
       return execute({ cwd: input.cwd, args }).pipe(Effect.asVoid);
     },

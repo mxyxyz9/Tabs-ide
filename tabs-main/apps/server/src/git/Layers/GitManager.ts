@@ -350,6 +350,8 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
     "remove_reviewer",
     "add_label",
     "remove_label",
+    "inline_comment",
+    "reply_to_thread",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -370,6 +372,9 @@ const GITLAB_PULL_REQUEST_CAPABILITIES = {
     "remove_reviewer",
     "add_label",
     "remove_label",
+    "inline_comment",
+    "reply_to_thread",
+    "resolve_thread",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -1102,12 +1107,24 @@ export const makeGitManager = Effect.gen(function* () {
                 cwd: input.cwd,
                 reference: String(details.number),
               });
+              const reviewThreads = yield* gitHubCli.getPullRequestReviewThreads({
+                cwd: input.cwd,
+                reference: String(details.number),
+              });
               return {
                 ...toResolvedPullRequest(details),
                 ...(files.length > 0 ? { files } : {}),
+                ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
               };
             })
-          : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
+          : yield* Effect.gen(function* () {
+              const details = yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
+              const reviewThreads = yield* gitLabCli.getPullRequestReviewThreads({
+                cwd: input.cwd,
+                reference: String(details.number),
+              });
+              return { ...details, ...(reviewThreads.length > 0 ? { reviewThreads } : {}) };
+            });
 
       return { pullRequest, capabilities: pullRequestCapabilities(provider) };
     },
@@ -1147,6 +1164,12 @@ export const makeGitManager = Effect.gen(function* () {
           `${provider} does not support the ${input.action.replaceAll("_", " ")} action.`,
         );
       }
+      if (provider === "github" && input.action === "resolve_thread") {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          "GitHub thread resolution is unavailable through the configured provider API.",
+        );
+      }
       if (
         ["add_reviewer", "remove_reviewer", "add_label", "remove_label"].includes(input.action) &&
         !input.value?.trim()
@@ -1162,6 +1185,18 @@ export const makeGitManager = Effect.gen(function* () {
           `Action ${input.action} requires a non-empty message.`,
         );
       }
+      if (["inline_comment", "reply_to_thread"].includes(input.action) && !input.body?.trim()) {
+        return yield* gitManagerError("mutatePullRequest", `${input.action} requires a message.`);
+      }
+      if (input.action === "inline_comment" && (!input.path?.trim() || !input.line)) {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          "Inline comments require a file path and positive line number.",
+        );
+      }
+      if (["reply_to_thread", "resolve_thread"].includes(input.action) && !input.threadId?.trim()) {
+        return yield* gitManagerError("mutatePullRequest", `${input.action} requires a thread id.`);
+      }
       const mutation = {
         cwd: input.cwd,
         reference,
@@ -1170,9 +1205,20 @@ export const makeGitManager = Effect.gen(function* () {
         ...(input.deleteBranch !== undefined ? { deleteBranch: input.deleteBranch } : {}),
         ...(input.body !== undefined ? { body: input.body } : {}),
         ...(input.value !== undefined ? { value: input.value } : {}),
+        ...(input.path !== undefined ? { path: input.path } : {}),
+        ...(input.line !== undefined ? { line: input.line } : {}),
+        ...(input.side !== undefined ? { side: input.side } : {}),
+        ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
       } satisfies typeof input;
-      if (provider === "github") yield* gitHubCli.mutatePullRequest(mutation);
-      else yield* gitLabCli.mutatePullRequest(mutation);
+      if (provider === "github") {
+        if (mutation.action === "resolve_thread") {
+          return yield* gitManagerError(
+            "mutatePullRequest",
+            "GitHub thread resolution is unavailable through the configured provider API.",
+          );
+        }
+        yield* gitHubCli.mutatePullRequest({ ...mutation, action: mutation.action });
+      } else yield* gitLabCli.mutatePullRequest(mutation);
       const pullRequest =
         provider === "github"
           ? toResolvedPullRequest(yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference }))

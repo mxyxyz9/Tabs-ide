@@ -125,6 +125,36 @@ export const GitPullRequestReview = Schema.Struct({
 });
 export type GitPullRequestReview = typeof GitPullRequestReview.Type;
 
+export const GitPullRequestReaction = Schema.Struct({
+  content: TrimmedNonEmptyStringSchema,
+  count: PositiveInt,
+  viewerHasReacted: Schema.optional(Schema.Boolean),
+});
+export type GitPullRequestReaction = typeof GitPullRequestReaction.Type;
+
+export const GitPullRequestInlineComment = Schema.Struct({
+  id: TrimmedNonEmptyStringSchema,
+  author: Schema.NullOr(GitPullRequestActor),
+  body: Schema.String,
+  createdAt: Schema.String,
+  updatedAt: Schema.optional(Schema.String),
+  url: Schema.optional(Schema.String),
+  reactions: Schema.optional(Schema.Array(GitPullRequestReaction)),
+});
+export type GitPullRequestInlineComment = typeof GitPullRequestInlineComment.Type;
+
+export const GitPullRequestReviewThread = Schema.Struct({
+  id: TrimmedNonEmptyStringSchema,
+  path: TrimmedNonEmptyStringSchema,
+  line: PositiveInt,
+  side: Schema.Literals(["left", "right"]),
+  originalLine: Schema.optional(PositiveInt),
+  resolved: Schema.optional(Schema.Boolean),
+  outdated: Schema.optional(Schema.Boolean),
+  comments: Schema.Array(GitPullRequestInlineComment).check(Schema.isMinLength(1)),
+});
+export type GitPullRequestReviewThread = typeof GitPullRequestReviewThread.Type;
+
 export const GitPullRequestCommit = Schema.Struct({
   sha: TrimmedNonEmptyStringSchema,
   subject: TrimmedNonEmptyStringSchema,
@@ -170,6 +200,7 @@ const GitResolvedPullRequest = Schema.Struct({
   reviews: Schema.optional(Schema.Array(GitPullRequestReview)),
   commits: Schema.optional(Schema.Array(GitPullRequestCommit)),
   files: Schema.optional(Schema.Array(GitPullRequestFile)),
+  reviewThreads: Schema.optional(Schema.Array(GitPullRequestReviewThread)),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 
@@ -760,6 +791,9 @@ export const GitPullRequestAction = Schema.Literals([
   "remove_reviewer",
   "add_label",
   "remove_label",
+  "inline_comment",
+  "reply_to_thread",
+  "resolve_thread",
 ]);
 export type GitPullRequestAction = typeof GitPullRequestAction.Type;
 
@@ -793,6 +827,10 @@ export const GitMutatePullRequestInput = Schema.Struct({
   deleteBranch: Schema.optional(Schema.Boolean),
   body: Schema.optional(Schema.String.check(Schema.isMaxLength(100_000))),
   value: Schema.optional(TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(256))),
+  path: Schema.optional(TrimmedNonEmptyStringSchema),
+  line: Schema.optional(PositiveInt),
+  side: Schema.optional(Schema.Literals(["left", "right"])),
+  threadId: Schema.optional(TrimmedNonEmptyStringSchema),
 });
 export type GitMutatePullRequestInput = typeof GitMutatePullRequestInput.Type;
 

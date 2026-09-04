@@ -85,6 +85,23 @@ export interface GitHubPullRequestSummary {
     readonly patch: string | null;
     readonly patchTruncated: boolean;
   }>;
+  readonly reviewThreads?: ReadonlyArray<{
+    readonly id: string;
+    readonly path: string;
+    readonly line: number;
+    readonly side: "left" | "right";
+    readonly originalLine?: number;
+    readonly resolved?: boolean;
+    readonly outdated?: boolean;
+    readonly comments: ReadonlyArray<{
+      readonly id: string;
+      readonly author: { readonly login: string; readonly avatarUrl?: string } | null;
+      readonly body: string;
+      readonly createdAt: string;
+      readonly updatedAt?: string;
+      readonly url?: string;
+    }>;
+  }>;
 }
 
 export interface GitHubRepositoryCloneUrls {
@@ -129,6 +146,11 @@ export interface GitHubCliShape {
     readonly reference: string;
   }) => Effect.Effect<NonNullable<GitHubPullRequestSummary["files"]>, GitHubCliError>;
 
+  readonly getPullRequestReviewThreads: (input: {
+    readonly cwd: string;
+    readonly reference: string;
+  }) => Effect.Effect<NonNullable<GitHubPullRequestSummary["reviewThreads"]>, GitHubCliError>;
+
   readonly mutatePullRequest: (input: {
     readonly cwd: string;
     readonly reference: string;
@@ -144,11 +166,17 @@ export interface GitHubCliShape {
       | "add_reviewer"
       | "remove_reviewer"
       | "add_label"
-      | "remove_label";
+      | "remove_label"
+      | "inline_comment"
+      | "reply_to_thread";
     readonly mergeMethod?: "merge" | "squash" | "rebase";
     readonly deleteBranch?: boolean;
     readonly body?: string;
     readonly value?: string;
+    readonly path?: string;
+    readonly line?: number;
+    readonly side?: "left" | "right";
+    readonly threadId?: string;
   }) => Effect.Effect<void, GitHubCliError>;
 
   /**

@@ -30,6 +30,11 @@ export interface GitLabCliShape {
     readonly reference: string;
   }) => Effect.Effect<GitResolvedPullRequest, GitLabCliError>;
 
+  readonly getPullRequestReviewThreads: (input: {
+    readonly cwd: string;
+    readonly reference: string;
+  }) => Effect.Effect<NonNullable<GitResolvedPullRequest["reviewThreads"]>, GitLabCliError>;
+
   readonly mutatePullRequest: (
     input: GitMutatePullRequestInput,
   ) => Effect.Effect<void, GitLabCliError>;
