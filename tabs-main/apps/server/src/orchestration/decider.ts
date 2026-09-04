@@ -915,12 +915,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.session.set": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
-      return {
+      const sessionSetEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
@@ -934,6 +934,26 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           session: command.session,
         },
       };
+      const isSessionActivity =
+        command.session.status === "starting" || command.session.status === "running";
+      if (thread.settledOverride === null || !isSessionActivity) return sessionSetEvent;
+      return [
+        {
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.unsettled",
+          payload: {
+            threadId: command.threadId,
+            reason: "activity",
+            updatedAt: command.createdAt,
+          },
+        },
+        sessionSetEvent,
+      ];
     }
 
     case "thread.message.assistant.delta": {
@@ -1060,7 +1080,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.activity.append": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
@@ -1073,7 +1093,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ? ((command.activity.payload as { requestId: string })
               .requestId as OrchestrationEvent["metadata"]["requestId"])
           : undefined;
-      return {
+      const activityEvent: Omit<OrchestrationEvent, "sequence"> = {
         ...withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
@@ -1087,6 +1107,27 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           activity: command.activity,
         },
       };
+      const wakesSettledThread =
+        command.activity.kind === "approval.requested" ||
+        command.activity.kind === "user-input.requested";
+      if (thread.settledOverride === null || !wakesSettledThread) return activityEvent;
+      return [
+        {
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.unsettled",
+          payload: {
+            threadId: command.threadId,
+            reason: "activity",
+            updatedAt: command.createdAt,
+          },
+        },
+        activityEvent,
+      ];
     }
 
     default: {
