@@ -69,6 +69,7 @@ export class WsTransport {
   private readonly pending = new Map<string, PendingRequest>();
   private readonly listeners = new Map<string, Set<(message: WsPush) => void>>();
   private readonly latestPushByChannel = new Map<string, WsPush>();
+  private readonly openListeners = new Set<() => void>();
   private readonly outboundQueue: string[] = [];
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -181,6 +182,12 @@ export class WsTransport {
     return this.state;
   }
 
+  onOpen(listener: () => void): () => void {
+    this.openListeners.add(listener);
+    if (this.state === "open") listener();
+    return () => this.openListeners.delete(listener);
+  }
+
   reconnectAfterSystemResume(): void {
     if (this.disposed) return;
     if (this.reconnectTimer !== null) {
@@ -259,6 +266,7 @@ export class WsTransport {
       this.state = "open";
       this.reconnectAttempt = 0;
       this.flushQueue();
+      for (const listener of this.openListeners) listener();
     });
 
     ws.addEventListener("message", (event) => {

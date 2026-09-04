@@ -484,11 +484,18 @@ export function createWsNativeApi(): NativeApi {
             WS_CHANNELS.previewAutomationEvent,
             (message) => callback(message.data),
           );
-          void transport
-            .request(WS_METHODS.previewAutomationConnect, input, { timeoutMs: null })
-            .then(() => options?.onResubscribe?.())
-            .catch(() => undefined);
-          return unsubscribe;
+          let connectedOnce = false;
+          const unsubscribeOpen = transport.onOpen(() => {
+            if (connectedOnce) options?.onResubscribe?.();
+            connectedOnce = true;
+            void transport
+              .request(WS_METHODS.previewAutomationConnect, input, { timeoutMs: null })
+              .catch(() => undefined);
+          });
+          return () => {
+            unsubscribeOpen();
+            unsubscribe();
+          };
         },
         respond: (input) => transport.request(WS_METHODS.previewAutomationRespond, input),
         focusHost: (input) => transport.request(WS_METHODS.previewAutomationFocusHost, input),

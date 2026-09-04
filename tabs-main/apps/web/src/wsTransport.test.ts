@@ -85,6 +85,24 @@ afterEach(() => {
 });
 
 describe("WsTransport", () => {
+  it("notifies connection listeners after every successful open", () => {
+    vi.useFakeTimers();
+    const listener = vi.fn();
+    const transport = new WsTransport("ws://remote.example.test/ws");
+    const unsubscribe = transport.onOpen(listener);
+    getSocket().open();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    getSocket().close();
+    vi.advanceTimersByTime(500);
+    getSocket().open();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+    transport.dispose();
+    vi.useRealTimers();
+  });
+
   it("reconnects its configured endpoint after system resume", () => {
     vi.useFakeTimers();
     const transport = new WsTransport("ws://remote.example.test/ws");
