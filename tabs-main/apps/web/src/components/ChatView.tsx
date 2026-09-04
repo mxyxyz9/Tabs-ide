@@ -365,7 +365,6 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   });
   const { resolvedTheme } = useTheme();
   const queryClient = useQueryClient();
-  const createWorktreeMutation = useMutation(gitCreateWorktreeMutationOptions({ queryClient }));
   const composerDraft = useComposerDraft(threadId);
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
@@ -638,6 +637,12 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
   );
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
   const activeProject = projects.find((p) => p.id === activeThread?.projectId);
+  const createWorktreeMutation = useMutation(
+    gitCreateWorktreeMutationOptions({
+      queryClient,
+      environmentId: activeProject?.environmentId,
+    }),
+  );
 
   const openPullRequestDialog = useCallback(
     (reference?: string) => {
@@ -2732,6 +2737,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
           cwd: activeProject.cwd,
           branch: baseBranchForWorktree,
           newBranch,
+          environmentId: activeProject.environmentId,
         });
         nextThreadBranch = result.worktree.branch;
         nextThreadWorktreePath = result.worktree.path;
@@ -4325,6 +4331,7 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
             terminalToggleShortcutLabel={terminalToggleShortcutLabel}
             diffToggleShortcutLabel={diffPanelShortcutLabel}
             gitCwd={gitCwd}
+            environmentId={activeProject?.environmentId}
             diffOpen={diffOpen}
             onToggleTerminal={toggleTerminalVisibility}
             onToggleDiff={onToggleDiff}

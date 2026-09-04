@@ -17,7 +17,7 @@ import {
   invalidateGitQueries,
 } from "../lib/gitReactQuery";
 import { toGitUserFacingErrorMessage } from "../lib/gitErrorMessages";
-import { readNativeApi } from "../nativeApi";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import { AccountsPanel } from "./git/AccountsPanel";
 import { BranchesPanel } from "./git/BranchesPanel";
 import { ChangesPanel } from "./git/ChangesPanel";
@@ -56,6 +56,7 @@ import { toastManager } from "./ui/toast";
 
 export interface GitToolV2Props {
   cwd: string;
+  environmentId?: string | undefined;
   activeThreadId: ThreadId | null;
   terminalAvailable: boolean;
   terminalOpen: boolean;
@@ -87,6 +88,7 @@ import { useProjectGitState } from "../state/scopedStateStore";
 
 export function GitToolV2({
   cwd,
+  environmentId,
   activeThreadId,
   terminalAvailable,
   terminalOpen,
@@ -95,7 +97,16 @@ export function GitToolV2({
   onOpenAgents,
   onRunGitHubLogin,
 }: GitToolV2Props) {
-  const api = readNativeApi();
+  const [api, setApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(null);
+  useEffect(() => {
+    let active = true;
+    void environmentApi(environmentId).then((next) => {
+      if (active) setApi(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [environmentId]);
   const queryClient = useQueryClient();
   const { unreadCount, clearUnread } = useReviewStore(cwd);
   const [gitState, setGitState] = useProjectGitState(cwd);
@@ -135,15 +146,21 @@ export function GitToolV2({
   const [historyLimit, setHistoryLimit] = useState(50);
 
   // Queries
-  const gitStatusQuery = useQuery(gitStatusQueryOptions(cwd));
-  const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(cwd));
-  const branchesQuery = useQuery(gitBranchesQueryOptions(cwd));
-  const historyQuery = useQuery(gitHistoryQueryOptions({ cwd, limit: historyLimit }));
+  const gitStatusQuery = useQuery(gitStatusQueryOptions(cwd, environmentId));
+  const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(cwd, environmentId));
+  const branchesQuery = useQuery(gitBranchesQueryOptions(cwd, environmentId));
+  const historyQuery = useQuery(
+    gitHistoryQueryOptions({ cwd, limit: historyLimit, environmentId }),
+  );
 
-  const stashQuery = useQuery(gitStashListQueryOptions(cwd));
-  const gitInitMutation = useMutation(gitInitMutationOptions({ cwd, queryClient }));
-  const switchMutation = useMutation(gitHubSwitchAccountMutationOptions({ cwd, queryClient }));
-  const logoutMutation = useMutation(gitHubLogoutMutationOptions({ cwd, queryClient }));
+  const stashQuery = useQuery(gitStashListQueryOptions(cwd, environmentId));
+  const gitInitMutation = useMutation(gitInitMutationOptions({ cwd, queryClient, environmentId }));
+  const switchMutation = useMutation(
+    gitHubSwitchAccountMutationOptions({ cwd, queryClient, environmentId }),
+  );
+  const logoutMutation = useMutation(
+    gitHubLogoutMutationOptions({ cwd, queryClient, environmentId }),
+  );
 
   const [excludedWatchedBranches, setExcludedWatchedBranches] = useState<string[]>(() => {
     try {
@@ -182,7 +199,7 @@ export function GitToolV2({
   );
 
   const watchedBranchesQuery = useQuery(
-    gitWatchedBranchesQueryOptions(cwd, excludedWatchedBranches),
+    gitWatchedBranchesQueryOptions(cwd, excludedWatchedBranches, environmentId),
   );
   const watchedBranchStatuses = watchedBranchesQuery.data?.branches ?? [];
 

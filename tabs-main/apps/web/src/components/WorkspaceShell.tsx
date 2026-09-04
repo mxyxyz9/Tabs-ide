@@ -136,6 +136,7 @@ import {
   newThreadId,
 } from "../lib/utils";
 import { APP_VERSION } from "../branding";
+import { environmentApi } from "../connection/environmentApiRegistry";
 
 // On Windows the native title bar is hidden and the caption buttons are overlaid
 // (Window Controls Overlay) at the top-right, so the top bar reserves space on
@@ -2360,7 +2361,18 @@ function AgentsThreadList(props: {
 }
 
 function FallbackCodeTool(props: { project: Project }) {
-  const api = readNativeApi();
+  const [api, setEnvironmentApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    void environmentApi(props.project.environmentId).then((next) => {
+      if (active) setEnvironmentApi(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [props.project.environmentId]);
   const { resolvedTheme } = useTheme();
   const [query, setQuery] = useState("");
   const setCodeFocusedPath = workspaceShellActions.setCodeFocusedPath;
@@ -3382,7 +3394,18 @@ function GitTool(props: {
     onOpenFileInCode,
     onDispatchRelease,
   } = props;
-  const api = readNativeApi();
+  const [api, setGitEnvironmentApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    void environmentApi(project.environmentId).then((next) => {
+      if (active) setGitEnvironmentApi(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [project.environmentId]);
   const keybindings = useKeybindings();
   const queryClient = useQueryClient();
   const gitStatusQuery = useQuery(gitStatusQueryOptions(project.cwd, project.environmentId));
@@ -11161,6 +11184,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   const gitTool = activeProject ? (
     <GitToolV2
       cwd={activeProject.cwd}
+      environmentId={activeProject.environmentId}
       activeThreadId={gitActionThreadId}
       terminalAvailable
       terminalOpen={Boolean(gitTerminalState?.terminalOpen)}

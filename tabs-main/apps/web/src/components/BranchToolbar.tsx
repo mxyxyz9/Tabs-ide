@@ -3,7 +3,7 @@ import { FolderIcon, GitForkIcon } from "lucide-react";
 import { useCallback } from "react";
 
 import { newCommandId } from "../lib/utils";
-import { readNativeApi } from "../nativeApi";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import { composerDraftActions, useDraftThread } from "../state/composerDrafts";
 import { setThreadBranchInAtoms } from "../state/readModel";
 import { projectsAtom, threadsAtom } from "../state/threads";
@@ -59,27 +59,30 @@ export default function BranchToolbar({
   const setThreadBranch = useCallback(
     (branch: string | null, worktreePath: string | null) => {
       if (!activeThreadId) return;
-      const api = readNativeApi();
       // If the effective cwd is about to change, stop the running session so the
       // next message creates a new one with the correct cwd.
-      if (serverThread?.session && worktreePath !== activeWorktreePath && api) {
-        void api.orchestration
-          .dispatchCommand({
-            type: "thread.session.stop",
+      if (serverThread?.session && worktreePath !== activeWorktreePath) {
+        void environmentApi(activeProject?.environmentId).then((api) =>
+          api.orchestration
+            .dispatchCommand({
+              type: "thread.session.stop",
+              commandId: newCommandId(),
+              threadId: activeThreadId,
+              createdAt: new Date().toISOString(),
+            })
+            .catch(() => undefined),
+        );
+      }
+      if (hasServerThread) {
+        void environmentApi(activeProject?.environmentId).then((api) =>
+          api.orchestration.dispatchCommand({
+            type: "thread.meta.update",
             commandId: newCommandId(),
             threadId: activeThreadId,
-            createdAt: new Date().toISOString(),
-          })
-          .catch(() => undefined);
-      }
-      if (api && hasServerThread) {
-        void api.orchestration.dispatchCommand({
-          type: "thread.meta.update",
-          commandId: newCommandId(),
-          threadId: activeThreadId,
-          branch,
-          worktreePath,
-        });
+            branch,
+            worktreePath,
+          }),
+        );
       }
       if (hasServerThread) {
         setThreadBranchAction(activeThreadId, branch, worktreePath);
@@ -105,6 +108,7 @@ export default function BranchToolbar({
       setDraftThreadContext,
       threadId,
       effectiveEnvMode,
+      activeProject?.environmentId,
     ],
   );
 
@@ -158,6 +162,7 @@ export default function BranchToolbar({
       )}
 
       <BranchToolbarBranchSelector
+        environmentId={activeProject.environmentId}
         activeProjectCwd={activeProject.cwd}
         activeThreadBranch={activeThreadBranch}
         activeWorktreePath={activeWorktreePath}

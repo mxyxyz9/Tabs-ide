@@ -41,7 +41,6 @@ import { openInPreferredEditor } from "~/editorPreferences";
 import {
   gitBranchesQueryOptions,
   gitInitMutationOptions,
-  gitMutationKeys,
   gitPullMutationOptions,
   gitRunStackedActionMutationOptions,
   gitStatusQueryOptions,
@@ -55,6 +54,7 @@ import { refreshVcs, useVcs } from "../state/vcs";
 interface GitActionsControlProps {
   gitCwd: string | null;
   activeThreadId: ThreadId | null;
+  environmentId?: string | undefined;
 }
 
 interface PendingDefaultBranchAction {
@@ -214,7 +214,11 @@ function GitQuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
   return <InfoIcon className={iconClassName} />;
 }
 
-export default function GitActionsControl({ gitCwd, activeThreadId }: GitActionsControlProps) {
+export default function GitActionsControl({
+  gitCwd,
+  activeThreadId,
+  environmentId,
+}: GitActionsControlProps) {
   const threadToastData = useMemo(
     () => (activeThreadId ? { threadId: activeThreadId } : undefined),
     [activeThreadId],
@@ -263,19 +267,22 @@ export default function GitActionsControl({ gitCwd, activeThreadId }: GitActions
   const allSelected = excludedFiles.size === 0;
   const noneSelected = selectedFiles.length === 0;
 
-  const initMutation = useMutation(gitInitMutationOptions({ cwd: gitCwd, queryClient }));
-
-  const runImmediateGitActionMutation = useMutation(
-    gitRunStackedActionMutationOptions({
-      cwd: gitCwd,
-      queryClient,
-    }),
+  const initMutation = useMutation(
+    gitInitMutationOptions({ cwd: gitCwd, queryClient, environmentId }),
   );
-  const pullMutation = useMutation(gitPullMutationOptions({ cwd: gitCwd, queryClient }));
+
+  const runStackedActionOptions = gitRunStackedActionMutationOptions({
+    cwd: gitCwd,
+    queryClient,
+    environmentId,
+  });
+  const runImmediateGitActionMutation = useMutation(runStackedActionOptions);
+  const pullOptions = gitPullMutationOptions({ cwd: gitCwd, queryClient, environmentId });
+  const pullMutation = useMutation(pullOptions);
 
   const isRunStackedActionRunning =
-    useIsMutating({ mutationKey: gitMutationKeys.runStackedAction(gitCwd) }) > 0;
-  const isPullRunning = useIsMutating({ mutationKey: gitMutationKeys.pull(gitCwd) }) > 0;
+    useIsMutating({ mutationKey: runStackedActionOptions.mutationKey }) > 0;
+  const isPullRunning = useIsMutating({ mutationKey: pullOptions.mutationKey }) > 0;
   const isGitActionRunning = isRunStackedActionRunning || isPullRunning;
   const isDefaultBranch = useMemo(() => {
     const branchName = gitStatusForActions?.branch;

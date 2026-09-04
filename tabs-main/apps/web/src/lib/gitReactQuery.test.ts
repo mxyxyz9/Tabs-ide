@@ -34,12 +34,20 @@ describe("git mutation options", () => {
       cwd: "/repo/a",
       queryClient,
     });
-    expect(options.mutationKey).toEqual(gitMutationKeys.runStackedAction("/repo/a"));
+    expect(options.mutationKey).toEqual([
+      "environment",
+      "primary",
+      ...gitMutationKeys.runStackedAction("/repo/a"),
+    ]);
   });
 
   it("attaches cwd-scoped mutation key for pull", () => {
     const options = gitPullMutationOptions({ cwd: "/repo/a", queryClient });
-    expect(options.mutationKey).toEqual(gitMutationKeys.pull("/repo/a"));
+    expect(options.mutationKey).toEqual([
+      "environment",
+      "primary",
+      ...gitMutationKeys.pull("/repo/a"),
+    ]);
   });
 
   it("attaches cwd-scoped mutation key for preparePullRequestThread", () => {
@@ -47,7 +55,11 @@ describe("git mutation options", () => {
       cwd: "/repo/a",
       queryClient,
     });
-    expect(options.mutationKey).toEqual(gitMutationKeys.preparePullRequestThread("/repo/a"));
+    expect(options.mutationKey).toEqual([
+      "environment",
+      "primary",
+      ...gitMutationKeys.preparePullRequestThread("/repo/a"),
+    ]);
   });
 });
 

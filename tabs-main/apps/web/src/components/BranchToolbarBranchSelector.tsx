@@ -21,7 +21,7 @@ import {
   invalidateGitQueries,
 } from "../lib/gitReactQuery";
 import { toGitUserFacingErrorMessage } from "../lib/gitErrorMessages";
-import { readNativeApi } from "../nativeApi";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import { parsePullRequestReference } from "../pullRequestReference";
 import {
   dedupeRemoteBranchesWithLocalMatches,
@@ -47,6 +47,7 @@ interface BranchToolbarBranchSelectorProps {
   activeThreadBranch: string | null;
   activeWorktreePath: string | null;
   branchCwd: string | null;
+  environmentId?: string | undefined;
   effectiveEnvMode: EnvMode;
   envLocked: boolean;
   onSetThreadBranch: (branch: string | null, worktreePath: string | null) => void;
@@ -78,6 +79,7 @@ export function BranchToolbarBranchSelector({
   activeThreadBranch,
   activeWorktreePath,
   branchCwd,
+  environmentId,
   effectiveEnvMode,
   envLocked,
   onSetThreadBranch,
@@ -89,8 +91,8 @@ export function BranchToolbarBranchSelector({
   const [branchQuery, setBranchQuery] = useState("");
   const deferredBranchQuery = useDeferredValue(branchQuery);
 
-  const branchesQuery = useQuery(gitBranchesQueryOptions(branchCwd));
-  const branchStatusQuery = useQuery(gitStatusQueryOptions(branchCwd));
+  const branchesQuery = useQuery(gitBranchesQueryOptions(branchCwd, environmentId));
+  const branchStatusQuery = useQuery(gitStatusQueryOptions(branchCwd, environmentId));
   const branches = useMemo(
     () => dedupeRemoteBranchesWithLocalMatches(branchesQuery.data?.branches ?? []),
     [branchesQuery.data?.branches],
@@ -156,8 +158,7 @@ export function BranchToolbarBranchSelector({
   };
 
   const selectBranch = (branch: GitBranch) => {
-    const api = readNativeApi();
-    if (!api || !branchCwd || isBranchActionPending) return;
+    if (!branchCwd || isBranchActionPending) return;
 
     // In new-worktree mode, selecting a branch sets the base branch.
     if (isSelectingWorktreeBase) {
@@ -189,6 +190,7 @@ export function BranchToolbarBranchSelector({
     onComposerFocusRequest?.();
 
     runBranchAction(async () => {
+      const api = await environmentApi(environmentId);
       setOptimisticBranch(selectedBranchName);
       try {
         await api.git.checkout({ cwd: selectionTarget.checkoutCwd, branch: branch.name });
@@ -217,13 +219,13 @@ export function BranchToolbarBranchSelector({
 
   const createBranch = (rawName: string) => {
     const name = rawName.trim();
-    const api = readNativeApi();
-    if (!api || !branchCwd || !name || isBranchActionPending) return;
+    if (!branchCwd || !name || isBranchActionPending) return;
 
     setIsBranchMenuOpen(false);
     onComposerFocusRequest?.();
 
     runBranchAction(async () => {
+      const api = await environmentApi(environmentId);
       setOptimisticBranch(name);
 
       try {

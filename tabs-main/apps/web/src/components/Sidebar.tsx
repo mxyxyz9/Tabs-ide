@@ -805,6 +805,7 @@ export default function Sidebar() {
           cwd: threadProject.cwd,
           path: orphanedWorktreePath,
           force: true,
+          environmentId: threadProject.environmentId,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown error removing worktree.";

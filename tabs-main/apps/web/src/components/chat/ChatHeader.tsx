@@ -21,6 +21,7 @@ interface ChatHeaderProps {
   terminalToggleShortcutLabel: string | null;
   diffToggleShortcutLabel: string | null;
   gitCwd: string | null;
+  environmentId?: string | undefined;
   diffOpen: boolean;
   onToggleTerminal: () => void;
   onToggleDiff: () => void;
@@ -39,6 +40,7 @@ export const ChatHeader = memo(function ChatHeader({
   terminalToggleShortcutLabel,
   diffToggleShortcutLabel,
   gitCwd,
+  environmentId,
   diffOpen,
   onToggleTerminal,
   onToggleDiff,
@@ -81,7 +83,13 @@ export const ChatHeader = memo(function ChatHeader({
             openInCwd={openInCwd}
           />
         )}
-        {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
+        {activeProjectName && (
+          <GitActionsControl
+            gitCwd={gitCwd}
+            activeThreadId={activeThreadId}
+            environmentId={environmentId}
+          />
+        )}
         <Tooltip>
           <TooltipTrigger
             render={
