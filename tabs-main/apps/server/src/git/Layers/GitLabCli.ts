@@ -281,10 +281,9 @@ export const makeGitLabCli = Effect.sync(() => {
           "--raw-field",
           `target_branch=${input.baseBranch}`,
           "--raw-field",
-          `title=${input.title}`,
+          `title=${input.draft && !/^draft:/i.test(input.title) ? `Draft: ${input.title}` : input.title}`,
           "--field",
           `description=@${input.bodyFile}`,
-          ...(input.draft ? ["--raw-field", "draft=true"] : []),
         ],
       }).pipe(Effect.asVoid),
   } satisfies GitLabCliShape;

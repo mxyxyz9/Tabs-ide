@@ -66,6 +66,10 @@ function formatProviderName(provider: PullRequestRow["provider"]): string {
   }
 }
 
+function supportsRequestChanges(provider: PullRequestRow["provider"]): boolean {
+  return provider !== "gitlab";
+}
+
 export function PRsPanel({
   cwd,
   environmentId,
@@ -332,7 +336,7 @@ export function PRsPanel({
           </p>
           <p className="text-xs text-muted-foreground/70 mb-4 max-w-sm mx-auto">
             {viewMode === "branch"
-              ? "Push your branch and open a pull request on GitHub to request feedback and merge changes."
+              ? "Push your branch and open a pull request to request feedback and merge changes."
               : `There are currently no matching ${filterState === "all" ? "" : filterState + " "}pull requests in this repository.`}
           </p>
           <Button size="sm" onClick={onOpenCreatePR}>
@@ -757,24 +761,26 @@ export function PRsPanel({
                                   >
                                     Approve
                                   </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    disabled={!actionBody.trim() || pendingAction !== null}
-                                    onClick={async () => {
-                                      if (
-                                        await mutatePullRequest(
-                                          pr.n,
-                                          "request_changes",
-                                          actionBody.trim(),
-                                        )
-                                      ) {
-                                        setActionBody("");
-                                      }
-                                    }}
-                                  >
-                                    Request changes
-                                  </Button>
+                                  {supportsRequestChanges(pr.provider) ? (
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      disabled={!actionBody.trim() || pendingAction !== null}
+                                      onClick={async () => {
+                                        if (
+                                          await mutatePullRequest(
+                                            pr.n,
+                                            "request_changes",
+                                            actionBody.trim(),
+                                          )
+                                        ) {
+                                          setActionBody("");
+                                        }
+                                      }}
+                                    >
+                                      Request changes
+                                    </Button>
+                                  ) : null}
                                 </div>
                               </div>
                             ) : null}
