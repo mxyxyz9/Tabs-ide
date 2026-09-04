@@ -33,7 +33,9 @@ verification evidence, not just a matching type or placeholder.
       instead of placeholder arrays.
 - [x] Report real native URL/title/loading/history/failure changes back to the authoritative
       preview session, including redirects and human navigation.
-- [ ] Synchronize live cursor position and human-input ownership between clients.
+- [x] Serialize native automation actions, surface agent/human control in browser chrome, render
+      agent click position inside the guest, and let real human keyboard/mouse input interrupt
+      stale agent actions through a control epoch.
 - [x] Capture browser screenshots as real managed artifacts, with typed renderer IPC and
       artifact-directory-restricted reveal/copy operations.
 - [x] Record the live Chromium guest through its native media-source ID and persist non-empty

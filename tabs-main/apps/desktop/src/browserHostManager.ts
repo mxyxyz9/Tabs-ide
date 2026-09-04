@@ -181,6 +181,11 @@ type BrowserSession = {
   consoleEntries: BrowserConsoleEntry[];
   networkEntries: BrowserNetworkEntry[];
   actionTimeline: BrowserActionEvent[];
+  controller: "human" | "agent" | "none";
+  controlEpoch: number;
+  dispatchingAgentInput: boolean;
+  humanControlTimer: ReturnType<typeof setTimeout> | null;
+  automationTail: Promise<void>;
 };
 
 interface BrowserConsoleEntry {
@@ -350,6 +355,11 @@ export class BrowserHostManager {
       consoleEntries: [],
       networkEntries: [],
       actionTimeline: [],
+      controller: "none",
+      controlEpoch: 0,
+      dispatchingAgentInput: false,
+      humanControlTimer: null,
+      automationTail: Promise.resolve(),
     };
 
     this.sessions.set(key, session);
@@ -392,6 +402,7 @@ export class BrowserHostManager {
     const currentUrl = session.currentUrl;
     const partition = partitionInput ?? session.partition ?? `persist:tabs-browser:${projectId}`;
 
+    this.clearHumanControlTimer(session);
     this.detachSession(session);
     session.view.webContents.close({ waitForBeforeUnload: false });
 
@@ -878,36 +889,70 @@ export class BrowserHostManager {
           )
         : [];
       return this.trackAutomation(session, "press", async () => {
-        contents.sendInputEvent({ type: "keyDown", keyCode: input.key as string, modifiers });
-        contents.sendInputEvent({ type: "keyUp", keyCode: input.key as string, modifiers });
+        session.dispatchingAgentInput = true;
+        try {
+          contents.sendInputEvent({ type: "keyDown", keyCode: input.key as string, modifiers });
+          contents.sendInputEvent({ type: "keyUp", keyCode: input.key as string, modifiers });
+        } finally {
+          session.dispatchingAgentInput = false;
+        }
         return { pressed: true };
       });
     }
 
     if (request.operation === "click") {
       return this.trackAutomation(session, "click", async () => {
+        let point: { x: number; y: number };
         if (typeof input.x === "number" && typeof input.y === "number") {
+          point = { x: input.x, y: input.y };
+        } else {
+          const target = pageTargetExpression(input);
+          const resolved = (await contents.executeJavaScript(
+            `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return null; const rect = element.getBoundingClientRect(); return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) }; })()`,
+            true,
+          )) as { x: number; y: number } | null;
+          if (!resolved) throw new Error("The browser click target was not found.");
+          point = resolved;
+        }
+        await contents.executeJavaScript(
+          `(() => {
+            document.querySelector('[data-tabs-agent-pointer]')?.remove();
+            const pointer = document.createElement('div');
+            pointer.setAttribute('data-tabs-agent-pointer', '');
+            Object.assign(pointer.style, {
+              position: 'fixed', left: '${point.x}px', top: '${point.y}px', width: '18px', height: '18px',
+              transform: 'translate(-50%, -50%)', borderRadius: '999px', pointerEvents: 'none',
+              zIndex: '2147483647', background: 'rgba(124,58,237,.3)', border: '2px solid #7c3aed',
+              boxShadow: '0 0 0 5px rgba(124,58,237,.12)', transition: 'opacity 180ms ease'
+            });
+            document.documentElement.append(pointer);
+            setTimeout(() => { pointer.style.opacity = '0'; setTimeout(() => pointer.remove(), 200); }, 500);
+          })()`,
+          true,
+        );
+        session.dispatchingAgentInput = true;
+        try {
+          contents.sendInputEvent({
+            type: "mouseMove",
+            x: point.x,
+            y: point.y,
+          });
           contents.sendInputEvent({
             type: "mouseDown",
-            x: input.x,
-            y: input.y,
+            x: point.x,
+            y: point.y,
             button: "left",
             clickCount: 1,
           });
           contents.sendInputEvent({
             type: "mouseUp",
-            x: input.x,
-            y: input.y,
+            x: point.x,
+            y: point.y,
             button: "left",
             clickCount: 1,
           });
-        } else {
-          const target = pageTargetExpression(input);
-          const clicked = await contents.executeJavaScript(
-            `(() => { const element = ${target}; if (!(element instanceof HTMLElement)) return false; element.click(); return true; })()`,
-            true,
-          );
-          if (!clicked) throw new Error("The browser click target was not found.");
+        } finally {
+          session.dispatchingAgentInput = false;
         }
         return { clicked: true };
       });
@@ -1189,6 +1234,12 @@ export class BrowserHostManager {
     action: string,
     run: () => Promise<T>,
   ): Promise<T> {
+    const previous = session.automationTail ?? Promise.resolve();
+    let releaseQueue!: () => void;
+    session.automationTail = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    await previous;
     const event: BrowserActionEvent = {
       id: crypto.randomUUID(),
       action,
@@ -1197,16 +1248,34 @@ export class BrowserHostManager {
     };
     session.actionTimeline ??= [];
     appendBounded(session.actionTimeline, event);
+    session.controlEpoch ??= 0;
+    const controlEpoch = session.controlEpoch;
+    session.controller = "agent";
+    this.emitState(session);
     try {
       const result = await run();
+      if (session.controlEpoch !== controlEpoch) {
+        event.status = "interrupted";
+        event.completedAt = new Date().toISOString();
+        event.error = "Browser automation was interrupted by human input.";
+        throw new Error(event.error);
+      }
       event.status = "succeeded";
       event.completedAt = new Date().toISOString();
       return result;
     } catch (cause) {
-      event.status = "failed";
-      event.completedAt = new Date().toISOString();
-      event.error = cause instanceof Error ? cause.message : String(cause);
+      if (event.status !== "interrupted") {
+        event.status = "failed";
+        event.completedAt = new Date().toISOString();
+        event.error = cause instanceof Error ? cause.message : String(cause);
+      }
       throw cause;
+    } finally {
+      if (session.controller === "agent") {
+        session.controller = "none";
+        this.emitState(session);
+      }
+      releaseQueue();
     }
   }
 
@@ -1248,6 +1317,7 @@ export class BrowserHostManager {
         this.detachSession(session);
         this.activeKey = null;
       }
+      this.clearHumanControlTimer(session);
       session.view.webContents.close({ waitForBeforeUnload: false });
       this.sessions.delete(key);
     }
@@ -1256,6 +1326,7 @@ export class BrowserHostManager {
   dispose(): void {
     this.hideActiveSession();
     for (const session of this.sessions.values()) {
+      this.clearHumanControlTimer(session);
       session.view.webContents.close({ waitForBeforeUnload: false });
     }
     this.sessions.clear();
@@ -1284,6 +1355,7 @@ export class BrowserHostManager {
       canGoBack: session.canGoBack,
       canGoForward: session.canGoForward,
       devToolsOpen: session.devToolsOpen,
+      controller: session.controller ?? "none",
       lastError: session.lastError,
       transientError: session.transientError,
     };
@@ -1295,6 +1367,12 @@ export class BrowserHostManager {
       return;
     }
     window.webContents.send("desktop:browser-host:session-state", this.snapshotSession(session));
+  }
+
+  private clearHumanControlTimer(session: BrowserSession): void {
+    if (!session.humanControlTimer) return;
+    clearTimeout(session.humanControlTimer);
+    session.humanControlTimer = null;
   }
 
   private observeProfileSession(partition: string, s: Session): void {
@@ -1336,6 +1414,21 @@ export class BrowserHostManager {
       session.canGoBack = contents.canGoBack();
       session.canGoForward = contents.canGoForward();
     };
+    const markHumanControl = () => {
+      if (session.dispatchingAgentInput) return;
+      session.controlEpoch = (session.controlEpoch ?? 0) + 1;
+      session.controller = "human";
+      if (session.humanControlTimer) clearTimeout(session.humanControlTimer);
+      this.emitState(session);
+      session.humanControlTimer = setTimeout(() => {
+        session.humanControlTimer = null;
+        if (session.controller !== "human") return;
+        session.controller = "none";
+        this.emitState(session);
+      }, 750);
+    };
+    contents.on("before-input-event", markHumanControl);
+    contents.on("before-mouse-event", markHumanControl);
     let authenticationWindowPending = false;
     const openAuthenticationWindow = (url: string, originatingUrl: string) => {
       if (authenticationWindowPending) return;

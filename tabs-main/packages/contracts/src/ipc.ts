@@ -1704,6 +1704,7 @@ export interface DesktopBrowserSessionState {
   canGoBack: boolean;
   canGoForward: boolean;
   devToolsOpen: boolean;
+  controller?: "human" | "agent" | "none";
   lastError: string | null;
   /** Set when did-fail-load fires with ERR_CONNECTION_REFUSED (-102).
    * Unlike lastError, this is treated as a transient startup condition and

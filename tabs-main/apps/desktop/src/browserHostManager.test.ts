@@ -248,6 +248,94 @@ describe("BrowserHostManager automation", () => {
     ]);
   });
 
+  it("marks an action interrupted when human input advances the control epoch", async () => {
+    const manager = new BrowserHostManager(() => null);
+    const browserSession = {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      view: { webContents: { isDestroyed: () => false, executeJavaScript: vi.fn() } },
+      bounds: null,
+      currentUrl: "https://example.com/",
+      pageTitle: "Example",
+      loading: false,
+      consoleEntries: [],
+      networkEntries: [],
+      actionTimeline: [],
+      controller: "none",
+      controlEpoch: 0,
+      dispatchingAgentInput: false,
+      humanControlTimer: null,
+    };
+    browserSession.view.webContents.executeJavaScript.mockImplementation(async () => {
+      browserSession.controlEpoch += 1;
+      browserSession.controller = "human";
+      return "late result";
+    });
+    (
+      manager as unknown as {
+        sessions: Map<string, unknown>;
+      }
+    ).sessions.set("project-1::preview-1", browserSession);
+
+    await expect(
+      manager.runAutomation({
+        projectId: "project-1",
+        sessionId: "preview-1",
+        operation: "evaluate",
+        input: { expression: "slowOperation()" },
+      }),
+    ).rejects.toThrow("interrupted by human input");
+    expect(browserSession.actionTimeline).toEqual([
+      expect.objectContaining({ status: "interrupted", error: expect.stringContaining("human") }),
+    ]);
+    expect(browserSession.controller).toBe("human");
+  });
+
+  it("serializes automation actions for one browser session", async () => {
+    let releaseFirst!: () => void;
+    const firstResult = new Promise<string>((resolve) => {
+      releaseFirst = () => resolve("first");
+    });
+    const executeJavaScript = vi
+      .fn()
+      .mockImplementationOnce(() => firstResult)
+      .mockResolvedValueOnce("second");
+    const manager = new BrowserHostManager(() => null);
+    (
+      manager as unknown as {
+        sessions: Map<string, unknown>;
+      }
+    ).sessions.set("project-1::preview-1", {
+      projectId: "project-1",
+      sessionId: "preview-1",
+      key: "project-1::preview-1",
+      view: { webContents: { isDestroyed: () => false, executeJavaScript } },
+      actionTimeline: [],
+      controller: "none",
+      controlEpoch: 0,
+      automationTail: Promise.resolve(),
+    });
+
+    const first = manager.runAutomation({
+      projectId: "project-1",
+      sessionId: "preview-1",
+      operation: "evaluate",
+      input: { expression: "first()" },
+    });
+    const second = manager.runAutomation({
+      projectId: "project-1",
+      sessionId: "preview-1",
+      operation: "evaluate",
+      input: { expression: "second()" },
+    });
+    await Promise.resolve();
+    expect(executeJavaScript).toHaveBeenCalledTimes(1);
+    releaseFirst();
+    await expect(Promise.all([first, second])).resolves.toEqual(["first", "second"]);
+    expect(executeJavaScript).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects automation for a missing session", async () => {
     const manager = new BrowserHostManager(() => null);
     await expect(

@@ -7089,6 +7089,14 @@ function DesktopBrowserChrome(props: {
                 <MousePointer2Icon className="size-3.5" />
                 {pickingElement ? "Pick on page…" : "Pick element"}
               </Button>
+              {props.sessionState.controller && props.sessionState.controller !== "none" ? (
+                <Badge
+                  variant={props.sessionState.controller === "agent" ? "default" : "secondary"}
+                  aria-live="polite"
+                >
+                  {props.sessionState.controller === "agent" ? "Agent control" : "Human control"}
+                </Badge>
+              ) : null}
               <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
                 <Input
                   className="h-8"
@@ -7176,6 +7184,15 @@ function DesktopBrowserChrome(props: {
       ) : props.toolbarTarget ? (
         createPortal(
           <div className="flex items-center gap-1.5 pr-1">
+            {props.sessionState.controller && props.sessionState.controller !== "none" ? (
+              <Badge
+                variant={props.sessionState.controller === "agent" ? "default" : "secondary"}
+                className="h-6"
+                aria-live="polite"
+              >
+                {props.sessionState.controller === "agent" ? "Agent" : "Human"}
+              </Badge>
+            ) : null}
             <div className="flex items-center rounded-lg border border-border/70 bg-card/60 p-0.5 shadow-2xs backdrop-blur-xs">
               <div className="flex items-center">
                 <Tooltip>
