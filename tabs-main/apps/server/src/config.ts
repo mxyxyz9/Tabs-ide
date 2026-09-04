@@ -32,6 +32,7 @@ export interface ServerDerivedPaths {
   readonly anonymousIdPath: string;
   readonly environmentIdPath: string;
   readonly secretsDir: string;
+  readonly environmentThemesDir: string;
 }
 
 /**
@@ -78,6 +79,7 @@ export const deriveServerPaths = Effect.fn(function* (
     anonymousIdPath: join(stateDir, "anonymous-id"),
     environmentIdPath: join(stateDir, "environment-id"),
     secretsDir: join(stateDir, "secrets"),
+    environmentThemesDir: join(stateDir, "themes"),
   };
 });
 
@@ -123,10 +125,8 @@ export class ServerConfig extends Context.Service<ServerConfig, ServerConfigShap
     );
 }
 
-export const layerTest = (
-  cwd: string,
-  baseDirOrPrefix: string | { readonly prefix: string },
-) => ServerConfig.layerTest(cwd, baseDirOrPrefix);
+export const layerTest = (cwd: string, baseDirOrPrefix: string | { readonly prefix: string }) =>
+  ServerConfig.layerTest(cwd, baseDirOrPrefix);
 
 export const resolveStaticDir = Effect.fn(function* () {
   const { join, resolve } = yield* Path.Path;

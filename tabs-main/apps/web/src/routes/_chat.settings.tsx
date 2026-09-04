@@ -1127,6 +1127,7 @@ function ThemePickerGrid({
   onDeletePreset,
   onRenamePreset,
   onEditPresetInStudio,
+  environmentThemes,
 }: {
   activeTheme: ThemePreference;
   customConfig: CustomThemeConfig;
@@ -1136,6 +1137,7 @@ function ThemePickerGrid({
   onDeletePreset: (presetId: string) => void;
   onRenamePreset: (presetId: string, newName: string) => void;
   onEditPresetInStudio?: (preset: SavedCustomPreset) => void;
+  environmentThemes: NonNullable<ReturnType<typeof useServerConfig>>["environmentThemes"];
 }) {
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editingNameInput, setEditingNameInput] = useState("");
@@ -1169,6 +1171,26 @@ function ThemePickerGrid({
         codeKeyword: t.colors.primary,
         codeString: t.colors.accentForeground || t.colors.foreground,
       })),
+    ...(environmentThemes ?? []).map((published) => {
+      const fallback =
+        published.appearance === "light"
+          ? THEME_DEFINITIONS["tabs-light"]
+          : THEME_DEFINITIONS["tabs-dark"];
+      const colors = published.colors ?? {};
+      return {
+        id: `environment:${published.id}` as ThemePreference,
+        name: published.name,
+        description: "Published by the connected environment",
+        baseVariant: published.appearance,
+        badge: "REMOTE",
+        bg: colors.background ?? published.canvas ?? fallback.colors.background,
+        card: colors.card ?? colors.cardBackground ?? fallback.colors.card,
+        accent: colors.primary ?? published.accent ?? fallback.colors.primary,
+        border: colors.border ?? fallback.colors.border,
+        codeKeyword: colors.primary ?? published.accent ?? fallback.colors.primary,
+        codeString: colors.foreground ?? fallback.colors.foreground,
+      };
+    }),
   ];
 
   return (
@@ -2064,6 +2086,7 @@ function SettingsRouteView() {
     fontPreferences,
     setFontPreferences,
   } = useTheme();
+  const serverConfig = useServerConfig();
 
   const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
   const [zoomFactor, updateZoom] = useZoomFactor();
@@ -2090,7 +2113,6 @@ function SettingsRouteView() {
     },
   });
 
-  const serverConfig = useServerConfig();
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
   const [settingsViewState, updateSettingsViewState] = useSettingsViewState();
@@ -3737,6 +3759,7 @@ function SettingsRouteView() {
                         activeTheme={theme}
                         customConfig={customThemeConfig}
                         savedPresets={savedPresets}
+                        environmentThemes={serverConfig?.environmentThemes}
                         onSelectTheme={(t, overrideConfig) => {
                           if (overrideConfig) {
                             setCustomThemeConfig(overrideConfig);

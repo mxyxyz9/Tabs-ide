@@ -40,6 +40,36 @@ export type ServerConfigIssue = typeof ServerConfigIssue.Type;
 
 const ServerConfigIssues = Schema.Array(ServerConfigIssue);
 
+export const EnvironmentThemeId = Schema.String.check(
+  Schema.isPattern(/^(?!(?:system|light|dark|custom)$)[a-z0-9](?:[a-z0-9-]{0,47})$/),
+);
+export type EnvironmentThemeId = typeof EnvironmentThemeId.Type;
+
+const EnvironmentThemeColors = Schema.Record(
+  Schema.String.check(Schema.isPattern(/^[a-zA-Z][a-zA-Z0-9]{0,63}$/)),
+  TrimmedNonEmptyString.check(Schema.isMaxLength(64)),
+);
+
+export const EnvironmentThemeFile = Schema.Struct({
+  version: Schema.optional(Schema.Literal(1)),
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(48)),
+  appearance: Schema.Literals(["light", "dark"]),
+  canvas: Schema.optional(
+    Schema.String.check(Schema.isPattern(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)),
+  ),
+  accent: Schema.optional(
+    Schema.String.check(Schema.isPattern(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)),
+  ),
+  colors: Schema.optional(EnvironmentThemeColors),
+});
+export type EnvironmentThemeFile = typeof EnvironmentThemeFile.Type;
+
+export const EnvironmentTheme = Schema.Struct({
+  id: EnvironmentThemeId,
+  ...EnvironmentThemeFile.fields,
+});
+export type EnvironmentTheme = typeof EnvironmentTheme.Type;
+
 export const ServerProviderState = Schema.Literals(["ready", "warning", "error", "disabled"]);
 export type ServerProviderState = typeof ServerProviderState.Type;
 
@@ -483,6 +513,7 @@ export const ServerConfig = Schema.Struct({
   availableEditors: Schema.Array(EditorId),
   observability: ServerObservability,
   settings: ServerSettings,
+  environmentThemes: Schema.optional(Schema.Array(EnvironmentTheme)),
 });
 export type ServerConfig = typeof ServerConfig.Type;
 
@@ -516,6 +547,7 @@ export const ServerConfigUpdatedPayload = Schema.Struct({
   issues: ServerConfigIssues,
   providers: ServerProviders,
   settings: Schema.optional(ServerSettings),
+  environmentThemes: Schema.optional(Schema.Array(EnvironmentTheme)),
 });
 export type ServerConfigUpdatedPayload = typeof ServerConfigUpdatedPayload.Type;
 

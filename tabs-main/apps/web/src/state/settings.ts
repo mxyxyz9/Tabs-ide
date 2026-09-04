@@ -16,6 +16,7 @@ import { Atom } from "@tabs/client-runtime/state";
 import { useEffect } from "react";
 
 import { getLocalStorageItem, setLocalStorageItem } from "../hooks/useLocalStorage";
+import { setEnvironmentThemes } from "../hooks/useTheme";
 import { ensureNativeApi } from "../nativeApi";
 import { appAtomRegistry } from "./atomRegistry";
 
@@ -60,9 +61,11 @@ let refreshServerConfigPromise: Promise<ServerConfig | null> | null = null;
 
 export function setServerConfig(config: ServerConfig) {
   appAtomRegistry.set(serverConfigAtom, config);
+  setEnvironmentThemes(config.environmentThemes ?? []);
 }
 
 export function applyServerConfigUpdate(payload: ServerConfigUpdatedPayload) {
+  if (payload.environmentThemes) setEnvironmentThemes(payload.environmentThemes);
   appAtomRegistry.update(serverConfigAtom, (config) =>
     config === null
       ? config
@@ -70,6 +73,7 @@ export function applyServerConfigUpdate(payload: ServerConfigUpdatedPayload) {
           ...config,
           providers: payload.providers,
           ...(payload.settings ? { settings: payload.settings } : {}),
+          ...(payload.environmentThemes ? { environmentThemes: payload.environmentThemes } : {}),
         },
   );
 }
@@ -103,7 +107,11 @@ export function updateClientSettings(update: (current: ClientSettings) => Client
   hydrateClientSettings();
   appAtomRegistry.update(clientSettingsAtom, (current) => {
     const next = update(current);
-    if (next.aiProvider && next.aiProvider !== current.aiProvider && typeof window !== "undefined") {
+    if (
+      next.aiProvider &&
+      next.aiProvider !== current.aiProvider &&
+      typeof window !== "undefined"
+    ) {
       void window.desktopBridge?.setAiProvider?.(next.aiProvider);
     }
     try {

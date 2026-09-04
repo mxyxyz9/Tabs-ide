@@ -149,6 +149,7 @@ import * as DateTime from "effect/DateTime";
 import { verifyDpopRequestFields } from "./auth/dpop.ts";
 import { ServerSecretStore } from "./auth/ServerSecretStore.ts";
 import { BackgroundPolicy } from "./background/BackgroundPolicy.ts";
+import { EnvironmentThemeService } from "./environmentTheme.ts";
 import {
   readProcessDiagnostics,
   readProcessResourceHistory,
@@ -333,7 +334,8 @@ export type ServerRuntimeServices =
   | SessionStore
   | ServerSecretStore
   | Crypto.Crypto
-  | BackgroundPolicy;
+  | BackgroundPolicy
+  | EnvironmentThemeService;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -394,6 +396,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const serverSecretStore = yield* ServerSecretStore;
   const effectCrypto = yield* Crypto.Crypto;
   const backgroundPolicy = yield* BackgroundPolicy;
+  const environmentTheme = yield* EnvironmentThemeService;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -1002,6 +1005,17 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         issues: [],
         providers,
         settings,
+      });
+    }),
+  ).pipe(Effect.forkIn(subscriptionsScope));
+
+  yield* Stream.runForEach(environmentTheme.streamChanges, (environmentThemes) =>
+    Effect.gen(function* () {
+      const providers = yield* Ref.get(providersRef);
+      yield* pushBus.publishAll(WS_CHANNELS.serverConfigUpdated, {
+        issues: [],
+        providers,
+        environmentThemes,
       });
     }),
   ).pipe(Effect.forkIn(subscriptionsScope));
@@ -1943,6 +1957,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             otlpMetricsEnabled: false,
           },
           settings,
+          environmentThemes: yield* environmentTheme.current,
         };
       }
 

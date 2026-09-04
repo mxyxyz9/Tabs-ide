@@ -11,7 +11,8 @@ export type ThemeId =
   | "solarized-light"
   | "custom";
 
-export type ThemePreference = ThemeId | "system";
+export type EnvironmentThemePreference = `environment:${string}`;
+export type ThemePreference = ThemeId | "system" | EnvironmentThemePreference;
 
 export interface ThemeColors {
   background: string;
@@ -359,7 +360,7 @@ export const THEME_DEFINITIONS: Record<ThemeId, ThemeDefinition> = {
       },
     },
   },
-  "custom": {
+  custom: {
     id: "custom",
     name: "Custom",
     description: "User-defined custom colors and font choices",
@@ -464,16 +465,61 @@ export const RANDOM_STYLE_OPTIONS: { id: RandomStyleMode; label: string }[] = [
 ];
 
 const AESTHETIC_PREFIXES = [
-  "Tokyo", "Cyber", "Aesthetic", "Midnight", "Matcha", "Sakura", "Velvet",
-  "Obsidian", "Pixel", "Lunar", "Vibe", "Neon", "Ghost", "Solar", "Chai",
-  "Cosmic", "Electric", "Retro", "Emerald", "Twilight", "Solstice", "Oasis",
-  "Zenith", "Nebula", "Monaco", "Kyoto", "Mochi", "Indigo", "Lumina"
+  "Tokyo",
+  "Cyber",
+  "Aesthetic",
+  "Midnight",
+  "Matcha",
+  "Sakura",
+  "Velvet",
+  "Obsidian",
+  "Pixel",
+  "Lunar",
+  "Vibe",
+  "Neon",
+  "Ghost",
+  "Solar",
+  "Chai",
+  "Cosmic",
+  "Electric",
+  "Retro",
+  "Emerald",
+  "Twilight",
+  "Solstice",
+  "Oasis",
+  "Zenith",
+  "Nebula",
+  "Monaco",
+  "Kyoto",
+  "Mochi",
+  "Indigo",
+  "Lumina",
 ];
 
 const AESTHETIC_SUFFIXES = [
-  "Drift", "Haze", "Glow", "Pulse", "Check", "Bloom", "Latte", "Signal",
-  "Wave", "Dust", "Aura", "Flare", "Syntax", "Shift", "Echo", "Mirage",
-  "Vibes", "Mist", "Realm", "Matrix", "Chroma", "Radiance", "Spark"
+  "Drift",
+  "Haze",
+  "Glow",
+  "Pulse",
+  "Check",
+  "Bloom",
+  "Latte",
+  "Signal",
+  "Wave",
+  "Dust",
+  "Aura",
+  "Flare",
+  "Syntax",
+  "Shift",
+  "Echo",
+  "Mirage",
+  "Vibes",
+  "Mist",
+  "Realm",
+  "Matrix",
+  "Chroma",
+  "Radiance",
+  "Spark",
 ];
 
 export function generateAestheticThemeName(): string {
@@ -552,9 +598,10 @@ export function generateHarmonizedPalette(
     return baseVariant === "dark" ? isDarkBg : !isDarkBg;
   });
 
-  const selected = matched.length > 0
-    ? matched[Math.floor(Math.random() * matched.length)]!
-    : pool[Math.floor(Math.random() * pool.length)]!;
+  const selected =
+    matched.length > 0
+      ? matched[Math.floor(Math.random() * matched.length)]!
+      : pool[Math.floor(Math.random() * pool.length)]!;
 
   let fg = selected.fg;
   let bg = selected.bg;
@@ -705,7 +752,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "pre",
     serifText: "cision ",
     sansText2: "scale",
-        sansClass: "font-bold tracking-tighter lowercase",
+    sansClass: "font-bold tracking-tighter lowercase",
     serifClass: "italic font-normal normal-case",
   },
   {
@@ -718,7 +765,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "ab",
     serifText: "stract ",
     sansText2: "forms",
-        sansClass: "font-extrabold tracking-tighter lowercase",
+    sansClass: "font-extrabold tracking-tighter lowercase",
     serifClass: "italic font-normal normal-case",
   },
   {
@@ -731,7 +778,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "geo",
     serifText: "metric ",
     sansText2: "node",
-        sansClass: "font-bold tracking-tight lowercase",
+    sansClass: "font-bold tracking-tight lowercase",
     serifClass: "font-normal normal-case",
   },
   {
@@ -744,7 +791,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "syn",
     serifText: "thetic ",
     sansText2: "mind",
-        sansClass: "font-extrabold tracking-tighter lowercase",
+    sansClass: "font-extrabold tracking-tighter lowercase",
     serifClass: "italic font-light normal-case",
   },
   {
@@ -757,7 +804,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "liq",
     serifText: "uidity ",
     sansText2: "pool",
-        sansClass: "font-extrabold tracking-tighter lowercase",
+    sansClass: "font-extrabold tracking-tighter lowercase",
     serifClass: "italic font-medium normal-case",
   },
   {
@@ -770,7 +817,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "a",
     serifText: "sync ",
     sansText2: "ops",
-        sansClass: "font-black tracking-tighter lowercase",
+    sansClass: "font-black tracking-tighter lowercase",
     serifClass: "italic font-normal normal-case",
   },
   {
@@ -783,7 +830,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "ki",
     serifText: "netic ",
     sansText2: "type",
-        sansClass: "font-black tracking-tighter lowercase",
+    sansClass: "font-black tracking-tighter lowercase",
     serifClass: "italic font-medium normal-case",
   },
   {
@@ -796,7 +843,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "om",
     serifText: "ni ",
     sansText2: "base",
-        sansClass: "font-black tracking-tighter lowercase",
+    sansClass: "font-black tracking-tighter lowercase",
     serifClass: "italic font-normal normal-case",
   },
   {
@@ -809,7 +856,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "neu",
     serifText: "ral ",
     sansText2: "net",
-        sansClass: "font-extrabold tracking-tighter lowercase",
+    sansClass: "font-extrabold tracking-tighter lowercase",
     serifClass: "italic font-normal normal-case",
   },
   {
@@ -822,7 +869,7 @@ export const FONT_COMBOS: FontCombo[] = [
     sansText: "lu",
     serifText: "cid ",
     sansText2: "state",
-        sansClass: "font-black tracking-tighter lowercase",
+    sansClass: "font-black tracking-tighter lowercase",
     serifClass: "italic font-normal normal-case",
   },
 ];
@@ -834,7 +881,6 @@ export function getActiveFontCombo(fonts: FontPreferences): FontCombo {
   return match ?? FONT_COMBOS[0]!;
 }
 
-
 // Color utilities re-exported from @tabs/shared/themeDerivation above.
 
 /**
@@ -843,7 +889,10 @@ export function getActiveFontCombo(fonts: FontPreferences): FontCombo {
 export function hexToHsv(hex: string): { h: number; s: number; v: number } {
   let clean = hex.replace("#", "").trim();
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6 && clean.length !== 8) return { h: 220, s: 0.8, v: 0.8 };
 
@@ -877,15 +926,39 @@ export function hsvToHex(h: number, s: number, v: number): string {
   const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
   const m = v - c;
 
-  let r = 0, g = 0, b = 0;
-  if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
-  else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
-  else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
-  else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
-  else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
-  else { r = c; g = 0; b = x; }
+  let r = 0,
+    g = 0,
+    b = 0;
+  if (h >= 0 && h < 60) {
+    r = c;
+    g = x;
+    b = 0;
+  } else if (h >= 60 && h < 120) {
+    r = x;
+    g = c;
+    b = 0;
+  } else if (h >= 120 && h < 180) {
+    r = 0;
+    g = c;
+    b = x;
+  } else if (h >= 180 && h < 240) {
+    r = 0;
+    g = x;
+    b = c;
+  } else if (h >= 240 && h < 300) {
+    r = x;
+    g = 0;
+    b = c;
+  } else {
+    r = c;
+    g = 0;
+    b = x;
+  }
 
-  const toHex = (n: number) => Math.round((n + m) * 255).toString(16).padStart(2, "0");
+  const toHex = (n: number) =>
+    Math.round((n + m) * 255)
+      .toString(16)
+      .padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
@@ -895,7 +968,10 @@ export function hsvToHex(h: number, s: number, v: number): string {
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   let clean = hex.replace("#", "").trim();
   if (clean.length === 3) {
-    clean = clean.split("").map((c) => c + c).join("");
+    clean = clean
+      .split("")
+      .map((c) => c + c)
+      .join("");
   }
   if (clean.length !== 6 && clean.length !== 8) return { r: 99, g: 102, b: 241 };
 

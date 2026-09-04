@@ -42,6 +42,7 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
+import * as EnvironmentTheme from "./environmentTheme.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -151,9 +152,7 @@ export function makeServerRuntimeServicesLayer() {
     Layer.provideMerge(runtimeServicesLayer),
   );
 
-  const usageLayer = UsageServiceLive.pipe(
-    Layer.provide(FetchHttpClient.layer),
-  );
+  const usageLayer = UsageServiceLive.pipe(Layer.provide(FetchHttpClient.layer));
 
   // NodeServices (FileSystem/Path/ChildProcessSpawner) is provided once, at the
   // innermost level of the main composition, so the instance-registry drivers
@@ -170,14 +169,13 @@ export function makeServerRuntimeServicesLayer() {
     usageLayer,
     PreviewManager.layer,
     PreviewAutomationBroker.layer,
+    EnvironmentTheme.layer,
   );
 }
 
 /** Stable environment identity plus the persisted pairing/session authority used by remote clients. */
 export function makeRemoteAccessServicesLayer() {
-  const authLayer = EnvironmentAuth.layer.pipe(
-    Layer.provideMerge(ServerSecretStore.layer),
-  );
+  const authLayer = EnvironmentAuth.layer.pipe(Layer.provideMerge(ServerSecretStore.layer));
 
   return Layer.mergeAll(
     ServerEnvironment.layer,

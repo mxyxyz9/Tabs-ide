@@ -8,10 +8,10 @@ import {
   getOptimalPrimaryForeground,
   type CustomThemeConfig,
   type FontPreferences,
-  type ThemeDefinition,
   type ThemeId,
   type ThemePreference,
 } from "../lib/themes";
+import type { EnvironmentTheme } from "@tabs/contracts";
 
 type ThemeSnapshot = {
   theme: ThemePreference;
@@ -26,6 +26,14 @@ const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 let listeners: Array<() => void> = [];
 let lastSnapshot: ThemeSnapshot | null = null;
 let lastDesktopTheme: string | null = null;
+let environmentThemes: ReadonlyArray<EnvironmentTheme> = [];
+
+export function setEnvironmentThemes(next: ReadonlyArray<EnvironmentTheme>) {
+  if (JSON.stringify(environmentThemes) === JSON.stringify(next)) return;
+  environmentThemes = next;
+  if (getStoredPreference().startsWith("environment:")) applyTheme(getStoredPreference(), true);
+  emitChange();
+}
 
 function emitChange() {
   for (const listener of listeners) listener();
@@ -101,16 +109,20 @@ function getStoredPreference(): ThemePreference {
   if (raw === "light") return "tabs-light";
   if (raw === "dark") return "tabs-dark";
   if (raw === "custom" || raw in THEME_DEFINITIONS) return raw as ThemeId;
+  if (raw.startsWith("environment:") && raw.length > "environment:".length) {
+    return raw as ThemePreference;
+  }
   return "system";
 }
 
-export function resolveActiveThemeId(preference: ThemePreference): ThemeId {
+export function resolveActiveThemeId(preference: ThemePreference): ThemePreference {
   if (preference === "system") {
     return getSystemDark() ? "tabs-dark" : "tabs-light";
   }
   if (preference === "custom" || preference in THEME_DEFINITIONS) {
     return preference;
   }
+  if (preference.startsWith("environment:")) return preference;
   return DEFAULT_THEME_ID;
 }
 
@@ -135,10 +147,28 @@ function applyTheme(
   const activeThemeId = resolveActiveThemeId(preference);
 
   let config: CustomThemeConfig;
-  if (activeThemeId === "custom") {
+  if (activeThemeId.startsWith("environment:")) {
+    const published = environmentThemes.find((item) => `environment:${item.id}` === activeThemeId);
+    const fallback =
+      published?.appearance === "light"
+        ? THEME_DEFINITIONS["tabs-light"]
+        : THEME_DEFINITIONS["tabs-dark"];
+    const colors = published?.colors ?? {};
+    config = {
+      baseVariant: published?.appearance ?? fallback.baseVariant,
+      colors: {
+        background: colors.background ?? published?.canvas ?? fallback.colors.background,
+        foreground: colors.foreground ?? fallback.colors.foreground,
+        card: colors.card ?? colors.cardBackground ?? fallback.colors.card,
+        border: colors.border ?? fallback.colors.border,
+        primary: colors.primary ?? published?.accent ?? fallback.colors.primary,
+      },
+      fonts,
+    };
+  } else if (activeThemeId === "custom") {
     config = customConfigOverride ?? getStoredCustomThemeConfig();
   } else {
-    const def = THEME_DEFINITIONS[activeThemeId] ?? THEME_DEFINITIONS[DEFAULT_THEME_ID];
+    const def = THEME_DEFINITIONS[activeThemeId as ThemeId] ?? THEME_DEFINITIONS[DEFAULT_THEME_ID];
     config = {
       baseVariant: def.baseVariant,
       colors: {
@@ -252,7 +282,7 @@ function applyTheme(
   syncDesktopTheme(
     activeThemeId,
     preference,
-    activeThemeId === "custom" ? config : undefined,
+    activeThemeId === "custom" || activeThemeId.startsWith("environment:") ? config : undefined,
     fonts,
   );
 
@@ -290,7 +320,7 @@ function syncDesktopTheme(
 
   const fonts = fontPreferences ?? getStoredFontPreferences();
   const payload =
-    themeId === "custom" && customConfig
+    (themeId === "custom" || themeId.startsWith("environment:")) && customConfig
       ? { themeId, preference, customConfig, fontPreferences: fonts }
       : { themeId, preference, fontPreferences: fonts };
   lastDesktopTheme = themeId;
@@ -361,9 +391,13 @@ export function useTheme() {
 
   const activeThemeId = resolveActiveThemeId(theme);
   const customConfig = getStoredCustomThemeConfig();
-  const themeDef = THEME_DEFINITIONS[activeThemeId];
-  const resolvedTheme: "light" | "dark" =
-    activeThemeId === "custom"
+  const themeDef = activeThemeId.startsWith("environment:")
+    ? undefined
+    : THEME_DEFINITIONS[activeThemeId as ThemeId];
+  const resolvedTheme: "light" | "dark" = activeThemeId.startsWith("environment:")
+    ? (environmentThemes.find((item) => `environment:${item.id}` === activeThemeId)?.appearance ??
+      "dark")
+    : activeThemeId === "custom"
       ? customConfig.baseVariant
       : (themeDef?.baseVariant ?? (getSystemDark() ? "dark" : "light"));
 
