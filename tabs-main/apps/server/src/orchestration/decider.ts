@@ -454,11 +454,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.meta.update": {
-      yield* requireThread({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      const branch =
+        command.branch !== undefined &&
+        command.expectedBranch !== undefined &&
+        thread.branch !== command.expectedBranch
+          ? thread.branch
+          : command.branch;
       const occurredAt = nowIso();
       return {
         ...withEventBase({
@@ -471,11 +477,24 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           ...(command.title !== undefined ? { title: command.title } : {}),
+          ...(command.regenerateTitle === true
+            ? {
+                regenerateTitle: true as const,
+                previousTitle: thread.title,
+                titleRegeneration: { requestId: command.commandId, startedAt: occurredAt },
+              }
+            : {}),
+          ...(command.title !== undefined && thread.titleRegeneration != null
+            ? { titleRegeneration: null }
+            : {}),
           ...(command.modelSelection !== undefined
             ? { modelSelection: command.modelSelection }
             : {}),
-          ...(command.branch !== undefined ? { branch: command.branch } : {}),
+          ...(branch !== undefined ? { branch } : {}),
           ...(command.worktreePath !== undefined ? { worktreePath: command.worktreePath } : {}),
+          ...(command.linkedPullRequest !== undefined
+            ? { linkedPullRequest: command.linkedPullRequest }
+            : {}),
           updatedAt: occurredAt,
         },
       };

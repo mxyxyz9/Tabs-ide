@@ -13,6 +13,8 @@ import type {
   CheckpointRef,
   ProviderInteractionMode,
   RuntimeMode,
+  ThreadLinkedPullRequest,
+  ThreadTitleRegeneration,
 } from "@tabs/contracts";
 
 export type SessionPhase = "disconnected" | "connecting" | "ready" | "running";
@@ -112,6 +114,8 @@ export interface Thread {
   snoozedAt?: string | null;
   pinnedAt?: string | null;
   pinOrderKey?: string | null;
+  linkedPullRequest?: ThreadLinkedPullRequest | null;
+  titleRegeneration?: ThreadTitleRegeneration | null;
   branch: string | null;
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];

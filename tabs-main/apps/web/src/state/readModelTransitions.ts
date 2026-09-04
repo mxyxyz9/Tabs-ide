@@ -315,6 +315,8 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
         snoozedAt: thread.snoozedAt ?? null,
         pinnedAt: thread.pinnedAt ?? null,
         pinOrderKey: thread.pinOrderKey ?? null,
+        linkedPullRequest: thread.linkedPullRequest ?? null,
+        titleRegeneration: thread.titleRegeneration ?? null,
         branch: thread.branch,
         worktreePath: thread.worktreePath,
         turnDiffSummaries: thread.checkpoints.map((checkpoint) => ({
