@@ -239,6 +239,11 @@ export const issueActiveMcpCredential = (
 export const touchActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.touch(threadId) : Effect.void;
 
+export const resolveActiveMcpCredential = (
+  token: string,
+): Effect.Effect<McpInvocationContext.McpInvocationScope | undefined> =>
+  activeMcpSessionRegistry ? activeMcpSessionRegistry.resolve(token) : Effect.succeed(undefined);
+
 export const revokeActiveMcpThread = (threadId: ThreadId): Effect.Effect<void> =>
   activeMcpSessionRegistry ? activeMcpSessionRegistry.revokeThread(threadId) : Effect.void;
 

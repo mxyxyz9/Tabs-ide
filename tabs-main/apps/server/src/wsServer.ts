@@ -137,6 +137,8 @@ import { PreviewManager } from "./preview/Manager.ts";
 import { ServerEnvironment } from "./environment/ServerEnvironment.ts";
 import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
 import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
+import { handleMcpHttpRequest } from "./mcp/McpHttpServer.ts";
+import { resolveActiveMcpCredential } from "./mcp/McpSessionRegistry.ts";
 import { SessionStore } from "./auth/SessionStore.ts";
 import * as DateTime from "effect/DateTime";
 import { verifyDpopRequestFields } from "./auth/dpop.ts";
@@ -395,10 +397,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const providersRef = yield* Ref.make(yield* providerRegistry.getProviders);
 
   const clients = yield* Ref.make(new Set<WebSocket>());
-  const previewAutomationFibers = new Map<
-    WebSocket,
-    Set<Fiber.Fiber<void, unknown>>
-  >();
+  const previewAutomationFibers = new Map<WebSocket, Set<Fiber.Fiber<void, unknown>>>();
   const logger = createLogger("ws");
   const readiness = yield* makeServerReadiness;
 
@@ -606,6 +605,40 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           return;
         }
 
+        if (url.pathname === "/mcp") {
+          const authorization = req.headers.authorization;
+          const token = authorization?.startsWith("Bearer ")
+            ? authorization.slice("Bearer ".length).trim()
+            : "";
+          const scope = token.length > 0 ? yield* resolveActiveMcpCredential(token) : undefined;
+          if (!scope) {
+            respond(
+              401,
+              {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": "no-store",
+                "WWW-Authenticate": "Bearer",
+              },
+              JSON.stringify({
+                jsonrpc: "2.0",
+                error: { code: -32001, message: "Invalid or expired MCP credential." },
+                id: null,
+              }),
+            );
+            return;
+          }
+          yield* Effect.tryPromise(() =>
+            handleMcpHttpRequest({
+              request: req,
+              response: res,
+              scope,
+              broker: previewAutomationBroker,
+              runPromise,
+            }),
+          );
+          return;
+        }
+
         if (req.method === "POST" && url.pathname === "/oauth/token") {
           const rawBody = yield* Effect.tryPromise(() => readHttpRequestBody(req));
           const payload = new URLSearchParams(rawBody);
@@ -622,20 +655,25 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             respondJson(400, { code: "invalid_request", reason: "invalid_scope", traceId: "http" });
             return;
           }
-          const proofVerification = typeof req.headers.dpop === "string"
-            ? yield* verifyDpopRequestFields({
-                proof: req.headers.dpop,
-                method: req.method,
-                url: requestUrl,
-              }).pipe(
-                Effect.provideService(ServerSecretStore, serverSecretStore),
-                Effect.provideService(Crypto.Crypto, effectCrypto),
-                Effect.exit,
-              )
-            : Exit.succeed(undefined);
+          const proofVerification =
+            typeof req.headers.dpop === "string"
+              ? yield* verifyDpopRequestFields({
+                  proof: req.headers.dpop,
+                  method: req.method,
+                  url: requestUrl,
+                }).pipe(
+                  Effect.provideService(ServerSecretStore, serverSecretStore),
+                  Effect.provideService(Crypto.Crypto, effectCrypto),
+                  Effect.exit,
+                )
+              : Exit.succeed(undefined);
           if (Exit.isFailure(proofVerification)) {
             res.setHeader("WWW-Authenticate", "DPoP");
-            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "invalid_credential",
+              traceId: "http",
+            });
             return;
           }
           const proofKeyThumbprint = proofVerification.value;
@@ -644,10 +682,15 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
               credential,
               requestedScopes as typeof AuthStandardClientScopes | undefined,
               {
-                deviceType: (payload.get("client_device_type") as "desktop" | "mobile" | "tablet" | "bot" | "unknown" | null) ?? "unknown",
-                ...(payload.get("client_label")
-                  ? { label: payload.get("client_label")! }
-                  : {}),
+                deviceType:
+                  (payload.get("client_device_type") as
+                    | "desktop"
+                    | "mobile"
+                    | "tablet"
+                    | "bot"
+                    | "unknown"
+                    | null) ?? "unknown",
+                ...(payload.get("client_label") ? { label: payload.get("client_label")! } : {}),
                 ...(payload.get("client_os") ? { os: payload.get("client_os")! } : {}),
                 ...(req.headers["user-agent"] ? { userAgent: req.headers["user-agent"] } : {}),
                 ...(req.socket.remoteAddress ? { ipAddress: req.socket.remoteAddress } : {}),
@@ -656,30 +699,43 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             )
             .pipe(Effect.exit);
           if (Exit.isFailure(issued)) {
-            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "invalid_credential",
+              traceId: "http",
+            });
             return;
           }
           respondJson(200, issued.value);
           return;
         }
 
-        if (
-          req.method === "POST" &&
-          url.pathname === "/api/auth/websocket-ticket"
-        ) {
+        if (req.method === "POST" && url.pathname === "/api/auth/websocket-ticket") {
           const authorization = req.headers.authorization;
           if (!authorization) {
-            respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "missing_credential",
+              traceId: "http",
+            });
             return;
           }
           const verified = yield* authenticateAccessToken(authorization).pipe(Effect.exit);
           if (Exit.isFailure(verified)) {
             if (authorization.startsWith("DPoP ")) res.setHeader("WWW-Authenticate", "DPoP");
-            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "invalid_credential",
+              traceId: "http",
+            });
             return;
           }
           if (verified.value === null) {
-            respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "missing_credential",
+              traceId: "http",
+            });
             return;
           }
           const ticket = yield* sessionStore.issueWebSocketToken(verified.value.sessionId);
@@ -700,11 +756,19 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           const verified = yield* authenticateAccessToken(authorization).pipe(Effect.exit);
           if (Exit.isFailure(verified)) {
             if (authorization.startsWith("DPoP ")) res.setHeader("WWW-Authenticate", "DPoP");
-            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "invalid_credential",
+              traceId: "http",
+            });
             return;
           }
           if (verified.value === null) {
-            respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
+            respondJson(401, {
+              code: "auth_invalid",
+              reason: "missing_credential",
+              traceId: "http",
+            });
             return;
           }
           respondJson(200, {
@@ -2117,10 +2181,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.usageReadSummary: {
         const body = stripRequestTag(request.body) as UsageSummaryInput;
         return yield* usageService.readSummary(body).pipe(
-          Effect.catchCause((cause) =>
-            new RouteRequestError({
-              message: `Usage summary read failed: ${Cause.squash(cause)}`,
-            }),
+          Effect.catchCause(
+            (cause) =>
+              new RouteRequestError({
+                message: `Usage summary read failed: ${Cause.squash(cause)}`,
+              }),
           ),
         );
       }
@@ -2223,13 +2288,15 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
       return;
     }
-    void runPromise(sessionStore.verifyWebSocketToken(ticket).pipe(Effect.exit)).then((verified) => {
-      if (Exit.isFailure(verified)) {
-        rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
-        return;
-      }
-      completeUpgrade();
-    });
+    void runPromise(sessionStore.verifyWebSocketToken(ticket).pipe(Effect.exit)).then(
+      (verified) => {
+        if (Exit.isFailure(verified)) {
+          rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
+          return;
+        }
+        completeUpgrade();
+      },
+    );
   });
 
   wss.on("connection", (ws) => {
