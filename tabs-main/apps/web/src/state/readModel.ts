@@ -59,41 +59,66 @@ export function markThreadUnreadInAtoms(threadId: ThreadId, environmentId?: Envi
   );
 }
 
-export function markThreadVisitedInAtoms(threadId: ThreadId, visitedAt?: string) {
+export function markThreadVisitedInAtoms(
+  threadId: ThreadId,
+  visitedAt?: string,
+  environmentId?: EnvironmentId,
+) {
   appAtomRegistry.update(readModelStateAtom, (state) =>
-    markThreadVisited(state, threadId, visitedAt),
+    markThreadVisited(state, threadId, visitedAt, environmentId),
   );
 }
 
-export function setThreadErrorInAtoms(threadId: ThreadId, error: string | null) {
-  appAtomRegistry.update(readModelStateAtom, (state) => setError(state, threadId, error));
+export function setThreadErrorInAtoms(
+  threadId: ThreadId,
+  error: string | null,
+  environmentId?: EnvironmentId,
+) {
+  appAtomRegistry.update(readModelStateAtom, (state) =>
+    setError(state, threadId, error, environmentId),
+  );
 }
 
 export function setThreadBranchInAtoms(
   threadId: ThreadId,
   branch: string | null,
   worktreePath: string | null,
+  environmentId?: EnvironmentId,
 ) {
   appAtomRegistry.update(readModelStateAtom, (state) =>
-    setThreadBranch(state, threadId, branch, worktreePath),
+    setThreadBranch(state, threadId, branch, worktreePath, environmentId),
   );
 }
 
-export function setProjectExpandedInAtoms(projectId: Project["id"], expanded: boolean) {
+export function setProjectExpandedInAtoms(
+  projectId: Project["id"],
+  expanded: boolean,
+  environmentId?: EnvironmentId,
+) {
   appAtomRegistry.update(readModelStateAtom, (state) =>
-    setProjectExpanded(state, projectId, expanded),
+    setProjectExpanded(state, projectId, expanded, environmentId),
   );
 }
 
-export function toggleProjectInAtoms(projectId: Project["id"]) {
-  appAtomRegistry.update(readModelStateAtom, (state) => toggleProject(state, projectId));
+export function toggleProjectInAtoms(projectId: Project["id"], environmentId?: EnvironmentId) {
+  appAtomRegistry.update(readModelStateAtom, (state) =>
+    toggleProject(state, projectId, environmentId),
+  );
 }
 
 export function reorderProjectsInAtoms(
   draggedProjectId: Project["id"],
   targetProjectId: Project["id"],
+  draggedEnvironmentId?: EnvironmentId,
+  targetEnvironmentId?: EnvironmentId,
 ) {
   appAtomRegistry.update(readModelStateAtom, (state) =>
-    reorderProjects(state, draggedProjectId, targetProjectId),
+    reorderProjects(
+      state,
+      draggedProjectId,
+      targetProjectId,
+      draggedEnvironmentId,
+      targetEnvironmentId,
+    ),
   );
 }

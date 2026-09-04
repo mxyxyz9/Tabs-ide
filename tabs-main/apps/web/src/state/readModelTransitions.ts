@@ -16,8 +16,9 @@ export interface AppState {
   threadsHydrated: boolean;
 }
 
-const PERSISTED_STATE_KEY = "tabs:renderer-state:v8";
+const PERSISTED_STATE_KEY = "tabs:renderer-state:v9";
 const LEGACY_PERSISTED_STATE_KEYS = [
+  "tabs:renderer-state:v8",
   "tabs:renderer-state:v7",
   "tabs:renderer-state:v6",
   "tabs:renderer-state:v5",
@@ -34,30 +35,38 @@ const initialState: AppState = {
   threads: [],
   threadsHydrated: false,
 };
-const persistedExpandedProjectCwds = new Set<string>();
-const persistedProjectOrderCwds: string[] = [];
+const persistedExpandedProjectKeys = new Set<string>();
+const persistedProjectOrderKeys: string[] = [];
+
+function persistedProjectKey(environmentId: EnvironmentId | undefined, cwd: string): string {
+  return JSON.stringify([environmentId ?? "legacy", cwd]);
+}
 
 // ── Persist helpers ──────────────────────────────────────────────────
 
 export function readPersistedAppState(): AppState {
   if (typeof window === "undefined") return initialState;
   try {
-    const raw = window.localStorage.getItem(PERSISTED_STATE_KEY);
+    const raw =
+      window.localStorage.getItem(PERSISTED_STATE_KEY) ??
+      window.localStorage.getItem("tabs:renderer-state:v8");
     if (!raw) return initialState;
     const parsed = JSON.parse(raw) as {
       expandedProjectCwds?: string[];
       projectOrderCwds?: string[];
+      expandedProjectKeys?: string[];
+      projectOrderKeys?: string[];
     };
-    persistedExpandedProjectCwds.clear();
-    persistedProjectOrderCwds.length = 0;
-    for (const cwd of parsed.expandedProjectCwds ?? []) {
-      if (typeof cwd === "string" && cwd.length > 0) {
-        persistedExpandedProjectCwds.add(cwd);
+    persistedExpandedProjectKeys.clear();
+    persistedProjectOrderKeys.length = 0;
+    for (const key of parsed.expandedProjectKeys ?? parsed.expandedProjectCwds ?? []) {
+      if (typeof key === "string" && key.length > 0) {
+        persistedExpandedProjectKeys.add(key);
       }
     }
-    for (const cwd of parsed.projectOrderCwds ?? []) {
-      if (typeof cwd === "string" && cwd.length > 0 && !persistedProjectOrderCwds.includes(cwd)) {
-        persistedProjectOrderCwds.push(cwd);
+    for (const key of parsed.projectOrderKeys ?? parsed.projectOrderCwds ?? []) {
+      if (typeof key === "string" && key.length > 0 && !persistedProjectOrderKeys.includes(key)) {
+        persistedProjectOrderKeys.push(key);
       }
     }
     return { ...initialState };
@@ -74,10 +83,12 @@ export function persistAppState(state: AppState): void {
     window.localStorage.setItem(
       PERSISTED_STATE_KEY,
       JSON.stringify({
-        expandedProjectCwds: state.projects
+        expandedProjectKeys: state.projects
           .filter((project) => project.expanded)
-          .map((project) => project.cwd),
-        projectOrderCwds: state.projects.map((project) => project.cwd),
+          .map((project) => persistedProjectKey(project.environmentId, project.cwd)),
+        projectOrderKeys: state.projects.map((project) =>
+          persistedProjectKey(project.environmentId, project.cwd),
+        ),
       }),
     );
     if (!legacyKeysCleanedUp) {
@@ -122,8 +133,8 @@ function mapProjectsFromReadModel(
   const previousOrderByCwd = new Map(
     previous.map((project, index) => [project.cwd, index] as const),
   );
-  const persistedOrderByCwd = new Map(
-    persistedProjectOrderCwds.map((cwd, index) => [cwd, index] as const),
+  const persistedOrderByKey = new Map(
+    persistedProjectOrderKeys.map((key, index) => [key, index] as const),
   );
   const usePersistedOrder = previous.length === 0;
 
@@ -147,8 +158,10 @@ function mapProjectsFromReadModel(
           : null),
       expanded:
         existing?.expanded ??
-        (persistedExpandedProjectCwds.size > 0
-          ? persistedExpandedProjectCwds.has(project.workspaceRoot)
+        (persistedExpandedProjectKeys.size > 0
+          ? persistedExpandedProjectKeys.has(
+              persistedProjectKey(environmentId, project.workspaceRoot),
+            ) || persistedExpandedProjectKeys.has(project.workspaceRoot)
           : true),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
@@ -160,11 +173,14 @@ function mapProjectsFromReadModel(
     .map((project, incomingIndex) => {
       const previousIndex =
         previousOrderById.get(project.id) ?? previousOrderByCwd.get(project.cwd);
-      const persistedIndex = usePersistedOrder ? persistedOrderByCwd.get(project.cwd) : undefined;
+      const persistedIndex = usePersistedOrder
+        ? (persistedOrderByKey.get(persistedProjectKey(environmentId, project.cwd)) ??
+          persistedOrderByKey.get(project.cwd))
+        : undefined;
       const orderIndex =
         previousIndex ??
         persistedIndex ??
-        (usePersistedOrder ? persistedProjectOrderCwds.length : previous.length) + incomingIndex;
+        (usePersistedOrder ? persistedProjectOrderKeys.length : previous.length) + incomingIndex;
       return { project, incomingIndex, orderIndex };
     })
     .toSorted((a, b) => {
@@ -417,10 +433,18 @@ export function markThreadUnread(
   return threads === state.threads ? state : { ...state, threads };
 }
 
-export function toggleProject(state: AppState, projectId: Project["id"]): AppState {
+export function toggleProject(
+  state: AppState,
+  projectId: Project["id"],
+  environmentId?: EnvironmentId,
+): AppState {
   return {
     ...state,
-    projects: state.projects.map((p) => (p.id === projectId ? { ...p, expanded: !p.expanded } : p)),
+    projects: state.projects.map((p) =>
+      p.id === projectId && (environmentId === undefined || p.environmentId === environmentId)
+        ? { ...p, expanded: !p.expanded }
+        : p,
+    ),
   };
 }
 
@@ -428,10 +452,16 @@ export function setProjectExpanded(
   state: AppState,
   projectId: Project["id"],
   expanded: boolean,
+  environmentId?: EnvironmentId,
 ): AppState {
   let changed = false;
   const projects = state.projects.map((p) => {
-    if (p.id !== projectId || p.expanded === expanded) return p;
+    if (
+      p.id !== projectId ||
+      (environmentId !== undefined && p.environmentId !== environmentId) ||
+      p.expanded === expanded
+    )
+      return p;
     changed = true;
     return { ...p, expanded };
   });
@@ -442,10 +472,24 @@ export function reorderProjects(
   state: AppState,
   draggedProjectId: Project["id"],
   targetProjectId: Project["id"],
+  draggedEnvironmentId?: EnvironmentId,
+  targetEnvironmentId?: EnvironmentId,
 ): AppState {
-  if (draggedProjectId === targetProjectId) return state;
-  const draggedIndex = state.projects.findIndex((project) => project.id === draggedProjectId);
-  const targetIndex = state.projects.findIndex((project) => project.id === targetProjectId);
+  if (
+    draggedProjectId === targetProjectId &&
+    (draggedEnvironmentId === undefined || draggedEnvironmentId === targetEnvironmentId)
+  )
+    return state;
+  const draggedIndex = state.projects.findIndex(
+    (project) =>
+      project.id === draggedProjectId &&
+      (draggedEnvironmentId === undefined || project.environmentId === draggedEnvironmentId),
+  );
+  const targetIndex = state.projects.findIndex(
+    (project) =>
+      project.id === targetProjectId &&
+      (targetEnvironmentId === undefined || project.environmentId === targetEnvironmentId),
+  );
   if (draggedIndex < 0 || targetIndex < 0) return state;
   const projects = [...state.projects];
   const [draggedProject] = projects.splice(draggedIndex, 1);
@@ -454,11 +498,21 @@ export function reorderProjects(
   return { ...state, projects };
 }
 
-export function setError(state: AppState, threadId: ThreadId, error: string | null): AppState {
-  const threads = updateThread(state.threads, threadId, (t) => {
-    if (t.error === error) return t;
-    return { ...t, error };
-  });
+export function setError(
+  state: AppState,
+  threadId: ThreadId,
+  error: string | null,
+  environmentId?: EnvironmentId,
+): AppState {
+  const threads = updateThread(
+    state.threads,
+    threadId,
+    (t) => {
+      if (t.error === error) return t;
+      return { ...t, error };
+    },
+    environmentId,
+  );
   return threads === state.threads ? state : { ...state, threads };
 }
 
@@ -467,16 +521,22 @@ export function setThreadBranch(
   threadId: ThreadId,
   branch: string | null,
   worktreePath: string | null,
+  environmentId?: EnvironmentId,
 ): AppState {
-  const threads = updateThread(state.threads, threadId, (t) => {
-    if (t.branch === branch && t.worktreePath === worktreePath) return t;
-    const cwdChanged = t.worktreePath !== worktreePath;
-    return {
-      ...t,
-      branch,
-      worktreePath,
-      ...(cwdChanged ? { session: null } : {}),
-    };
-  });
+  const threads = updateThread(
+    state.threads,
+    threadId,
+    (t) => {
+      if (t.branch === branch && t.worktreePath === worktreePath) return t;
+      const cwdChanged = t.worktreePath !== worktreePath;
+      return {
+        ...t,
+        branch,
+        worktreePath,
+        ...(cwdChanged ? { session: null } : {}),
+      };
+    },
+    environmentId,
+  );
   return threads === state.threads ? state : { ...state, threads };
 }

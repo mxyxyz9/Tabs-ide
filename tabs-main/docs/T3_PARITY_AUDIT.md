@@ -75,6 +75,8 @@ an adapter over that engine.
 ## Remaining non-mobile systems
 
 - [ ] Multi-environment renderer state and environment-scoped queries/mutations.
+- [x] Isolate same-ID projects and threads across renderer read-model mutations, drag identities,
+      agent/server/testing/browser UI state, proposed-plan lookup, and persisted sidebar state.
 - [ ] Project filesystem/workspace services and environment-aware file operations.
 - [x] Provider-scoped MCP credential issuance, liveness refresh, resolution, and revocation.
 - [x] HTTP MCP transport lifecycle, provider injection, discovery, and complete preview tool

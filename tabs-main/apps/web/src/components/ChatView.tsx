@@ -40,7 +40,7 @@ import {
   type ReactNode,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useProjectAgentsState } from "~/state/scopedStateStore";
+import { projectUiStateKey, useProjectAgentsState } from "~/state/scopedStateStore";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { gitBranchesQueryOptions, gitCreateWorktreeMutationOptions } from "~/lib/gitReactQuery";
@@ -464,11 +464,19 @@ export default function ChatView({
     ApprovalRequestId[]
   >([]);
   const activeProjectId =
-    threads.find((t) => t.id === threadId)?.projectId ??
+    threads.find(
+      (candidate) =>
+        candidate.id === threadId &&
+        (environmentId === undefined || candidate.environmentId === environmentId),
+    )?.projectId ??
     draftThread?.projectId ??
-    projects[0]?.id ??
+    projects.find(
+      (candidate) => environmentId === undefined || candidate.environmentId === environmentId,
+    )?.id ??
     "";
-  const [agentsState, setAgentsState] = useProjectAgentsState(activeProjectId);
+  const [agentsState, setAgentsState] = useProjectAgentsState(
+    projectUiStateKey(environmentId, activeProjectId),
+  );
   const pendingUserInputAnswersByRequestId =
     (agentsState.pendingUserInputAnswersByRequestId as Record<
       string,
@@ -784,13 +792,14 @@ export default function ChatView({
     const lastVisitedAt = activeThread.lastVisitedAt ? Date.parse(activeThread.lastVisitedAt) : NaN;
     if (!Number.isNaN(lastVisitedAt) && lastVisitedAt >= turnCompletedAt) return;
 
-    markThreadVisited(activeThread.id);
+    markThreadVisited(activeThread.id, undefined, environmentId);
   }, [
     activeThread?.id,
     activeThread?.lastVisitedAt,
     activeLatestTurn?.completedAt,
     latestTurnSettled,
     markThreadVisited,
+    environmentId,
   ]);
 
   const sessionProvider = activeThread?.session?.provider ?? null;
@@ -956,8 +965,9 @@ export default function ChatView({
         latestTurn: activeLatestTurn,
         latestTurnSettled,
         threadId: activeThread?.id ?? null,
+        ...(environmentId ? { environmentId } : {}),
       }),
-    [activeLatestTurn, activeThread?.id, latestTurnSettled, threads],
+    [activeLatestTurn, activeThread?.id, environmentId, latestTurnSettled, threads],
   );
   const activePlan = useMemo(
     () => deriveActivePlanState(threadActivities, activeLatestTurn?.turnId ?? undefined),
@@ -1448,8 +1458,14 @@ export default function ChatView({
   const setThreadError = useCallback(
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
-      if (threads.some((thread) => thread.id === targetThreadId)) {
-        setStoreThreadError(targetThreadId, error);
+      if (
+        threads.some(
+          (thread) =>
+            thread.id === targetThreadId &&
+            (environmentId === undefined || thread.environmentId === environmentId),
+        )
+      ) {
+        setStoreThreadError(targetThreadId, error, environmentId);
         return;
       }
       setLocalDraftErrorsByThreadId((existing) => {
@@ -1462,7 +1478,7 @@ export default function ChatView({
         };
       });
     },
-    [setStoreThreadError, threads],
+    [environmentId, setStoreThreadError, threads],
   );
 
   const focusComposer = useCallback(() => {
@@ -2795,6 +2811,7 @@ export default function ChatView({
       setStoreThreadError(
         threadIdForSend,
         "Select a base branch before sending in New worktree mode.",
+        environmentId,
       );
       return;
     }
@@ -2899,7 +2916,12 @@ export default function ChatView({
           });
           // Keep local thread state in sync immediately so terminal drawer opens
           // with the worktree cwd/env instead of briefly using the project root.
-          setStoreThreadBranch(threadIdForSend, result.worktree.branch, result.worktree.path);
+          setStoreThreadBranch(
+            threadIdForSend,
+            result.worktree.branch,
+            result.worktree.path,
+            environmentId,
+          );
         }
       }
 
@@ -3085,11 +3107,12 @@ export default function ChatView({
           setStoreThreadError(
             activeThreadId,
             err instanceof Error ? err.message : "Failed to submit approval decision.",
+            environmentId,
           );
         });
       setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
-    [activeThreadId, setStoreThreadError, threadApi],
+    [activeThreadId, environmentId, setStoreThreadError, threadApi],
   );
 
   const onRespondToUserInput = useCallback(
@@ -3113,11 +3136,12 @@ export default function ChatView({
           setStoreThreadError(
             activeThreadId,
             err instanceof Error ? err.message : "Failed to submit user input.",
+            environmentId,
           );
         });
       setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
-    [activeThreadId, setStoreThreadError, threadApi],
+    [activeThreadId, environmentId, setStoreThreadError, threadApi],
   );
 
   const setActivePendingUserInputQuestionIndex = useCallback(
@@ -4493,6 +4517,7 @@ export default function ChatView({
   const branchToolbar = isGitRepo ? (
     <BranchToolbar
       threadId={activeThread.id}
+      {...(environmentId ? { environmentId } : {})}
       onEnvModeChange={onEnvModeChange}
       envLocked={envLocked}
       onComposerFocusRequest={scheduleComposerFocus}

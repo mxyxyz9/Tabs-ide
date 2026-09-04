@@ -82,6 +82,7 @@ import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { environmentApi } from "../connection/environmentApiRegistry";
 import { composerDraftActions } from "../state/composerDrafts";
+import { projectUiStateKey } from "../state/scopedStateStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { selectThreadTerminalState } from "../state/terminalTransitions";
 import { terminalStateAtom, terminalActions } from "../state/terminal";
@@ -353,11 +354,11 @@ function ProjectSortMenu({
 }
 
 function SortableProjectItem({
-  projectId,
+  projectKey,
   disabled = false,
   children,
 }: {
-  projectId: ProjectId;
+  projectKey: string;
   disabled?: boolean;
   children: (handleProps: SortableProjectHandleProps) => React.ReactNode;
 }) {
@@ -370,7 +371,7 @@ function SortableProjectItem({
     transition,
     isDragging,
     isOver,
-  } = useSortable({ id: projectId, disabled });
+  } = useSortable({ id: projectKey, disabled });
   return (
     <li
       ref={setNodeRef}
@@ -1253,10 +1254,19 @@ export default function Sidebar() {
       dragInProgressRef.current = false;
       const { active, over } = event;
       if (!over || active.id === over.id) return;
-      const activeProject = projects.find((project) => project.id === active.id);
-      const overProject = projects.find((project) => project.id === over.id);
+      const activeProject = projects.find(
+        (project) => projectUiStateKey(project.environmentId, project.id) === active.id,
+      );
+      const overProject = projects.find(
+        (project) => projectUiStateKey(project.environmentId, project.id) === over.id,
+      );
       if (!activeProject || !overProject) return;
-      reorderProjects(activeProject.id, overProject.id);
+      reorderProjects(
+        activeProject.id,
+        overProject.id,
+        activeProject.environmentId,
+        overProject.environmentId,
+      );
     },
     [appSettings.sidebarProjectSortOrder, projects, reorderProjects],
   );
@@ -1535,8 +1545,10 @@ export default function Sidebar() {
             {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
             {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.listeners : {})}
             onPointerDownCapture={handleProjectTitlePointerDownCapture}
-            onClick={(event) => handleProjectTitleClick(event, project.id)}
-            onKeyDown={(event) => handleProjectTitleKeyDown(event, project.id)}
+            onClick={(event) => handleProjectTitleClick(event, project.id, project.environmentId)}
+            onKeyDown={(event) =>
+              handleProjectTitleKeyDown(event, project.id, project.environmentId)
+            }
             onContextMenu={(event) => {
               event.preventDefault();
               void handleProjectContextMenu(project, {
@@ -1650,7 +1662,11 @@ export default function Sidebar() {
   }
 
   const handleProjectTitleClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>, projectId: ProjectId) => {
+    (
+      event: React.MouseEvent<HTMLButtonElement>,
+      projectId: ProjectId,
+      environmentId?: EnvironmentId,
+    ) => {
       if (dragInProgressRef.current) {
         event.preventDefault();
         event.stopPropagation();
@@ -1666,19 +1682,23 @@ export default function Sidebar() {
       if (selectedThreadKeys.size > 0) {
         clearSelection();
       }
-      toggleProject(projectId);
+      toggleProject(projectId, environmentId);
     },
     [clearSelection, selectedThreadKeys.size, toggleProject],
   );
 
   const handleProjectTitleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>, projectId: ProjectId) => {
+    (
+      event: React.KeyboardEvent<HTMLButtonElement>,
+      projectId: ProjectId,
+      environmentId?: EnvironmentId,
+    ) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       if (dragInProgressRef.current) {
         return;
       }
-      toggleProject(projectId);
+      toggleProject(projectId, environmentId);
     },
     [toggleProject],
   );
@@ -2039,13 +2059,15 @@ export default function Sidebar() {
             >
               <SidebarMenu>
                 <SortableContext
-                  items={sortedProjects.map((project) => project.id)}
+                  items={sortedProjects.map((project) =>
+                    projectUiStateKey(project.environmentId, project.id),
+                  )}
                   strategy={verticalListSortingStrategy}
                 >
                   {sortedProjects.map((project) => (
                     <SortableProjectItem
                       key={`${project.environmentId}:${project.id}`}
-                      projectId={project.id}
+                      projectKey={projectUiStateKey(project.environmentId, project.id)}
                     >
                       {(dragHandleProps) => renderProjectItem(project, dragHandleProps)}
                     </SortableProjectItem>

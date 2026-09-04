@@ -12,6 +12,7 @@ import React, {
 import type {
   ModelSelection,
   ModelSlug,
+  EnvironmentId,
   ProjectId,
   TestingCaseIdPolicy,
   TestingCaseSummary,
@@ -97,17 +98,20 @@ function basenameOfPath(input: string): string {
   return parts[parts.length - 1] ?? input;
 }
 
-import { useProjectTestingState } from "~/state/scopedStateStore";
+import { projectUiStateKey, useProjectTestingState } from "~/state/scopedStateStore";
 
 export function TestingTool(props: {
   projectId: ProjectId;
+  environmentId?: EnvironmentId;
   projectPath: string;
   defaultModelSelection: ModelSelection | null;
 }) {
   const serverConfig = useServerConfig();
   const [testingTerminalOpen, setTestingTerminalOpen] = useState(false);
   const testingTerminalButtonRef = useRef<HTMLButtonElement>(null);
-  const [testingState, setTestingState] = useProjectTestingState(props.projectId);
+  const [testingState, setTestingState] = useProjectTestingState(
+    projectUiStateKey(props.environmentId, props.projectId),
+  );
 
   const closeTestingTerminal = useCallback(() => {
     setTestingTerminalOpen(false);

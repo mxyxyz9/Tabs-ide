@@ -30,6 +30,7 @@ import {
   useProjectAgentsState,
   useProjectServerState,
   useProjectBrowserState,
+  projectUiStateKey,
 } from "~/state/scopedStateStore";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
@@ -1319,7 +1320,9 @@ function AgentsThreadList(props: {
     },
     [draggedPinnedThreadId, props.threads],
   );
-  const [agentsState, setAgentsState] = useProjectAgentsState(props.project.id);
+  const [agentsState, setAgentsState] = useProjectAgentsState(
+    projectUiStateKey(props.project.environmentId, props.project.id),
+  );
   const view = agentsState.threadListView;
   const setView = useCallback(
     (v: "current" | "archived" | ((prev: "current" | "archived") => "current" | "archived")) => {
@@ -7370,7 +7373,7 @@ function DesktopBrowserTool(props: {
     };
   }, [props.project.environmentId]);
   const bridge = window.desktopBridge;
-  const sessionKey = `${props.project.id}:browser`;
+  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
     const sessionExisting = state.browserStateBySessionKey?.[sessionKey];
     if (sessionExisting) {
@@ -7905,7 +7908,7 @@ function EmbeddedBrowserTool(props: {
   onRunProcess?: ((processId: string) => void) | undefined;
 }) {
   const api = readNativeApi();
-  const sessionKey = `${props.project.id}:browser`;
+  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:browser`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
     const sessionExisting = state.browserStateBySessionKey?.[sessionKey];
     if (sessionExisting) {
@@ -8269,7 +8272,7 @@ function DesktopCustomEmbedTool(props: {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
   const projectSettings = useProjectWorkspaceSettings(props.project.id);
-  const sessionKey = `${props.project.id}:${props.sessionId}`;
+  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:${props.sessionId}`;
   const browserState = useAtomValue(workspaceShellAtom, (state) => {
     const existing = state.browserStateBySessionKey?.[sessionKey];
     if (existing) {
@@ -8785,7 +8788,7 @@ function CustomEmbedTool(props: {
   const api = readNativeApi();
   const [loading, setLoading] = useState(true);
   const [embedBlocked, setEmbedBlocked] = useState(false);
-  const sessionKey = `${props.project.id}:${props.sessionId}`;
+  const sessionKey = `${projectUiStateKey(props.project.environmentId, props.project.id)}:${props.sessionId}`;
   const storedUrl = useAtomValue(
     workspaceShellAtom,
     (state) => state.browserUrlBySessionKey[sessionKey],
@@ -9055,7 +9058,9 @@ function ServerTool(props: {
   }, [props.projectSettings.serverPresets]);
   const terminalIdSet = new Set(props.terminalIds);
   const runningProcessIdSet = new Set(props.runningProcessIds);
-  const [serverState, setServerState] = useProjectServerState(props.project.id);
+  const [serverState, setServerState] = useProjectServerState(
+    projectUiStateKey(props.project.environmentId, props.project.id),
+  );
   const presetsExpanded = serverState.presetsExpanded;
   const setPresetsExpanded = useCallback(
     (v: boolean | ((prev: boolean) => boolean)) => {
@@ -11818,6 +11823,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     content = (
       <TestingTool
         projectId={activeProject.id}
+        {...(activeProject.environmentId ? { environmentId: activeProject.environmentId } : {})}
         projectPath={activeProject.cwd}
         defaultModelSelection={activeProject.defaultModelSelection}
       />

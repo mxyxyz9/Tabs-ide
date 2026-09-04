@@ -7,9 +7,10 @@ import {
   createDefaultServerState,
   createDefaultBrowserState,
   createDefaultSettingsState,
+  projectUiStateKey,
 } from "./scopedStateStore";
 import { createScopedStorageKey } from "../lib/scopedStateStorage";
-import { ProjectId } from "@tabs/contracts";
+import { EnvironmentId, ProjectId } from "@tabs/contracts";
 
 describe("scopedStateStore", () => {
   beforeEach(() => {
@@ -21,6 +22,16 @@ describe("scopedStateStore", () => {
       browserStateByProjectId: {},
       settingsState: createDefaultSettingsState(),
     });
+  });
+
+  it("isolates UI state keys for identical project ids in different environments", () => {
+    const projectId = ProjectId.make("project-1");
+    expect(projectUiStateKey(EnvironmentId.make("environment-a"), projectId)).toBe(
+      "environment-a:project-1",
+    );
+    expect(projectUiStateKey(EnvironmentId.make("environment-b"), projectId)).toBe(
+      "environment-b:project-1",
+    );
   });
 
   describe("Testing Scoped State", () => {

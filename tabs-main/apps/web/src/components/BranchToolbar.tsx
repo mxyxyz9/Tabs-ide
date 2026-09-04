@@ -1,4 +1,4 @@
-import type { ThreadId } from "@tabs/contracts";
+import type { EnvironmentId, ThreadId } from "@tabs/contracts";
 import { FolderIcon, GitForkIcon } from "lucide-react";
 import { useCallback } from "react";
 
@@ -23,6 +23,7 @@ const envModeItems = [
 
 interface BranchToolbarProps {
   threadId: ThreadId;
+  environmentId?: EnvironmentId;
   onEnvModeChange: (mode: EnvMode) => void;
   envLocked: boolean;
   onCheckoutPullRequestRequest?: (reference: string) => void;
@@ -31,6 +32,7 @@ interface BranchToolbarProps {
 
 export default function BranchToolbar({
   threadId,
+  environmentId,
   onEnvModeChange,
   envLocked,
   onCheckoutPullRequestRequest,
@@ -42,9 +44,17 @@ export default function BranchToolbar({
   const draftThread = useDraftThread(threadId);
   const setDraftThreadContext = composerDraftActions.setDraftThreadContext;
 
-  const serverThread = threads.find((thread) => thread.id === threadId);
+  const serverThread = threads.find(
+    (thread) =>
+      thread.id === threadId &&
+      (environmentId === undefined || thread.environmentId === environmentId),
+  );
   const activeProjectId = serverThread?.projectId ?? draftThread?.projectId ?? null;
-  const activeProject = projects.find((project) => project.id === activeProjectId);
+  const activeProject = projects.find(
+    (project) =>
+      project.id === activeProjectId &&
+      (environmentId === undefined || project.environmentId === environmentId),
+  );
   const activeThreadId = serverThread?.id ?? (draftThread ? threadId : undefined);
   const activeThreadBranch = serverThread?.branch ?? draftThread?.branch ?? null;
   const activeWorktreePath = serverThread?.worktreePath ?? draftThread?.worktreePath ?? null;
@@ -85,7 +95,7 @@ export default function BranchToolbar({
         );
       }
       if (hasServerThread) {
-        setThreadBranchAction(activeThreadId, branch, worktreePath);
+        setThreadBranchAction(activeThreadId, branch, worktreePath, environmentId);
         return;
       }
       const nextDraftEnvMode = resolveDraftEnvModeAfterBranchChange({
@@ -109,6 +119,7 @@ export default function BranchToolbar({
       threadId,
       effectiveEnvMode,
       activeProject?.environmentId,
+      environmentId,
     ],
   );
 

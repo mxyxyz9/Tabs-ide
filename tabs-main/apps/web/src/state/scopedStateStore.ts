@@ -1,8 +1,9 @@
 import { useCallback, useMemo } from "react";
 import { create } from "zustand";
+import { scopedProjectKey, scopeProjectRef } from "@tabs/client-runtime/environment";
+import { EnvironmentId, ProjectId } from "@tabs/contracts";
 import type {
   ModelSelection,
-  ProjectId,
   TestingDiscoveryMode,
   TestingDiscoverySafetyProfile,
   TestingExplorationScope,
@@ -18,6 +19,18 @@ import type {
   TestingWorkspaceSection,
 } from "../components/testing/types";
 import type { NavPanel } from "../components/git/Sidebar";
+
+export function projectUiStateKey(
+  environmentId: string | null | undefined,
+  projectId: ProjectId | string,
+): string {
+  if (!projectId) return "";
+  return environmentId
+    ? scopedProjectKey(
+        scopeProjectRef(EnvironmentId.makeUnsafe(environmentId), ProjectId.makeUnsafe(projectId)),
+      )
+    : projectId;
+}
 
 export interface ProjectTestingState {
   // Navigation / Tabs
@@ -195,17 +208,20 @@ export function createDefaultTestingState(projectId?: string): ProjectTestingSta
 
     if (persisted) {
       if (persisted.manualCaseId !== undefined) base.manualCaseId = persisted.manualCaseId;
-      if (persisted.manualCaseDescription !== undefined) base.manualCaseDescription = persisted.manualCaseDescription;
+      if (persisted.manualCaseDescription !== undefined)
+        base.manualCaseDescription = persisted.manualCaseDescription;
       if (persisted.manualCaseSteps !== undefined) base.manualCaseSteps = persisted.manualCaseSteps;
       if (persisted.manualCaseExpectedResults !== undefined) {
         base.manualCaseExpectedResults = persisted.manualCaseExpectedResults;
       } else if (persisted.manualCaseExpected !== undefined) {
         base.manualCaseExpectedResults = [persisted.manualCaseExpected];
       }
-      if (persisted.manualCaseLocatorIds !== undefined) base.manualCaseLocatorIds = deserializeSet(persisted.manualCaseLocatorIds);
+      if (persisted.manualCaseLocatorIds !== undefined)
+        base.manualCaseLocatorIds = deserializeSet(persisted.manualCaseLocatorIds);
       if (persisted.storyText !== undefined) base.storyText = persisted.storyText;
       if (persisted.storyFilePath !== undefined) base.storyFilePath = persisted.storyFilePath;
-      if (persisted.locatorCodeDraft !== undefined) base.locatorCodeDraft = persisted.locatorCodeDraft;
+      if (persisted.locatorCodeDraft !== undefined)
+        base.locatorCodeDraft = persisted.locatorCodeDraft;
       if (persisted.bugDraft !== undefined) base.bugDraft = persisted.bugDraft;
       if (persisted.targetUrl !== undefined) base.targetUrl = persisted.targetUrl;
     }
@@ -366,7 +382,9 @@ export interface ScopedStateStore {
   // Actions
   updateTestingState: (
     projectId: ProjectId | string,
-    updater: Partial<ProjectTestingState> | ((prev: ProjectTestingState) => Partial<ProjectTestingState>),
+    updater:
+      | Partial<ProjectTestingState>
+      | ((prev: ProjectTestingState) => Partial<ProjectTestingState>),
   ) => void;
   updateGitState: (
     key: ProjectId | string,
@@ -374,20 +392,24 @@ export interface ScopedStateStore {
   ) => void;
   updateAgentsState: (
     projectId: ProjectId | string,
-    updater: Partial<ProjectAgentsState> | ((prev: ProjectAgentsState) => Partial<ProjectAgentsState>),
+    updater:
+      | Partial<ProjectAgentsState>
+      | ((prev: ProjectAgentsState) => Partial<ProjectAgentsState>),
   ) => void;
   updateServerState: (
     projectId: ProjectId | string,
-    updater: Partial<ProjectServerState> | ((prev: ProjectServerState) => Partial<ProjectServerState>),
+    updater:
+      | Partial<ProjectServerState>
+      | ((prev: ProjectServerState) => Partial<ProjectServerState>),
   ) => void;
   updateBrowserState: (
     projectId: ProjectId | string,
-    updater: Partial<ProjectBrowserState> | ((prev: ProjectBrowserState) => Partial<ProjectBrowserState>),
+    updater:
+      | Partial<ProjectBrowserState>
+      | ((prev: ProjectBrowserState) => Partial<ProjectBrowserState>),
   ) => void;
   updateSettingsState: (
-    updater:
-      | Partial<SettingsViewState>
-      | ((prev: SettingsViewState) => Partial<SettingsViewState>),
+    updater: Partial<SettingsViewState> | ((prev: SettingsViewState) => Partial<SettingsViewState>),
   ) => void;
 }
 
@@ -401,7 +423,8 @@ export const useScopedStateStore = create<ScopedStateStore>((set) => ({
 
   updateTestingState: (projectId, updater) =>
     set((state) => {
-      const current = state.testingStateByProjectId[projectId] ?? createDefaultTestingState(projectId);
+      const current =
+        state.testingStateByProjectId[projectId] ?? createDefaultTestingState(projectId);
       const patch = typeof updater === "function" ? updater(current) : updater;
       const next = { ...current, ...patch };
 
@@ -506,7 +529,8 @@ const STATIC_DEFAULT_BROWSER_STATE: ProjectBrowserState = createDefaultBrowserSt
 export function useProjectTestingState(projectId: ProjectId | string) {
   const testingStateFromStore = useScopedStateStore(
     useCallback(
-      (state: ScopedStateStore) => (projectId ? state.testingStateByProjectId[projectId] : undefined),
+      (state: ScopedStateStore) =>
+        projectId ? state.testingStateByProjectId[projectId] : undefined,
       [projectId],
     ),
   );
@@ -519,7 +543,11 @@ export function useProjectTestingState(projectId: ProjectId | string) {
   const testingState = testingStateFromStore ?? fallback;
 
   const setTestingState = useCallback(
-    (updater: Partial<ProjectTestingState> | ((prev: ProjectTestingState) => Partial<ProjectTestingState>)) => {
+    (
+      updater:
+        | Partial<ProjectTestingState>
+        | ((prev: ProjectTestingState) => Partial<ProjectTestingState>),
+    ) => {
       if (!projectId) return;
       update(projectId, updater);
     },
@@ -558,7 +586,8 @@ export function useProjectGitState(key: ProjectId | string) {
 export function useProjectAgentsState(projectId: ProjectId | string) {
   const agentsStateFromStore = useScopedStateStore(
     useCallback(
-      (state: ScopedStateStore) => (projectId ? state.agentsStateByProjectId[projectId] : undefined),
+      (state: ScopedStateStore) =>
+        projectId ? state.agentsStateByProjectId[projectId] : undefined,
       [projectId],
     ),
   );
@@ -566,7 +595,11 @@ export function useProjectAgentsState(projectId: ProjectId | string) {
   const agentsState = agentsStateFromStore ?? STATIC_DEFAULT_AGENTS_STATE;
 
   const setAgentsState = useCallback(
-    (updater: Partial<ProjectAgentsState> | ((prev: ProjectAgentsState) => Partial<ProjectAgentsState>)) => {
+    (
+      updater:
+        | Partial<ProjectAgentsState>
+        | ((prev: ProjectAgentsState) => Partial<ProjectAgentsState>),
+    ) => {
       if (!projectId) return;
       update(projectId, updater);
     },
@@ -579,7 +612,8 @@ export function useProjectAgentsState(projectId: ProjectId | string) {
 export function useProjectServerState(projectId: ProjectId | string) {
   const serverStateFromStore = useScopedStateStore(
     useCallback(
-      (state: ScopedStateStore) => (projectId ? state.serverStateByProjectId[projectId] : undefined),
+      (state: ScopedStateStore) =>
+        projectId ? state.serverStateByProjectId[projectId] : undefined,
       [projectId],
     ),
   );
@@ -587,7 +621,11 @@ export function useProjectServerState(projectId: ProjectId | string) {
   const serverState = serverStateFromStore ?? STATIC_DEFAULT_SERVER_STATE;
 
   const setServerState = useCallback(
-    (updater: Partial<ProjectServerState> | ((prev: ProjectServerState) => Partial<ProjectServerState>)) => {
+    (
+      updater:
+        | Partial<ProjectServerState>
+        | ((prev: ProjectServerState) => Partial<ProjectServerState>),
+    ) => {
       if (!projectId) return;
       update(projectId, updater);
     },
@@ -600,7 +638,8 @@ export function useProjectServerState(projectId: ProjectId | string) {
 export function useProjectBrowserState(projectId: ProjectId | string) {
   const browserStateFromStore = useScopedStateStore(
     useCallback(
-      (state: ScopedStateStore) => (projectId ? state.browserStateByProjectId[projectId] : undefined),
+      (state: ScopedStateStore) =>
+        projectId ? state.browserStateByProjectId[projectId] : undefined,
       [projectId],
     ),
   );
@@ -608,7 +647,11 @@ export function useProjectBrowserState(projectId: ProjectId | string) {
   const browserState = browserStateFromStore ?? STATIC_DEFAULT_BROWSER_STATE;
 
   const setBrowserState = useCallback(
-    (updater: Partial<ProjectBrowserState> | ((prev: ProjectBrowserState) => Partial<ProjectBrowserState>)) => {
+    (
+      updater:
+        | Partial<ProjectBrowserState>
+        | ((prev: ProjectBrowserState) => Partial<ProjectBrowserState>),
+    ) => {
       if (!projectId) return;
       update(projectId, updater);
     },
@@ -623,7 +666,11 @@ export function useSettingsViewState() {
   const update = useScopedStateStore((state) => state.updateSettingsState);
 
   const setSettingsState = useCallback(
-    (updater: Partial<SettingsViewState> | ((prev: SettingsViewState) => Partial<SettingsViewState>)) => {
+    (
+      updater:
+        | Partial<SettingsViewState>
+        | ((prev: SettingsViewState) => Partial<SettingsViewState>),
+    ) => {
       update(updater);
     },
     [update],

@@ -7,6 +7,7 @@ import {
   type ProviderKind,
   type ToolLifecycleItemType,
   type UserInputQuestion,
+  type EnvironmentId,
   type ThreadId,
   type TurnId,
 } from "@tabs/contracts";
@@ -453,19 +454,30 @@ export function findLatestProposedPlan(
 }
 
 export function findSidebarProposedPlan(input: {
-  threads: ReadonlyArray<Pick<Thread, "id" | "proposedPlans">>;
+  threads: ReadonlyArray<
+    Pick<Thread, "id" | "proposedPlans"> & Pick<Partial<Thread>, "environmentId">
+  >;
   latestTurn: Pick<OrchestrationLatestTurn, "turnId" | "sourceProposedPlan"> | null;
   latestTurnSettled: boolean;
   threadId: ThreadId | string | null | undefined;
+  environmentId?: EnvironmentId;
 }): LatestProposedPlanState | null {
   const activeThreadPlans =
-    input.threads.find((thread) => thread.id === input.threadId)?.proposedPlans ?? [];
+    input.threads.find(
+      (thread) =>
+        thread.id === input.threadId &&
+        (input.environmentId === undefined || thread.environmentId === input.environmentId),
+    )?.proposedPlans ?? [];
 
   if (!input.latestTurnSettled) {
     const sourceProposedPlan = input.latestTurn?.sourceProposedPlan;
     if (sourceProposedPlan) {
       const sourcePlan = input.threads
-        .find((thread) => thread.id === sourceProposedPlan.threadId)
+        .find(
+          (thread) =>
+            thread.id === sourceProposedPlan.threadId &&
+            (input.environmentId === undefined || thread.environmentId === input.environmentId),
+        )
         ?.proposedPlans.find((plan) => plan.id === sourceProposedPlan.planId);
       if (sourcePlan) {
         return toLatestProposedPlanState(sourcePlan);

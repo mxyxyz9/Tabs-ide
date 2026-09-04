@@ -359,7 +359,7 @@ function EventRouter() {
         if (!payload.bootstrapProjectId || !payload.bootstrapThreadId) {
           return;
         }
-        setProjectExpanded(payload.bootstrapProjectId, true);
+        setProjectExpanded(payload.bootstrapProjectId, true, primaryEnvironmentId ?? undefined);
 
         const currentThreadId = threadIdFromPathname(pathnameRef.current);
         const snapshotThreadIds = new Set(
