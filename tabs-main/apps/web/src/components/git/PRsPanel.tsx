@@ -36,6 +36,7 @@ import { Card, Select } from "./gitPrimitives";
 import { useProjectGitState } from "../../state/scopedStateStore";
 import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import ChatMarkdown from "../ChatMarkdown";
+import { parseUnifiedDiff } from "./unifiedDiff";
 
 interface PullRequestRow {
   n: number;
@@ -127,6 +128,7 @@ export function PRsPanel({
   const [reviewerInput, setReviewerInput] = useState("");
   const [labelInput, setLabelInput] = useState("");
   const [inlineLine, setInlineLine] = useState("");
+  const [inlineSide, setInlineSide] = useState<"left" | "right">("right");
   const [inlineBody, setInlineBody] = useState("");
   const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
@@ -713,6 +715,9 @@ export function PRsPanel({
                             const selectedThreads = (
                               detailQuery.data.pullRequest.reviewThreads ?? []
                             ).filter((thread) => thread.path === selectedFile?.path);
+                            const patchLines = selectedFile?.patch
+                              ? parseUnifiedDiff(selectedFile.patch)
+                              : [];
                             if (!selectedFile) {
                               return (
                                 <p className="text-muted-foreground">
@@ -738,7 +743,10 @@ export function PRsPanel({
                                           ? "bg-accent text-accent-foreground"
                                           : "hover:bg-muted/40"
                                       }`}
-                                      onClick={() => setSelectedFilePath(file.path)}
+                                      onClick={() => {
+                                        setSelectedFilePath(file.path);
+                                        setInlineLine("");
+                                      }}
                                     >
                                       <span className="min-w-0 break-all font-mono text-[11px]">
                                         {file.path}
@@ -763,13 +771,55 @@ export function PRsPanel({
                                       provider may have omitted a very large patch.
                                     </p>
                                   ) : (
-                                    <pre
+                                    <div
                                       tabIndex={0}
                                       aria-label={`Patch for ${selectedFile.path}`}
-                                      className="max-h-96 overflow-auto p-3 font-mono text-[11px] leading-5"
+                                      className="max-h-96 overflow-auto font-mono text-[11px] leading-5"
                                     >
-                                      {selectedFile.patch}
-                                    </pre>
+                                      {patchLines.map((line) => (
+                                        <div
+                                          key={line.key}
+                                          className={`grid grid-cols-[2.5rem_2.5rem_minmax(max-content,1fr)] whitespace-pre ${
+                                            line.kind === "addition"
+                                              ? "bg-emerald-500/10"
+                                              : line.kind === "deletion"
+                                                ? "bg-red-500/10"
+                                                : line.kind === "header"
+                                                  ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                                  : ""
+                                          }`}
+                                        >
+                                          {(["left", "right"] as const).map((side) => {
+                                            const lineNumber =
+                                              side === "left" ? line.oldLine : line.newLine;
+                                            return lineNumber &&
+                                              supportsAction("inline_comment") ? (
+                                              <button
+                                                key={side}
+                                                type="button"
+                                                className="border-r border-border/40 px-1 text-right text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:z-10"
+                                                aria-label={`Comment on ${side === "left" ? "original" : "new"} line ${lineNumber}`}
+                                                onClick={() => {
+                                                  setInlineSide(side);
+                                                  setInlineLine(String(lineNumber));
+                                                }}
+                                              >
+                                                {lineNumber}
+                                              </button>
+                                            ) : (
+                                              <span
+                                                key={side}
+                                                aria-hidden="true"
+                                                className="border-r border-border/40 px-1 text-right text-muted-foreground"
+                                              >
+                                                {lineNumber ?? ""}
+                                              </span>
+                                            );
+                                          })}
+                                          <span className="px-2">{line.text || " "}</span>
+                                        </div>
+                                      ))}
+                                    </div>
                                   )}
                                   {selectedFile.patchTruncated ? (
                                     <p
@@ -792,7 +842,7 @@ export function PRsPanel({
                                           "inline_comment",
                                           inlineBody.trim(),
                                           undefined,
-                                          { path: selectedFile.path, line, side: "right" },
+                                          { path: selectedFile.path, line, side: inlineSide },
                                         ).then((ok) => {
                                           if (ok) {
                                             setInlineBody("");
@@ -809,7 +859,7 @@ export function PRsPanel({
                                           required
                                           value={inlineLine}
                                           onChange={(event) => setInlineLine(event.target.value)}
-                                          aria-label="New file line number"
+                                          aria-label={`${inlineSide === "right" ? "New" : "Original"} file line number`}
                                           placeholder="Line"
                                           className="w-20 rounded-md border border-border bg-background px-2"
                                         />
@@ -822,6 +872,11 @@ export function PRsPanel({
                                           className="min-h-16 flex-1 rounded-md border border-border bg-background p-2"
                                         />
                                       </div>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        Target: {inlineSide === "right" ? "new" : "original"} side
+                                        {inlineLine ? `, line ${inlineLine}` : ""}. Select a line
+                                        number in the diff or enter one directly.
+                                      </p>
                                       <Button
                                         type="submit"
                                         size="sm"
