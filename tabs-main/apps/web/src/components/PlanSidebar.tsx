@@ -4,6 +4,8 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import ChatMarkdown from "./ChatMarkdown";
+import type { EnvironmentId } from "@tabs/contracts";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -24,7 +26,6 @@ import {
   stripDisplayedPlanMarkdown,
 } from "../proposedPlan";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
-import { readNativeApi } from "~/nativeApi";
 import { toastManager } from "./ui/toast";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 
@@ -55,6 +56,7 @@ interface PlanSidebarProps {
   activeProposedPlan: LatestProposedPlanState | null;
   markdownCwd: string | undefined;
   workspaceRoot: string | undefined;
+  environmentId: EnvironmentId | undefined;
   timestampFormat: TimestampFormat;
   onClose: () => void;
 }
@@ -64,6 +66,7 @@ const PlanSidebar = memo(function PlanSidebar({
   activeProposedPlan,
   markdownCwd,
   workspaceRoot,
+  environmentId,
   timestampFormat,
   onClose,
 }: PlanSidebarProps) {
@@ -86,9 +89,9 @@ const PlanSidebar = memo(function PlanSidebar({
     downloadPlanAsTextFile(filename, normalizePlanMarkdownForExport(planMarkdown));
   }, [planMarkdown]);
 
-  const handleSaveToWorkspace = useCallback(() => {
-    const api = readNativeApi();
-    if (!api || !workspaceRoot || !planMarkdown) return;
+  const handleSaveToWorkspace = useCallback(async () => {
+    if (!workspaceRoot || !planMarkdown) return;
+    const api = await environmentApi(environmentId);
     const filename = buildProposedPlanMarkdownFilename(planMarkdown);
     setIsSavingToWorkspace(true);
     void api.projects
@@ -115,7 +118,7 @@ const PlanSidebar = memo(function PlanSidebar({
         () => setIsSavingToWorkspace(false),
         () => setIsSavingToWorkspace(false),
       );
-  }, [planMarkdown, workspaceRoot]);
+  }, [environmentId, planMarkdown, workspaceRoot]);
 
   return (
     <div className="flex h-full w-[340px] shrink-0 flex-col border-l border-border/70 bg-card/50">

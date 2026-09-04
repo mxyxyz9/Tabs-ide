@@ -23,16 +23,19 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { toastManager } from "../ui/toast";
-import { readNativeApi } from "~/nativeApi";
+import type { EnvironmentId } from "@tabs/contracts";
+import { environmentApi } from "~/connection/environmentApiRegistry";
 
 export const ProposedPlanCard = memo(function ProposedPlanCard({
   planMarkdown,
   cwd,
   workspaceRoot,
+  environmentId,
 }: {
   planMarkdown: string;
   cwd: string | undefined;
   workspaceRoot: string | undefined;
+  environmentId: EnvironmentId | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -66,10 +69,9 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
     setIsSaveDialogOpen(true);
   };
 
-  const handleSaveToWorkspace = () => {
-    const api = readNativeApi();
+  const handleSaveToWorkspace = async () => {
     const relativePath = savePath.trim();
-    if (!api || !workspaceRoot) {
+    if (!workspaceRoot) {
       return;
     }
     if (!relativePath) {
@@ -81,6 +83,7 @@ export const ProposedPlanCard = memo(function ProposedPlanCard({
     }
 
     setIsSavingToWorkspace(true);
+    const api = await environmentApi(environmentId);
     void api.projects
       .writeFile({
         cwd: workspaceRoot,

@@ -12,8 +12,9 @@ verification evidence, not just a matching type or placeholder.
 - [x] Renderer connection settings create, list, reconnect, and remove remote environments.
 - [x] Saved direct and SSH environments can be activated, mint authenticated WebSocket tickets,
       and renew those tickets after disconnects or system resume.
-- [ ] Route each project/thread runtime through its selected environment instead of the current
-      process-wide transport.
+- [x] Route each project/thread runtime through its selected environment instead of the current
+      process-wide transport, including composer persistence, PR workspace preparation, code-file
+      reads/writes, plan export, Git, terminal, testing, browser, and orchestration calls.
 - [x] Scope environment routes, read-model hydration, chat commands, Git operations, code-file
       queries, and command-palette workspace browsing/project creation to the selected environment.
 - [x] Surface direct/SSH/Tailscale reachability and connection repair in settings.
@@ -78,7 +79,9 @@ an adapter over that engine.
 - [x] Isolate same-ID projects and threads across renderer read-model mutations, drag identities,
       agent/server/testing/browser UI state, proposed-plan lookup, persisted sidebar state, and
       composer/local-draft persistence with legacy-draft claiming and scoped promotion cleanup.
-- [ ] Project filesystem/workspace services and environment-aware file operations.
+- [x] Project filesystem/workspace services and environment-aware file operations, including
+      search/read queries, conflict writes, Git settings, workspace browsing, and proposed-plan
+      exports through the owning environment transport.
 - [x] Provider-scoped MCP credential issuance, liveness refresh, resolution, and revocation.
 - [x] HTTP MCP transport lifecycle, provider injection, discovery, and complete preview tool
       exposure.

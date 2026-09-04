@@ -4618,6 +4618,7 @@ export default function ChatView({
                   resolvedTheme={resolvedTheme}
                   timestampFormat={timestampFormat}
                   workspaceRoot={activeProject?.cwd ?? undefined}
+                  environmentId={environmentId ?? undefined}
                   latestTaskDescription={latestTaskDescription}
                   providerInstanceId={selectedProvider}
                 />
@@ -4681,6 +4682,7 @@ export default function ChatView({
             activeProposedPlan={sidebarProposedPlan}
             markdownCwd={gitCwd ?? undefined}
             workspaceRoot={activeProject?.cwd ?? undefined}
+            environmentId={environmentId ?? undefined}
             timestampFormat={timestampFormat}
             onClose={() => {
               setPlanSidebarOpen(false);

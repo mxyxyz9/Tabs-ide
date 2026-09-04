@@ -1,4 +1,4 @@
-import { type MessageId, type TurnId } from "@tabs/contracts";
+import { type EnvironmentId, type MessageId, type TurnId } from "@tabs/contracts";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
@@ -85,6 +85,7 @@ interface MessagesTimelineProps {
   resolvedTheme: "light" | "dark";
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
+  environmentId?: EnvironmentId | undefined;
   latestTaskDescription: string | null;
   /** Provider instanceId for the active thread (e.g. "claudeAgent", "codex", "grok") */
   providerInstanceId?: string;
@@ -112,6 +113,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   resolvedTheme,
   timestampFormat,
   workspaceRoot,
+  environmentId,
   latestTaskDescription,
   providerInstanceId,
 }: MessagesTimelineProps) {
@@ -497,6 +499,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
             planMarkdown={row.proposedPlan.planMarkdown}
             cwd={markdownCwd}
             workspaceRoot={workspaceRoot}
+            environmentId={environmentId}
           />
         </div>
       )}
