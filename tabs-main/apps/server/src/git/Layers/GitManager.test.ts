@@ -1472,6 +1472,12 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         headBranch: "feature/resolve-pr",
         state: "open",
       });
+      expect(result.capabilities).toMatchObject({
+        provider: "github",
+        diff: true,
+        actions: expect.arrayContaining(["approve", "request_changes", "merge"]),
+        mergeMethods: ["merge", "squash", "rebase"],
+      });
       expect(ghCalls.some((call) => call.startsWith("pr view 42 "))).toBe(true);
     }),
   );
@@ -1500,6 +1506,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
 
       expect(result.pullRequests).toHaveLength(2);
       expect(result.hasMore).toBe(true);
+      expect(result.capabilities?.provider).toBe("github");
       expect(ghCalls.some((call) => call.includes("--limit 2"))).toBe(true);
     }),
   );

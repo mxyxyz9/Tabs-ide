@@ -16,11 +16,11 @@ The current Tabs implementation is therefore a strong base. Its provider-neutral
 | Branches and divergence  | Branch CRUD, merge/rebase, watched divergence, worktrees                                               | Basic branch/checkout integration                                             | Basic branch/project integration                                | Keep Tabs; harden command execution                      |
 | History                  | Search, details, reset, revert, cherry-pick, AI summary                                                | Limited compared with Tabs Git tool                                           | Limited compared with Tabs Git tool                             | Keep Tabs                                                |
 | Stashes and tags         | First-class panels and actions                                                                         | Not comparable in breadth                                                     | Not comparable in breadth                                       | Keep Tabs                                                |
-| Provider/account support | GitHub and GitLab PR adapters; Azure/Bitbucket discovery only                                          | GitHub, GitLab, Azure DevOps, Bitbucket PR providers                          | Deep hosted-PR service and repository inventory                 | Finish Azure/Bitbucket and capability gating             |
+| Provider/account support | GitHub/GitLab PR adapters with server-authored capabilities; Azure/Bitbucket discovery only            | GitHub, GitLab, Azure DevOps, Bitbucket PR providers                          | Deep hosted-PR service and repository inventory                 | Finish Azure/Bitbucket adapters                          |
 | PR list                  | Current-branch/repository list, state filters, load-more pagination, draft/review/check/merge metadata | Rich filters, pagination, draft/review/check metadata                         | Rich list, project context, pinning, stack metadata             | Core pagination parity; advanced organization remains    |
 | PR detail                | Native Summary, Code, Checks, Commits, and Activity tabs; actors, labels, reviewers, comments/reviews  | Native summary, checks, commits, code, timeline, actors, labels, reviewers    | Native summary, checks, code, timeline, comments, stack context | Core read-only detail parity; richer code review remains |
 | Review interaction       | Comments, approve/request-changes, reviewer/label edits, plus separate local AI review                 | Inline annotations, comments, reactions, reviewer selection, Markdown editing | Comments, Markdown, review timeline and code inspection         | Inline threads, reactions, and rich Markdown remain      |
-| PR merge                 | Typed GitHub/GitLab mutation with merge/squash/rebase and branch deletion                              | Typed provider capabilities and merge methods                                 | Typed PR operations and capabilities                            | Mutation exists; explicit capability negotiation remains |
+| PR merge                 | Typed GitHub/GitLab mutation plus provider-declared actions and merge methods                          | Typed provider capabilities and merge methods                                 | Typed PR operations and capabilities                            | Core capability-aware mutation parity                    |
 | Tests                    | Good lower-level Git coverage; sparse Git-panel/PR interaction coverage                                | Extensive PR service, provider, and UI tests                                  | Extensive PR service, cache/recovery, and browser tests         | Add contract and interaction coverage                    |
 
 ## Findings by priority
@@ -37,7 +37,7 @@ The current Tabs implementation is therefore a strong base. Its provider-neutral
 
 ### P1 — next implementation slice
 
-1. **Provider-neutral PR domain — substantially completed.** Tabs now carries provider identity, draft state, author, labels, review decision, mergeability, aggregate and individual checks, commits, comments, reviews, reviewers, body, change totals, and a bounded server-authored pagination signal. An explicit provider-capability object remains.
+1. **Provider-neutral PR domain — core completed.** Tabs carries provider identity, draft state, author, labels, review decision, mergeability, aggregate and individual checks, commits, comments, reviews, reviewers, body, change totals, bounded pagination, and a provider-authored capability object.
 
 2. **Native PR detail workspace — core read-only surface completed.** Summary, Code, Checks, Commits, and Activity are implemented with accessible tab semantics and real provider data. GitHub and GitLab file patches are normalized through one bounded contract with explicit binary/omitted and truncation states. Inline threads and review annotations remain. Preserve Tabs' existing local AI Review panel as a complementary workflow.
 
@@ -53,7 +53,7 @@ The current Tabs implementation is therefore a strong base. Its provider-neutral
 2. Include untracked and conflicted files in the sidebar change count where appropriate.
 3. Add explicit tab/tabpanel relationships and complete icon-button accessible names.
 4. Add panel interaction tests for error, loading, remote-environment routing, destructive confirmations, authentication failure, and PR state transitions.
-5. Add provider capability gating so unsupported buttons are hidden or explained rather than assuming GitHub CLI availability.
+5. **Provider capability gating — completed for GitHub and GitLab.** The server declares diff, creation, action, verdict, and merge-method support; the renderer hides unsupported controls, and the manager rejects unsupported mutations independently.
 
 ## Recommended port strategy
 
@@ -61,10 +61,10 @@ Use Tabs as the host and port the PR domain in three vertical slices:
 
 1. **Read-only core parity — completed.** User-controlled PR-list pagination, provider-backed PR file/diff data, and the Code tab use bounded typed transport. Advanced search and reference-app organization remain optional enhancements.
 2. **Finish review parity:** inline annotations/threads, reactions, and rich Markdown editing; basic comments, review submission, and reviewer management already work.
-3. **Finish mutation parity:** add an explicit provider-capability contract and use it to gate the implemented create, merge-method, close/reopen, label, reviewer, and review actions.
+3. **Core mutation parity — completed:** an explicit provider-capability contract gates create, merge-method, close/reopen, label, reviewer, and review actions in both renderer and server.
 
 T3 Code is the stronger reference for multi-provider contracts, review filters, annotations, reactions, and merge capabilities. Synara is the stronger reference for stack context, repository inventory, project pinning/recovery, request coalescing, and its cohesive docked PR workflow. Tabs should port those strengths without replacing its more capable general Git workspace.
 
 ## Release gate
 
-The Git tool should not be described as PR-parity complete until inline collaboration and provider-capability gating are implemented and tested against at least GitHub plus one non-GitHub provider. The current implementation is a broad Git client with a real GitHub/GitLab PR management and read-only code workspace, not yet a complete collaborative PR-review client.
+The Git tool should not be described as PR-parity complete until inline collaboration is implemented and tested against at least GitHub plus one non-GitHub provider. The current implementation is a broad, capability-aware Git client with a real GitHub/GitLab PR management and read-only code workspace, not yet a complete collaborative PR-review client.

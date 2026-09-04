@@ -93,7 +93,19 @@ describe("GitListPullRequests", () => {
     expect(decodeListPullRequestsInput({ cwd: "/repo", state: "open", limit: 100 }).limit).toBe(
       100,
     );
-    expect(decodeListPullRequestsResult({ pullRequests: [], hasMore: false }).hasMore).toBe(false);
+    const result = decodeListPullRequestsResult({
+      pullRequests: [],
+      hasMore: false,
+      capabilities: {
+        provider: "gitlab",
+        diff: true,
+        create: true,
+        actions: ["comment", "approve"],
+        mergeMethods: ["merge", "squash"],
+      },
+    });
+    expect(result.hasMore).toBe(false);
+    expect(result.capabilities?.actions).not.toContain("request_changes");
     expect(() => decodeListPullRequestsInput({ cwd: "/repo", limit: 201 })).toThrow();
   });
 });

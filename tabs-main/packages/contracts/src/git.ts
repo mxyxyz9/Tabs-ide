@@ -733,11 +733,6 @@ export const GitCreateWorktreeResult = Schema.Struct({
 });
 export type GitCreateWorktreeResult = typeof GitCreateWorktreeResult.Type;
 
-export const GitResolvePullRequestResult = Schema.Struct({
-  pullRequest: GitResolvedPullRequest,
-});
-export type GitResolvePullRequestResult = typeof GitResolvePullRequestResult.Type;
-
 export const GitListPullRequestsInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
   state: Schema.optional(
@@ -751,12 +746,6 @@ export const GitListPullRequestsInput = Schema.Struct({
   limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(200))),
 });
 export type GitListPullRequestsInput = typeof GitListPullRequestsInput.Type;
-
-export const GitListPullRequestsResult = Schema.Struct({
-  pullRequests: Schema.Array(GitResolvedPullRequest),
-  hasMore: Schema.Boolean,
-});
-export type GitListPullRequestsResult = typeof GitListPullRequestsResult.Type;
 
 export const GitPullRequestAction = Schema.Literals([
   "merge",
@@ -773,6 +762,28 @@ export const GitPullRequestAction = Schema.Literals([
   "remove_label",
 ]);
 export type GitPullRequestAction = typeof GitPullRequestAction.Type;
+
+export const GitPullRequestCapabilities = Schema.Struct({
+  provider: SourceControlProviderKind,
+  diff: Schema.Boolean,
+  create: Schema.Boolean,
+  actions: Schema.Array(GitPullRequestAction),
+  mergeMethods: Schema.Array(Schema.Literals(["merge", "squash", "rebase"])),
+});
+export type GitPullRequestCapabilities = typeof GitPullRequestCapabilities.Type;
+
+export const GitResolvePullRequestResult = Schema.Struct({
+  pullRequest: GitResolvedPullRequest,
+  capabilities: Schema.optional(GitPullRequestCapabilities),
+});
+export type GitResolvePullRequestResult = typeof GitResolvePullRequestResult.Type;
+
+export const GitListPullRequestsResult = Schema.Struct({
+  pullRequests: Schema.Array(GitResolvedPullRequest),
+  hasMore: Schema.optional(Schema.Boolean),
+  capabilities: Schema.optional(GitPullRequestCapabilities),
+});
+export type GitListPullRequestsResult = typeof GitListPullRequestsResult.Type;
 
 export const GitMutatePullRequestInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,

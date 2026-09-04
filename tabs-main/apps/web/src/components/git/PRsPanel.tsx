@@ -12,6 +12,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
+import type { GitPullRequestAction } from "@tabs/contracts";
 
 import {
   gitAllPullRequestsQueryOptions,
@@ -66,10 +67,6 @@ function formatProviderName(provider: PullRequestRow["provider"]): string {
     default:
       return "provider";
   }
-}
-
-function supportsRequestChanges(provider: PullRequestRow["provider"]): boolean {
-  return provider !== "gitlab";
 }
 
 function handleTabListKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
@@ -153,6 +150,12 @@ export function PRsPanel({
   );
 
   const activeQuery = viewMode === "branch" ? branchPrQuery : allPrsQuery;
+  const capabilities = activeQuery.data?.capabilities;
+  const supportsAction = useCallback(
+    (action: GitPullRequestAction) =>
+      capabilities ? capabilities.actions.includes(action) : action !== "request_changes",
+    [capabilities],
+  );
   const loading = activeQuery.isLoading;
 
   const prs = useMemo<PullRequestRow[]>(() => {
@@ -311,10 +314,12 @@ export function PRsPanel({
         </div>
 
         {/* Action Button */}
-        <Button size="sm" onClick={onOpenCreatePR} className="gap-1.5 shrink-0 ml-auto">
-          <Plus size={13} />
-          <span>Create pull request</span>
-        </Button>
+        {capabilities?.create !== false ? (
+          <Button size="sm" onClick={onOpenCreatePR} className="gap-1.5 shrink-0 ml-auto">
+            <Plus size={13} />
+            <span>Create pull request</span>
+          </Button>
+        ) : null}
       </div>
 
       {activeQuery.isError ? (
@@ -438,7 +443,7 @@ export function PRsPanel({
                     {expandedPrNumber === pr.n ? <ChevronDown /> : <ChevronRight />}
                     Details
                   </Button>
-                  {pr.state === "open" && !pr.isDraft && (
+                  {pr.state === "open" && !pr.isDraft && supportsAction("merge") && (
                     <Button
                       size="sm"
                       disabled={pr.mergeability === "conflicting" || pr.checksState === "failing"}
@@ -449,12 +454,18 @@ export function PRsPanel({
                             ? "Fix failing checks before merging"
                             : undefined
                       }
-                      onClick={() => setMergePr(pr)}
+                      onClick={() => {
+                        const methods = capabilities?.mergeMethods ?? ["squash", "merge", "rebase"];
+                        if (!methods.includes(mergeMethod)) {
+                          setMergeMethod(methods[0] ?? "squash");
+                        }
+                        setMergePr(pr);
+                      }}
                     >
                       <GitMerge /> Merge…
                     </Button>
                   )}
-                  {pr.state === "open" ? (
+                  {pr.state === "open" && supportsAction("close") ? (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -463,7 +474,7 @@ export function PRsPanel({
                     >
                       Close
                     </Button>
-                  ) : pr.state === "closed" ? (
+                  ) : pr.state === "closed" && supportsAction("reopen") ? (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -551,7 +562,10 @@ export function PRsPanel({
                       >
                         {detailTab === "summary" ? (
                           <div className="space-y-2">
-                            {detailQuery.data.pullRequest.state === "open" ? (
+                            {detailQuery.data.pullRequest.state === "open" &&
+                            supportsAction(
+                              detailQuery.data.pullRequest.isDraft ? "ready" : "draft",
+                            ) ? (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -583,7 +597,9 @@ export function PRsPanel({
                                     key={reviewer.login}
                                     size="sm"
                                     variant="ghost"
-                                    disabled={pendingAction !== null}
+                                    disabled={
+                                      pendingAction !== null || !supportsAction("remove_reviewer")
+                                    }
                                     aria-label={`Remove reviewer ${reviewer.login}`}
                                     onClick={() =>
                                       void mutatePullRequest(
@@ -602,6 +618,7 @@ export function PRsPanel({
                             {detailQuery.data.pullRequest.state === "open" ? (
                               <div className="grid gap-2 sm:grid-cols-2">
                                 <form
+                                  hidden={!supportsAction("add_reviewer")}
                                   className="flex gap-1"
                                   onSubmit={(event) => {
                                     event.preventDefault();
@@ -633,6 +650,7 @@ export function PRsPanel({
                                   </Button>
                                 </form>
                                 <form
+                                  hidden={!supportsAction("add_label")}
                                   className="flex gap-1"
                                   onSubmit={(event) => {
                                     event.preventDefault();
@@ -672,7 +690,9 @@ export function PRsPanel({
                                     key={label.name}
                                     size="sm"
                                     variant="secondary"
-                                    disabled={pendingAction !== null}
+                                    disabled={
+                                      pendingAction !== null || !supportsAction("remove_label")
+                                    }
                                     aria-label={`Remove label ${label.name}`}
                                     onClick={() =>
                                       void mutatePullRequest(
@@ -842,34 +862,46 @@ export function PRsPanel({
                                   placeholder="Write a comment or review…"
                                 />
                                 <div className="flex flex-wrap gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={!actionBody.trim() || pendingAction !== null}
-                                    onClick={async () => {
-                                      if (
-                                        await mutatePullRequest(pr.n, "comment", actionBody.trim())
-                                      ) {
-                                        setActionBody("");
-                                      }
-                                    }}
-                                  >
-                                    Comment
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    disabled={pendingAction !== null}
-                                    onClick={async () => {
-                                      if (
-                                        await mutatePullRequest(pr.n, "approve", actionBody.trim())
-                                      ) {
-                                        setActionBody("");
-                                      }
-                                    }}
-                                  >
-                                    Approve
-                                  </Button>
-                                  {supportsRequestChanges(pr.provider) ? (
+                                  {supportsAction("comment") ? (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={!actionBody.trim() || pendingAction !== null}
+                                      onClick={async () => {
+                                        if (
+                                          await mutatePullRequest(
+                                            pr.n,
+                                            "comment",
+                                            actionBody.trim(),
+                                          )
+                                        ) {
+                                          setActionBody("");
+                                        }
+                                      }}
+                                    >
+                                      Comment
+                                    </Button>
+                                  ) : null}
+                                  {supportsAction("approve") ? (
+                                    <Button
+                                      size="sm"
+                                      disabled={pendingAction !== null}
+                                      onClick={async () => {
+                                        if (
+                                          await mutatePullRequest(
+                                            pr.n,
+                                            "approve",
+                                            actionBody.trim(),
+                                          )
+                                        ) {
+                                          setActionBody("");
+                                        }
+                                      }}
+                                    >
+                                      Approve
+                                    </Button>
+                                  ) : null}
+                                  {supportsAction("request_changes") ? (
                                     <Button
                                       size="sm"
                                       variant="destructive"
@@ -940,9 +972,15 @@ export function PRsPanel({
                   value={mergeMethod}
                   onChange={(e) => setMergeMethod(e.target.value as "squash" | "merge" | "rebase")}
                 >
-                  <option value="squash">Squash and merge (recommended)</option>
-                  <option value="merge">Create a merge commit</option>
-                  <option value="rebase">Rebase and merge</option>
+                  {(capabilities?.mergeMethods ?? ["squash", "merge", "rebase"]).map((method) => (
+                    <option key={method} value={method}>
+                      {method === "squash"
+                        ? "Squash and merge (recommended)"
+                        : method === "merge"
+                          ? "Create a merge commit"
+                          : "Rebase and merge"}
+                    </option>
+                  ))}
                 </Select>
               </div>
 

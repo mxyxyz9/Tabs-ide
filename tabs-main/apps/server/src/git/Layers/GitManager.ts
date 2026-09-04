@@ -333,6 +333,53 @@ function normalizePullRequestReference(reference: string): string {
   return hashNumber?.[1] ?? trimmed;
 }
 
+const GITHUB_PULL_REQUEST_CAPABILITIES = {
+  provider: "github" as const,
+  diff: true,
+  create: true,
+  actions: [
+    "merge",
+    "close",
+    "reopen",
+    "ready",
+    "draft",
+    "comment",
+    "approve",
+    "request_changes",
+    "add_reviewer",
+    "remove_reviewer",
+    "add_label",
+    "remove_label",
+  ] as const,
+  mergeMethods: ["merge", "squash", "rebase"] as const,
+};
+
+const GITLAB_PULL_REQUEST_CAPABILITIES = {
+  provider: "gitlab" as const,
+  diff: true,
+  create: true,
+  actions: [
+    "merge",
+    "close",
+    "reopen",
+    "ready",
+    "draft",
+    "comment",
+    "approve",
+    "add_reviewer",
+    "remove_reviewer",
+    "add_label",
+    "remove_label",
+  ] as const,
+  mergeMethods: ["merge", "squash", "rebase"] as const,
+};
+
+function pullRequestCapabilities(provider: "github" | "gitlab") {
+  return provider === "github"
+    ? GITHUB_PULL_REQUEST_CAPABILITIES
+    : GITLAB_PULL_REQUEST_CAPABILITIES;
+}
+
 function canonicalizeExistingPath(value: string): string {
   try {
     return realpathSync.native(value);
@@ -1062,7 +1109,7 @@ export const makeGitManager = Effect.gen(function* () {
             })
           : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
 
-      return { pullRequest };
+      return { pullRequest, capabilities: pullRequestCapabilities(provider) };
     },
   );
 
@@ -1081,7 +1128,11 @@ export const makeGitManager = Effect.gen(function* () {
               limit,
             });
 
-      return { pullRequests, hasMore: pullRequests.length >= limit && limit < 200 };
+      return {
+        pullRequests,
+        hasMore: pullRequests.length >= limit && limit < 200,
+        capabilities: pullRequestCapabilities(provider),
+      };
     },
   );
 
@@ -1089,6 +1140,13 @@ export const makeGitManager = Effect.gen(function* () {
     function* (input) {
       const provider = yield* requireSupportedPullRequestProvider(input.cwd);
       const reference = normalizePullRequestReference(input.reference);
+      const capabilities = pullRequestCapabilities(provider);
+      if (!(capabilities.actions as readonly string[]).includes(input.action)) {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          `${provider} does not support the ${input.action.replaceAll("_", " ")} action.`,
+        );
+      }
       if (
         ["add_reviewer", "remove_reviewer", "add_label", "remove_label"].includes(input.action) &&
         !input.value?.trim()
