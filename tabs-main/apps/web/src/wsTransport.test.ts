@@ -18,7 +18,7 @@ class MockWebSocket {
   readonly sent: string[] = [];
   private readonly listeners = new Map<WsEventType, Set<WsListener>>();
 
-  constructor(_url: string) {
+  constructor(readonly url: string) {
     sockets.push(this);
   }
 
@@ -85,6 +85,21 @@ afterEach(() => {
 });
 
 describe("WsTransport", () => {
+  it("reconnects its configured endpoint after system resume", () => {
+    vi.useFakeTimers();
+    const transport = new WsTransport("ws://remote.example.test/ws");
+    const socket = getSocket();
+    socket.open();
+
+    transport.reconnectAfterSystemResume();
+    vi.advanceTimersByTime(500);
+
+    expect(sockets).toHaveLength(2);
+    expect(getSocket().url).toBe("ws://remote.example.test/ws");
+    transport.dispose();
+    vi.useRealTimers();
+  });
+
   it("routes valid push envelopes to channel listeners", () => {
     const transport = new WsTransport("ws://localhost:3020");
     const socket = getSocket();

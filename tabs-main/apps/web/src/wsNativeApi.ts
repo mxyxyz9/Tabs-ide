@@ -108,6 +108,9 @@ export function createWsNativeApi(): NativeApi {
   if (instance) return instance.api;
 
   const transport = new WsTransport();
+  window.desktopBridge?.onSystemResume(() => {
+    transport.reconnectAfterSystemResume();
+  });
 
   transport.subscribe(WS_CHANNELS.serverWelcome, (message) => {
     const payload = message.data;

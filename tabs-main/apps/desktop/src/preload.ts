@@ -37,6 +37,7 @@ const FETCH_SSH_SESSION_STATE_CHANNEL = "desktop:fetch-ssh-session-state";
 const ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL = "desktop:issue-ssh-websocket-token";
 const SSH_PASSWORD_PROMPT_CHANNEL = "desktop:ssh-password-prompt";
 const RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL = "desktop:resolve-ssh-password-prompt";
+const SYSTEM_RESUME_CHANNEL = "desktop:system-resume";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -130,6 +131,11 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       requestId,
       password,
     }),
+  onSystemResume: (listener) => {
+    const wrapped = () => listener();
+    ipcRenderer.on(SYSTEM_RESUME_CHANNEL, wrapped);
+    return () => ipcRenderer.removeListener(SYSTEM_RESUME_CHANNEL, wrapped);
+  },
   getWsUrl: () => {
     const result = ipcRenderer.sendSync(GET_WS_URL_CHANNEL);
     return typeof result === "string" ? result : null;

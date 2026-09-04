@@ -76,8 +76,10 @@ export class WsTransport {
   private disposed = false;
   private state: TransportState = "connecting";
   private url: string;
+  private readonly configuredUrl: string | undefined;
 
   constructor(url?: string) {
+    this.configuredUrl = url;
     this.url = this.resolveUrl(url);
     this.connect();
   }
@@ -179,6 +181,21 @@ export class WsTransport {
     return this.state;
   }
 
+  reconnectAfterSystemResume(): void {
+    if (this.disposed) return;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    const socket = this.ws;
+    if (socket !== null) {
+      socket.close();
+      return;
+    }
+    this.reconnectAttempt = 0;
+    this.connect();
+  }
+
   dispose() {
     this.disposed = true;
     this.state = "disposed";
@@ -216,7 +233,7 @@ export class WsTransport {
     // permanently — leaving the renderer stuck until a manual refresh.
     let ws: WebSocket;
     try {
-      this.url = this.resolveUrl();
+      this.url = this.resolveUrl(this.configuredUrl);
       ws = new WebSocket(this.url);
     } catch (error) {
       console.warn("WebSocket failed to initialize; scheduling reconnect", {

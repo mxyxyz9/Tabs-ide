@@ -52,7 +52,8 @@ an adapter over that engine.
 - [ ] Multi-environment renderer state and environment-scoped queries/mutations.
 - [ ] Project filesystem/workspace services and environment-aware file operations.
 - [ ] HTTP MCP server lifecycle, discovery, authorization, and complete tool exposure.
-- [ ] Background liveness, sleep/wake recovery, and desktop power handling.
+- [x] Desktop resume events force stale renderer WebSocket transports to reconnect.
+- [ ] Background activity reporting and full power/thermal-aware liveness policy.
 - [ ] Resource telemetry, diagnostics, tracing UI, and support bundles.
 - [ ] Self-update and cloud/relay status UI parity.
 - [ ] Environment-aware themes and appearance synchronization.

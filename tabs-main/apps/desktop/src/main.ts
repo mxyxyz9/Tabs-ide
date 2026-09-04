@@ -12,6 +12,7 @@ import {
   Menu,
   nativeImage,
   nativeTheme,
+  powerMonitor,
   protocol,
   session,
   shell,
@@ -116,6 +117,7 @@ const BOOTSTRAP_SSH_BEARER_SESSION_CHANNEL = "desktop:bootstrap-ssh-bearer-sessi
 const FETCH_SSH_SESSION_STATE_CHANNEL = "desktop:fetch-ssh-session-state";
 const ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL = "desktop:issue-ssh-websocket-token";
 const RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL = "desktop:resolve-ssh-password-prompt";
+const SYSTEM_RESUME_CHANNEL = "desktop:system-resume";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -2966,6 +2968,12 @@ if (hasSingleInstanceLock) {
       configureApplicationMenu();
       registerDesktopProtocol();
       configureAutoUpdater();
+
+      powerMonitor.on("resume", () => {
+        const window = mainWindow;
+        if (!window || window.isDestroyed()) return;
+        window.webContents.send(SYSTEM_RESUME_CHANNEL);
+      });
 
       const allowedPermissions = new Set([
         "clipboard-read",
