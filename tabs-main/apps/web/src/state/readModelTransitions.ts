@@ -308,6 +308,13 @@ export function syncServerReadModel(state: AppState, readModel: OrchestrationRea
         latestTurn: thread.latestTurn,
         lastVisitedAt: existing?.lastVisitedAt ?? thread.updatedAt,
         archivedAt: thread.archivedAt,
+        settledOverride: thread.settledOverride,
+        settledAt: thread.settledAt,
+        unsettledAt: thread.unsettledAt ?? null,
+        snoozedUntil: thread.snoozedUntil ?? null,
+        snoozedAt: thread.snoozedAt ?? null,
+        pinnedAt: thread.pinnedAt ?? null,
+        pinOrderKey: thread.pinOrderKey ?? null,
         branch: thread.branch,
         worktreePath: thread.worktreePath,
         turnDiffSummaries: thread.checkpoints.map((checkpoint) => ({

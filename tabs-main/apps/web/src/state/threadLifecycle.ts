@@ -128,10 +128,19 @@ export function lifecycleFor(
   return lifecycle[threadId] ?? EMPTY_ENTRY;
 }
 
-export function isSnoozed(entry: ThreadLifecycleEntry, now = Date.now()): boolean {
-  return entry.snoozedUntil !== null && Date.parse(entry.snoozedUntil) > now;
+export function isSnoozed(
+  entry: Pick<ThreadLifecycleEntry, "snoozedUntil"> | { snoozedUntil?: string | null },
+  now = Date.now(),
+): boolean {
+  return typeof entry.snoozedUntil === "string" && Date.parse(entry.snoozedUntil) > now;
 }
 
-export function isSettled(entry: ThreadLifecycleEntry, threadUpdatedAt: string): boolean {
-  return entry.settledAt !== null && Date.parse(entry.settledAt) >= Date.parse(threadUpdatedAt);
+export function isSettled(
+  entry: Pick<ThreadLifecycleEntry, "settledAt"> | { settledAt?: string | null },
+  threadUpdatedAt: string,
+): boolean {
+  return (
+    typeof entry.settledAt === "string" &&
+    Date.parse(entry.settledAt) >= Date.parse(threadUpdatedAt)
+  );
 }

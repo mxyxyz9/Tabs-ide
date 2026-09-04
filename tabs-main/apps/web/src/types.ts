@@ -105,6 +105,13 @@ export interface Thread {
   latestTurn: OrchestrationLatestTurn | null;
   lastVisitedAt?: string | undefined;
   archivedAt: string | null;
+  settledOverride?: "settled" | "active" | null;
+  settledAt?: string | null;
+  unsettledAt?: string | null;
+  snoozedUntil?: string | null;
+  snoozedAt?: string | null;
+  pinnedAt?: string | null;
+  pinOrderKey?: string | null;
   branch: string | null;
   worktreePath: string | null;
   turnDiffSummaries: TurnDiffSummary[];

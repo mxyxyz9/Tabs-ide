@@ -126,13 +126,7 @@ import {
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useConfirm } from "~/hooks/useConfirm";
-import {
-  isSnoozed,
-  isSettled,
-  lifecycleFor,
-  threadLifecycleActions,
-  useThreadLifecycle,
-} from "../state/threadLifecycle";
+import { isSnoozed, isSettled } from "../state/threadLifecycle";
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -420,7 +414,6 @@ export default function Sidebar() {
   const [addProjectError, setAddProjectError] = useState<string | null>(null);
   const addProjectInputRef = useRef<HTMLInputElement | null>(null);
   const [renamingThreadId, setRenamingThreadId] = useState<ThreadId | null>(null);
-  const lifecycle = useThreadLifecycle();
   const [renamingTitle, setRenamingTitle] = useState("");
   const [expandedThreadListsByProject, setExpandedThreadListsByProject] = useState<
     ReadonlySet<ProjectId>
@@ -844,17 +837,15 @@ export default function Sidebar() {
           { id: "mark-unread", label: "Mark unread" },
           {
             id: "pin",
-            label: lifecycleFor(lifecycle, threadId).pinnedAt ? "Unpin thread" : "Pin thread",
+            label: thread.pinnedAt ? "Unpin thread" : "Pin thread",
           },
           {
             id: "settle",
-            label: lifecycleFor(lifecycle, threadId).settledAt
-              ? "Return to active"
-              : "Settle thread",
+            label: thread.settledAt ? "Return to active" : "Settle thread",
           },
           {
             id: "snooze",
-            label: isSnoozed(lifecycleFor(lifecycle, threadId)) ? "Wake now" : "Snooze for 1 hour",
+            label: isSnoozed(thread) ? "Wake now" : "Snooze for 1 hour",
           },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
@@ -875,30 +866,46 @@ export default function Sidebar() {
         return;
       }
       if (clicked === "pin") {
-        if (lifecycleFor(lifecycle, threadId).pinnedAt) {
-          threadLifecycleActions.unpin(threadId);
-        } else {
-          threadLifecycleActions.pin(threadId);
-        }
+        await api.orchestration.dispatchCommand({
+          type: thread.pinnedAt ? "thread.unpin" : "thread.pin",
+          commandId: newCommandId(),
+          threadId,
+        });
         return;
       }
       if (clicked === "settle") {
-        if (lifecycleFor(lifecycle, threadId).settledAt) {
-          threadLifecycleActions.unsettle(threadId);
+        if (thread.settledAt) {
+          await api.orchestration.dispatchCommand({
+            type: "thread.unsettle",
+            commandId: newCommandId(),
+            threadId,
+            reason: "user",
+          });
         } else {
-          threadLifecycleActions.settle(threadId);
+          await api.orchestration.dispatchCommand({
+            type: "thread.settle",
+            commandId: newCommandId(),
+            threadId,
+          });
         }
         return;
       }
       if (clicked === "snooze") {
-        if (isSnoozed(lifecycleFor(lifecycle, threadId))) {
-          threadLifecycleActions.unsnooze(threadId);
-        } else {
-          threadLifecycleActions.snooze(
-            threadId,
-            new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-          );
-        }
+        await api.orchestration.dispatchCommand(
+          isSnoozed(thread)
+            ? {
+                type: "thread.unsnooze",
+                commandId: newCommandId(),
+                threadId,
+                reason: "user",
+              }
+            : {
+                type: "thread.snooze",
+                commandId: newCommandId(),
+                threadId,
+                snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              },
+        );
         return;
       }
       if (clicked === "copy-path") {
@@ -936,7 +943,6 @@ export default function Sidebar() {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
-      lifecycle,
       markThreadUnread,
       projectCwdById,
       threads,
@@ -1165,7 +1171,7 @@ export default function Sidebar() {
           hasPendingUserInput: derivePendingUserInputs(thread.activities).length > 0,
         });
         if (status) return 0;
-        const entry = lifecycleFor(lifecycle, thread.id);
+        const entry = thread;
         if (entry.pinnedAt) return 1;
         if (isSnoozed(entry)) return 3;
         if (isSettled(entry, thread.updatedAt ?? thread.createdAt)) return 4;
@@ -1210,7 +1216,7 @@ export default function Sidebar() {
       const terminalStatus = terminalStatusFromRunningIds(
         selectThreadTerminalState(terminalStateByThreadId, thread.id).runningTerminalIds,
       );
-      const lifecycleEntry = lifecycleFor(lifecycle, thread.id);
+      const lifecycleEntry = thread;
 
       return (
         <SidebarMenuSubItem key={thread.id} className="w-full" data-thread-item>

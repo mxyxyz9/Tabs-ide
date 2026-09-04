@@ -90,6 +90,8 @@ function createMinimalSnapshot(): OrchestrationReadModel {
         updatedAt: NOW_ISO,
         deletedAt: null,
         archivedAt: null,
+        settledOverride: null,
+        settledAt: null,
         messages: [
           {
             id: "msg-1" as MessageId,
