@@ -67,7 +67,8 @@ an adapter over that engine.
 - [x] Desktop self-update state machine, download/install actions, sidebar notification, and
       settings UI. Tabs retains its existing updater because it is already more complete.
 - [ ] Cloud relay account and managed-server status UI parity.
-- [ ] Environment-aware themes and appearance synchronization.
+- [x] Environment-aware themes and appearance synchronization with bounded server-published
+      palettes, hot reload, remote theme selection, and retained local custom presets.
 - [x] Searchable keyboard-accessible command palette with project, thread, navigation, and action
       submenus. Tabs retains its existing implementation because it is already more complete.
 - [ ] Remaining T3 chat actions and in-application documentation surfaces.
