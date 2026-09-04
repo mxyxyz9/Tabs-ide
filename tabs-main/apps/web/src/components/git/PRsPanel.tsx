@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
+import type { KeyboardEvent } from "react";
 
 import {
   gitAllPullRequestsQueryOptions,
@@ -68,6 +69,22 @@ function formatProviderName(provider: PullRequestRow["provider"]): string {
 
 function supportsRequestChanges(provider: PullRequestRow["provider"]): boolean {
   return provider !== "gitlab";
+}
+
+function handleTabListKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("[role='tab']"));
+  const currentIndex = tabs.indexOf(document.activeElement as HTMLElement);
+  if (currentIndex < 0 || tabs.length === 0) return;
+  event.preventDefault();
+  const nextIndex =
+    event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[nextIndex]?.focus();
+  tabs[nextIndex]?.click();
 }
 
 export function PRsPanel({
@@ -494,6 +511,7 @@ export function PRsPanel({
                       <div
                         role="tablist"
                         aria-label={`Pull request #${pr.n} details`}
+                        onKeyDown={handleTabListKeyDown}
                         className="flex flex-wrap gap-1"
                       >
                         {(
@@ -506,8 +524,11 @@ export function PRsPanel({
                         ).map(([id, label, Icon]) => (
                           <Button
                             key={id}
+                            id={`pr-${pr.n}-${id}-tab`}
                             role="tab"
+                            aria-controls={`pr-${pr.n}-detail-panel`}
                             aria-selected={detailTab === id}
+                            tabIndex={detailTab === id ? 0 : -1}
                             variant={detailTab === id ? "secondary" : "ghost"}
                             size="sm"
                             onClick={() => setDetailTab(id)}
@@ -516,7 +537,13 @@ export function PRsPanel({
                           </Button>
                         ))}
                       </div>
-                      <div role="tabpanel" className="rounded-lg bg-muted/20 p-3 text-xs">
+                      <div
+                        id={`pr-${pr.n}-detail-panel`}
+                        role="tabpanel"
+                        aria-labelledby={`pr-${pr.n}-${detailTab}-tab`}
+                        tabIndex={0}
+                        className="rounded-lg bg-muted/20 p-3 text-xs"
+                      >
                         {detailTab === "summary" ? (
                           <div className="space-y-2">
                             {detailQuery.data.pullRequest.state === "open" ? (
