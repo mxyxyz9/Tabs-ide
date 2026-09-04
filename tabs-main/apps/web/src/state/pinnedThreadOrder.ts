@@ -26,6 +26,42 @@ export function pinOrderKeyBetween(before: string | null, after: string | null):
   return midpoint(before ?? "", after ?? "");
 }
 
+function spreadKeys(count: number): string[] {
+  const space = DIGITS.length * DIGITS.length;
+  const step = space / (count + 1);
+  let previous = 0;
+  return Array.from({ length: count }, (_, index) => {
+    let value = Math.max(Math.round(step * (index + 1)), previous + 1);
+    if (value % DIGITS.length === 0) value += 1;
+    value = Math.min(value, space - 1);
+    previous = value;
+    return DIGITS.charAt(Math.floor(value / DIGITS.length)) + DIGITS.charAt(value % DIGITS.length);
+  });
+}
+
+export function planPinnedMove(input: {
+  readonly orderedIds: readonly string[];
+  readonly keysById: ReadonlyMap<string, string | null | undefined>;
+  readonly movedId: string;
+  readonly direction: "up" | "down";
+}): ReadonlyArray<{ readonly id: string; readonly orderKey: string }> | null {
+  const from = input.orderedIds.indexOf(input.movedId);
+  const to = input.direction === "up" ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= input.orderedIds.length) return null;
+  const desired = [...input.orderedIds];
+  [desired[from], desired[to]] = [desired[to]!, desired[from]!];
+  const before = to > 0 ? (input.keysById.get(desired[to - 1]!) ?? null) : null;
+  const after = to < desired.length - 1 ? (input.keysById.get(desired[to + 1]!) ?? null) : null;
+  if ((to === 0 || before !== null) && (to === desired.length - 1 || after !== null)) {
+    const key = pinOrderKeyBetween(before, after);
+    if (key !== null) return [{ id: input.movedId, orderKey: key }];
+  }
+  const keys = spreadKeys(desired.length);
+  return desired.flatMap((id, index) =>
+    input.keysById.get(id) === keys[index] ? [] : [{ id, orderKey: keys[index]! }],
+  );
+}
+
 export function sortPinnedThreads<
   T extends { id: string; createdAt: string; pinOrderKey?: string | null },
 >(threads: readonly T[]): T[] {

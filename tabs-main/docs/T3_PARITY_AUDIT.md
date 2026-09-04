@@ -41,7 +41,8 @@ an adapter over that engine.
 - [x] Server-side latest-message, pending-request, and actionable-plan summary counters.
 - [x] Automatic wake behavior for new turns, active sessions, approvals, and user input.
 - [x] T3 snooze presets in the desktop thread context menu.
-- [ ] Add drag ordering for pinned threads.
+- [x] Persisted, keyboard-accessible Move Up/Down ordering for pinned threads.
+- [ ] Add pointer drag ordering for pinned threads.
 - [x] Title regeneration worker, interruption recovery, correlation, and sidebar action.
 - [x] Linked pull-request metadata command, projection, persistence, and hydration.
 - [ ] Automatically discover/update linked pull requests and render their shared status.

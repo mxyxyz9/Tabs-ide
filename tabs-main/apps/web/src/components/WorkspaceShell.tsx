@@ -245,7 +245,7 @@ import { MercuryChromeLoader } from "./MercuryChromeLoader";
 import { Spinner } from "./ui/spinner";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
 import { resolveSnoozePresets } from "../state/snoozePresets";
-import { sortPinnedThreads } from "../state/pinnedThreadOrder";
+import { planPinnedMove, sortPinnedThreads } from "../state/pinnedThreadOrder";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -1253,6 +1253,28 @@ function AgentsThreadList(props: {
     },
     [],
   );
+  const movePinnedThread = useCallback(
+    async (thread: Thread, direction: "up" | "down") => {
+      const ordered = sortPinnedThreads(props.threads.filter((candidate) => candidate.pinnedAt));
+      const assignments = planPinnedMove({
+        orderedIds: ordered.map((candidate) => candidate.id),
+        keysById: new Map(ordered.map((candidate) => [candidate.id, candidate.pinOrderKey])),
+        movedId: thread.id,
+        direction,
+      });
+      const api = readNativeApi();
+      if (!api || assignments === null) return;
+      for (const assignment of assignments) {
+        await api.orchestration.dispatchCommand({
+          type: "thread.pin.reorder",
+          commandId: newCommandId(),
+          threadId: ThreadId.makeUnsafe(assignment.id),
+          orderKey: assignment.orderKey,
+        });
+      }
+    },
+    [props.threads],
+  );
   const [agentsState, setAgentsState] = useProjectAgentsState(props.project.id);
   const view = agentsState.threadListView;
   const setView = useCallback(
@@ -2107,6 +2129,18 @@ function AgentsThreadList(props: {
                                   <PinIcon className="size-3.5" />
                                   {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
                                 </MenuItem>
+                                {lifecycleEntry.pinnedAt && (
+                                  <>
+                                    <MenuItem onClick={() => void movePinnedThread(thread, "up")}>
+                                      <ArrowUpIcon className="size-3.5" />
+                                      Move pinned thread up
+                                    </MenuItem>
+                                    <MenuItem onClick={() => void movePinnedThread(thread, "down")}>
+                                      <ArrowDownIcon className="size-3.5" />
+                                      Move pinned thread down
+                                    </MenuItem>
+                                  </>
+                                )}
                                 {section === "settled" ? (
                                   <MenuItem
                                     onClick={() => void dispatchLifecycle(thread, "settle")}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { pinOrderKeyBetween, sortPinnedThreads } from "./pinnedThreadOrder";
+import { pinOrderKeyBetween, planPinnedMove, sortPinnedThreads } from "./pinnedThreadOrder";
 
 describe("pinned thread ordering", () => {
   it("creates keys before, between, and after existing keys", () => {
@@ -18,5 +18,25 @@ describe("pinned thread ordering", () => {
       { id: "first", createdAt: "2026-01-02T00:00:00.000Z", pinOrderKey: "g" },
     ]);
     expect(sorted.map((thread) => thread.id)).toEqual(["first", "second", "legacy"]);
+  });
+
+  it("plans one-key neighbor moves and rejects moves past an edge", () => {
+    const ids = ["first", "second", "third"];
+    const keys = new Map<string, string | null>([
+      ["first", "g"],
+      ["second", "m"],
+      ["third", "t"],
+    ]);
+    const move = planPinnedMove({
+      orderedIds: ids,
+      keysById: keys,
+      movedId: "second",
+      direction: "up",
+    });
+    expect(move).toHaveLength(1);
+    expect(move![0]!.orderKey < "g").toBe(true);
+    expect(
+      planPinnedMove({ orderedIds: ids, keysById: keys, movedId: "first", direction: "up" }),
+    ).toBeNull();
   });
 });
