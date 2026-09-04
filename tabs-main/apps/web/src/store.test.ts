@@ -207,13 +207,47 @@ describe("store read model sync", () => {
   it("attaches the owning environment to hydrated projects and threads", () => {
     const environmentId = EnvironmentId.makeUnsafe("environment-remote");
     const next = syncServerReadModel(
-      makeState(makeThread()),
+      { projects: [], threads: [], threadsHydrated: false },
       makeReadModel(makeReadModelThread({})),
       environmentId,
     );
 
     expect(next.projects[0]?.environmentId).toBe(environmentId);
     expect(next.threads[0]?.environmentId).toBe(environmentId);
+  });
+
+  it("merges environment snapshots without collapsing identical local ids", () => {
+    const primaryEnvironmentId = EnvironmentId.makeUnsafe("environment-primary");
+    const remoteEnvironmentId = EnvironmentId.makeUnsafe("environment-remote");
+    const primary = syncServerReadModel(
+      { projects: [], threads: [], threadsHydrated: false },
+      makeReadModel(
+        makeReadModelThread({
+          title: "Primary thread",
+        }),
+      ),
+      primaryEnvironmentId,
+    );
+
+    const next = syncServerReadModel(
+      primary,
+      {
+        ...makeReadModel(makeReadModelThread({ title: "Remote thread" })),
+        projects: [makeReadModelProject({ title: "Remote project" })],
+      },
+      remoteEnvironmentId,
+    );
+
+    expect(next.projects).toHaveLength(2);
+    expect(next.projects.map((project) => [project.environmentId, project.name])).toEqual([
+      [primaryEnvironmentId, "Project"],
+      [remoteEnvironmentId, "Remote project"],
+    ]);
+    expect(next.threads).toHaveLength(2);
+    expect(next.threads.map((thread) => [thread.environmentId, thread.title])).toEqual([
+      [primaryEnvironmentId, "Primary thread"],
+      [remoteEnvironmentId, "Remote thread"],
+    ]);
   });
 
   it("preserves claude model slugs without an active session", () => {

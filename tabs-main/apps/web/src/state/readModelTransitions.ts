@@ -246,13 +246,19 @@ export function syncServerReadModel(
   readModel: OrchestrationReadModel,
   environmentId?: EnvironmentId,
 ): AppState {
-  const projects = mapProjectsFromReadModel(
+  const previousProjects = environmentId
+    ? state.projects.filter((project) => project.environmentId === environmentId)
+    : state.projects;
+  const previousThreads = environmentId
+    ? state.threads.filter((thread) => thread.environmentId === environmentId)
+    : state.threads;
+  const environmentProjects = mapProjectsFromReadModel(
     readModel.projects.filter((project) => project.deletedAt === null),
-    state.projects,
+    previousProjects,
     environmentId,
   );
-  const existingThreadById = new Map(state.threads.map((thread) => [thread.id, thread] as const));
-  const threads = readModel.threads
+  const existingThreadById = new Map(previousThreads.map((thread) => [thread.id, thread] as const));
+  const environmentThreads = readModel.threads
     .filter((thread) => thread.deletedAt === null)
     .map((thread) => {
       const existing = existingThreadById.get(thread.id);
@@ -340,6 +346,18 @@ export function syncServerReadModel(
         activities: thread.activities.map((activity) => ({ ...activity })),
       };
     });
+  const projects = environmentId
+    ? [
+        ...state.projects.filter((project) => project.environmentId !== environmentId),
+        ...environmentProjects,
+      ]
+    : environmentProjects;
+  const threads = environmentId
+    ? [
+        ...state.threads.filter((thread) => thread.environmentId !== environmentId),
+        ...environmentThreads,
+      ]
+    : environmentThreads;
   return {
     ...state,
     projects,

@@ -11,8 +11,37 @@ interface EnvironmentApiEntry {
   config: ServerConfig;
 }
 
+export type EnvironmentApiRegistryEvent =
+  | {
+      readonly type: "connected";
+      readonly environmentId: EnvironmentId;
+      readonly api: NativeApi;
+      readonly primary: boolean;
+    }
+  | { readonly type: "disconnected"; readonly environmentId: EnvironmentId };
+
 const entries = new Map<string, EnvironmentApiEntry>();
+const listeners = new Set<(event: EnvironmentApiRegistryEvent) => void>();
 let primaryEnvironmentId: string | null = null;
+
+function emit(event: EnvironmentApiRegistryEvent): void {
+  for (const listener of listeners) listener(event);
+}
+
+export function onEnvironmentApiRegistryEvent(
+  listener: (event: EnvironmentApiRegistryEvent) => void,
+): () => void {
+  listeners.add(listener);
+  for (const [environmentId, entry] of entries) {
+    listener({
+      type: "connected",
+      environmentId: environmentId as EnvironmentId,
+      api: entry.api,
+      primary: environmentId === primaryEnvironmentId,
+    });
+  }
+  return () => listeners.delete(listener);
+}
 
 export async function initializePrimaryEnvironmentApi(): Promise<EnvironmentId> {
   const api = ensureNativeApi();
@@ -20,6 +49,7 @@ export async function initializePrimaryEnvironmentApi(): Promise<EnvironmentId> 
   const environmentId = config.environment.environmentId;
   primaryEnvironmentId = environmentId;
   entries.set(environmentId, { api, transport: null, config });
+  emit({ type: "connected", environmentId, api, primary: true });
   return environmentId;
 }
 
@@ -41,6 +71,7 @@ export async function connectEnvironmentApi(environmentId: string): Promise<Nati
     );
   }
   entries.set(environmentId, { api, transport, config });
+  emit({ type: "connected", environmentId: environmentId as EnvironmentId, api, primary: false });
   return api;
 }
 
@@ -62,4 +93,5 @@ export function disconnectEnvironmentApi(environmentId: string): void {
   const entry = entries.get(environmentId);
   entry?.transport?.dispose();
   entries.delete(environmentId);
+  emit({ type: "disconnected", environmentId: environmentId as EnvironmentId });
 }

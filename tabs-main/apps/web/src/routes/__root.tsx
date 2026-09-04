@@ -36,14 +36,21 @@ import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 import { CommandPalette } from "../components/CommandPalette";
 import { NativePreviewAutomationHost } from "../components/NativePreviewAutomationHost";
 import { BackgroundActivityReporter } from "../components/BackgroundActivityReporter";
-import { setProjectExpandedInAtoms, syncServerReadModelToAtoms } from "../state/readModel";
+import {
+  removeEnvironmentReadModelFromAtoms,
+  setProjectExpandedInAtoms,
+  syncServerReadModelToAtoms,
+} from "../state/readModel";
 import { appAtomRegistry } from "../state/atomRegistry";
 import { readModelStateAtom } from "../state/readModel";
 import { composerDraftActions, composerDraftsAtom } from "../state/composerDrafts";
 import { workspaceShellAtom } from "../state/workspaceShell";
 import { applyServerConfigUpdate, refreshServerConfig } from "../state/settings";
 import { threadsHydratedAtom } from "../state/threads";
-import { initializePrimaryEnvironmentApi } from "../connection/environmentApiRegistry";
+import {
+  initializePrimaryEnvironmentApi,
+  onEnvironmentApiRegistryEvent,
+} from "../connection/environmentApiRegistry";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -90,6 +97,7 @@ function RootRouteView() {
       <ToastProvider>
         <AnchoredToastProvider>
           <EventRouter />
+          <RemoteEnvironmentEventRouter />
           <NativePreviewAutomationHost />
           <BackgroundActivityReporter />
           <DesktopProjectBootstrap />
@@ -237,8 +245,7 @@ function EventRouter() {
       const primaryEnvironmentId = await primaryEnvironmentIdPromise;
       if (disposed) return;
       latestSequence = Math.max(latestSequence, snapshot.snapshotSequence);
-      syncServerReadModel(snapshot);
-      syncServerReadModelToAtoms(snapshot, primaryEnvironmentId ?? undefined);
+      syncServerReadModel(snapshot, primaryEnvironmentId ?? undefined);
       clearPromotedDraftThreads(new Set(snapshot.threads.map((t) => t.id)));
       const draftThreadIds = Object.keys(
         appAtomRegistry.get(composerDraftsAtom).draftThreadsByThreadId,
@@ -464,6 +471,69 @@ function EventRouter() {
       unsubProvidersUpdated();
     };
   }, [navigate, queryClient, setProjectExpanded, syncServerReadModel]);
+
+  return null;
+}
+
+function RemoteEnvironmentEventRouter() {
+  useEffect(() => {
+    const cleanups = new Map<string, () => void>();
+    const unsubscribeRegistry = onEnvironmentApiRegistryEvent((event) => {
+      if (event.type === "disconnected") {
+        cleanups.get(event.environmentId)?.();
+        cleanups.delete(event.environmentId);
+        removeEnvironmentReadModelFromAtoms(event.environmentId);
+        return;
+      }
+      if (event.primary || cleanups.has(event.environmentId)) return;
+
+      let disposed = false;
+      let latestSequence = 0;
+      let syncPromise: Promise<void> | null = null;
+      let pending = false;
+      const syncSnapshot = async (): Promise<void> => {
+        if (syncPromise) {
+          pending = true;
+          return syncPromise;
+        }
+        syncPromise = (async () => {
+          do {
+            pending = false;
+            const snapshot = await event.api.orchestration.getSnapshot();
+            if (disposed) return;
+            latestSequence = Math.max(latestSequence, snapshot.snapshotSequence);
+            syncServerReadModelToAtoms(snapshot, event.environmentId);
+          } while (pending && !disposed);
+        })().finally(() => {
+          syncPromise = null;
+        });
+        return syncPromise;
+      };
+      const throttler = new Throttler(() => void syncSnapshot(), {
+        wait: 100,
+        leading: false,
+        trailing: true,
+      });
+      const unsubscribeDomain = event.api.orchestration.onDomainEvent((domainEvent) => {
+        if (domainEvent.sequence <= latestSequence) return;
+        latestSequence = domainEvent.sequence;
+        throttler.maybeExecute();
+      });
+      void syncSnapshot().catch((error) => {
+        console.warn(`Failed to sync environment ${event.environmentId}`, error);
+      });
+      cleanups.set(event.environmentId, () => {
+        disposed = true;
+        unsubscribeDomain();
+        throttler.cancel();
+      });
+    });
+
+    return () => {
+      unsubscribeRegistry();
+      for (const cleanup of cleanups.values()) cleanup();
+    };
+  }, []);
 
   return null;
 }

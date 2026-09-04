@@ -41,6 +41,18 @@ export function syncServerReadModelToAtoms(
   });
 }
 
+export function removeEnvironmentReadModelFromAtoms(environmentId: EnvironmentId) {
+  appAtomRegistry.update(readModelStateAtom, (state) => {
+    const next = {
+      ...state,
+      projects: state.projects.filter((project) => project.environmentId !== environmentId),
+      threads: state.threads.filter((thread) => thread.environmentId !== environmentId),
+    };
+    persistAppState(next);
+    return next;
+  });
+}
+
 export function markThreadUnreadInAtoms(threadId: ThreadId) {
   appAtomRegistry.update(readModelStateAtom, (state) => markThreadUnread(state, threadId));
 }
