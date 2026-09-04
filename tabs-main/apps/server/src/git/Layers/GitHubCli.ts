@@ -101,6 +101,33 @@ const RawGitHubPullRequestSchema = Schema.Struct({
       }),
     ),
   ),
+  isDraft: Schema.optional(Schema.Boolean),
+  author: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        login: TrimmedNonEmptyString,
+        avatarUrl: Schema.optional(Schema.String),
+        url: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+  labels: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        name: TrimmedNonEmptyString,
+        color: Schema.optional(Schema.String),
+        description: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+  ),
+  reviewDecision: Schema.optional(Schema.NullOr(Schema.String)),
+  mergeable: Schema.optional(Schema.NullOr(Schema.String)),
+  statusCheckRollup: Schema.optional(Schema.Array(Schema.Record(Schema.String, Schema.Unknown))),
+  additions: Schema.optional(Schema.Number),
+  deletions: Schema.optional(Schema.Number),
+  changedFiles: Schema.optional(Schema.Number),
+  createdAt: Schema.optional(Schema.String),
+  updatedAt: Schema.optional(Schema.String),
 });
 
 const RawGitHubRepositoryCloneUrlsSchema = Schema.Struct({
@@ -118,6 +145,39 @@ function normalizePullRequestSummary(
     (typeof headRepositoryNameWithOwner === "string" && headRepositoryNameWithOwner.includes("/")
       ? (headRepositoryNameWithOwner.split("/")[0] ?? null)
       : null);
+  const reviewDecision =
+    raw.reviewDecision === "APPROVED"
+      ? ("approved" as const)
+      : raw.reviewDecision === "CHANGES_REQUESTED"
+        ? ("changes_requested" as const)
+        : raw.reviewDecision === "REVIEW_REQUIRED"
+          ? ("review_required" as const)
+          : undefined;
+  const mergeability =
+    raw.mergeable === "MERGEABLE"
+      ? ("mergeable" as const)
+      : raw.mergeable === "CONFLICTING"
+        ? ("conflicting" as const)
+        : raw.mergeable
+          ? ("unknown" as const)
+          : undefined;
+  const checks = raw.statusCheckRollup ?? [];
+  const checksState =
+    checks.length === 0
+      ? undefined
+      : checks.some((check) => {
+            const conclusion = String(check.conclusion ?? check.state ?? "").toUpperCase();
+            return ["FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"].includes(
+              conclusion,
+            );
+          })
+        ? ("failing" as const)
+        : checks.some((check) => {
+              const status = String(check.status ?? check.state ?? "").toUpperCase();
+              return ["QUEUED", "IN_PROGRESS", "PENDING", "EXPECTED"].includes(status);
+            })
+          ? ("pending" as const)
+          : ("passing" as const);
   return {
     number: raw.number,
     title: raw.title,
@@ -130,6 +190,19 @@ function normalizePullRequestSummary(
       : {}),
     ...(headRepositoryNameWithOwner ? { headRepositoryNameWithOwner } : {}),
     ...(headRepositoryOwnerLogin ? { headRepositoryOwnerLogin } : {}),
+    ...(typeof raw.isDraft === "boolean" ? { isDraft: raw.isDraft } : {}),
+    ...(raw.author !== undefined ? { author: raw.author } : {}),
+    ...(raw.labels ? { labels: raw.labels } : {}),
+    ...(reviewDecision ? { reviewDecision } : {}),
+    ...(mergeability ? { mergeability } : {}),
+    ...(checksState ? { checksState } : {}),
+    ...(typeof raw.additions === "number" ? { additions: Math.max(0, raw.additions) } : {}),
+    ...(typeof raw.deletions === "number" ? { deletions: Math.max(0, raw.deletions) } : {}),
+    ...(typeof raw.changedFiles === "number"
+      ? { changedFiles: Math.max(0, raw.changedFiles) }
+      : {}),
+    ...(raw.createdAt ? { createdAt: raw.createdAt } : {}),
+    ...(raw.updatedAt ? { updatedAt: raw.updatedAt } : {}),
   };
 }
 
@@ -183,7 +256,7 @@ const makeGitHubCli = Effect.sync(() => {
         "--limit",
         String(input.limit ?? 50),
         "--json",
-        "number,title,url,baseRefName,headRefName,state,mergedAt",
+        "number,title,url,baseRefName,headRefName,state,mergedAt,isDraft,author,labels,reviewDecision,mergeable,statusCheckRollup,additions,deletions,changedFiles,createdAt,updatedAt",
       ];
       if (input.headSelector) {
         args.push("--head", input.headSelector);
@@ -214,7 +287,7 @@ const makeGitHubCli = Effect.sync(() => {
           "view",
           input.reference,
           "--json",
-          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
+          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,author,labels,reviewDecision,mergeable,statusCheckRollup,additions,deletions,changedFiles,createdAt,updatedAt",
         ],
       }).pipe(
         Effect.map((result) => result.stdout.trim()),

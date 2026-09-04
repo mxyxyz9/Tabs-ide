@@ -26,6 +26,15 @@ interface PullRequestRow {
   state: "open" | "draft" | "merged" | "closed";
   branch: string;
   body: string;
+  isDraft: boolean;
+  author: string | null;
+  labels: ReadonlyArray<{ name: string; color?: string | undefined }>;
+  reviewDecision?: "approved" | "changes_requested" | "review_required";
+  mergeability?: "mergeable" | "conflicting" | "unknown";
+  checksState?: "passing" | "failing" | "pending";
+  additions?: number;
+  deletions?: number;
+  changedFiles?: number;
 }
 
 import { useProjectGitState } from "../../state/scopedStateStore";
@@ -93,6 +102,15 @@ export function PRsPanel({
           state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
           branch: `${pr.headBranch ?? branchName} → ${pr.baseBranch ?? "main"}`,
           body: pr.url,
+          isDraft: pr.isDraft ?? false,
+          author: pr.author?.login ?? null,
+          labels: pr.labels ?? [],
+          ...(pr.reviewDecision ? { reviewDecision: pr.reviewDecision } : {}),
+          ...(pr.mergeability ? { mergeability: pr.mergeability } : {}),
+          ...(pr.checksState ? { checksState: pr.checksState } : {}),
+          ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
+          ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
+          ...(pr.changedFiles !== undefined ? { changedFiles: pr.changedFiles } : {}),
         },
       ];
     } else {
@@ -103,6 +121,15 @@ export function PRsPanel({
         state: (pr.state as "open" | "draft" | "merged" | "closed") || "open",
         branch: `${pr.headBranch} → ${pr.baseBranch}`,
         body: pr.url,
+        isDraft: pr.isDraft ?? false,
+        author: pr.author?.login ?? null,
+        labels: pr.labels ?? [],
+        ...(pr.reviewDecision ? { reviewDecision: pr.reviewDecision } : {}),
+        ...(pr.mergeability ? { mergeability: pr.mergeability } : {}),
+        ...(pr.checksState ? { checksState: pr.checksState } : {}),
+        ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
+        ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
+        ...(pr.changedFiles !== undefined ? { changedFiles: pr.changedFiles } : {}),
       }));
     }
   }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName]);
@@ -244,15 +271,61 @@ export function PRsPanel({
                 </Badge>
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold text-foreground/90 truncate">
-                    {pr.title}
+                    {pr.title}{" "}
+                    {pr.isDraft ? <span className="text-muted-foreground">(draft)</span> : null}
                   </div>
                   <div className="text-[10px] font-mono text-muted-foreground/70 truncate">
                     {pr.branch}
                   </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                    {pr.author ? <span>by @{pr.author}</span> : null}
+                    {pr.checksState ? (
+                      <Badge
+                        variant={
+                          pr.checksState === "passing"
+                            ? "success"
+                            : pr.checksState === "failing"
+                              ? "destructive"
+                              : "outline"
+                        }
+                      >
+                        Checks {pr.checksState}
+                      </Badge>
+                    ) : null}
+                    {pr.reviewDecision ? (
+                      <Badge variant="outline">{pr.reviewDecision.replaceAll("_", " ")}</Badge>
+                    ) : null}
+                    {pr.mergeability === "conflicting" ? (
+                      <Badge variant="destructive">Conflicts</Badge>
+                    ) : null}
+                    {pr.changedFiles !== undefined ? <span>{pr.changedFiles} files</span> : null}
+                    {pr.additions !== undefined ? (
+                      <span className="text-emerald-600">+{pr.additions}</span>
+                    ) : null}
+                    {pr.deletions !== undefined ? (
+                      <span className="text-red-600">−{pr.deletions}</span>
+                    ) : null}
+                    {pr.labels.slice(0, 3).map((label) => (
+                      <Badge key={label.name} variant="secondary">
+                        {label.name}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {pr.state === "open" && (
-                    <Button size="sm" onClick={() => setMergePr(pr)}>
+                  {pr.state === "open" && !pr.isDraft && (
+                    <Button
+                      size="sm"
+                      disabled={pr.mergeability === "conflicting" || pr.checksState === "failing"}
+                      title={
+                        pr.mergeability === "conflicting"
+                          ? "Resolve merge conflicts before merging"
+                          : pr.checksState === "failing"
+                            ? "Fix failing checks before merging"
+                            : undefined
+                      }
+                      onClick={() => setMergePr(pr)}
+                    >
                       <GitMerge /> Merge…
                     </Button>
                   )}

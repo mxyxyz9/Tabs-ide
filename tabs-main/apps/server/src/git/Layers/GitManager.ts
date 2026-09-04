@@ -25,7 +25,7 @@ import {
   type GitRunStackedActionOptions,
 } from "../Services/GitManager.ts";
 import { GitCore } from "../Services/GitCore.ts";
-import { GitHubCli } from "../Services/GitHubCli.ts";
+import { GitHubCli, type GitHubPullRequestSummary } from "../Services/GitHubCli.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { runStaticAnalysis } from "../../staticAnalysis/StaticAnalysisService.ts";
@@ -33,10 +33,7 @@ import {
   buildStaticAnalysisContext,
   extractChangedFilesFromPatch,
 } from "../../staticAnalysis/ContextBuilder.ts";
-import {
-  runRepoContext,
-  loadTabsReviewJson,
-} from "../../repoContext/RepoContextService.ts";
+import { runRepoContext, loadTabsReviewJson } from "../../repoContext/RepoContextService.ts";
 import { runReviewPasses } from "../../review/ReviewPassRunner.ts";
 import {
   prepareIncrementalDiff,
@@ -68,12 +65,28 @@ interface PullRequestInfo extends OpenPrInfo {
 }
 
 interface ResolvedPullRequest {
+  provider?: "github" | "gitlab" | "azure-devops" | "bitbucket" | "unknown";
   number: number;
   title: string;
   url: string;
   baseBranch: string;
   headBranch: string;
   state: "open" | "closed" | "merged";
+  isDraft?: boolean;
+  author?: { login: string; avatarUrl?: string | undefined; url?: string | undefined } | null;
+  labels?: ReadonlyArray<{
+    name: string;
+    color?: string | undefined;
+    description?: string | null | undefined;
+  }>;
+  reviewDecision?: "approved" | "changes_requested" | "review_required";
+  mergeability?: "mergeable" | "conflicting" | "unknown";
+  checksState?: "passing" | "failing" | "pending";
+  additions?: number;
+  deletions?: number;
+  changedFiles?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface PullRequestHeadRemoteInfo {
@@ -349,21 +362,26 @@ function canonicalizeExistingPath(value: string): string {
   }
 }
 
-function toResolvedPullRequest(pr: {
-  number: number;
-  title: string;
-  url: string;
-  baseRefName: string;
-  headRefName: string;
-  state?: "open" | "closed" | "merged";
-}): ResolvedPullRequest {
+function toResolvedPullRequest(pr: GitHubPullRequestSummary): ResolvedPullRequest {
   return {
+    provider: "github",
     number: pr.number,
     title: pr.title,
     url: pr.url,
     baseBranch: pr.baseRefName,
     headBranch: pr.headRefName,
     state: pr.state ?? "open",
+    ...(typeof pr.isDraft === "boolean" ? { isDraft: pr.isDraft } : {}),
+    ...(pr.author !== undefined ? { author: pr.author } : {}),
+    ...(pr.labels ? { labels: [...pr.labels] } : {}),
+    ...(pr.reviewDecision ? { reviewDecision: pr.reviewDecision } : {}),
+    ...(pr.mergeability ? { mergeability: pr.mergeability } : {}),
+    ...(pr.checksState ? { checksState: pr.checksState } : {}),
+    ...(typeof pr.additions === "number" ? { additions: pr.additions } : {}),
+    ...(typeof pr.deletions === "number" ? { deletions: pr.deletions } : {}),
+    ...(typeof pr.changedFiles === "number" ? { changedFiles: pr.changedFiles } : {}),
+    ...(pr.createdAt ? { createdAt: pr.createdAt } : {}),
+    ...(pr.updatedAt ? { updatedAt: pr.updatedAt } : {}),
   };
 }
 
@@ -1377,7 +1395,8 @@ export const makeGitManager = Effect.gen(function* () {
         Effect.catch((error) => {
           let finalError: GitManagerServiceError = error;
           if (currentPhase === "push") {
-            const pushDetail = (error as { detail?: string })?.detail ?? error?.message ?? String(error);
+            const pushDetail =
+              (error as { detail?: string })?.detail ?? error?.message ?? String(error);
             const lower = pushDetail.toLowerCase();
             if (
               lower.includes("permission to") ||
@@ -1442,7 +1461,13 @@ export const makeGitManager = Effect.gen(function* () {
         const diffRes = yield* gitCore.execute({
           operation: "GitManager.generateDiffSummary.fullCodebase",
           cwd: input.cwd,
-          args: ["diff", "--no-color", "--no-ext-diff", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD"],
+          args: [
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+            "HEAD",
+          ],
           allowNonZeroExit: true,
         });
         rawPatch = diffRes.stdout;
@@ -1523,7 +1548,8 @@ export const makeGitManager = Effect.gen(function* () {
 
       let patchContent = filteredLines.join("\n");
       if (patchContent.length > 300_000) {
-        patchContent = patchContent.slice(0, 300_000) + "\n[... diff patch capped at 300,000 characters ...]";
+        patchContent =
+          patchContent.slice(0, 300_000) + "\n[... diff patch capped at 300,000 characters ...]";
         wasTruncated = true;
       }
 
@@ -1590,7 +1616,9 @@ export const makeGitManager = Effect.gen(function* () {
         diffPatch: patchContent,
         ...(commitMessage ? { commitMessage } : {}),
         ...(finalUserHint ? { userHint: finalUserHint } : {}),
-        ...(staticAnalysisContextSection ? { staticAnalysisContext: staticAnalysisContextSection } : {}),
+        ...(staticAnalysisContextSection
+          ? { staticAnalysisContext: staticAnalysisContextSection }
+          : {}),
         ...(repoContextSection ? { repoContext: repoContextSection } : {}),
         ...(projectRulesSection ? { projectRules: projectRulesSection } : {}),
         modelSelection,
@@ -1624,302 +1652,308 @@ export const makeGitManager = Effect.gen(function* () {
     ),
   );
 
-  const generateReview: GitManagerShape["generateReview"] = Effect.fn(
-    "GitManager.generateReview",
-  )((input, options) =>
-    Effect.gen(function* () {
-      const settings = yield* serverSettingsService.getSettings;
-      const modelSelection =
-        input.modelSelection ??
-        settings.gitAi?.gitTextGenerationModelSelection ??
-        settings.textGenerationModelSelection;
-      if (!modelSelection || !modelSelection.instanceId || !modelSelection.model) {
-        return yield* gitManagerError(
-          "generateReview",
-          "No text generation model configured — set one up in Settings → Providers",
-        );
-      }
-
-      let diffSummary = "";
-      let rawPatch = "";
-      let targetScope: "staged" | "working_tree" | "commit" | "full_codebase" = "working_tree";
-
-      if (options?.onProgress) {
-        yield* options.onProgress({
-          cwd: input.cwd,
-          stage: "assembling_context",
-          message:
-            input.target.kind === "full_codebase"
-              ? "Collecting full codebase source files & diff patch buffers..."
-              : "Collecting working tree diff patch & git status...",
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      if (input.target.kind === "commit") {
-        targetScope = "commit";
-        const commitSha = input.target.sha;
-        const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
-        rawPatch = diffRes.patch;
-        diffSummary = `Commit ${commitSha}`;
-      } else if (input.target.kind === "full_codebase") {
-        targetScope = "full_codebase";
-        const diffRes = yield* gitCore.execute({
-          operation: "GitManager.generateReview.fullCodebase",
-          cwd: input.cwd,
-          args: ["diff", "--no-color", "--no-ext-diff", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD"],
-          allowNonZeroExit: true,
-        });
-        rawPatch = diffRes.stdout;
-        diffSummary = "Full codebase audit across repository source files";
-      } else {
-        const details = yield* gitCore.statusDetails(input.cwd);
-        const stagedCount = details.staged?.files.length ?? 0;
-        if (stagedCount > 0) {
-          targetScope = "staged";
-          const prepContext = yield* gitCore.prepareCommitContext(input.cwd);
-          if (prepContext) {
-            diffSummary = prepContext.stagedSummary;
-            rawPatch = prepContext.stagedPatch;
-          }
-        } else {
-          targetScope = "working_tree";
-          const diffRes = yield* gitCore.diff({ cwd: input.cwd, path: "." });
-          rawPatch = diffRes.patch;
-          diffSummary = `Working tree changes (${details.workingTree.files.length} files)`;
-        }
-      }
-
-      if (!rawPatch.trim() && !input.userHint) {
-        return {
-          summary: "No changes detected.",
-          keyChanges: "- No modifications found in diff.",
-          notesAndRisk: "",
-          findings: [],
-          passesRun: [],
-          targetScope,
-          wasTruncated: false,
-        };
-      }
-
-      // Truncation & Exclusions logic
-      const EXCLUDED_PATTERNS = [
-        "package-lock.json",
-        "pnpm-lock.yaml",
-        "yarn.lock",
-        "bun.lockb",
-        ".min.js",
-        ".min.css",
-        ".map",
-      ];
-      const lines = rawPatch.split("\n");
-      const filteredLines: string[] = [];
-      let truncatedCount = 0;
-      let wasTruncated = false;
-      let currentFileExcluded = false;
-      let fileLineCount = 0;
-
-      for (const line of lines) {
-        if (line.startsWith("diff --git")) {
-          const isExcluded = EXCLUDED_PATTERNS.some((pat) => line.includes(pat));
-          if (isExcluded) {
-            currentFileExcluded = true;
-            truncatedCount++;
-            wasTruncated = true;
-            continue;
-          }
-          currentFileExcluded = false;
-          fileLineCount = 0;
+  const generateReview: GitManagerShape["generateReview"] = Effect.fn("GitManager.generateReview")(
+    (input, options) =>
+      Effect.gen(function* () {
+        const settings = yield* serverSettingsService.getSettings;
+        const modelSelection =
+          input.modelSelection ??
+          settings.gitAi?.gitTextGenerationModelSelection ??
+          settings.textGenerationModelSelection;
+        if (!modelSelection || !modelSelection.instanceId || !modelSelection.model) {
+          return yield* gitManagerError(
+            "generateReview",
+            "No text generation model configured — set one up in Settings → Providers",
+          );
         }
 
-        if (currentFileExcluded) {
-          continue;
-        }
+        let diffSummary = "";
+        let rawPatch = "";
+        let targetScope: "staged" | "working_tree" | "commit" | "full_codebase" = "working_tree";
 
-        fileLineCount++;
-        if (fileLineCount > 150) {
-          if (fileLineCount === 151) {
-            filteredLines.push("[... file patch truncated at 150 lines ...]");
-            wasTruncated = true;
-          }
-          continue;
-        }
-
-        filteredLines.push(line);
-      }
-
-      let patchContent = filteredLines.join("\n");
-      if (patchContent.length > 300_000) {
-        patchContent = patchContent.slice(0, 300_000) + "\n[... diff patch capped at 300,000 characters ...]";
-        wasTruncated = true;
-      }
-
-      const initialChangedFiles = extractChangedFilesFromPatch(patchContent);
-      if (options?.onProgress) {
-        yield* options.onProgress({
-          cwd: input.cwd,
-          stage: "assembling_context",
-          message:
-            input.target.kind === "full_codebase"
-              ? `Assembled patch context for ${initialChangedFiles.length} codebase files.`
-              : `Assembled patch context for ${initialChangedFiles.length} modified files.`,
-          fileCount: initialChangedFiles.length,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      const customInstructions = settings.gitAi?.customPromptInstructions?.trim();
-
-      // Static Analysis
-      let staticAnalysisContextSection = "";
-      const saSettings = settings.gitAi?.staticAnalysis;
-      if (saSettings?.enabled && saSettings.tools.length > 0) {
         if (options?.onProgress) {
           yield* options.onProgress({
             cwd: input.cwd,
-            stage: "static_analysis",
-            message: "Evaluating static analysis context & AST symbol diagnostics...",
+            stage: "assembling_context",
+            message:
+              input.target.kind === "full_codebase"
+                ? "Collecting full codebase source files & diff patch buffers..."
+                : "Collecting working tree diff patch & git status...",
             timestamp: new Date().toISOString(),
           });
         }
-        const saResult = yield* runStaticAnalysis({
-          cwd: input.cwd,
-          tools: saSettings.tools,
-        });
-        const changedFiles = extractChangedFilesFromPatch(patchContent);
-        const contextResult = buildStaticAnalysisContext({
-          changedFiles,
-          allFindings: saResult.allFindings,
-        });
-        staticAnalysisContextSection = contextResult.contextSection;
-      }
 
-      // User hint
-      const userHintParts: string[] = [];
-      if (input.userHint?.trim()) userHintParts.push(input.userHint.trim());
-      if (customInstructions) userHintParts.push(customInstructions);
-      const finalUserHint = userHintParts.join("\n\n") || undefined;
-
-      // Repo Context & .tabs-review.json
-      let repoContextSection = "";
-      let projectRulesSection = "";
-      const rcSettings = settings.gitAi?.repoContext;
-      if (rcSettings?.enabled) {
-        const changedFiles = extractChangedFilesFromPatch(patchContent);
-        const tabsReview = loadTabsReviewJson(input.cwd);
-        if (tabsReview.parseError) {
-          yield* Effect.logWarning(
-            `[GitManager.generateReview] .tabs-review.json config error: ${tabsReview.parseError}`,
-          );
+        if (input.target.kind === "commit") {
+          targetScope = "commit";
+          const commitSha = input.target.sha;
+          const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
+          rawPatch = diffRes.patch;
+          diffSummary = `Commit ${commitSha}`;
+        } else if (input.target.kind === "full_codebase") {
+          targetScope = "full_codebase";
+          const diffRes = yield* gitCore.execute({
+            operation: "GitManager.generateReview.fullCodebase",
+            cwd: input.cwd,
+            args: [
+              "diff",
+              "--no-color",
+              "--no-ext-diff",
+              "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+              "HEAD",
+            ],
+            allowNonZeroExit: true,
+          });
+          rawPatch = diffRes.stdout;
+          diffSummary = "Full codebase audit across repository source files";
+        } else {
+          const details = yield* gitCore.statusDetails(input.cwd);
+          const stagedCount = details.staged?.files.length ?? 0;
+          if (stagedCount > 0) {
+            targetScope = "staged";
+            const prepContext = yield* gitCore.prepareCommitContext(input.cwd);
+            if (prepContext) {
+              diffSummary = prepContext.stagedSummary;
+              rawPatch = prepContext.stagedPatch;
+            }
+          } else {
+            targetScope = "working_tree";
+            const diffRes = yield* gitCore.diff({ cwd: input.cwd, path: "." });
+            rawPatch = diffRes.patch;
+            diffSummary = `Working tree changes (${details.workingTree.files.length} files)`;
+          }
         }
-        if (tabsReview.config?.instructions?.trim()) {
-          projectRulesSection = tabsReview.config.instructions.trim();
+
+        if (!rawPatch.trim() && !input.userHint) {
+          return {
+            summary: "No changes detected.",
+            keyChanges: "- No modifications found in diff.",
+            notesAndRisk: "",
+            findings: [],
+            passesRun: [],
+            targetScope,
+            wasTruncated: false,
+          };
         }
-        const rcResult = yield* runRepoContext({
-          cwd: input.cwd,
-          changedFiles,
-          diffPatch: patchContent,
-          maxCallersPerSymbol: rcSettings.maxCallersPerSymbol,
-          maxCommitHistoryPerFile: rcSettings.maxCommitHistoryPerFile,
-        });
-        repoContextSection = rcResult.contextSection;
-      }
 
-      // Review passes configured via gitAi.review.passes
-      const configuredPasses = settings.gitAi?.review?.passes;
+        // Truncation & Exclusions logic
+        const EXCLUDED_PATTERNS = [
+          "package-lock.json",
+          "pnpm-lock.yaml",
+          "yarn.lock",
+          "bun.lockb",
+          ".min.js",
+          ".min.css",
+          ".map",
+        ];
+        const lines = rawPatch.split("\n");
+        const filteredLines: string[] = [];
+        let truncatedCount = 0;
+        let wasTruncated = false;
+        let currentFileExcluded = false;
+        let fileLineCount = 0;
 
-      const reviewResult = yield* runReviewPasses(
-        {
-          cwd: input.cwd,
-          diffSummary: limitContext(diffSummary, 12_000),
-          diffPatch: patchContent,
-          userHint: finalUserHint,
-          staticAnalysisContext: staticAnalysisContextSection || undefined,
-          repoContext: repoContextSection || undefined,
-          projectRules: projectRulesSection || undefined,
-          modelSelection,
-          configuredPasses,
-          ...(options?.onCostPreview ? { onCostPreview: options.onCostPreview } : {}),
-          ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
-        },
-        textGeneration,
-      );
+        for (const line of lines) {
+          if (line.startsWith("diff --git")) {
+            const isExcluded = EXCLUDED_PATTERNS.some((pat) => line.includes(pat));
+            if (isExcluded) {
+              currentFileExcluded = true;
+              truncatedCount++;
+              wasTruncated = true;
+              continue;
+            }
+            currentFileExcluded = false;
+            fileLineCount = 0;
+          }
 
-      const truncatedReason = wasTruncated
-        ? truncatedCount > 0
-          ? `Summary based on partial diff — ${truncatedCount} file(s) excluded or truncated.`
-          : "Summary based on partial diff — patch truncated to fit context limits."
-        : undefined;
+          if (currentFileExcluded) {
+            continue;
+          }
 
-      const branchRes = yield* gitCore
-        .execute({
-          operation: "GitManager.generateReview.getBranch",
-          cwd: input.cwd,
-          args: ["rev-parse", "--abbrev-ref", "HEAD"],
-          allowNonZeroExit: true,
-        })
-        .pipe(Effect.option);
+          fileLineCount++;
+          if (fileLineCount > 150) {
+            if (fileLineCount === 151) {
+              filteredLines.push("[... file patch truncated at 150 lines ...]");
+              wasTruncated = true;
+            }
+            continue;
+          }
 
-      const shaRes = yield* gitCore
-        .execute({
-          operation: "GitManager.generateReview.getHeadSha",
-          cwd: input.cwd,
-          args: ["rev-parse", "HEAD"],
-          allowNonZeroExit: true,
-        })
-        .pipe(Effect.option);
+          filteredLines.push(line);
+        }
 
-      const currentBranchName = branchRes._tag === "Some" ? branchRes.value.stdout.trim() : "";
-      const currentHeadSha = shaRes._tag === "Some" ? shaRes.value.stdout.trim() : "";
+        let patchContent = filteredLines.join("\n");
+        if (patchContent.length > 300_000) {
+          patchContent =
+            patchContent.slice(0, 300_000) + "\n[... diff patch capped at 300,000 characters ...]";
+          wasTruncated = true;
+        }
 
-      if (currentHeadSha && currentBranchName) {
-        saveReviewState({
+        const initialChangedFiles = extractChangedFilesFromPatch(patchContent);
+        if (options?.onProgress) {
+          yield* options.onProgress({
+            cwd: input.cwd,
+            stage: "assembling_context",
+            message:
+              input.target.kind === "full_codebase"
+                ? `Assembled patch context for ${initialChangedFiles.length} codebase files.`
+                : `Assembled patch context for ${initialChangedFiles.length} modified files.`,
+            fileCount: initialChangedFiles.length,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        const customInstructions = settings.gitAi?.customPromptInstructions?.trim();
+
+        // Static Analysis
+        let staticAnalysisContextSection = "";
+        const saSettings = settings.gitAi?.staticAnalysis;
+        if (saSettings?.enabled && saSettings.tools.length > 0) {
+          if (options?.onProgress) {
+            yield* options.onProgress({
+              cwd: input.cwd,
+              stage: "static_analysis",
+              message: "Evaluating static analysis context & AST symbol diagnostics...",
+              timestamp: new Date().toISOString(),
+            });
+          }
+          const saResult = yield* runStaticAnalysis({
+            cwd: input.cwd,
+            tools: saSettings.tools,
+          });
+          const changedFiles = extractChangedFilesFromPatch(patchContent);
+          const contextResult = buildStaticAnalysisContext({
+            changedFiles,
+            allFindings: saResult.allFindings,
+          });
+          staticAnalysisContextSection = contextResult.contextSection;
+        }
+
+        // User hint
+        const userHintParts: string[] = [];
+        if (input.userHint?.trim()) userHintParts.push(input.userHint.trim());
+        if (customInstructions) userHintParts.push(customInstructions);
+        const finalUserHint = userHintParts.join("\n\n") || undefined;
+
+        // Repo Context & .tabs-review.json
+        let repoContextSection = "";
+        let projectRulesSection = "";
+        const rcSettings = settings.gitAi?.repoContext;
+        if (rcSettings?.enabled) {
+          const changedFiles = extractChangedFilesFromPatch(patchContent);
+          const tabsReview = loadTabsReviewJson(input.cwd);
+          if (tabsReview.parseError) {
+            yield* Effect.logWarning(
+              `[GitManager.generateReview] .tabs-review.json config error: ${tabsReview.parseError}`,
+            );
+          }
+          if (tabsReview.config?.instructions?.trim()) {
+            projectRulesSection = tabsReview.config.instructions.trim();
+          }
+          const rcResult = yield* runRepoContext({
+            cwd: input.cwd,
+            changedFiles,
+            diffPatch: patchContent,
+            maxCallersPerSymbol: rcSettings.maxCallersPerSymbol,
+            maxCommitHistoryPerFile: rcSettings.maxCommitHistoryPerFile,
+          });
+          repoContextSection = rcResult.contextSection;
+        }
+
+        // Review passes configured via gitAi.review.passes
+        const configuredPasses = settings.gitAi?.review?.passes;
+
+        const reviewResult = yield* runReviewPasses(
+          {
+            cwd: input.cwd,
+            diffSummary: limitContext(diffSummary, 12_000),
+            diffPatch: patchContent,
+            userHint: finalUserHint,
+            staticAnalysisContext: staticAnalysisContextSection || undefined,
+            repoContext: repoContextSection || undefined,
+            projectRules: projectRulesSection || undefined,
+            modelSelection,
+            configuredPasses,
+            ...(options?.onCostPreview ? { onCostPreview: options.onCostPreview } : {}),
+            ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
+          },
+          textGeneration,
+        );
+
+        const truncatedReason = wasTruncated
+          ? truncatedCount > 0
+            ? `Summary based on partial diff — ${truncatedCount} file(s) excluded or truncated.`
+            : "Summary based on partial diff — patch truncated to fit context limits."
+          : undefined;
+
+        const branchRes = yield* gitCore
+          .execute({
+            operation: "GitManager.generateReview.getBranch",
+            cwd: input.cwd,
+            args: ["rev-parse", "--abbrev-ref", "HEAD"],
+            allowNonZeroExit: true,
+          })
+          .pipe(Effect.option);
+
+        const shaRes = yield* gitCore
+          .execute({
+            operation: "GitManager.generateReview.getHeadSha",
+            cwd: input.cwd,
+            args: ["rev-parse", "HEAD"],
+            allowNonZeroExit: true,
+          })
+          .pipe(Effect.option);
+
+        const currentBranchName = branchRes._tag === "Some" ? branchRes.value.stdout.trim() : "";
+        const currentHeadSha = shaRes._tag === "Some" ? shaRes.value.stdout.trim() : "";
+
+        if (currentHeadSha && currentBranchName) {
+          saveReviewState({
+            repoPath: input.cwd,
+            branchName: currentBranchName,
+            lastReviewedSha: currentHeadSha,
+            findings: reviewResult.findings,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        addReviewHistoryRecord({
+          id: randomUUID(),
           repoPath: input.cwd,
-          branchName: currentBranchName,
-          lastReviewedSha: currentHeadSha,
+          branchName: currentBranchName || "HEAD",
+          timestamp: new Date().toISOString(),
+          modelUsed: modelSelection.model,
+          targetScope,
+          summary: reviewResult.summary,
+          keyChanges: reviewResult.keyChanges,
+          notesAndRisk: reviewResult.notesAndRisk,
           findings: reviewResult.findings,
-          updatedAt: new Date().toISOString(),
+          passesRun: reviewResult.passesRun,
+          isIncremental: false,
         });
-      }
 
-      addReviewHistoryRecord({
-        id: randomUUID(),
-        repoPath: input.cwd,
-        branchName: currentBranchName || "HEAD",
-        timestamp: new Date().toISOString(),
-        modelUsed: modelSelection.model,
-        targetScope,
-        summary: reviewResult.summary,
-        keyChanges: reviewResult.keyChanges,
-        notesAndRisk: reviewResult.notesAndRisk,
-        findings: reviewResult.findings,
-        passesRun: reviewResult.passesRun,
-        isIncremental: false,
-      });
-
-      const result: GitGenerateReviewResult = {
-        summary: reviewResult.summary,
-        keyChanges: reviewResult.keyChanges,
-        notesAndRisk: reviewResult.notesAndRisk,
-        findings: [...reviewResult.findings],
-        passesRun: [...reviewResult.passesRun],
-        targetScope,
-        wasTruncated,
-        ...(truncatedCount > 0 ? { truncatedCount } : {}),
-        ...(truncatedReason ? { truncatedReason } : {}),
-      };
-      return result;
-    }).pipe(
-      Effect.mapError((err) =>
-        gitManagerError(
-          "generateReview",
-          (err as { detail?: string; message?: string })?.detail ||
-            (err as { detail?: string; message?: string })?.message ||
-            "Failed to generate AI review.",
-          err,
+        const result: GitGenerateReviewResult = {
+          summary: reviewResult.summary,
+          keyChanges: reviewResult.keyChanges,
+          notesAndRisk: reviewResult.notesAndRisk,
+          findings: [...reviewResult.findings],
+          passesRun: [...reviewResult.passesRun],
+          targetScope,
+          wasTruncated,
+          ...(truncatedCount > 0 ? { truncatedCount } : {}),
+          ...(truncatedReason ? { truncatedReason } : {}),
+        };
+        return result;
+      }).pipe(
+        Effect.mapError((err) =>
+          gitManagerError(
+            "generateReview",
+            (err as { detail?: string; message?: string })?.detail ||
+              (err as { detail?: string; message?: string })?.message ||
+              "Failed to generate AI review.",
+            err,
+          ),
         ),
       ),
-    ),
   );
 
   const submitFindingFeedback: GitManagerShape["submitFindingFeedback"] = Effect.fn(

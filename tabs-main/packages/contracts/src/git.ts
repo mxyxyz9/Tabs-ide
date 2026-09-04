@@ -1,7 +1,11 @@
 import { Schema } from "effect";
 import { NonNegativeInt, PositiveInt, TrimmedNonEmptyString, ThreadId } from "./baseSchemas";
 import { VcsDriverKind } from "./vcs.ts";
-import { SourceControlProviderError, SourceControlProviderInfo } from "./sourceControl.ts";
+import {
+  SourceControlProviderError,
+  SourceControlProviderInfo,
+  SourceControlProviderKind,
+} from "./sourceControl.ts";
 import { ModelSelection } from "./orchestration.ts";
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 
@@ -67,13 +71,52 @@ const GitWorktree = Schema.Struct({
   path: TrimmedNonEmptyStringSchema,
   branch: TrimmedNonEmptyStringSchema,
 });
+export const GitPullRequestActor = Schema.Struct({
+  login: TrimmedNonEmptyStringSchema,
+  avatarUrl: Schema.optional(Schema.String),
+  url: Schema.optional(Schema.String),
+});
+export type GitPullRequestActor = typeof GitPullRequestActor.Type;
+
+export const GitPullRequestLabel = Schema.Struct({
+  name: TrimmedNonEmptyStringSchema,
+  color: Schema.optional(Schema.String),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+});
+export type GitPullRequestLabel = typeof GitPullRequestLabel.Type;
+
+export const GitPullRequestChecksState = Schema.Literals(["passing", "failing", "pending"]);
+export type GitPullRequestChecksState = typeof GitPullRequestChecksState.Type;
+
+export const GitPullRequestReviewDecision = Schema.Literals([
+  "approved",
+  "changes_requested",
+  "review_required",
+]);
+export type GitPullRequestReviewDecision = typeof GitPullRequestReviewDecision.Type;
+
+export const GitPullRequestMergeability = Schema.Literals(["mergeable", "conflicting", "unknown"]);
+export type GitPullRequestMergeability = typeof GitPullRequestMergeability.Type;
+
 const GitResolvedPullRequest = Schema.Struct({
+  provider: Schema.optional(SourceControlProviderKind),
   number: PositiveInt,
   title: TrimmedNonEmptyStringSchema,
   url: Schema.String,
   baseBranch: TrimmedNonEmptyStringSchema,
   headBranch: TrimmedNonEmptyStringSchema,
   state: GitPullRequestState,
+  isDraft: Schema.optional(Schema.Boolean),
+  author: Schema.optional(Schema.NullOr(GitPullRequestActor)),
+  labels: Schema.optional(Schema.Array(GitPullRequestLabel)),
+  reviewDecision: Schema.optional(GitPullRequestReviewDecision),
+  mergeability: Schema.optional(GitPullRequestMergeability),
+  checksState: Schema.optional(GitPullRequestChecksState),
+  additions: Schema.optional(NonNegativeInt),
+  deletions: Schema.optional(NonNegativeInt),
+  changedFiles: Schema.optional(NonNegativeInt),
+  createdAt: Schema.optional(Schema.String),
+  updatedAt: Schema.optional(Schema.String),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 
@@ -327,14 +370,20 @@ export const GitGenerateDiffSummaryResult = Schema.Struct({
   summary: Schema.String,
   keyChanges: Schema.String,
   notesAndRisk: Schema.String,
-  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit", "full_codebase"])),
+  targetScope: Schema.optional(
+    Schema.Literals(["staged", "working_tree", "commit", "full_codebase"]),
+  ),
   wasTruncated: Schema.Boolean,
   truncatedCount: Schema.optional(NonNegativeInt),
   truncatedReason: Schema.optional(Schema.String),
 });
 export type GitGenerateDiffSummaryResult = typeof GitGenerateDiffSummaryResult.Type;
 
-export const ReviewFindingCategory = Schema.Literals(["correctness", "security", "api_compatibility"]);
+export const ReviewFindingCategory = Schema.Literals([
+  "correctness",
+  "security",
+  "api_compatibility",
+]);
 export type ReviewFindingCategory = typeof ReviewFindingCategory.Type;
 
 export const ReviewFindingSeverity = Schema.Literals(["error", "warning", "info"]);
@@ -375,7 +424,9 @@ export const GitGenerateReviewResult = Schema.Struct({
   notesAndRisk: Schema.String,
   findings: Schema.Array(ReviewFinding),
   passesRun: Schema.Array(Schema.String),
-  targetScope: Schema.optional(Schema.Literals(["staged", "working_tree", "commit", "full_codebase"])),
+  targetScope: Schema.optional(
+    Schema.Literals(["staged", "working_tree", "commit", "full_codebase"]),
+  ),
   wasTruncated: Schema.Boolean,
   truncatedCount: Schema.optional(NonNegativeInt),
   truncatedReason: Schema.optional(Schema.String),
@@ -426,7 +477,6 @@ export const GitGetReviewHistoryResult = Schema.Struct({
   records: Schema.Array(ReviewHistoryRecordSchema),
 });
 export type GitGetReviewHistoryResult = typeof GitGetReviewHistoryResult.Type;
-
 
 export const GitInitInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
@@ -512,7 +562,6 @@ export const GitListBranchesResult = Schema.Struct({
   remoteName: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type GitListBranchesResult = typeof GitListBranchesResult.Type;
-
 
 // Environment + GitHub account management
 
@@ -626,8 +675,6 @@ export const GitWatchedBranchStatusesResult = Schema.Struct({
 });
 export type GitWatchedBranchStatusesResult = typeof GitWatchedBranchStatusesResult.Type;
 
-
-
 export const GitCreateWorktreeResult = Schema.Struct({
   worktree: GitWorktree,
 });
@@ -646,7 +693,7 @@ export const GitListPullRequestsInput = Schema.Struct({
       Schema.Literal("closed"),
       Schema.Literal("merged"),
       Schema.Literal("all"),
-    ])
+    ]),
   ),
 });
 export type GitListPullRequestsInput = typeof GitListPullRequestsInput.Type;
@@ -804,7 +851,6 @@ export const GitWorkflowRun = Schema.Struct({
   workflowName: Schema.String,
 });
 export type GitWorkflowRun = typeof GitWorkflowRun.Type;
-
 
 export const GitListWorkflowRunsInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,

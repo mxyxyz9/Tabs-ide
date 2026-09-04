@@ -1459,6 +1459,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       });
 
       expect(result.pullRequest).toEqual({
+        provider: "github",
         number: 42,
         title: "Resolve PR",
         url: "https://github.com/pingdotgg/codething-mvp/pull/42",

@@ -21,6 +21,25 @@ export interface GitHubPullRequestSummary {
   readonly isCrossRepository?: boolean;
   readonly headRepositoryNameWithOwner?: string | null;
   readonly headRepositoryOwnerLogin?: string | null;
+  readonly isDraft?: boolean | undefined;
+  readonly author?: {
+    readonly login: string;
+    readonly avatarUrl?: string | undefined;
+    readonly url?: string | undefined;
+  } | null;
+  readonly labels?: ReadonlyArray<{
+    readonly name: string;
+    readonly color?: string | undefined;
+    readonly description?: string | null | undefined;
+  }>;
+  readonly reviewDecision?: "approved" | "changes_requested" | "review_required" | undefined;
+  readonly mergeability?: "mergeable" | "conflicting" | "unknown" | undefined;
+  readonly checksState?: "passing" | "failing" | "pending" | undefined;
+  readonly additions?: number | undefined;
+  readonly deletions?: number | undefined;
+  readonly changedFiles?: number | undefined;
+  readonly createdAt?: string | undefined;
+  readonly updatedAt?: string | undefined;
 }
 
 export interface GitHubRepositoryCloneUrls {
