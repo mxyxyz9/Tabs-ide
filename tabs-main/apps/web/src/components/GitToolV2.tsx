@@ -152,11 +152,15 @@ export function GitToolV2({
   const gitStatusQuery = useQuery(gitStatusQueryOptions(cwd, environmentId));
   const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(cwd, environmentId));
   const branchesQuery = useQuery(gitBranchesQueryOptions(cwd, environmentId));
-  const historyQuery = useQuery(
-    gitHistoryQueryOptions({ cwd, limit: historyLimit, environmentId }),
-  );
+  const historyQuery = useQuery({
+    ...gitHistoryQueryOptions({ cwd, limit: historyLimit, environmentId }),
+    enabled: ["overview", "diff", "history", "tags"].includes(panel),
+  });
 
-  const stashQuery = useQuery(gitStashListQueryOptions(cwd, environmentId));
+  const stashQuery = useQuery({
+    ...gitStashListQueryOptions(cwd, environmentId),
+    enabled: panel === "stashes",
+  });
   const gitInitMutation = useMutation(gitInitMutationOptions({ cwd, queryClient, environmentId }));
   const switchMutation = useMutation(
     gitHubSwitchAccountMutationOptions({ cwd, queryClient, environmentId }),
@@ -207,9 +211,10 @@ export function GitToolV2({
     [gitScopeKey],
   );
 
-  const watchedBranchesQuery = useQuery(
-    gitWatchedBranchesQueryOptions(cwd, excludedWatchedBranches, environmentId),
-  );
+  const watchedBranchesQuery = useQuery({
+    ...gitWatchedBranchesQueryOptions(cwd, excludedWatchedBranches, environmentId),
+    enabled: panel === "overview" || panel === "divergence",
+  });
   const watchedBranchStatuses = watchedBranchesQuery.data?.branches ?? [];
 
   const [isFullScanning, setIsFullScanning] = useState(false);
@@ -571,24 +576,28 @@ export function GitToolV2({
 
         <PanelErrorBoundary panelName="PRs">
           <div className={cn(panel === "prs" ? "block" : "hidden")} aria-hidden={panel !== "prs"}>
-            <PRsPanel
-              cwd={cwd}
-              environmentId={environmentId}
-              branchName={branchName}
-              onOpenCreatePR={() => setModal("createPR")}
-            />
+            {panel === "prs" ? (
+              <PRsPanel
+                cwd={cwd}
+                environmentId={environmentId}
+                branchName={branchName}
+                onOpenCreatePR={() => setModal("createPR")}
+              />
+            ) : null}
           </div>
         </PanelErrorBoundary>
 
         <PanelErrorBoundary panelName="Tags">
           <div className={cn(panel === "tags" ? "block" : "hidden")} aria-hidden={panel !== "tags"}>
-            <TagsPanel
-              cwd={cwd}
-              commits={commits}
-              pushAccess={branchesQuery.data?.pushAccess}
-              onOpenDraftRelease={() => setModal("draftRelease")}
-              onRunInTerminal={onRunInTerminal}
-            />
+            {panel === "tags" ? (
+              <TagsPanel
+                cwd={cwd}
+                commits={commits}
+                pushAccess={branchesQuery.data?.pushAccess}
+                onOpenDraftRelease={() => setModal("draftRelease")}
+                onRunInTerminal={onRunInTerminal}
+              />
+            ) : null}
           </div>
         </PanelErrorBoundary>
 
@@ -632,15 +641,17 @@ export function GitToolV2({
             className={cn(panel === "settings" ? "block" : "hidden")}
             aria-hidden={panel !== "settings"}
           >
-            <SettingsPanel
-              cwd={cwd}
-              environmentData={environmentData}
-              excludedBranches={excludedWatchedBranches}
-              onAddExcludedBranch={addExcludedBranch}
-              onRemoveExcludedBranch={removeExcludedBranch}
-              onOpenAddRemote={() => setModal("addRemote")}
-              onRunInTerminal={onRunInTerminal}
-            />
+            {panel === "settings" ? (
+              <SettingsPanel
+                cwd={cwd}
+                environmentData={environmentData}
+                excludedBranches={excludedWatchedBranches}
+                onAddExcludedBranch={addExcludedBranch}
+                onRemoveExcludedBranch={removeExcludedBranch}
+                onOpenAddRemote={() => setModal("addRemote")}
+                onRunInTerminal={onRunInTerminal}
+              />
+            ) : null}
           </div>
         </PanelErrorBoundary>
       </>
