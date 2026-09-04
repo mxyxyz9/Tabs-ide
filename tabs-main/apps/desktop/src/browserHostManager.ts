@@ -1,6 +1,13 @@
+import * as FS from "node:fs/promises";
+import * as Path from "node:path";
+
 import {
+  app,
   BrowserWindow,
+  clipboard,
+  ClipboardItem,
   Menu,
+  nativeImage,
   WebContentsView,
   session as electronSession,
   shell,
@@ -17,6 +24,7 @@ import type {
   DesktopBrowserHostState,
   DesktopBrowserSessionState,
   BrowserProfileDomainInfo,
+  DesktopPreviewScreenshotArtifact,
 } from "@tabs/contracts";
 
 const DEFAULT_BROWSER_HOST_STATE: DesktopBrowserHostState = {
@@ -974,6 +982,58 @@ export class BrowserHostManager {
     }
 
     throw new Error(`Unsupported browser automation operation: ${request.operation}`);
+  }
+
+  async captureScreenshot(
+    input: DesktopBrowserHostControlInput,
+  ): Promise<DesktopPreviewScreenshotArtifact> {
+    const session = this.sessions.get(this.sessionKey(input.projectId, input.sessionId));
+    if (!session || session.view.webContents.isDestroyed()) {
+      throw new Error("The requested browser session is unavailable.");
+    }
+    const image = await session.view.webContents.capturePage();
+    const data = image.toPNG();
+    const createdAt = new Date().toISOString();
+    const id = `browser-screenshot-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+    const artifactDirectory = this.artifactDirectory();
+    const artifactPath = Path.join(artifactDirectory, `${id}.png`);
+    await FS.mkdir(artifactDirectory, { recursive: true });
+    await FS.writeFile(artifactPath, data, { flag: "wx" });
+    return {
+      id,
+      tabId: session.sessionId,
+      path: artifactPath,
+      mimeType: "image/png",
+      sizeBytes: data.byteLength,
+      createdAt,
+    };
+  }
+
+  revealArtifact(artifactPath: string): void {
+    shell.showItemInFolder(this.requireArtifactPath(artifactPath));
+  }
+
+  async copyArtifactToClipboard(artifactPath: string): Promise<void> {
+    const safePath = this.requireArtifactPath(artifactPath);
+    const data = await FS.readFile(safePath);
+    const image = nativeImage.createFromBuffer(data);
+    if (image.isEmpty()) throw new Error("The browser artifact is not a readable image.");
+    await clipboard.write([
+      new ClipboardItem({ "image/png": new Blob([new Uint8Array(data)], { type: "image/png" }) }),
+    ]);
+  }
+
+  private artifactDirectory(): string {
+    return Path.join(app.getPath("userData"), "browser-artifacts");
+  }
+
+  private requireArtifactPath(artifactPath: string): string {
+    const artifactDirectory = Path.resolve(this.artifactDirectory());
+    const resolved = Path.resolve(artifactPath);
+    if (!resolved.startsWith(`${artifactDirectory}${Path.sep}`)) {
+      throw new Error("Browser artifacts must be inside the Tabs artifact directory.");
+    }
+    return resolved;
   }
 
   private sessionForWebContentsId(webContentsId: number | undefined): BrowserSession | undefined {

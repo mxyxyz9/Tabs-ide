@@ -145,6 +145,9 @@ const BROWSER_HOST_BACK_SESSION_CHANNEL = "desktop:browser-host:back-session";
 const BROWSER_HOST_FORWARD_SESSION_CHANNEL = "desktop:browser-host:forward-session";
 const BROWSER_HOST_TOGGLE_DEVTOOLS_CHANNEL = "desktop:browser-host:toggle-devtools";
 const BROWSER_HOST_AUTOMATION_CHANNEL = "desktop:browser-host:automation";
+const BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL = "desktop:browser-host:capture-screenshot";
+const BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL = "desktop:browser-host:reveal-artifact";
+const BROWSER_HOST_COPY_ARTIFACT_CHANNEL = "desktop:browser-host:copy-artifact";
 const BROWSER_HOST_SET_BOUNDS_CHANNEL = "desktop:browser-host:set-bounds";
 const BROWSER_HOST_SYNC_SESSIONS_CHANNEL = "desktop:browser-host:sync-sessions";
 const CODE_HOST_RECREATE_SESSION_CHANNEL = "desktop:code-host:recreate-session";
@@ -2395,6 +2398,33 @@ function registerIpcHandlers(): void {
       input?: unknown;
     };
     return browserHostManager.runAutomation(request);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_CAPTURE_SCREENSHOT_CHANNEL, async (_event, input: unknown) => {
+    if (
+      typeof input !== "object" ||
+      input === null ||
+      typeof (input as { projectId?: unknown }).projectId !== "string"
+    ) {
+      throw new Error("Invalid browser screenshot request.");
+    }
+    return browserHostManager.captureScreenshot({
+      projectId: (input as { projectId: string }).projectId,
+      sessionId: readBrowserSessionId(input),
+    });
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_REVEAL_ARTIFACT_CHANNEL, async (_event, artifactPath: unknown) => {
+    if (typeof artifactPath !== "string") throw new Error("Invalid browser artifact path.");
+    browserHostManager.revealArtifact(artifactPath);
+  });
+
+  ipcMain.removeHandler(BROWSER_HOST_COPY_ARTIFACT_CHANNEL);
+  ipcMain.handle(BROWSER_HOST_COPY_ARTIFACT_CHANNEL, async (_event, artifactPath: unknown) => {
+    if (typeof artifactPath !== "string") throw new Error("Invalid browser artifact path.");
+    await browserHostManager.copyArtifactToClipboard(artifactPath);
   });
 
   ipcMain.handle(BROWSER_HOST_SET_BOUNDS_CHANNEL, async (_event, input: unknown) => {

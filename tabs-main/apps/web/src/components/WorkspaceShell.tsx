@@ -41,6 +41,7 @@ import {
   CheckIcon,
   ArchiveRestoreIcon,
   BugIcon,
+  CameraIcon,
   BotIcon,
   ChevronDownIcon,
   ChevronRightIcon,
@@ -6962,10 +6963,36 @@ function DesktopBrowserChrome(props: {
 }) {
   const api = readNativeApi();
   const bridge = window.desktopBridge;
+  const [capturingScreenshot, setCapturingScreenshot] = useState(false);
 
   const sessionArg = props.sessionId
     ? { projectId: props.projectId, sessionId: props.sessionId }
     : { projectId: props.projectId };
+  const captureScreenshot = useCallback(async () => {
+    if (!bridge || capturingScreenshot) return;
+    setCapturingScreenshot(true);
+    try {
+      const artifact = await bridge.captureBrowserScreenshot(
+        props.sessionId
+          ? { projectId: props.projectId, sessionId: props.sessionId }
+          : { projectId: props.projectId },
+      );
+      await bridge.revealBrowserArtifact(artifact.path);
+      toastManager.add({
+        type: "success",
+        title: "Browser screenshot saved",
+        description: artifact.path,
+      });
+    } catch (cause) {
+      toastManager.add({
+        type: "error",
+        title: "Could not capture browser screenshot",
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
+    } finally {
+      setCapturingScreenshot(false);
+    }
+  }, [bridge, capturingScreenshot, props.projectId, props.sessionId]);
 
   return (
     <div
@@ -7013,6 +7040,16 @@ function DesktopBrowserChrome(props: {
               >
                 <BugIcon className="size-3.5" />
                 Inspect
+              </Button>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={capturingScreenshot}
+                onClick={() => void captureScreenshot()}
+              >
+                <CameraIcon className="size-3.5" />
+                {capturingScreenshot ? "Capturing…" : "Screenshot"}
               </Button>
               <div className="flex min-w-[12rem] flex-1 items-center gap-1.5 px-1.5">
                 <Input

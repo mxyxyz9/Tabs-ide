@@ -1165,6 +1165,11 @@ export interface DesktopBridge {
   goForwardBrowserSession: (input: DesktopBrowserHostControlInput) => Promise<void>;
   toggleBrowserDevTools: (input: DesktopBrowserHostControlInput) => Promise<void>;
   runBrowserAutomation: (input: DesktopBrowserAutomationInput) => Promise<unknown>;
+  captureBrowserScreenshot: (
+    input: DesktopBrowserHostControlInput,
+  ) => Promise<DesktopPreviewScreenshotArtifact>;
+  revealBrowserArtifact: (path: string) => Promise<void>;
+  copyBrowserArtifactToClipboard: (path: string) => Promise<void>;
   setBrowserBounds: (input: DesktopBrowserHostSetBoundsInput) => Promise<void>;
   syncBrowserSessions: (projectIds: readonly string[]) => Promise<void>;
   recreateBrowserSession: (input: {

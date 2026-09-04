@@ -32,8 +32,10 @@ verification evidence, not just a matching type or placeholder.
 - [x] Populate automation snapshots with bounded live console, network, and action diagnostics
       instead of placeholder arrays.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
-- [ ] Add annotation picking, recordings, and artifact reveal/copy. Automation snapshots already
-      include PNG screenshots.
+- [x] Capture browser screenshots as real managed artifacts, with typed renderer IPC and
+      artifact-directory-restricted reveal/copy operations.
+- [ ] Add annotation picking and recordings. Automation snapshots already include inline PNG
+      screenshots.
 - [x] Expose preview automation through the authenticated HTTP MCP transport.
 
 Tabs deliberately keeps `WebContentsView` rather than replacing it with T3's `<webview>` engine;

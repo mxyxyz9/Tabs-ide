@@ -2,15 +2,23 @@ import { describe, expect, it, vi } from "vitest";
 
 const electronMocks = vi.hoisted(() => ({
   fromPartition: vi.fn(),
+  showItemInFolder: vi.fn(),
 }));
 
 // browserHostManager imports `electron` at module load; mock it so the pure
 // helper under test can be imported in a plain Node test environment.
 vi.mock("electron", () => ({
+  app: { getPath: () => "/tmp/tabs-test-user-data" },
+  clipboard: { write: vi.fn() },
+  ClipboardItem: vi.fn(),
+  nativeImage: { createFromBuffer: vi.fn() },
   WebContentsView: vi.fn(),
   Menu: { buildFromTemplate: () => ({ popup: () => undefined }) },
   session: { fromPartition: electronMocks.fromPartition },
-  shell: { openExternal: () => Promise.resolve() },
+  shell: {
+    openExternal: () => Promise.resolve(),
+    showItemInFolder: electronMocks.showItemInFolder,
+  },
 }));
 
 import {
@@ -245,6 +253,22 @@ describe("BrowserHostManager automation", () => {
     await expect(
       manager.runAutomation({ projectId: "missing", operation: "status" }),
     ).rejects.toThrow("browser session was not found");
+  });
+});
+
+describe("BrowserHostManager artifacts", () => {
+  it("reveals only files inside the managed artifact directory", () => {
+    const manager = new BrowserHostManager(() => null);
+
+    expect(() => manager.revealArtifact("/tmp/tabs-test-user-data/settings.json")).toThrow(
+      "Tabs artifact directory",
+    );
+    manager.revealArtifact(
+      "/tmp/tabs-test-user-data/browser-artifacts/browser-screenshot-test.png",
+    );
+    expect(electronMocks.showItemInFolder).toHaveBeenCalledWith(
+      "/tmp/tabs-test-user-data/browser-artifacts/browser-screenshot-test.png",
+    );
   });
 });
 
