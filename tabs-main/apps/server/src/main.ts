@@ -30,7 +30,7 @@ import {
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnapshotQuery";
 import { Server } from "./wsServer";
-import { ServerLoggerLive } from "./serverLogger";
+import { ObservabilityLive } from "./observability/Observability";
 import { AnalyticsServiceLayerLive } from "./telemetry/Layers/AnalyticsService";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { readBootstrapEnvelope } from "./bootstrap";
@@ -341,15 +341,15 @@ const LayerLive = (input: CliInput) =>
       Layer.effectDiscard(
         Effect.sync(() => {
           console.timeEnd("SqlitePersistence");
-          console.time("ServerLoggerLive");
+          console.time("ObservabilityLive");
         }),
       ),
     ),
-    Layer.provideMerge(ServerLoggerLive),
+    Layer.provideMerge(ObservabilityLive),
     Layer.provideMerge(
       Layer.effectDiscard(
         Effect.sync(() => {
-          console.timeEnd("ServerLoggerLive");
+          console.timeEnd("ObservabilityLive");
           console.time("AnalyticsServiceLayerLive");
         }),
       ),

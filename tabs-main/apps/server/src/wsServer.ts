@@ -112,6 +112,7 @@ import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuer
 import { clamp } from "effect/Number";
 import { Open, resolveAvailableEditors } from "./open";
 import { ServerConfig } from "./config";
+import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics";
 import { GitCore } from "./git/Services/GitCore.ts";
 import { GitEnvironment } from "./git/Services/GitEnvironment.ts";
 import { tryHandleProjectFaviconRequest } from "./projectFaviconRoute";
@@ -335,7 +336,8 @@ export type ServerRuntimeServices =
   | ServerSecretStore
   | Crypto.Crypto
   | BackgroundPolicy
-  | EnvironmentThemeService;
+  | EnvironmentThemeService
+  | TraceDiagnostics.TraceDiagnostics;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -1962,7 +1964,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           availableEditors,
           observability: {
             logsDirectoryPath: serverConfig.logsDir,
-            localTracingEnabled: false,
+            localTracingEnabled: true,
             otlpTracesEnabled: false,
             otlpMetricsEnabled: false,
           },
@@ -1987,31 +1989,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         );
 
       case WS_METHODS.serverGetTraceDiagnostics: {
-        const readAt = yield* DateTime.now;
-        return {
-          traceFilePath: "unavailable",
-          scannedFilePaths: [],
-          readAt,
-          recordCount: 0,
-          parseErrorCount: 0,
-          firstSpanAt: Option.none(),
-          lastSpanAt: Option.none(),
-          failureCount: 0,
-          interruptionCount: 0,
-          slowSpanThresholdMs: 1_000,
-          slowSpanCount: 0,
-          logLevelCounts: {},
-          topSpansByCount: [],
-          slowestSpans: [],
-          commonFailures: [],
-          latestFailures: [],
-          latestWarningAndErrorLogs: [],
-          partialFailure: Option.none(),
-          error: Option.some({
-            kind: "trace-file-not-found" as const,
-            message: "Structured trace collection is not enabled for this server.",
-          }),
-        };
+        return yield* TraceDiagnostics.readTraceDiagnostics({
+          traceFilePath: serverConfig.serverTracePath,
+          maxFiles: 5,
+        });
       }
 
       case WS_METHODS.serverReportClientActivity: {

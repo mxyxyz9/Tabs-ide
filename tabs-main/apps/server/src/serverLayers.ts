@@ -43,6 +43,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
+import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -170,6 +171,7 @@ export function makeServerRuntimeServicesLayer() {
     PreviewManager.layer,
     PreviewAutomationBroker.layer,
     EnvironmentTheme.layer,
+    TraceDiagnostics.layer,
   );
 }
 

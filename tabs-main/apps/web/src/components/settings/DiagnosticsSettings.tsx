@@ -2,6 +2,7 @@ import type {
   BackgroundActivityProfile,
   ServerProcessDiagnosticsResult,
   ServerProcessResourceHistoryResult,
+  ServerTraceDiagnosticsResult,
 } from "@tabs/contracts";
 import * as Option from "effect/Option";
 import { ActivityIcon, RefreshCwIcon } from "lucide-react";
@@ -21,6 +22,7 @@ function formatBytes(value: number): string {
 export function DiagnosticsSettings() {
   const [processes, setProcesses] = useState<ServerProcessDiagnosticsResult | null>(null);
   const [history, setHistory] = useState<ServerProcessResourceHistoryResult | null>(null);
+  const [traces, setTraces] = useState<ServerTraceDiagnosticsResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [backgroundProfile, setBackgroundProfile] = useState<BackgroundActivityProfile>("balanced");
@@ -30,13 +32,15 @@ export function DiagnosticsSettings() {
     setError(null);
     try {
       const api = ensureNativeApi();
-      const [nextProcesses, nextHistory, settings] = await Promise.all([
+      const [nextProcesses, nextHistory, nextTraces, settings] = await Promise.all([
         api.server.getProcessDiagnostics(),
         api.server.getProcessResourceHistory({ windowMs: 15 * 60_000, bucketMs: 30_000 }),
+        api.server.getTraceDiagnostics(),
         api.server.getSettings(),
       ]);
       setProcesses(nextProcesses);
       setHistory(nextHistory);
+      setTraces(nextTraces);
       setBackgroundProfile(
         settings.backgroundActivity.profile === "custom"
           ? (settings.backgroundActivity.baseProfile ?? "balanced")
@@ -123,6 +127,63 @@ export function DiagnosticsSettings() {
             </Button>
           ))}
         </div>
+      </SettingsSection>
+
+      <SettingsSection title="Structured traces">
+        <p className="mb-3 break-all text-xs text-muted-foreground">
+          {traces?.traceFilePath ?? "Trace storage is loading…"}
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-live="polite">
+          <Metric label="Spans" value={String(traces?.recordCount ?? "—")} />
+          <Metric label="Failures" value={String(traces?.failureCount ?? "—")} />
+          <Metric label="Interruptions" value={String(traces?.interruptionCount ?? "—")} />
+          <Metric label="Slow spans" value={String(traces?.slowSpanCount ?? "—")} />
+        </div>
+        {traces && Option.isSome(traces.error) ? (
+          <p role="alert" className="mt-3 text-xs text-destructive">
+            {traces.error.value.message}
+          </p>
+        ) : null}
+        {traces && Option.isSome(traces.partialFailure) ? (
+          <p role="status" className="mt-3 text-xs text-warning">
+            Some rotated trace files could not be read, so these diagnostics are incomplete.
+          </p>
+        ) : null}
+        {traces && traces.topSpansByCount.length > 0 ? (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-border/60">
+            <table className="w-full text-left text-xs">
+              <caption className="sr-only">Most frequent structured trace spans</caption>
+              <thead className="bg-muted/50 text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-3 py-2">
+                    Span
+                  </th>
+                  <th scope="col" className="px-3 py-2">
+                    Count
+                  </th>
+                  <th scope="col" className="px-3 py-2">
+                    Failures
+                  </th>
+                  <th scope="col" className="px-3 py-2">
+                    Average
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {traces.topSpansByCount.map((span) => (
+                  <tr key={span.name} className="border-t border-border/50">
+                    <td className="px-3 py-2 font-mono">{span.name}</td>
+                    <td className="px-3 py-2 tabular-nums">{span.count}</td>
+                    <td className="px-3 py-2 tabular-nums">{span.failureCount}</td>
+                    <td className="px-3 py-2 tabular-nums">
+                      {span.averageDurationMs.toFixed(1)} ms
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection title="Process tree">

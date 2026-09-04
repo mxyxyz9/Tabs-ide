@@ -87,6 +87,8 @@ an adapter over that engine.
 - [x] Environment process-tree diagnostics, bounded history, safe descendant process signaling,
       and an accessible diagnostics settings panel.
 - [ ] Native resource attribution, trace-file aggregation, and support bundles.
+- [x] Replace the advertised trace-diagnostics placeholder with bounded rotating structured trace
+      capture, multi-file aggregation, parse/failure summaries, and an accessible diagnostics view.
 - [x] Desktop self-update state machine, download/install actions, sidebar notification, and
       settings UI. Tabs retains its existing updater because it is already more complete.
 - [ ] Cloud relay account and managed-server status UI parity.
