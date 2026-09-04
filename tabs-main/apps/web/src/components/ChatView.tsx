@@ -3693,7 +3693,9 @@ export default function ChatView({
           trigger.rangeStart,
           replacementRangeEnd,
           replacement,
-          { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+          {
+            expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+          },
         );
         if (applied) {
           setComposerHighlightedItemId(null);
@@ -3712,7 +3714,9 @@ export default function ChatView({
             trigger.rangeStart,
             replacementRangeEnd,
             replacement,
-            { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+            {
+              expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+            },
           );
           if (applied) {
             setComposerHighlightedItemId(null);
@@ -3942,40 +3946,41 @@ export default function ChatView({
           }}
         />
         {activeThreadIsSettled && (
-          <div
-            className="flex items-center gap-2 rounded-t-xl border border-b-0 border-primary/35 bg-primary/5 px-3 py-2 text-sm"
-            role="status"
-          >
-            <CircleCheckIcon aria-hidden="true" className="size-4 shrink-0 text-primary" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground">This thread is settled</p>
-              <p className="text-xs text-muted-foreground">
-                Sending a message returns it to Unsettled.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const api = threadApi;
-                if (!api) return;
-                void api.orchestration.dispatchCommand({
-                  type: "thread.unsettle",
-                  commandId: newCommandId(),
-                  threadId: activeThread.id,
-                  reason: "user",
-                });
-              }}
+          <div className="mb-1.5 flex justify-center px-2">
+            <div
+              className="flex max-w-full items-center gap-2 rounded-full border border-border/70 bg-card/95 py-1.5 pl-2.5 pr-1.5 text-xs shadow-sm backdrop-blur"
+              role="status"
+              aria-label="This thread is settled. Sending a message will return it to Unsettled."
             >
-              Unsettle
-            </Button>
+              <CircleCheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+              <span className="truncate font-medium text-foreground">Thread settled</span>
+              <span aria-hidden="true" className="hidden text-muted-foreground sm:inline">
+                Send a message to resume
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 shrink-0 rounded-full px-2 text-xs"
+                onClick={() => {
+                  const api = threadApi;
+                  if (!api) return;
+                  void api.orchestration.dispatchCommand({
+                    type: "thread.unsettle",
+                    commandId: newCommandId(),
+                    threadId: activeThread.id,
+                    reason: "user",
+                  });
+                }}
+              >
+                Unsettle
+              </Button>
+            </div>
           </div>
         )}
         <div
           className={cn(
             "group rounded-2xl p-0.5 transition-all duration-200",
-            activeThreadIsSettled && "rounded-t-none",
             composerProviderState.composerFrameClassName,
           )}
           onDragEnter={onComposerDragEnter}
@@ -3987,7 +3992,6 @@ export default function ChatView({
             ref={composerCardRef}
             className={cn(
               "rounded-2xl border bg-card/90 shadow-md transition-all duration-200 overflow-hidden flex flex-col",
-              activeThreadIsSettled && "rounded-t-none",
               isDragOverComposer
                 ? "border-foreground/40 bg-accent/30"
                 : "border-border/60 hover:border-border/80 has-focus-visible:border-foreground/30 has-focus-visible:ring-1 has-focus-visible:ring-foreground/20",
