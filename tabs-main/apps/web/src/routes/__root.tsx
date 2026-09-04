@@ -183,7 +183,7 @@ function errorDetails(error: unknown): string {
 }
 
 function threadIdFromPathname(pathname: string): ThreadId | null {
-  const match = /^\/([^/]+)$/.exec(pathname);
+  const match = /^\/(?:[^/]+\/)?([^/]+)$/.exec(pathname);
   if (!match) {
     return null;
   }
@@ -342,6 +342,7 @@ function EventRouter() {
       migrateLocalSettingsToServer();
       void (async () => {
         await syncSnapshot();
+        const primaryEnvironmentId = await primaryEnvironmentIdPromise;
         if (disposed) {
           return;
         }
@@ -392,11 +393,16 @@ function EventRouter() {
         if (shouldReplaceEmptyDraftSelection && currentThreadId) {
           composerDraftActions.clearDraftThread(currentThreadId);
         }
-        await navigate({
-          to: "/$threadId",
-          params: { threadId: payload.bootstrapThreadId },
-          replace: true,
-        });
+        if (primaryEnvironmentId) {
+          await navigate({
+            to: "/$environmentId/$threadId",
+            params: {
+              environmentId: primaryEnvironmentId,
+              threadId: payload.bootstrapThreadId,
+            },
+            replace: true,
+          });
+        }
         handledBootstrapThreadIdRef.current = payload.bootstrapThreadId;
       })().catch(() => undefined);
     });

@@ -33,6 +33,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   DEFAULT_MODEL,
   type DesktopUpdateState,
+  type EnvironmentId,
   ProjectId,
   ThreadId,
   type GitStatusResult,
@@ -405,6 +406,10 @@ export default function Sidebar() {
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeEnvironmentId = useParams({
+    strict: false,
+    select: (params) => (params.environmentId ? (params.environmentId as EnvironmentId) : null),
+  });
   const keybindings = useKeybindings() ?? EMPTY_KEYBINDINGS;
   const queryClient = useQueryClient();
   const { confirm, confirmDialog } = useConfirm();
@@ -550,16 +555,18 @@ export default function Sidebar() {
   }, []);
 
   const focusMostRecentThreadForProject = useCallback(
-    (projectId: ProjectId) => {
+    (projectId: ProjectId, environmentId: EnvironmentId | undefined) => {
       const latestThread = sortThreadsForSidebar(
-        threads.filter((thread) => thread.projectId === projectId),
+        threads.filter(
+          (thread) => thread.projectId === projectId && thread.environmentId === environmentId,
+        ),
         appSettings.sidebarThreadSortOrder,
       )[0];
-      if (!latestThread) return;
+      if (!latestThread?.environmentId) return;
 
       void navigate({
-        to: "/$threadId",
-        params: { threadId: latestThread.id },
+        to: "/$environmentId/$threadId",
+        params: { environmentId: latestThread.environmentId, threadId: latestThread.id },
       });
     },
     [appSettings.sidebarThreadSortOrder, navigate, threads],
@@ -582,7 +589,7 @@ export default function Sidebar() {
 
       const existing = projects.find((project) => project.cwd === cwd);
       if (existing) {
-        focusMostRecentThreadForProject(existing.id);
+        focusMostRecentThreadForProject(existing.id, existing.environmentId);
         finishAddingProject();
         return;
       }
@@ -769,7 +776,8 @@ export default function Sidebar() {
       }
 
       const allDeletedIds = deletedIds ?? new Set<ThreadId>();
-      const shouldNavigateToFallback = routeThreadId === threadId;
+      const shouldNavigateToFallback =
+        routeThreadId === threadId && routeEnvironmentId === thread.environmentId;
       const fallbackThreadId = getFallbackThreadIdAfterDelete({
         threads,
         deletedThreadId: threadId,
@@ -786,9 +794,20 @@ export default function Sidebar() {
       clearTerminalState(threadId);
       if (shouldNavigateToFallback) {
         if (fallbackThreadId) {
+          const fallbackThread = threads.find(
+            (candidate) =>
+              candidate.id === fallbackThreadId && candidate.environmentId === thread.environmentId,
+          );
+          if (!fallbackThread?.environmentId) {
+            void navigate({ to: "/", replace: true });
+            return;
+          }
           void navigate({
-            to: "/$threadId",
-            params: { threadId: fallbackThreadId },
+            to: "/$environmentId/$threadId",
+            params: {
+              environmentId: fallbackThread.environmentId,
+              threadId: fallbackThreadId,
+            },
             replace: true,
           });
         } else {
@@ -831,6 +850,7 @@ export default function Sidebar() {
       projects,
       removeWorktreeMutation,
       routeThreadId,
+      routeEnvironmentId,
       threads,
     ],
   );
@@ -1071,7 +1091,12 @@ export default function Sidebar() {
   );
 
   const handleThreadClick = useCallback(
-    (event: MouseEvent, threadId: ThreadId, orderedProjectThreadIds: readonly ThreadId[]) => {
+    (
+      event: MouseEvent,
+      threadId: ThreadId,
+      environmentId: EnvironmentId | undefined,
+      orderedProjectThreadIds: readonly ThreadId[],
+    ) => {
       const isMac = isMacPlatform(navigator.platform);
       const isModClick = isMac ? event.metaKey : event.ctrlKey;
       const isShiftClick = event.shiftKey;
@@ -1093,10 +1118,12 @@ export default function Sidebar() {
         clearSelection();
       }
       setSelectionAnchor(threadId);
-      void navigate({
-        to: "/$threadId",
-        params: { threadId },
-      });
+      if (environmentId) {
+        void navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId, threadId },
+        });
+      }
     },
     [
       clearSelection,
@@ -1230,7 +1257,10 @@ export default function Sidebar() {
     dragHandleProps: SortableProjectHandleProps | null,
   ) {
     const projectThreads = sortThreadsForSidebar(
-      threads.filter((thread) => thread.projectId === project.id),
+      threads.filter(
+        (thread) =>
+          thread.projectId === project.id && thread.environmentId === project.environmentId,
+      ),
       appSettings.sidebarThreadSortOrder,
     ).toSorted((left, right) => {
       const rank = (thread: (typeof threads)[number]) => {
@@ -1266,7 +1296,9 @@ export default function Sidebar() {
     const isThreadListExpanded = expandedThreadListsByProject.has(project.id);
     const pinnedCollapsedThread =
       !project.expanded && activeThreadId
-        ? (projectThreads.find((thread) => thread.id === activeThreadId) ?? null)
+        ? (projectThreads.find(
+            (thread) => thread.id === activeThreadId && thread.environmentId === routeEnvironmentId,
+          ) ?? null)
         : null;
     const shouldShowThreadPanel = project.expanded || pinnedCollapsedThread !== null;
     const { hasHiddenThreads, visibleThreads } = getVisibleThreadsForProject({
@@ -1278,7 +1310,7 @@ export default function Sidebar() {
     const orderedProjectThreadIds = projectThreads.map((thread) => thread.id);
     const renderedThreads = pinnedCollapsedThread ? [pinnedCollapsedThread] : visibleThreads;
     const renderThreadRow = (thread: (typeof projectThreads)[number]) => {
-      const isActive = routeThreadId === thread.id;
+      const isActive = routeThreadId === thread.id && routeEnvironmentId === thread.environmentId;
       const isSelected = selectedThreadIds.has(thread.id);
       const isHighlighted = isActive || isSelected;
       const threadStatus = resolveThreadStatusPill({
@@ -1293,7 +1325,11 @@ export default function Sidebar() {
       const lifecycleEntry = thread;
 
       return (
-        <SidebarMenuSubItem key={thread.id} className="w-full" data-thread-item>
+        <SidebarMenuSubItem
+          key={`${thread.environmentId}:${thread.id}`}
+          className="w-full"
+          data-thread-item
+        >
           <SidebarMenuSubButton
             render={<div role="button" tabIndex={0} />}
             size="sm"
@@ -1303,7 +1339,7 @@ export default function Sidebar() {
               isSelected,
             })}
             onClick={(event) => {
-              handleThreadClick(event, thread.id, orderedProjectThreadIds);
+              handleThreadClick(event, thread.id, thread.environmentId, orderedProjectThreadIds);
             }}
             onKeyDown={(event) => {
               if (event.key !== "Enter" && event.key !== " ") return;
@@ -1312,10 +1348,12 @@ export default function Sidebar() {
                 clearSelection();
               }
               setSelectionAnchor(thread.id);
-              void navigate({
-                to: "/$threadId",
-                params: { threadId: thread.id },
-              });
+              if (thread.environmentId) {
+                void navigate({
+                  to: "/$environmentId/$threadId",
+                  params: { environmentId: thread.environmentId, threadId: thread.id },
+                });
+              }
             }}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -1958,7 +1996,10 @@ export default function Sidebar() {
                   strategy={verticalListSortingStrategy}
                 >
                   {sortedProjects.map((project) => (
-                    <SortableProjectItem key={project.id} projectId={project.id}>
+                    <SortableProjectItem
+                      key={`${project.environmentId}:${project.id}`}
+                      projectId={project.id}
+                    >
                       {(dragHandleProps) => renderProjectItem(project, dragHandleProps)}
                     </SortableProjectItem>
                   ))}
@@ -1968,7 +2009,10 @@ export default function Sidebar() {
           ) : (
             <SidebarMenu ref={attachProjectListAutoAnimateRef}>
               {sortedProjects.map((project) => (
-                <SidebarMenuItem key={project.id} className="rounded-md">
+                <SidebarMenuItem
+                  key={`${project.environmentId}:${project.id}`}
+                  className="rounded-md"
+                >
                   {renderProjectItem(project, null)}
                 </SidebarMenuItem>
               ))}

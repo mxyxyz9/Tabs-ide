@@ -3,7 +3,7 @@ import type { GitListBranchesResult, GitStatusResult } from "@tabs/contracts";
 import { Atom } from "@tabs/client-runtime/state";
 import { useEffect } from "react";
 
-import { ensureNativeApi } from "../nativeApi";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import { appAtomRegistry } from "./atomRegistry";
 
 interface VcsSnapshot {
@@ -21,48 +21,51 @@ export const vcsSnapshotAtom = Atom.make(EMPTY_VCS_SNAPSHOT).pipe(
 
 const refreshes = new Map<string, Promise<void>>();
 
-export function refreshVcs(cwd: string | null): Promise<void> {
+const vcsKey = (environmentId: string | undefined, cwd: string) =>
+  JSON.stringify([environmentId ?? "primary", cwd]);
+
+export function refreshVcs(cwd: string | null, environmentId?: string): Promise<void> {
   if (!cwd) return Promise.resolve();
-  const active = refreshes.get(cwd);
+  const key = vcsKey(environmentId, cwd);
+  const active = refreshes.get(key);
   if (active) return active;
-  const refresh = Promise.all([
-    ensureNativeApi().git.status({ cwd }),
-    ensureNativeApi().git.listBranches({ cwd }),
-  ])
+  const refresh = environmentApi(environmentId)
+    .then((api) => Promise.all([api.git.status({ cwd }), api.git.listBranches({ cwd })]))
     .then(([status, branches]) => {
       appAtomRegistry.update(vcsSnapshotAtom, (snapshot) => ({
-        statusByCwd: { ...snapshot.statusByCwd, [cwd]: status },
-        branchesByCwd: { ...snapshot.branchesByCwd, [cwd]: branches },
-        errorsByCwd: { ...snapshot.errorsByCwd, [cwd]: undefined },
+        statusByCwd: { ...snapshot.statusByCwd, [key]: status },
+        branchesByCwd: { ...snapshot.branchesByCwd, [key]: branches },
+        errorsByCwd: { ...snapshot.errorsByCwd, [key]: undefined },
       }));
     })
     .catch((cause: unknown) => {
       const error = cause instanceof Error ? cause : new Error("Unable to read Git state.");
       appAtomRegistry.update(vcsSnapshotAtom, (snapshot) => ({
         ...snapshot,
-        errorsByCwd: { ...snapshot.errorsByCwd, [cwd]: error },
+        errorsByCwd: { ...snapshot.errorsByCwd, [key]: error },
       }));
     })
-    .finally(() => refreshes.delete(cwd));
-  refreshes.set(cwd, refresh);
+    .finally(() => refreshes.delete(key));
+  refreshes.set(key, refresh);
   return refresh;
 }
 
-export function useVcs(cwd: string | null) {
+export function useVcs(cwd: string | null, environmentId?: string) {
+  const key = cwd ? vcsKey(environmentId, cwd) : null;
   const result = useAtomValue(vcsSnapshotAtom, (snapshot) =>
-    cwd
+    key
       ? {
-          status: snapshot.statusByCwd[cwd] ?? null,
-          branches: snapshot.branchesByCwd[cwd] ?? null,
-          error: snapshot.errorsByCwd[cwd] ?? null,
+          status: snapshot.statusByCwd[key] ?? null,
+          branches: snapshot.branchesByCwd[key] ?? null,
+          error: snapshot.errorsByCwd[key] ?? null,
         }
       : { status: null, branches: null, error: null },
   );
   useEffect(() => {
-    void refreshVcs(cwd);
+    void refreshVcs(cwd, environmentId);
     if (!cwd) return;
-    const interval = window.setInterval(() => void refreshVcs(cwd), 15_000);
+    const interval = window.setInterval(() => void refreshVcs(cwd, environmentId), 15_000);
     return () => window.clearInterval(interval);
-  }, [cwd]);
+  }, [cwd, environmentId]);
   return result;
 }

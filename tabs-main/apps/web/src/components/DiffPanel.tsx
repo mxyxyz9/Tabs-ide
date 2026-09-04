@@ -3,7 +3,7 @@ import { FileDiff, type FileDiffMetadata, Virtualizer } from "@pierre/diffs/reac
 import { useQuery } from "@tanstack/react-query";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { ThreadId, type TurnId } from "@tabs/contracts";
+import { EnvironmentId, ThreadId, type TurnId } from "@tabs/contracts";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -180,18 +180,32 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeEnvironmentId = useParams({
+    strict: false,
+    select: (params) =>
+      params.environmentId ? EnvironmentId.makeUnsafe(params.environmentId) : null,
+  });
   const diffSearch = useSearch({ strict: false, select: (search) => parseDiffRouteSearch(search) });
   const diffOpen = diffSearch.diff === "1";
   const activeThreadId = routeThreadId;
   const activeThread = useAtomValue(readModelStateAtom, (state) =>
-    activeThreadId ? state.threads.find((thread) => thread.id === activeThreadId) : undefined,
+    activeThreadId
+      ? state.threads.find(
+          (thread) => thread.id === activeThreadId && thread.environmentId === routeEnvironmentId,
+        )
+      : undefined,
   );
   const activeProjectId = activeThread?.projectId ?? null;
   const activeProject = useAtomValue(readModelStateAtom, (state) =>
-    activeProjectId ? state.projects.find((project) => project.id === activeProjectId) : undefined,
+    activeProjectId
+      ? state.projects.find(
+          (project) =>
+            project.id === activeProjectId && project.environmentId === activeThread?.environmentId,
+        )
+      : undefined,
   );
   const activeCwd = activeThread?.worktreePath ?? activeProject?.cwd;
-  const { branches: gitBranches } = useVcs(activeCwd ?? null);
+  const { branches: gitBranches } = useVcs(activeCwd ?? null, activeThread?.environmentId);
   const isGitRepo = gitBranches?.isRepo ?? true;
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
@@ -257,16 +271,16 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     ? selectedCheckpointRange
     : conversationCheckpointRange;
   const closeDiffPanel = useCallback(() => {
-    if (!activeThreadId) return;
+    if (!activeThreadId || !routeEnvironmentId) return;
     void navigate({
-      to: "/$threadId",
-      params: { threadId: activeThreadId },
+      to: "/$environmentId/$threadId",
+      params: { environmentId: routeEnvironmentId, threadId: activeThreadId },
       search: (previous) => {
         const rest = stripDiffSearchParams(previous);
         return { ...rest, diff: undefined };
       },
     });
-  }, [activeThreadId, navigate]);
+  }, [activeThreadId, navigate, routeEnvironmentId]);
   const conversationCacheScope = useMemo(() => {
     if (selectedTurn || orderedTurnDiffSummaries.length === 0) {
       return null;
@@ -345,10 +359,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
   );
 
   const selectTurn = (turnId: TurnId) => {
-    if (!activeThread) return;
+    if (!activeThread?.environmentId) return;
     void navigate({
-      to: "/$threadId",
-      params: { threadId: activeThread.id },
+      to: "/$environmentId/$threadId",
+      params: { environmentId: activeThread.environmentId, threadId: activeThread.id },
       search: (previous) => {
         const rest = stripDiffSearchParams(previous);
         return { ...rest, diff: "1", diffTurnId: turnId };
@@ -356,10 +370,10 @@ export default function DiffPanel({ mode = "inline" }: DiffPanelProps) {
     });
   };
   const selectWholeConversation = () => {
-    if (!activeThread) return;
+    if (!activeThread?.environmentId) return;
     void navigate({
-      to: "/$threadId",
-      params: { threadId: activeThread.id },
+      to: "/$environmentId/$threadId",
+      params: { environmentId: activeThread.environmentId, threadId: activeThread.id },
       search: (previous) => {
         const rest = stripDiffSearchParams(previous);
         return { ...rest, diff: "1" };

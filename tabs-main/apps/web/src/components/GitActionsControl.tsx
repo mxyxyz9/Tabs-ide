@@ -246,7 +246,11 @@ export default function GitActionsControl({
     });
   }, [threadToastData]);
 
-  const { status: gitStatus, branches: branchList, error: gitStatusError } = useVcs(gitCwd);
+  const {
+    status: gitStatus,
+    branches: branchList,
+    error: gitStatusError,
+  } = useVcs(gitCwd, environmentId);
   // Default to true while loading so we don't flash init controls.
   const isRepo = branchList?.isRepo ?? true;
   const hasOriginRemote = branchList?.hasOriginRemote ?? false;
@@ -257,8 +261,8 @@ export default function GitActionsControl({
   useEffect(() => {
     if (!isGitStatusOutOfSync) return;
     void invalidateGitQueries(queryClient);
-    void refreshVcs(gitCwd);
-  }, [gitCwd, isGitStatusOutOfSync, queryClient]);
+    void refreshVcs(gitCwd, environmentId);
+  }, [environmentId, gitCwd, isGitStatusOutOfSync, queryClient]);
 
   const gitStatusForActions = isGitStatusOutOfSync ? null : gitStatus;
 

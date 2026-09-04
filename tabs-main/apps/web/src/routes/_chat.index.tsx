@@ -22,7 +22,11 @@ function ChatIndexRouteView() {
     ? (projects.find((project) => project.id === activeProjectId) ?? null)
     : null;
   const projectThreads = activeProject
-    ? threads.filter((thread) => thread.projectId === activeProject.id)
+    ? threads.filter(
+        (thread) =>
+          thread.projectId === activeProject.id &&
+          thread.environmentId === activeProject.environmentId,
+      )
     : [];
 
   const rememberedDraft = rememberedThreadId
@@ -40,13 +44,13 @@ function ChatIndexRouteView() {
   const targetThreadId =
     isRememberedDraft || isRememberedSaved
       ? rememberedThreadId
-      : projectDraft?.threadId ?? projectThreads[0]?.id ?? null;
+      : (projectDraft?.threadId ?? projectThreads[0]?.id ?? null);
 
   useEffect(() => {
-    if (location.pathname === "/" && activeProject && targetThreadId) {
+    if (location.pathname === "/" && activeProject?.environmentId && targetThreadId) {
       void navigate({
-        to: "/$threadId",
-        params: { threadId: targetThreadId },
+        to: "/$environmentId/$threadId",
+        params: { environmentId: activeProject.environmentId, threadId: targetThreadId },
         replace: true,
       });
     }

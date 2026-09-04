@@ -11,6 +11,7 @@ import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   type EditorId,
+  type EnvironmentId,
   type ResolvedKeybindingsConfig,
   type ServerProvider,
   type ThreadId,
@@ -314,6 +315,7 @@ const terminalContextIdListsEqual = (
   contexts.length === ids.length && contexts.every((context, index) => context.id === ids[index]);
 
 interface ChatViewProps {
+  environmentId?: EnvironmentId;
   threadId: ThreadId;
   /**
    * Compact embed mode (the Code-tab AI side chat): hides the top toolbar
@@ -332,7 +334,12 @@ interface ChatViewProps {
   onRequestThread?: (threadId: ThreadId) => void;
 }
 
-export default function ChatView({ threadId, compact = false, onRequestThread }: ChatViewProps) {
+export default function ChatView({
+  environmentId,
+  threadId,
+  compact = false,
+  onRequestThread,
+}: ChatViewProps) {
   const { confirm, confirmDialog } = useConfirm();
   const threads = useAtomValue(threadsAtom);
   const projects = useAtomValue(projectsAtom);
@@ -355,9 +362,13 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
         onRequestThread?.(nextThreadId);
         return;
       }
-      return navigate({ to: "/$threadId", params: { threadId: nextThreadId } });
+      if (!environmentId) return;
+      return navigate({
+        to: "/$environmentId/$threadId",
+        params: { environmentId, threadId: nextThreadId },
+      });
     },
-    [compact, navigate, onRequestThread],
+    [compact, environmentId, navigate, onRequestThread],
   );
   const rawSearch = useSearch({
     strict: false,
@@ -598,8 +609,16 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     [composerTerminalContexts, removeComposerDraftTerminalContext, setPrompt, threadId],
   );
 
-  const serverThread = threads.find((t) => t.id === threadId);
-  const fallbackDraftProject = projects.find((project) => project.id === draftThread?.projectId);
+  const serverThread = threads.find(
+    (thread) =>
+      thread.id === threadId &&
+      (environmentId === undefined || thread.environmentId === environmentId),
+  );
+  const fallbackDraftProject = projects.find(
+    (project) =>
+      project.id === draftThread?.projectId &&
+      (environmentId === undefined || project.environmentId === environmentId),
+  );
   const localDraftError = serverThread ? null : (localDraftErrorsByThreadId[threadId] ?? null);
   const localDraftThread = useMemo(
     () =>
@@ -636,7 +655,12 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     [activeThread?.activities],
   );
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
-  const activeProject = projects.find((p) => p.id === activeThread?.projectId);
+  const activeProject = projects.find(
+    (project) =>
+      project.id === activeThread?.projectId &&
+      (activeThread?.environmentId === undefined ||
+        project.environmentId === activeThread.environmentId),
+  );
   const createWorktreeMutation = useMutation(
     gitCreateWorktreeMutationOptions({
       queryClient,
