@@ -34,6 +34,7 @@ async function mountMenu(props?: { modelSelection?: ModelSelection; prompt?: str
     nonPersistedImageIds: [],
     persistedAttachments: [],
     terminalContexts: [],
+    previewAnnotations: [],
     modelSelectionByProvider: {
       [provider]: makeAppModelSelection(provider, model, props?.modelSelection?.options),
     },

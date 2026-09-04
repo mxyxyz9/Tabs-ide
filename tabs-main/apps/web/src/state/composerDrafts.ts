@@ -20,6 +20,7 @@ const emptyDraft: ComposerThreadDraftState = {
   nonPersistedImageIds: [],
   persistedAttachments: [],
   terminalContexts: [],
+  previewAnnotations: [],
   modelSelectionByProvider: {},
   activeProvider: null,
   runtimeMode: null,
@@ -96,6 +97,17 @@ export const composerDraftActions = {
   setTerminalContexts: (
     ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["setTerminalContexts"]>
   ) => useComposerDraftStore.getState().setTerminalContexts(...args),
+  addPreviewAnnotation: (
+    ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["addPreviewAnnotation"]>
+  ) => useComposerDraftStore.getState().addPreviewAnnotation(...args),
+  setPreviewAnnotations: (
+    ...args: Parameters<ReturnType<typeof useComposerDraftStore.getState>["setPreviewAnnotations"]>
+  ) => useComposerDraftStore.getState().setPreviewAnnotations(...args),
+  removePreviewAnnotation: (
+    ...args: Parameters<
+      ReturnType<typeof useComposerDraftStore.getState>["removePreviewAnnotation"]
+    >
+  ) => useComposerDraftStore.getState().removePreviewAnnotation(...args),
   clearPersistedAttachments: (
     ...args: Parameters<
       ReturnType<typeof useComposerDraftStore.getState>["clearPersistedAttachments"]

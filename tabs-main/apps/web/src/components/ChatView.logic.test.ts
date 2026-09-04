@@ -12,6 +12,17 @@ import {
 } from "./ChatView.logic";
 
 describe("deriveComposerSendState", () => {
+  it("treats structured preview context as sendable without typed text", () => {
+    const state = deriveComposerSendState({
+      prompt: "",
+      imageCount: 0,
+      contextCount: 1,
+      terminalContexts: [],
+    });
+
+    expect(state.hasSendableContent).toBe(true);
+  });
+
   it("treats expired terminal pills as non-sendable content", () => {
     const state = deriveComposerSendState({
       prompt: "\uFFFC",

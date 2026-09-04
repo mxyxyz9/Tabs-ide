@@ -22,6 +22,7 @@ import {
   DEFAULT_MODEL,
   type ServerProviderModel,
   type ProviderOptionSelection,
+  type PreviewAnnotationPayload,
 } from "@tabs/contracts";
 import {
   applyClaudePromptEffortPrefix,
@@ -122,6 +123,7 @@ import {
   ListTodoIcon,
   LockIcon,
   LockOpenIcon,
+  MousePointer2Icon,
   PaperclipIcon,
   PenIcon,
   XIcon,
@@ -154,6 +156,7 @@ import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
   type PersistedComposerImageAttachment,
+  useComposerDraftStore,
   useEffectiveComposerModelState,
 } from "../composerDraftStore";
 import {
@@ -178,6 +181,12 @@ import { projectsAtom, threadsAtom } from "../state/threads";
 import { ComposerPromptEditor, type ComposerPromptEditorHandle } from "./ComposerPromptEditor";
 import { ComposerPromptLengthValidation } from "./chat/ComposerPromptLengthValidation";
 import { getComposerPromptLengthValidationMessage } from "./chat/composerSubmission";
+import {
+  appendPreviewAnnotationPrompt,
+  PREVIEW_ANNOTATION_PICKED_EVENT,
+  previewAnnotationScreenshotFile,
+  type PreviewAnnotationPickedDetail,
+} from "../lib/previewAnnotation";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { ChatHeader } from "./chat/ChatHeader";
@@ -395,14 +404,16 @@ export default function ChatView({
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
   const composerTerminalContexts = composerDraft.terminalContexts;
+  const composerPreviewAnnotations = composerDraft.previewAnnotations;
   const composerSendState = useMemo(
     () =>
       deriveComposerSendState({
         prompt,
         imageCount: composerImages.length,
+        contextCount: composerPreviewAnnotations.length,
         terminalContexts: composerTerminalContexts,
       }),
-    [composerImages.length, composerTerminalContexts, prompt],
+    [composerImages.length, composerPreviewAnnotations.length, composerTerminalContexts, prompt],
   );
   const nonPersistedComposerImageIds = composerDraft.nonPersistedImageIds;
   const {
@@ -417,6 +428,9 @@ export default function ChatView({
     addTerminalContexts: addComposerDraftTerminalContexts,
     removeTerminalContext: removeComposerDraftTerminalContext,
     setTerminalContexts: setComposerDraftTerminalContexts,
+    addPreviewAnnotation: addComposerDraftPreviewAnnotation,
+    setPreviewAnnotations: setComposerDraftPreviewAnnotations,
+    removePreviewAnnotation: removeComposerDraftPreviewAnnotation,
     clearPersistedAttachments: clearComposerDraftPersistedAttachments,
     syncPersistedAttachments: syncComposerDraftPersistedAttachments,
     clearComposerContent: clearComposerDraftContent,
@@ -2455,6 +2469,59 @@ export default function ChatView({
     setThreadError(activeThreadId, error);
   };
 
+  useEffect(() => {
+    const handlePickedAnnotation = (event: Event) => {
+      const detail = (event as CustomEvent<PreviewAnnotationPickedDetail>).detail;
+      if (!detail || detail.projectId !== activeProject?.id || !activeThreadId) return;
+      const annotation: PreviewAnnotationPayload = detail.annotation;
+      addComposerDraftPreviewAnnotation(activeThreadId, annotation);
+      void previewAnnotationScreenshotFile(annotation)
+        .then((file) => {
+          if (!file) return;
+          if (file.size > PROVIDER_SEND_TURN_MAX_IMAGE_BYTES) {
+            setThreadError(
+              activeThreadId,
+              "The captured browser screenshot exceeds the attachment limit.",
+            );
+            return;
+          }
+          if (composerImagesRef.current.length >= PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
+            setThreadError(
+              activeThreadId,
+              `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} images per message.`,
+            );
+            return;
+          }
+          addComposerImage({
+            type: "image",
+            id: annotation.id,
+            name: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+            previewUrl: URL.createObjectURL(file),
+            file,
+          });
+        })
+        .catch((cause: unknown) => {
+          setThreadError(
+            activeThreadId,
+            cause instanceof Error ? cause.message : "Could not attach the browser screenshot.",
+          );
+        });
+      focusComposer();
+    };
+    window.addEventListener(PREVIEW_ANNOTATION_PICKED_EVENT, handlePickedAnnotation);
+    return () =>
+      window.removeEventListener(PREVIEW_ANNOTATION_PICKED_EVENT, handlePickedAnnotation);
+  }, [
+    activeProject?.id,
+    activeThreadId,
+    addComposerDraftPreviewAnnotation,
+    addComposerImage,
+    focusComposer,
+    setThreadError,
+  ]);
+
   const removeComposerImage = (imageId: string) => {
     removeComposerImageFromDraft(imageId);
   };
@@ -2584,6 +2651,7 @@ export default function ChatView({
     } = deriveComposerSendState({
       prompt: promptForSend,
       imageCount: composerImages.length,
+      contextCount: composerPreviewAnnotations.length,
       terminalContexts: composerTerminalContexts,
     });
     if (showPlanFollowUpPrompt && activeProposedPlan) {
@@ -2635,14 +2703,16 @@ export default function ChatView({
       }
       return;
     }
+    const providerInputWithContexts = composerPreviewAnnotations.reduce(
+      (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
+      appendTerminalContextsToPrompt(promptForSend, sendableComposerTerminalContexts),
+    );
     const providerInputForValidation = formatOutgoingPrompt({
       provider: selectedProvider,
       model: selectedModel,
       models: selectedProviderModels,
       effort: selectedPromptEffort,
-      text:
-        appendTerminalContextsToPrompt(promptForSend, sendableComposerTerminalContexts) ||
-        IMAGE_ONLY_BOOTSTRAP_PROMPT,
+      text: providerInputWithContexts || IMAGE_ONLY_BOOTSTRAP_PROMPT,
     });
     const validationMessage = getComposerPromptLengthValidationMessage(providerInputForValidation);
     if (validationMessage) {
@@ -2734,9 +2804,14 @@ export default function ChatView({
 
     const composerImagesSnapshot = [...composerImages];
     const composerTerminalContextsSnapshot = [...sendableComposerTerminalContexts];
-    const messageTextForSend = appendTerminalContextsToPrompt(
+    const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
+    const messageTextWithContexts = appendTerminalContextsToPrompt(
       promptForSend,
       composerTerminalContextsSnapshot,
+    );
+    const messageTextForSend = composerPreviewAnnotationsSnapshot.reduce(
+      (text, annotation) => appendPreviewAnnotationPrompt(text, annotation),
+      messageTextWithContexts,
     );
     const messageIdForSend = newMessageId();
     const messageCreatedAt = new Date().toISOString();
@@ -2946,7 +3021,9 @@ export default function ChatView({
         !turnStartSucceeded &&
         promptRef.current.length === 0 &&
         composerImagesRef.current.length === 0 &&
-        composerTerminalContextsRef.current.length === 0
+        composerTerminalContextsRef.current.length === 0 &&
+        (useComposerDraftStore.getState().draftsByThreadId[activeThread.id]?.previewAnnotations
+          .length ?? 0) === 0
       ) {
         setOptimisticUserMessages((existing) => {
           const removed = existing.filter((message) => message.id === messageIdForSend);
@@ -2961,6 +3038,7 @@ export default function ChatView({
         setComposerCursor(collapseExpandedComposerCursor(promptForSend, promptForSend.length));
         addComposerImagesToDraft(composerImagesSnapshot.map(cloneComposerImageForRetry));
         addComposerTerminalContextsToDraft(composerTerminalContextsSnapshot);
+        setComposerDraftPreviewAnnotations(activeThread.id, composerPreviewAnnotationsSnapshot);
         setComposerTrigger(detectComposerTrigger(promptForSend, promptForSend.length));
       }
       setThreadError(
@@ -4107,6 +4185,35 @@ export default function ChatView({
                   />
                 </div>
               )}
+
+              {!isComposerApprovalState &&
+                pendingUserInputs.length === 0 &&
+                composerPreviewAnnotations.length > 0 && (
+                  <div className="mb-2.5 flex flex-wrap gap-2" aria-label="Preview annotations">
+                    {composerPreviewAnnotations.map((annotation) => (
+                      <div
+                        key={annotation.id}
+                        className="flex max-w-full items-center gap-2 rounded-md border border-border/80 bg-muted/30 px-2.5 py-1.5 text-xs"
+                      >
+                        <MousePointer2Icon className="size-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">
+                          {annotation.pageTitle || annotation.pageUrl || "Preview element"}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => {
+                            removeComposerDraftPreviewAnnotation(activeThread.id, annotation.id);
+                          }}
+                          aria-label={`Remove preview annotation from ${annotation.pageTitle || annotation.pageUrl}`}
+                        >
+                          <XIcon />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               {!isComposerApprovalState &&
                 pendingUserInputs.length === 0 &&

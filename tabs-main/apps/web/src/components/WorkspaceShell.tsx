@@ -96,6 +96,10 @@ import {
 } from "react";
 
 import { useDesktopIconThemeSync } from "../hooks/useDesktopIconTheme";
+import {
+  PREVIEW_ANNOTATION_PICKED_EVENT,
+  type PreviewAnnotationPickedDetail,
+} from "../lib/previewAnnotation";
 import { useAutoRefreshModelsOnStartup } from "../hooks/useAutoRefreshModelsOnStartup";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { composerDraftActions } from "../state/composerDrafts";
@@ -7005,11 +7009,15 @@ function DesktopBrowserChrome(props: {
           : { projectId: props.projectId },
       );
       if (!annotation) return;
-      await navigator.clipboard.writeText(JSON.stringify(annotation, null, 2));
+      window.dispatchEvent(
+        new CustomEvent<PreviewAnnotationPickedDetail>(PREVIEW_ANNOTATION_PICKED_EVENT, {
+          detail: { projectId: props.projectId, annotation },
+        }),
+      );
       toastManager.add({
         type: "success",
-        title: "Element annotation copied",
-        description: "Paste it into chat to give the agent exact page context.",
+        title: "Element attached to chat",
+        description: "Review or remove the preview context in the composer before sending.",
       });
     } catch (cause) {
       toastManager.add({

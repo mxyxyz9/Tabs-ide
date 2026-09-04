@@ -4,6 +4,7 @@ import {
   ThreadId,
   type ModelSelection,
   type ProviderModelOptions,
+  type PreviewAnnotationPayload,
 } from "@tabs/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -69,6 +70,21 @@ function makeTerminalContext(input: {
     lineEnd: input.lineEnd ?? 5,
     text: input.text ?? "git status\nOn branch main",
     createdAt: "2026-03-13T12:00:00.000Z",
+  };
+}
+
+function makePreviewAnnotation(id: string): PreviewAnnotationPayload {
+  return {
+    id,
+    pageUrl: "http://localhost:5173",
+    pageTitle: "Preview",
+    comment: "",
+    elements: [],
+    regions: [],
+    strokes: [],
+    styleChanges: [],
+    screenshot: null,
+    createdAt: "2026-09-04T12:00:00.000Z",
   };
 }
 
@@ -176,6 +192,30 @@ describe("composerDraftStore addImages", () => {
     const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
     expect(draft?.images.map((image) => image.id)).toEqual(["img-shared"]);
     expect(revokeSpy).not.toHaveBeenCalledWith("blob:shared");
+  });
+});
+
+describe("composerDraftStore preview annotations", () => {
+  const threadId = ThreadId.makeUnsafe("thread-preview-annotation");
+
+  beforeEach(resetComposerDraftStore);
+
+  it("replaces duplicate annotations and removes them independently", () => {
+    const store = useComposerDraftStore.getState();
+    store.addPreviewAnnotation(threadId, makePreviewAnnotation("annotation-1"));
+    store.addPreviewAnnotation(threadId, {
+      ...makePreviewAnnotation("annotation-1"),
+      comment: "latest",
+    });
+
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]?.previewAnnotations).toEqual(
+      [expect.objectContaining({ id: "annotation-1", comment: "latest" })],
+    );
+
+    useComposerDraftStore.getState().removePreviewAnnotation(threadId, "annotation-1");
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]?.previewAnnotations).toEqual(
+      [],
+    );
   });
 });
 
