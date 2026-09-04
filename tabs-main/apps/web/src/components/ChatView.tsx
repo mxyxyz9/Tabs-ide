@@ -141,7 +141,7 @@ import {
 } from "~/projectScripts";
 import { SidebarTrigger } from "./ui/sidebar";
 import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
-import { readNativeApi } from "~/nativeApi";
+import { environmentApi } from "~/connection/environmentApiRegistry";
 import {
   getProviderModelCapabilities,
   getProviderModels,
@@ -340,6 +340,19 @@ export default function ChatView({
   compact = false,
   onRequestThread,
 }: ChatViewProps) {
+  const [threadApi, setThreadApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    setThreadApi(null);
+    void environmentApi(environmentId).then((api) => {
+      if (active) setThreadApi(api);
+    });
+    return () => {
+      active = false;
+    };
+  }, [environmentId]);
   const { confirm, confirmDialog } = useConfirm();
   const threads = useAtomValue(threadsAtom);
   const projects = useAtomValue(projectsAtom);
@@ -1523,7 +1536,7 @@ export default function ChatView({
   );
   const closeTerminal = useCallback(
     (terminalId: string) => {
-      const api = readNativeApi();
+      const api = threadApi;
       if (!activeThreadId || !api) return;
       const isFinalTerminal = terminalState.terminalIds.length <= 1;
       const fallbackExitWrite = () =>
@@ -1549,7 +1562,7 @@ export default function ChatView({
       storeCloseTerminal(activeThreadId, terminalId);
       setTerminalFocusRequestId((value) => value + 1);
     },
-    [activeThreadId, storeCloseTerminal, terminalState.terminalIds.length],
+    [activeThreadId, storeCloseTerminal, terminalState.terminalIds.length, threadApi],
   );
   const runProjectScript = useCallback(
     async (
@@ -1562,7 +1575,7 @@ export default function ChatView({
         rememberAsLastInvoked?: boolean;
       },
     ) => {
-      const api = readNativeApi();
+      const api = threadApi;
       if (!api || !activeThreadId || !activeProject || !activeThread) return;
       if (options?.rememberAsLastInvoked !== false) {
         setLastInvokedScriptByProjectId((current) => {
@@ -1640,6 +1653,7 @@ export default function ChatView({
       terminalState.activeTerminalId,
       terminalState.runningTerminalIds,
       terminalState.terminalIds,
+      threadApi,
     ],
   );
 
@@ -1729,7 +1743,7 @@ export default function ChatView({
       if (!serverThread) {
         return;
       }
-      const api = readNativeApi();
+      const api = threadApi;
       if (!api) {
         return;
       }
@@ -1769,7 +1783,7 @@ export default function ChatView({
         });
       }
     },
-    [serverThread],
+    [serverThread, threadApi],
   );
 
   // Auto-scroll on new messages
@@ -2500,7 +2514,7 @@ export default function ChatView({
 
   const onRevertToTurnCount = useCallback(
     async (turnCount: number) => {
-      const api = readNativeApi();
+      const api = threadApi;
       if (!api || !activeThread || isRevertingCheckpoint) return;
 
       if (phase === "running" || isSendBusy || isConnecting) {
@@ -2536,12 +2550,21 @@ export default function ChatView({
       }
       setIsRevertingCheckpoint(false);
     },
-    [activeThread, isConnecting, isRevertingCheckpoint, isSendBusy, phase, setThreadError],
+    [
+      activeThread,
+      confirm,
+      isConnecting,
+      isRevertingCheckpoint,
+      isSendBusy,
+      phase,
+      setThreadError,
+      threadApi,
+    ],
   );
 
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
-    const api = readNativeApi();
+    const api = threadApi;
     if (!api || !activeThread || isSendBusy || isConnecting || sendInFlightRef.current) return;
     if (activePendingProgress) {
       onAdvanceActivePendingUserInput();
@@ -2926,7 +2949,7 @@ export default function ChatView({
   };
 
   const onInterrupt = async () => {
-    const api = readNativeApi();
+    const api = threadApi;
     if (!api || !activeThread) return;
     await api.orchestration.dispatchCommand({
       type: "thread.turn.interrupt",
@@ -2939,7 +2962,7 @@ export default function ChatView({
 
   const onRespondToApproval = useCallback(
     async (requestId: ApprovalRequestId, decision: ProviderApprovalDecision) => {
-      const api = readNativeApi();
+      const api = threadApi;
       if (!api || !activeThreadId) return;
 
       setRespondingRequestIds((existing) =>
@@ -2962,12 +2985,12 @@ export default function ChatView({
         });
       setRespondingRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
-    [activeThreadId, setStoreThreadError],
+    [activeThreadId, setStoreThreadError, threadApi],
   );
 
   const onRespondToUserInput = useCallback(
     async (requestId: ApprovalRequestId, answers: Record<string, unknown>) => {
-      const api = readNativeApi();
+      const api = threadApi;
       if (!api || !activeThreadId) return;
 
       setRespondingUserInputRequestIds((existing) =>
@@ -2990,7 +3013,7 @@ export default function ChatView({
         });
       setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
-    [activeThreadId, setStoreThreadError],
+    [activeThreadId, setStoreThreadError, threadApi],
   );
 
   const setActivePendingUserInputQuestionIndex = useCallback(
@@ -3092,7 +3115,7 @@ export default function ChatView({
       text: string;
       interactionMode: "default" | "plan";
     }) => {
-      const api = readNativeApi();
+      const api = threadApi;
       if (
         !api ||
         !activeThread ||
@@ -3210,11 +3233,12 @@ export default function ChatView({
       setComposerDraftInteractionMode,
       setThreadError,
       selectedModel,
+      threadApi,
     ],
   );
 
   const onImplementPlanInNewThread = useCallback(async () => {
-    const api = readNativeApi();
+    const api = threadApi;
     if (
       !api ||
       !activeThread ||
@@ -3326,6 +3350,7 @@ export default function ChatView({
     selectedProviderModels,
     syncServerReadModel,
     selectedModel,
+    threadApi,
   ]);
 
   const onProviderModelSelect = useCallback(
@@ -3792,7 +3817,7 @@ export default function ChatView({
               variant="outline"
               size="sm"
               onClick={() => {
-                const api = readNativeApi();
+                const api = threadApi;
                 if (!api) return;
                 void api.orchestration.dispatchCommand({
                   type: "thread.unsettle",
