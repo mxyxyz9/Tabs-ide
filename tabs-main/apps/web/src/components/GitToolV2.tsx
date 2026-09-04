@@ -251,12 +251,13 @@ export function GitToolV2({
   const aheadCount = statusData?.aheadCount ?? 0;
   const behindCount = statusData?.behindCount ?? 0;
   const stagedFiles = statusData?.staged?.files ?? [];
-  const unstagedFiles = useMemo(
-    () => (statusData?.unstaged?.files ?? []).filter((f) => !f.conflicted && !f.untracked),
-    [statusData?.unstaged?.files],
-  );
+  const unstagedFiles = statusData?.unstaged?.files ?? [];
   const conflictedFiles = statusData?.conflicted?.files ?? [];
-  const changeCount = stagedFiles.length + unstagedFiles.length;
+  const changeCount = useMemo(
+    () =>
+      new Set([...stagedFiles, ...unstagedFiles, ...conflictedFiles].map((file) => file.path)).size,
+    [conflictedFiles, stagedFiles, unstagedFiles],
+  );
   const hasConflict = conflictedFiles.length > 0;
   const commits = historyQuery.data?.commits ?? [];
   const stashes = stashQuery.data?.entries ?? [];
@@ -324,7 +325,7 @@ export function GitToolV2({
   const stashPullReapply = useCallback(
     async (sourceBranch: string) => {
       if (!api) return;
-      const hasChanges = stagedFiles.length + unstagedFiles.length > 0;
+      const hasChanges = changeCount > 0;
       try {
         if (hasChanges) {
           await api.git.saveStash({ cwd });
@@ -351,7 +352,7 @@ export function GitToolV2({
         });
       }
     },
-    [api, closeModal, cwd, queryClient, stagedFiles.length, unstagedFiles.length],
+    [api, changeCount, closeModal, cwd, queryClient],
   );
 
   const applyStash = useCallback(
