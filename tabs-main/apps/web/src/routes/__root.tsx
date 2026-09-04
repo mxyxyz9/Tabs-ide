@@ -35,6 +35,7 @@ import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
 import { GlobalConfirmDialog } from "../components/GlobalConfirmDialog";
 import { CommandPalette } from "../components/CommandPalette";
 import { NativePreviewAutomationHost } from "../components/NativePreviewAutomationHost";
+import { BackgroundActivityReporter } from "../components/BackgroundActivityReporter";
 import { setProjectExpandedInAtoms, syncServerReadModelToAtoms } from "../state/readModel";
 import { appAtomRegistry } from "../state/atomRegistry";
 import { readModelStateAtom } from "../state/readModel";
@@ -57,10 +58,7 @@ function RootRouteView() {
   const isNativeApiReady = !!readNativeApi();
   const threadsHydrated = useAtomValue(threadsHydratedAtom);
   const settings = useSettings();
-  const ready = useMinimumDuration(
-    isNativeApiReady && threadsHydrated,
-    STARTUP_ANIMATION_HOLD_MS,
-  );
+  const ready = useMinimumDuration(isNativeApiReady && threadsHydrated, STARTUP_ANIMATION_HOLD_MS);
   const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
@@ -92,6 +90,7 @@ function RootRouteView() {
         <AnchoredToastProvider>
           <EventRouter />
           <NativePreviewAutomationHost />
+          <BackgroundActivityReporter />
           <DesktopProjectBootstrap />
           <CommandPalette>
             <Outlet />

@@ -1,4 +1,9 @@
 import { Schema, Struct } from "effect";
+import {
+  BackgroundPolicySnapshot,
+  ClientActivityReportInput,
+  HostPowerSnapshot,
+} from "./background.ts";
 import { NonNegativeInt, ProjectId, ThreadId, TrimmedNonEmptyString } from "./baseSchemas";
 
 import {
@@ -305,6 +310,9 @@ export const WS_METHODS = {
   serverRemoveKeybinding: "server.removeKeybinding",
   serverRunProviderMaintenance: "server.runProviderMaintenance",
   serverSignalProcess: "server.signalProcess",
+  serverReportClientActivity: "server.reportClientActivity",
+  serverReportHostPowerState: "server.reportHostPowerState",
+  serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverUpdateProvider: "server.updateProvider",
   serverUpdateSettings: "server.updateSettings",
   serverUpsertKeybinding: "server.upsertKeybinding",
@@ -339,6 +347,7 @@ export const WS_CHANNELS = {
   usageUpdated: "usage.updated",
   previewEvent: "preview.event",
   previewAutomationEvent: "preview.automationEvent",
+  backgroundPolicyUpdated: "server.backgroundPolicyUpdated",
 } as const;
 
 // -- Tagged Union of all request body schemas ─────────────────────────
@@ -519,6 +528,9 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetProcessDiagnostics, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverGetProcessResourceHistory, ServerProcessResourceHistoryInput),
   tagRequestBody(WS_METHODS.serverSignalProcess, ServerSignalProcessInput),
+  tagRequestBody(WS_METHODS.serverReportClientActivity, ClientActivityReportInput),
+  tagRequestBody(WS_METHODS.serverReportHostPowerState, HostPowerSnapshot),
+  tagRequestBody(WS_METHODS.serverGetBackgroundPolicy, Schema.Struct({})),
 
   // Usage & Limits
   tagRequestBody(WS_METHODS.usageReadSummary, UsageSummaryInput),
@@ -567,6 +579,7 @@ export interface WsPushPayloadByChannel {
   readonly [WS_CHANNELS.usageUpdated]: ServerListProviderUsageResult;
   readonly [WS_CHANNELS.previewEvent]: PreviewEvent;
   readonly [WS_CHANNELS.previewAutomationEvent]: PreviewAutomationStreamEvent;
+  readonly [WS_CHANNELS.backgroundPolicyUpdated]: typeof BackgroundPolicySnapshot.Type;
   readonly [ORCHESTRATION_WS_CHANNELS.domainEvent]: OrchestrationEvent;
 }
 
@@ -615,6 +628,10 @@ export const WsPushPreviewAutomationEvent = makeWsPushSchema(
   WS_CHANNELS.previewAutomationEvent,
   PreviewAutomationStreamEvent,
 );
+export const WsPushBackgroundPolicyUpdated = makeWsPushSchema(
+  WS_CHANNELS.backgroundPolicyUpdated,
+  BackgroundPolicySnapshot,
+);
 export const WsPushOrchestrationDomainEvent = makeWsPushSchema(
   ORCHESTRATION_WS_CHANNELS.domainEvent,
   OrchestrationEvent,
@@ -631,6 +648,7 @@ export const WsPushChannelSchema = Schema.Literals([
   WS_CHANNELS.usageUpdated,
   WS_CHANNELS.previewEvent,
   WS_CHANNELS.previewAutomationEvent,
+  WS_CHANNELS.backgroundPolicyUpdated,
   ORCHESTRATION_WS_CHANNELS.domainEvent,
 ]);
 export type WsPushChannelSchema = typeof WsPushChannelSchema.Type;
@@ -646,6 +664,7 @@ export const WsPush = Schema.Union([
   WsPushUsageUpdated,
   WsPushPreviewEvent,
   WsPushPreviewAutomationEvent,
+  WsPushBackgroundPolicyUpdated,
   WsPushOrchestrationDomainEvent,
 ]);
 export type WsPush = typeof WsPush.Type;

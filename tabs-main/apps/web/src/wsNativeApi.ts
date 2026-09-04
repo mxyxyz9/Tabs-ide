@@ -91,9 +91,7 @@ export function onServerProvidersUpdated(
   };
 }
 
-export function onUsageUpdated(
-  listener: (payload: any) => void,
-): () => void {
+export function onUsageUpdated(listener: (payload: any) => void): () => void {
   usageUpdatedListeners.add(listener);
   return () => {
     usageUpdatedListeners.delete(listener);
@@ -414,6 +412,15 @@ export function createWsNativeApi(): NativeApi {
       getProcessResourceHistory: (input) =>
         transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
       signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
+      reportClientActivity: (input) =>
+        transport.request(WS_METHODS.serverReportClientActivity, input),
+      reportHostPowerState: (input) =>
+        transport.request(WS_METHODS.serverReportHostPowerState, input),
+      getBackgroundPolicy: () => transport.request(WS_METHODS.serverGetBackgroundPolicy, {}),
+      onBackgroundPolicy: (callback) =>
+        transport.subscribe(WS_CHANNELS.backgroundPolicyUpdated, (message) =>
+          callback(message.data),
+        ),
       readUsageSummary: (input) => transport.request(WS_METHODS.usageReadSummary, input),
       listUsageSnapshots: (input = {}) => transport.request(WS_METHODS.usageListSnapshots, input),
       refreshAllUsageSnapshots: () => transport.request(WS_METHODS.usageRefreshAll, {}),
@@ -480,9 +487,8 @@ export function createWsNativeApi(): NativeApi {
       reportStatus: (input) => transport.request(WS_METHODS.previewReportStatus, input),
       automation: {
         connect: (input, callback, options) => {
-          const unsubscribe = transport.subscribe(
-            WS_CHANNELS.previewAutomationEvent,
-            (message) => callback(message.data),
+          const unsubscribe = transport.subscribe(WS_CHANNELS.previewAutomationEvent, (message) =>
+            callback(message.data),
           );
           let connectedOnce = false;
           const unsubscribeOpen = transport.onOpen(() => {

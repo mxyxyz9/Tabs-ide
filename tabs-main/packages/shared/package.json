@@ -139,6 +139,10 @@
     "./preview": {
       "types": "./src/preview.ts",
       "import": "./src/preview.ts"
+    },
+    "./backgroundActivitySettings": {
+      "types": "./src/backgroundActivitySettings.ts",
+      "import": "./src/backgroundActivitySettings.ts"
     }
   },
   "scripts": {
@@ -146,15 +150,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@tabs/contracts": "workspace:*",
     "@noble/curves": "^1.9.1",
     "@noble/hashes": "^1.8.0",
+    "@tabs/contracts": "workspace:*",
     "effect": "catalog:",
     "jose": "^6.2.2"
   },
   "devDependencies": {
-    "@effect/platform-node": "catalog:",
     "@effect/language-service": "catalog:",
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
     "@noble/hashes": "^1.8.0",
     "@types/node": "catalog:",

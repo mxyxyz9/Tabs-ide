@@ -36,6 +36,7 @@ import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { readBootstrapEnvelope } from "./bootstrap";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry";
 import { ServerSettingsLive } from "./serverSettings";
+import * as BackgroundPolicy from "./background/BackgroundPolicy";
 
 export class StartupError extends Data.TaggedError("StartupError")<{
   readonly message: string;
@@ -362,7 +363,7 @@ const LayerLive = (input: CliInput) =>
         }),
       ),
     ),
-    Layer.provideMerge(ServerSettingsLive),
+    Layer.provideMerge(BackgroundPolicy.layer.pipe(Layer.provideMerge(ServerSettingsLive))),
     Layer.provideMerge(
       Layer.effectDiscard(
         Effect.sync(() => {

@@ -16,6 +16,7 @@ import Mime from "@effect/platform-node/Mime";
 import {
   CommandId,
   AuthStandardClientScopes,
+  AuthSessionId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ClientOrchestrationCommand,
   type OrchestrationCommand,
@@ -24,6 +25,7 @@ import {
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
   ProjectId,
   ProviderInstanceId,
+  RpcClientId,
   ThreadId,
   type TestingCaseCreateInput,
   type TestingCaseDeleteInput,
@@ -145,6 +147,7 @@ import { SessionStore } from "./auth/SessionStore.ts";
 import * as DateTime from "effect/DateTime";
 import { verifyDpopRequestFields } from "./auth/dpop.ts";
 import { ServerSecretStore } from "./auth/ServerSecretStore.ts";
+import { BackgroundPolicy } from "./background/BackgroundPolicy.ts";
 import {
   readProcessDiagnostics,
   readProcessResourceHistory,
@@ -328,7 +331,8 @@ export type ServerRuntimeServices =
   | PreviewAutomationBroker
   | SessionStore
   | ServerSecretStore
-  | Crypto.Crypto;
+  | Crypto.Crypto
+  | BackgroundPolicy;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -388,6 +392,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const sessionStore = yield* SessionStore;
   const serverSecretStore = yield* ServerSecretStore;
   const effectCrypto = yield* Crypto.Crypto;
+  const backgroundPolicy = yield* BackgroundPolicy;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -405,6 +410,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   const clients = yield* Ref.make(new Set<WebSocket>());
   const previewAutomationFibers = new Map<WebSocket, Set<Fiber.Fiber<void, unknown>>>();
+  const websocketSessions = new WeakMap<WebSocket, AuthSessionId>();
+  const websocketClientIds = new WeakMap<WebSocket, RpcClientId>();
+  let nextRpcClientId = 1;
   const logger = createLogger("ws");
   const readiness = yield* makeServerReadiness;
 
@@ -1008,6 +1016,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
   yield* Stream.runForEach(previewManager.events, (event) =>
     pushBus.publishAll(WS_CHANNELS.previewEvent, event),
+  ).pipe(Effect.forkIn(subscriptionsScope));
+
+  yield* Stream.runForEach(backgroundPolicy.streamChanges, (snapshot) =>
+    pushBus.publishAll(WS_CHANNELS.backgroundPolicyUpdated, snapshot),
   ).pipe(Effect.forkIn(subscriptionsScope));
 
   yield* Scope.provide(subscriptionsScope)(orchestrationReactor.start);
@@ -1959,6 +1971,24 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         };
       }
 
+      case WS_METHODS.serverReportClientActivity: {
+        const sessionId = websocketSessions.get(ws) ?? AuthSessionId.make("local-desktop");
+        const rpcClientId = websocketClientIds.get(ws) ?? RpcClientId.make(0);
+        yield* backgroundPolicy.reportClientActivity(
+          sessionId,
+          rpcClientId,
+          stripRequestTag(request.body),
+        );
+        return undefined;
+      }
+
+      case WS_METHODS.serverReportHostPowerState:
+        yield* backgroundPolicy.reportHostPowerState(stripRequestTag(request.body));
+        return undefined;
+
+      case WS_METHODS.serverGetBackgroundPolicy:
+        return yield* backgroundPolicy.snapshot;
+
       case WS_METHODS.serverRefreshProviders: {
         const providers = yield* providerRegistry.refresh();
         yield* Ref.set(providersRef, providers);
@@ -2322,8 +2352,10 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       return;
     }
 
-    const completeUpgrade = () =>
+    const completeUpgrade = (sessionId = AuthSessionId.make("local-desktop")) =>
       wss.handleUpgrade(request, socket, head, (ws) => {
+        websocketSessions.set(ws, sessionId);
+        websocketClientIds.set(ws, RpcClientId.make(nextRpcClientId++));
         wss.emit("connection", ws, request);
       });
 
@@ -2344,7 +2376,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
           return;
         }
-        completeUpgrade();
+        completeUpgrade(verified.value.sessionId);
       },
     );
   });
@@ -2375,6 +2407,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     });
 
     ws.on("close", () => {
+      const sessionId = websocketSessions.get(ws);
+      const rpcClientId = websocketClientIds.get(ws);
       void runPromise(
         Effect.all(
           [
@@ -2385,6 +2419,9 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             Effect.forEach(previewAutomationFibers.get(ws) ?? [], Fiber.interrupt, {
               discard: true,
             }),
+            sessionId && rpcClientId
+              ? backgroundPolicy.removeRpcClient(sessionId, rpcClientId)
+              : Effect.void,
           ],
           { discard: true },
         ).pipe(Effect.ensuring(Effect.sync(() => previewAutomationFibers.delete(ws)))),

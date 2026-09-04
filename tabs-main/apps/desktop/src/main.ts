@@ -19,6 +19,7 @@ import {
 } from "electron";
 import type { MenuItemConstructorOptions } from "electron";
 import * as Effect from "effect/Effect";
+import * as DateTime from "effect/DateTime";
 import type {
   DesktopIconTheme,
   DesktopTheme,
@@ -118,6 +119,8 @@ const FETCH_SSH_SESSION_STATE_CHANNEL = "desktop:fetch-ssh-session-state";
 const ISSUE_SSH_WEBSOCKET_TOKEN_CHANNEL = "desktop:issue-ssh-websocket-token";
 const RESOLVE_SSH_PASSWORD_PROMPT_CHANNEL = "desktop:resolve-ssh-password-prompt";
 const SYSTEM_RESUME_CHANNEL = "desktop:system-resume";
+const HOST_POWER_GET_CHANNEL = "desktop:host-power:get";
+const HOST_POWER_CHANGED_CHANNEL = "desktop:host-power:changed";
 const CODE_HOST_GET_STATE_CHANNEL = "desktop:code-host:get-state";
 const CODE_HOST_ENSURE_SESSION_CHANNEL = "desktop:code-host:ensure-session";
 const CODE_HOST_ACTIVATE_SESSION_CHANNEL = "desktop:code-host:activate-session";
@@ -253,6 +256,30 @@ type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 
 let mainWindow: BrowserWindow | null = null;
 let sshEnvironmentBridgePromise: Promise<SshEnvironmentBridge> | null = null;
+let hostSuspended = false;
+
+function readHostPowerSnapshot() {
+  const idleSeconds = powerMonitor.getSystemIdleTime();
+  const idleState = powerMonitor.getSystemIdleState(60);
+  return {
+    source: "electron-main" as const,
+    idle: idleState === "active" ? ("false" as const) : ("true" as const),
+    idleSeconds,
+    locked: idleState === "locked" ? ("true" as const) : ("false" as const),
+    suspended: hostSuspended,
+    onBattery: powerMonitor.isOnBatteryPower() ? ("true" as const) : ("false" as const),
+    lowPowerMode: "unknown" as const,
+    thermalState: powerMonitor.getCurrentThermalState(),
+    stale: false,
+    updatedAt: DateTime.nowUnsafe(),
+  };
+}
+
+function broadcastHostPowerSnapshot(): void {
+  const window = mainWindow;
+  if (!window || window.isDestroyed()) return;
+  window.webContents.send(HOST_POWER_CHANGED_CHANNEL, readHostPowerSnapshot());
+}
 
 function getSshEnvironmentBridge(): Promise<SshEnvironmentBridge> {
   sshEnvironmentBridgePromise ??= createSshEnvironmentBridge({
@@ -1615,6 +1642,9 @@ const shutdownPromise = Effect.runPromise(
 );
 
 function registerIpcHandlers(): void {
+  ipcMain.removeHandler(HOST_POWER_GET_CHANNEL);
+  ipcMain.handle(HOST_POWER_GET_CHANNEL, () => readHostPowerSnapshot());
+
   ipcMain.removeAllListeners(GET_WS_URL_CHANNEL);
   ipcMain.on(GET_WS_URL_CHANNEL, (event) => {
     event.returnValue = backendWsUrl;
@@ -2990,10 +3020,21 @@ if (hasSingleInstanceLock) {
       configureAutoUpdater();
 
       powerMonitor.on("resume", () => {
+        hostSuspended = false;
         const window = mainWindow;
         if (!window || window.isDestroyed()) return;
         window.webContents.send(SYSTEM_RESUME_CHANNEL);
+        broadcastHostPowerSnapshot();
       });
+      powerMonitor.on("suspend", () => {
+        hostSuspended = true;
+        broadcastHostPowerSnapshot();
+      });
+      powerMonitor.on("lock-screen", broadcastHostPowerSnapshot);
+      powerMonitor.on("unlock-screen", broadcastHostPowerSnapshot);
+      powerMonitor.on("on-ac", broadcastHostPowerSnapshot);
+      powerMonitor.on("on-battery", broadcastHostPowerSnapshot);
+      powerMonitor.on("thermal-state-change", broadcastHostPowerSnapshot);
 
       const allowedPermissions = new Set([
         "clipboard-read",

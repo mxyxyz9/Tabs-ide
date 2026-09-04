@@ -65,6 +65,7 @@ import { GitCommandError, GitManagerError } from "./git/Errors.ts";
 import { MigrationError } from "@effect/sql-sqlite-bun/SqliteMigrator";
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { ServerSettingsService } from "./serverSettings.ts";
+import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 
 const asEventId = (value: string): EventId => value as EventId;
 const asProviderItemId = (value: string): ProviderItemId => value as ProviderItemId;
@@ -590,12 +591,13 @@ describe("WebSocket Server", () => {
     // Merge the test stub last so the transport-facing `yield* ProviderRegistry`
     // in `createServer` resolves to the stub (Layer.merge: second arg wins),
     // while orchestration keeps the real registry it captured during build.
+    const settingsLayer = ServerSettingsService.layerTest(options.serverSettings);
     const dependenciesLayerBase = Layer.empty.pipe(
       Layer.provideMerge(runtimeLayer),
       Layer.provideMerge(remoteAccessLayer),
       Layer.provideMerge(providerRegistryLayer),
       Layer.provideMerge(openLayer),
-      Layer.provideMerge(ServerSettingsService.layerTest(options.serverSettings)),
+      Layer.provideMerge(BackgroundPolicy.layer.pipe(Layer.provideMerge(settingsLayer))),
       Layer.provideMerge(serverConfigLayer),
       Layer.provideMerge(AnalyticsService.layerTest),
       Layer.provideMerge(NodeServices.layer),

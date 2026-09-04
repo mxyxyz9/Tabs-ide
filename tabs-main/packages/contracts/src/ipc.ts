@@ -24,6 +24,11 @@ import type {
 } from "./git.ts";
 import type { TestingApi } from "./testing.ts";
 import type {
+  BackgroundPolicySnapshot,
+  ClientActivityReportInput,
+  HostPowerSnapshot,
+} from "./background.ts";
+import type {
   GitListBranchesInput,
   GitListBranchesResult,
   GitCreateWorktreeInput,
@@ -1103,6 +1108,8 @@ export interface DesktopBridge {
   onSshPasswordPrompt: (listener: (request: DesktopSshPasswordPromptRequest) => void) => () => void;
   resolveSshPasswordPrompt: (requestId: string, password: string | null) => Promise<boolean>;
   onSystemResume?: (listener: () => void) => () => void;
+  getHostPowerSnapshot?: () => Promise<HostPowerSnapshot>;
+  onHostPowerSnapshot?: (listener: (snapshot: HostPowerSnapshot) => void) => () => void;
   getWsUrl: () => string | null;
   cloneRepository: (input: DesktopCloneRepositoryInput) => Promise<DesktopCloneRepositoryResult>;
   getPersistedItem: (key: string) => Promise<string | null>;
@@ -1302,6 +1309,10 @@ export interface LocalApi {
       input: ServerProcessResourceHistoryInput,
     ) => Promise<ServerProcessResourceHistoryResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
+    reportClientActivity: (input: ClientActivityReportInput) => Promise<void>;
+    reportHostPowerState: (input: HostPowerSnapshot) => Promise<void>;
+    getBackgroundPolicy: () => Promise<BackgroundPolicySnapshot>;
+    onBackgroundPolicy: (listener: (snapshot: BackgroundPolicySnapshot) => void) => () => void;
     readUsageSummary: (input: UsageSummaryInput) => Promise<UsageSummary>;
     listUsageSnapshots: (
       input?: ServerListProviderUsageInput,
