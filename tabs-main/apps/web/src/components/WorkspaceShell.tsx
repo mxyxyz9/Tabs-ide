@@ -9953,6 +9953,25 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   ]);
 
   const activeProject = resolveProjectById(projects, workspaceState.session.activeProjectId);
+  const [activeProjectApi, setActiveProjectApi] = useState<Awaited<
+    ReturnType<typeof environmentApi>
+  > | null>(null);
+  useEffect(() => {
+    let active = true;
+    setActiveProjectApi(null);
+    if (activeProject) {
+      void environmentApi(activeProject.environmentId)
+        .then((api) => {
+          if (active) setActiveProjectApi(api);
+        })
+        .catch(() => {
+          if (active) setActiveProjectApi(null);
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [activeProject?.environmentId]);
   const openProjects = workspaceState.session.openProjectIds
     .map((projectId) => projects.find((project) => project.id === projectId) ?? null)
     .filter((project): project is Project => project !== null);
@@ -10693,7 +10712,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   );
   const closeGitTerminal = useCallback(
     (terminalId: string) => {
-      const api = readNativeApi();
+      const api = activeProjectApi;
       if (!gitTerminalThreadId || !api || !gitTerminalState) return;
       const isFinalTerminal = gitTerminalState.terminalIds.length <= 1;
       const fallbackExitWrite = () =>
@@ -10719,11 +10738,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       storeCloseTerminal(gitTerminalThreadId, terminalId);
       setShellTerminalFocusRequestId((value) => value + 1);
     },
-    [gitTerminalState, gitTerminalThreadId, storeCloseTerminal],
+    [activeProjectApi, gitTerminalState, gitTerminalThreadId, storeCloseTerminal],
   );
   const runCommandInGitTerminal = useCallback(
     async (command: string, errorTitle: string) => {
-      const api = readNativeApi();
+      const api = activeProjectApi;
       if (!gitTerminalThreadId || !api || !activeProject) return;
       setGitTerminalOpen(true);
       setShellTerminalFocusRequestId((value) => value + 1);
@@ -10757,6 +10776,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [
       activeProject,
+      activeProjectApi,
       gitTerminalState,
       gitTerminalThreadId,
       setGitTerminalOpen,
@@ -10855,7 +10875,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       process: ProjectWorkspaceSettings["terminalProcesses"][number];
       reveal: boolean;
     }) => {
-      const api = readNativeApi();
+      const api = activeProjectApi;
       if (!api || !activeProject) return;
       const commands = input.process.commands
         .map((command) => command.trim())
@@ -10917,6 +10937,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [
       activeProject,
+      activeProjectApi,
       storeCloseTerminal,
       storeNewTerminal,
       storeSetActiveTerminal,
@@ -10931,7 +10952,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       clearIfFinal: boolean;
     }) => {
       executedCommandsRef.current.delete(`${input.threadId}:${input.terminalId}`);
-      const api = readNativeApi();
+      const api = activeProjectApi;
       const isFinalTerminal = (input.terminalState?.terminalIds.length ?? 0) <= 1;
       const fallbackExitWrite = () =>
         api?.terminal
@@ -10958,11 +10979,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       storeCloseTerminal(input.threadId, input.terminalId);
       setShellTerminalFocusRequestId((value) => value + 1);
     },
-    [storeCloseTerminal],
+    [activeProjectApi, storeCloseTerminal],
   );
   const closeServerTerminal = useCallback(
     (terminalId: string) => {
-      const api = readNativeApi();
+      const api = activeProjectApi;
       if (!serverThreadId || !api || !serverTerminalState) return;
       executedCommandsRef.current.delete(`${serverThreadId}:${terminalId}`);
       const isFinalTerminal = serverTerminalState.terminalIds.length <= 1;
@@ -10985,11 +11006,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       storeCloseTerminal(serverThreadId, terminalId);
       setShellTerminalFocusRequestId((value) => value + 1);
     },
-    [serverTerminalState, serverThreadId, storeCloseTerminal],
+    [activeProjectApi, serverTerminalState, serverThreadId, storeCloseTerminal],
   );
   const stopServerProcess = useCallback(
     async (processId: string) => {
-      const api = readNativeApi();
+      const api = activeProjectApi;
       if (!serverThreadId || !serverTerminalState?.terminalIds.includes(processId)) {
         return;
       }
@@ -11019,7 +11040,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
         setShellTerminalFocusRequestId((value) => value + 1);
       }
     },
-    [serverTerminalState?.terminalIds, serverThreadId, storeCloseTerminal],
+    [activeProjectApi, serverTerminalState?.terminalIds, serverThreadId, storeCloseTerminal],
   );
   const runServerProcess = useCallback(
     async (processId: string) => {
@@ -11057,7 +11078,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       const timeoutId = setTimeout(() => {
         previewTimeoutsRef.current.delete(processId);
         if (process.previewOpenTarget === "external" && process.previewUrl) {
-          const api = readNativeApi();
+          const api = activeProjectApi;
           if (api?.shell?.openExternal) {
             api.shell.openExternal(process.previewUrl).catch(console.error);
           } else {
@@ -11083,6 +11104,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       revealServerTerminal,
       serverThreadId,
       activeProject?.id,
+      activeProjectApi,
     ],
   );
   const dependencyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -11152,7 +11174,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     [closeThreadTerminal],
   );
   const closeAllServerTerminals = useCallback(async () => {
-    const api = readNativeApi();
+    const api = activeProjectApi;
     if (!serverThreadId || !serverTerminalState) {
       return;
     }
@@ -11184,7 +11206,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     storeClearTerminalState(serverThreadId);
     serverAutoStartedProcessIdsRef.current.clear();
     setShellTerminalFocusRequestId((value) => value + 1);
-  }, [serverTerminalState, serverThreadId, storeClearTerminalState]);
+  }, [activeProjectApi, serverTerminalState, serverThreadId, storeClearTerminalState]);
 
   const serverAutoStartedProcessIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
