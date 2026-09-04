@@ -73,6 +73,7 @@ import {
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import {
   Cause,
+  Crypto,
   Deferred,
   Effect,
   Exit,
@@ -138,6 +139,8 @@ import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
 import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
 import { SessionStore } from "./auth/SessionStore.ts";
 import * as DateTime from "effect/DateTime";
+import { verifyDpopRequestFields } from "./auth/dpop.ts";
+import { ServerSecretStore } from "./auth/ServerSecretStore.ts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -314,7 +317,9 @@ export type ServerRuntimeServices =
   | ServerEnvironment
   | EnvironmentAuth
   | PreviewAutomationBroker
-  | SessionStore;
+  | SessionStore
+  | ServerSecretStore
+  | Crypto.Crypto;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -372,6 +377,8 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const environmentAuth = yield* EnvironmentAuth;
   const previewAutomationBroker = yield* PreviewAutomationBroker;
   const sessionStore = yield* SessionStore;
+  const serverSecretStore = yield* ServerSecretStore;
+  const effectCrypto = yield* Crypto.Crypto;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -564,6 +571,35 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             },
             JSON.stringify(value),
           );
+        const requestUrl = new URL(
+          req.url ?? "/",
+          `${"encrypted" in req.socket && req.socket.encrypted ? "https" : "http"}://${req.headers.host ?? `localhost:${port}`}`,
+        ).href;
+        const authenticateAccessToken = (authorization: string | undefined) =>
+          Effect.gen(function* () {
+            const isDpop = authorization?.startsWith("DPoP ") === true;
+            const isBearer = authorization?.startsWith("Bearer ") === true;
+            if (!isDpop && !isBearer) return null;
+            const token = authorization!.slice(isDpop ? 5 : 7).trim();
+            if (token.length === 0) return null;
+            const session = yield* sessionStore.verify(token);
+            if (session.proofKeyThumbprint) {
+              if (!isDpop) return yield* Effect.fail(new Error("DPoP authorization required."));
+              yield* verifyDpopRequestFields({
+                proof: typeof req.headers.dpop === "string" ? req.headers.dpop : undefined,
+                method: req.method ?? "GET",
+                url: requestUrl,
+                expectedThumbprint: session.proofKeyThumbprint,
+                expectedAccessToken: token,
+              }).pipe(
+                Effect.provideService(ServerSecretStore, serverSecretStore),
+                Effect.provideService(Crypto.Crypto, effectCrypto),
+              );
+            } else if (isDpop) {
+              return yield* Effect.fail(new Error("DPoP token is not proof-bound."));
+            }
+            return session;
+          });
 
         if (req.method === "GET" && url.pathname === "/.well-known/t3/environment") {
           respondJson(200, yield* serverEnvironment.getDescriptor);
@@ -586,6 +622,23 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
             respondJson(400, { code: "invalid_request", reason: "invalid_scope", traceId: "http" });
             return;
           }
+          const proofVerification = typeof req.headers.dpop === "string"
+            ? yield* verifyDpopRequestFields({
+                proof: req.headers.dpop,
+                method: req.method,
+                url: requestUrl,
+              }).pipe(
+                Effect.provideService(ServerSecretStore, serverSecretStore),
+                Effect.provideService(Crypto.Crypto, effectCrypto),
+                Effect.exit,
+              )
+            : Exit.succeed(undefined);
+          if (Exit.isFailure(proofVerification)) {
+            res.setHeader("WWW-Authenticate", "DPoP");
+            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            return;
+          }
+          const proofKeyThumbprint = proofVerification.value;
           const issued = yield* environmentAuth
             .exchangeBootstrapCredentialForAccessToken(
               credential,
@@ -599,6 +652,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
                 ...(req.headers["user-agent"] ? { userAgent: req.headers["user-agent"] } : {}),
                 ...(req.socket.remoteAddress ? { ipAddress: req.socket.remoteAddress } : {}),
               },
+              proofKeyThumbprint ? { proofKeyThumbprint } : undefined,
             )
             .pipe(Effect.exit);
           if (Exit.isFailure(issued)) {
@@ -614,13 +668,18 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           url.pathname === "/api/auth/websocket-ticket"
         ) {
           const authorization = req.headers.authorization;
-          if (!authorization?.startsWith("Bearer ")) {
+          if (!authorization) {
             respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
             return;
           }
-          const verified = yield* sessionStore.verify(authorization.slice(7)).pipe(Effect.exit);
+          const verified = yield* authenticateAccessToken(authorization).pipe(Effect.exit);
           if (Exit.isFailure(verified)) {
+            if (authorization.startsWith("DPoP ")) res.setHeader("WWW-Authenticate", "DPoP");
             respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            return;
+          }
+          if (verified.value === null) {
+            respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
             return;
           }
           const ticket = yield* sessionStore.issueWebSocketToken(verified.value.sessionId);
@@ -634,13 +693,18 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         if (req.method === "GET" && url.pathname === "/api/auth/session") {
           const authorization = req.headers.authorization;
           const auth = yield* environmentAuth.getDescriptor();
-          if (!authorization?.startsWith("Bearer ")) {
+          if (!authorization) {
             respondJson(200, { authenticated: false, auth });
             return;
           }
-          const verified = yield* sessionStore.verify(authorization.slice(7)).pipe(Effect.exit);
+          const verified = yield* authenticateAccessToken(authorization).pipe(Effect.exit);
           if (Exit.isFailure(verified)) {
+            if (authorization.startsWith("DPoP ")) res.setHeader("WWW-Authenticate", "DPoP");
             respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            return;
+          }
+          if (verified.value === null) {
+            respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
             return;
           }
           respondJson(200, {

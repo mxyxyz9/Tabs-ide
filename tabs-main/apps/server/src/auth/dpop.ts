@@ -56,18 +56,34 @@ export const verifyRequestDpopProof = (input: {
   readonly expectedAccessToken?: string;
 }) =>
   Effect.gen(function* () {
-    const proof = input.request.headers.dpop;
     const url = HttpServerRequest.toURL(input.request);
     if (Option.isNone(url)) {
       return yield* new ServerAuthInvalidCredentialError({
         diagnostic: "Invalid DPoP request URL.",
       });
     }
-    const now = yield* DateTime.now;
-    const result = verifyDpopProof({
-      proof,
+    return yield* verifyDpopRequestFields({
+      proof: input.request.headers.dpop,
       method: input.request.method,
       url: url.value.href,
+      ...(input.expectedThumbprint ? { expectedThumbprint: input.expectedThumbprint } : {}),
+      ...(input.expectedAccessToken ? { expectedAccessToken: input.expectedAccessToken } : {}),
+    });
+  });
+
+export const verifyDpopRequestFields = (input: {
+  readonly proof: string | undefined;
+  readonly method: string;
+  readonly url: string;
+  readonly expectedThumbprint?: string;
+  readonly expectedAccessToken?: string;
+}) =>
+  Effect.gen(function* () {
+    const now = yield* DateTime.now;
+    const result = verifyDpopProof({
+      proof: input.proof,
+      method: input.method,
+      url: input.url,
       nowEpochSeconds: Math.floor(now.epochMilliseconds / 1_000),
       ...(input.expectedThumbprint ? { expectedThumbprint: input.expectedThumbprint } : {}),
       ...(input.expectedAccessToken ? { expectedAccessToken: input.expectedAccessToken } : {}),
@@ -121,4 +137,3 @@ export const verifyRequestDpopProof = (input: {
       );
     return result.thumbprint;
   });
-
