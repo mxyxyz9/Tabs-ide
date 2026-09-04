@@ -133,6 +133,17 @@ export const GitPullRequestCommit = Schema.Struct({
 });
 export type GitPullRequestCommit = typeof GitPullRequestCommit.Type;
 
+export const GitPullRequestFile = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+  previousPath: Schema.optional(TrimmedNonEmptyStringSchema),
+  status: Schema.Literals(["added", "modified", "removed", "renamed", "copied", "changed"]),
+  additions: NonNegativeInt,
+  deletions: NonNegativeInt,
+  patch: Schema.NullOr(Schema.String),
+  patchTruncated: Schema.Boolean,
+});
+export type GitPullRequestFile = typeof GitPullRequestFile.Type;
+
 const GitResolvedPullRequest = Schema.Struct({
   provider: Schema.optional(SourceControlProviderKind),
   number: PositiveInt,
@@ -158,6 +169,7 @@ const GitResolvedPullRequest = Schema.Struct({
   comments: Schema.optional(Schema.Array(GitPullRequestComment)),
   reviews: Schema.optional(Schema.Array(GitPullRequestReview)),
   commits: Schema.optional(Schema.Array(GitPullRequestCommit)),
+  files: Schema.optional(Schema.Array(GitPullRequestFile)),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 

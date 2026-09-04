@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ChevronRight,
   GitCommit,
+  FileDiff,
   GitMerge,
   GitPullRequest,
   MessageSquare,
@@ -120,9 +121,10 @@ export function PRsPanel({
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
   const [expandedPrNumber, setExpandedPrNumber] = useState<number | null>(null);
-  const [detailTab, setDetailTab] = useState<"summary" | "checks" | "commits" | "activity">(
-    "summary",
-  );
+  const [detailTab, setDetailTab] = useState<
+    "summary" | "code" | "checks" | "commits" | "activity"
+  >("summary");
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [actionBody, setActionBody] = useState("");
   const [reviewerInput, setReviewerInput] = useState("");
   const [labelInput, setLabelInput] = useState("");
@@ -429,6 +431,7 @@ export function PRsPanel({
                     onClick={() => {
                       setExpandedPrNumber((current) => (current === pr.n ? null : pr.n));
                       setDetailTab("summary");
+                      setSelectedFilePath(null);
                     }}
                   >
                     {expandedPrNumber === pr.n ? <ChevronDown /> : <ChevronRight />}
@@ -517,6 +520,7 @@ export function PRsPanel({
                         {(
                           [
                             ["summary", "Summary", GitPullRequest],
+                            ["code", "Code", FileDiff],
                             ["checks", "Checks", CheckCircle2],
                             ["commits", "Commits", GitCommit],
                             ["activity", "Activity", MessageSquare],
@@ -684,6 +688,82 @@ export function PRsPanel({
                               </div>
                             ) : null}
                           </div>
+                        ) : detailTab === "code" ? (
+                          (() => {
+                            const files = detailQuery.data.pullRequest.files ?? [];
+                            const selectedFile =
+                              files.find((file) => file.path === selectedFilePath) ?? files[0];
+                            if (!selectedFile) {
+                              return (
+                                <p className="text-muted-foreground">
+                                  This provider did not report any changed files.
+                                </p>
+                              );
+                            }
+                            return (
+                              <div className="grid min-h-72 gap-3 md:grid-cols-[minmax(12rem,0.32fr)_minmax(0,1fr)]">
+                                <div
+                                  className="max-h-96 overflow-auto rounded-md border border-border/70 bg-background"
+                                  aria-label="Changed files"
+                                >
+                                  {files.map((file) => (
+                                    <button
+                                      key={file.path}
+                                      type="button"
+                                      aria-current={
+                                        selectedFile.path === file.path ? "true" : undefined
+                                      }
+                                      className={`flex w-full items-start justify-between gap-2 border-b border-border/50 px-2.5 py-2 text-left last:border-b-0 ${
+                                        selectedFile.path === file.path
+                                          ? "bg-accent text-accent-foreground"
+                                          : "hover:bg-muted/40"
+                                      }`}
+                                      onClick={() => setSelectedFilePath(file.path)}
+                                    >
+                                      <span className="min-w-0 break-all font-mono text-[11px]">
+                                        {file.path}
+                                      </span>
+                                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                                        <span className="text-emerald-600">+{file.additions}</span>{" "}
+                                        <span className="text-red-600">−{file.deletions}</span>
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="min-w-0 overflow-hidden rounded-md border border-border/70 bg-background">
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-3 py-2">
+                                    <span className="break-all font-mono text-[11px] font-medium">
+                                      {selectedFile.path}
+                                    </span>
+                                    <Badge variant="outline">{selectedFile.status}</Badge>
+                                  </div>
+                                  {selectedFile.patch === null ? (
+                                    <p className="p-4 text-muted-foreground">
+                                      No textual patch is available. The file may be binary or the
+                                      provider may have omitted a very large patch.
+                                    </p>
+                                  ) : (
+                                    <pre
+                                      tabIndex={0}
+                                      aria-label={`Patch for ${selectedFile.path}`}
+                                      className="max-h-96 overflow-auto p-3 font-mono text-[11px] leading-5"
+                                    >
+                                      {selectedFile.patch}
+                                    </pre>
+                                  )}
+                                  {selectedFile.patchTruncated ? (
+                                    <p
+                                      role="status"
+                                      className="border-t border-border/60 px-3 py-2 text-amber-700 dark:text-amber-400"
+                                    >
+                                      This patch was truncated to keep the review responsive. Open
+                                      the pull request on the provider for the complete diff.
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })()
                         ) : detailTab === "checks" ? (
                           <div className="space-y-1.5">
                             {(detailQuery.data.pullRequest.checks ?? []).length > 0 ? (

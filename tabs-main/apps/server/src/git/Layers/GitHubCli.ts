@@ -11,6 +11,9 @@ import {
 } from "../Services/GitHubCli.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_PULL_REQUEST_FILE_PATCH_CHARS = 200_000;
+const MAX_PULL_REQUEST_FILES = 300;
+const MAX_PULL_REQUEST_TOTAL_PATCH_CHARS = 2_000_000;
 
 function normalizeGitHubCliError(operation: "execute" | "stdout", error: unknown): GitHubCliError {
   if (error instanceof Error) {
@@ -199,6 +202,28 @@ const RawGitHubRepositoryCloneUrlsSchema = Schema.Struct({
   sshUrl: TrimmedNonEmptyString,
 });
 
+const RawGitHubPullRequestFileSchema = Schema.Struct({
+  filename: TrimmedNonEmptyString,
+  previous_filename: Schema.optional(TrimmedNonEmptyString),
+  status: Schema.String,
+  additions: Schema.Number,
+  deletions: Schema.Number,
+  patch: Schema.optional(Schema.String),
+});
+
+function normalizeFileStatus(
+  value: string,
+): "added" | "modified" | "removed" | "renamed" | "copied" | "changed" {
+  return value === "added" ||
+    value === "modified" ||
+    value === "removed" ||
+    value === "renamed" ||
+    value === "copied" ||
+    value === "changed"
+    ? value
+    : "changed";
+}
+
 function normalizePullRequestSummary(
   raw: Schema.Schema.Type<typeof RawGitHubPullRequestSchema>,
 ): GitHubPullRequestSummary {
@@ -351,7 +376,11 @@ function normalizeRepositoryCloneUrls(
 function decodeGitHubJson<S extends Schema.Top>(
   raw: string,
   schema: S,
-  operation: "listOpenPullRequests" | "getPullRequest" | "getRepositoryCloneUrls",
+  operation:
+    | "listOpenPullRequests"
+    | "getPullRequest"
+    | "getPullRequestFiles"
+    | "getRepositoryCloneUrls",
   invalidDetail: string,
 ): Effect.Effect<S["Type"], GitHubCliError, S["DecodingServices"]> {
   return Schema.decodeEffect(Schema.fromJsonString(schema))(raw).pipe(
@@ -432,6 +461,48 @@ const makeGitHubCli = Effect.sync(() => {
           ),
         ),
         Effect.map(normalizePullRequestSummary),
+      ),
+    getPullRequestFiles: (input) =>
+      execute({
+        cwd: input.cwd,
+        args: [
+          "api",
+          "--paginate",
+          "--slurp",
+          `repos/{owner}/{repo}/pulls/${input.reference}/files`,
+        ],
+      }).pipe(
+        Effect.map((result) => result.stdout.trim()),
+        Effect.flatMap((raw) =>
+          decodeGitHubJson(
+            raw || "[]",
+            Schema.Array(Schema.Array(RawGitHubPullRequestFileSchema)),
+            "getPullRequestFiles",
+            "GitHub CLI returned invalid pull request file JSON.",
+          ),
+        ),
+        Effect.map((pages) => {
+          const files = pages.flat();
+          let remainingPatchChars = MAX_PULL_REQUEST_TOTAL_PATCH_CHARS;
+          return files.slice(0, MAX_PULL_REQUEST_FILES).map((file) => {
+            const patch = file.patch ?? null;
+            const allowedPatchChars = Math.min(
+              MAX_PULL_REQUEST_FILE_PATCH_CHARS,
+              remainingPatchChars,
+            );
+            const boundedPatch = patch === null ? null : patch.slice(0, allowedPatchChars);
+            remainingPatchChars -= boundedPatch?.length ?? 0;
+            return {
+              path: file.filename,
+              ...(file.previous_filename ? { previousPath: file.previous_filename } : {}),
+              status: normalizeFileStatus(file.status),
+              additions: Math.max(0, file.additions),
+              deletions: Math.max(0, file.deletions),
+              patch: boundedPatch,
+              patchTruncated: patch !== null && patch.length > allowedPatchChars,
+            };
+          });
+        }),
       ),
     mutatePullRequest: (input) => {
       const args: string[] = ["pr"];

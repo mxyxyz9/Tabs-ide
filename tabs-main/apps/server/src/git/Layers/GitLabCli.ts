@@ -5,6 +5,9 @@ import { GitLabCli, type GitLabCliShape } from "../Services/GitLabCli.ts";
 import type { GitResolvedPullRequest } from "@tabs/contracts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_PULL_REQUEST_FILE_PATCH_CHARS = 200_000;
+const MAX_PULL_REQUEST_FILES = 300;
+const MAX_PULL_REQUEST_TOTAL_PATCH_CHARS = 2_000_000;
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
@@ -109,6 +112,51 @@ function parseMergeRequest(value: unknown): GitResolvedPullRequest | null {
   };
 }
 
+export function decodeGitLabMergeRequestChanges(
+  value: unknown,
+): NonNullable<GitResolvedPullRequest["files"]> {
+  const raw = record(value);
+  const changes = Array.isArray(raw?.changes) ? raw.changes.slice(0, MAX_PULL_REQUEST_FILES) : [];
+  let remainingPatchChars = MAX_PULL_REQUEST_TOTAL_PATCH_CHARS;
+  return changes.flatMap((entry) => {
+    const change = record(entry);
+    const path = text(change?.new_path ?? change?.old_path);
+    if (!change || !path) return [];
+    const previousPath = text(change.old_path);
+    const patch = typeof change.diff === "string" ? change.diff : null;
+    const status =
+      change.new_file === true
+        ? ("added" as const)
+        : change.deleted_file === true
+          ? ("removed" as const)
+          : change.renamed_file === true
+            ? ("renamed" as const)
+            : ("modified" as const);
+    let additions = 0;
+    let deletions = 0;
+    if (patch) {
+      for (const line of patch.split("\n")) {
+        if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
+        else if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
+      }
+    }
+    const allowedPatchChars = Math.min(MAX_PULL_REQUEST_FILE_PATCH_CHARS, remainingPatchChars);
+    const boundedPatch = patch === null ? null : patch.slice(0, allowedPatchChars);
+    remainingPatchChars -= boundedPatch?.length ?? 0;
+    return [
+      {
+        path,
+        ...(previousPath && previousPath !== path ? { previousPath } : {}),
+        status,
+        additions,
+        deletions,
+        patch: boundedPatch,
+        patchTruncated: patch !== null && patch.length > allowedPatchChars,
+      },
+    ];
+  });
+}
+
 export function decodeGitLabMergeRequests(stdout: string): ReadonlyArray<GitResolvedPullRequest> {
   const parsed: unknown = JSON.parse(stdout);
   const entries = Array.isArray(parsed) ? parsed : [parsed];
@@ -203,21 +251,31 @@ export const makeGitLabCli = Effect.sync(() => {
         ),
       ),
     getPullRequest: (input) =>
-      execute({
-        cwd: input.cwd,
-        args: ["mr", "view", input.reference, "--output", "json"],
-      }).pipe(
-        Effect.flatMap((result) =>
-          Effect.try({
-            try: () => {
-              const [pullRequest] = decodeGitLabMergeRequests(result.stdout.trim());
-              if (!pullRequest) throw new Error("GitLab returned an invalid merge request.");
-              return pullRequest;
-            },
-            catch: (error) => normalizeGitLabCliError("getPullRequest", error),
-          }),
-        ),
-      ),
+      Effect.gen(function* () {
+        const details = yield* execute({
+          cwd: input.cwd,
+          args: ["mr", "view", input.reference, "--output", "json"],
+        });
+        const [pullRequest] = decodeGitLabMergeRequests(details.stdout.trim());
+        if (!pullRequest) {
+          return yield* normalizeGitLabCliError(
+            "getPullRequest",
+            new Error("GitLab returned an invalid merge request."),
+          );
+        }
+        const changes = yield* execute({
+          cwd: input.cwd,
+          args: ["api", `projects/:fullpath/merge_requests/${pullRequest.number}/changes`],
+        });
+        return yield* Effect.try({
+          try: () => {
+            const parsedChanges: unknown = JSON.parse(changes.stdout.trim() || "{}");
+            const files = decodeGitLabMergeRequestChanges(parsedChanges);
+            return { ...pullRequest, ...(files.length > 0 ? { files } : {}) };
+          },
+          catch: (error) => normalizeGitLabCliError("getPullRequest", error),
+        });
+      }),
     mutatePullRequest: (input) => {
       const reference = input.reference.trim().replace(/^#/, "");
       let args: ReadonlyArray<string>;

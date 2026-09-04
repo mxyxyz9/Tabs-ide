@@ -439,6 +439,7 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
           ],
         }).pipe(Effect.map((result) => JSON.parse(result.stdout) as GitHubPullRequestSummary)),
+      getPullRequestFiles: () => Effect.succeed([]),
       mutatePullRequest: (input) => {
         ghCalls.push(`pr ${input.action} ${input.reference}`);
         return Effect.void;

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 
-import { decodeGitLabMergeRequests } from "./GitLabCli.ts";
+import { decodeGitLabMergeRequestChanges, decodeGitLabMergeRequests } from "./GitLabCli.ts";
 
 describe("decodeGitLabMergeRequests", () => {
   it("normalizes real GitLab fields without inventing unavailable data", () => {
@@ -64,5 +64,49 @@ describe("decodeGitLabMergeRequests", () => {
         ]),
       ),
     ).toHaveLength(1);
+  });
+});
+
+describe("decodeGitLabMergeRequestChanges", () => {
+  it("normalizes renamed and binary merge-request files", () => {
+    expect(
+      decodeGitLabMergeRequestChanges({
+        changes: [
+          {
+            old_path: "src/old.ts",
+            new_path: "src/new.ts",
+            renamed_file: true,
+            new_file: false,
+            deleted_file: false,
+            diff: "@@ -1 +1 @@\n-old\n+new",
+          },
+          {
+            old_path: "logo.png",
+            new_path: "logo.png",
+            new_file: false,
+            deleted_file: false,
+            renamed_file: false,
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        path: "src/new.ts",
+        previousPath: "src/old.ts",
+        status: "renamed",
+        additions: 1,
+        deletions: 1,
+        patch: "@@ -1 +1 @@\n-old\n+new",
+        patchTruncated: false,
+      },
+      {
+        path: "logo.png",
+        status: "modified",
+        additions: 0,
+        deletions: 0,
+        patch: null,
+        patchTruncated: false,
+      },
+    ]);
   });
 });

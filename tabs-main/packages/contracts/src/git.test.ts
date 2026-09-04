@@ -65,11 +65,22 @@ describe("GitResolvePullRequestResult", () => {
         baseBranch: "main",
         headBranch: "feature/pr-threads",
         state: "open",
+        files: [
+          {
+            path: "src/app.ts",
+            status: "modified",
+            additions: 3,
+            deletions: 1,
+            patch: "@@ -1 +1 @@\n-old\n+new",
+            patchTruncated: false,
+          },
+        ],
       },
     });
 
     expect(parsed.pullRequest.number).toBe(42);
     expect(parsed.pullRequest.headBranch).toBe("feature/pr-threads");
+    expect(parsed.pullRequest.files?.[0]?.path).toBe("src/app.ts");
   });
 });
 

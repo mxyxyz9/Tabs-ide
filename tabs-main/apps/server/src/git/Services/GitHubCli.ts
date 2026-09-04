@@ -76,6 +76,15 @@ export interface GitHubPullRequestSummary {
       readonly avatarUrl?: string | undefined;
     }>;
   }>;
+  readonly files?: ReadonlyArray<{
+    readonly path: string;
+    readonly previousPath?: string | undefined;
+    readonly status: "added" | "modified" | "removed" | "renamed" | "copied" | "changed";
+    readonly additions: number;
+    readonly deletions: number;
+    readonly patch: string | null;
+    readonly patchTruncated: boolean;
+  }>;
 }
 
 export interface GitHubRepositoryCloneUrls {
@@ -114,6 +123,11 @@ export interface GitHubCliShape {
     readonly cwd: string;
     readonly reference: string;
   }) => Effect.Effect<GitHubPullRequestSummary, GitHubCliError>;
+
+  readonly getPullRequestFiles: (input: {
+    readonly cwd: string;
+    readonly reference: string;
+  }) => Effect.Effect<NonNullable<GitHubPullRequestSummary["files"]>, GitHubCliError>;
 
   readonly mutatePullRequest: (input: {
     readonly cwd: string;

@@ -1049,9 +1049,17 @@ export const makeGitManager = Effect.gen(function* () {
       const reference = normalizePullRequestReference(input.reference);
       const pullRequest =
         provider === "github"
-          ? yield* gitHubCli
-              .getPullRequest({ cwd: input.cwd, reference })
-              .pipe(Effect.map(toResolvedPullRequest))
+          ? yield* Effect.gen(function* () {
+              const details = yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference });
+              const files = yield* gitHubCli.getPullRequestFiles({
+                cwd: input.cwd,
+                reference: String(details.number),
+              });
+              return {
+                ...toResolvedPullRequest(details),
+                ...(files.length > 0 ? { files } : {}),
+              };
+            })
           : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
 
       return { pullRequest };

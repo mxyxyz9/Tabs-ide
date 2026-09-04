@@ -18,6 +18,65 @@ afterEach(() => {
 });
 
 layer("GitHubCliLive", (it) => {
+  it.effect("normalizes pull request file patches and binary omissions", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          [
+            {
+              filename: "src/new.ts",
+              previous_filename: "src/old.ts",
+              status: "renamed",
+              additions: 4,
+              deletions: 2,
+              patch: "@@ -1 +1 @@\n-old\n+new",
+            },
+          ],
+          [
+            {
+              filename: "public/logo.png",
+              status: "modified",
+              additions: 0,
+              deletions: 0,
+            },
+          ],
+        ]),
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+
+      const gh = yield* GitHubCli;
+      const files = yield* gh.getPullRequestFiles({ cwd: "/repo", reference: "42" });
+
+      assert.deepStrictEqual(files, [
+        {
+          path: "src/new.ts",
+          previousPath: "src/old.ts",
+          status: "renamed",
+          additions: 4,
+          deletions: 2,
+          patch: "@@ -1 +1 @@\n-old\n+new",
+          patchTruncated: false,
+        },
+        {
+          path: "public/logo.png",
+          status: "modified",
+          additions: 0,
+          deletions: 0,
+          patch: null,
+          patchTruncated: false,
+        },
+      ]);
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "gh",
+        ["api", "--paginate", "--slurp", "repos/{owner}/{repo}/pulls/42/files"],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
   it.effect("parses pull request view output", () =>
     Effect.gen(function* () {
       mockedRunProcess.mockResolvedValueOnce({
