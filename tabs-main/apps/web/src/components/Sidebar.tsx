@@ -127,6 +127,7 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useConfirm } from "~/hooks/useConfirm";
 import { isSnoozed, isSettled } from "../state/threadLifecycle";
+import { resolveSnoozePresets } from "../state/snoozePresets";
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -831,6 +832,7 @@ export default function Sidebar() {
       if (!thread) return;
       const threadWorkspacePath =
         thread.worktreePath ?? projectCwdById.get(thread.projectId) ?? null;
+      const snoozePresets = resolveSnoozePresets();
       const clicked = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
@@ -850,7 +852,15 @@ export default function Sidebar() {
           },
           {
             id: "snooze",
-            label: isSnoozed(thread) ? "Wake now" : "Snooze for 1 hour",
+            label: isSnoozed(thread) ? "Wake now" : "Snooze",
+            ...(isSnoozed(thread)
+              ? {}
+              : {
+                  children: snoozePresets.map((preset) => ({
+                    id: `snooze:${preset.id}`,
+                    label: `${preset.label} (${preset.whenLabel})`,
+                  })),
+                }),
           },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
@@ -904,7 +914,8 @@ export default function Sidebar() {
         }
         return;
       }
-      if (clicked === "snooze") {
+      if (clicked === "snooze" || clicked?.startsWith("snooze:")) {
+        const preset = snoozePresets.find((entry) => `snooze:${entry.id}` === clicked);
         await api.orchestration.dispatchCommand(
           isSnoozed(thread)
             ? {
@@ -917,7 +928,8 @@ export default function Sidebar() {
                 type: "thread.snooze",
                 commandId: newCommandId(),
                 threadId,
-                snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                snoozedUntil:
+                  preset?.snoozedUntil ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
               },
         );
         return;
