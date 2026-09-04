@@ -188,7 +188,7 @@ export function buildThreadActionItems(input: {
   renderLeadingContent?: (thread: Thread) => ReactNode;
   /** Optional content rendered inline after the title text per-thread. */
   renderTrailingContent?: (thread: Thread) => ReactNode;
-  runThread: (thread: Pick<Thread, "id">) => Promise<void>;
+  runThread: (thread: Thread) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
   const sortedThreads = sortThreads(

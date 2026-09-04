@@ -9793,6 +9793,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeEnvironmentId = useParams({
+    strict: false,
+    select: (params) => params.environmentId ?? null,
+  });
   const projects = useAtomValue(projectsAtom);
   const threads = useAtomValue(threadsAtom);
   const { handleNewThread } = useHandleNewThread();
@@ -9921,7 +9925,9 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
   ]);
 
   const activeThread = routeThreadId
-    ? (threads.find((thread) => thread.id === routeThreadId) ?? null)
+    ? (threads.find(
+        (thread) => thread.id === routeThreadId && thread.environmentId === routeEnvironmentId,
+      ) ?? null)
     : null;
   const routeProjectId = activeThread?.projectId ?? workspaceState.session.activeProjectId ?? null;
 
@@ -10085,10 +10091,14 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           threads,
           workspaceState.session.rememberedThreadIdByProjectId[projectId] ?? null,
         );
-        if (rememberedThreadId) {
+        const targetProject = projects.find((project) => project.id === projectId);
+        if (rememberedThreadId && targetProject?.environmentId) {
           await navigate({
-            to: "/$threadId",
-            params: { threadId: rememberedThreadId },
+            to: "/$environmentId/$threadId",
+            params: {
+              environmentId: targetProject.environmentId,
+              threadId: rememberedThreadId,
+            },
           });
           return;
         }
@@ -10099,6 +10109,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       location.pathname,
       navigate,
       openProject,
+      projects,
       threads,
       workspaceState.projectSettingsByProjectId,
       workspaceState.session.activeToolIdByProjectId,
@@ -10342,10 +10353,11 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       );
       setActiveProject(projectId);
       setActiveTool(projectId, "agents");
-      if (targetThreadId) {
+      const targetProject = projects.find((project) => project.id === projectId);
+      if (targetThreadId && targetProject?.environmentId) {
         await navigate({
-          to: "/$threadId",
-          params: { threadId: targetThreadId },
+          to: "/$environmentId/$threadId",
+          params: { environmentId: targetProject.environmentId, threadId: targetThreadId },
         });
         return;
       }
@@ -10353,6 +10365,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [
       navigate,
+      projects,
       setActiveProject,
       setActiveTool,
       threads,
@@ -10373,36 +10386,36 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
 
   const handleDeleteThread = useCallback(
     async (thread: Thread) => {
-      const api = readNativeApi() ?? ensureNativeApi();
+      const api = await environmentApi(thread.environmentId);
       await api.orchestration.dispatchCommand({
         type: "thread.delete",
         commandId: newCommandId(),
         threadId: thread.id,
       });
-      if (routeThreadId === thread.id) {
+      if (routeThreadId === thread.id && routeEnvironmentId === thread.environmentId) {
         void navigate({ to: "/" });
       }
     },
-    [navigate, routeThreadId],
+    [navigate, routeEnvironmentId, routeThreadId],
   );
 
   const handleArchiveThread = useCallback(
     async (thread: Thread) => {
-      const api = readNativeApi() ?? ensureNativeApi();
+      const api = await environmentApi(thread.environmentId);
       await api.orchestration.dispatchCommand({
         type: "thread.archive",
         commandId: newCommandId(),
         threadId: thread.id,
       });
-      if (routeThreadId === thread.id) {
+      if (routeThreadId === thread.id && routeEnvironmentId === thread.environmentId) {
         void navigate({ to: "/" });
       }
     },
-    [navigate, routeThreadId],
+    [navigate, routeEnvironmentId, routeThreadId],
   );
 
   const handleUnarchiveThread = useCallback(async (thread: Thread) => {
-    const api = readNativeApi() ?? ensureNativeApi();
+    const api = await environmentApi(thread.environmentId);
     await api.orchestration.dispatchCommand({
       type: "thread.unarchive",
       commandId: newCommandId(),
@@ -10430,10 +10443,10 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
           threads,
           workspaceState.session.rememberedThreadIdByProjectId[activeProject.id] ?? null,
         );
-        if (nextThreadId) {
+        if (nextThreadId && activeProject.environmentId) {
           await navigate({
-            to: "/$threadId",
-            params: { threadId: nextThreadId },
+            to: "/$environmentId/$threadId",
+            params: { environmentId: activeProject.environmentId, threadId: nextThreadId },
           });
           return;
         }
@@ -11597,15 +11610,20 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
       <AgentsThreadList
         project={activeProject}
         threads={sortProjectThreads(
-          threads.filter((thread) => thread.projectId === activeProject.id),
+          threads.filter(
+            (thread) =>
+              thread.projectId === activeProject.id &&
+              thread.environmentId === activeProject.environmentId,
+          ),
         )}
         activeThreadId={routeThreadId}
-        onSelectThread={(threadId) =>
+        onSelectThread={(threadId) => {
+          if (!activeProject.environmentId) return;
           void navigate({
-            to: "/$threadId",
-            params: { threadId },
-          })
-        }
+            to: "/$environmentId/$threadId",
+            params: { environmentId: activeProject.environmentId, threadId },
+          });
+        }}
         onCreateThread={() =>
           void handleNewThread(activeProject.id, {
             envMode: settings.defaultThreadEnvMode,

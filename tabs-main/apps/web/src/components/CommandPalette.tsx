@@ -304,17 +304,20 @@ function OpenCommandPaletteDialog(props: {
   const openProjectFromSearch = useMemo(
     () => async (project: (typeof projects)[number]) => {
       // Find latest thread or create new
-      const projectThreads = threads.filter((t) => t.projectId === project.id);
+      const projectThreads = threads.filter(
+        (thread) =>
+          thread.projectId === project.id && thread.environmentId === project.environmentId,
+      );
       if (projectThreads.length > 0) {
         // Sort and select latest
         const sorted = [...projectThreads].sort(
           (a, b) => Date.parse(b.updatedAt ?? b.createdAt) - Date.parse(a.updatedAt ?? a.createdAt),
         );
         const latest = sorted[0];
-        if (latest) {
+        if (latest?.environmentId) {
           void navigate({
-            to: "/$threadId",
-            params: { threadId: latest.id },
+            to: "/$environmentId/$threadId",
+            params: { environmentId: latest.environmentId, threadId: latest.id },
           });
           return;
         }
@@ -360,10 +363,12 @@ function OpenCommandPaletteDialog(props: {
         sortOrder: "updated_at",
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
         runThread: async (thread) => {
-          void navigate({
-            to: "/$threadId",
-            params: { threadId: thread.id },
-          });
+          if (thread.environmentId) {
+            void navigate({
+              to: "/$environmentId/$threadId",
+              params: { environmentId: thread.environmentId, threadId: thread.id },
+            });
+          }
         },
         limit: RECENT_THREAD_LIMIT,
       }),
