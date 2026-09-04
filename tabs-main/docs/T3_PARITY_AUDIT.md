@@ -14,7 +14,8 @@ verification evidence, not just a matching type or placeholder.
       and renew those tickets after disconnects or system resume.
 - [ ] Route each project/thread runtime through its selected environment instead of the current
       process-wide transport.
-- [ ] Surface relay/Tailscale reachability and connection repair in the main workspace.
+- [x] Surface direct/SSH/Tailscale reachability and connection repair in settings.
+- [ ] Add managed cloud relay account discovery and status to the main workspace.
 - [x] Replace the native SSH password prompt with an accessible in-app credential dialog.
 
 ## Collaborative browser and computer use
@@ -59,9 +60,15 @@ an adapter over that engine.
       exposure.
 - [x] Desktop resume events force stale renderer WebSocket transports to reconnect.
 - [ ] Background activity reporting and full power/thermal-aware liveness policy.
-- [ ] Resource telemetry, diagnostics, tracing UI, and support bundles.
-- [ ] Self-update and cloud/relay status UI parity.
+- [x] Environment process-tree diagnostics, bounded history, safe descendant process signaling,
+      and an accessible diagnostics settings panel.
+- [ ] Native resource attribution, trace-file aggregation, and support bundles.
+- [x] Desktop self-update state machine, download/install actions, sidebar notification, and
+      settings UI. Tabs retains its existing updater because it is already more complete.
+- [ ] Cloud relay account and managed-server status UI parity.
 - [ ] Environment-aware themes and appearance synchronization.
-- [ ] Remaining chat actions, command palette parity, voice input, and documentation surfaces.
+- [x] Searchable keyboard-accessible command palette with project, thread, navigation, and action
+      submenus. Tabs retains its existing implementation because it is already more complete.
+- [ ] Remaining T3 chat actions and in-application documentation surfaces.
 
 Mobile applications and mobile-only protocol/UI work are explicitly excluded.
