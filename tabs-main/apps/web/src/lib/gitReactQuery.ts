@@ -1,6 +1,7 @@
 import { type GitStackedAction } from "@tabs/contracts";
 import { mutationOptions, queryOptions, type QueryClient } from "@tanstack/react-query";
 import { ensureNativeApi } from "../nativeApi";
+import { environmentApi } from "../connection/environmentApiRegistry";
 
 const GIT_ENVIRONMENT_STALE_TIME_MS = 30_000;
 const GIT_STATUS_STALE_TIME_MS = 5_000;
@@ -38,15 +39,18 @@ export const gitMutationKeys = {
     ["git", "mutation", "prepare-pull-request-thread", cwd] as const,
 };
 
+const scopedGitKey = (environmentId: string | undefined, key: readonly unknown[]) =>
+  ["environment", environmentId ?? "primary", ...key] as const;
+
 export function invalidateGitQueries(queryClient: QueryClient) {
   return queryClient.invalidateQueries({ queryKey: gitQueryKeys.all });
 }
 
-export function gitEnvironmentQueryOptions(cwd: string | null) {
+export function gitEnvironmentQueryOptions(cwd: string | null, environmentId?: string) {
   return queryOptions({
-    queryKey: gitQueryKeys.environment(cwd),
+    queryKey: scopedGitKey(environmentId, gitQueryKeys.environment(cwd)),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(environmentId);
       if (!cwd) throw new Error("Git environment is unavailable.");
       return api.git.environment({ cwd });
     },
@@ -89,11 +93,11 @@ export function gitHubLogoutMutationOptions(input: {
   });
 }
 
-export function gitStatusQueryOptions(cwd: string | null) {
+export function gitStatusQueryOptions(cwd: string | null, environmentId?: string) {
   return queryOptions({
-    queryKey: gitQueryKeys.status(cwd),
+    queryKey: scopedGitKey(environmentId, gitQueryKeys.status(cwd)),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(environmentId);
       if (!cwd) throw new Error("Git status is unavailable.");
       return api.git.status({ cwd });
     },
@@ -105,11 +109,11 @@ export function gitStatusQueryOptions(cwd: string | null) {
   });
 }
 
-export function gitBranchesQueryOptions(cwd: string | null) {
+export function gitBranchesQueryOptions(cwd: string | null, environmentId?: string) {
   return queryOptions({
-    queryKey: gitQueryKeys.branches(cwd),
+    queryKey: scopedGitKey(environmentId, gitQueryKeys.branches(cwd)),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(environmentId);
       if (!cwd) throw new Error("Git branches are unavailable.");
       return api.git.listBranches({ cwd });
     },
@@ -121,12 +125,16 @@ export function gitBranchesQueryOptions(cwd: string | null) {
   });
 }
 
-export function gitHistoryQueryOptions(input: { cwd: string | null; limit?: number }) {
+export function gitHistoryQueryOptions(input: {
+  cwd: string | null;
+  limit?: number;
+  environmentId?: string | undefined;
+}) {
   const limit = input.limit ?? 40;
   return queryOptions({
-    queryKey: gitQueryKeys.history(input.cwd, limit),
+    queryKey: scopedGitKey(input.environmentId, gitQueryKeys.history(input.cwd, limit)),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(input.environmentId);
       if (!input.cwd) throw new Error("Git history is unavailable.");
       return api.git.history({ cwd: input.cwd, limit });
     },
@@ -142,13 +150,14 @@ export function gitDiffQueryOptions(input: {
   cwd: string | null;
   path?: string | null;
   commit?: string | null;
+  environmentId?: string | undefined;
 }) {
   const isWorkingTreeDiff = !input.commit;
   const hasTarget = Boolean(input.path) || Boolean(input.commit);
   return queryOptions({
-    queryKey: gitQueryKeys.diff(input),
+    queryKey: scopedGitKey(input.environmentId, gitQueryKeys.diff(input)),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(input.environmentId);
       if (!input.cwd) throw new Error("Git diff is unavailable.");
       if (!input.path && !input.commit) {
         throw new Error("Git diff needs a file path or commit.");
@@ -171,11 +180,15 @@ export function gitConflictSnapshotQueryOptions(input: {
   cwd: string | null;
   path: string | null;
   enabled?: boolean;
+  environmentId?: string | undefined;
 }) {
   return queryOptions({
-    queryKey: gitQueryKeys.conflictSnapshot(input.cwd, input.path),
+    queryKey: scopedGitKey(
+      input.environmentId,
+      gitQueryKeys.conflictSnapshot(input.cwd, input.path),
+    ),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(input.environmentId);
       if (!input.cwd || !input.path) {
         throw new Error("Git conflict snapshot is unavailable.");
       }
@@ -189,11 +202,11 @@ export function gitConflictSnapshotQueryOptions(input: {
   });
 }
 
-export function gitStashListQueryOptions(cwd: string | null) {
+export function gitStashListQueryOptions(cwd: string | null, environmentId?: string) {
   return queryOptions({
-    queryKey: gitQueryKeys.stashes(cwd),
+    queryKey: scopedGitKey(environmentId, gitQueryKeys.stashes(cwd)),
     queryFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(environmentId);
       if (!cwd) throw new Error("Git stashes are unavailable.");
       return api.git.listStashes({ cwd });
     },
@@ -245,11 +258,15 @@ export function gitAllPullRequestsQueryOptions(
   });
 }
 
-export function gitInitMutationOptions(input: { cwd: string | null; queryClient: QueryClient }) {
+export function gitInitMutationOptions(input: {
+  cwd: string | null;
+  queryClient: QueryClient;
+  environmentId?: string | undefined;
+}) {
   return mutationOptions({
-    mutationKey: gitMutationKeys.init(input.cwd),
+    mutationKey: scopedGitKey(input.environmentId, gitMutationKeys.init(input.cwd)),
     mutationFn: async () => {
-      const api = ensureNativeApi();
+      const api = await environmentApi(input.environmentId);
       if (!input.cwd) throw new Error("Git init is unavailable.");
       return api.git.init({ cwd: input.cwd });
     },
@@ -430,4 +447,3 @@ export function gitWatchedBranchesQueryOptions(
     refetchOnWindowFocus: "always",
   });
 }
-

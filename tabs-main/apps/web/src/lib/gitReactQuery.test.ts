@@ -5,6 +5,7 @@ import {
   gitPreparePullRequestThreadMutationOptions,
   gitPullMutationOptions,
   gitRunStackedActionMutationOptions,
+  gitStatusQueryOptions,
 } from "./gitReactQuery";
 
 describe("gitMutationKeys", () => {
@@ -47,5 +48,14 @@ describe("git mutation options", () => {
       queryClient,
     });
     expect(options.mutationKey).toEqual(gitMutationKeys.preparePullRequestThread("/repo/a"));
+  });
+});
+
+describe("git query options", () => {
+  it("separates identical paths hosted by different environments", () => {
+    const first = gitStatusQueryOptions("/repo/a", "environment-a");
+    const second = gitStatusQueryOptions("/repo/a", "environment-b");
+
+    expect(first.queryKey).not.toEqual(second.queryKey);
   });
 });

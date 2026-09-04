@@ -1215,7 +1215,9 @@ function AgentsThreadList(props: {
   const [threadSearch, setThreadSearch] = useState("");
   const [openThreadMenuId, setOpenThreadMenuId] = useState<ThreadId | null>(null);
   const [draggedPinnedThreadId, setDraggedPinnedThreadId] = useState<ThreadId | null>(null);
-  const projectGitStatusQuery = useQuery(gitStatusQueryOptions(props.project.cwd));
+  const projectGitStatusQuery = useQuery(
+    gitStatusQueryOptions(props.project.cwd, props.project.environmentId),
+  );
   useEffect(() => {
     const timer = window.setInterval(() => {
       setLifecycleNow(Date.now());
@@ -3383,12 +3385,18 @@ function GitTool(props: {
   const api = readNativeApi();
   const keybindings = useKeybindings();
   const queryClient = useQueryClient();
-  const gitStatusQuery = useQuery(gitStatusQueryOptions(project.cwd));
-  const gitEnvironmentQuery = useQuery(gitEnvironmentQueryOptions(project.cwd));
-  const branchesQuery = useQuery(gitBranchesQueryOptions(project.cwd));
-  const gitInitMutation = useMutation(gitInitMutationOptions({ cwd: project.cwd, queryClient }));
-  const historyQuery = useQuery(gitHistoryQueryOptions({ cwd: project.cwd, limit: 40 }));
-  const stashQuery = useQuery(gitStashListQueryOptions(project.cwd));
+  const gitStatusQuery = useQuery(gitStatusQueryOptions(project.cwd, project.environmentId));
+  const gitEnvironmentQuery = useQuery(
+    gitEnvironmentQueryOptions(project.cwd, project.environmentId),
+  );
+  const branchesQuery = useQuery(gitBranchesQueryOptions(project.cwd, project.environmentId));
+  const gitInitMutation = useMutation(
+    gitInitMutationOptions({ cwd: project.cwd, queryClient, environmentId: project.environmentId }),
+  );
+  const historyQuery = useQuery(
+    gitHistoryQueryOptions({ cwd: project.cwd, limit: 40, environmentId: project.environmentId }),
+  );
+  const stashQuery = useQuery(gitStashListQueryOptions(project.cwd, project.environmentId));
   const [branchDraft, setBranchDraft] = useState("");
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
   const [createBranchName, setCreateBranchName] = useState("");
@@ -3565,6 +3573,7 @@ function GitTool(props: {
   const totalConflictCount = conflictedFiles.length;
   const diffQuery = useQuery(
     gitDiffQueryOptions({
+      environmentId: project.environmentId,
       cwd: project.cwd,
       path: selectedPath,
       commit: selectedPath ? null : (activeHistoryCommit?.sha ?? null),
@@ -3572,6 +3581,7 @@ function GitTool(props: {
   );
   const conflictSnapshotQuery = useQuery(
     gitConflictSnapshotQueryOptions({
+      environmentId: project.environmentId,
       cwd: project.cwd,
       path: resolverFilePath,
       enabled: resolverFilePath !== null,
