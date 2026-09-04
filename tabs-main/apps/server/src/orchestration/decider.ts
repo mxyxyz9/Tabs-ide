@@ -623,6 +623,27 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.title.regeneration.complete": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      const requestIsCurrent = thread.titleRegeneration?.requestId === command.requestId;
+      const occurredAt = nowIso();
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.meta-updated",
+        payload: {
+          threadId: command.threadId,
+          ...(requestIsCurrent && command.title !== undefined ? { title: command.title } : {}),
+          ...(requestIsCurrent ? { titleRegeneration: null } : {}),
+          updatedAt: requestIsCurrent ? occurredAt : thread.updatedAt,
+        },
+      };
+    }
+
     case "thread.runtime-mode.set": {
       yield* requireThread({
         readModel,

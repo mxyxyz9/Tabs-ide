@@ -897,6 +897,14 @@ const ThreadRevertCompleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
+  type: Schema.Literal("thread.title.regeneration.complete"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  requestId: CommandId,
+  title: Schema.optional(TrimmedNonEmptyString),
+});
+
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
@@ -905,6 +913,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
+  ThreadTitleRegenerationCompleteCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 

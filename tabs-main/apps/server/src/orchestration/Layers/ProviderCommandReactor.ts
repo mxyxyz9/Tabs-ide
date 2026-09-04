@@ -30,6 +30,7 @@ type ProviderIntentEvent = Extract<
   OrchestrationEvent,
   {
     type:
+      | "thread.meta-updated"
       | "thread.runtime-mode-set"
       | "thread.turn-start-requested"
       | "thread.turn-interrupt-requested"
@@ -203,6 +204,10 @@ const make = Effect.gen(function* () {
     const readModel = yield* orchestrationEngine.getReadModel();
     return readModel.threads.find((entry) => entry.id === threadId);
   });
+  const resolveProject = Effect.fnUntraced(function* (projectId: string) {
+    const readModel = yield* orchestrationEngine.getReadModel();
+    return readModel.projects.find((entry) => entry.id === projectId);
+  });
 
   const ensureSessionForThread = Effect.fnUntraced(function* (
     threadId: ThreadId,
@@ -264,7 +269,6 @@ const make = Effect.gen(function* () {
     });
 
     const resolveActiveSession = (threadId: ThreadId) =>
-
       providerService
         .listSessions()
         .pipe(Effect.map((sessions) => sessions.find((session) => session.threadId === threadId)));
@@ -684,6 +688,39 @@ const make = Effect.gen(function* () {
   const processDomainEvent = (event: ProviderIntentEvent) =>
     Effect.gen(function* () {
       switch (event.type) {
+        case "thread.meta-updated": {
+          if (event.payload.regenerateTitle !== true) return;
+          const requestId = event.payload.titleRegeneration?.requestId ?? event.commandId;
+          if (requestId === null) return;
+          const thread = yield* resolveThread(event.payload.threadId);
+          if (!thread || thread.titleRegeneration?.requestId !== requestId) return;
+          const firstUserMessage = thread.messages.find((message) => message.role === "user");
+          let title: string | undefined;
+          if (firstUserMessage?.text.trim()) {
+            const attachments = firstUserMessage.attachments ?? [];
+            const project = yield* resolveProject(thread.projectId);
+            const cwd =
+              resolveThreadWorkspaceCwd({ thread, projects: project ? [project] : [] }) ??
+              process.cwd();
+            const { textGenerationModelSelection: modelSelection } =
+              yield* serverSettingsService.getSettings;
+            const generated = yield* textGeneration.generateThreadTitle({
+              cwd,
+              message: firstUserMessage.text,
+              ...(attachments.length > 0 ? { attachments } : {}),
+              modelSelection,
+            });
+            if (generated.title !== thread.title) title = generated.title;
+          }
+          yield* orchestrationEngine.dispatch({
+            type: "thread.title.regeneration.complete",
+            commandId: serverCommandId("thread-title-regeneration-complete"),
+            threadId: thread.id,
+            requestId,
+            ...(title !== undefined ? { title } : {}),
+          });
+          return;
+        }
         case "thread.runtime-mode-set": {
           const thread = yield* resolveThread(event.payload.threadId);
           if (!thread?.session || thread.session.status === "stopped") {
@@ -733,6 +770,7 @@ const make = Effect.gen(function* () {
   const start: ProviderCommandReactorShape["start"] = Effect.forkScoped(
     Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
       if (
+        event.type !== "thread.meta-updated" &&
         event.type !== "thread.runtime-mode-set" &&
         event.type !== "thread.turn-start-requested" &&
         event.type !== "thread.turn-interrupt-requested" &&

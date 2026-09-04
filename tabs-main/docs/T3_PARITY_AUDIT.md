@@ -7,11 +7,11 @@ verification evidence, not just a matching type or placeholder.
 ## Environments and connections
 
 - [x] Persistent environment identity, pairing, bearer sessions, proof-bound sessions, and
-  WebSocket tickets.
+      WebSocket tickets.
 - [x] SSH discovery, managed remote startup, tunnels, pairing, and desktop environment catalog.
 - [x] Renderer connection settings create, list, reconnect, and remove remote environments.
 - [ ] Route each project/thread runtime through its selected environment instead of the current
-  process-wide transport.
+      process-wide transport.
 - [ ] Surface relay/Tailscale reachability and connection repair in the main workspace.
 - [ ] Replace the native SSH password prompt with an accessible in-app credential dialog.
 
@@ -22,7 +22,7 @@ verification evidence, not just a matching type or placeholder.
 - [x] Tabs persistent browser host with isolated profiles, login windows, navigation, and DevTools.
 - [ ] Adapt the broker host protocol to Tabs' `WebContentsView` browser sessions.
 - [ ] Implement accessibility snapshots and click/type/press/scroll/evaluate/wait operations in
-  the browser host.
+      the browser host.
 - [ ] Synchronize URL, navigation, viewport, cursor, and human-input ownership between clients.
 - [ ] Add annotation picking, screenshots, recordings, and artifact reveal/copy.
 - [ ] Expose the preview automation operations through the MCP server.
@@ -40,7 +40,7 @@ an adapter over that engine.
 - [x] Enforce pending-approval, pending-input, and queued-turn guards for settle/snooze.
 - [ ] Finish automatic activity/session wake behavior and server-side summary counters.
 - [ ] Add drag ordering for pinned threads and T3 snooze presets.
-- [ ] Finish title regeneration worker, interruption recovery, and action-menu UI.
+- [ ] Finish title regeneration interruption recovery; worker and sidebar action are implemented.
 - [x] Linked pull-request metadata command, projection, persistence, and hydration.
 - [ ] Automatically discover/update linked pull requests and render their shared status.
 

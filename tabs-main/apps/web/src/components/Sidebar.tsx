@@ -834,6 +834,11 @@ export default function Sidebar() {
       const clicked = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
+          {
+            id: "regenerate-title",
+            label: thread.titleRegeneration ? "Regenerating title…" : "Regenerate title",
+            disabled: thread.titleRegeneration !== null && thread.titleRegeneration !== undefined,
+          },
           { id: "mark-unread", label: "Mark unread" },
           {
             id: "pin",
@@ -858,6 +863,15 @@ export default function Sidebar() {
         setRenamingThreadId(threadId);
         setRenamingTitle(thread.title);
         renamingCommittedRef.current = false;
+        return;
+      }
+      if (clicked === "regenerate-title") {
+        await api.orchestration.dispatchCommand({
+          type: "thread.meta.update",
+          commandId: newCommandId(),
+          threadId,
+          regenerateTitle: true,
+        });
         return;
       }
 
