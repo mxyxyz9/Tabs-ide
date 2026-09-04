@@ -70,7 +70,8 @@ export const make = Effect.gen(function* () {
   );
   const rawId = existing ?? (yield* crypto.randomUUIDv4);
   if (existing === null) {
-    yield* fileSystem.writeFileString(config.environmentIdPath, `${rawId}\n`).pipe(
+    yield* fileSystem.makeDirectory(path.dirname(config.environmentIdPath), { recursive: true }).pipe(
+      Effect.andThen(fileSystem.writeFileString(config.environmentIdPath, `${rawId}\n`)),
       Effect.mapError((cause) => new ServerEnvironmentIdPersistenceError({
         operation: "write",
         environmentIdPath: config.environmentIdPath,

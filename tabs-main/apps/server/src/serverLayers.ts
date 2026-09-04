@@ -38,6 +38,7 @@ import { AnalyticsService } from "./telemetry/Services/AnalyticsService";
 import { layer as UsageServiceLive } from "./usage/UsageService.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
+import * as SessionStore from "./auth/SessionStore.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as PreviewManager from "./preview/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -178,5 +179,10 @@ export function makeRemoteAccessServicesLayer() {
     Layer.provideMerge(ServerSecretStore.layer),
   );
 
-  return Layer.mergeAll(ServerEnvironment.layer, authLayer, ServerSecretStore.layer);
+  return Layer.mergeAll(
+    ServerEnvironment.layer,
+    authLayer,
+    ServerSecretStore.layer,
+    SessionStore.layer.pipe(Layer.provideMerge(ServerSecretStore.layer)),
+  );
 }

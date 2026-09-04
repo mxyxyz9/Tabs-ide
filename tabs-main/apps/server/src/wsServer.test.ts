@@ -653,6 +653,34 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("advertises the remote environment descriptor over HTTP", async () => {
+    server = await createTestServer({ cwd: "/test/project" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    const response = await fetch(`http://127.0.0.1:${port}/.well-known/t3/environment`);
+    const descriptor = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(descriptor).toMatchObject({
+      label: expect.any(String),
+      environmentId: expect.any(String),
+      capabilities: { repositoryIdentity: true, connectionProbe: true },
+    });
+  }, 15_000);
+
+  it("reports an unauthenticated remote session without exposing credentials", async () => {
+    server = await createTestServer({ cwd: "/test/project" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+    const response = await fetch(`http://127.0.0.1:${port}/api/auth/session`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      authenticated: false,
+      auth: { policy: expect.any(String) },
+    });
+  }, 15_000);
+
   it("serves persisted attachments from stateDir", async () => {
     const baseDir = makeTempDir("tabs-state-attachments-");
     const { attachmentsDir } = deriveServerPathsSync(baseDir, undefined);

@@ -15,6 +15,7 @@ import type { Duplex } from "node:stream";
 import Mime from "@effect/platform-node/Mime";
 import {
   CommandId,
+  AuthStandardClientScopes,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   type ClientOrchestrationCommand,
   type OrchestrationCommand,
@@ -135,6 +136,8 @@ import { PreviewManager } from "./preview/Manager.ts";
 import { ServerEnvironment } from "./environment/ServerEnvironment.ts";
 import { EnvironmentAuth } from "./auth/EnvironmentAuth.ts";
 import { PreviewAutomationBroker } from "./mcp/PreviewAutomationBroker.ts";
+import { SessionStore } from "./auth/SessionStore.ts";
+import * as DateTime from "effect/DateTime";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -208,6 +211,25 @@ function websocketRawToString(raw: unknown): string | null {
     return chunks.join("");
   }
   return null;
+}
+
+function readHttpRequestBody(request: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    request.on("data", (chunk: Buffer | string) => {
+      const buffer = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+      size += buffer.length;
+      if (size > 64 * 1024) {
+        reject(new Error("Request body is too large."));
+        request.destroy();
+        return;
+      }
+      chunks.push(buffer);
+    });
+    request.once("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    request.once("error", reject);
+  });
 }
 
 function toPosixRelativePath(input: string): string {
@@ -291,7 +313,8 @@ export type ServerRuntimeServices =
   | PreviewManager
   | ServerEnvironment
   | EnvironmentAuth
-  | PreviewAutomationBroker;
+  | PreviewAutomationBroker
+  | SessionStore;
 
 export class ServerLifecycleError extends Schema.TaggedErrorClass<ServerLifecycleError>()(
   "ServerLifecycleError",
@@ -348,6 +371,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   const serverEnvironment = yield* ServerEnvironment;
   const environmentAuth = yield* EnvironmentAuth;
   const previewAutomationBroker = yield* PreviewAutomationBroker;
+  const sessionStore = yield* SessionStore;
   const testingService = new TestingService(serverConfig.stateDir, textGeneration);
   yield* Effect.addFinalizer(() => Effect.sync(() => testingService.close()));
 
@@ -531,6 +555,105 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
     void runPromise(
       Effect.gen(function* () {
         const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+        const respondJson = (statusCode: number, value: unknown) =>
+          respond(
+            statusCode,
+            {
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+            JSON.stringify(value),
+          );
+
+        if (req.method === "GET" && url.pathname === "/.well-known/t3/environment") {
+          respondJson(200, yield* serverEnvironment.getDescriptor);
+          return;
+        }
+
+        if (req.method === "POST" && url.pathname === "/oauth/token") {
+          const rawBody = yield* Effect.tryPromise(() => readHttpRequestBody(req));
+          const payload = new URLSearchParams(rawBody);
+          const credential = payload.get("subject_token")?.trim() ?? "";
+          const requestedScope = payload.get("scope");
+          const requestedScopes = requestedScope
+            ? requestedScope.split(" ").filter((scope) => scope.length > 0)
+            : undefined;
+          if (
+            credential.length === 0 ||
+            (requestedScopes !== undefined &&
+              !requestedScopes.every((scope) => AuthStandardClientScopes.includes(scope as never)))
+          ) {
+            respondJson(400, { code: "invalid_request", reason: "invalid_scope", traceId: "http" });
+            return;
+          }
+          const issued = yield* environmentAuth
+            .exchangeBootstrapCredentialForAccessToken(
+              credential,
+              requestedScopes as typeof AuthStandardClientScopes | undefined,
+              {
+                deviceType: (payload.get("client_device_type") as "desktop" | "mobile" | "tablet" | "bot" | "unknown" | null) ?? "unknown",
+                ...(payload.get("client_label")
+                  ? { label: payload.get("client_label")! }
+                  : {}),
+                ...(payload.get("client_os") ? { os: payload.get("client_os")! } : {}),
+                ...(req.headers["user-agent"] ? { userAgent: req.headers["user-agent"] } : {}),
+                ...(req.socket.remoteAddress ? { ipAddress: req.socket.remoteAddress } : {}),
+              },
+            )
+            .pipe(Effect.exit);
+          if (Exit.isFailure(issued)) {
+            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            return;
+          }
+          respondJson(200, issued.value);
+          return;
+        }
+
+        if (
+          req.method === "POST" &&
+          url.pathname === "/api/auth/websocket-ticket"
+        ) {
+          const authorization = req.headers.authorization;
+          if (!authorization?.startsWith("Bearer ")) {
+            respondJson(401, { code: "auth_invalid", reason: "missing_credential", traceId: "http" });
+            return;
+          }
+          const verified = yield* sessionStore.verify(authorization.slice(7)).pipe(Effect.exit);
+          if (Exit.isFailure(verified)) {
+            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            return;
+          }
+          const ticket = yield* sessionStore.issueWebSocketToken(verified.value.sessionId);
+          respondJson(200, {
+            ticket: ticket.token,
+            expiresAt: DateTime.formatIso(ticket.expiresAt),
+          });
+          return;
+        }
+
+        if (req.method === "GET" && url.pathname === "/api/auth/session") {
+          const authorization = req.headers.authorization;
+          const auth = yield* environmentAuth.getDescriptor();
+          if (!authorization?.startsWith("Bearer ")) {
+            respondJson(200, { authenticated: false, auth });
+            return;
+          }
+          const verified = yield* sessionStore.verify(authorization.slice(7)).pipe(Effect.exit);
+          if (Exit.isFailure(verified)) {
+            respondJson(401, { code: "auth_invalid", reason: "invalid_credential", traceId: "http" });
+            return;
+          }
+          respondJson(200, {
+            authenticated: true,
+            auth,
+            scopes: verified.value.scopes,
+            sessionMethod: verified.value.method,
+            ...(verified.value.expiresAt
+              ? { expiresAt: DateTime.formatIso(verified.value.expiresAt) }
+              : {}),
+          });
+          return;
+        }
         if (!authToken && tryHandleProjectFaviconRequest(url, res)) {
           return;
         }
@@ -2012,24 +2135,36 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
   httpServer.on("upgrade", (request, socket, head) => {
     socket.on("error", () => {}); // Prevent unhandled `EPIPE`/`ECONNRESET` from crashing the process if the client disconnects mid-handshake
 
-    if (authToken) {
-      let providedToken: string | null = null;
-      try {
-        const url = new URL(request.url ?? "/", `http://localhost:${port}`);
-        providedToken = url.searchParams.get("token");
-      } catch {
-        rejectUpgrade(socket, 400, "Invalid WebSocket URL");
-        return;
-      }
+    let upgradeUrl: URL;
+    try {
+      upgradeUrl = new URL(request.url ?? "/", `http://localhost:${port}`);
+    } catch {
+      rejectUpgrade(socket, 400, "Invalid WebSocket URL");
+      return;
+    }
 
-      if (providedToken !== authToken) {
+    const completeUpgrade = () =>
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+
+    const providedToken = upgradeUrl.searchParams.get("token");
+    if (!authToken || providedToken === authToken) {
+      completeUpgrade();
+      return;
+    }
+
+    const ticket = upgradeUrl.searchParams.get("wsTicket");
+    if (!ticket) {
+      rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
+      return;
+    }
+    void runPromise(sessionStore.verifyWebSocketToken(ticket).pipe(Effect.exit)).then((verified) => {
+      if (Exit.isFailure(verified)) {
         rejectUpgrade(socket, 401, "Unauthorized WebSocket connection");
         return;
       }
-    }
-
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit("connection", ws, request);
+      completeUpgrade();
     });
   });
 
