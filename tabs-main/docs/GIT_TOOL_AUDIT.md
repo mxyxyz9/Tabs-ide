@@ -16,7 +16,7 @@ The current Tabs implementation is therefore a strong base, but it is not yet a 
 | Branches and divergence | Branch CRUD, merge/rebase, watched divergence, worktrees | Basic branch/checkout integration | Basic branch/project integration | Keep Tabs; harden command execution |
 | History | Search, details, reset, revert, cherry-pick, AI summary | Limited compared with Tabs Git tool | Limited compared with Tabs Git tool | Keep Tabs |
 | Stashes and tags | First-class panels and actions | Not comparable in breadth | Not comparable in breadth | Keep Tabs |
-| Provider/account support | GitHub, GitLab, and Azure backend adapters; UI is still GitHub-centric | GitHub, GitLab, Azure DevOps, Bitbucket PR providers | Deep hosted-PR service and repository inventory | Port provider-neutral PR behavior |
+| Provider/account support | GitHub and GitLab PR adapters; Azure/Bitbucket discovery only | GitHub, GitLab, Azure DevOps, Bitbucket PR providers | Deep hosted-PR service and repository inventory | Finish Azure/Bitbucket and capability gating |
 | PR list | Current-branch and repository list, basic state filtering | Rich filters, pagination, draft/review/check metadata | Rich list, project context, pinning, stack metadata | Tabs is materially behind |
 | PR detail | Opens web page; merge delegated to terminal | Native summary, checks, commits, code, timeline, actors, labels, reviewers | Native summary, checks, code, timeline, comments, stack context | Port reference architecture |
 | Review interaction | Separate local AI review surface | Inline annotations, comments, reactions, reviewer selection, Markdown editing | Comments, Markdown, review timeline and code inspection | Tabs is materially behind |
@@ -41,7 +41,7 @@ The current Tabs implementation is therefore a strong base, but it is not yet a 
 
 2. **Add a native PR detail workspace.** Implement Summary, Code, Checks, Commits, and Timeline tabs. Preserve Tabs' existing local AI Review panel as a complementary workflow rather than merging the two concepts.
 
-3. **Typed PR mutation — GitHub completed.** Create, merge, close/reopen, draft/ready, comments, approvals, change requests, reviewer assignment, and label editing use a typed environment API whose provider adapter passes argument arrays directly to the host CLI. Equivalent GitLab, Azure DevOps, and Bitbucket adapters remain.
+3. **Typed PR mutation — GitHub and GitLab implemented.** The repository remote now selects the provider before list, detail, creation, or mutation. Both adapters pass argument arrays directly to their CLI and GitLab normalizes real MR metadata into the shared model. GitLab deliberately rejects the unsupported request-changes verdict. Azure DevOps and Bitbucket adapters remain, along with a fuller self-hosted-provider refinement step.
 
 4. **Eliminate shell interpolation.** Worktree paths, release titles/notes, remote names/URLs, branch names, and tags are interpolated into terminal commands in several paths. Move these actions behind typed API methods with argument arrays. Escaping individual strings is only an interim mitigation.
 

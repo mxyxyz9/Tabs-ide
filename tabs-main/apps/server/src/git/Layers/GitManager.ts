@@ -27,6 +27,7 @@ import {
 } from "../Services/GitManager.ts";
 import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli, type GitHubPullRequestSummary } from "../Services/GitHubCli.ts";
+import { makeGitLabCli } from "./GitLabCli.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { runStaticAnalysis } from "../../staticAnalysis/StaticAnalysisService.ts";
@@ -401,8 +402,53 @@ function toPullRequestHeadRemoteInfo(pr: {
 export const makeGitManager = Effect.gen(function* () {
   const gitCore = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
+  const gitLabCli = yield* makeGitLabCli;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
+
+  const repositoryProvider = (cwd: string) =>
+    Effect.gen(function* () {
+      const origin = yield* gitCore
+        .execute({
+          operation: "repositoryProvider.origin",
+          cwd,
+          args: ["remote", "get-url", "origin"],
+        })
+        .pipe(
+          Effect.map((result) => result.stdout.trim()),
+          Effect.catch(() => Effect.succeed("")),
+        );
+      const remoteUrl =
+        origin ||
+        (yield* gitCore
+          .execute({ operation: "repositoryProvider.list", cwd, args: ["remote", "-v"] })
+          .pipe(
+            Effect.map((result) => result.stdout.split(/\r?\n/)[0]?.split(/\s+/)[1]?.trim() ?? ""),
+            Effect.catch(() => Effect.succeed("")),
+          ));
+      const normalized = remoteUrl.toLowerCase();
+      if (normalized.includes("github")) return "github" as const;
+      if (normalized.includes("gitlab")) return "gitlab" as const;
+      if (normalized.includes("bitbucket")) return "bitbucket" as const;
+      if (normalized.includes("dev.azure.com") || normalized.includes("visualstudio.com")) {
+        return "azure-devops" as const;
+      }
+      return "unknown" as const;
+    });
+
+  const requireSupportedPullRequestProvider = (cwd: string) =>
+    repositoryProvider(cwd).pipe(
+      Effect.flatMap((provider) =>
+        provider === "github" || provider === "gitlab" || provider === "unknown"
+          ? Effect.succeed(provider === "unknown" ? ("github" as const) : provider)
+          : Effect.fail(
+              gitManagerError(
+                "pullRequestProvider",
+                `${provider} pull-request workflows are not implemented yet.`,
+              ),
+            ),
+      ),
+    );
 
   const createProgressEmitter = (
     input: { cwd: string; action: GitStackedAction },
@@ -999,12 +1045,14 @@ export const makeGitManager = Effect.gen(function* () {
 
   const resolvePullRequest: GitManagerShape["resolvePullRequest"] = Effect.fnUntraced(
     function* (input) {
-      const pullRequest = yield* gitHubCli
-        .getPullRequest({
-          cwd: input.cwd,
-          reference: normalizePullRequestReference(input.reference),
-        })
-        .pipe(Effect.map((resolved) => toResolvedPullRequest(resolved)));
+      const provider = yield* requireSupportedPullRequestProvider(input.cwd);
+      const reference = normalizePullRequestReference(input.reference);
+      const pullRequest =
+        provider === "github"
+          ? yield* gitHubCli
+              .getPullRequest({ cwd: input.cwd, reference })
+              .pipe(Effect.map(toResolvedPullRequest))
+          : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
 
       return { pullRequest };
     },
@@ -1012,13 +1060,17 @@ export const makeGitManager = Effect.gen(function* () {
 
   const listPullRequests: GitManagerShape["listPullRequests"] = Effect.fnUntraced(
     function* (input) {
-      const pullRequests = yield* gitHubCli
-        .listOpenPullRequests({
-          cwd: input.cwd,
-          state: input.state ?? "all",
-          limit: 50,
-        })
-        .pipe(Effect.map((list) => list.map(toResolvedPullRequest)));
+      const provider = yield* requireSupportedPullRequestProvider(input.cwd);
+      const pullRequests =
+        provider === "github"
+          ? yield* gitHubCli
+              .listOpenPullRequests({ cwd: input.cwd, state: input.state ?? "all", limit: 50 })
+              .pipe(Effect.map((list) => list.map(toResolvedPullRequest)))
+          : yield* gitLabCli.listPullRequests({
+              cwd: input.cwd,
+              state: input.state ?? "all",
+              limit: 50,
+            });
 
       return { pullRequests };
     },
@@ -1026,6 +1078,7 @@ export const makeGitManager = Effect.gen(function* () {
 
   const mutatePullRequest: GitManagerShape["mutatePullRequest"] = Effect.fnUntraced(
     function* (input) {
+      const provider = yield* requireSupportedPullRequestProvider(input.cwd);
       const reference = normalizePullRequestReference(input.reference);
       if (
         ["add_reviewer", "remove_reviewer", "add_label", "remove_label"].includes(input.action) &&
@@ -1042,7 +1095,7 @@ export const makeGitManager = Effect.gen(function* () {
           `Action ${input.action} requires a non-empty message.`,
         );
       }
-      yield* gitHubCli.mutatePullRequest({
+      const mutation = {
         cwd: input.cwd,
         reference,
         action: input.action,
@@ -1050,14 +1103,20 @@ export const makeGitManager = Effect.gen(function* () {
         ...(input.deleteBranch !== undefined ? { deleteBranch: input.deleteBranch } : {}),
         ...(input.body !== undefined ? { body: input.body } : {}),
         ...(input.value !== undefined ? { value: input.value } : {}),
-      });
-      const pullRequest = yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference });
-      return { pullRequest: toResolvedPullRequest(pullRequest) };
+      } satisfies typeof input;
+      if (provider === "github") yield* gitHubCli.mutatePullRequest(mutation);
+      else yield* gitLabCli.mutatePullRequest(mutation);
+      const pullRequest =
+        provider === "github"
+          ? toResolvedPullRequest(yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference }))
+          : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
+      return { pullRequest };
     },
   );
 
   const createPullRequest: GitManagerShape["createPullRequest"] = Effect.fnUntraced(
     function* (input) {
+      const provider = yield* requireSupportedPullRequestProvider(input.cwd);
       const bodyFile = path.join(tempDir, `tabs-pr-body-${process.pid}-${randomUUID()}.md`);
       yield* fileSystem
         .writeFileString(bodyFile, input.body)
@@ -1070,21 +1129,29 @@ export const makeGitManager = Effect.gen(function* () {
             ),
           ),
         );
-      yield* gitHubCli
-        .createPullRequest({
-          cwd: input.cwd,
-          baseBranch: input.baseBranch,
-          headSelector: input.headBranch,
-          title: input.title,
-          bodyFile,
-          ...(input.draft !== undefined ? { draft: input.draft } : {}),
-        })
-        .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
-      const created = yield* gitHubCli.getPullRequest({
-        cwd: input.cwd,
-        reference: input.headBranch,
-      });
-      return { pullRequest: toResolvedPullRequest(created) };
+      if (provider === "github") {
+        yield* gitHubCli
+          .createPullRequest({
+            cwd: input.cwd,
+            baseBranch: input.baseBranch,
+            headSelector: input.headBranch,
+            title: input.title,
+            bodyFile,
+            ...(input.draft !== undefined ? { draft: input.draft } : {}),
+          })
+          .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
+      } else {
+        yield* gitLabCli
+          .createPullRequest({ ...input, bodyFile })
+          .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
+      }
+      const created =
+        provider === "github"
+          ? toResolvedPullRequest(
+              yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch }),
+            )
+          : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch });
+      return { pullRequest: created };
     },
   );
 
