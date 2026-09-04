@@ -28,6 +28,7 @@ import {
 import { GitCore } from "../Services/GitCore.ts";
 import { GitHubCli, type GitHubPullRequestSummary } from "../Services/GitHubCli.ts";
 import { makeGitLabCli } from "./GitLabCli.ts";
+import { makeAzureDevOpsCli } from "./AzureDevOpsCli.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { runStaticAnalysis } from "../../staticAnalysis/StaticAnalysisService.ts";
@@ -384,10 +385,28 @@ const GITLAB_PULL_REQUEST_CAPABILITIES = {
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
 
-function pullRequestCapabilities(provider: "github" | "gitlab") {
+const AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES = {
+  provider: "azure-devops" as const,
+  diff: false,
+  create: true,
+  actions: [
+    "merge",
+    "close",
+    "reopen",
+    "ready",
+    "draft",
+    "add_reviewer",
+    "remove_reviewer",
+  ] as const,
+  mergeMethods: ["merge", "squash"] as const,
+};
+
+function pullRequestCapabilities(provider: "github" | "gitlab" | "azure-devops") {
   return provider === "github"
     ? GITHUB_PULL_REQUEST_CAPABILITIES
-    : GITLAB_PULL_REQUEST_CAPABILITIES;
+    : provider === "gitlab"
+      ? GITLAB_PULL_REQUEST_CAPABILITIES
+      : AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES;
 }
 
 function canonicalizeExistingPath(value: string): string {
@@ -460,6 +479,7 @@ export const makeGitManager = Effect.gen(function* () {
   const gitCore = yield* GitCore;
   const gitHubCli = yield* GitHubCli;
   const gitLabCli = yield* makeGitLabCli;
+  const azureDevOpsCli = yield* makeAzureDevOpsCli;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
 
@@ -496,7 +516,10 @@ export const makeGitManager = Effect.gen(function* () {
   const requireSupportedPullRequestProvider = (cwd: string) =>
     repositoryProvider(cwd).pipe(
       Effect.flatMap((provider) =>
-        provider === "github" || provider === "gitlab" || provider === "unknown"
+        provider === "github" ||
+        provider === "gitlab" ||
+        provider === "azure-devops" ||
+        provider === "unknown"
           ? Effect.succeed(provider === "unknown" ? ("github" as const) : provider)
           : Effect.fail(
               gitManagerError(
@@ -1122,14 +1145,16 @@ export const makeGitManager = Effect.gen(function* () {
                 ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
               };
             })
-          : yield* Effect.gen(function* () {
-              const details = yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
-              const reviewThreads = yield* gitLabCli.getPullRequestReviewThreads({
-                cwd: input.cwd,
-                reference: String(details.number),
-              });
-              return { ...details, ...(reviewThreads.length > 0 ? { reviewThreads } : {}) };
-            });
+          : provider === "gitlab"
+            ? yield* Effect.gen(function* () {
+                const details = yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
+                const reviewThreads = yield* gitLabCli.getPullRequestReviewThreads({
+                  cwd: input.cwd,
+                  reference: String(details.number),
+                });
+                return { ...details, ...(reviewThreads.length > 0 ? { reviewThreads } : {}) };
+              })
+            : yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference });
 
       return { pullRequest, capabilities: pullRequestCapabilities(provider) };
     },
@@ -1144,11 +1169,17 @@ export const makeGitManager = Effect.gen(function* () {
           ? yield* gitHubCli
               .listOpenPullRequests({ cwd: input.cwd, state: input.state ?? "all", limit })
               .pipe(Effect.map((list) => list.map(toResolvedPullRequest)))
-          : yield* gitLabCli.listPullRequests({
-              cwd: input.cwd,
-              state: input.state ?? "all",
-              limit,
-            });
+          : provider === "gitlab"
+            ? yield* gitLabCli.listPullRequests({
+                cwd: input.cwd,
+                state: input.state ?? "all",
+                limit,
+              })
+            : yield* azureDevOpsCli.listPullRequests({
+                cwd: input.cwd,
+                state: input.state ?? "all",
+                limit,
+              });
 
       return {
         pullRequests,
@@ -1222,11 +1253,14 @@ export const makeGitManager = Effect.gen(function* () {
       } satisfies typeof input;
       if (provider === "github") {
         yield* gitHubCli.mutatePullRequest({ ...mutation, action: mutation.action });
-      } else yield* gitLabCli.mutatePullRequest(mutation);
+      } else if (provider === "gitlab") yield* gitLabCli.mutatePullRequest(mutation);
+      else yield* azureDevOpsCli.mutatePullRequest(mutation);
       const pullRequest =
         provider === "github"
           ? toResolvedPullRequest(yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference }))
-          : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
+          : provider === "gitlab"
+            ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference })
+            : yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference });
       return { pullRequest };
     },
   );
@@ -1246,6 +1280,7 @@ export const makeGitManager = Effect.gen(function* () {
             ),
           ),
         );
+      let azureCreated: GitResolvedPullRequest | null = null;
       if (provider === "github") {
         yield* gitHubCli
           .createPullRequest({
@@ -1257,9 +1292,13 @@ export const makeGitManager = Effect.gen(function* () {
             ...(input.draft !== undefined ? { draft: input.draft } : {}),
           })
           .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
-      } else {
+      } else if (provider === "gitlab") {
         yield* gitLabCli
           .createPullRequest({ ...input, bodyFile })
+          .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
+      } else {
+        azureCreated = yield* azureDevOpsCli
+          .createPullRequest(input)
           .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
       }
       const created =
@@ -1267,7 +1306,9 @@ export const makeGitManager = Effect.gen(function* () {
           ? toResolvedPullRequest(
               yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch }),
             )
-          : yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch });
+          : provider === "gitlab"
+            ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch })
+            : azureCreated!;
       return { pullRequest: created };
     },
   );

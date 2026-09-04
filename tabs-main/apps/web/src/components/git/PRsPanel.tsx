@@ -557,21 +557,26 @@ export function PRsPanel({
                             ["commits", "Commits", GitCommit],
                             ["activity", "Activity", MessageSquare],
                           ] as const
-                        ).map(([id, label, Icon]) => (
-                          <Button
-                            key={id}
-                            id={`pr-${pr.n}-${id}-tab`}
-                            role="tab"
-                            aria-controls={`pr-${pr.n}-detail-panel`}
-                            aria-selected={detailTab === id}
-                            tabIndex={detailTab === id ? 0 : -1}
-                            variant={detailTab === id ? "secondary" : "ghost"}
-                            size="sm"
-                            onClick={() => setDetailTab(id)}
-                          >
-                            <Icon /> {label}
-                          </Button>
-                        ))}
+                        )
+                          .filter(
+                            ([id]) =>
+                              id !== "code" || detailQuery.data?.capabilities?.diff !== false,
+                          )
+                          .map(([id, label, Icon]) => (
+                            <Button
+                              key={id}
+                              id={`pr-${pr.n}-${id}-tab`}
+                              role="tab"
+                              aria-controls={`pr-${pr.n}-detail-panel`}
+                              aria-selected={detailTab === id}
+                              tabIndex={detailTab === id ? 0 : -1}
+                              variant={detailTab === id ? "secondary" : "ghost"}
+                              size="sm"
+                              onClick={() => setDetailTab(id)}
+                            >
+                              <Icon /> {label}
+                            </Button>
+                          ))}
                       </div>
                       <div
                         id={`pr-${pr.n}-detail-panel`}
