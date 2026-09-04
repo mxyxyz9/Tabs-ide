@@ -56,6 +56,17 @@ interface PullRequestRow {
   changedFiles?: number;
 }
 
+const REACTION_OPTIONS = [
+  ["THUMBS_UP", "👍"],
+  ["THUMBS_DOWN", "👎"],
+  ["LAUGH", "😄"],
+  ["HOORAY", "🎉"],
+  ["CONFUSED", "😕"],
+  ["HEART", "❤️"],
+  ["ROCKET", "🚀"],
+  ["EYES", "👀"],
+] as const;
+
 function formatProviderName(provider: PullRequestRow["provider"]): string {
   switch (provider) {
     case "github":
@@ -215,7 +226,14 @@ export function PRsPanel({
     action: GitPullRequestAction,
     body?: string,
     value?: string,
-    inline?: { path?: string; line?: number; side?: "left" | "right"; threadId?: string },
+    inline?: {
+      path?: string;
+      line?: number;
+      side?: "left" | "right";
+      threadId?: string;
+      subjectId?: string;
+      reaction?: (typeof REACTION_OPTIONS)[number][0];
+    },
   ) => {
     if (!api) return false;
     setPendingAction(action);
@@ -231,6 +249,8 @@ export function PRsPanel({
         ...(inline?.line ? { line: inline.line } : {}),
         ...(inline?.side ? { side: inline.side } : {}),
         ...(inline?.threadId ? { threadId: inline.threadId } : {}),
+        ...(inline?.subjectId ? { subjectId: inline.subjectId } : {}),
+        ...(inline?.reaction ? { reaction: inline.reaction } : {}),
       });
       await Promise.all([branchPrQuery.refetch(), allPrsQuery.refetch(), detailQuery.refetch()]);
       toastManager.add({
@@ -918,6 +938,52 @@ export function PRsPanel({
                                                     : "Unknown author"}
                                                 </p>
                                                 <ChatMarkdown text={comment.body} cwd={cwd} />
+                                                {supportsAction("add_reaction") ? (
+                                                  <div
+                                                    className="mt-1 flex flex-wrap gap-1"
+                                                    aria-label="Comment reactions"
+                                                  >
+                                                    {REACTION_OPTIONS.map(([content, symbol]) => {
+                                                      const reaction = comment.reactions?.find(
+                                                        (entry) => entry.content === content,
+                                                      );
+                                                      return (
+                                                        <Button
+                                                          key={content}
+                                                          type="button"
+                                                          size="sm"
+                                                          variant={
+                                                            reaction?.viewerHasReacted
+                                                              ? "secondary"
+                                                              : "ghost"
+                                                          }
+                                                          disabled={pendingAction !== null}
+                                                          aria-label={`${reaction?.viewerHasReacted ? "Remove" : "Add"} ${content.toLowerCase().replaceAll("_", " ")} reaction`}
+                                                          aria-pressed={
+                                                            reaction?.viewerHasReacted ?? false
+                                                          }
+                                                          onClick={() =>
+                                                            void mutatePullRequest(
+                                                              pr.n,
+                                                              reaction?.viewerHasReacted
+                                                                ? "remove_reaction"
+                                                                : "add_reaction",
+                                                              undefined,
+                                                              undefined,
+                                                              {
+                                                                subjectId: comment.id,
+                                                                reaction: content,
+                                                              },
+                                                            )
+                                                          }
+                                                        >
+                                                          {symbol}
+                                                          {reaction ? ` ${reaction.count}` : ""}
+                                                        </Button>
+                                                      );
+                                                    })}
+                                                  </div>
+                                                ) : null}
                                               </div>
                                             ))}
                                           </div>

@@ -794,6 +794,8 @@ export const GitPullRequestAction = Schema.Literals([
   "inline_comment",
   "reply_to_thread",
   "resolve_thread",
+  "add_reaction",
+  "remove_reaction",
 ]);
 export type GitPullRequestAction = typeof GitPullRequestAction.Type;
 
@@ -831,6 +833,19 @@ export const GitMutatePullRequestInput = Schema.Struct({
   line: Schema.optional(PositiveInt),
   side: Schema.optional(Schema.Literals(["left", "right"])),
   threadId: Schema.optional(TrimmedNonEmptyStringSchema),
+  subjectId: Schema.optional(TrimmedNonEmptyStringSchema),
+  reaction: Schema.optional(
+    Schema.Literals([
+      "THUMBS_UP",
+      "THUMBS_DOWN",
+      "LAUGH",
+      "HOORAY",
+      "CONFUSED",
+      "HEART",
+      "ROCKET",
+      "EYES",
+    ]),
+  ),
 });
 export type GitMutatePullRequestInput = typeof GitMutatePullRequestInput.Type;
 

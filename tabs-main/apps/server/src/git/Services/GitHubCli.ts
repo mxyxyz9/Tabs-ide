@@ -100,6 +100,11 @@ export interface GitHubPullRequestSummary {
       readonly createdAt: string;
       readonly updatedAt?: string;
       readonly url?: string;
+      readonly reactions?: ReadonlyArray<{
+        readonly content: string;
+        readonly count: number;
+        readonly viewerHasReacted?: boolean;
+      }>;
     }>;
   }>;
 }
@@ -168,7 +173,10 @@ export interface GitHubCliShape {
       | "add_label"
       | "remove_label"
       | "inline_comment"
-      | "reply_to_thread";
+      | "reply_to_thread"
+      | "resolve_thread"
+      | "add_reaction"
+      | "remove_reaction";
     readonly mergeMethod?: "merge" | "squash" | "rebase";
     readonly deleteBranch?: boolean;
     readonly body?: string;
@@ -177,6 +185,16 @@ export interface GitHubCliShape {
     readonly line?: number;
     readonly side?: "left" | "right";
     readonly threadId?: string;
+    readonly subjectId?: string;
+    readonly reaction?:
+      | "THUMBS_UP"
+      | "THUMBS_DOWN"
+      | "LAUGH"
+      | "HOORAY"
+      | "CONFUSED"
+      | "HEART"
+      | "ROCKET"
+      | "EYES";
   }) => Effect.Effect<void, GitHubCliError>;
 
   /**

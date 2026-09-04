@@ -166,7 +166,23 @@ export function decodeGitLabMergeRequests(stdout: string): ReadonlyArray<GitReso
   });
 }
 
-export function decodeGitLabReviewThreads(value: unknown) {
+const GITLAB_REACTION_NAMES = {
+  THUMBS_UP: "thumbsup",
+  THUMBS_DOWN: "thumbsdown",
+  LAUGH: "laughing",
+  HOORAY: "tada",
+  CONFUSED: "confused",
+  HEART: "heart",
+  ROCKET: "rocket",
+  EYES: "eyes",
+} as const;
+
+function gitLabReactionContent(name: string) {
+  const entry = Object.entries(GITLAB_REACTION_NAMES).find(([, value]) => value === name);
+  return entry?.[0] ?? null;
+}
+
+export function decodeGitLabReviewThreads(value: unknown, viewerLogin?: string | null) {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
     const discussion = record(entry);
@@ -186,6 +202,26 @@ export function decodeGitLabReviewThreads(value: unknown) {
       if (!raw || !noteId || body === null || !createdAt || raw.system === true) return [];
       const author = record(raw.author);
       const login = text(author?.username ?? author?.name);
+      const reactionCounts = new Map<
+        string,
+        { content: string; count: number; viewerHasReacted: boolean }
+      >();
+      for (const entry of Array.isArray(raw.award_emoji) ? raw.award_emoji : []) {
+        const award = record(entry);
+        const name = text(award?.name);
+        const content = name ? gitLabReactionContent(name) : null;
+        if (!award || !content) continue;
+        const existing = reactionCounts.get(content);
+        const awardUser = record(award.user);
+        reactionCounts.set(content, {
+          content,
+          count: (existing?.count ?? 0) + 1,
+          viewerHasReacted:
+            (existing?.viewerHasReacted ?? false) ||
+            (!!viewerLogin && text(awardUser?.username) === viewerLogin),
+        });
+      }
+      const reactions = [...reactionCounts.values()];
       return [
         {
           id: noteId,
@@ -198,6 +234,7 @@ export function decodeGitLabReviewThreads(value: unknown) {
           body,
           createdAt,
           ...(text(raw.updated_at) ? { updatedAt: text(raw.updated_at)! } : {}),
+          ...(reactions.length > 0 ? { reactions } : {}),
         },
       ];
     });
@@ -327,21 +364,28 @@ export const makeGitLabCli = Effect.sync(() => {
         });
       }),
     getPullRequestReviewThreads: (input) =>
-      execute({
-        cwd: input.cwd,
-        args: [
-          "api",
-          "--paginate",
-          `projects/:fullpath/merge_requests/${input.reference}/discussions`,
-        ],
-      }).pipe(
-        Effect.flatMap((result) =>
-          Effect.try({
-            try: () => decodeGitLabReviewThreads(JSON.parse(result.stdout.trim() || "[]")),
-            catch: (error) => normalizeGitLabCliError("getPullRequestReviewThreads", error),
-          }),
-        ),
-      ),
+      Effect.gen(function* () {
+        const viewerLogin = yield* execute({
+          cwd: input.cwd,
+          args: ["api", "user", "--jq", ".username"],
+        }).pipe(
+          Effect.map((result) => text(result.stdout)),
+          Effect.catch(() => Effect.succeed(null)),
+        );
+        const result = yield* execute({
+          cwd: input.cwd,
+          args: [
+            "api",
+            "--paginate",
+            `projects/:fullpath/merge_requests/${input.reference}/discussions`,
+          ],
+        });
+        return yield* Effect.try({
+          try: () =>
+            decodeGitLabReviewThreads(JSON.parse(result.stdout.trim() || "[]"), viewerLogin),
+          catch: (error) => normalizeGitLabCliError("getPullRequestReviewThreads", error),
+        });
+      }),
     mutatePullRequest: (input) => {
       const reference = input.reference.trim().replace(/^#/, "");
       let args: ReadonlyArray<string>;
@@ -450,6 +494,50 @@ export const makeGitLabCli = Effect.sync(() => {
             "resolved=true",
           ];
           break;
+        case "add_reaction":
+          args = [
+            "api",
+            "--method",
+            "POST",
+            `projects/:fullpath/merge_requests/${reference}/notes/${input.subjectId ?? ""}/award_emoji`,
+            "--raw-field",
+            `name=${GITLAB_REACTION_NAMES[input.reaction ?? "THUMBS_UP"]}`,
+          ];
+          break;
+        case "remove_reaction":
+          return Effect.gen(function* () {
+            const [viewerResult, awardsResult] = yield* Effect.all([
+              execute({ cwd: input.cwd, args: ["api", "user"] }),
+              execute({
+                cwd: input.cwd,
+                args: [
+                  "api",
+                  "--paginate",
+                  `projects/:fullpath/merge_requests/${reference}/notes/${input.subjectId ?? ""}/award_emoji`,
+                ],
+              }),
+            ]);
+            const viewerId = record(JSON.parse(viewerResult.stdout.trim() || "{}"))?.id;
+            const awards: unknown = JSON.parse(awardsResult.stdout.trim() || "[]");
+            const reactionName = GITLAB_REACTION_NAMES[input.reaction ?? "THUMBS_UP"];
+            const owned = Array.isArray(awards)
+              ? awards.find((entry) => {
+                  const award = record(entry);
+                  return text(award?.name) === reactionName && record(award?.user)?.id === viewerId;
+                })
+              : null;
+            const awardId = record(owned)?.id;
+            if (typeof awardId !== "number" && typeof awardId !== "string") return;
+            yield* execute({
+              cwd: input.cwd,
+              args: [
+                "api",
+                "--method",
+                "DELETE",
+                `projects/:fullpath/merge_requests/${reference}/notes/${input.subjectId ?? ""}/award_emoji/${awardId}`,
+              ],
+            });
+          });
       }
       return execute({ cwd: input.cwd, args }).pipe(Effect.asVoid);
     },

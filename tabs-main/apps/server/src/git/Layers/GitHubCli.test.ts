@@ -17,43 +17,133 @@ afterEach(() => {
   mockedRunProcess.mockReset();
 });
 
-it("groups GitHub review replies under their root diff comment", () => {
+it("decodes GitHub GraphQL review threads, resolution, and reactions", () => {
   expect(
-    decodeGitHubReviewThreads([
-      {
-        id: 10,
-        node_id: "root-node",
-        path: "src/app.ts",
-        line: 7,
-        side: "RIGHT",
-        body: "Please handle the error.",
-        created_at: "2026-09-01T10:00:00Z",
-        user: { login: "reviewer" },
+    decodeGitHubReviewThreads({
+      data: {
+        repository: {
+          pullRequest: {
+            reviewThreads: {
+              nodes: [
+                {
+                  id: "PRRT_thread",
+                  path: "src/app.ts",
+                  line: 7,
+                  diffSide: "RIGHT",
+                  isResolved: true,
+                  isOutdated: false,
+                  comments: {
+                    nodes: [
+                      {
+                        id: "PRRC_root",
+                        body: "Please handle the error.",
+                        createdAt: "2026-09-01T10:00:00Z",
+                        author: { login: "reviewer" },
+                        reactionGroups: [
+                          {
+                            content: "THUMBS_UP",
+                            viewerHasReacted: true,
+                            users: { totalCount: 2 },
+                          },
+                        ],
+                      },
+                      {
+                        id: "PRRC_reply",
+                        body: "Fixed in the latest commit.",
+                        createdAt: "2026-09-01T11:00:00Z",
+                        author: { login: "author" },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        },
       },
-      {
-        id: 11,
-        node_id: "reply-node",
-        in_reply_to_id: 10,
-        path: "src/app.ts",
-        line: 7,
-        side: "RIGHT",
-        body: "Fixed in the latest commit.",
-        created_at: "2026-09-01T11:00:00Z",
-        user: { login: "author" },
-      },
-    ]),
+    }),
   ).toMatchObject([
     {
-      id: "10",
+      id: "PRRT_thread",
       path: "src/app.ts",
       line: 7,
       side: "right",
-      comments: [{ id: "root-node" }, { id: "reply-node" }],
+      resolved: true,
+      comments: [
+        {
+          id: "PRRC_root",
+          reactions: [{ content: "THUMBS_UP", count: 2, viewerHasReacted: true }],
+        },
+        { id: "PRRC_reply" },
+      ],
     },
   ]);
 });
 
 layer("GitHubCliLive", (it) => {
+  it.effect("paginates GraphQL review threads with provider cursors", () =>
+    Effect.gen(function* () {
+      const page = (id: string, hasNextPage: boolean, endCursor: string | null) =>
+        JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                reviewThreads: {
+                  pageInfo: { hasNextPage, endCursor },
+                  nodes: [
+                    {
+                      id,
+                      path: "src/app.ts",
+                      line: 4,
+                      diffSide: "RIGHT",
+                      comments: {
+                        nodes: [
+                          {
+                            id: `${id}-comment`,
+                            body: id,
+                            createdAt: "2026-09-01T10:00:00Z",
+                          },
+                        ],
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        });
+      mockedRunProcess
+        .mockResolvedValueOnce({
+          stdout: "tabs/app\n",
+          stderr: "",
+          code: 0,
+          signal: null,
+          timedOut: false,
+        })
+        .mockResolvedValueOnce({
+          stdout: page("thread-1", true, "cursor-1"),
+          stderr: "",
+          code: 0,
+          signal: null,
+          timedOut: false,
+        })
+        .mockResolvedValueOnce({
+          stdout: page("thread-2", false, null),
+          stderr: "",
+          code: 0,
+          signal: null,
+          timedOut: false,
+        });
+
+      const gh = yield* GitHubCli;
+      const threads = yield* gh.getPullRequestReviewThreads({ cwd: "/repo", reference: "42" });
+      expect(threads.map((thread) => thread.id)).toEqual(["thread-1", "thread-2"]);
+      expect(mockedRunProcess.mock.calls[2]?.[1]).toEqual(
+        expect.arrayContaining(["cursor=cursor-1"]),
+      );
+    }),
+  );
+
   it.effect("normalizes pull request file patches and binary omissions", () =>
     Effect.gen(function* () {
       mockedRunProcess.mockResolvedValueOnce({
@@ -392,6 +482,37 @@ layer("GitHubCliLive", (it) => {
           "side=RIGHT",
         ],
         expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
+  it.effect("uses GraphQL node identities for thread resolution and reactions", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValue({
+        stdout: "{}",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+      const gh = yield* GitHubCli;
+      yield* gh.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "resolve_thread",
+        threadId: "PRRT_unsafe;$(literal)",
+      });
+      yield* gh.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "add_reaction",
+        subjectId: "PRRC_comment",
+        reaction: "ROCKET",
+      });
+
+      expect(mockedRunProcess.mock.calls[0]?.[1]).toContain("threadId=PRRT_unsafe;$(literal)");
+      expect(mockedRunProcess.mock.calls[1]?.[1]).toEqual(
+        expect.arrayContaining(["subjectId=PRRC_comment", "content=ROCKET"]),
       );
     }),
   );

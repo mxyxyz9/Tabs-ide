@@ -220,65 +220,103 @@ function nonEmptyText(value: unknown): string | null {
 }
 
 export function decodeGitHubReviewThreads(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  const comments = value.flatMap((entry) => {
-    const raw = object(entry);
-    const id = raw && (nonEmptyText(raw.node_id) ?? String(raw.id ?? "").trim());
-    const path = raw && nonEmptyText(raw.path);
-    const lineValue = raw && (raw.line ?? raw.original_line);
+  const root = object(value);
+  const data = object(root?.data);
+  const repository = object(data?.repository);
+  const pullRequest = object(repository?.pullRequest);
+  const connection = object(pullRequest?.reviewThreads);
+  const nodes = Array.isArray(connection?.nodes) ? connection.nodes : [];
+  return nodes.flatMap((entry) => {
+    const thread = object(entry);
+    const id = nonEmptyText(thread?.id);
+    const path = nonEmptyText(thread?.path);
+    const lineValue = thread?.line;
     const line = typeof lineValue === "number" && lineValue > 0 ? Math.trunc(lineValue) : null;
-    const body = raw && typeof raw.body === "string" ? raw.body : null;
-    const createdAt = raw && nonEmptyText(raw.created_at);
-    if (!raw || !id || !path || !line || body === null || !createdAt) return [];
-    const user = object(raw.user);
-    const login = nonEmptyText(user?.login);
-    const replyTo = typeof raw.in_reply_to_id === "number" ? String(raw.in_reply_to_id) : null;
-    const rootId = replyTo ?? String(raw.id ?? id);
-    return [
-      {
-        rootId,
-        thread: {
-          id: rootId,
-          path,
-          line,
-          side:
-            nonEmptyText(raw.side)?.toUpperCase() === "LEFT"
-              ? ("left" as const)
-              : ("right" as const),
-          ...(typeof raw.original_line === "number" && raw.original_line > 0
-            ? { originalLine: Math.trunc(raw.original_line) }
-            : {}),
-          ...(raw.position === null ? { outdated: true } : {}),
-        },
-        comment: {
-          id,
+    const commentConnection = object(thread?.comments);
+    const commentNodes = Array.isArray(commentConnection?.nodes) ? commentConnection.nodes : [];
+    if (!thread || !id || !path || !line) return [];
+    const comments = commentNodes.flatMap((entry) => {
+      const raw = object(entry);
+      const commentId = nonEmptyText(raw?.id);
+      const body = raw && typeof raw.body === "string" ? raw.body : null;
+      const createdAt = nonEmptyText(raw?.createdAt);
+      if (!raw || !commentId || body === null || !createdAt) return [];
+      const author = object(raw.author);
+      const login = nonEmptyText(author?.login);
+      const reactionGroups = Array.isArray(raw.reactionGroups) ? raw.reactionGroups : [];
+      const reactions = reactionGroups.flatMap((entry) => {
+        const group = object(entry);
+        const content = nonEmptyText(group?.content);
+        const users = object(group?.users);
+        const count = users?.totalCount;
+        return content && typeof count === "number" && count > 0
+          ? [
+              {
+                content,
+                count: Math.trunc(count),
+                ...(typeof group?.viewerHasReacted === "boolean"
+                  ? { viewerHasReacted: group.viewerHasReacted }
+                  : {}),
+              },
+            ]
+          : [];
+      });
+      return [
+        {
+          id: commentId,
           author: login
             ? {
                 login,
-                ...(nonEmptyText(user?.avatar_url)
-                  ? { avatarUrl: nonEmptyText(user?.avatar_url)! }
+                ...(nonEmptyText(author?.avatarUrl)
+                  ? { avatarUrl: nonEmptyText(author?.avatarUrl)! }
                   : {}),
               }
             : null,
           body,
           createdAt,
-          ...(nonEmptyText(raw.updated_at) ? { updatedAt: nonEmptyText(raw.updated_at)! } : {}),
-          ...(nonEmptyText(raw.html_url) ? { url: nonEmptyText(raw.html_url)! } : {}),
+          ...(nonEmptyText(raw.updatedAt) ? { updatedAt: nonEmptyText(raw.updatedAt)! } : {}),
+          ...(nonEmptyText(raw.url) ? { url: nonEmptyText(raw.url)! } : {}),
+          ...(reactions.length > 0 ? { reactions } : {}),
         },
-      },
-    ];
+      ];
+    });
+    return comments.length > 0
+      ? [
+          {
+            id,
+            path,
+            line,
+            side:
+              nonEmptyText(thread.diffSide)?.toUpperCase() === "LEFT"
+                ? ("left" as const)
+                : ("right" as const),
+            ...(thread.isResolved === true ? { resolved: true } : {}),
+            ...(thread.isOutdated === true ? { outdated: true } : {}),
+            comments,
+          },
+        ]
+      : [];
   });
-  const roots = new Map<
-    string,
-    (typeof comments)[number]["thread"] & { comments: Array<(typeof comments)[number]["comment"]> }
-  >();
-  for (const item of comments) {
-    const existing = roots.get(item.rootId);
-    if (existing) existing.comments.push(item.comment);
-    else roots.set(item.rootId, { ...item.thread, comments: [item.comment] });
-  }
-  return [...roots.values()];
 }
+
+const REVIEW_THREADS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id isResolved isOutdated path line diffSide
+          comments(first: 100) {
+            nodes {
+              id body createdAt updatedAt url author { login avatarUrl }
+              reactionGroups { content viewerHasReacted users { totalCount } }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
 
 function normalizeFileStatus(
   value: string,
@@ -574,28 +612,52 @@ const makeGitHubCli = Effect.sync(() => {
         }),
       ),
     getPullRequestReviewThreads: (input) =>
-      execute({
-        cwd: input.cwd,
-        args: [
-          "api",
-          "--paginate",
-          "--slurp",
-          `repos/{owner}/{repo}/pulls/${input.reference}/comments`,
-        ],
-      }).pipe(
-        Effect.map((result) => result.stdout.trim()),
-        Effect.flatMap((raw) =>
-          Effect.try({
-            try: () => {
-              const pages: unknown = JSON.parse(raw || "[]");
-              return decodeGitHubReviewThreads(
-                Array.isArray(pages) && pages.every(Array.isArray) ? pages.flat() : pages,
-              );
-            },
+      Effect.gen(function* () {
+        const repositoryResult = yield* execute({
+          cwd: input.cwd,
+          args: ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+        });
+        const [owner, name] = repositoryResult.stdout.trim().split("/", 2);
+        if (!owner || !name || !/^\d+$/.test(input.reference)) {
+          return yield* new GitHubCliError({
+            operation: "stdout",
+            detail: "GitHub did not return a repository identity or numeric pull request number.",
+          });
+        }
+        const threads: ReturnType<typeof decodeGitHubReviewThreads> = [];
+        let cursor: string | null = null;
+        for (let page = 0; page < 20; page += 1) {
+          const result = yield* execute({
+            cwd: input.cwd,
+            args: [
+              "api",
+              "graphql",
+              "-f",
+              `query=${REVIEW_THREADS_QUERY}`,
+              "-F",
+              `owner=${owner}`,
+              "-F",
+              `name=${name}`,
+              "-F",
+              `number=${input.reference}`,
+              ...(cursor ? ["-F", `cursor=${cursor}`] : []),
+            ],
+          });
+          const parsed = yield* Effect.try({
+            try: () => JSON.parse(result.stdout.trim() || "{}") as unknown,
             catch: (error) => normalizeGitHubCliError("stdout", error),
-          }),
-        ),
-      ),
+          });
+          threads.push(...decodeGitHubReviewThreads(parsed));
+          const connection = object(
+            object(object(object(object(parsed)?.data)?.repository)?.pullRequest)?.reviewThreads,
+          );
+          const pageInfo = object(connection?.pageInfo);
+          const nextCursor = nonEmptyText(pageInfo?.endCursor);
+          if (pageInfo?.hasNextPage !== true || !nextCursor) break;
+          cursor = nextCursor;
+        }
+        return threads;
+      }),
     mutatePullRequest: (input) => {
       const args: string[] = ["pr"];
       switch (input.action) {
@@ -677,11 +739,42 @@ const makeGitHubCli = Effect.sync(() => {
             cwd: input.cwd,
             args: [
               "api",
-              "--method",
-              "POST",
-              `repos/{owner}/{repo}/pulls/${input.reference}/comments/${input.threadId ?? ""}/replies`,
-              "--raw-field",
+              "graphql",
+              "-f",
+              "query=mutation($threadId: ID!, $body: String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $threadId, body: $body}) { comment { id } } }",
+              "-F",
+              `threadId=${input.threadId ?? ""}`,
+              "-f",
               `body=${input.body ?? ""}`,
+            ],
+          }).pipe(Effect.asVoid);
+        case "resolve_thread":
+          return execute({
+            cwd: input.cwd,
+            args: [
+              "api",
+              "graphql",
+              "-f",
+              "query=mutation($threadId: ID!) { resolveReviewThread(input: {threadId: $threadId}) { thread { id isResolved } } }",
+              "-F",
+              `threadId=${input.threadId ?? ""}`,
+            ],
+          }).pipe(Effect.asVoid);
+        case "add_reaction":
+        case "remove_reaction":
+          return execute({
+            cwd: input.cwd,
+            args: [
+              "api",
+              "graphql",
+              "-f",
+              `query=mutation($subjectId: ID!, $content: ReactionContent!) { ${
+                input.action === "add_reaction" ? "addReaction" : "removeReaction"
+              }(input: {subjectId: $subjectId, content: $content}) { reaction { content } } }`,
+              "-F",
+              `subjectId=${input.subjectId ?? ""}`,
+              "-F",
+              `content=${input.reaction ?? "THUMBS_UP"}`,
             ],
           }).pipe(Effect.asVoid);
       }

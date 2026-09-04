@@ -9,27 +9,34 @@ import {
 describe("decodeGitLabReviewThreads", () => {
   it("keeps positioned discussion replies and resolution state", () => {
     expect(
-      decodeGitLabReviewThreads([
-        {
-          id: "discussion-1",
-          resolved: true,
-          notes: [
-            {
-              id: 20,
-              body: "Can this be simplified?",
-              created_at: "2026-09-01T10:00:00Z",
-              author: { username: "reviewer" },
-              position: { new_path: "src/app.ts", new_line: 12 },
-            },
-            {
-              id: 21,
-              body: "Done.",
-              created_at: "2026-09-01T11:00:00Z",
-              author: { username: "author" },
-            },
-          ],
-        },
-      ]),
+      decodeGitLabReviewThreads(
+        [
+          {
+            id: "discussion-1",
+            resolved: true,
+            notes: [
+              {
+                id: 20,
+                body: "Can this be simplified?",
+                created_at: "2026-09-01T10:00:00Z",
+                author: { username: "reviewer" },
+                position: { new_path: "src/app.ts", new_line: 12 },
+                award_emoji: [
+                  { name: "rocket", user: { username: "rushil" } },
+                  { name: "rocket", user: { username: "reviewer" } },
+                ],
+              },
+              {
+                id: 21,
+                body: "Done.",
+                created_at: "2026-09-01T11:00:00Z",
+                author: { username: "author" },
+              },
+            ],
+          },
+        ],
+        "rushil",
+      ),
     ).toMatchObject([
       {
         id: "discussion-1",
@@ -37,7 +44,13 @@ describe("decodeGitLabReviewThreads", () => {
         line: 12,
         side: "right",
         resolved: true,
-        comments: [{ id: "20" }, { id: "21" }],
+        comments: [
+          {
+            id: "20",
+            reactions: [{ content: "ROCKET", count: 2, viewerHasReacted: true }],
+          },
+          { id: "21" },
+        ],
       },
     ]);
   });

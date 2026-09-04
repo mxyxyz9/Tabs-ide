@@ -352,6 +352,9 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
     "remove_label",
     "inline_comment",
     "reply_to_thread",
+    "resolve_thread",
+    "add_reaction",
+    "remove_reaction",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -375,6 +378,8 @@ const GITLAB_PULL_REQUEST_CAPABILITIES = {
     "inline_comment",
     "reply_to_thread",
     "resolve_thread",
+    "add_reaction",
+    "remove_reaction",
   ] as const,
   mergeMethods: ["merge", "squash", "rebase"] as const,
 };
@@ -1164,12 +1169,6 @@ export const makeGitManager = Effect.gen(function* () {
           `${provider} does not support the ${input.action.replaceAll("_", " ")} action.`,
         );
       }
-      if (provider === "github" && input.action === "resolve_thread") {
-        return yield* gitManagerError(
-          "mutatePullRequest",
-          "GitHub thread resolution is unavailable through the configured provider API.",
-        );
-      }
       if (
         ["add_reviewer", "remove_reviewer", "add_label", "remove_label"].includes(input.action) &&
         !input.value?.trim()
@@ -1197,6 +1196,15 @@ export const makeGitManager = Effect.gen(function* () {
       if (["reply_to_thread", "resolve_thread"].includes(input.action) && !input.threadId?.trim()) {
         return yield* gitManagerError("mutatePullRequest", `${input.action} requires a thread id.`);
       }
+      if (
+        ["add_reaction", "remove_reaction"].includes(input.action) &&
+        (!input.subjectId?.trim() || !input.reaction)
+      ) {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          `${input.action} requires a subject id and reaction.`,
+        );
+      }
       const mutation = {
         cwd: input.cwd,
         reference,
@@ -1209,14 +1217,10 @@ export const makeGitManager = Effect.gen(function* () {
         ...(input.line !== undefined ? { line: input.line } : {}),
         ...(input.side !== undefined ? { side: input.side } : {}),
         ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
+        ...(input.subjectId !== undefined ? { subjectId: input.subjectId } : {}),
+        ...(input.reaction !== undefined ? { reaction: input.reaction } : {}),
       } satisfies typeof input;
       if (provider === "github") {
-        if (mutation.action === "resolve_thread") {
-          return yield* gitManagerError(
-            "mutatePullRequest",
-            "GitHub thread resolution is unavailable through the configured provider API.",
-          );
-        }
         yield* gitHubCli.mutatePullRequest({ ...mutation, action: mutation.action });
       } else yield* gitLabCli.mutatePullRequest(mutation);
       const pullRequest =
