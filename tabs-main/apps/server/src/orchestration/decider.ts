@@ -11,6 +11,7 @@ import {
   requireProjectAbsent,
   requireThread,
   requireThreadAbsent,
+  requireThreadNotArchived,
   requireWorkspaceRootAvailable,
 } from "./commandInvariants.ts";
 
@@ -238,6 +239,216 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.settle": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (thread.session?.status === "starting" || thread.session?.status === "running") {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} has an active session and cannot be settled`,
+        });
+      }
+      const occurredAt = nowIso();
+      const alreadySettled = thread.settledOverride === "settled" && thread.settledAt !== null;
+      const settled = {
+        ...withEventBase({
+          aggregateKind: "thread" as const,
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.settled" as const,
+        payload: {
+          threadId: command.threadId,
+          settledAt: alreadySettled ? thread.settledAt : occurredAt,
+          updatedAt: alreadySettled ? thread.updatedAt : occurredAt,
+        },
+      };
+      const companions: Array<Omit<OrchestrationEvent, "sequence">> = [];
+      if (thread.pinnedAt != null) {
+        companions.push({
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.unpinned",
+          payload: { threadId: command.threadId, updatedAt: occurredAt },
+        });
+      }
+      if (thread.snoozedUntil != null) {
+        companions.push({
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.unsnoozed",
+          payload: { threadId: command.threadId, reason: "user", updatedAt: occurredAt },
+        });
+      }
+      return companions.length > 0 ? [settled, ...companions] : settled;
+    }
+
+    case "thread.unsettle": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = nowIso();
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.unsettled",
+        payload: {
+          threadId: command.threadId,
+          reason: command.reason,
+          updatedAt: thread.settledOverride === "active" ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
+    case "thread.snooze": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = nowIso();
+      if (!(Date.parse(command.snoozedUntil) > Date.parse(occurredAt))) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "snooze wake time must be in the future",
+        });
+      }
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.snoozed",
+        payload: {
+          threadId: command.threadId,
+          snoozedUntil: command.snoozedUntil,
+          snoozedAt:
+            thread.snoozedUntil === command.snoozedUntil && thread.snoozedAt
+              ? thread.snoozedAt
+              : occurredAt,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.unsnooze": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = nowIso();
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.unsnoozed",
+        payload: {
+          threadId: command.threadId,
+          reason: command.reason,
+          updatedAt: thread.snoozedUntil == null ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
+    case "thread.pin": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = nowIso();
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.pinned",
+        payload: {
+          threadId: command.threadId,
+          pinnedAt: thread.pinnedAt ?? occurredAt,
+          ...(command.orderKey ? { pinOrderKey: command.orderKey } : {}),
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.unpin": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = nowIso();
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.unpinned",
+        payload: {
+          threadId: command.threadId,
+          updatedAt: thread.pinnedAt == null ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
+    case "thread.pin.reorder": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (thread.pinnedAt == null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "only pinned threads can be reordered",
+        });
+      }
+      const occurredAt = nowIso();
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.pin-reordered",
+        payload: {
+          threadId: command.threadId,
+          orderKey: command.orderKey,
+          updatedAt: thread.pinOrderKey === command.orderKey ? thread.updatedAt : occurredAt,
         },
       };
     }

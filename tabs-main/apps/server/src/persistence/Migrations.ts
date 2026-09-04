@@ -35,9 +35,28 @@ import Migration0019 from "./Migrations/019_BackfillLegacyEventUpdatedAt.ts";
 import Migration0020 from "./Migrations/020_AuthAccessManagement.ts";
 import Migration0021 from "./Migrations/021_AuthSessionClientMetadata.ts";
 import Migration0022 from "./Migrations/022_AuthSessionLastConnectedAt.ts";
+import Migration0023 from "./Migrations/023_ProjectionThreadShellSummary.ts";
+import Migration0024 from "./Migrations/024_BackfillProjectionThreadShellSummary.ts";
+import Migration0025 from "./Migrations/025_CleanupInvalidProjectionPendingApprovals.ts";
+import Migration0026 from "./Migrations/026_CanonicalizeModelSelectionOptions.ts";
+import Migration0027 from "./Migrations/027_ProviderSessionRuntimeInstanceId.ts";
+import Migration0028 from "./Migrations/028_ProjectionThreadSessionInstanceId.ts";
+import Migration0029 from "./Migrations/029_ProjectionThreadDetailOrderingIndexes.ts";
+import Migration0030 from "./Migrations/030_ProjectionThreadShellArchiveIndexes.ts";
 import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
+import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
+import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
+import Migration0035 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
+import Migration0036 from "./Migrations/036_ProjectionThreadsPinned.ts";
+import Migration0037 from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
+import Migration0038 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
+import Migration0039 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
+import Migration0040 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
 import Migration0041 from "./Migrations/041_AuthSessionClientConnection.ts";
+import Migration0042 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
+import Migration0043 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
+import Migration0044 from "./Migrations/044_CatchUpThreadLifecycle.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -72,9 +91,28 @@ export const migrationEntries = [
   [20, "AuthAccessManagement", Migration0020],
   [21, "AuthSessionClientMetadata", Migration0021],
   [22, "AuthSessionLastConnectedAt", Migration0022],
+  [23, "ProjectionThreadShellSummary", Migration0023],
+  [24, "BackfillProjectionThreadShellSummary", Migration0024],
+  [25, "CleanupInvalidProjectionPendingApprovals", Migration0025],
+  [26, "CanonicalizeModelSelectionOptions", Migration0026],
+  [27, "ProviderSessionRuntimeInstanceIdV2", Migration0027],
+  [28, "ProjectionThreadSessionInstanceId", Migration0028],
+  [29, "ProjectionThreadDetailOrderingIndexes", Migration0029],
+  [30, "ProjectionThreadShellArchiveIndexes", Migration0030],
   [31, "AuthAuthorizationScopes", Migration0031],
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
+  [33, "ProjectionThreadsSettled", Migration0033],
+  [34, "ProjectionThreadsSnoozed", Migration0034],
+  [35, "ProjectionThreadTitleRegeneration", Migration0035],
+  [36, "ProjectionThreadsPinned", Migration0036],
+  [37, "ProjectionTurnsKeysetIndex", Migration0037],
+  [38, "ProjectionThreadsPinOrderKey", Migration0038],
+  [39, "ProjectionProjectsDefaultThreadEnvMode", Migration0039],
+  [40, "ProjectionProjectFaviconPath", Migration0040],
   [41, "AuthSessionClientConnection", Migration0041],
+  [42, "ProjectionThreadLinkedPullRequest", Migration0042],
+  [43, "ProjectionThreadsUnsettledAt", Migration0043],
+  [44, "CatchUpThreadLifecycle", Migration0044],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

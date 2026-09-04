@@ -75,6 +75,8 @@ const readModel: OrchestrationReadModel = {
       checkpoints: [],
       deletedAt: null,
       archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
     },
     {
       id: "thread-2" as ThreadId,
@@ -98,6 +100,8 @@ const readModel: OrchestrationReadModel = {
       checkpoints: [],
       deletedAt: null,
       archivedAt: null,
+      settledOverride: null,
+      settledAt: null,
     },
   ],
 };

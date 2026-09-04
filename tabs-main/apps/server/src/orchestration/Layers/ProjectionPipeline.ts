@@ -421,13 +421,133 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
             interactionMode: event.payload.interactionMode,
             branch: event.payload.branch,
             worktreePath: event.payload.worktreePath,
+            linkedPullRequest: null,
             latestTurnId: null,
             createdAt: event.payload.createdAt,
             updatedAt: event.payload.updatedAt,
             deletedAt: null,
             archivedAt: null,
+            settledOverride: null,
+            settledAt: null,
+            unsettledAt: null,
+            snoozedUntil: null,
+            snoozedAt: null,
+            pinnedAt: null,
+            pinOrderKey: null,
+            titleRegenerationRequestId: null,
+            titleRegenerationStartedAt: null,
+            latestUserMessageAt: null,
+            pendingApprovalCount: 0,
+            pendingUserInputCount: 0,
+            hasActionableProposedPlan: 0,
           });
           return;
+
+        case "thread.settled": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              settledOverride: "settled",
+              settledAt: event.payload.settledAt,
+              unsettledAt: null,
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
+
+        case "thread.unsettled": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              settledOverride: event.payload.reason === "user" ? "active" : null,
+              settledAt: null,
+              unsettledAt: event.payload.updatedAt,
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
+
+        case "thread.snoozed": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              snoozedUntil: event.payload.snoozedUntil,
+              snoozedAt: event.payload.snoozedAt,
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
+
+        case "thread.unsnoozed": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              snoozedUntil: null,
+              snoozedAt: null,
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
+
+        case "thread.pinned": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              pinnedAt: event.payload.pinnedAt,
+              ...(event.payload.pinOrderKey ? { pinOrderKey: event.payload.pinOrderKey } : {}),
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
+
+        case "thread.unpinned": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              pinnedAt: null,
+              pinOrderKey: null,
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
+
+        case "thread.pin-reordered": {
+          const row = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isSome(row)) {
+            yield* projectionThreadRepository.upsert({
+              ...row.value,
+              pinOrderKey: event.payload.orderKey,
+              updatedAt: event.payload.updatedAt,
+            });
+          }
+          return;
+        }
 
         case "thread.meta-updated": {
           const existingRow = yield* projectionThreadRepository.getById({
@@ -445,6 +565,15 @@ const makeOrchestrationProjectionPipeline = Effect.gen(function* () {
             ...(event.payload.branch !== undefined ? { branch: event.payload.branch } : {}),
             ...(event.payload.worktreePath !== undefined
               ? { worktreePath: event.payload.worktreePath }
+              : {}),
+            ...(event.payload.linkedPullRequest !== undefined
+              ? { linkedPullRequest: event.payload.linkedPullRequest }
+              : {}),
+            ...(event.payload.titleRegeneration !== undefined
+              ? {
+                  titleRegenerationRequestId: event.payload.titleRegeneration?.requestId ?? null,
+                  titleRegenerationStartedAt: event.payload.titleRegeneration?.startedAt ?? null,
+                }
               : {}),
             updatedAt: event.payload.updatedAt,
           });

@@ -40,4 +40,3 @@ export default Effect.gen(function* () {
     ON auth_sessions(revoked_at, expires_at, issued_at)
   `;
 });
-

@@ -1,6 +1,9 @@
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
-import { Effect, Layer, Schema, Struct } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
@@ -11,11 +14,12 @@ import {
   ProjectionThreadRepository,
   type ProjectionThreadRepositoryShape,
 } from "../Services/ProjectionThreads.ts";
-import { ModelSelection } from "@tabs/contracts";
+import { ModelSelection, ThreadLinkedPullRequest } from "@tabs/contracts";
 
 const ProjectionThreadDbRow = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
+    linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
   }),
 );
 type ProjectionThreadDbRow = typeof ProjectionThreadDbRow.Type;
@@ -36,11 +40,25 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode,
           branch,
           worktree_path,
+          linked_pull_request_json,
           latest_turn_id,
           created_at,
           updated_at,
-          deleted_at,
-          archived_at
+          archived_at,
+          settled_override,
+          settled_at,
+          unsettled_at,
+          snoozed_until,
+          snoozed_at,
+          pinned_at,
+          pin_order_key,
+          title_regeneration_request_id,
+          title_regeneration_started_at,
+          latest_user_message_at,
+          pending_approval_count,
+          pending_user_input_count,
+          has_actionable_proposed_plan,
+          deleted_at
         )
         VALUES (
           ${row.threadId},
@@ -51,11 +69,25 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.interactionMode},
           ${row.branch},
           ${row.worktreePath},
+          ${row.linkedPullRequest === undefined || row.linkedPullRequest === null ? null : JSON.stringify(row.linkedPullRequest)},
           ${row.latestTurnId},
           ${row.createdAt},
           ${row.updatedAt},
-          ${row.deletedAt},
-          ${row.archivedAt}
+          ${row.archivedAt},
+          ${row.settledOverride},
+          ${row.settledAt},
+          ${row.unsettledAt},
+          ${row.snoozedUntil},
+          ${row.snoozedAt},
+          ${row.pinnedAt},
+          ${row.pinOrderKey ?? null},
+          ${row.titleRegenerationRequestId ?? null},
+          ${row.titleRegenerationStartedAt ?? null},
+          ${row.latestUserMessageAt},
+          ${row.pendingApprovalCount},
+          ${row.pendingUserInputCount},
+          ${row.hasActionableProposedPlan},
+          ${row.deletedAt}
         )
         ON CONFLICT (thread_id)
         DO UPDATE SET
@@ -66,11 +98,25 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode = excluded.interaction_mode,
           branch = excluded.branch,
           worktree_path = excluded.worktree_path,
+          linked_pull_request_json = excluded.linked_pull_request_json,
           latest_turn_id = excluded.latest_turn_id,
           created_at = excluded.created_at,
           updated_at = excluded.updated_at,
-          deleted_at = excluded.deleted_at,
-          archived_at = excluded.archived_at
+          archived_at = excluded.archived_at,
+          settled_override = excluded.settled_override,
+          settled_at = excluded.settled_at,
+          unsettled_at = excluded.unsettled_at,
+          snoozed_until = excluded.snoozed_until,
+          snoozed_at = excluded.snoozed_at,
+          pinned_at = excluded.pinned_at,
+          pin_order_key = excluded.pin_order_key,
+          title_regeneration_request_id = excluded.title_regeneration_request_id,
+          title_regeneration_started_at = excluded.title_regeneration_started_at,
+          latest_user_message_at = excluded.latest_user_message_at,
+          pending_approval_count = excluded.pending_approval_count,
+          pending_user_input_count = excluded.pending_user_input_count,
+          has_actionable_proposed_plan = excluded.has_actionable_proposed_plan,
+          deleted_at = excluded.deleted_at
       `,
   });
 
@@ -88,11 +134,25 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
-          deleted_at AS "deletedAt",
-          archived_at AS "archivedAt"
+          archived_at AS "archivedAt",
+          settled_override AS "settledOverride",
+          settled_at AS "settledAt",
+          unsettled_at AS "unsettledAt",
+          snoozed_until AS "snoozedUntil",
+          snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          pin_order_key AS "pinOrderKey",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
+          latest_user_message_at AS "latestUserMessageAt",
+          pending_approval_count AS "pendingApprovalCount",
+          pending_user_input_count AS "pendingUserInputCount",
+          has_actionable_proposed_plan AS "hasActionableProposedPlan",
+          deleted_at AS "deletedAt"
         FROM projection_threads
         WHERE thread_id = ${threadId}
       `,
@@ -112,11 +172,25 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
-          deleted_at AS "deletedAt",
-          archived_at AS "archivedAt"
+          archived_at AS "archivedAt",
+          settled_override AS "settledOverride",
+          settled_at AS "settledAt",
+          unsettled_at AS "unsettledAt",
+          snoozed_until AS "snoozedUntil",
+          snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          pin_order_key AS "pinOrderKey",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
+          latest_user_message_at AS "latestUserMessageAt",
+          pending_approval_count AS "pendingApprovalCount",
+          pending_user_input_count AS "pendingUserInputCount",
+          has_actionable_proposed_plan AS "hasActionableProposedPlan",
+          deleted_at AS "deletedAt"
         FROM projection_threads
         WHERE project_id = ${projectId}
         ORDER BY created_at ASC, thread_id ASC

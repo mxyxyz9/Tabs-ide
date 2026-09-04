@@ -289,6 +289,15 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           updatedAt: "2026-02-24T00:00:03.000Z",
           deletedAt: null,
           archivedAt: null,
+          linkedPullRequest: null,
+          settledOverride: null,
+          settledAt: null,
+          unsettledAt: null,
+          snoozedUntil: null,
+          snoozedAt: null,
+          pinnedAt: null,
+          pinOrderKey: null,
+          titleRegeneration: null,
           messages: [
             {
               id: asMessageId("message-1"),

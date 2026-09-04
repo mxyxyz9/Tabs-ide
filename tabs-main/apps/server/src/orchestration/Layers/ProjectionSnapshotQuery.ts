@@ -8,6 +8,7 @@ import {
   OrchestrationReadModel,
   ProjectScript,
   ThreadId,
+  ThreadLinkedPullRequest,
   TurnId,
   type OrchestrationCheckpointSummary,
   type OrchestrationLatestTurn,
@@ -60,6 +61,7 @@ const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
 const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
     modelSelection: Schema.fromJsonString(ModelSelection),
+    linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -171,11 +173,25 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           interaction_mode AS "interactionMode",
           branch,
           worktree_path AS "worktreePath",
+          linked_pull_request_json AS "linkedPullRequest",
           latest_turn_id AS "latestTurnId",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt",
-          archived_at AS "archivedAt"
+          archived_at AS "archivedAt",
+          settled_override AS "settledOverride",
+          settled_at AS "settledAt",
+          unsettled_at AS "unsettledAt",
+          snoozed_until AS "snoozedUntil",
+          snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
+          pin_order_key AS "pinOrderKey",
+          title_regeneration_request_id AS "titleRegenerationRequestId",
+          title_regeneration_started_at AS "titleRegenerationStartedAt",
+          latest_user_message_at AS "latestUserMessageAt",
+          pending_approval_count AS "pendingApprovalCount",
+          pending_user_input_count AS "pendingUserInputCount",
+          has_actionable_proposed_plan AS "hasActionableProposedPlan"
         FROM projection_threads
         ORDER BY created_at ASC, thread_id ASC
       `,
@@ -558,11 +574,26 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             interactionMode: row.interactionMode,
             branch: row.branch,
             worktreePath: row.worktreePath,
+            linkedPullRequest: row.linkedPullRequest,
             latestTurn: latestTurnByThread.get(row.threadId) ?? null,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
             deletedAt: row.deletedAt,
             archivedAt: row.archivedAt,
+            settledOverride: row.settledOverride,
+            settledAt: row.settledAt,
+            unsettledAt: row.unsettledAt,
+            snoozedUntil: row.snoozedUntil,
+            snoozedAt: row.snoozedAt,
+            pinnedAt: row.pinnedAt,
+            pinOrderKey: row.pinOrderKey ?? null,
+            titleRegeneration:
+              row.titleRegenerationRequestId && row.titleRegenerationStartedAt
+                ? {
+                    requestId: row.titleRegenerationRequestId,
+                    startedAt: row.titleRegenerationStartedAt,
+                  }
+                : null,
             messages: messagesByThread.get(row.threadId) ?? [],
             proposedPlans: proposedPlansByThread.get(row.threadId) ?? [],
             activities: activitiesByThread.get(row.threadId) ?? [],

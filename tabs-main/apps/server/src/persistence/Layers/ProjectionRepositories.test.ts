@@ -89,6 +89,20 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         updatedAt: "2026-03-24T00:00:00.000Z",
         deletedAt: null,
         archivedAt: null,
+        linkedPullRequest: null,
+        settledOverride: null,
+        settledAt: null,
+        unsettledAt: null,
+        snoozedUntil: null,
+        snoozedAt: null,
+        pinnedAt: null,
+        pinOrderKey: null,
+        titleRegenerationRequestId: null,
+        titleRegenerationStartedAt: null,
+        latestUserMessageAt: null,
+        pendingApprovalCount: 0,
+        pendingUserInputCount: 0,
+        hasActionableProposedPlan: 0,
       });
 
       const rows = yield* sql<{
