@@ -1,4 +1,13 @@
-import { CheckCircle2, GitMerge, GitPullRequest, Plus } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  GitCommit,
+  GitMerge,
+  GitPullRequest,
+  MessageSquare,
+  Plus,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
@@ -73,6 +82,10 @@ export function PRsPanel({
   const [mergePr, setMergePr] = useState<PullRequestRow | null>(null);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
+  const [expandedPrNumber, setExpandedPrNumber] = useState<number | null>(null);
+  const [detailTab, setDetailTab] = useState<"summary" | "checks" | "commits" | "activity">(
+    "summary",
+  );
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
@@ -86,6 +99,13 @@ export function PRsPanel({
   // Query 2: Repository PRs query (supports state filter for past merged/closed PRs)
   const allPrsQuery = useQuery(
     gitAllPullRequestsQueryOptions(cwd || null, filterState, environmentId),
+  );
+  const detailQuery = useQuery(
+    gitResolvePullRequestQueryOptions({
+      cwd: cwd || null,
+      reference: expandedPrNumber === null ? null : String(expandedPrNumber),
+      environmentId,
+    }),
   );
 
   const activeQuery = viewMode === "branch" ? branchPrQuery : allPrsQuery;
@@ -313,6 +333,18 @@ export function PRsPanel({
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-expanded={expandedPrNumber === pr.n}
+                    onClick={() => {
+                      setExpandedPrNumber((current) => (current === pr.n ? null : pr.n));
+                      setDetailTab("summary");
+                    }}
+                  >
+                    {expandedPrNumber === pr.n ? <ChevronDown /> : <ChevronRight />}
+                    Details
+                  </Button>
                   {pr.state === "open" && !pr.isDraft && (
                     <Button
                       size="sm"
@@ -338,6 +370,140 @@ export function PRsPanel({
                   </Button>
                 </div>
               </div>
+              {expandedPrNumber === pr.n ? (
+                <div className="mt-3 border-t border-border/60 pt-3">
+                  {detailQuery.isLoading ? (
+                    <GitCheckingState message={`Loading pull request #${pr.n}…`} size={24} />
+                  ) : detailQuery.isError ? (
+                    <div role="alert" className="rounded-lg border border-destructive/40 p-3">
+                      <p className="text-xs text-destructive">
+                        {detailQuery.error instanceof Error
+                          ? detailQuery.error.message
+                          : "Unable to load pull-request details."}
+                      </p>
+                      <Button
+                        className="mt-2"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => detailQuery.refetch()}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ) : detailQuery.data?.pullRequest ? (
+                    <div className="space-y-3">
+                      <div
+                        role="tablist"
+                        aria-label={`Pull request #${pr.n} details`}
+                        className="flex flex-wrap gap-1"
+                      >
+                        {(
+                          [
+                            ["summary", "Summary", GitPullRequest],
+                            ["checks", "Checks", CheckCircle2],
+                            ["commits", "Commits", GitCommit],
+                            ["activity", "Activity", MessageSquare],
+                          ] as const
+                        ).map(([id, label, Icon]) => (
+                          <Button
+                            key={id}
+                            role="tab"
+                            aria-selected={detailTab === id}
+                            variant={detailTab === id ? "secondary" : "ghost"}
+                            size="sm"
+                            onClick={() => setDetailTab(id)}
+                          >
+                            <Icon /> {label}
+                          </Button>
+                        ))}
+                      </div>
+                      <div role="tabpanel" className="rounded-lg bg-muted/20 p-3 text-xs">
+                        {detailTab === "summary" ? (
+                          <div className="space-y-2">
+                            {detailQuery.data.pullRequest.body ? (
+                              <p className="whitespace-pre-wrap text-foreground/90">
+                                {detailQuery.data.pullRequest.body}
+                              </p>
+                            ) : (
+                              <p className="text-muted-foreground">No description provided.</p>
+                            )}
+                            {(detailQuery.data.pullRequest.reviewers ?? []).length > 0 ? (
+                              <p className="text-muted-foreground">
+                                Reviewers:{" "}
+                                {detailQuery.data.pullRequest.reviewers
+                                  ?.map((reviewer) => `@${reviewer.login}`)
+                                  .join(", ")}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : detailTab === "checks" ? (
+                          <div className="space-y-1.5">
+                            {(detailQuery.data.pullRequest.checks ?? []).length > 0 ? (
+                              detailQuery.data.pullRequest.checks?.map((check) => (
+                                <div
+                                  key={`${check.workflowName ?? ""}:${check.name}`}
+                                  className="flex items-center justify-between gap-3"
+                                >
+                                  <span>
+                                    {check.workflowName ? `${check.workflowName} / ` : ""}
+                                    {check.name}
+                                  </span>
+                                  <Badge variant="outline">
+                                    {check.conclusion ?? check.status.replaceAll("_", " ")}
+                                  </Badge>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-muted-foreground">No checks reported.</p>
+                            )}
+                          </div>
+                        ) : detailTab === "commits" ? (
+                          <div className="space-y-2">
+                            {(detailQuery.data.pullRequest.commits ?? []).length > 0 ? (
+                              detailQuery.data.pullRequest.commits?.map((commit) => (
+                                <div key={commit.sha} className="flex items-start gap-2">
+                                  <code className="text-muted-foreground">
+                                    {commit.sha.slice(0, 7)}
+                                  </code>
+                                  <span>{commit.subject}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-muted-foreground">No commits reported.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {(detailQuery.data.pullRequest.reviews ?? []).map((review) => (
+                              <div key={review.id}>
+                                <p className="font-medium">
+                                  {review.author ? `@${review.author.login}` : "Unknown reviewer"} ·{" "}
+                                  {review.state.toLowerCase().replaceAll("_", " ")}
+                                </p>
+                                {review.body ? (
+                                  <p className="mt-1 whitespace-pre-wrap">{review.body}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                            {(detailQuery.data.pullRequest.comments ?? []).map((comment) => (
+                              <div key={comment.id}>
+                                <p className="font-medium">
+                                  {comment.author ? `@${comment.author.login}` : "Unknown author"}
+                                </p>
+                                <p className="mt-1 whitespace-pre-wrap">{comment.body}</p>
+                              </div>
+                            ))}
+                            {(detailQuery.data.pullRequest.reviews ?? []).length === 0 &&
+                            (detailQuery.data.pullRequest.comments ?? []).length === 0 ? (
+                              <p className="text-muted-foreground">No review activity reported.</p>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </Card>
           ))}
         </div>

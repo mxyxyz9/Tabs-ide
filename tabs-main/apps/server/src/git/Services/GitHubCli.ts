@@ -40,6 +40,42 @@ export interface GitHubPullRequestSummary {
   readonly changedFiles?: number | undefined;
   readonly createdAt?: string | undefined;
   readonly updatedAt?: string | undefined;
+  readonly body?: string | undefined;
+  readonly reviewers?: ReadonlyArray<{
+    readonly login: string;
+    readonly avatarUrl?: string | undefined;
+    readonly url?: string | undefined;
+  }>;
+  readonly checks?: ReadonlyArray<{
+    readonly name: string;
+    readonly status: "queued" | "in_progress" | "completed" | "unknown";
+    readonly conclusion?: string | undefined;
+    readonly detailsUrl?: string | undefined;
+    readonly workflowName?: string | undefined;
+  }>;
+  readonly comments?: ReadonlyArray<{
+    readonly id: string;
+    readonly author: { readonly login: string; readonly avatarUrl?: string | undefined } | null;
+    readonly body: string;
+    readonly createdAt: string;
+    readonly url?: string | undefined;
+  }>;
+  readonly reviews?: ReadonlyArray<{
+    readonly id: string;
+    readonly author: { readonly login: string; readonly avatarUrl?: string | undefined } | null;
+    readonly body: string;
+    readonly state: string;
+    readonly submittedAt?: string | null | undefined;
+  }>;
+  readonly commits?: ReadonlyArray<{
+    readonly sha: string;
+    readonly subject: string;
+    readonly authoredAt?: string | undefined;
+    readonly authors: ReadonlyArray<{
+      readonly login: string;
+      readonly avatarUrl?: string | undefined;
+    }>;
+  }>;
 }
 
 export interface GitHubRepositoryCloneUrls {

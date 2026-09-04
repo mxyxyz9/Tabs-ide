@@ -98,6 +98,41 @@ export type GitPullRequestReviewDecision = typeof GitPullRequestReviewDecision.T
 export const GitPullRequestMergeability = Schema.Literals(["mergeable", "conflicting", "unknown"]);
 export type GitPullRequestMergeability = typeof GitPullRequestMergeability.Type;
 
+export const GitPullRequestCheck = Schema.Struct({
+  name: TrimmedNonEmptyStringSchema,
+  status: Schema.Literals(["queued", "in_progress", "completed", "unknown"]),
+  conclusion: Schema.optional(Schema.String),
+  detailsUrl: Schema.optional(Schema.String),
+  workflowName: Schema.optional(Schema.String),
+});
+export type GitPullRequestCheck = typeof GitPullRequestCheck.Type;
+
+export const GitPullRequestComment = Schema.Struct({
+  id: TrimmedNonEmptyStringSchema,
+  author: Schema.NullOr(GitPullRequestActor),
+  body: Schema.String,
+  createdAt: Schema.String,
+  url: Schema.optional(Schema.String),
+});
+export type GitPullRequestComment = typeof GitPullRequestComment.Type;
+
+export const GitPullRequestReview = Schema.Struct({
+  id: TrimmedNonEmptyStringSchema,
+  author: Schema.NullOr(GitPullRequestActor),
+  body: Schema.String,
+  state: Schema.String,
+  submittedAt: Schema.optional(Schema.NullOr(Schema.String)),
+});
+export type GitPullRequestReview = typeof GitPullRequestReview.Type;
+
+export const GitPullRequestCommit = Schema.Struct({
+  sha: TrimmedNonEmptyStringSchema,
+  subject: TrimmedNonEmptyStringSchema,
+  authoredAt: Schema.optional(Schema.String),
+  authors: Schema.Array(GitPullRequestActor),
+});
+export type GitPullRequestCommit = typeof GitPullRequestCommit.Type;
+
 const GitResolvedPullRequest = Schema.Struct({
   provider: Schema.optional(SourceControlProviderKind),
   number: PositiveInt,
@@ -117,6 +152,12 @@ const GitResolvedPullRequest = Schema.Struct({
   changedFiles: Schema.optional(NonNegativeInt),
   createdAt: Schema.optional(Schema.String),
   updatedAt: Schema.optional(Schema.String),
+  body: Schema.optional(Schema.String),
+  reviewers: Schema.optional(Schema.Array(GitPullRequestActor)),
+  checks: Schema.optional(Schema.Array(GitPullRequestCheck)),
+  comments: Schema.optional(Schema.Array(GitPullRequestComment)),
+  reviews: Schema.optional(Schema.Array(GitPullRequestReview)),
+  commits: Schema.optional(Schema.Array(GitPullRequestCommit)),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 

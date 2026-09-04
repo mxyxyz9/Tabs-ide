@@ -128,6 +128,69 @@ const RawGitHubPullRequestSchema = Schema.Struct({
   changedFiles: Schema.optional(Schema.Number),
   createdAt: Schema.optional(Schema.String),
   updatedAt: Schema.optional(Schema.String),
+  body: Schema.optional(Schema.String),
+  reviewRequests: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        login: TrimmedNonEmptyString,
+        avatarUrl: Schema.optional(Schema.String),
+        url: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+  comments: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        id: TrimmedNonEmptyString,
+        author: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              login: TrimmedNonEmptyString,
+              avatarUrl: Schema.optional(Schema.String),
+            }),
+          ),
+        ),
+        body: Schema.String,
+        createdAt: Schema.String,
+        url: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+  reviews: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        id: TrimmedNonEmptyString,
+        author: Schema.optional(
+          Schema.NullOr(
+            Schema.Struct({
+              login: TrimmedNonEmptyString,
+              avatarUrl: Schema.optional(Schema.String),
+            }),
+          ),
+        ),
+        body: Schema.String,
+        state: Schema.String,
+        submittedAt: Schema.optional(Schema.NullOr(Schema.String)),
+      }),
+    ),
+  ),
+  commits: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        oid: TrimmedNonEmptyString,
+        messageHeadline: TrimmedNonEmptyString,
+        authoredDate: Schema.optional(Schema.String),
+        authors: Schema.optional(
+          Schema.Array(
+            Schema.Struct({
+              login: Schema.optional(Schema.NullOr(Schema.String)),
+              avatarUrl: Schema.optional(Schema.String),
+            }),
+          ),
+        ),
+      }),
+    ),
+  ),
 });
 
 const RawGitHubRepositoryCloneUrlsSchema = Schema.Struct({
@@ -162,6 +225,31 @@ function normalizePullRequestSummary(
           ? ("unknown" as const)
           : undefined;
   const checks = raw.statusCheckRollup ?? [];
+  const normalizedChecks = checks.flatMap((check) => {
+    const nameValue = check.name ?? check.context;
+    if (typeof nameValue !== "string" || nameValue.trim().length === 0) return [];
+    const rawStatus = String(check.status ?? "").toUpperCase();
+    const status =
+      rawStatus === "QUEUED"
+        ? ("queued" as const)
+        : rawStatus === "IN_PROGRESS" || rawStatus === "PENDING"
+          ? ("in_progress" as const)
+          : rawStatus === "COMPLETED"
+            ? ("completed" as const)
+            : ("unknown" as const);
+    const conclusionValue = check.conclusion ?? check.state;
+    const detailsUrlValue = check.detailsUrl ?? check.targetUrl;
+    const workflowNameValue = check.workflowName ?? check.workflow;
+    return [
+      {
+        name: nameValue.trim(),
+        status,
+        ...(typeof conclusionValue === "string" ? { conclusion: conclusionValue } : {}),
+        ...(typeof detailsUrlValue === "string" ? { detailsUrl: detailsUrlValue } : {}),
+        ...(typeof workflowNameValue === "string" ? { workflowName: workflowNameValue } : {}),
+      },
+    ];
+  });
   const checksState =
     checks.length === 0
       ? undefined
@@ -203,6 +291,50 @@ function normalizePullRequestSummary(
       : {}),
     ...(raw.createdAt ? { createdAt: raw.createdAt } : {}),
     ...(raw.updatedAt ? { updatedAt: raw.updatedAt } : {}),
+    ...(raw.body !== undefined ? { body: raw.body } : {}),
+    ...(raw.reviewRequests ? { reviewers: raw.reviewRequests } : {}),
+    ...(raw.statusCheckRollup ? { checks: normalizedChecks } : {}),
+    ...(raw.comments
+      ? {
+          comments: raw.comments.map((comment) => ({
+            id: comment.id,
+            author: comment.author ?? null,
+            body: comment.body,
+            createdAt: comment.createdAt,
+            ...(comment.url ? { url: comment.url } : {}),
+          })),
+        }
+      : {}),
+    ...(raw.reviews
+      ? {
+          reviews: raw.reviews.map((review) => ({
+            id: review.id,
+            author: review.author ?? null,
+            body: review.body,
+            state: review.state,
+            ...(review.submittedAt !== undefined ? { submittedAt: review.submittedAt } : {}),
+          })),
+        }
+      : {}),
+    ...(raw.commits
+      ? {
+          commits: raw.commits.map((commit) => ({
+            sha: commit.oid,
+            subject: commit.messageHeadline,
+            ...(commit.authoredDate ? { authoredAt: commit.authoredDate } : {}),
+            authors: (commit.authors ?? []).flatMap((author) =>
+              author.login
+                ? [
+                    {
+                      login: author.login,
+                      ...(author.avatarUrl ? { avatarUrl: author.avatarUrl } : {}),
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        }
+      : {}),
   };
 }
 
@@ -287,7 +419,7 @@ const makeGitHubCli = Effect.sync(() => {
           "view",
           input.reference,
           "--json",
-          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,author,labels,reviewDecision,mergeable,statusCheckRollup,additions,deletions,changedFiles,createdAt,updatedAt",
+          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,author,labels,reviewDecision,mergeable,statusCheckRollup,additions,deletions,changedFiles,createdAt,updatedAt,body,reviewRequests,comments,reviews,commits",
         ],
       }).pipe(
         Effect.map((result) => result.stdout.trim()),

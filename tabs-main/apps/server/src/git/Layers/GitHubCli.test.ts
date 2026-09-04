@@ -41,12 +41,39 @@ layer("GitHubCliLive", (it) => {
           labels: [{ name: "enhancement", color: "84b6eb", description: null }],
           reviewDecision: "APPROVED",
           mergeable: "MERGEABLE",
-          statusCheckRollup: [{ status: "COMPLETED", conclusion: "SUCCESS" }],
+          statusCheckRollup: [{ name: "CI", status: "COMPLETED", conclusion: "SUCCESS" }],
           additions: 120,
           deletions: 18,
           changedFiles: 7,
           createdAt: "2026-09-01T10:00:00Z",
           updatedAt: "2026-09-04T10:00:00Z",
+          body: "Implements the PR workspace.",
+          reviewRequests: [{ login: "reviewer" }],
+          comments: [
+            {
+              id: "comment-1",
+              author: { login: "reviewer" },
+              body: "Looks good.",
+              createdAt: "2026-09-04T09:00:00Z",
+            },
+          ],
+          reviews: [
+            {
+              id: "review-1",
+              author: { login: "reviewer" },
+              body: "Approved.",
+              state: "APPROVED",
+              submittedAt: "2026-09-04T09:30:00Z",
+            },
+          ],
+          commits: [
+            {
+              oid: "abcdef1234567890",
+              messageHeadline: "Build PR workspace",
+              authoredDate: "2026-09-03T10:00:00Z",
+              authors: [{ login: "octocat" }],
+            },
+          ],
         }),
         stderr: "",
         code: 0,
@@ -78,11 +105,39 @@ layer("GitHubCliLive", (it) => {
         reviewDecision: "approved",
         mergeability: "mergeable",
         checksState: "passing",
+        checks: [{ name: "CI", status: "completed", conclusion: "SUCCESS" }],
         additions: 120,
         deletions: 18,
         changedFiles: 7,
         createdAt: "2026-09-01T10:00:00Z",
         updatedAt: "2026-09-04T10:00:00Z",
+        body: "Implements the PR workspace.",
+        reviewers: [{ login: "reviewer" }],
+        comments: [
+          {
+            id: "comment-1",
+            author: { login: "reviewer" },
+            body: "Looks good.",
+            createdAt: "2026-09-04T09:00:00Z",
+          },
+        ],
+        reviews: [
+          {
+            id: "review-1",
+            author: { login: "reviewer" },
+            body: "Approved.",
+            state: "APPROVED",
+            submittedAt: "2026-09-04T09:30:00Z",
+          },
+        ],
+        commits: [
+          {
+            sha: "abcdef1234567890",
+            subject: "Build PR workspace",
+            authoredAt: "2026-09-03T10:00:00Z",
+            authors: [{ login: "octocat" }],
+          },
+        ],
       });
       expect(mockedRunProcess).toHaveBeenCalledWith(
         "gh",
@@ -91,7 +146,7 @@ layer("GitHubCliLive", (it) => {
           "view",
           "#42",
           "--json",
-          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,author,labels,reviewDecision,mergeable,statusCheckRollup,additions,deletions,changedFiles,createdAt,updatedAt",
+          "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner,isDraft,author,labels,reviewDecision,mergeable,statusCheckRollup,additions,deletions,changedFiles,createdAt,updatedAt,body,reviewRequests,comments,reviews,commits",
         ],
         expect.objectContaining({ cwd: "/repo" }),
       );

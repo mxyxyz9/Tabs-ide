@@ -6,6 +6,7 @@ import { Effect, FileSystem, Layer, Path } from "effect";
 import {
   GitActionProgressEvent,
   GitActionProgressPhase,
+  type GitResolvedPullRequest,
   type GitStackedAction,
   ModelSelection,
   type GitGenerateReviewResult,
@@ -64,30 +65,7 @@ interface PullRequestInfo extends OpenPrInfo {
   updatedAt: string | null;
 }
 
-interface ResolvedPullRequest {
-  provider?: "github" | "gitlab" | "azure-devops" | "bitbucket" | "unknown";
-  number: number;
-  title: string;
-  url: string;
-  baseBranch: string;
-  headBranch: string;
-  state: "open" | "closed" | "merged";
-  isDraft?: boolean;
-  author?: { login: string; avatarUrl?: string | undefined; url?: string | undefined } | null;
-  labels?: ReadonlyArray<{
-    name: string;
-    color?: string | undefined;
-    description?: string | null | undefined;
-  }>;
-  reviewDecision?: "approved" | "changes_requested" | "review_required";
-  mergeability?: "mergeable" | "conflicting" | "unknown";
-  checksState?: "passing" | "failing" | "pending";
-  additions?: number;
-  deletions?: number;
-  changedFiles?: number;
-  createdAt?: string;
-  updatedAt?: string;
-}
+type ResolvedPullRequest = GitResolvedPullRequest;
 
 interface PullRequestHeadRemoteInfo {
   isCrossRepository?: boolean;
@@ -382,6 +360,19 @@ function toResolvedPullRequest(pr: GitHubPullRequestSummary): ResolvedPullReques
     ...(typeof pr.changedFiles === "number" ? { changedFiles: pr.changedFiles } : {}),
     ...(pr.createdAt ? { createdAt: pr.createdAt } : {}),
     ...(pr.updatedAt ? { updatedAt: pr.updatedAt } : {}),
+    ...(pr.body !== undefined ? { body: pr.body } : {}),
+    ...(pr.reviewers ? { reviewers: [...pr.reviewers] } : {}),
+    ...(pr.checks ? { checks: [...pr.checks] } : {}),
+    ...(pr.comments ? { comments: [...pr.comments] } : {}),
+    ...(pr.reviews ? { reviews: [...pr.reviews] } : {}),
+    ...(pr.commits
+      ? {
+          commits: pr.commits.map((commit) => ({
+            ...commit,
+            authors: [...commit.authors],
+          })),
+        }
+      : {}),
   };
 }
 
