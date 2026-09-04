@@ -1,4 +1,7 @@
-import { bootstrapRemoteBearerSession } from "@tabs/client-runtime/authorization";
+import {
+  bootstrapRemoteBearerSession,
+  resolveRemoteWebSocketConnectionUrl,
+} from "@tabs/client-runtime/authorization";
 import {
   BearerConnectionCredential,
   BearerConnectionProfile,
@@ -134,4 +137,69 @@ export async function removeManualConnection(environmentId: string) {
     }
   }
   await writeCatalog(removeConnectionFromCatalog(catalog, target));
+}
+
+export async function connectManualConnection(environmentId: string): Promise<never> {
+  const catalog = await readCatalog();
+  const target = catalog.targets.find((entry) => entry.environmentId === environmentId);
+  if (!target) throw new Error("The saved environment no longer exists.");
+
+  let socketUrl: string;
+  if (target._tag === "BearerConnectionTarget") {
+    const profile = catalog.profiles.find(
+      (entry) =>
+        entry._tag === "BearerConnectionProfile" && entry.connectionId === target.connectionId,
+    );
+    const credential = catalog.credentials.find(
+      (entry) => entry.connectionId === target.connectionId,
+    );
+    if (
+      profile?._tag !== "BearerConnectionProfile" ||
+      credential?.credential._tag !== "BearerConnectionCredential"
+    ) {
+      throw new Error("This environment's saved connection details are incomplete.");
+    }
+    socketUrl = await Effect.runPromise(
+      resolveRemoteWebSocketConnectionUrl({
+        httpBaseUrl: profile.httpBaseUrl,
+        wsBaseUrl: profile.wsBaseUrl,
+        bearerToken: credential.credential.token,
+        connectionMethod: "direct",
+      }).pipe(Effect.provide(FetchHttpClient.layer)),
+    );
+  } else if (target._tag === "SshConnectionTarget") {
+    const profile = catalog.profiles.find(
+      (entry) =>
+        entry._tag === "SshConnectionProfile" && entry.connectionId === target.connectionId,
+    );
+    if (profile?._tag !== "SshConnectionProfile") {
+      throw new Error("This SSH environment's saved connection details are incomplete.");
+    }
+    const bridge = window.desktopBridge;
+    if (!bridge) throw new Error("SSH environments are only available in the desktop app.");
+    const bootstrap = await bridge.ensureSshEnvironment(profile.target, {
+      issuePairingToken: true,
+    });
+    if (!bootstrap.pairingToken)
+      throw new Error("The SSH environment did not issue a pairing token.");
+    const access = await bridge.bootstrapSshBearerSession(
+      bootstrap.httpBaseUrl,
+      bootstrap.pairingToken,
+    );
+    socketUrl = await Effect.runPromise(
+      resolveRemoteWebSocketConnectionUrl({
+        httpBaseUrl: bootstrap.httpBaseUrl,
+        wsBaseUrl: bootstrap.wsBaseUrl,
+        bearerToken: access.access_token,
+        connectionMethod: "ssh",
+      }).pipe(Effect.provide(FetchHttpClient.layer)),
+    );
+  } else {
+    throw new Error("Relay connections require the cloud connection runtime.");
+  }
+
+  const destination = new URL(window.location.href);
+  destination.searchParams.set("tabsWsUrl", socketUrl);
+  window.location.assign(destination);
+  return await new Promise<never>(() => undefined);
 }

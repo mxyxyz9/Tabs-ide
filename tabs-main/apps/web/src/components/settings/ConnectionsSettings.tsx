@@ -35,6 +35,7 @@ import {
 } from "~/components/ui/dialog";
 import { cn } from "~/lib/utils";
 import {
+  connectManualConnection,
   listManualConnections,
   registerManualRemote,
   registerManualSsh,
@@ -228,9 +229,7 @@ export function ConnectionsSettings() {
             <DialogDescription>
               Enter the password for{" "}
               <span className="font-medium text-foreground">
-                {activeSshPasswordPrompt?.username
-                  ? activeSshPasswordPrompt.username + "@"
-                  : ""}
+                {activeSshPasswordPrompt?.username ? activeSshPasswordPrompt.username + "@" : ""}
                 {activeSshPasswordPrompt?.destination}
               </span>
               .
@@ -743,6 +742,25 @@ export function ConnectionsSettings() {
                         {connection.kind.toUpperCase()} · {connection.environmentId}
                       </div>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      aria-label={`Connect to ${connection.label}`}
+                      onClick={async () => {
+                        try {
+                          await connectManualConnection(connection.environmentId);
+                        } catch (error) {
+                          toastManager.add({
+                            title: "Could not connect",
+                            description:
+                              error instanceof Error ? error.message : "Connection failed.",
+                            type: "error",
+                          });
+                        }
+                      }}
+                    >
+                      Connect
+                    </Button>
                     <Button
                       size="icon-xs"
                       variant="ghost"
