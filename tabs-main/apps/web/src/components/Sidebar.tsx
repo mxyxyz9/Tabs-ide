@@ -40,6 +40,7 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@tabs/contracts";
 import { makeAppModelSelection } from "../modelSelection";
+import type { Project, Thread } from "../types";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtomValue } from "@effect/atom-react";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
@@ -74,6 +75,7 @@ import { derivePendingApprovals, derivePendingUserInputs } from "../session-logi
 import { gitRemoveWorktreeMutationOptions, gitStatusQueryOptions } from "../lib/gitReactQuery";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
+import { environmentApi } from "../connection/environmentApiRegistry";
 import { composerDraftActions } from "../state/composerDrafts";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { selectThreadTerminalState } from "../state/terminalTransitions";
@@ -440,62 +442,73 @@ export default function Sidebar() {
   const shouldBrowseForProjectImmediately = isElectron && !isLinuxDesktop;
   const shouldShowProjectPathEntry = addingProject && !shouldBrowseForProjectImmediately;
   const projectCwdById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project.cwd] as const)),
+    () =>
+      new Map(
+        projects.map((project) => [`${project.environmentId}:${project.id}`, project.cwd] as const),
+      ),
     [projects],
   );
   const threadGitTargets = useMemo(
     () =>
       threads.map((thread) => ({
+        environmentId: thread.environmentId,
         threadId: thread.id,
         branch: thread.branch,
-        cwd: thread.worktreePath ?? projectCwdById.get(thread.projectId) ?? null,
+        cwd:
+          thread.worktreePath ??
+          projectCwdById.get(`${thread.environmentId}:${thread.projectId}`) ??
+          null,
       })),
     [projectCwdById, threads],
   );
-  const threadGitStatusCwds = useMemo(
-    () => [
-      ...new Set(
-        threadGitTargets
-          .filter((target) => target.branch !== null)
-          .map((target) => target.cwd)
-          .filter((cwd): cwd is string => cwd !== null),
-      ),
-    ],
-    [threadGitTargets],
-  );
+  const threadGitStatusTargets = useMemo(() => {
+    const unique = new Map<string, { environmentId: EnvironmentId | undefined; cwd: string }>();
+    for (const target of threadGitTargets) {
+      if (target.branch === null || target.cwd === null) continue;
+      unique.set(`${target.environmentId}:${target.cwd}`, {
+        environmentId: target.environmentId,
+        cwd: target.cwd,
+      });
+    }
+    return [...unique.values()];
+  }, [threadGitTargets]);
   const threadGitStatusQueries = useQueries({
-    queries: threadGitStatusCwds.map((cwd) => ({
-      ...gitStatusQueryOptions(cwd),
+    queries: threadGitStatusTargets.map((target) => ({
+      ...gitStatusQueryOptions(target.cwd, target.environmentId),
       staleTime: 30_000,
       refetchInterval: 60_000,
     })),
   });
   const prByThreadId = useMemo(() => {
     const statusByCwd = new Map<string, GitStatusResult>();
-    for (let index = 0; index < threadGitStatusCwds.length; index += 1) {
-      const cwd = threadGitStatusCwds[index];
-      if (!cwd) continue;
+    for (let index = 0; index < threadGitStatusTargets.length; index += 1) {
+      const target = threadGitStatusTargets[index];
+      if (!target) continue;
       const status = threadGitStatusQueries[index]?.data;
       if (status) {
-        statusByCwd.set(cwd, status);
+        statusByCwd.set(`${target.environmentId}:${target.cwd}`, status);
       }
     }
 
-    const map = new Map<ThreadId, ThreadPr>();
+    const map = new Map<string, ThreadPr>();
     for (const target of threadGitTargets) {
-      const status = target.cwd ? statusByCwd.get(target.cwd) : undefined;
+      const status = target.cwd
+        ? statusByCwd.get(`${target.environmentId}:${target.cwd}`)
+        : undefined;
       const branchMatches =
         target.branch !== null && status?.branch !== null && status?.branch === target.branch;
-      map.set(target.threadId, branchMatches ? (status?.pr ?? null) : null);
+      map.set(
+        `${target.environmentId}:${target.threadId}`,
+        branchMatches ? (status?.pr ?? null) : null,
+      );
     }
     return map;
-  }, [threadGitStatusCwds, threadGitStatusQueries, threadGitTargets]);
-  const linkedPrSyncRef = useRef(new Map<ThreadId, string>());
+  }, [threadGitStatusQueries, threadGitStatusTargets, threadGitTargets]);
+  const linkedPrSyncRef = useRef(new Map<string, string>());
   useEffect(() => {
-    const api = readNativeApi();
-    if (!api) return;
     for (const thread of threads) {
-      const pr = prByThreadId.get(thread.id) ?? null;
+      const threadKey = `${thread.environmentId}:${thread.id}`;
+      const pr = prByThreadId.get(threadKey) ?? null;
       let repository: string | null = null;
       if (pr) {
         try {
@@ -516,19 +529,21 @@ export default function Sidebar() {
         current?.number === next?.number &&
         current?.url === next?.url
       ) {
-        linkedPrSyncRef.current.delete(thread.id);
+        linkedPrSyncRef.current.delete(threadKey);
         continue;
       }
-      if (linkedPrSyncRef.current.get(thread.id) === signature) continue;
-      linkedPrSyncRef.current.set(thread.id, signature);
-      void api.orchestration
-        .dispatchCommand({
-          type: "thread.meta.update",
-          commandId: newCommandId(),
-          threadId: thread.id,
-          linkedPullRequest: next,
-        })
-        .catch(() => linkedPrSyncRef.current.delete(thread.id));
+      if (linkedPrSyncRef.current.get(threadKey) === signature) continue;
+      linkedPrSyncRef.current.set(threadKey, signature);
+      void environmentApi(thread.environmentId)
+        .then((api) =>
+          api.orchestration.dispatchCommand({
+            type: "thread.meta.update",
+            commandId: newCommandId(),
+            threadId: thread.id,
+            linkedPullRequest: next,
+          }),
+        )
+        .catch(() => linkedPrSyncRef.current.delete(threadKey));
     }
   }, [prByThreadId, threads]);
 
@@ -676,7 +691,8 @@ export default function Sidebar() {
   }, []);
 
   const commitRename = useCallback(
-    async (threadId: ThreadId, newTitle: string, originalTitle: string) => {
+    async (thread: Thread, newTitle: string, originalTitle: string) => {
+      const threadId = thread.id;
       const finishRename = () => {
         setRenamingThreadId((current) => {
           if (current !== threadId) return current;
@@ -695,12 +711,8 @@ export default function Sidebar() {
         finishRename();
         return;
       }
-      const api = readNativeApi();
-      if (!api) {
-        finishRename();
-        return;
-      }
       try {
+        const api = await environmentApi(thread.environmentId);
         await api.orchestration.dispatchCommand({
           type: "thread.meta.update",
           commandId: newCommandId(),
@@ -727,21 +739,33 @@ export default function Sidebar() {
   const deleteThread = useCallback(
     async (
       threadId: ThreadId,
-      opts: { deletedThreadIds?: ReadonlySet<ThreadId> } = {},
+      opts: {
+        deletedThreadIds?: ReadonlySet<ThreadId>;
+        environmentId?: EnvironmentId | undefined;
+      } = {},
     ): Promise<void> => {
-      const api = readNativeApi();
-      if (!api) return;
-      const thread = threads.find((t) => t.id === threadId);
+      const thread = threads.find(
+        (candidate) =>
+          candidate.id === threadId &&
+          (opts.environmentId === undefined || candidate.environmentId === opts.environmentId),
+      );
       if (!thread) return;
-      const threadProject = projects.find((project) => project.id === thread.projectId);
+      const api = await environmentApi(thread.environmentId);
+      const threadProject = projects.find(
+        (project) =>
+          project.id === thread.projectId && project.environmentId === thread.environmentId,
+      );
       // When bulk-deleting, exclude the other threads being deleted so
       // getOrphanedWorktreePathForThread correctly detects that no surviving
       // threads will reference this worktree.
       const deletedIds = opts.deletedThreadIds;
+      const environmentThreads = threads.filter(
+        (candidate) => candidate.environmentId === thread.environmentId,
+      );
       const survivingThreads =
         deletedIds && deletedIds.size > 0
-          ? threads.filter((t) => t.id === threadId || !deletedIds.has(t.id))
-          : threads;
+          ? environmentThreads.filter((t) => t.id === threadId || !deletedIds.has(t.id))
+          : environmentThreads;
       const orphanedWorktreePath = getOrphanedWorktreePathForThread(survivingThreads, threadId);
       const displayWorktreePath = orphanedWorktreePath
         ? formatWorktreePathForDisplay(orphanedWorktreePath)
@@ -779,7 +803,7 @@ export default function Sidebar() {
       const shouldNavigateToFallback =
         routeThreadId === threadId && routeEnvironmentId === thread.environmentId;
       const fallbackThreadId = getFallbackThreadIdAfterDelete({
-        threads,
+        threads: environmentThreads,
         deletedThreadId: threadId,
         deletedThreadIds: allDeletedIds,
         sortOrder: appSettings.sidebarThreadSortOrder,
@@ -888,13 +912,13 @@ export default function Sidebar() {
     },
   });
   const handleThreadContextMenu = useCallback(
-    async (threadId: ThreadId, position: { x: number; y: number }) => {
-      const api = readNativeApi();
-      if (!api) return;
-      const thread = threads.find((t) => t.id === threadId);
-      if (!thread) return;
+    async (thread: Thread, position: { x: number; y: number }) => {
+      const threadId = thread.id;
+      const api = await environmentApi(thread.environmentId);
       const threadWorkspacePath =
-        thread.worktreePath ?? projectCwdById.get(thread.projectId) ?? null;
+        thread.worktreePath ??
+        projectCwdById.get(`${thread.environmentId}:${thread.projectId}`) ??
+        null;
       const snoozePresets = resolveSnoozePresets();
       const clicked = await api.contextMenu.show(
         [
@@ -1025,7 +1049,7 @@ export default function Sidebar() {
           return;
         }
       }
-      await deleteThread(threadId);
+      await deleteThread(threadId, { environmentId: thread.environmentId });
     },
     [
       appSettings.confirmThreadDelete,
@@ -1136,19 +1160,19 @@ export default function Sidebar() {
   );
 
   const handleProjectContextMenu = useCallback(
-    async (projectId: ProjectId, position: { x: number; y: number }) => {
-      const api = readNativeApi();
-      if (!api) return;
+    async (project: Project, position: { x: number; y: number }) => {
+      const projectId = project.id;
+      const api = await environmentApi(project.environmentId);
       const clicked = await api.contextMenu.show(
         [{ id: "delete", label: "Remove project", destructive: true }],
         position,
       );
       if (clicked !== "delete") return;
 
-      const project = projects.find((entry) => entry.id === projectId);
-      if (!project) return;
-
-      const projectThreads = threads.filter((thread) => thread.projectId === projectId);
+      const projectThreads = threads.filter(
+        (thread) =>
+          thread.projectId === projectId && thread.environmentId === project.environmentId,
+      );
       if (projectThreads.length > 0) {
         toastManager.add({
           type: "warning",
@@ -1182,13 +1206,7 @@ export default function Sidebar() {
         });
       }
     },
-    [
-      clearComposerDraftForThread,
-      clearProjectDraftThreadId,
-      getDraftThreadByProjectId,
-      projects,
-      threads,
-    ],
+    [clearComposerDraftForThread, clearProjectDraftThreadId, getDraftThreadByProjectId, threads],
   );
 
   const projectDnDSensors = useSensors(
@@ -1366,7 +1384,7 @@ export default function Sidebar() {
                 if (selectedThreadIds.size > 0) {
                   clearSelection();
                 }
-                void handleThreadContextMenu(thread.id, {
+                void handleThreadContextMenu(thread, {
                   x: event.clientX,
                   y: event.clientY,
                 });
@@ -1431,7 +1449,7 @@ export default function Sidebar() {
                     if (e.key === "Enter") {
                       e.preventDefault();
                       renamingCommittedRef.current = true;
-                      void commitRename(thread.id, renamingTitle, thread.title);
+                      void commitRename(thread, renamingTitle, thread.title);
                     } else if (e.key === "Escape") {
                       e.preventDefault();
                       renamingCommittedRef.current = true;
@@ -1440,7 +1458,7 @@ export default function Sidebar() {
                   }}
                   onBlur={() => {
                     if (!renamingCommittedRef.current) {
-                      void commitRename(thread.id, renamingTitle, thread.title);
+                      void commitRename(thread, renamingTitle, thread.title);
                     }
                   }}
                   onClick={(e) => e.stopPropagation()}
@@ -1493,7 +1511,7 @@ export default function Sidebar() {
             onKeyDown={(event) => handleProjectTitleKeyDown(event, project.id)}
             onContextMenu={(event) => {
               event.preventDefault();
-              void handleProjectContextMenu(project.id, {
+              void handleProjectContextMenu(project, {
                 x: event.clientX,
                 y: event.clientY,
               });
