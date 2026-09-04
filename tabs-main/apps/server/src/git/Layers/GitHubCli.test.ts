@@ -202,4 +202,37 @@ layer("GitHubCliLive", (it) => {
       assert.equal(error.message.includes("Pull request not found"), true);
     }),
   );
+
+  it.effect("passes pull request mutations as process arguments without shell interpolation", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValueOnce({
+        stdout: "",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+
+      const gh = yield* GitHubCli;
+      yield* gh.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "request_changes",
+        body: "Please fix `$(unsafe)`; this must stay literal.",
+      });
+
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "gh",
+        [
+          "pr",
+          "review",
+          "42",
+          "--request-changes",
+          "--body",
+          "Please fix `$(unsafe)`; this must stay literal.",
+        ],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
 });

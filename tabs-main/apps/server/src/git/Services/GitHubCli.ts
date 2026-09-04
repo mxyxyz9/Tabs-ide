@@ -115,6 +115,23 @@ export interface GitHubCliShape {
     readonly reference: string;
   }) => Effect.Effect<GitHubPullRequestSummary, GitHubCliError>;
 
+  readonly mutatePullRequest: (input: {
+    readonly cwd: string;
+    readonly reference: string;
+    readonly action:
+      | "merge"
+      | "close"
+      | "reopen"
+      | "ready"
+      | "draft"
+      | "comment"
+      | "approve"
+      | "request_changes";
+    readonly mergeMethod?: "merge" | "squash" | "rebase";
+    readonly deleteBranch?: boolean;
+    readonly body?: string;
+  }) => Effect.Effect<void, GitHubCliError>;
+
   /**
    * Resolve clone URLs for a GitHub repository.
    */

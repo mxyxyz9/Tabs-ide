@@ -1887,6 +1887,7 @@ describe("WebSocket Server", () => {
       status,
       resolvePullRequest,
       listPullRequests,
+      mutatePullRequest: vi.fn(() => Effect.void as any),
       preparePullRequestThread,
       runStackedAction,
       generateDiffSummary: vi.fn(() => Effect.void as any),
@@ -1931,6 +1932,7 @@ describe("WebSocket Server", () => {
       status: vi.fn(() => Effect.void as any),
       resolvePullRequest: vi.fn(() => Effect.succeed(resolvePullRequestResult)),
       listPullRequests: vi.fn(() => Effect.void as any),
+      mutatePullRequest: vi.fn(() => Effect.succeed(resolvePullRequestResult)),
       preparePullRequestThread: vi.fn(() => Effect.succeed(preparePullRequestThreadResult)),
       runStackedAction: vi.fn(() => Effect.void as any),
       generateDiffSummary: vi.fn(() => Effect.void as any),
@@ -1960,6 +1962,14 @@ describe("WebSocket Server", () => {
     });
     expect(prepareResponse.error).toBeUndefined();
     expect(prepareResponse.result).toEqual(preparePullRequestThreadResult);
+    const mutateResponse = await sendRequest(ws, WS_METHODS.gitMutatePullRequest, {
+      cwd: "/test",
+      reference: "42",
+      action: "comment",
+      body: "Verified over websocket.",
+    });
+    expect(mutateResponse.error).toBeUndefined();
+    expect(mutateResponse.result).toEqual(resolvePullRequestResult);
     expect(gitManager.resolvePullRequest).toHaveBeenCalledWith({
       cwd: "/test",
       reference: "#42",
@@ -1968,6 +1978,12 @@ describe("WebSocket Server", () => {
       cwd: "/test",
       reference: "42",
       mode: "worktree",
+    });
+    expect(gitManager.mutatePullRequest).toHaveBeenCalledWith({
+      cwd: "/test",
+      reference: "42",
+      action: "comment",
+      body: "Verified over websocket.",
     });
   });
 
@@ -1984,6 +2000,7 @@ describe("WebSocket Server", () => {
       status: vi.fn(() => Effect.void as any),
       resolvePullRequest: vi.fn(() => Effect.void as any),
       listPullRequests: vi.fn(() => Effect.void as any),
+      mutatePullRequest: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.void as any),
       runStackedAction,
       generateDiffSummary: vi.fn(() => Effect.void as any),
@@ -2055,6 +2072,7 @@ describe("WebSocket Server", () => {
       status: vi.fn(() => Effect.void as any),
       resolvePullRequest: vi.fn(() => Effect.void as any),
       listPullRequests: vi.fn(() => Effect.void as any),
+      mutatePullRequest: vi.fn(() => Effect.void as any),
       preparePullRequestThread: vi.fn(() => Effect.void as any),
       runStackedAction,
       generateDiffSummary: vi.fn(() => Effect.void as any),

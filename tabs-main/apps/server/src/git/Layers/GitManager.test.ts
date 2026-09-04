@@ -439,6 +439,10 @@ function createGitHubCliWithFakeGh(scenario: FakeGhScenario = {}): {
             "number,title,url,baseRefName,headRefName,state,mergedAt,isCrossRepository,headRepository,headRepositoryOwner",
           ],
         }).pipe(Effect.map((result) => JSON.parse(result.stdout) as GitHubPullRequestSummary)),
+      mutatePullRequest: (input) => {
+        ghCalls.push(`pr ${input.action} ${input.reference}`);
+        return Effect.void;
+      },
       getRepositoryCloneUrls: (input) =>
         execute({
           cwd: input.cwd,
@@ -1468,6 +1472,40 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         state: "open",
       });
       expect(ghCalls.some((call) => call.startsWith("pr view 42 "))).toBe(true);
+    }),
+  );
+
+  it.effect("mutates a pull request and returns refreshed provider state", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-manager-");
+      yield* initRepo(repoDir);
+
+      const { manager, ghCalls } = yield* makeManager({
+        ghScenario: {
+          pullRequest: {
+            number: 42,
+            title: "Review PR",
+            url: "https://github.com/pingdotgg/codething-mvp/pull/42",
+            baseRefName: "main",
+            headRefName: "feature/review-pr",
+            state: "open",
+          },
+        },
+      });
+
+      const result = yield* manager.mutatePullRequest({
+        cwd: repoDir,
+        reference: "#42",
+        action: "approve",
+        body: "Verified locally.",
+      });
+
+      expect(ghCalls).toContain("pr approve 42");
+      expect(result.pullRequest).toMatchObject({
+        provider: "github",
+        number: 42,
+        state: "open",
+      });
     }),
   );
 

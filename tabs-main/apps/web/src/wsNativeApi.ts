@@ -373,6 +373,7 @@ export function createWsNativeApi(options?: {
       skipRebase: (input) => transport.request(WS_METHODS.gitSkipRebase, input),
       resolvePullRequest: (input) => transport.request(WS_METHODS.gitResolvePullRequest, input),
       listPullRequests: (input) => transport.request(WS_METHODS.gitListPullRequests, input),
+      mutatePullRequest: (input) => transport.request(WS_METHODS.gitMutatePullRequest, input),
       preparePullRequestThread: (input) =>
         transport.request(WS_METHODS.gitPreparePullRequestThread, input),
       push: (input) => transport.request(WS_METHODS.gitPush, input),

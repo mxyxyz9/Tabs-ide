@@ -1024,6 +1024,22 @@ export const makeGitManager = Effect.gen(function* () {
     },
   );
 
+  const mutatePullRequest: GitManagerShape["mutatePullRequest"] = Effect.fnUntraced(
+    function* (input) {
+      const reference = normalizePullRequestReference(input.reference);
+      yield* gitHubCli.mutatePullRequest({
+        cwd: input.cwd,
+        reference,
+        action: input.action,
+        ...(input.mergeMethod ? { mergeMethod: input.mergeMethod } : {}),
+        ...(input.deleteBranch !== undefined ? { deleteBranch: input.deleteBranch } : {}),
+        ...(input.body !== undefined ? { body: input.body } : {}),
+      });
+      const pullRequest = yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference });
+      return { pullRequest: toResolvedPullRequest(pullRequest) };
+    },
+  );
+
   const preparePullRequestThread: GitManagerShape["preparePullRequestThread"] = Effect.fnUntraced(
     function* (input) {
       const normalizedReference = normalizePullRequestReference(input.reference);
@@ -1968,6 +1984,7 @@ export const makeGitManager = Effect.gen(function* () {
     status,
     resolvePullRequest,
     listPullRequests,
+    mutatePullRequest,
     preparePullRequestThread,
     runStackedAction,
     generateDiffSummary,

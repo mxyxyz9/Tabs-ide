@@ -15,9 +15,11 @@ import {
   gitAllPullRequestsQueryOptions,
   gitResolvePullRequestQueryOptions,
 } from "../../lib/gitReactQuery";
+import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { toastManager } from "../ui/toast";
 import { Switch } from "~/components/ui/switch";
 import {
   Dialog,
@@ -47,7 +49,7 @@ interface PullRequestRow {
 }
 
 import { useProjectGitState } from "../../state/scopedStateStore";
-import { useGitScopeKey } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 
 export function PRsPanel({
   cwd,
@@ -62,6 +64,7 @@ export function PRsPanel({
   onOpenCreatePR: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
+  const api = useGitApi();
   const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const viewMode = gitState.prViewMode;
   const setViewMode = useCallback(
@@ -86,6 +89,8 @@ export function PRsPanel({
   const [detailTab, setDetailTab] = useState<"summary" | "checks" | "commits" | "activity">(
     "summary",
   );
+  const [actionBody, setActionBody] = useState("");
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
@@ -154,13 +159,53 @@ export function PRsPanel({
     }
   }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName]);
 
-  const handleConfirmMerge = () => {
+  const mutatePullRequest = async (
+    reference: number,
+    action:
+      | "merge"
+      | "close"
+      | "reopen"
+      | "ready"
+      | "draft"
+      | "comment"
+      | "approve"
+      | "request_changes",
+    body?: string,
+  ) => {
+    if (!api) return false;
+    setPendingAction(action);
+    try {
+      await api.git.mutatePullRequest({
+        cwd,
+        reference: String(reference),
+        action,
+        ...(action === "merge" ? { mergeMethod, deleteBranch } : {}),
+        ...(body !== undefined ? { body } : {}),
+      });
+      await Promise.all([branchPrQuery.refetch(), allPrsQuery.refetch(), detailQuery.refetch()]);
+      toastManager.add({
+        type: "success",
+        title:
+          action === "request_changes"
+            ? "Changes requested"
+            : `Pull request ${action.replaceAll("_", " ")} succeeded`,
+      });
+      return true;
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: `Pull request ${action.replaceAll("_", " ")} failed`,
+        description: toGitUserFacingErrorMessage(error),
+      });
+      return false;
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleConfirmMerge = async () => {
     if (!mergePr) return;
-    const flag =
-      mergeMethod === "squash" ? "--squash" : mergeMethod === "rebase" ? "--rebase" : "--merge";
-    const delFlag = deleteBranch ? " --delete-branch" : "";
-    onRunInTerminal(`gh pr merge ${mergePr.n} ${flag}${delFlag}`);
-    setMergePr(null);
+    if (await mutatePullRequest(mergePr.n, "merge")) setMergePr(null);
   };
 
   return (
@@ -361,6 +406,25 @@ export function PRsPanel({
                       <GitMerge /> Merge…
                     </Button>
                   )}
+                  {pr.state === "open" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pendingAction !== null}
+                      onClick={() => void mutatePullRequest(pr.n, "close")}
+                    >
+                      Close
+                    </Button>
+                  ) : pr.state === "closed" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={pendingAction !== null}
+                      onClick={() => void mutatePullRequest(pr.n, "reopen")}
+                    >
+                      Reopen
+                    </Button>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -420,6 +484,23 @@ export function PRsPanel({
                       <div role="tabpanel" className="rounded-lg bg-muted/20 p-3 text-xs">
                         {detailTab === "summary" ? (
                           <div className="space-y-2">
+                            {detailQuery.data.pullRequest.state === "open" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={pendingAction !== null}
+                                onClick={() =>
+                                  void mutatePullRequest(
+                                    pr.n,
+                                    detailQuery.data.pullRequest.isDraft ? "ready" : "draft",
+                                  )
+                                }
+                              >
+                                {detailQuery.data.pullRequest.isDraft
+                                  ? "Mark ready for review"
+                                  : "Convert to draft"}
+                              </Button>
+                            ) : null}
                             {detailQuery.data.pullRequest.body ? (
                               <p className="whitespace-pre-wrap text-foreground/90">
                                 {detailQuery.data.pullRequest.body}
@@ -497,6 +578,70 @@ export function PRsPanel({
                             (detailQuery.data.pullRequest.comments ?? []).length === 0 ? (
                               <p className="text-muted-foreground">No review activity reported.</p>
                             ) : null}
+                            {detailQuery.data.pullRequest.state === "open" ? (
+                              <div className="space-y-2 border-t border-border/60 pt-3">
+                                <label
+                                  className="block text-[11px] font-medium"
+                                  htmlFor={`pr-action-${pr.n}`}
+                                >
+                                  Add review feedback
+                                </label>
+                                <textarea
+                                  id={`pr-action-${pr.n}`}
+                                  value={actionBody}
+                                  onChange={(event) => setActionBody(event.target.value)}
+                                  className="min-h-20 w-full rounded-lg border border-border bg-background p-2 text-xs"
+                                  placeholder="Write a comment or review…"
+                                />
+                                <div className="flex flex-wrap gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!actionBody.trim() || pendingAction !== null}
+                                    onClick={async () => {
+                                      if (
+                                        await mutatePullRequest(pr.n, "comment", actionBody.trim())
+                                      ) {
+                                        setActionBody("");
+                                      }
+                                    }}
+                                  >
+                                    Comment
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    disabled={pendingAction !== null}
+                                    onClick={async () => {
+                                      if (
+                                        await mutatePullRequest(pr.n, "approve", actionBody.trim())
+                                      ) {
+                                        setActionBody("");
+                                      }
+                                    }}
+                                  >
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={!actionBody.trim() || pendingAction !== null}
+                                    onClick={async () => {
+                                      if (
+                                        await mutatePullRequest(
+                                          pr.n,
+                                          "request_changes",
+                                          actionBody.trim(),
+                                        )
+                                      ) {
+                                        setActionBody("");
+                                      }
+                                    }}
+                                  >
+                                    Request changes
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         )}
                       </div>
@@ -550,7 +695,11 @@ export function PRsPanel({
               <Button variant="outline" size="sm" onClick={() => setMergePr(null)}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleConfirmMerge}>
+              <Button
+                size="sm"
+                disabled={pendingAction !== null}
+                onClick={() => void handleConfirmMerge()}
+              >
                 <CheckCircle2 /> Confirm Merge
               </Button>
             </DialogFooter>

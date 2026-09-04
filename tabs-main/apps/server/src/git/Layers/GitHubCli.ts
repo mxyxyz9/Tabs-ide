@@ -433,6 +433,44 @@ const makeGitHubCli = Effect.sync(() => {
         ),
         Effect.map(normalizePullRequestSummary),
       ),
+    mutatePullRequest: (input) => {
+      const args: string[] = ["pr"];
+      switch (input.action) {
+        case "merge":
+          args.push(
+            "merge",
+            input.reference,
+            input.mergeMethod === "rebase"
+              ? "--rebase"
+              : input.mergeMethod === "merge"
+                ? "--merge"
+                : "--squash",
+          );
+          if (input.deleteBranch) args.push("--delete-branch");
+          break;
+        case "close":
+        case "reopen":
+          args.push(input.action, input.reference);
+          break;
+        case "ready":
+          args.push("ready", input.reference);
+          break;
+        case "draft":
+          args.push("ready", input.reference, "--undo");
+          break;
+        case "comment":
+          args.push("comment", input.reference, "--body", input.body ?? "");
+          break;
+        case "approve":
+          args.push("review", input.reference, "--approve");
+          if (input.body) args.push("--body", input.body);
+          break;
+        case "request_changes":
+          args.push("review", input.reference, "--request-changes", "--body", input.body ?? "");
+          break;
+      }
+      return execute({ cwd: input.cwd, args }).pipe(Effect.asVoid);
+    },
     getRepositoryCloneUrls: (input) =>
       execute({
         cwd: input.cwd,

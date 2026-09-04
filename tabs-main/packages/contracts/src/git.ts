@@ -744,6 +744,33 @@ export const GitListPullRequestsResult = Schema.Struct({
 });
 export type GitListPullRequestsResult = typeof GitListPullRequestsResult.Type;
 
+export const GitPullRequestAction = Schema.Literals([
+  "merge",
+  "close",
+  "reopen",
+  "ready",
+  "draft",
+  "comment",
+  "approve",
+  "request_changes",
+]);
+export type GitPullRequestAction = typeof GitPullRequestAction.Type;
+
+export const GitMutatePullRequestInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  reference: GitPullRequestReference,
+  action: GitPullRequestAction,
+  mergeMethod: Schema.optional(Schema.Literals(["merge", "squash", "rebase"])),
+  deleteBranch: Schema.optional(Schema.Boolean),
+  body: Schema.optional(Schema.String.check(Schema.isMaxLength(100_000))),
+});
+export type GitMutatePullRequestInput = typeof GitMutatePullRequestInput.Type;
+
+export const GitMutatePullRequestResult = Schema.Struct({
+  pullRequest: GitResolvedPullRequest,
+});
+export type GitMutatePullRequestResult = typeof GitMutatePullRequestResult.Type;
+
 export const GitPreparePullRequestThreadResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,
   branch: TrimmedNonEmptyStringSchema,
