@@ -131,12 +131,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "./ui/menu";
 import { cn, randomUUID } from "~/lib/utils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 import { toastManager } from "./ui/toast";
-import {
-  isSettled,
-  lifecycleFor,
-  threadLifecycleActions,
-  useThreadLifecycle,
-} from "../state/threadLifecycle";
+import { isSettled } from "../state/threadLifecycle";
 import {
   projectScriptCwd,
   projectScriptRuntimeEnv,
@@ -621,12 +616,11 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
     [draftThread, fallbackDraftProject?.defaultModelSelection, localDraftError, threadId],
   );
   const activeThread = serverThread ?? localDraftThread;
-  const lifecycle = useThreadLifecycle();
-  const activeLifecycle = activeThread ? lifecycleFor(lifecycle, activeThread.id) : null;
+  const activeLifecycle = activeThread ?? null;
   const activeThreadIsSettled = Boolean(
     activeThread &&
-      activeLifecycle &&
-      isSettled(activeLifecycle, activeThread.updatedAt ?? activeThread.createdAt),
+    activeLifecycle &&
+    isSettled(activeLifecycle, activeThread.updatedAt ?? activeThread.createdAt),
   );
   const runtimeMode =
     composerDraft.runtimeMode ?? activeThread?.runtimeMode ?? DEFAULT_RUNTIME_MODE;
@@ -2631,7 +2625,12 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
 
     const threadIdForSend = activeThread.id;
     if (activeThreadIsSettled) {
-      threadLifecycleActions.activate(activeThread.id);
+      await api.orchestration.dispatchCommand({
+        type: "thread.unsettle",
+        commandId: newCommandId(),
+        threadId: activeThread.id,
+        reason: "user",
+      });
     }
     const isFirstMessage = !isServerThread || activeThread.messages.length === 0;
     const baseBranchForWorktree =
@@ -3761,7 +3760,16 @@ export default function ChatView({ threadId, compact = false, onRequestThread }:
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => threadLifecycleActions.unsettle(activeThread.id)}
+              onClick={() => {
+                const api = readNativeApi();
+                if (!api) return;
+                void api.orchestration.dispatchCommand({
+                  type: "thread.unsettle",
+                  commandId: newCommandId(),
+                  threadId: activeThread.id,
+                  reason: "user",
+                });
+              }}
             >
               Unsettle
             </Button>

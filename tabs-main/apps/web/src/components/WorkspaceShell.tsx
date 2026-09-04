@@ -234,13 +234,7 @@ import { projectScriptRuntimeEnv } from "../projectScripts";
 import { PatchViewer } from "./PatchViewer";
 import { MercuryChromeLoader } from "./MercuryChromeLoader";
 import { Spinner } from "./ui/spinner";
-import {
-  isSnoozed,
-  isSettled,
-  lifecycleFor,
-  threadLifecycleActions,
-  useThreadLifecycle,
-} from "../state/threadLifecycle";
+import { isSnoozed, isSettled } from "../state/threadLifecycle";
 // Lazy: ChatView pulls in heavy markdown/syntax-highlight deps (react-markdown,
 // @pierre/diffs). It is only needed when the Agents tab or the Code-tab AI side
 // chat is actually opened, so keep it out of the always-loaded shell bundle.
@@ -1204,7 +1198,6 @@ function AgentsThreadList(props: {
   children: ReactNode;
 }) {
   const [threadPendingDelete, setThreadPendingDelete] = useState<Thread | null>(null);
-  const lifecycle = useThreadLifecycle();
   const [lifecycleNow, setLifecycleNow] = useState(() => Date.now());
   const [showSettledView, setShowSettledView] = useState(false);
   const [showSnoozedView, setShowSnoozedView] = useState(false);
@@ -1212,32 +1205,43 @@ function AgentsThreadList(props: {
   const [openThreadMenuId, setOpenThreadMenuId] = useState<ThreadId | null>(null);
   const projectGitStatusQuery = useQuery(gitStatusQueryOptions(props.project.cwd));
   useEffect(() => {
-    threadLifecycleActions.expireSnoozes();
     const timer = window.setInterval(() => {
-      const now = Date.now();
-      threadLifecycleActions.expireSnoozes(now);
-      setLifecycleNow(now);
+      setLifecycleNow(Date.now());
     }, 30_000);
     return () => window.clearInterval(timer);
   }, []);
-  useEffect(() => {
-    const nextWakeAt = Object.values(lifecycle).reduce<number | null>((nearest, entry) => {
-      if (entry.snoozedUntil === null) return nearest;
-      const wakeAt = Date.parse(entry.snoozedUntil);
-      if (!Number.isFinite(wakeAt) || wakeAt <= Date.now()) return nearest;
-      return nearest === null || wakeAt < nearest ? wakeAt : nearest;
-    }, null);
-    if (nextWakeAt === null) return;
-    const timer = window.setTimeout(
-      () => {
-        const now = Date.now();
-        threadLifecycleActions.expireSnoozes(now);
-        setLifecycleNow(now);
-      },
-      Math.max(0, nextWakeAt - Date.now()) + 25,
-    );
-    return () => window.clearTimeout(timer);
-  }, [lifecycle]);
+  const dispatchLifecycle = useCallback(
+    async (thread: Thread, action: "pin" | "settle" | "snooze") => {
+      const api = readNativeApi();
+      if (!api) return;
+      const commandId = newCommandId();
+      if (action === "pin") {
+        await api.orchestration.dispatchCommand(
+          thread.pinnedAt
+            ? { type: "thread.unpin", commandId, threadId: thread.id }
+            : { type: "thread.pin", commandId, threadId: thread.id },
+        );
+      } else if (action === "settle") {
+        await api.orchestration.dispatchCommand(
+          thread.settledAt
+            ? { type: "thread.unsettle", commandId, threadId: thread.id, reason: "user" }
+            : { type: "thread.settle", commandId, threadId: thread.id },
+        );
+      } else {
+        await api.orchestration.dispatchCommand(
+          isSnoozed(thread)
+            ? { type: "thread.unsnooze", commandId, threadId: thread.id, reason: "user" }
+            : {
+                type: "thread.snooze",
+                commandId,
+                threadId: thread.id,
+                snoozedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+              },
+        );
+      }
+    },
+    [],
+  );
   const [agentsState, setAgentsState] = useProjectAgentsState(props.project.id);
   const view = agentsState.threadListView;
   const setView = useCallback(
@@ -1317,7 +1321,7 @@ function AgentsThreadList(props: {
     const snoozed: Thread[] = [];
     const settled: Thread[] = [];
     for (const thread of searchedActiveThreads) {
-      const entry = lifecycleFor(lifecycle, thread.id);
+      const entry = thread;
       if (isSnoozed(entry, lifecycleNow)) {
         snoozed.push(thread);
       } else if (isSettled(entry, thread.updatedAt ?? thread.createdAt)) {
@@ -1329,10 +1333,17 @@ function AgentsThreadList(props: {
       }
     }
     const eventTime = (thread: Thread): number =>
-      Date.parse(
-        lifecycleFor(lifecycle, thread.id).lastTransition?.at ??
-          thread.updatedAt ??
+      Math.max(
+        ...[
+          thread.pinnedAt,
+          thread.settledAt,
+          thread.snoozedAt,
+          thread.unsettledAt,
+          thread.updatedAt,
           thread.createdAt,
+        ]
+          .filter((value): value is string => typeof value === "string")
+          .map(Date.parse),
       );
     const byAttentionThenEvent = (left: Thread, right: Thread): number => {
       const leftAttention = deriveThreadAttention(left) !== null ? 1 : 0;
@@ -1342,8 +1353,8 @@ function AgentsThreadList(props: {
     pinned.sort(byAttentionThenEvent);
     active.sort(byAttentionThenEvent);
     snoozed.sort((left, right) => {
-      const leftWake = Date.parse(lifecycleFor(lifecycle, left.id).snoozedUntil ?? "");
-      const rightWake = Date.parse(lifecycleFor(lifecycle, right.id).snoozedUntil ?? "");
+      const leftWake = Date.parse(left.snoozedUntil ?? "");
+      const rightWake = Date.parse(right.snoozedUntil ?? "");
       return leftWake - rightWake;
     });
     settled.sort((left, right) => eventTime(right) - eventTime(left));
@@ -1358,7 +1369,6 @@ function AgentsThreadList(props: {
       { name: "active" as const, threads: active },
     ];
   }, [
-    lifecycle,
     lifecycleNow,
     searchedActiveThreads,
     searchedArchivedThreads,
@@ -1370,11 +1380,9 @@ function AgentsThreadList(props: {
     section.threads.map((thread, index) => ({ thread, section: section.name, first: index === 0 })),
   );
   const settledCount = activeThreads.filter((thread) =>
-    isSettled(lifecycleFor(lifecycle, thread.id), thread.updatedAt ?? thread.createdAt),
+    isSettled(thread, thread.updatedAt ?? thread.createdAt),
   ).length;
-  const snoozedCount = activeThreads.filter((thread) =>
-    isSnoozed(lifecycleFor(lifecycle, thread.id), lifecycleNow),
-  ).length;
+  const snoozedCount = activeThreads.filter((thread) => isSnoozed(thread, lifecycleNow)).length;
   const actionableCount = activeThreads.length - settledCount - snoozedCount;
 
   return (
@@ -1612,11 +1620,11 @@ function AgentsThreadList(props: {
             {visibleThreads.map(({ thread, section, first }) => {
               const active = props.activeThreadId === thread.id;
               const isArchived = thread.archivedAt !== null;
-              const lifecycleEntry = lifecycleFor(lifecycle, thread.id);
+              const lifecycleEntry = thread;
               const threadIsSnoozed = isSnoozed(lifecycleEntry, lifecycleNow);
               const attention = deriveThreadAttention(thread);
               const wakeLabel =
-                lifecycleEntry.snoozedUntil === null
+                lifecycleEntry.snoozedUntil == null
                   ? null
                   : new Intl.DateTimeFormat(undefined, {
                       hour: "numeric",
@@ -2003,11 +2011,7 @@ function AgentsThreadList(props: {
                                       lifecycleEntry.pinnedAt &&
                                         "bg-primary/10 text-primary hover:text-primary",
                                     )}
-                                    onClick={() =>
-                                      lifecycleEntry.pinnedAt
-                                        ? threadLifecycleActions.unpin(thread.id)
-                                        : threadLifecycleActions.pin(thread.id)
-                                    }
+                                    onClick={() => void dispatchLifecycle(thread, "pin")}
                                   />
                                 }
                               >
@@ -2028,11 +2032,7 @@ function AgentsThreadList(props: {
                                         : "Settle thread"
                                     }
                                     className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    onClick={() =>
-                                      section === "settled"
-                                        ? threadLifecycleActions.unsettle(thread.id)
-                                        : threadLifecycleActions.settle(thread.id)
-                                    }
+                                    onClick={() => void dispatchLifecycle(thread, "settle")}
                                   />
                                 }
                               >
@@ -2051,14 +2051,7 @@ function AgentsThreadList(props: {
                                       threadIsSnoozed ? "Wake thread now" : "Snooze thread"
                                     }
                                     className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    onClick={() =>
-                                      threadIsSnoozed
-                                        ? threadLifecycleActions.unsnooze(thread.id)
-                                        : threadLifecycleActions.snooze(
-                                            thread.id,
-                                            new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-                                          )
-                                    }
+                                    onClick={() => void dispatchLifecycle(thread, "snooze")}
                                   />
                                 }
                               >
@@ -2099,26 +2092,20 @@ function AgentsThreadList(props: {
                           >
                             {!isArchived && (
                               <>
-                                <MenuItem
-                                  onClick={() =>
-                                    lifecycleEntry.pinnedAt
-                                      ? threadLifecycleActions.unpin(thread.id)
-                                      : threadLifecycleActions.pin(thread.id)
-                                  }
-                                >
+                                <MenuItem onClick={() => void dispatchLifecycle(thread, "pin")}>
                                   <PinIcon className="size-3.5" />
                                   {lifecycleEntry.pinnedAt ? "Unpin thread" : "Pin thread"}
                                 </MenuItem>
                                 {section === "settled" ? (
                                   <MenuItem
-                                    onClick={() => threadLifecycleActions.unsettle(thread.id)}
+                                    onClick={() => void dispatchLifecycle(thread, "settle")}
                                   >
                                     <CircleCheckIcon className="size-3.5" />
                                     Return to active
                                   </MenuItem>
                                 ) : (
                                   <MenuItem
-                                    onClick={() => threadLifecycleActions.settle(thread.id)}
+                                    onClick={() => void dispatchLifecycle(thread, "settle")}
                                   >
                                     <CircleCheckIcon className="size-3.5" />
                                     Settle thread
@@ -2126,19 +2113,14 @@ function AgentsThreadList(props: {
                                 )}
                                 {threadIsSnoozed ? (
                                   <MenuItem
-                                    onClick={() => threadLifecycleActions.unsnooze(thread.id)}
+                                    onClick={() => void dispatchLifecycle(thread, "snooze")}
                                   >
                                     <Clock3Icon className="size-3.5" />
                                     Wake now
                                   </MenuItem>
                                 ) : (
                                   <MenuItem
-                                    onClick={() =>
-                                      threadLifecycleActions.snooze(
-                                        thread.id,
-                                        new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-                                      )
-                                    }
+                                    onClick={() => void dispatchLifecycle(thread, "snooze")}
                                   >
                                     <Clock3Icon className="size-3.5" />
                                     Snooze for 1 hour
