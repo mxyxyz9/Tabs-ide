@@ -45,7 +45,7 @@ an adapter over that engine.
 - [ ] Add pointer drag ordering for pinned threads.
 - [x] Title regeneration worker, interruption recovery, correlation, and sidebar action.
 - [x] Linked pull-request metadata command, projection, persistence, and hydration.
-- [ ] Automatically discover/update linked pull requests and render their shared status.
+- [x] Automatically discover/update linked pull requests and render their shared status.
 
 ## Remaining non-mobile systems
 

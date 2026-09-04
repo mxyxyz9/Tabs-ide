@@ -485,6 +485,47 @@ export default function Sidebar() {
     }
     return map;
   }, [threadGitStatusCwds, threadGitStatusQueries, threadGitTargets]);
+  const linkedPrSyncRef = useRef(new Map<ThreadId, string>());
+  useEffect(() => {
+    const api = readNativeApi();
+    if (!api) return;
+    for (const thread of threads) {
+      const pr = prByThreadId.get(thread.id) ?? null;
+      let repository: string | null = null;
+      if (pr) {
+        try {
+          repository = new URL(pr.url).pathname.replace(/^\//, "").split("/pull/")[0] ?? null;
+        } catch {
+          repository = null;
+        }
+      }
+      const next =
+        pr && repository
+          ? { projectId: thread.projectId, repository, number: pr.number, url: pr.url }
+          : null;
+      const current = thread.linkedPullRequest ?? null;
+      const signature = JSON.stringify(next);
+      if (
+        current?.projectId === next?.projectId &&
+        current?.repository === next?.repository &&
+        current?.number === next?.number &&
+        current?.url === next?.url
+      ) {
+        linkedPrSyncRef.current.delete(thread.id);
+        continue;
+      }
+      if (linkedPrSyncRef.current.get(thread.id) === signature) continue;
+      linkedPrSyncRef.current.set(thread.id, signature);
+      void api.orchestration
+        .dispatchCommand({
+          type: "thread.meta.update",
+          commandId: newCommandId(),
+          threadId: thread.id,
+          linkedPullRequest: next,
+        })
+        .catch(() => linkedPrSyncRef.current.delete(thread.id));
+    }
+  }, [prByThreadId, threads]);
 
   const openPrLink = useCallback((event: React.MouseEvent<HTMLElement>, prUrl: string) => {
     event.preventDefault();
