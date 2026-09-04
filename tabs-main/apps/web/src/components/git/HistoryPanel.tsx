@@ -13,7 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
-import { useGitApi } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import { DiffCard, parseGitPatchToFiles, type ParsedFileDiff } from "./DiffPage";
 import { GitCheckingState } from "./GitCheckingState";
 import { Button } from "../ui/button";
@@ -173,6 +173,7 @@ export function CommitDetailModal({
   commit: GitHistoryCommit | null;
   onClose: () => void;
 }) {
+  const gitScopeKey = useGitScopeKey();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fileDiffs, setFileDiffs] = useState<ParsedFileDiff[]>([]);
@@ -187,12 +188,12 @@ export function CommitDetailModal({
       return;
     }
     try {
-      const cached = sessionStorage.getItem(`tabs_git_commit_summary_${commit.sha}`);
+      const cached = sessionStorage.getItem(`tabs_git_commit_summary_${gitScopeKey}_${commit.sha}`);
       setDiffSummaryResultState(cached ? JSON.parse(cached) : null);
     } catch {
       setDiffSummaryResultState(null);
     }
-  }, [commit?.sha]);
+  }, [commit?.sha, gitScopeKey]);
 
   const setDiffSummaryResult = (
     val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null,
@@ -201,9 +202,12 @@ export function CommitDetailModal({
     if (commit?.sha) {
       try {
         if (val) {
-          sessionStorage.setItem(`tabs_git_commit_summary_${commit.sha}`, JSON.stringify(val));
+          sessionStorage.setItem(
+            `tabs_git_commit_summary_${gitScopeKey}_${commit.sha}`,
+            JSON.stringify(val),
+          );
         } else {
-          sessionStorage.removeItem(`tabs_git_commit_summary_${commit.sha}`);
+          sessionStorage.removeItem(`tabs_git_commit_summary_${gitScopeKey}_${commit.sha}`);
         }
       } catch {
         // Ignore session storage errors
@@ -422,7 +426,7 @@ export function HistoryPanel({
   onCherryPick: (c: GitHistoryCommit) => void;
   onLoadMoreHistory?: () => void;
 }) {
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const query = gitState.historySearch;
   const setQuery = useCallback(
     (q: string) => {

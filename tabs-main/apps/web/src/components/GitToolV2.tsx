@@ -37,7 +37,7 @@ import { StashesPanel } from "./git/StashesPanel";
 import { TagsPanel } from "./git/TagsPanel";
 import { TopBar } from "./git/TopBar";
 import { ReviewPanel } from "./git/ReviewPanel";
-import { GitApiProvider } from "./git/gitApiContext";
+import { GitApiProvider, gitWorkspaceScopeKey } from "./git/gitApiContext";
 import { useReviewStore } from "./git/reviewStateStore";
 import {
   AddRemoteModal,
@@ -98,6 +98,7 @@ export function GitToolV2({
   onOpenAgents,
   onRunGitHubLogin,
 }: GitToolV2Props) {
+  const gitScopeKey = useMemo(() => gitWorkspaceScopeKey(environmentId, cwd), [cwd, environmentId]);
   const [api, setApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(null);
   useEffect(() => {
     let active = true;
@@ -110,8 +111,8 @@ export function GitToolV2({
     };
   }, [environmentId]);
   const queryClient = useQueryClient();
-  const { unreadCount, clearUnread } = useReviewStore(cwd);
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const { unreadCount, clearUnread } = useReviewStore(gitScopeKey);
+  const [gitState, setGitState] = useProjectGitState(gitScopeKey);
 
   const panel = gitState.panel;
   const setPanel = useCallback(
@@ -129,7 +130,7 @@ export function GitToolV2({
       if (window.localStorage?.getItem("tabs.alwaysMinimizeGitSidebar") === "true") {
         return true;
       }
-      return window.localStorage?.getItem(`tabs_git_sidebar_collapsed_${cwd}`) === "true";
+      return window.localStorage?.getItem(`tabs_git_sidebar_collapsed_${gitScopeKey}`) === "true";
     } catch {
       return false;
     }
@@ -139,10 +140,10 @@ export function GitToolV2({
     (c: boolean) => {
       setCollapsedState(c);
       try {
-        window.localStorage?.setItem(`tabs_git_sidebar_collapsed_${cwd}`, String(c));
+        window.localStorage?.setItem(`tabs_git_sidebar_collapsed_${gitScopeKey}`, String(c));
       } catch {}
     },
-    [cwd],
+    [gitScopeKey],
   );
 
   const [historyLimit, setHistoryLimit] = useState(50);
@@ -166,7 +167,7 @@ export function GitToolV2({
 
   const [excludedWatchedBranches, setExcludedWatchedBranches] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem(`tabs_excluded_watched_branches_${cwd}`);
+      const saved = localStorage.getItem(`tabs_excluded_watched_branches_${gitScopeKey}`);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -179,12 +180,15 @@ export function GitToolV2({
         if (prev.includes(branch)) return prev;
         const updated = [...prev, branch];
         try {
-          localStorage.setItem(`tabs_excluded_watched_branches_${cwd}`, JSON.stringify(updated));
+          localStorage.setItem(
+            `tabs_excluded_watched_branches_${gitScopeKey}`,
+            JSON.stringify(updated),
+          );
         } catch {}
         return updated;
       });
     },
-    [cwd],
+    [gitScopeKey],
   );
 
   const removeExcludedBranch = useCallback(
@@ -192,12 +196,15 @@ export function GitToolV2({
       setExcludedWatchedBranches((prev) => {
         const updated = prev.filter((b) => b !== branch);
         try {
-          localStorage.setItem(`tabs_excluded_watched_branches_${cwd}`, JSON.stringify(updated));
+          localStorage.setItem(
+            `tabs_excluded_watched_branches_${gitScopeKey}`,
+            JSON.stringify(updated),
+          );
         } catch {}
         return updated;
       });
     },
-    [cwd],
+    [gitScopeKey],
   );
 
   const watchedBranchesQuery = useQuery(
@@ -590,9 +597,9 @@ export function GitToolV2({
   };
 
   return (
-    <GitApiProvider api={api}>
+    <GitApiProvider api={api} scopeKey={gitScopeKey}>
       <GitEnvironmentGate
-        key={cwd}
+        key={gitScopeKey}
         environment={environmentData ?? undefined}
         isRepo={branchList?.isRepo}
         isLoading={gitEnvironmentQuery.isLoading || branchesQuery.isLoading}

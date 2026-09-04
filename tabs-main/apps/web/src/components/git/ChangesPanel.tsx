@@ -24,7 +24,7 @@ import { useCallback, useMemo, useState } from "react";
 import { deriveRepoState } from "../../lib/deriveRepoState";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
-import { useGitApi } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -446,7 +446,8 @@ export function ChangesPanel({
   onOpenDiscardAll: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const gitScopeKey = useGitScopeKey();
+  const [gitState, setGitState] = useProjectGitState(gitScopeKey);
 
   const msg = gitState.commitDraft;
   const setMsg = useCallback(
@@ -494,7 +495,7 @@ export function ChangesPanel({
   >(() => {
     if (!cwd) return null;
     try {
-      const cached = sessionStorage.getItem(`tabs_git_summary_${cwd}`);
+      const cached = sessionStorage.getItem(`tabs_git_summary_${gitScopeKey}`);
       return cached ? JSON.parse(cached) : null;
     } catch {
       return null;
@@ -508,9 +509,9 @@ export function ChangesPanel({
     if (cwd) {
       try {
         if (val) {
-          sessionStorage.setItem(`tabs_git_summary_${cwd}`, JSON.stringify(val));
+          sessionStorage.setItem(`tabs_git_summary_${gitScopeKey}`, JSON.stringify(val));
         } else {
-          sessionStorage.removeItem(`tabs_git_summary_${cwd}`);
+          sessionStorage.removeItem(`tabs_git_summary_${gitScopeKey}`);
         }
       } catch {
         // Ignore session storage errors

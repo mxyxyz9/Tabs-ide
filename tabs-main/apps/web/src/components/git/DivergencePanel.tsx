@@ -19,7 +19,7 @@ import type { GitWatchedBranchStatus } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
-import { useGitApi } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -71,6 +71,7 @@ export function DivergencePanel({
   isScanning?: boolean;
   onScanAllBranches: () => void;
 }) {
+  const gitScopeKey = useGitScopeKey();
   const [confirmMergeBranch, setConfirmMergeBranch] = useState<string | null>(null);
   const [confirmRebaseBranch, setConfirmRebaseBranch] = useState<string | null>(null);
   const [isSubmittingModal, setIsSubmittingModal] = useState(false);
@@ -90,10 +91,10 @@ export function DivergencePanel({
 
   // Per-repo persisted sets
   const [archivedBranches, saveArchivedBranches] = useLocalStorageSet(
-    `tabs_archived_watched_branches_${cwd}`,
+    `tabs_archived_watched_branches_${gitScopeKey}`,
   );
   const [spotlightBranches, saveSpotlightBranches] = useLocalStorageSet(
-    `tabs_spotlight_watched_branches_${cwd}`,
+    `tabs_spotlight_watched_branches_${gitScopeKey}`,
   );
 
   const archiveSet = useMemo(

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { gitWorkflowRunsQueryOptions, invalidateGitQueries } from "../../lib/gitReactQuery";
-import { useGitApi } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
 import { Button } from "../ui/button";
@@ -113,7 +113,7 @@ export function TagsPanel({
   onOpenDraftRelease: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const form = gitState.tagForm;
   const setForm = useCallback(
     (f: boolean) => {

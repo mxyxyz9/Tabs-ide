@@ -1,7 +1,7 @@
 import type { GitHistoryCommit, GitStatusFile, GitStatusResult } from "@tabs/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { useGitApi } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import { Card, FilePathLabel, PathBreadcrumb, StatPill } from "./gitPrimitives";
 
 export interface ParsedFileDiff {
@@ -210,7 +210,7 @@ export function DiffPage({
   statusData: GitStatusResult | null;
   commits: ReadonlyArray<GitHistoryCommit>;
 }) {
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const diffMode = gitState.diffMode;
   const setDiffMode = useCallback(
     (mode: "working" | "history") => {

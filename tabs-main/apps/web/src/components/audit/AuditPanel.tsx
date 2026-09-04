@@ -20,7 +20,15 @@ import {
   DialogFooter,
 } from "../ui/dialog";
 
-export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
+export function AuditPanel({
+  cwd,
+  stateKey = cwd,
+  api,
+}: {
+  cwd: string;
+  stateKey?: string;
+  api: any;
+}) {
   const {
     state,
     setActiveMode,
@@ -38,19 +46,20 @@ export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
     closeAskAIDrawer,
     selectHistoryRecord,
     runAudit,
-  } = useAuditStore(cwd);
+  } = useAuditStore(stateKey, cwd);
 
   // Custom confirmation modal state for interrupting active scans
   const [pendingNewAudit, setPendingNewAudit] = useState(false);
 
-  const selectedFinding = state.scanResult?.findings.find((f) => f.id === state.selectedFindingId) ?? null;
+  const selectedFinding =
+    state.scanResult?.findings.find((f) => f.id === state.selectedFindingId) ?? null;
   const isRunning = state.status === "running";
 
   const handleNewAuditClick = () => {
     if (isRunning) {
       setPendingNewAudit(true);
     } else {
-      updateAuditState(cwd, { scanResult: null, status: "idle" });
+      updateAuditState(stateKey, { scanResult: null, status: "idle" });
     }
   };
 
@@ -81,13 +90,12 @@ export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
       <main className="flex-1 flex flex-col h-full overflow-y-auto">
         {/* Slim top bar: just cwd context + model picker */}
         <div className="flex items-center justify-between border-b border-border px-8 py-2.5 shrink-0">
-          <span className="text-[11px] font-mono text-muted-foreground truncate max-w-sm">{cwd}</span>
+          <span className="text-[11px] font-mono text-muted-foreground truncate max-w-sm">
+            {cwd}
+          </span>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-[11px] text-muted-foreground font-sans">AI Model:</span>
-            <GitModelPicker
-              selection={state.modelSelection}
-              onSelect={setModelSelection}
-            />
+            <GitModelPicker selection={state.modelSelection} onSelect={setModelSelection} />
           </div>
         </div>
 
@@ -102,13 +110,22 @@ export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
                   <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/5 flex items-start gap-3">
                     <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0 space-y-1">
-                      <p className="text-sm font-semibold text-foreground font-sans">Review Failed</p>
+                      <p className="text-sm font-semibold text-foreground font-sans">
+                        Review Failed
+                      </p>
                       <p className="text-xs text-muted-foreground font-mono leading-relaxed break-all">
-                        {state.errorMessage ?? "An unknown error occurred. Check model configuration and try again."}
+                        {state.errorMessage ??
+                          "An unknown error occurred. Check model configuration and try again."}
                       </p>
                     </div>
                     <button
-                      onClick={() => updateAuditState(cwd, { status: "idle", errorMessage: null, scanResult: null })}
+                      onClick={() =>
+                        updateAuditState(stateKey, {
+                          status: "idle",
+                          errorMessage: null,
+                          scanResult: null,
+                        })
+                      }
                       className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-1.5 bg-muted/40 hover:bg-muted transition-colors cursor-pointer"
                     >
                       <RotateCcw size={11} />
@@ -152,7 +169,9 @@ export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
                     filterCategory={state.filterCategory}
                     filterVerification={state.filterVerification}
                     searchQuery={state.searchQuery}
-                    onSelectFinding={(id) => { setSelectedFindingId(id); }}
+                    onSelectFinding={(id) => {
+                      setSelectedFindingId(id);
+                    }}
                     onFilterSeverityChange={setFilterSeverity}
                     onFilterCategoryChange={setFilterCategory}
                     onFilterVerificationChange={setFilterVerification}
@@ -175,7 +194,8 @@ export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
               Cancel Active Audit Scan?
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground leading-relaxed font-sans mt-1">
-              An audit scan is currently running in the background. Starting a new audit will cancel the active scan and discard progress. Are you sure you want to proceed?
+              An audit scan is currently running in the background. Starting a new audit will cancel
+              the active scan and discard progress. Are you sure you want to proceed?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="pt-2">
@@ -189,7 +209,7 @@ export function AuditPanel({ cwd, api }: { cwd: string; api: any }) {
             <Button
               onClick={() => {
                 setPendingNewAudit(false);
-                updateAuditState(cwd, { scanResult: null, status: "idle" });
+                updateAuditState(stateKey, { scanResult: null, status: "idle" });
               }}
               className="bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-4 py-2 cursor-pointer"
             >

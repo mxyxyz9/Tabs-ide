@@ -27,7 +27,12 @@ export interface AuditHistoryRecord {
 export interface AuditStoreState {
   activeMode: AuditMode;
   status: "idle" | "running" | "done" | "error";
-  scopeKind: "full_repository" | "workspace_package" | "folder" | "selected_files" | "changed_files_only";
+  scopeKind:
+    | "full_repository"
+    | "workspace_package"
+    | "folder"
+    | "selected_files"
+    | "changed_files_only";
   depth: AuditScanDepth;
   targetPaths: string[];
   enabledCategories: AuditCategory[];
@@ -86,14 +91,17 @@ export function getAuditState(cwd: string): AuditStoreState {
   return storeByCwd[cwd] ?? { ...defaultState };
 }
 
-export function updateAuditState(cwd: string, updater: Partial<AuditStoreState> | ((prev: AuditStoreState) => AuditStoreState)): void {
+export function updateAuditState(
+  cwd: string,
+  updater: Partial<AuditStoreState> | ((prev: AuditStoreState) => AuditStoreState),
+): void {
   const current = getAuditState(cwd);
   const next = typeof updater === "function" ? updater(current) : { ...current, ...updater };
   storeByCwd[cwd] = next;
   notify();
 }
 
-export function useAuditStore(cwd: string) {
+export function useAuditStore(cwd: string, runtimeCwd: string = cwd) {
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -112,15 +120,26 @@ export function useAuditStore(cwd: string) {
     setScopeKind: (scopeKind: AuditStoreState["scopeKind"]) => updateAuditState(cwd, { scopeKind }),
     setDepth: (depth: AuditScanDepth) => updateAuditState(cwd, { depth }),
     setTargetPaths: (targetPaths: string[]) => updateAuditState(cwd, { targetPaths }),
-    setModelSelection: (modelSelection: ModelSelection) => updateAuditState(cwd, { modelSelection }),
-    setSelectedFindingId: (selectedFindingId: string | null) => updateAuditState(cwd, { selectedFindingId }),
-    setFilterSeverity: (filterSeverity: AuditSeverity | "all") => updateAuditState(cwd, { filterSeverity }),
-    setFilterCategory: (filterCategory: AuditCategory | "all") => updateAuditState(cwd, { filterCategory }),
-    setFilterVerification: (filterVerification: FindingVerificationState | "all") => updateAuditState(cwd, { filterVerification }),
+    setModelSelection: (modelSelection: ModelSelection) =>
+      updateAuditState(cwd, { modelSelection }),
+    setSelectedFindingId: (selectedFindingId: string | null) =>
+      updateAuditState(cwd, { selectedFindingId }),
+    setFilterSeverity: (filterSeverity: AuditSeverity | "all") =>
+      updateAuditState(cwd, { filterSeverity }),
+    setFilterCategory: (filterCategory: AuditCategory | "all") =>
+      updateAuditState(cwd, { filterCategory }),
+    setFilterVerification: (filterVerification: FindingVerificationState | "all") =>
+      updateAuditState(cwd, { filterVerification }),
     setSearchQuery: (searchQuery: string) => updateAuditState(cwd, { searchQuery }),
-    openPatchModal: (activePatchFinding: AuditFinding) => updateAuditState(cwd, { isPatchModalOpen: true, activePatchFinding }),
-    closePatchModal: () => updateAuditState(cwd, { isPatchModalOpen: false, activePatchFinding: null }),
-    openAskAIDrawer: (selectedFindingId?: string) => updateAuditState(cwd, { isAskAIDrawerOpen: true, ...(selectedFindingId ? { selectedFindingId } : {}) }),
+    openPatchModal: (activePatchFinding: AuditFinding) =>
+      updateAuditState(cwd, { isPatchModalOpen: true, activePatchFinding }),
+    closePatchModal: () =>
+      updateAuditState(cwd, { isPatchModalOpen: false, activePatchFinding: null }),
+    openAskAIDrawer: (selectedFindingId?: string) =>
+      updateAuditState(cwd, {
+        isAskAIDrawerOpen: true,
+        ...(selectedFindingId ? { selectedFindingId } : {}),
+      }),
     closeAskAIDrawer: () => updateAuditState(cwd, { isAskAIDrawerOpen: false }),
     selectHistoryRecord: (record: AuditHistoryRecord) => {
       updateAuditState(cwd, {
@@ -138,7 +157,7 @@ export function useAuditStore(cwd: string) {
     runAudit: async (api: any) => {
       const startedAt = Date.now();
       const initialLog: ReviewProgressEvent = {
-        cwd,
+        cwd: runtimeCwd,
         stage: "assembling_context",
         message: `Starting Codebase Audit (${state.depth} mode via ${state.modelSelection.model})...`,
         timestamp: new Date().toISOString(),
@@ -154,8 +173,10 @@ export function useAuditStore(cwd: string) {
 
       try {
         const result: AuditScanResult = await api.git.generateReview({
-          cwd,
-          target: { kind: state.scopeKind === "changed_files_only" ? "working_tree" : "full_codebase" },
+          cwd: runtimeCwd,
+          target: {
+            kind: state.scopeKind === "changed_files_only" ? "working_tree" : "full_codebase",
+          },
           modelSelection: state.modelSelection,
         });
 

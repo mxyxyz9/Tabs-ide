@@ -11,7 +11,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
-import { useGitApi } from "./gitApiContext";
+import { useGitApi, useGitScopeKey } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
@@ -51,7 +51,7 @@ export function BranchesPanel({
   onOpenNewWorktree: () => void;
   onGoToChanges?: () => void;
 }) {
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const form = gitState.branchForm;
   const setForm = useCallback(
     (f: "new" | "rename" | null) => {

@@ -45,7 +45,7 @@ The current Tabs implementation is therefore a strong base, but it is not yet a 
 
 4. **Eliminate shell interpolation.** Worktree paths, release titles/notes, remote names/URLs, branch names, and tags are interpolated into terminal commands in several paths. Move these actions behind typed API methods with argument arrays. Escaping individual strings is only an interim mitigation.
 
-5. **Scope persistent Git UI state by environment.** Panel drafts, selected commits/files, collapsed state, excluded branches, summaries, and review state currently use `cwd` as the principal key. Two environments with the same path can collide. Key them by `(environmentId, cwd)`.
+5. **Environment-scoped Git UI state — completed.** Panel drafts, selected commits/files, collapsed state, excluded branches, summaries, audit state, and review badges are keyed by `(environmentId, cwd)`, preventing equal remote and local paths from colliding.
 
 ### P2 — quality and performance
 

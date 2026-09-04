@@ -29,6 +29,7 @@ interface PullRequestRow {
 }
 
 import { useProjectGitState } from "../../state/scopedStateStore";
+import { useGitScopeKey } from "./gitApiContext";
 
 export function PRsPanel({
   cwd,
@@ -43,7 +44,7 @@ export function PRsPanel({
   onOpenCreatePR: () => void;
   onRunInTerminal: (cmd: string) => void;
 }) {
-  const [gitState, setGitState] = useProjectGitState(cwd);
+  const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const viewMode = gitState.prViewMode;
   const setViewMode = useCallback(
     (mode: "branch" | "all") => {
