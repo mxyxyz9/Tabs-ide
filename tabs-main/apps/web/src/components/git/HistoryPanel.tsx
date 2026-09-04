@@ -13,7 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { DiffCard, parseGitPatchToFiles, type ParsedFileDiff } from "./DiffPage";
 import { GitCheckingState } from "./GitCheckingState";
 import { Button } from "../ui/button";
@@ -25,13 +25,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "../ui/dialog";
-import {
-  Banner,
-  Card,
-  DiffSummaryCard,
-  StatPill,
-  TextInput,
-} from "./gitPrimitives";
+import { Banner, Card, DiffSummaryCard, StatPill, TextInput } from "./gitPrimitives";
 
 export function CommitRow({
   c,
@@ -90,7 +84,9 @@ export function CommitRow({
         />
         <div className="text-xs font-medium text-foreground/90 leading-snug">{c.subject}</div>
         <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono text-muted-foreground/70">
-          <span className="border border-border rounded px-1.5 py-0.5 text-muted-foreground">{c.shortSha}</span>
+          <span className="border border-border rounded px-1.5 py-0.5 text-muted-foreground">
+            {c.shortSha}
+          </span>
           <span>{c.authorName}</span>
           <span>&middot;</span>
           <span>{c.authoredAt.slice(0, 10)}</span>
@@ -109,7 +105,9 @@ export function CommitRow({
             setMenuOpen((o) => !o);
           }}
           className={`w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-foreground transition-opacity cursor-pointer ${
-            menuOpen ? "opacity-100 bg-muted" : "opacity-0 group-hover:opacity-100 hover:bg-muted/50"
+            menuOpen
+              ? "opacity-100 bg-muted"
+              : "opacity-0 group-hover:opacity-100 hover:bg-muted/50"
           }`}
         >
           <MoreHorizontal size={13} />
@@ -179,7 +177,9 @@ export function CommitDetailModal({
   const [error, setError] = useState<string | null>(null);
   const [fileDiffs, setFileDiffs] = useState<ParsedFileDiff[]>([]);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
-  const [diffSummaryResult, setDiffSummaryResultState] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(null);
+  const [diffSummaryResult, setDiffSummaryResultState] = useState<
+    import("@tabs/contracts").GitGenerateDiffSummaryResult | null
+  >(null);
 
   useEffect(() => {
     if (!commit?.sha) {
@@ -194,7 +194,9 @@ export function CommitDetailModal({
     }
   }, [commit?.sha]);
 
-  const setDiffSummaryResult = (val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null) => {
+  const setDiffSummaryResult = (
+    val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null,
+  ) => {
     setDiffSummaryResultState(val);
     if (commit?.sha) {
       try {
@@ -210,7 +212,7 @@ export function CommitDetailModal({
   };
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const api = readNativeApi();
+  const api = useGitApi();
 
   useEffect(() => {
     if (!commit || !api || !cwd) return;
@@ -267,17 +269,29 @@ export function CommitDetailModal({
   const currentFile = fileDiffs[selectedFileIndex] ?? null;
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-5xl">
         <DialogHeader>
           <DialogTitle>Commit {commit.shortSha}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="flex flex-col h-[75vh] min-h-[400px] overflow-hidden">
           <div className="space-y-1.5 border-b border-border/50 pb-3 shrink-0">
-            <div className="text-sm font-semibold text-foreground leading-snug">{commit.subject}</div>
+            <div className="text-sm font-semibold text-foreground leading-snug">
+              {commit.subject}
+            </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground/70 font-mono">
-              <span>Author: <strong className="text-foreground/90">{commit.authorName}</strong></span>
-              <span>Date: <strong className="text-foreground/90">{commit.authoredAt.slice(0, 10)}</strong></span>
+              <span>
+                Author: <strong className="text-foreground/90">{commit.authorName}</strong>
+              </span>
+              <span>
+                Date:{" "}
+                <strong className="text-foreground/90">{commit.authoredAt.slice(0, 10)}</strong>
+              </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground/70 pt-1">
               <span className="truncate flex-1">SHA: {commit.sha}</span>
@@ -288,10 +302,18 @@ export function CommitDetailModal({
                 onClick={() => void handleSummarizeCommit()}
                 className="gap-1 text-xs"
               >
-                {isSummarizing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} className="text-primary" />}
+                {isSummarizing ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Wand2 size={12} className="text-primary" />
+                )}
                 {isSummarizing ? "Summarizing…" : "Summarize commit"}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => void navigator.clipboard?.writeText(commit.sha)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void navigator.clipboard?.writeText(commit.sha)}
+              >
                 Copy SHA
               </Button>
             </div>
@@ -327,7 +349,9 @@ export function CommitDetailModal({
           ) : error ? (
             <Banner tone="bad" title="Failed to load commit diff" body={error} />
           ) : fileDiffs.length === 0 ? (
-            <div className="text-center text-xs text-muted-foreground/70 py-8">No file changes found in this commit.</div>
+            <div className="text-center text-xs text-muted-foreground/70 py-8">
+              No file changes found in this commit.
+            </div>
           ) : (
             <div className="flex flex-1 min-h-0 gap-3 overflow-hidden mt-3">
               <div className="w-64 shrink-0 border-r border-border/50 pr-2 overflow-y-auto custom-scrollbar space-y-1">
@@ -340,12 +364,16 @@ export function CommitDetailModal({
                     type="button"
                     onClick={() => setSelectedFileIndex(idx)}
                     className={`w-full text-left px-2 py-1.5 rounded text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
-                      selectedFileIndex === idx ? "bg-accent text-foreground font-medium" : "text-muted-foreground hover:bg-muted/50"
+                      selectedFileIndex === idx
+                        ? "bg-accent text-foreground font-medium"
+                        : "text-muted-foreground hover:bg-muted/50"
                     }`}
                   >
                     <span className="truncate flex-1 font-mono text-[11px]">{fd.path}</span>
                     {fd.isBinary ? (
-                      <span className="text-[10px] font-mono border border-border rounded px-1.5 py-0.5 text-muted-foreground/70 uppercase">BIN</span>
+                      <span className="text-[10px] font-mono border border-border rounded px-1.5 py-0.5 text-muted-foreground/70 uppercase">
+                        BIN
+                      </span>
                     ) : (
                       <StatPill ins={fd.ins} del={fd.del} />
                     )}
@@ -362,7 +390,9 @@ export function CommitDetailModal({
                     lines={currentFile.lines}
                   />
                 ) : (
-                  <div className="text-center text-xs text-muted-foreground/70 py-8">Select a file to view changes.</div>
+                  <div className="text-center text-xs text-muted-foreground/70 py-8">
+                    Select a file to view changes.
+                  </div>
                 )}
               </div>
             </div>
@@ -402,7 +432,14 @@ export function HistoryPanel({
   );
   const [activeCommit, setActiveCommit] = useState<GitHistoryCommit | null>(null);
   const q = query.trim().toLowerCase();
-  const filtered = q ? commits.filter((c) => c.subject.toLowerCase().includes(q) || c.authorName.toLowerCase().includes(q) || c.sha.includes(q)) : commits;
+  const filtered = q
+    ? commits.filter(
+        (c) =>
+          c.subject.toLowerCase().includes(q) ||
+          c.authorName.toLowerCase().includes(q) ||
+          c.sha.includes(q),
+      )
+    : commits;
 
   if (loadingHistory) {
     return <GitCheckingState message="Loading history…" size={36} />;
@@ -413,7 +450,9 @@ export function HistoryPanel({
       <Card className="p-6 text-center">
         <HistoryIcon className="mx-auto mb-2 text-muted-foreground/70" size={24} />
         <p className="text-xs font-medium text-foreground/90 mb-1">No commits yet</p>
-        <p className="text-[11px] text-muted-foreground/70">Commits made to this repository will appear here.</p>
+        <p className="text-[11px] text-muted-foreground/70">
+          Commits made to this repository will appear here.
+        </p>
       </Card>
     );
   }
@@ -421,16 +460,33 @@ export function HistoryPanel({
   return (
     <div>
       <div className="relative mb-4">
-        <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
-        <TextInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter by message, author, or SHA…" className="pl-8" />
+        <Search
+          size={12}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+        />
+        <TextInput
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by message, author, or SHA…"
+          className="pl-8"
+        />
       </div>
       {filtered.length === 0 ? (
-        <div className="text-center text-xs text-muted-foreground/70 py-10">No commits match "{query}"</div>
+        <div className="text-center text-xs text-muted-foreground/70 py-10">
+          No commits match "{query}"
+        </div>
       ) : (
         <div className="relative pl-4">
           <div className="absolute top-2 bottom-2 w-px bg-border" style={{ left: "7px" }} />
           {filtered.map((c) => (
-            <CommitRow key={c.sha} c={c} onClick={() => setActiveCommit(c)} onReset={onReset} onRevert={onRevert} onCherryPick={onCherryPick} />
+            <CommitRow
+              key={c.sha}
+              c={c}
+              onClick={() => setActiveCommit(c)}
+              onReset={onReset}
+              onRevert={onRevert}
+              onCherryPick={onCherryPick}
+            />
           ))}
           {onLoadMoreHistory && filtered.length >= 50 && (
             <div className="pt-4 text-center">

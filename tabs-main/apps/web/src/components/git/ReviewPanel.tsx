@@ -1,8 +1,8 @@
 import React from "react";
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { AuditPanel } from "../audit/AuditPanel";
 
 export function ReviewPanel({ cwd }: { cwd: string; activePanel?: string }) {
-  const api = readNativeApi();
+  const api = useGitApi();
   return <AuditPanel cwd={cwd} api={api} />;
 }

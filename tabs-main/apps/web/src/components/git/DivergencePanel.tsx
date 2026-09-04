@@ -19,7 +19,7 @@ import type { GitWatchedBranchStatus } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -253,7 +253,7 @@ export function DivergencePanel({
     setSearchQuery("");
   };
 
-  const api = readNativeApi();
+  const api = useGitApi();
   const queryClient = useQueryClient();
 
   const handleExecuteMerge = async (targetBranch: string) => {
@@ -301,7 +301,9 @@ export function DivergencePanel({
         <div>
           <div className="flex items-center gap-2">
             <GitCompare size={18} className="text-muted-foreground" />
-            <h2 className="text-base font-semibold text-foreground tracking-tight">Watched branch divergence</h2>
+            <h2 className="text-base font-semibold text-foreground tracking-tight">
+              Watched branch divergence
+            </h2>
           </div>
           <p className="text-xs text-muted-foreground/80 leading-relaxed mt-0.5">
             Compare all branches against your current HEAD. Spotlight key branches, archive noise.
@@ -338,7 +340,10 @@ export function DivergencePanel({
       <div className="flex items-center justify-between gap-3 mb-4">
         {/* Search */}
         <div className="relative flex-1 max-w-sm">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70"
+          />
           <input
             type="text"
             value={searchQuery}
@@ -364,7 +369,9 @@ export function DivergencePanel({
               type="button"
               onClick={() => switchView("spotlight")}
               className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                activeView === "spotlight" ? "font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
+                activeView === "spotlight"
+                  ? "font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
               style={
                 activeView === "spotlight"
@@ -382,7 +389,9 @@ export function DivergencePanel({
               type="button"
               onClick={() => switchView("active")}
               className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                activeView === "active" ? "bg-accent text-foreground font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
+                activeView === "active"
+                  ? "bg-accent text-foreground font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Active ({activeBranchList.length})
@@ -391,7 +400,9 @@ export function DivergencePanel({
               type="button"
               onClick={() => switchView("archived")}
               className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
-                activeView === "archived" ? "bg-accent text-foreground font-semibold shadow-xs" : "text-muted-foreground hover:text-foreground"
+                activeView === "archived"
+                  ? "bg-accent text-foreground font-semibold shadow-xs"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               Archived ({archivedBranchList.length})
@@ -473,8 +484,12 @@ export function DivergencePanel({
       {isScanning && watchedBranchStatuses.length === 0 ? (
         <Card className="p-8 text-center">
           <RefreshCw className="animate-spin mx-auto mb-3 text-muted-foreground/70" size={24} />
-          <div className="text-xs font-medium text-foreground">Scanning all branches for divergence…</div>
-          <p className="text-[11px] text-muted-foreground/70 mt-1">Comparing all local and remote branches against HEAD</p>
+          <div className="text-xs font-medium text-foreground">
+            Scanning all branches for divergence…
+          </div>
+          <p className="text-[11px] text-muted-foreground/70 mt-1">
+            Comparing all local and remote branches against HEAD
+          </p>
         </Card>
       ) : displayedBranches.length === 0 ? (
         <Card className="p-8 text-center">
@@ -565,7 +580,9 @@ export function DivergencePanel({
                       </button>
                     )}
 
-                    <span className="text-xs font-mono font-semibold text-foreground/90 truncate">{b.name}</span>
+                    <span className="text-xs font-mono font-semibold text-foreground/90 truncate">
+                      {b.name}
+                    </span>
                     {b.isRemote && <Badge variant="outline">remote</Badge>}
                     {b.isDefault && <Badge variant="success">default</Badge>}
 
@@ -594,7 +611,11 @@ export function DivergencePanel({
                     <Button variant="ghost" size="sm" onClick={() => setConfirmMergeBranch(b.name)}>
                       <Download /> Merge
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setConfirmRebaseBranch(b.name)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmRebaseBranch(b.name)}
+                    >
                       Rebase
                     </Button>
 
@@ -604,7 +625,9 @@ export function DivergencePanel({
                       title={isSpotlit ? "Remove from Spotlight" : "Add to Spotlight"}
                       onClick={() => handleToggleSpotlight(b.name)}
                       className={`p-1 rounded transition-colors cursor-pointer ${
-                        isSpotlit ? "text-amber-400 hover:bg-muted/50" : "text-muted-foreground/70 hover:text-foreground hover:bg-muted/50"
+                        isSpotlit
+                          ? "text-amber-400 hover:bg-muted/50"
+                          : "text-muted-foreground/70 hover:text-foreground hover:bg-muted/50"
                       }`}
                     >
                       <Telescope size={14} />
@@ -613,9 +636,7 @@ export function DivergencePanel({
                     {/* Archive toggle */}
                     <button
                       type="button"
-                      title={
-                        activeView === "archived" ? "Remove from archive" : "Archive branch"
-                      }
+                      title={activeView === "archived" ? "Remove from archive" : "Archive branch"}
                       onClick={() => handleToggleArchive(b.name)}
                       className="p-1 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"
                     >
@@ -635,7 +656,12 @@ export function DivergencePanel({
 
       {/* Confirmation Modals */}
       {confirmMergeBranch && (
-        <Dialog open onOpenChange={(open) => { if (!open && !isSubmittingModal) setConfirmMergeBranch(null); }}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !isSubmittingModal) setConfirmMergeBranch(null);
+          }}
+        >
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
               <DialogTitle>Merge {confirmMergeBranch}</DialogTitle>
@@ -647,10 +673,19 @@ export function DivergencePanel({
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" disabled={isSubmittingModal} onClick={() => setConfirmMergeBranch(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSubmittingModal}
+                onClick={() => setConfirmMergeBranch(null)}
+              >
                 Cancel
               </Button>
-              <Button size="sm" disabled={isSubmittingModal} onClick={() => void handleExecuteMerge(confirmMergeBranch)}>
+              <Button
+                size="sm"
+                disabled={isSubmittingModal}
+                onClick={() => void handleExecuteMerge(confirmMergeBranch)}
+              >
                 {isSubmittingModal ? <Loader2 size={13} className="animate-spin" /> : <Download />}
                 {isSubmittingModal ? "Merging…" : `Merge ${confirmMergeBranch}`}
               </Button>
@@ -660,7 +695,12 @@ export function DivergencePanel({
       )}
 
       {confirmRebaseBranch && (
-        <Dialog open onOpenChange={(open) => { if (!open && !isSubmittingModal) setConfirmRebaseBranch(null); }}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !isSubmittingModal) setConfirmRebaseBranch(null);
+          }}
+        >
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
               <DialogTitle>Rebase onto {confirmRebaseBranch}</DialogTitle>
@@ -672,10 +712,19 @@ export function DivergencePanel({
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" disabled={isSubmittingModal} onClick={() => setConfirmRebaseBranch(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSubmittingModal}
+                onClick={() => setConfirmRebaseBranch(null)}
+              >
                 Cancel
               </Button>
-              <Button size="sm" disabled={isSubmittingModal} onClick={() => void handleExecuteRebase(confirmRebaseBranch)}>
+              <Button
+                size="sm"
+                disabled={isSubmittingModal}
+                onClick={() => void handleExecuteRebase(confirmRebaseBranch)}
+              >
                 {isSubmittingModal ? <Loader2 size={13} className="animate-spin" /> : null}
                 {isSubmittingModal ? "Rebasing…" : `Rebase onto ${confirmRebaseBranch}`}
               </Button>

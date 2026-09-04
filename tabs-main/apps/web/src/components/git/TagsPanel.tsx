@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { gitWorkflowRunsQueryOptions, invalidateGitQueries } from "../../lib/gitReactQuery";
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
 import { Button } from "../ui/button";
@@ -131,7 +131,7 @@ export function TagsPanel({
     [setGitState],
   );
 
-  const api = readNativeApi();
+  const api = useGitApi();
   const queryClient = useQueryClient();
 
   const fetchTags = useCallback(async () => {
@@ -215,7 +215,7 @@ export function TagsPanel({
     return realTags.filter((tagName) => {
       if (tagName.toLowerCase().includes(q)) return true;
       const commit = commits.find((c) =>
-        c.refs?.some((r) => r === `tag: ${tagName}` || r.endsWith(`/${tagName}`))
+        c.refs?.some((r) => r === `tag: ${tagName}` || r.endsWith(`/${tagName}`)),
       );
       if (commit) {
         if (commit.shortSha.toLowerCase().includes(q)) return true;
@@ -236,7 +236,10 @@ export function TagsPanel({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card/60 p-3 rounded-xl border border-border/60">
         {/* Search Input */}
         <div className="relative flex-1 min-w-0">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0" />
+          <Search
+            size={13}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0"
+          />
           <input
             type="text"
             value={searchQuery}
@@ -300,7 +303,7 @@ export function TagsPanel({
         <Card className="divide-y divide-border/40 overflow-hidden border-border/60">
           {filteredTags.map((tagName) => {
             const commit = commits.find((c) =>
-              c.refs?.some((r) => r === `tag: ${tagName}` || r.endsWith(`/${tagName}`))
+              c.refs?.some((r) => r === `tag: ${tagName}` || r.endsWith(`/${tagName}`)),
             );
 
             return (
@@ -317,7 +320,10 @@ export function TagsPanel({
                   >
                     <Tag size={11} className="text-muted-foreground/60 shrink-0" />
                     <span>{tagName}</span>
-                    <Copy size={9} className="opacity-0 group-hover/row:opacity-60 transition-opacity ml-0.5 text-muted-foreground" />
+                    <Copy
+                      size={9}
+                      className="opacity-0 group-hover/row:opacity-60 transition-opacity ml-0.5 text-muted-foreground"
+                    />
                   </div>
 
                   {commit && (

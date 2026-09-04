@@ -1,8 +1,19 @@
 import type { GitEnvironmentResult, ProviderInstanceId } from "@tabs/contracts";
-import { CheckCircle2, Cpu, Eye, EyeOff, FolderGit2, Globe, KeyRound, Loader2, Trash2, Wand2 } from "lucide-react";
+import {
+  CheckCircle2,
+  Cpu,
+  Eye,
+  EyeOff,
+  FolderGit2,
+  Globe,
+  KeyRound,
+  Loader2,
+  Trash2,
+  Wand2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Switch } from "../ui/switch";
@@ -80,7 +91,11 @@ export function updateGitConfigUser(configText: string, newName: string, newEmai
   return resultLines.join("\n");
 }
 
-export function verifyGitConfigUser(configText: string, expectedName: string, expectedEmail: string): boolean {
+export function verifyGitConfigUser(
+  configText: string,
+  expectedName: string,
+  expectedEmail: string,
+): boolean {
   const lines = configText.split(/\r?\n/);
   let inUserSection = false;
   let nameFound = false;
@@ -138,7 +153,7 @@ export function SettingsPanel({
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [customInstructions, setCustomInstructions] = useState("");
-  const api = readNativeApi();
+  const api = useGitApi();
 
   const isGeminiConfigured = Boolean(settings?.providers?.gemini?.apiKey?.trim());
 
@@ -189,14 +204,16 @@ export function SettingsPanel({
       });
     }
 
-    const isDirectGemini = (settings?.gitAi?.modelSourceMode ?? modelSourceMode) === "direct_gemini";
+    const isDirectGemini =
+      (settings?.gitAi?.modelSourceMode ?? modelSourceMode) === "direct_gemini";
     const effectiveKey = currentKey || settings?.providers?.gemini?.apiKey?.trim();
 
     if (isDirectGemini && !effectiveKey) {
       toastManager.add({
         type: "error",
         title: "Gemini API Key Required",
-        description: "Please enter your Google Gemini API key and click Save Key before generating rules.",
+        description:
+          "Please enter your Google Gemini API key and click Save Key before generating rules.",
       });
       return;
     }
@@ -204,22 +221,26 @@ export function SettingsPanel({
     setIsAnalyzingRepo(true);
     try {
       let pkgDetails = "";
-      const pkgRes = await api.projects.readFile({ cwd, relativePath: "package.json" }).catch(() => null);
+      const pkgRes = await api.projects
+        .readFile({ cwd, relativePath: "package.json" })
+        .catch(() => null);
       if (pkgRes?.contents) {
         try {
           const parsed = JSON.parse(pkgRes.contents);
-          const deps = Object.keys({ ...parsed.dependencies, ...parsed.devDependencies }).slice(0, 30);
+          const deps = Object.keys({ ...parsed.dependencies, ...parsed.devDependencies }).slice(
+            0,
+            30,
+          );
           pkgDetails = `Project Name: ${parsed.name || "workspace"}, Key Stack Dependencies: ${deps.join(", ")}`;
         } catch {
           // Ignore JSON parse error
         }
       }
 
-      const activeModelSelection =
-        settings?.gitAi?.gitTextGenerationModelSelection || {
-          instanceId: "gemini",
-          model: "gemini-3.6-flash",
-        };
+      const activeModelSelection = settings?.gitAi?.gitTextGenerationModelSelection || {
+        instanceId: "gemini",
+        model: "gemini-3.6-flash",
+      };
 
       const userPrompt = [
         `Deep Codebase Analysis Request for Workspace: ${cwd}`,
@@ -227,7 +248,9 @@ export function SettingsPanel({
         "Task: Analyze the architecture, frameworks, and coding patterns of this codebase.",
         "Generate 4-6 concise, highly specific AI Code Review Rules tailored to this repository.",
         "Focus on breaking API changes, data contract schemas, type safety, error boundaries, security vulnerabilities, and testing guidelines.",
-      ].filter(Boolean).join("\n\n");
+      ]
+        .filter(Boolean)
+        .join("\n\n");
 
       let res: import("@tabs/contracts").GitGenerateDiffSummaryResult | null = null;
       let usedModelName = activeModelSelection.model;
@@ -241,7 +264,10 @@ export function SettingsPanel({
         });
       } catch (firstErr) {
         // Fallback retry with Gemini 2.5 Flash if primary selected provider failed or request was cancelled
-        const fallbackSelection = { instanceId: "gemini" as ProviderInstanceId, model: "gemini-3.6-flash" };
+        const fallbackSelection = {
+          instanceId: "gemini" as ProviderInstanceId,
+          model: "gemini-3.6-flash",
+        };
         if (activeModelSelection.instanceId !== "gemini") {
           usedModelName = "Gemini 2.5 Flash (Fallback)";
           res = await api.git.generateDiffSummary({
@@ -260,15 +286,22 @@ export function SettingsPanel({
           `# Codebase Review Rules (${cwd.split("/").pop()})`,
           "",
           res.summary ? `## Architecture Focus\n${res.summary}\n` : "",
-          res.keyChanges && res.keyChanges !== "- No modifications found in diff." ? `## Code Review Standards\n${res.keyChanges}\n` : "",
+          res.keyChanges && res.keyChanges !== "- No modifications found in diff."
+            ? `## Code Review Standards\n${res.keyChanges}\n`
+            : "",
           res.notesAndRisk ? `## Critical Risk Checklist\n${res.notesAndRisk}` : "",
-        ].filter(Boolean).join("\n");
+        ]
+          .filter(Boolean)
+          .join("\n");
 
         setCustomInstructions(generatedRules);
         updateSettings.updateSettings({
           gitAi: { customPromptInstructions: generatedRules },
         });
-        toastManager.add({ type: "success", title: `Generated review rules using ${usedModelName}!` });
+        toastManager.add({
+          type: "success",
+          title: `Generated review rules using ${usedModelName}!`,
+        });
       } else {
         throw new Error("AI model returned empty response.");
       }
@@ -284,7 +317,6 @@ export function SettingsPanel({
   };
   const [isTestingKey, setIsTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [isImprovingRules, setIsImprovingRules] = useState(false);
 
   const handleSaveGeminiKey = () => {
     updateSettings.updateSettings({
@@ -306,17 +338,32 @@ export function SettingsPanel({
     setIsTestingKey(true);
     setTestResult(null);
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`);
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`,
+      );
       if (res.ok) {
-        setTestResult({ ok: true, message: "API key validated successfully with Google AI Studio (HTTP 200)." });
+        setTestResult({
+          ok: true,
+          message: "API key validated successfully with Google AI Studio (HTTP 200).",
+        });
         toastManager.add({ type: "success", title: "Google Gemini API key valid!" });
       } else {
         const errText = await res.text().catch(() => "");
-        setTestResult({ ok: false, message: `Gemini API HTTP ${res.status}: ${errText || res.statusText}` });
-        toastManager.add({ type: "error", title: "Google Gemini API key invalid", description: `HTTP ${res.status}` });
+        setTestResult({
+          ok: false,
+          message: `Gemini API HTTP ${res.status}: ${errText || res.statusText}`,
+        });
+        toastManager.add({
+          type: "error",
+          title: "Google Gemini API key invalid",
+          description: `HTTP ${res.status}`,
+        });
       }
     } catch (err) {
-      setTestResult({ ok: false, message: `Network error: ${err instanceof Error ? err.message : String(err)}` });
+      setTestResult({
+        ok: false,
+        message: `Network error: ${err instanceof Error ? err.message : String(err)}`,
+      });
       toastManager.add({ type: "error", title: "Connection failed", description: String(err) });
     } finally {
       setIsTestingKey(false);
@@ -345,23 +392,19 @@ export function SettingsPanel({
     toastManager.add({ type: "success", title: "Saved Git AI custom instructions" });
   };
 
-  const handleImproveRulesWithAI = () => {
-    setIsImprovingRules(true);
-    setTimeout(() => {
-      const refined = [
-        "Focus on high-precision code review instructions:",
-        "- Identify breaking API changes and data contract modifications",
-        "- Flag security vulnerabilities (exposed secrets, unvalidated inputs, SQLi/XSS)",
-        "- Highlight performance bottlenecks and unhandled async exceptions",
-        "- Ensure error handling and fallback paths are explicitly implemented",
-      ].join("\n");
-      setCustomInstructions(refined);
-      updateSettings.updateSettings({
-        gitAi: { customPromptInstructions: refined },
-      });
-      toastManager.add({ type: "success", title: "Refined review rules with AI" });
-      setIsImprovingRules(false);
-    }, 400);
+  const handleUseSuggestedRules = () => {
+    const suggested = [
+      "Focus on high-precision code review instructions:",
+      "- Identify breaking API changes and data contract modifications",
+      "- Flag security vulnerabilities (exposed secrets, unvalidated inputs, SQLi/XSS)",
+      "- Highlight performance bottlenecks and unhandled async exceptions",
+      "- Ensure error handling and fallback paths are explicitly implemented",
+    ].join("\n");
+    setCustomInstructions(suggested);
+    updateSettings.updateSettings({
+      gitAi: { customPromptInstructions: suggested },
+    });
+    toastManager.add({ type: "success", title: "Applied suggested review rules" });
   };
 
   useEffect(() => {
@@ -447,7 +490,11 @@ export function SettingsPanel({
       if (!verifyGitConfigUser(readBackText, name.trim(), email.trim())) {
         // Rollback on verification failure
         if (currentConfig) {
-          await api.projects.writeFile({ cwd, relativePath: ".git/config", contents: currentConfig });
+          await api.projects.writeFile({
+            cwd,
+            relativePath: ".git/config",
+            contents: currentConfig,
+          });
         }
         throw new Error("Git identity write failed verification check; changes rolled back.");
       }
@@ -472,7 +519,11 @@ export function SettingsPanel({
       setGitignoreChanged(false);
       toastManager.add({ type: "success", title: "Saved .gitignore" });
     } catch (error) {
-      toastManager.add({ type: "error", title: "Could not save .gitignore", description: error instanceof Error ? error.message : "Write error" });
+      toastManager.add({
+        type: "error",
+        title: "Could not save .gitignore",
+        description: error instanceof Error ? error.message : "Write error",
+      });
     } finally {
       setIsSavingGitignore(false);
     }
@@ -486,7 +537,9 @@ export function SettingsPanel({
           <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/40">
             <div>
               <span className="text-xs font-semibold text-foreground block">Model Source Mode</span>
-              <span className="text-[11px] text-muted-foreground/70 block">Choose how AI models are routed for diff summaries and reviews</span>
+              <span className="text-[11px] text-muted-foreground/70 block">
+                Choose how AI models are routed for diff summaries and reviews
+              </span>
             </div>
             <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border/60">
               <button
@@ -542,9 +595,17 @@ export function SettingsPanel({
           <div className="p-3.5 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 text-muted-foreground">
               <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
-              <span>Using Connected Provider Subscriptions (Codex, Claude, Grok, Cursor) — No API Key required.</span>
+              <span>
+                Using Connected Provider Subscriptions (Codex, Claude, Grok, Cursor) — No API Key
+                required.
+              </span>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setModelSourceMode("direct_gemini")} className="text-primary hover:text-primary text-[11px]">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setModelSourceMode("direct_gemini")}
+              className="text-primary hover:text-primary text-[11px]"
+            >
               Use Gemini API Key
             </Button>
           </div>
@@ -578,12 +639,22 @@ export function SettingsPanel({
                   <Button size="sm" onClick={handleSaveGeminiKey}>
                     Save Key
                   </Button>
-                  <Button variant="outline" size="sm" disabled={!geminiApiKey.trim() || isTestingKey} onClick={() => void handleTestGeminiKey()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!geminiApiKey.trim() || isTestingKey}
+                    onClick={() => void handleTestGeminiKey()}
+                  >
                     {isTestingKey ? <Loader2 size={12} className="animate-spin" /> : null}
                     {isTestingKey ? "Testing…" : "Test Key"}
                   </Button>
                   {isGeminiConfigured && (
-                    <Button variant="ghost" size="sm" onClick={handleClearGeminiKey} className="text-destructive hover:text-destructive">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearGeminiKey}
+                      className="text-destructive hover:text-destructive"
+                    >
                       <Trash2 size={13} />
                     </Button>
                   )}
@@ -605,7 +676,9 @@ export function SettingsPanel({
                       onClick={() => setKeyScope("global")}
                       className={cn(
                         "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer",
-                        keyScope === "global" ? "bg-background text-foreground font-semibold border border-border/60" : "text-muted-foreground/70",
+                        keyScope === "global"
+                          ? "bg-background text-foreground font-semibold border border-border/60"
+                          : "text-muted-foreground/70",
                       )}
                       title="Global System-Wide key: shared across all projects in Tabs"
                     >
@@ -616,7 +689,9 @@ export function SettingsPanel({
                       onClick={() => setKeyScope("project")}
                       className={cn(
                         "flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer",
-                        keyScope === "project" ? "bg-background text-foreground font-semibold border border-border/60" : "text-muted-foreground/70",
+                        keyScope === "project"
+                          ? "bg-background text-foreground font-semibold border border-border/60"
+                          : "text-muted-foreground/70",
                       )}
                       title="Project Local key: overrides key for this workspace repository"
                     >
@@ -642,7 +717,10 @@ export function SettingsPanel({
         )}
 
         <div className="pt-3 border-t border-border/50">
-          <Field label="Custom Review Rules" description="Instructions added to AI diff summaries, commit messages, and PR reviews.">
+          <Field
+            label="Custom Review Rules"
+            description="Instructions added to AI diff summaries, commit messages, and PR reviews."
+          >
             <AutoTextarea
               value={customInstructions}
               onChange={(e) => setCustomInstructions(e.target.value)}
@@ -660,29 +738,34 @@ export function SettingsPanel({
                 disabled={isAnalyzingRepo}
                 onClick={() => void handleAnalyzeRepoAndGenerateRules()}
               >
-                {isAnalyzingRepo ? <Loader2 size={12} className="animate-spin" /> : <FolderGit2 size={12} />}
+                {isAnalyzingRepo ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <FolderGit2 size={12} />
+                )}
                 {isAnalyzingRepo ? "Analyzing Repo…" : "Analyze Repo & Generate Rules"}
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={isImprovingRules}
-                onClick={handleImproveRulesWithAI}
-              >
-                {isImprovingRules ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
-                {isImprovingRules ? "Refining…" : "Improve with AI"}
+              <Button variant="ghost" size="sm" onClick={handleUseSuggestedRules}>
+                <Wand2 size={12} />
+                Use suggested rules
               </Button>
             </div>
           </Field>
         </div>
 
         <div className="pt-3 border-t border-border/50 space-y-3">
-          <label className="text-[11px] font-semibold text-foreground tracking-tight block">Included Summary Sections</label>
+          <label className="text-[11px] font-semibold text-foreground tracking-tight block">
+            Included Summary Sections
+          </label>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
-                <span className="text-xs font-medium text-foreground block">High-Level Summary</span>
-                <span className="text-[11px] text-muted-foreground/70 block">Concise 1-2 sentence overview of changes</span>
+                <span className="text-xs font-medium text-foreground block">
+                  High-Level Summary
+                </span>
+                <span className="text-[11px] text-muted-foreground/70 block">
+                  Concise 1-2 sentence overview of changes
+                </span>
               </div>
               <Switch
                 checked={settings?.gitAi?.includeSummarySection ?? true}
@@ -697,8 +780,12 @@ export function SettingsPanel({
             </div>
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
               <div className="space-y-0.5">
-                <span className="text-xs font-medium text-foreground block">Key Changes by Module</span>
-                <span className="text-[11px] text-muted-foreground/70 block">Grouped list of changes per file/module</span>
+                <span className="text-xs font-medium text-foreground block">
+                  Key Changes by Module
+                </span>
+                <span className="text-[11px] text-muted-foreground/70 block">
+                  Grouped list of changes per file/module
+                </span>
               </div>
               <Switch
                 checked={settings?.gitAi?.includeKeyChangesSection ?? true}
@@ -713,8 +800,12 @@ export function SettingsPanel({
             </div>
             <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40">
               <div className="space-y-0.5">
-                <span className="text-xs font-medium text-foreground block">Notes & Risk Assessment</span>
-                <span className="text-[11px] text-muted-foreground/70 block">Highlights breaking changes and potential risks</span>
+                <span className="text-xs font-medium text-foreground block">
+                  Notes & Risk Assessment
+                </span>
+                <span className="text-[11px] text-muted-foreground/70 block">
+                  Highlights breaking changes and potential risks
+                </span>
               </div>
               <Switch
                 checked={settings?.gitAi?.includeNotesAndRiskSection ?? true}
@@ -733,14 +824,28 @@ export function SettingsPanel({
 
       <SectionLabel>Git Identity</SectionLabel>
       <Card className="p-4 mb-4 space-y-3">
-        <p className="text-[11px] text-muted-foreground/70 leading-relaxed">Used as the author on every commit you make in this project.</p>
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+          Used as the author on every commit you make in this project.
+        </p>
         <Field label="Name">
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name" />
+          <TextInput
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your Name"
+          />
         </Field>
         <Field label="Email">
-          <TextInput value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+          <TextInput
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+          />
         </Field>
-        <Button size="sm" disabled={!name.trim() || !email.trim() || isSavingIdentity} onClick={() => void handleSaveIdentity()}>
+        <Button
+          size="sm"
+          disabled={!name.trim() || !email.trim() || isSavingIdentity}
+          onClick={() => void handleSaveIdentity()}
+        >
           {isSavingIdentity ? <Loader2 size={12} className="animate-spin" /> : null}
           {isSavingIdentity ? "Saving identity…" : "Save identity"}
         </Button>
@@ -749,7 +854,8 @@ export function SettingsPanel({
       <SectionLabel>Excluded watched branches</SectionLabel>
       <Card className="p-3 mb-1">
         <p className="text-[11px] text-muted-foreground/70 leading-relaxed mb-3">
-          By default, all local and remote-tracking branches with unmerged commits are watched on Overview. Add branch names here to exclude them from divergence checks.
+          By default, all local and remote-tracking branches with unmerged commits are watched on
+          Overview. Add branch names here to exclude them from divergence checks.
         </p>
         <div className="flex items-center gap-2 mb-3">
           <TextInput
@@ -772,10 +878,15 @@ export function SettingsPanel({
           </Button>
         </div>
         {excludedBranches.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground/70 px-2 py-2">No branches excluded (watching all branches).</div>
+          <div className="text-[11px] text-muted-foreground/70 px-2 py-2">
+            No branches excluded (watching all branches).
+          </div>
         ) : (
           excludedBranches.map((b) => (
-            <div key={b} className="flex items-center justify-between gap-3 px-2 py-2 border-b border-border/50 last:border-0">
+            <div
+              key={b}
+              className="flex items-center justify-between gap-3 px-2 py-2 border-b border-border/50 last:border-0"
+            >
               <span className="text-xs font-mono text-foreground/90 truncate">{b}</span>
               <Button variant="ghost" size="sm" onClick={() => onRemoveExcludedBranch?.(b)}>
                 Remove
@@ -785,7 +896,13 @@ export function SettingsPanel({
         )}
       </Card>
 
-      <SectionLabel action={<Button variant="ghost" size="sm" onClick={onOpenAddRemote}>Add remote</Button>}>
+      <SectionLabel
+        action={
+          <Button variant="ghost" size="sm" onClick={onOpenAddRemote}>
+            Add remote
+          </Button>
+        }
+      >
         Remotes
       </SectionLabel>
       <Card className="p-3 mb-1">
@@ -793,15 +910,26 @@ export function SettingsPanel({
           The URLs this project pushes to and pulls from. Most projects only need "origin".
         </p>
         {remotes.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground/70 px-2 py-2">No remotes configured.</div>
+          <div className="text-[11px] text-muted-foreground/70 px-2 py-2">
+            No remotes configured.
+          </div>
         ) : (
           remotes.map((r) => (
-            <div key={r.name} className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0">
+            <div
+              key={r.name}
+              className="flex items-center gap-3 px-2 py-2.5 border-b border-border/50 last:border-0"
+            >
               <div className="min-w-0 flex-1">
                 <div className="text-xs font-mono text-foreground/90">{r.name}</div>
-                <div className="text-[10px] font-mono text-muted-foreground/70 truncate">{r.url}</div>
+                <div className="text-[10px] font-mono text-muted-foreground/70 truncate">
+                  {r.url}
+                </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}
+              >
                 Remove
               </Button>
             </div>
@@ -824,7 +952,11 @@ export function SettingsPanel({
           className="w-full border border-border rounded-lg text-foreground bg-background font-mono text-[11px] placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors"
         />
         <div className="mt-2.5">
-          <Button size="sm" disabled={!gitignoreChanged || isSavingGitignore} onClick={() => void handleSaveGitignore()}>
+          <Button
+            size="sm"
+            disabled={!gitignoreChanged || isSavingGitignore}
+            onClick={() => void handleSaveGitignore()}
+          >
             {isSavingGitignore ? <Loader2 size={12} className="animate-spin" /> : null}
             {isSavingGitignore ? "Saving .gitignore…" : "Save .gitignore"}
           </Button>

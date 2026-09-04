@@ -1,8 +1,11 @@
-import { CheckCircle2, ChevronDown, ChevronRight, GitMerge, GitPullRequest, MessageSquare, Plus } from "lucide-react";
+import { CheckCircle2, GitMerge, GitPullRequest, Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 
-import { gitAllPullRequestsQueryOptions, gitResolvePullRequestQueryOptions } from "../../lib/gitReactQuery";
+import {
+  gitAllPullRequestsQueryOptions,
+  gitResolvePullRequestQueryOptions,
+} from "../../lib/gitReactQuery";
 import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -17,7 +20,7 @@ import {
 } from "../ui/dialog";
 import { Card, Select } from "./gitPrimitives";
 
-interface MockPR {
+interface PullRequestRow {
   n: number;
   title: string;
   state: "open" | "draft" | "merged" | "closed";
@@ -25,21 +28,17 @@ interface MockPR {
   body: string;
 }
 
-interface PRComment {
-  author: string;
-  body: string;
-  createdAt?: string;
-}
-
 import { useProjectGitState } from "../../state/scopedStateStore";
 
 export function PRsPanel({
   cwd,
+  environmentId,
   branchName,
   onOpenCreatePR,
   onRunInTerminal,
 }: {
   cwd: string;
+  environmentId?: string | undefined;
   branchName: string;
   onOpenCreatePR: () => void;
   onRunInTerminal: (cmd: string) => void;
@@ -61,37 +60,28 @@ export function PRsPanel({
     [setGitState],
   );
 
-  const [mergePr, setMergePr] = useState<MockPR | null>(null);
+  const [mergePr, setMergePr] = useState<PullRequestRow | null>(null);
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
-
-  const expandedPrComments = gitState.prExpandedComments;
-  const setExpandedPrComments = useCallback(
-    (n: number | null | ((prev: number | null) => number | null)) => {
-      setGitState((prev) => ({
-        prExpandedComments: typeof n === "function" ? n(prev.prExpandedComments) : n,
-      }));
-    },
-    [setGitState],
-  );
-  const [prComments, setPrComments] = useState<Record<number, PRComment[]>>({});
-  const [loadingComments, setLoadingComments] = useState<Record<number, boolean>>({});
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
     gitResolvePullRequestQueryOptions({
       cwd: cwd || null,
       reference: branchName || null,
+      environmentId,
     }),
   );
 
   // Query 2: Repository PRs query (supports state filter for past merged/closed PRs)
-  const allPrsQuery = useQuery(gitAllPullRequestsQueryOptions(cwd || null, filterState));
+  const allPrsQuery = useQuery(
+    gitAllPullRequestsQueryOptions(cwd || null, filterState, environmentId),
+  );
 
   const activeQuery = viewMode === "branch" ? branchPrQuery : allPrsQuery;
   const loading = activeQuery.isLoading;
 
-  const prs = useMemo<MockPR[]>(() => {
+  const prs = useMemo<PullRequestRow[]>(() => {
     if (viewMode === "branch") {
       const pr = branchPrQuery.data?.pullRequest;
       if (!pr) return [];
@@ -116,29 +106,10 @@ export function PRsPanel({
     }
   }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName]);
 
-  const toggleComments = (prNumber: number) => {
-    if (expandedPrComments === prNumber) {
-      setExpandedPrComments(null);
-      return;
-    }
-    setExpandedPrComments(prNumber);
-    if (prComments[prNumber]) return;
-
-    setLoadingComments((prev) => ({ ...prev, [prNumber]: true }));
-    setTimeout(() => {
-      setPrComments((prev) => ({
-        ...prev,
-        [prNumber]: [
-          { author: "github-actions[bot]", body: "All CI checks have passed successfully.", createdAt: "Just now" },
-        ],
-      }));
-      setLoadingComments((prev) => ({ ...prev, [prNumber]: false }));
-    }, 400);
-  };
-
   const handleConfirmMerge = () => {
     if (!mergePr) return;
-    const flag = mergeMethod === "squash" ? "--squash" : mergeMethod === "rebase" ? "--rebase" : "--merge";
+    const flag =
+      mergeMethod === "squash" ? "--squash" : mergeMethod === "rebase" ? "--rebase" : "--merge";
     const delFlag = deleteBranch ? " --delete-branch" : "";
     onRunInTerminal(`gh pr merge ${mergePr.n} ${flag}${delFlag}`);
     setMergePr(null);
@@ -153,6 +124,7 @@ export function PRsPanel({
           <div className="grid grid-cols-2 p-1 rounded-xl bg-muted/40 border border-border/80 text-xs shrink-0 sm:w-auto">
             <button
               type="button"
+              aria-pressed={viewMode === "branch"}
               onClick={() => setViewMode("branch")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 viewMode === "branch"
@@ -164,6 +136,7 @@ export function PRsPanel({
             </button>
             <button
               type="button"
+              aria-pressed={viewMode === "all"}
               onClick={() => setViewMode("all")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 viewMode === "all"
@@ -182,6 +155,7 @@ export function PRsPanel({
                 <button
                   key={st}
                   type="button"
+                  aria-pressed={filterState === st}
                   onClick={() => setFilterState(st)}
                   className={`px-2.5 py-1 rounded-md capitalize font-medium transition-colors ${
                     filterState === st
@@ -203,13 +177,42 @@ export function PRsPanel({
         </Button>
       </div>
 
-      {loading ? (
-        <GitCheckingState message={viewMode === "branch" ? `Loading pull request for ${branchName}…` : `Loading repository pull requests (${filterState})…`} size={36} />
+      {activeQuery.isError ? (
+        <div role="alert">
+          <Card className="border-destructive/40 bg-destructive/5 p-6 text-center">
+            <GitPullRequest className="mx-auto mb-2 text-destructive" size={28} />
+            <p className="text-sm font-medium text-foreground">Unable to load pull requests</p>
+            <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              {activeQuery.error instanceof Error
+                ? activeQuery.error.message
+                : "The pull-request provider returned an unknown error."}
+            </p>
+            <Button
+              className="mt-4"
+              size="sm"
+              variant="outline"
+              onClick={() => activeQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </Card>
+        </div>
+      ) : loading ? (
+        <GitCheckingState
+          message={
+            viewMode === "branch"
+              ? `Loading pull request for ${branchName}…`
+              : `Loading repository pull requests (${filterState})…`
+          }
+          size={36}
+        />
       ) : prs.length === 0 ? (
         <Card className="p-8 text-center bg-card/40 border-dashed">
           <GitPullRequest className="mx-auto mb-2 text-muted-foreground/70" size={28} />
           <p className="text-sm font-medium text-foreground mb-1">
-            {viewMode === "branch" ? `No pull requests for ${branchName}` : `No ${filterState === "all" ? "" : filterState + " "}pull requests in this repository`}
+            {viewMode === "branch"
+              ? `No pull requests for ${branchName}`
+              : `No ${filterState === "all" ? "" : filterState + " "}pull requests in this repository`}
           </p>
           <p className="text-xs text-muted-foreground/70 mb-4 max-w-sm mx-auto">
             {viewMode === "branch"
@@ -225,56 +228,54 @@ export function PRsPanel({
           {prs.map((pr) => (
             <Card key={pr.n} className="p-3.5 hover:bg-muted/20 transition-colors">
               <div className="flex items-center gap-3">
-                <Badge variant={pr.state === "open" ? "success" : pr.state === "merged" ? "secondary" : pr.state === "closed" ? "destructive" : "outline"}>
+                <Badge
+                  variant={
+                    pr.state === "open"
+                      ? "success"
+                      : pr.state === "merged"
+                        ? "secondary"
+                        : pr.state === "closed"
+                          ? "destructive"
+                          : "outline"
+                  }
+                >
                   #{pr.n} {pr.state}
                 </Badge>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-foreground/90 truncate">{pr.title}</div>
-                  <div className="text-[10px] font-mono text-muted-foreground/70 truncate">{pr.branch}</div>
+                  <div className="text-xs font-semibold text-foreground/90 truncate">
+                    {pr.title}
+                  </div>
+                  <div className="text-[10px] font-mono text-muted-foreground/70 truncate">
+                    {pr.branch}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => toggleComments(pr.n)}>
-                    <MessageSquare />
-                    {expandedPrComments === pr.n ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />} Comments
-                  </Button>
                   {pr.state === "open" && (
                     <Button size="sm" onClick={() => setMergePr(pr)}>
                       <GitMerge /> Merge…
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRunInTerminal(`gh pr view ${pr.n} --web`)}
+                  >
                     View on GitHub
                   </Button>
                 </div>
               </div>
-
-              {expandedPrComments === pr.n && (
-                <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
-                  <div className="text-[11px] font-medium text-muted-foreground">Review Feedback & Comments</div>
-                  {loadingComments[pr.n] ? (
-                    <div className="text-[11px] text-muted-foreground/70 py-2">Fetching PR activity…</div>
-                  ) : (prComments[pr.n] ?? []).length === 0 ? (
-                    <div className="text-[11px] text-muted-foreground/70 py-2">No review comments yet.</div>
-                  ) : (
-                    (prComments[pr.n] ?? []).map((c, i) => (
-                      <div key={i} className="p-2.5 rounded border border-border/50 bg-muted/50 text-xs">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-foreground">{c.author}</span>
-                          <span className="text-[10px] text-muted-foreground/70">{c.createdAt}</span>
-                        </div>
-                        <p className="text-foreground/90">{c.body}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
             </Card>
           ))}
         </div>
       )}
 
       {mergePr && (
-        <Dialog open onOpenChange={(open) => { if (!open) setMergePr(null); }}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setMergePr(null);
+          }}
+        >
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
               <DialogTitle>Merge Pull Request #{mergePr.n}</DialogTitle>
@@ -285,7 +286,9 @@ export function PRsPanel({
               </p>
 
               <div>
-                <label className="block text-[11px] font-medium text-muted-foreground mb-1">Merge Strategy</label>
+                <label className="block text-[11px] font-medium text-muted-foreground mb-1">
+                  Merge Strategy
+                </label>
                 <Select
                   value={mergeMethod}
                   onChange={(e) => setMergeMethod(e.target.value as "squash" | "merge" | "rebase")}
@@ -297,11 +300,10 @@ export function PRsPanel({
               </div>
 
               <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20 mt-2">
-                <span className="text-xs text-foreground/90 font-medium">Delete head branch after merging</span>
-                <Switch
-                  checked={deleteBranch}
-                  onCheckedChange={(c) => setDeleteBranch(!!c)}
-                />
+                <span className="text-xs text-foreground/90 font-medium">
+                  Delete head branch after merging
+                </span>
+                <Switch checked={deleteBranch} onCheckedChange={(c) => setDeleteBranch(!!c)} />
               </div>
             </DialogPanel>
             <DialogFooter>

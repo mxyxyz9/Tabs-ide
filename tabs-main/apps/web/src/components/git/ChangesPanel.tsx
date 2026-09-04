@@ -24,7 +24,7 @@ import { useCallback, useMemo, useState } from "react";
 import { deriveRepoState } from "../../lib/deriveRepoState";
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
@@ -69,7 +69,7 @@ export function FileRow({
   const [expanded, setExpanded] = useState(false);
   const [diffLines, setDiffLines] = useState<Array<{ type: string; text: string }> | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
-  const api = readNativeApi();
+  const api = useGitApi();
 
   const toggleInlineDiff = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -87,8 +87,10 @@ export function FileRow({
         if (res?.patch) {
           const lines = res.patch.split("\n").map((line: string) => {
             if (line.startsWith("@@")) return { type: "hunk", text: line };
-            if (line.startsWith("+") && !line.startsWith("+++")) return { type: "add", text: line.slice(1) };
-            if (line.startsWith("-") && !line.startsWith("---")) return { type: "del", text: line.slice(1) };
+            if (line.startsWith("+") && !line.startsWith("+++"))
+              return { type: "add", text: line.slice(1) };
+            if (line.startsWith("-") && !line.startsWith("---"))
+              return { type: "del", text: line.slice(1) };
             return { type: "ctx", text: line };
           });
           setDiffLines(lines);
@@ -114,11 +116,19 @@ export function FileRow({
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        <button type="button" onClick={() => onOpenDiff(f)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer">
+        <button
+          type="button"
+          onClick={() => onOpenDiff(f)}
+          className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
+        >
           <span
             className="w-1.5 h-1.5 rounded-full shrink-0"
             style={{
-              backgroundColor: f.untracked ? "var(--sem-emerald)" : f.deletions > 0 && f.insertions === 0 ? "var(--sem-red)" : "var(--sem-amber)",
+              backgroundColor: f.untracked
+                ? "var(--sem-emerald)"
+                : f.deletions > 0 && f.insertions === 0
+                  ? "var(--sem-red)"
+                  : "var(--sem-amber)",
             }}
           />
           <FilePathLabel path={f.path} size="text-xs" />
@@ -126,7 +136,10 @@ export function FileRow({
         <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--sem-emerald)" }}>
           +{f.insertions}
         </span>
-        <span className="text-[11px] font-mono shrink-0" style={{ color: "var(--sem-red)", opacity: 0.85 }}>
+        <span
+          className="text-[11px] font-mono shrink-0"
+          style={{ color: "var(--sem-red)", opacity: 0.85 }}
+        >
           -{f.deletions}
         </span>
         <button
@@ -147,7 +160,11 @@ export function FileRow({
           title="Discard changes to this file"
           className={`${rowLoadingAction === "discard" ? "opacity-100" : "opacity-0 group-hover:opacity-100"} transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer disabled:pointer-events-none`}
         >
-          {rowLoadingAction === "discard" ? <Loader2 size={10} className="animate-spin" /> : <Trash2 size={10} />}
+          {rowLoadingAction === "discard" ? (
+            <Loader2 size={10} className="animate-spin" />
+          ) : (
+            <Trash2 size={10} />
+          )}
         </button>
         <button
           type="button"
@@ -201,7 +218,9 @@ export function ConflictResolver({
 }: {
   files: ConflictFile[];
   resolutions: Record<string, { strategy: string; text?: string }>;
-  setResolutions: React.Dispatch<React.SetStateAction<Record<string, { strategy: string; text?: string }>>>;
+  setResolutions: React.Dispatch<
+    React.SetStateAction<Record<string, { strategy: string; text?: string }>>
+  >;
 }) {
   const [activeFile, setActiveFile] = useState(0);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -209,7 +228,8 @@ export function ConflictResolver({
 
   const key = (fi: number, hi: number) => `${fi}:${hi}`;
   const isResolved = (fi: number, hi: number) => Boolean(resolutions[key(fi, hi)]);
-  const fileResolvedCount = (fi: number) => files[fi]?.hunks.filter((_, hi) => isResolved(fi, hi)).length ?? 0;
+  const fileResolvedCount = (fi: number) =>
+    files[fi]?.hunks.filter((_, hi) => isResolved(fi, hi)).length ?? 0;
   const fileDone = (fi: number) => fileResolvedCount(fi) === (files[fi]?.hunks.length ?? 0);
 
   const setStrategy = (fi: number, hi: number, strategy: string, text?: string) => {
@@ -256,8 +276,13 @@ export function ConflictResolver({
                 activeFile === fi ? "bg-accent" : "hover:bg-muted/50"
               }`}
             >
-              <div className="text-[11px] font-mono text-foreground/90 truncate leading-normal pb-0.5">{f.path.split("/").pop()}</div>
-              <div className="text-[10px] font-mono mt-1" style={{ color: fileDone(fi) ? "var(--sem-emerald)" : "var(--fg-30)" }}>
+              <div className="text-[11px] font-mono text-foreground/90 truncate leading-normal pb-0.5">
+                {f.path.split("/").pop()}
+              </div>
+              <div
+                className="text-[10px] font-mono mt-1"
+                style={{ color: fileDone(fi) ? "var(--sem-emerald)" : "var(--fg-30)" }}
+              >
                 {fileResolvedCount(fi)}/{f.hunks.length} resolved
               </div>
             </button>
@@ -271,12 +296,17 @@ export function ConflictResolver({
             return (
               <Card key={hi} className="mb-3 overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
-                  <span className="text-[11px] font-mono text-muted-foreground/70 truncate">{h.header}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground/70 truncate">
+                    {h.header}
+                  </span>
                   <span
                     className="text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0"
                     style={
                       res
-                        ? { color: "var(--sem-emerald)", backgroundColor: "var(--sem-emerald-soft)" }
+                        ? {
+                            color: "var(--sem-emerald)",
+                            backgroundColor: "var(--sem-emerald-soft)",
+                          }
                         : { color: "var(--sem-amber)", backgroundColor: "var(--sem-amber-soft)" }
                     }
                   >
@@ -288,20 +318,30 @@ export function ConflictResolver({
                   <>
                     <div className="grid grid-cols-2">
                       <div className="border-r border-border/50 min-w-0">
-                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/70 border-b border-border/50 font-mono">Current (ours)</div>
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/70 border-b border-border/50 font-mono">
+                          Current (ours)
+                        </div>
                         <div className="font-mono text-[11px] py-1 overflow-x-auto custom-scrollbar">
                           {h.ours.map((l, li) => (
-                            <div key={li} className="px-3 py-0.5 whitespace-pre text-muted-foreground">
+                            <div
+                              key={li}
+                              className="px-3 py-0.5 whitespace-pre text-muted-foreground"
+                            >
                               {l}
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="min-w-0">
-                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/70 border-b border-border/50 font-mono">Incoming (theirs)</div>
+                        <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-muted-foreground/70 border-b border-border/50 font-mono">
+                          Incoming (theirs)
+                        </div>
                         <div className="font-mono text-[11px] py-1 overflow-x-auto custom-scrollbar">
                           {h.theirs.map((l, li) => (
-                            <div key={li} className="px-3 py-0.5 whitespace-pre text-muted-foreground">
+                            <div
+                              key={li}
+                              className="px-3 py-0.5 whitespace-pre text-muted-foreground"
+                            >
                               {l}
                             </div>
                           ))}
@@ -309,13 +349,25 @@ export function ConflictResolver({
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-border/50">
-                      <Button size="sm" variant={res?.strategy === "ours" ? "default" : "outline"} onClick={() => setStrategy(activeFile, hi, "ours")}>
+                      <Button
+                        size="sm"
+                        variant={res?.strategy === "ours" ? "default" : "outline"}
+                        onClick={() => setStrategy(activeFile, hi, "ours")}
+                      >
                         Use current
                       </Button>
-                      <Button size="sm" variant={res?.strategy === "theirs" ? "default" : "outline"} onClick={() => setStrategy(activeFile, hi, "theirs")}>
+                      <Button
+                        size="sm"
+                        variant={res?.strategy === "theirs" ? "default" : "outline"}
+                        onClick={() => setStrategy(activeFile, hi, "theirs")}
+                      >
                         Use incoming
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setStrategy(activeFile, hi, "both")}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setStrategy(activeFile, hi, "both")}
+                      >
                         Use both
                       </Button>
                       <Button
@@ -339,7 +391,10 @@ export function ConflictResolver({
                       className="w-full border border-border rounded-lg text-foreground/90 bg-background font-mono text-[11px] p-3 outline-none focus:border-border transition-colors"
                     />
                     <div className="flex items-center gap-2 mt-2">
-                      <Button size="sm" onClick={() => setStrategy(activeFile, hi, "manual", manualText)}>
+                      <Button
+                        size="sm"
+                        onClick={() => setStrategy(activeFile, hi, "manual", manualText)}
+                      >
                         Save resolution
                       </Button>
                       <Button variant="ghost" size="sm" onClick={() => setEditingKey(null)}>
@@ -431,8 +486,12 @@ export function ChangesPanel({
   const [isUnstagingAll, setIsUnstagingAll] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCommittingAndPushing, setIsCommittingAndPushing] = useState(false);
-  const [fileRowLoadingMap, setFileRowLoadingMap] = useState<Record<string, "stage" | "unstage" | "discard">>({});
-  const [diffSummaryResult, setDiffSummaryResultState] = useState<import("@tabs/contracts").GitGenerateDiffSummaryResult | null>(() => {
+  const [fileRowLoadingMap, setFileRowLoadingMap] = useState<
+    Record<string, "stage" | "unstage" | "discard">
+  >({});
+  const [diffSummaryResult, setDiffSummaryResultState] = useState<
+    import("@tabs/contracts").GitGenerateDiffSummaryResult | null
+  >(() => {
     if (!cwd) return null;
     try {
       const cached = sessionStorage.getItem(`tabs_git_summary_${cwd}`);
@@ -442,7 +501,9 @@ export function ChangesPanel({
     }
   });
 
-  const setDiffSummaryResult = (val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null) => {
+  const setDiffSummaryResult = (
+    val: import("@tabs/contracts").GitGenerateDiffSummaryResult | null,
+  ) => {
     setDiffSummaryResultState(val);
     if (cwd) {
       try {
@@ -474,7 +535,7 @@ export function ChangesPanel({
     [setGitState],
   );
 
-  const api = readNativeApi();
+  const api = useGitApi();
   const queryClient = useQueryClient();
 
   const isGitInstalled = environmentData?.git.installed ?? true;
@@ -484,7 +545,9 @@ export function ChangesPanel({
   const ahead = statusData?.aheadCount ?? 0;
   const behind = statusData?.behindCount ?? 0;
   const stagedFiles = statusData?.staged?.files ?? [];
-  const unstagedFiles = (statusData?.unstaged?.files ?? []).filter((f) => !f.conflicted && !f.untracked);
+  const unstagedFiles = (statusData?.unstaged?.files ?? []).filter(
+    (f) => !f.conflicted && !f.untracked,
+  );
   const conflictedFiles = statusData?.conflicted?.files ?? [];
   const hasConflict = conflictedFiles.length > 0;
   const totalChanged = stagedFiles.length + unstagedFiles.length;
@@ -505,7 +568,8 @@ export function ChangesPanel({
         unstagedFilesCount: unstagedFiles.length,
         hasConflict,
         isDetached,
-        isEmptyRepo: isRepo && (commits.length === 0 || (branchList?.branches.length === 0 && !hasConflict)),
+        isEmptyRepo:
+          isRepo && (commits.length === 0 || (branchList?.branches.length === 0 && !hasConflict)),
         remoteName,
         pushAccess,
       }),
@@ -538,7 +602,11 @@ export function ChangesPanel({
       }
       await invalidateGitQueries(queryClient);
     } catch (error) {
-      toastManager.add({ type: "error", title: staged ? "Unstage failed" : "Stage failed", description: toGitUserFacingErrorMessage(error) });
+      toastManager.add({
+        type: "error",
+        title: staged ? "Unstage failed" : "Stage failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
     } finally {
       setFileRowLoadingMap((prev) => {
         const next = { ...prev };
@@ -555,7 +623,11 @@ export function ChangesPanel({
       await api.git.stageFiles({ cwd, paths: unstagedFiles.map((f) => f.path) });
       await invalidateGitQueries(queryClient);
     } catch (error) {
-      toastManager.add({ type: "error", title: "Stage all failed", description: toGitUserFacingErrorMessage(error) });
+      toastManager.add({
+        type: "error",
+        title: "Stage all failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
     } finally {
       setIsStagingAll(false);
     }
@@ -568,7 +640,11 @@ export function ChangesPanel({
       await api.git.unstageFiles({ cwd, paths: stagedFiles.map((f) => f.path) });
       await invalidateGitQueries(queryClient);
     } catch (error) {
-      toastManager.add({ type: "error", title: "Unstage all failed", description: toGitUserFacingErrorMessage(error) });
+      toastManager.add({
+        type: "error",
+        title: "Unstage all failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
     } finally {
       setIsUnstagingAll(false);
     }
@@ -582,7 +658,11 @@ export function ChangesPanel({
       await invalidateGitQueries(queryClient);
       toastManager.add({ type: "success", title: `Discarded ${f.path}` });
     } catch (error) {
-      toastManager.add({ type: "error", title: "Discard failed", description: toGitUserFacingErrorMessage(error) });
+      toastManager.add({
+        type: "error",
+        title: "Discard failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
     } finally {
       setFileRowLoadingMap((prev) => {
         const next = { ...prev };
@@ -592,13 +672,27 @@ export function ChangesPanel({
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (!api || !stagedFiles.length) return;
     setGenerating(true);
-    setTimeout(() => {
-      const summary = stagedFiles.length ? `Update ${stagedFiles.slice(0, 2).map((f) => f.path.split("/").pop()).join(", ")}` : "";
-      setMsg(summary);
+    try {
+      const result = await api.git.generateDiffSummary({
+        cwd,
+        target: { kind: "working_tree" },
+        ...(selectedModel ? { modelSelection: selectedModel } : {}),
+        userHint:
+          "Prioritize the staged changes and return a concise imperative commit subject as the first line.",
+      });
+      setMsg(result.summary.split("\n", 1)[0]?.trim() ?? "");
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Message generation failed",
+        description: toGitUserFacingErrorMessage(error),
+      });
+    } finally {
       setGenerating(false);
-    }, 400);
+    }
   };
 
   const handleCommit = async (andPush = false) => {
@@ -621,20 +715,23 @@ export function ChangesPanel({
       }
       await invalidateGitQueries(queryClient);
       setMsg("");
-      toastManager.add({ type: "success", title: amend ? "Amended commit" : andPush ? "Committed and pushed" : "Committed staged" });
+      toastManager.add({
+        type: "success",
+        title: amend ? "Amended commit" : andPush ? "Committed and pushed" : "Committed staged",
+      });
     } catch (error) {
       await invalidateGitQueries(queryClient);
       const errObj = error as { message?: string; phase?: string; createdCommitSha?: string };
-      const isPushFailureAfterCommit = errObj?.phase === "push" && Boolean(errObj?.createdCommitSha);
+      const isPushFailureAfterCommit =
+        errObj?.phase === "push" && Boolean(errObj?.createdCommitSha);
       const unpushedCount = ahead + 1;
-      const countLabel = unpushedCount === 1 ? "1 unpushed commit" : `${unpushedCount} unpushed commits`;
+      const countLabel =
+        unpushedCount === 1 ? "1 unpushed commit" : `${unpushedCount} unpushed commits`;
       const shortSha = errObj.createdCommitSha ? errObj.createdCommitSha.substring(0, 7) : "";
       const errorMsg = toGitUserFacingErrorMessage(error);
       toastManager.add({
         type: "error",
-        title: isPushFailureAfterCommit
-          ? "Commit succeeded, but push failed"
-          : "Commit failed",
+        title: isPushFailureAfterCommit ? "Commit succeeded, but push failed" : "Commit failed",
         description: isPushFailureAfterCommit
           ? `${shortSha ? `Committed as ${shortSha}. ` : ""}Push failed: ${errorMsg}. You have ${countLabel} — click Push to retry.`
           : errorMsg,
@@ -692,13 +789,18 @@ export function ChangesPanel({
       )}
       {/* Conflicts section */}
       {hasConflict && (
-        <Card className="p-4 mb-4 border" style={{ borderColor: "var(--sem-red-border)", backgroundColor: "var(--sem-red-soft)" }}>
+        <Card
+          className="p-4 mb-4 border"
+          style={{ borderColor: "var(--sem-red-border)", backgroundColor: "var(--sem-red-soft)" }}
+        >
           <div className="flex items-center justify-between mb-3">
             <div>
               <span className="text-xs font-semibold" style={{ color: "var(--sem-red)" }}>
                 Merge conflict ({conflictedFiles.length} files)
               </span>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Resolve every conflict hunk below, then stage all files and complete the merge.</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Resolve every conflict hunk below, then stage all files and complete the merge.
+              </p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => onRunInTerminal("git merge --abort")}>
               <RotateCcw /> Abort merge
@@ -726,7 +828,12 @@ export function ChangesPanel({
       <SectionLabel
         action={
           stagedFiles.length > 0 ? (
-            <Button variant="ghost" size="sm" disabled={isUnstagingAll || isStagingAll} onClick={() => void unstageAll()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isUnstagingAll || isStagingAll}
+              onClick={() => void unstageAll()}
+            >
               {isUnstagingAll ? <Loader2 size={12} className="animate-spin" /> : null}
               {isUnstagingAll ? "Unstaging all…" : "Unstage all"}
             </Button>
@@ -737,7 +844,9 @@ export function ChangesPanel({
       </SectionLabel>
       <Card className="p-2 mb-4">
         {stagedFiles.length === 0 ? (
-          <div className="text-center text-[11px] text-muted-foreground/50 py-6">No staged changes</div>
+          <div className="text-center text-[11px] text-muted-foreground/50 py-6">
+            No staged changes
+          </div>
         ) : (
           stagedFiles.map((f) => (
             <FileRow
@@ -759,7 +868,12 @@ export function ChangesPanel({
         action={
           <div className="flex items-center gap-2">
             {unstagedFiles.length > 0 && (
-              <Button variant="ghost" size="sm" disabled={isStagingAll || isUnstagingAll} onClick={() => void stageAll()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={isStagingAll || isUnstagingAll}
+                onClick={() => void stageAll()}
+              >
                 {isStagingAll ? <Loader2 size={12} className="animate-spin" /> : null}
                 {isStagingAll ? "Staging all…" : "Stage all"}
               </Button>
@@ -776,7 +890,9 @@ export function ChangesPanel({
       </SectionLabel>
       <Card className="p-2 mb-4">
         {unstagedFiles.length === 0 ? (
-          <div className="text-center text-[11px] text-muted-foreground/50 py-6">Working tree clean</div>
+          <div className="text-center text-[11px] text-muted-foreground/50 py-6">
+            Working tree clean
+          </div>
         ) : (
           unstagedFiles.map((f) => (
             <FileRow
@@ -804,7 +920,9 @@ export function ChangesPanel({
               if (stagedFiles.length && repoState.canCommitLocally) void handleCommit(false);
             }
           }}
-          placeholder={amend ? "Leave blank to keep the previous message…" : "Summarize your change…"}
+          placeholder={
+            amend ? "Leave blank to keep the previous message…" : "Summarize your change…"
+          }
           minRows={3}
           className="w-full border border-border/80 rounded-lg bg-background text-foreground text-xs placeholder:text-muted-foreground/50 p-3 outline-none focus:border-border transition-colors leading-relaxed"
         />
@@ -813,7 +931,9 @@ export function ChangesPanel({
         <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20">
           <div className="space-y-0.5">
             <div className="text-xs font-medium text-foreground">Amend previous commit</div>
-            <div className="text-[11px] text-muted-foreground/70">Replace the tip of current branch instead of creating a new commit</div>
+            <div className="text-[11px] text-muted-foreground/70">
+              Replace the tip of current branch instead of creating a new commit
+            </div>
           </div>
           <Switch checked={amend} onCheckedChange={(c) => setAmend(!!c)} />
         </div>
@@ -822,22 +942,41 @@ export function ChangesPanel({
           <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
-              disabled={!stagedFiles.length || !repoState.canCommitLocally || isCommitting || isCommittingAndPushing}
+              disabled={
+                !stagedFiles.length ||
+                !repoState.canCommitLocally ||
+                isCommitting ||
+                isCommittingAndPushing
+              }
               title={!stagedFiles.length ? "Nothing staged yet" : undefined}
               onClick={() => void handleCommit(false)}
             >
               {isCommitting ? <Loader2 size={13} className="animate-spin" /> : <GitCommit />}
-              {isCommitting ? (amend ? "Amending…" : "Committing…") : amend ? "Amend commit" : repoState.commitButtonLabel}
+              {isCommitting
+                ? amend
+                  ? "Amending…"
+                  : "Committing…"
+                : amend
+                  ? "Amend commit"
+                  : repoState.commitButtonLabel}
             </Button>
             <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
                 size="sm"
-                disabled={totalChanged === 0 || isSummarizing || isCommitting || isCommittingAndPushing}
-                title={totalChanged === 0 ? "No changes in working tree" : "Summarize changes with AI"}
+                disabled={
+                  totalChanged === 0 || isSummarizing || isCommitting || isCommittingAndPushing
+                }
+                title={
+                  totalChanged === 0 ? "No changes in working tree" : "Summarize changes with AI"
+                }
                 onClick={() => void handleSummarizeChanges()}
               >
-                {isSummarizing ? <Loader2 size={13} className="animate-spin" /> : <Wand2 className="size-3.5 text-primary" />}
+                {isSummarizing ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Wand2 className="size-3.5 text-primary" />
+                )}
                 {isSummarizing ? "Summarizing…" : "Summarize changes"}
               </Button>
               <GitModelPicker selection={selectedModel} onSelect={setSelectedModel} />
@@ -847,17 +986,30 @@ export function ChangesPanel({
               size="sm"
               disabled={!stagedFiles.length || generating || isCommitting || isCommittingAndPushing}
               title="Generates a message from the staged diff"
-              onClick={handleGenerate}
+              onClick={() => void handleGenerate()}
             >
-              {generating ? <Loader2 size={13} className="animate-spin" /> : <Wand2 className="size-3.5" />}
+              {generating ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Wand2 className="size-3.5" />
+              )}
               {generating ? "Generating…" : "Generate message"}
             </Button>
           </div>
           <Button
             variant="outline"
             size="sm"
-            disabled={!stagedFiles.length || !repoState.canCommitLocally || !repoState.canPush || isCommitting || isCommittingAndPushing}
-            title={repoState.pushDisabledReason ?? (!stagedFiles.length ? "Nothing staged yet" : undefined)}
+            disabled={
+              !stagedFiles.length ||
+              !repoState.canCommitLocally ||
+              !repoState.canPush ||
+              isCommitting ||
+              isCommittingAndPushing
+            }
+            title={
+              repoState.pushDisabledReason ??
+              (!stagedFiles.length ? "Nothing staged yet" : undefined)
+            }
             onClick={() => void handleCommit(true)}
           >
             {isCommittingAndPushing ? <Loader2 size={13} className="animate-spin" /> : <Upload />}

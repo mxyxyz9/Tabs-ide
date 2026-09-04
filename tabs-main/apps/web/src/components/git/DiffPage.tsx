@@ -1,17 +1,8 @@
-import type {
-  GitHistoryCommit,
-  GitStatusFile,
-  GitStatusResult,
-} from "@tabs/contracts";
+import type { GitHistoryCommit, GitStatusFile, GitStatusResult } from "@tabs/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { readNativeApi } from "../../nativeApi";
-import {
-  Card,
-  FilePathLabel,
-  PathBreadcrumb,
-  StatPill,
-} from "./gitPrimitives";
+import { useGitApi } from "./gitApiContext";
+import { Card, FilePathLabel, PathBreadcrumb, StatPill } from "./gitPrimitives";
 
 export interface ParsedFileDiff {
   path: string;
@@ -47,7 +38,9 @@ export function DiffLines({ lines }: { lines: Array<{ type: string; text: string
           return (
             <div key={i} className="flex items-center gap-3 px-3 py-2">
               <div className="flex-1 h-px bg-border" />
-              <span className="text-[10px] text-muted-foreground/70 whitespace-pre shrink-0">{l.text}</span>
+              <span className="text-[10px] text-muted-foreground/70 whitespace-pre shrink-0">
+                {l.text}
+              </span>
               <div className="flex-1 h-px bg-border" />
             </div>
           );
@@ -56,17 +49,39 @@ export function DiffLines({ lines }: { lines: Array<{ type: string; text: string
         const isDel = l.type === "del";
         const barColor = isAdd ? "var(--sem-emerald)" : isDel ? "var(--sem-red)" : "transparent";
         const rowStyle = {
-          backgroundColor: isAdd ? "var(--sem-emerald-soft)" : isDel ? "var(--sem-red-soft)" : "transparent",
+          backgroundColor: isAdd
+            ? "var(--sem-emerald-soft)"
+            : isDel
+              ? "var(--sem-red-soft)"
+              : "transparent",
           borderLeft: `2px solid ${barColor}`,
         };
         return (
           <div key={i} className="flex" style={rowStyle}>
-            <span className="w-7 shrink-0 text-right pr-1.5 select-none text-[10px] text-muted-foreground/50">{l.oldNo || ""}</span>
-            <span className="w-7 shrink-0 text-right pr-1.5 select-none text-[10px] text-muted-foreground/50 border-r border-border/50 mr-2">{l.newNo || ""}</span>
-            <span className="w-3 shrink-0 select-none text-[11px]" style={{ color: isAdd ? "var(--sem-emerald)" : isDel ? "var(--sem-red)" : "var(--fg-20)" }}>
+            <span className="w-7 shrink-0 text-right pr-1.5 select-none text-[10px] text-muted-foreground/50">
+              {l.oldNo || ""}
+            </span>
+            <span className="w-7 shrink-0 text-right pr-1.5 select-none text-[10px] text-muted-foreground/50 border-r border-border/50 mr-2">
+              {l.newNo || ""}
+            </span>
+            <span
+              className="w-3 shrink-0 select-none text-[11px]"
+              style={{
+                color: isAdd ? "var(--sem-emerald)" : isDel ? "var(--sem-red)" : "var(--fg-20)",
+              }}
+            >
               {isAdd ? "+" : isDel ? "-" : ""}
             </span>
-            <span className="whitespace-pre pr-3" style={{ color: isAdd ? "var(--sem-emerald-text)" : isDel ? "var(--sem-red-text)" : "var(--fg-60)" }}>
+            <span
+              className="whitespace-pre pr-3"
+              style={{
+                color: isAdd
+                  ? "var(--sem-emerald-text)"
+                  : isDel
+                    ? "var(--sem-red-text)"
+                    : "var(--fg-60)",
+              }}
+            >
               {l.text}
             </span>
           </div>
@@ -160,7 +175,17 @@ export function parseGitPatchToFiles(patch: string): ParsedFileDiff[] {
   return files;
 }
 
-export function DiffCard({ path, ins, del, lines }: { path: string; ins: number; del: number; lines: Array<{ type: string; text: string }> }) {
+export function DiffCard({
+  path,
+  ins,
+  del,
+  lines,
+}: {
+  path: string;
+  ins: number;
+  del: number;
+  lines: Array<{ type: string; text: string }>;
+}) {
   return (
     <Card className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-border bg-muted/40 shrink-0">
@@ -194,10 +219,13 @@ export function DiffPage({
     [setGitState],
   );
 
-  const api = readNativeApi();
+  const api = useGitApi();
   const stagedFiles = statusData?.staged?.files ?? [];
   const unstagedFiles = statusData?.unstaged?.files ?? [];
-  const workingFiles = useMemo(() => [...stagedFiles, ...unstagedFiles], [stagedFiles, unstagedFiles]);
+  const workingFiles = useMemo(
+    () => [...stagedFiles, ...unstagedFiles],
+    [stagedFiles, unstagedFiles],
+  );
 
   const selectedPath = gitState.selectedPath;
   const selectedCommitSha = gitState.selectedCommit;
@@ -299,7 +327,9 @@ export function DiffPage({
           type="button"
           onClick={() => setDiffMode("working")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-            diffMode === "working" ? "bg-accent text-foreground" : "text-muted-foreground/70 hover:text-foreground"
+            diffMode === "working"
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground/70 hover:text-foreground"
           }`}
         >
           Working tree
@@ -308,7 +338,9 @@ export function DiffPage({
           type="button"
           onClick={() => setDiffMode("history")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-            diffMode === "history" ? "bg-accent text-foreground" : "text-muted-foreground/70 hover:text-foreground"
+            diffMode === "history"
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground/70 hover:text-foreground"
           }`}
         >
           Commit history
@@ -332,11 +364,22 @@ export function DiffPage({
                       selectedPath === f.path ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                   >
-                    {selectedPath === f.path && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
+                    {selectedPath === f.path && (
+                      <span
+                        className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+                        style={{ backgroundColor: "var(--fg)" }}
+                      />
+                    )}
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ backgroundColor: f.untracked ? "var(--sem-emerald)" : f.deletions > 0 && f.insertions === 0 ? "var(--sem-red)" : "var(--sem-amber)" }}
+                        style={{
+                          backgroundColor: f.untracked
+                            ? "var(--sem-emerald)"
+                            : f.deletions > 0 && f.insertions === 0
+                              ? "var(--sem-red)"
+                              : "var(--sem-amber)",
+                        }}
                       />
                       <FilePathLabel path={f.path} />
                     </div>
@@ -351,23 +394,46 @@ export function DiffPage({
                       selectedCommitSha === c.sha ? "bg-muted" : "hover:bg-muted/50"
                     }`}
                   >
-                    {selectedCommitSha === c.sha && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full" style={{ backgroundColor: "var(--fg)" }} />}
-                    <div className="text-xs text-foreground/90 truncate leading-snug">{c.subject}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground/70 mt-0.5">{c.shortSha}</div>
+                    {selectedCommitSha === c.sha && (
+                      <span
+                        className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+                        style={{ backgroundColor: "var(--fg)" }}
+                      />
+                    )}
+                    <div className="text-xs text-foreground/90 truncate leading-snug">
+                      {c.subject}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground/70 mt-0.5">
+                      {c.shortSha}
+                    </div>
                   </button>
                 ))}
           </div>
           <div className="flex-1 min-w-0 h-full">
             {diffMode === "working" ? (
               selectedFile ? (
-                <DiffCard path={selectedFile.path} ins={selectedFile.insertions} del={selectedFile.deletions} lines={diffContent} />
+                <DiffCard
+                  path={selectedFile.path}
+                  ins={selectedFile.insertions}
+                  del={selectedFile.deletions}
+                  lines={diffContent}
+                />
               ) : (
-                <div className="text-center text-xs text-muted-foreground/50 py-10">Pick a file on the left.</div>
+                <div className="text-center text-xs text-muted-foreground/50 py-10">
+                  Pick a file on the left.
+                </div>
               )
             ) : selectedCommit ? (
-              <DiffCard path={selectedCommit.subject} ins={commitStats.ins} del={commitStats.del} lines={diffContent} />
+              <DiffCard
+                path={selectedCommit.subject}
+                ins={commitStats.ins}
+                del={commitStats.del}
+                lines={diffContent}
+              />
             ) : (
-              <div className="text-center text-xs text-muted-foreground/50 py-10">Pick a commit on the left.</div>
+              <div className="text-center text-xs text-muted-foreground/50 py-10">
+                Pick a commit on the left.
+              </div>
             )}
           </div>
         </div>

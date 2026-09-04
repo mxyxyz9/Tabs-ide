@@ -37,6 +37,7 @@ import { StashesPanel } from "./git/StashesPanel";
 import { TagsPanel } from "./git/TagsPanel";
 import { TopBar } from "./git/TopBar";
 import { ReviewPanel } from "./git/ReviewPanel";
+import { GitApiProvider } from "./git/gitApiContext";
 import { useReviewStore } from "./git/reviewStateStore";
 import {
   AddRemoteModal,
@@ -100,6 +101,7 @@ export function GitToolV2({
   const [api, setApi] = useState<Awaited<ReturnType<typeof environmentApi>> | null>(null);
   useEffect(() => {
     let active = true;
+    setApi(null);
     void environmentApi(environmentId).then((next) => {
       if (active) setApi(next);
     });
@@ -512,6 +514,7 @@ export function GitToolV2({
           <div className={cn(panel === "prs" ? "block" : "hidden")} aria-hidden={panel !== "prs"}>
             <PRsPanel
               cwd={cwd}
+              environmentId={environmentId}
               branchName={branchName}
               onOpenCreatePR={() => setModal("createPR")}
               onRunInTerminal={onRunInTerminal}
@@ -587,167 +590,173 @@ export function GitToolV2({
   };
 
   return (
-    <GitEnvironmentGate
-      key={cwd}
-      environment={environmentData ?? undefined}
-      isRepo={branchList?.isRepo}
-      isLoading={gitEnvironmentQuery.isLoading || branchesQuery.isLoading}
-      initPending={gitInitMutation.isPending}
-      onInitRepo={() => void gitInitMutation.mutateAsync()}
-    >
-      <div
-        className="git-tool-v2 flex h-full min-h-0 overflow-hidden"
-        style={{ backgroundColor: "var(--bg-base)", color: "var(--fg)" }}
+    <GitApiProvider api={api}>
+      <GitEnvironmentGate
+        key={cwd}
+        environment={environmentData ?? undefined}
+        isRepo={branchList?.isRepo}
+        isLoading={gitEnvironmentQuery.isLoading || branchesQuery.isLoading}
+        initPending={gitInitMutation.isPending}
+        onInitRepo={() => void gitInitMutation.mutateAsync()}
       >
-        {/* Sidebar (w-64 expanded, w-16 collapsed) */}
-        <Sidebar
-          repoName={repoName}
-          panel={panel}
-          setPanel={setPanel}
-          collapsed={collapsed}
-          setCollapsed={setCollapsed}
-          changeCount={changeCount}
-          reviewBadgeCount={unreadCount}
-          hasConflict={hasConflict}
-        />
-
-        {/* Main Panel Area */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-          <TopBar
+        <div
+          className="git-tool-v2 flex h-full min-h-0 overflow-hidden"
+          style={{ backgroundColor: "var(--bg-base)", color: "var(--fg)" }}
+        >
+          {/* Sidebar (w-64 expanded, w-16 collapsed) */}
+          <Sidebar
             repoName={repoName}
-            branchLabel={branchName}
-            accentDotTone={hasConflict ? "bad" : behindCount > 0 ? "warn" : "ok"}
-            accounts={accounts}
-            activeAccountLogin={activeAccountLogin}
-            terminalOpen={terminalOpen}
-            onToggleTerminal={onToggleTerminal}
-            onSwitchAccount={switchAccount}
-            onOpenAccounts={() => setPanel("accounts")}
-            onOpenSignIn={() => setModal("deviceAuth")}
+            panel={panel}
+            setPanel={setPanel}
+            collapsed={collapsed}
+            setCollapsed={setCollapsed}
+            changeCount={changeCount}
+            reviewBadgeCount={unreadCount}
+            hasConflict={hasConflict}
           />
-          <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
-            <div className="w-full max-w-[1400px] mx-auto">{renderPanel()}</div>
+
+          {/* Main Panel Area */}
+          <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+            <TopBar
+              repoName={repoName}
+              branchLabel={branchName}
+              accentDotTone={hasConflict ? "bad" : behindCount > 0 ? "warn" : "ok"}
+              accounts={accounts}
+              activeAccountLogin={activeAccountLogin}
+              terminalOpen={terminalOpen}
+              onToggleTerminal={onToggleTerminal}
+              onSwitchAccount={switchAccount}
+              onOpenAccounts={() => setPanel("accounts")}
+              onOpenSignIn={() => setModal("deviceAuth")}
+            />
+            <div className="flex-1 overflow-y-auto px-6 py-5 custom-scrollbar">
+              <div className="w-full max-w-[1400px] mx-auto">{renderPanel()}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Modals */}
-      {modal === "stash" && (
-        <StashModal onClose={closeModal} onStash={(msg) => void doStash(msg)} />
-      )}
-      {modal === "discardAll" && (
-        <DiscardAllModal
-          count={changeCount}
-          onClose={closeModal}
-          onConfirm={() => void doDiscardAll()}
-        />
-      )}
-      {modal === "forcePush" && (
-        <ForcePushModal
-          branch={branchName}
-          onClose={closeModal}
-          onConfirm={() => {
-            onRunInTerminal(`git push --force-with-lease origin ${branchName}`);
-            closeModal();
-          }}
-        />
-      )}
-      {modal === "createPR" && (
-        <CreatePRModal
-          currentBranch={branchName}
-          branches={allBranches}
-          lastSubject={commits[0]?.subject || ""}
-          onClose={closeModal}
-          onCreate={async (pr) => {
-            // Security: never interpolate user-controlled title/body directly into a shell
-            // string — the terminal writes verbatim to a PTY and shell metacharacters
-            // (quotes, backticks, $(...), ;) would be executed.
-            //
-            // Body: written to .git/GITUI_PR_BODY and passed via --body-file so the
-            // content never touches the shell at all.
-            //
-            // Title: single-quote escaped (replace every ' with '\''). Single-quoted
-            // strings in POSIX shells treat every character literally except `'` itself.
-            const safeTitle = pr.title.replace(/'/g, `'\''`);
-            const bodyFilePath = ".git/GITUI_PR_BODY";
-            try {
-              await api?.projects.writeFile({ cwd, relativePath: bodyFilePath, contents: pr.body });
-            } catch {
-              toastManager.add({
-                type: "error",
-                title: "Could not prepare PR body",
-                description: "Failed to write body to temp file.",
-              });
-              return;
-            }
-            onRunInTerminal(
-              `gh pr create --title '${safeTitle}' --head '${pr.head}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`,
-            );
-            closeModal();
-          }}
-        />
-      )}
-      {modal === "addRemote" && (
-        <AddRemoteModal
-          onClose={closeModal}
-          onAdd={(r) => {
-            onRunInTerminal(`git remote add ${r.name} ${r.url}`);
-            closeModal();
-          }}
-        />
-      )}
-      {modal === "deviceAuth" && (
-        <DeviceAuthModal
-          cwd={cwd}
-          onRunGitHubLogin={onRunGitHubLogin}
-          onClose={closeModal}
-          onConfirm={() => {
-            closeModal();
-          }}
-        />
-      )}
-      {modal === "newWorktree" && (
-        <NewWorktreeModal
-          branches={allBranches}
-          currentBranch={branchName}
-          onClose={closeModal}
-          onCreate={(wt) => {
-            onRunInTerminal(`git worktree add -b ${wt.branch} ${wt.path} ${wt.base}`);
-            closeModal();
-          }}
-        />
-      )}
-      {modal === "draftRelease" && (
-        <DraftReleaseModal
-          tags={commits.map((c) => ({ name: c.shortSha }))}
-          commits={commits}
-          onClose={closeModal}
-          onPublish={(rel) => {
-            onRunInTerminal(
-              `gh release create ${rel.tag} --title "${rel.title}" --notes "${rel.notes}"${rel.prerelease ? " --prerelease" : ""}`,
-            );
-            closeModal();
-          }}
-        />
-      )}
-      {modal === "pullSource" && (
-        <PullSourceModal
-          branches={allBranches}
-          currentBranch={branchName}
-          onClose={closeModal}
-          onConfirm={(sourceBranch) => void stashPullReapply(sourceBranch)}
-        />
-      )}
-      {modal !== null && typeof modal === "object" && modal.kind === "reset" && (
-        <ResetModal
-          commit={modal.commit}
-          onClose={closeModal}
-          onReset={(mode) => {
-            onRunInTerminal(`git reset --${mode} ${modal.commit.sha}`);
-            closeModal();
-          }}
-        />
-      )}
-    </GitEnvironmentGate>
+        {/* Modals */}
+        {modal === "stash" && (
+          <StashModal onClose={closeModal} onStash={(msg) => void doStash(msg)} />
+        )}
+        {modal === "discardAll" && (
+          <DiscardAllModal
+            count={changeCount}
+            onClose={closeModal}
+            onConfirm={() => void doDiscardAll()}
+          />
+        )}
+        {modal === "forcePush" && (
+          <ForcePushModal
+            branch={branchName}
+            onClose={closeModal}
+            onConfirm={() => {
+              onRunInTerminal(`git push --force-with-lease origin ${branchName}`);
+              closeModal();
+            }}
+          />
+        )}
+        {modal === "createPR" && (
+          <CreatePRModal
+            currentBranch={branchName}
+            branches={allBranches}
+            lastSubject={commits[0]?.subject || ""}
+            onClose={closeModal}
+            onCreate={async (pr) => {
+              // Security: never interpolate user-controlled title/body directly into a shell
+              // string — the terminal writes verbatim to a PTY and shell metacharacters
+              // (quotes, backticks, $(...), ;) would be executed.
+              //
+              // Body: written to .git/GITUI_PR_BODY and passed via --body-file so the
+              // content never touches the shell at all.
+              //
+              // Title: single-quote escaped (replace every ' with '\''). Single-quoted
+              // strings in POSIX shells treat every character literally except `'` itself.
+              const safeTitle = pr.title.replace(/'/g, `'\''`);
+              const bodyFilePath = ".git/GITUI_PR_BODY";
+              try {
+                await api?.projects.writeFile({
+                  cwd,
+                  relativePath: bodyFilePath,
+                  contents: pr.body,
+                });
+              } catch {
+                toastManager.add({
+                  type: "error",
+                  title: "Could not prepare PR body",
+                  description: "Failed to write body to temp file.",
+                });
+                return;
+              }
+              onRunInTerminal(
+                `gh pr create --title '${safeTitle}' --head '${pr.head}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`,
+              );
+              closeModal();
+            }}
+          />
+        )}
+        {modal === "addRemote" && (
+          <AddRemoteModal
+            onClose={closeModal}
+            onAdd={(r) => {
+              onRunInTerminal(`git remote add ${r.name} ${r.url}`);
+              closeModal();
+            }}
+          />
+        )}
+        {modal === "deviceAuth" && (
+          <DeviceAuthModal
+            cwd={cwd}
+            onRunGitHubLogin={onRunGitHubLogin}
+            onClose={closeModal}
+            onConfirm={() => {
+              closeModal();
+            }}
+          />
+        )}
+        {modal === "newWorktree" && (
+          <NewWorktreeModal
+            branches={allBranches}
+            currentBranch={branchName}
+            onClose={closeModal}
+            onCreate={(wt) => {
+              onRunInTerminal(`git worktree add -b ${wt.branch} ${wt.path} ${wt.base}`);
+              closeModal();
+            }}
+          />
+        )}
+        {modal === "draftRelease" && (
+          <DraftReleaseModal
+            tags={commits.map((c) => ({ name: c.shortSha }))}
+            commits={commits}
+            onClose={closeModal}
+            onPublish={(rel) => {
+              onRunInTerminal(
+                `gh release create ${rel.tag} --title "${rel.title}" --notes "${rel.notes}"${rel.prerelease ? " --prerelease" : ""}`,
+              );
+              closeModal();
+            }}
+          />
+        )}
+        {modal === "pullSource" && (
+          <PullSourceModal
+            branches={allBranches}
+            currentBranch={branchName}
+            onClose={closeModal}
+            onConfirm={(sourceBranch) => void stashPullReapply(sourceBranch)}
+          />
+        )}
+        {modal !== null && typeof modal === "object" && modal.kind === "reset" && (
+          <ResetModal
+            commit={modal.commit}
+            onClose={closeModal}
+            onReset={(mode) => {
+              onRunInTerminal(`git reset --${mode} ${modal.commit.sha}`);
+              closeModal();
+            }}
+          />
+        )}
+      </GitEnvironmentGate>
+    </GitApiProvider>
   );
 }

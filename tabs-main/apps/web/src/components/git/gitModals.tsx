@@ -1,7 +1,4 @@
-import type {
-  GitBranch as GitBranchType,
-  GitHistoryCommit,
-} from "@tabs/contracts";
+import type { GitBranch as GitBranchType, GitHistoryCommit } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -24,7 +21,8 @@ import {
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
-import { readNativeApi } from "../../nativeApi";
+import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
+import { useGitApi } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import {
   Dialog,
@@ -37,13 +35,7 @@ import {
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Switch } from "~/components/ui/switch";
-import {
-  AutoTextarea,
-  Banner,
-  Field,
-  Select,
-  TextInput,
-} from "./gitPrimitives";
+import { AutoTextarea, Banner, Field, Select, TextInput } from "./gitPrimitives";
 
 export function ResetModal({
   commit,
@@ -67,12 +59,29 @@ export function ResetModal({
   };
 
   const MODES = [
-    { id: "soft" as const, label: "Soft", desc: "Move HEAD only. All changes since stay staged, ready to re-commit." },
-    { id: "mixed" as const, label: "Mixed", desc: "Move HEAD and unstage. Changes since stay in your working tree." },
-    { id: "hard" as const, label: "Hard", desc: "Move HEAD and discard everything — commits and working tree changes both. Cannot be undone." },
+    {
+      id: "soft" as const,
+      label: "Soft",
+      desc: "Move HEAD only. All changes since stay staged, ready to re-commit.",
+    },
+    {
+      id: "mixed" as const,
+      label: "Mixed",
+      desc: "Move HEAD and unstage. Changes since stay in your working tree.",
+    },
+    {
+      id: "hard" as const,
+      label: "Hard",
+      desc: "Move HEAD and discard everything — commits and working tree changes both. Cannot be undone.",
+    },
   ];
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-md">
         <DialogHeader>
           <DialogTitle>Reset to this commit</DialogTitle>
@@ -89,12 +98,27 @@ export function ResetModal({
                 onClick={() => setMode(m.id)}
                 className="text-left px-3 py-2.5 rounded-lg border transition-colors cursor-pointer"
                 style={{
-                  borderColor: mode === m.id ? (m.id === "hard" ? "var(--sem-red-border)" : "var(--overlay-20)") : "var(--overlay-10)",
-                  backgroundColor: mode === m.id ? (m.id === "hard" ? "var(--sem-red-soft)" : "var(--overlay-5)") : "transparent",
+                  borderColor:
+                    mode === m.id
+                      ? m.id === "hard"
+                        ? "var(--sem-red-border)"
+                        : "var(--overlay-20)"
+                      : "var(--overlay-10)",
+                  backgroundColor:
+                    mode === m.id
+                      ? m.id === "hard"
+                        ? "var(--sem-red-soft)"
+                        : "var(--overlay-5)"
+                      : "transparent",
                 }}
               >
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-xs font-semibold" style={{ color: mode === m.id && m.id === "hard" ? "var(--sem-red)" : "var(--fg)" }}>
+                  <span
+                    className="text-xs font-semibold"
+                    style={{
+                      color: mode === m.id && m.id === "hard" ? "var(--sem-red)" : "var(--fg)",
+                    }}
+                  >
                     {m.label}
                   </span>
                   {mode === m.id && <Check size={12} className="text-muted-foreground/70" />}
@@ -104,14 +128,24 @@ export function ResetModal({
             ))}
           </div>
           {mode === "hard" && (
-            <Banner tone="bad" title="This can't be undone" body="Hard reset permanently discards commits and any uncommitted work in one step." />
+            <Banner
+              tone="bad"
+              title="This can't be undone"
+              body="Hard reset permanently discards commits and any uncommitted work in one step."
+            />
           )}
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" variant={mode === "hard" ? "destructive" : "default"} disabled={submitting} onClick={() => void handleReset()}>
+          <Button
+            type="button"
+            size="sm"
+            variant={mode === "hard" ? "destructive" : "default"}
+            disabled={submitting}
+            onClick={() => void handleReset()}
+          >
             {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
             {submitting ? "Resetting…" : `Reset (${mode})`}
           </Button>
@@ -121,9 +155,22 @@ export function ResetModal({
   );
 }
 
-export function ForcePushModal({ branch, onConfirm, onClose }: { branch: string; onConfirm: () => void; onClose: () => void }) {
+export function ForcePushModal({
+  branch,
+  onConfirm,
+  onClose,
+}: {
+  branch: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Force push</DialogTitle>
@@ -148,7 +195,13 @@ export function ForcePushModal({ branch, onConfirm, onClose }: { branch: string;
   );
 }
 
-export function StashModal({ onStash, onClose }: { onStash: (msg: string) => void | Promise<void>; onClose: () => void }) {
+export function StashModal({
+  onStash,
+  onClose,
+}: {
+  onStash: (msg: string) => void | Promise<void>;
+  onClose: () => void;
+}) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -162,16 +215,27 @@ export function StashModal({ onStash, onClose }: { onStash: (msg: string) => voi
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Stash changes</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4">
           <Field label="Message (optional)">
-            <TextInput value={message} onChange={(e) => setMessage(e.target.value)} placeholder="WIP: pagination edge case" />
+            <TextInput
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="WIP: pagination edge case"
+            />
           </Field>
-          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">Sets aside everything currently staged and unstaged, and clears your working tree.</p>
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+            Sets aside everything currently staged and unstaged, and clears your working tree.
+          </p>
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
@@ -213,7 +277,12 @@ export function PullSourceModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Stash, pull & reapply</DialogTitle>
@@ -230,14 +299,21 @@ export function PullSourceModal({
             </Select>
           </Field>
           <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
-            Defaults to your own branch's upstream. Pick a different branch to pull in someone else's work instead. Your current changes are stashed first either way, and reapplied after.
+            Defaults to your own branch's upstream. Pick a different branch to pull in someone
+            else's work instead. Your current changes are stashed first either way, and reapplied
+            after.
           </p>
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={submitting} onClick={() => void handleConfirm()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={submitting}
+            onClick={() => void handleConfirm()}
+          >
             {submitting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw />}
             {submitting ? "Stashing, pulling & reapplying…" : "Stash, pull & reapply"}
           </Button>
@@ -247,7 +323,15 @@ export function PullSourceModal({
   );
 }
 
-export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; onConfirm: () => void | Promise<void>; onClose: () => void }) {
+export function DiscardAllModal({
+  count,
+  onConfirm,
+  onClose,
+}: {
+  count: number;
+  onConfirm: () => void | Promise<void>;
+  onClose: () => void;
+}) {
   const [submitting, setSubmitting] = useState(false);
 
   const handleConfirm = async () => {
@@ -260,7 +344,12 @@ export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; 
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>Discard all changes</DialogTitle>
@@ -276,7 +365,13 @@ export function DiscardAllModal({ count, onConfirm, onClose }: { count: number; 
           <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" variant="destructive" disabled={submitting} onClick={() => void handleConfirm()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={submitting}
+            onClick={() => void handleConfirm()}
+          >
             {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
             {submitting ? "Discarding…" : "Discard everything"}
           </Button>
@@ -325,7 +420,10 @@ export function SearchableBranchSelect({
         className="w-full flex items-center justify-between px-3 py-2 text-xs bg-background border border-border/80 rounded-lg text-foreground outline-none focus:ring-1 focus:ring-primary transition-all text-left"
       >
         <span className="font-mono text-xs truncate">{value || placeholder}</span>
-        <ChevronDown size={13} className={`text-muted-foreground shrink-0 ml-1.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown
+          size={13}
+          className={`text-muted-foreground shrink-0 ml-1.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
@@ -333,7 +431,10 @@ export function SearchableBranchSelect({
           {/* Internal Search Input */}
           <div className="p-2 border-b border-border bg-muted/20">
             <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0" />
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0"
+              />
               <input
                 type="text"
                 autoFocus
@@ -348,7 +449,9 @@ export function SearchableBranchSelect({
           {/* Branch List Options */}
           <div className="py-1 max-h-52 overflow-y-auto">
             {filtered.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-muted-foreground text-center">No branches found</div>
+              <div className="px-3 py-3 text-xs text-muted-foreground text-center">
+                No branches found
+              </div>
             ) : (
               filtered.map((b) => (
                 <button
@@ -387,13 +490,23 @@ export function CreatePRModal({
   currentBranch: string;
   branches: ReadonlyArray<GitBranchType>;
   lastSubject: string;
-  onCreate: (pr: { title: string; head: string; base: string; body: string; draft: boolean }) => void | Promise<void>;
+  onCreate: (pr: {
+    title: string;
+    head: string;
+    base: string;
+    body: string;
+    draft: boolean;
+  }) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [head, setHead] = useState(currentBranch);
   const [base, setBase] = useState(
-    () => branches.find((b) => b.name !== currentBranch && (b.name === "main" || b.name === "master"))?.name || branches.find((b) => b.name !== currentBranch)?.name || "main"
+    () =>
+      branches.find((b) => b.name !== currentBranch && (b.name === "main" || b.name === "master"))
+        ?.name ||
+      branches.find((b) => b.name !== currentBranch)?.name ||
+      "main",
   );
   const [body, setBody] = useState("");
   const [draft, setDraft] = useState(false);
@@ -422,22 +535,35 @@ export function CreatePRModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-4xl w-[88vw] h-[640px] max-h-[75vh] p-0 overflow-hidden border-border/80 shadow-2xl">
         <div className="flex h-full w-full">
           {/* Left Configuration Sidebar */}
           <div className="w-80 shrink-0 border-r border-border/60 bg-muted/20 p-6 flex flex-col justify-between">
             <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-foreground tracking-tight">Create pull request</h3>
-                <p className="text-xs text-muted-foreground/70 mt-1">Configure branches and visibility.</p>
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">
+                  Create pull request
+                </h3>
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  Configure branches and visibility.
+                </p>
               </div>
 
               {/* Branch Direction Arrow Pill */}
               <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/70 bg-card/50 text-xs font-mono">
-                <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground/90 font-medium truncate max-w-[100px]">{base}</span>
+                <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground/90 font-medium truncate max-w-[100px]">
+                  {base}
+                </span>
                 <span className="text-muted-foreground/70 text-sm font-sans">&larr;</span>
-                <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground font-medium truncate max-w-[100px]">{head}</span>
+                <span className="px-2 py-1 rounded bg-muted/50 border border-border text-foreground font-medium truncate max-w-[100px]">
+                  {head}
+                </span>
               </div>
 
               {/* Head Branch Selector with Search */}
@@ -475,7 +601,10 @@ export function CreatePRModal({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <GitPullRequest size={13} className={!draft ? "text-foreground" : "text-muted-foreground"} />
+                    <GitPullRequest
+                      size={13}
+                      className={!draft ? "text-foreground" : "text-muted-foreground"}
+                    />
                     <span>Ready</span>
                   </button>
                   <button
@@ -487,7 +616,10 @@ export function CreatePRModal({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <FileText size={13} className={draft ? "text-foreground" : "text-muted-foreground"} />
+                    <FileText
+                      size={13}
+                      className={draft ? "text-foreground" : "text-muted-foreground"}
+                    />
                     <span>Draft</span>
                   </button>
                 </div>
@@ -496,7 +628,14 @@ export function CreatePRModal({
 
             {/* Footer Action Buttons */}
             <div className="flex items-center gap-2 pt-4 border-t border-border/50">
-              <Button type="button" variant="outline" size="sm" className="flex-1" disabled={submitting} onClick={onClose}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={submitting}
+                onClick={onClose}
+              >
                 Cancel
               </Button>
               <Button
@@ -506,8 +645,20 @@ export function CreatePRModal({
                 disabled={!title.trim() || submitting}
                 onClick={() => void handleCreate()}
               >
-                {submitting ? <Loader2 size={13} className="animate-spin" /> : <GitPullRequest size={13} />}
-                <span>{submitting ? (draft ? "Drafting…" : "Creating…") : draft ? "Create draft" : "Create PR"}</span>
+                {submitting ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <GitPullRequest size={13} />
+                )}
+                <span>
+                  {submitting
+                    ? draft
+                      ? "Drafting…"
+                      : "Creating…"
+                    : draft
+                      ? "Create draft"
+                      : "Create PR"}
+                </span>
               </Button>
             </div>
           </div>
@@ -566,7 +717,13 @@ export function CreatePRModal({
   );
 }
 
-export function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; url: string }) => void | Promise<void>; onClose: () => void }) {
+export function AddRemoteModal({
+  onAdd,
+  onClose,
+}: {
+  onAdd: (r: { name: string; url: string }) => void | Promise<void>;
+  onClose: () => void;
+}) {
   const [name, setName] = useState("origin");
   const [url, setUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -581,7 +738,12 @@ export function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; 
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-md">
         <DialogHeader>
           <DialogTitle>Add remote</DialogTitle>
@@ -591,14 +753,23 @@ export function AddRemoteModal({ onAdd, onClose }: { onAdd: (r: { name: string; 
             <TextInput value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Remote URL">
-            <TextInput value={url} onChange={(e) => setUrl(e.target.value)} placeholder="git@github.com:org/repo.git" />
+            <TextInput
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="git@github.com:org/repo.git"
+            />
           </Field>
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={!url.trim() || submitting} onClick={() => void handleAdd()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!url.trim() || submitting}
+            onClick={() => void handleAdd()}
+          >
             {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
             {submitting ? "Adding remote…" : "Add remote"}
           </Button>
@@ -625,7 +796,7 @@ export function DeviceAuthModal({
 }) {
   const [confirming, setConfirming] = useState(false);
   const [authStatusText, setAuthStatusText] = useState<string | null>(null);
-  const api = readNativeApi();
+  const api = useGitApi();
   const queryClient = useQueryClient();
 
   const handleStartAuth = () => {
@@ -645,36 +816,55 @@ export function DeviceAuthModal({
           return;
         }
       }
-    } catch {
-      // Ignore
+    } catch (error) {
+      setAuthStatusText(toGitUserFacingErrorMessage(error));
+      setConfirming(false);
+      return;
     }
-    setAuthStatusText("Auth check complete");
-    setTimeout(() => {
-      onConfirm();
-    }, 500);
+    setAuthStatusText("GitHub is not authenticated yet. Finish authorization, then try again.");
+    setConfirming(false);
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-sm">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="space-y-4">
           <p className="text-xs text-muted-foreground/80 leading-relaxed">{subtitle}</p>
-          <div className="border border-border rounded-lg p-3 flex flex-col gap-2" style={{ backgroundColor: "var(--bg-base)" }}>
-            <p className="text-[11px] text-muted-foreground">Click below to launch interactive sign in in your terminal:</p>
+          <div
+            className="border border-border rounded-lg p-3 flex flex-col gap-2"
+            style={{ backgroundColor: "var(--bg-base)" }}
+          >
+            <p className="text-[11px] text-muted-foreground">
+              Click below to launch interactive sign in in your terminal:
+            </p>
             <Button type="button" size="sm" onClick={handleStartAuth}>
               <ExternalLink /> Start `gh auth login` in terminal
             </Button>
           </div>
-          {authStatusText && <p className="text-[11px] text-center font-mono text-muted-foreground/70">{authStatusText}</p>}
+          {authStatusText && (
+            <p className="text-[11px] text-center font-mono text-muted-foreground/70">
+              {authStatusText}
+            </p>
+          )}
         </DialogPanel>
         <DialogFooter>
           <Button type="button" variant="outline" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={confirming} onClick={() => void handleConfirm()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={confirming}
+            onClick={() => void handleConfirm()}
+          >
             {confirming ? <Loader2 className="animate-spin" /> : null}
             {confirming ? "Verifying…" : "I've authorized it"}
           </Button>
@@ -710,7 +900,12 @@ export function NewWorktreeModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-md">
         <DialogHeader>
           <DialogTitle>New worktree</DialogTitle>
@@ -726,7 +921,11 @@ export function NewWorktreeModal({
             </Select>
           </Field>
           <Field label="New branch name (optional)">
-            <TextInput value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="Leave blank to check out existing branch" />
+            <TextInput
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              placeholder="Leave blank to check out existing branch"
+            />
           </Field>
           <Field label="Path">
             <TextInput value={path} onChange={(e) => setPath(e.target.value)} />
@@ -736,7 +935,12 @@ export function NewWorktreeModal({
           <Button type="button" variant="outline" size="sm" disabled={submitting} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" size="sm" disabled={!path.trim() || submitting} onClick={() => void handleCreate()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!path.trim() || submitting}
+            onClick={() => void handleCreate()}
+          >
             {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
             {submitting ? "Creating worktree…" : "Create worktree"}
           </Button>
@@ -785,7 +989,10 @@ function SearchableTagSelect({
         className="w-full flex items-center justify-between px-3 py-2 text-xs bg-background border border-border/80 rounded-lg text-foreground outline-none focus:ring-1 focus:ring-primary transition-all"
       >
         <span className="font-mono text-xs truncate">{displayLabel}</span>
-        <ChevronDown size={13} className={`text-muted-foreground shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+        <ChevronDown
+          size={13}
+          className={`text-muted-foreground shrink-0 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
@@ -793,7 +1000,10 @@ function SearchableTagSelect({
           {/* Internal Search Input */}
           <div className="p-2 border-b border-border bg-muted/20">
             <div className="relative">
-              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0" />
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 shrink-0"
+              />
               <input
                 type="text"
                 autoFocus
@@ -820,7 +1030,9 @@ function SearchableTagSelect({
             </button>
 
             {filtered.length === 0 ? (
-              <div className="px-3 py-3 text-xs text-muted-foreground text-center">No tags found</div>
+              <div className="px-3 py-3 text-xs text-muted-foreground text-center">
+                No tags found
+              </div>
             ) : (
               filtered.map((t) => (
                 <button
@@ -834,7 +1046,9 @@ function SearchableTagSelect({
                   className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-foreground/80 hover:bg-accent hover:text-accent-foreground font-mono transition-colors text-left"
                 >
                   <span className="truncate">{t.name}</span>
-                  {value === t.name && <Check size={13} className="text-foreground shrink-0 ml-1" />}
+                  {value === t.name && (
+                    <Check size={13} className="text-foreground shrink-0 ml-1" />
+                  )}
                 </button>
               ))
             )}
@@ -853,7 +1067,12 @@ export function DraftReleaseModal({
 }: {
   tags: ReadonlyArray<{ name: string }>;
   commits: ReadonlyArray<GitHistoryCommit>;
-  onPublish: (rel: { tag: string; title: string; notes: string; prerelease: boolean }) => void | Promise<void>;
+  onPublish: (rel: {
+    tag: string;
+    title: string;
+    notes: string;
+    prerelease: boolean;
+  }) => void | Promise<void>;
   onClose: () => void;
 }) {
   const [tag, setTag] = useState(tags[0]?.name || "__new__");
@@ -880,31 +1099,39 @@ export function DraftReleaseModal({
   };
 
   const generateNotes = () => {
-    const bullets = commits.slice(0, 8).map((c) => `* ${c.subject} (${c.shortSha})`).join("\n");
+    const bullets = commits
+      .slice(0, 8)
+      .map((c) => `* ${c.subject} (${c.shortSha})`)
+      .join("\n");
     const formatted = `## What's Changed\n\n${bullets}\n\n**Full Commit History**: \`${commits[0]?.shortSha ?? "head"}\``;
     setNotes(formatted);
     if (!title.trim()) setTitle(effectiveTag ? `Release ${effectiveTag}` : "New Release");
   };
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !submitting) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !submitting) onClose();
+      }}
+    >
       <DialogPopup className="git-tool-v2 max-w-4xl w-[88vw] h-[640px] max-h-[75vh] p-0 overflow-hidden border-border/80 shadow-2xl">
         <div className="flex h-full w-full">
           {/* Left Configuration Sidebar */}
           <div className="w-80 shrink-0 border-r border-border/60 bg-muted/20 p-6 flex flex-col justify-between">
             <div className="space-y-5">
               <div>
-                <h3 className="text-lg font-semibold text-foreground tracking-tight">Draft a release</h3>
-                <p className="text-xs text-muted-foreground/70 mt-1">Configure target and visibility.</p>
+                <h3 className="text-lg font-semibold text-foreground tracking-tight">
+                  Draft a release
+                </h3>
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  Configure target and visibility.
+                </p>
               </div>
 
               {/* Target Tag Field with Internal Search */}
               <Field label="Target Tag">
-                <SearchableTagSelect
-                  tags={tags}
-                  value={tag}
-                  onChange={(val) => setTag(val)}
-                />
+                <SearchableTagSelect tags={tags} value={tag} onChange={(val) => setTag(val)} />
               </Field>
 
               {tag === "__new__" && (
@@ -933,7 +1160,10 @@ export function DraftReleaseModal({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <Package size={13} className={!prerelease ? "text-foreground" : "text-muted-foreground"} />
+                    <Package
+                      size={13}
+                      className={!prerelease ? "text-foreground" : "text-muted-foreground"}
+                    />
                     <span>Production</span>
                   </button>
                   <button
@@ -945,7 +1175,10 @@ export function DraftReleaseModal({
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <Beaker size={13} className={prerelease ? "text-foreground" : "text-muted-foreground"} />
+                    <Beaker
+                      size={13}
+                      className={prerelease ? "text-foreground" : "text-muted-foreground"}
+                    />
                     <span>Pre-release</span>
                   </button>
                 </div>
@@ -954,7 +1187,14 @@ export function DraftReleaseModal({
 
             {/* Footer Buttons */}
             <div className="flex items-center gap-2 pt-4 border-t border-border/50">
-              <Button type="button" variant="outline" size="sm" className="flex-1" disabled={submitting} onClick={onClose}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={submitting}
+                onClick={onClose}
+              >
                 Cancel
               </Button>
               <Button

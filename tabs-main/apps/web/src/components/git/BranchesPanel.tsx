@@ -1,11 +1,17 @@
 import type { GitBranch as GitBranchType } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, GitBranch as GitBranchIcon, GitMerge, GitPullRequest, Loader2 } from "lucide-react";
+import {
+  AlertTriangle,
+  GitBranch as GitBranchIcon,
+  GitMerge,
+  GitPullRequest,
+  Loader2,
+} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import { toGitUserFacingErrorMessage } from "../../lib/gitErrorMessages";
 import { invalidateGitQueries } from "../../lib/gitReactQuery";
-import { readNativeApi } from "../../nativeApi";
+import { useGitApi } from "./gitApiContext";
 import { toastManager } from "../ui/toast";
 import { GitCheckingState } from "./GitCheckingState";
 import { Badge } from "../ui/badge";
@@ -53,12 +59,18 @@ export function BranchesPanel({
     },
     [setGitState],
   );
-  const [confirmModal, setConfirmModal] = useState<{ type: "merge" | "rebase"; targetBranch: string } | null>(null);
-  const [conflictState, setConflictState] = useState<{ active: boolean; message: string }>({ active: false, message: "" });
+  const [confirmModal, setConfirmModal] = useState<{
+    type: "merge" | "rebase";
+    targetBranch: string;
+  } | null>(null);
+  const [conflictState, setConflictState] = useState<{ active: boolean; message: string }>({
+    active: false,
+    message: "",
+  });
   const [actionBranchMap, setActionBranchMap] = useState<Record<string, "checkout" | "delete">>({});
   const [isSubmittingModal, setIsSubmittingModal] = useState(false);
 
-  const api = readNativeApi();
+  const api = useGitApi();
   const queryClient = useQueryClient();
 
   const otherBranches = useMemo(() => allBranches.filter((b) => !b.current), [allBranches]);
@@ -72,7 +84,11 @@ export function BranchesPanel({
         await invalidateGitQueries(queryClient);
         toastManager.add({ type: "success", title: `Switched to ${name}` });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Checkout failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Checkout failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       } finally {
         setActionBranchMap((prev) => {
           const next = { ...prev };
@@ -120,7 +136,10 @@ export function BranchesPanel({
       } catch (error) {
         const errMsg = toGitUserFacingErrorMessage(error);
         if (errMsg.toLowerCase().includes("conflict")) {
-          setConflictState({ active: true, message: `Rebase conflict while rebasing onto ${name}.` });
+          setConflictState({
+            active: true,
+            message: `Rebase conflict while rebasing onto ${name}.`,
+          });
         }
         toastManager.add({ type: "error", title: "Rebase failed", description: errMsg });
       } finally {
@@ -139,7 +158,11 @@ export function BranchesPanel({
         await invalidateGitQueries(queryClient);
         toastManager.add({ type: "success", title: `Deleted branch ${name}` });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Delete failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Delete failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       } finally {
         setActionBranchMap((prev) => {
           const next = { ...prev };
@@ -160,7 +183,11 @@ export function BranchesPanel({
         await invalidateGitQueries(queryClient);
         toastManager.add({ type: "success", title: `Created and switched to ${name}` });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Create branch failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Create branch failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       }
     },
     [api, cwd, queryClient],
@@ -174,7 +201,11 @@ export function BranchesPanel({
         await invalidateGitQueries(queryClient);
         toastManager.add({ type: "success", title: `Renamed branch to ${name}` });
       } catch (error) {
-        toastManager.add({ type: "error", title: "Rename branch failed", description: toGitUserFacingErrorMessage(error) });
+        toastManager.add({
+          type: "error",
+          title: "Rename branch failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
       }
     },
     [api, activeBranch, cwd, queryClient],
@@ -212,16 +243,29 @@ export function BranchesPanel({
         />
       )}
       {aheadCount > 0 && behindCount > 0 && (
-        <Banner tone="info" title={`${activeBranch?.name} has diverged`} body={`${aheadCount} ahead, ${behindCount} behind origin/${activeBranch?.name}.`} />
+        <Banner
+          tone="info"
+          title={`${activeBranch?.name} has diverged`}
+          body={`${aheadCount} ahead, ${behindCount} behind origin/${activeBranch?.name}.`}
+        />
       )}
-      {isDetached && <Banner tone="warn" title="Detached HEAD" body="You're viewing a specific commit, not a branch." />}
+      {isDetached && (
+        <Banner
+          tone="warn"
+          title="Detached HEAD"
+          body="You're viewing a specific commit, not a branch."
+        />
+      )}
 
       <Card className="p-2">
         <div className="flex items-center gap-2.5 px-2 py-2 border-b border-border/50">
           <Badge variant="warning">
-            <GitBranchIcon /> {isDetached ? `${activeBranch?.name ?? "HEAD"} (detached)` : activeBranch?.name}
+            <GitBranchIcon />{" "}
+            {isDetached ? `${activeBranch?.name ?? "HEAD"} (detached)` : activeBranch?.name}
           </Badge>
-          <span className="text-[11px] font-mono text-muted-foreground/70 flex-1">{aheadCount || behindCount ? `↑${aheadCount} ↓${behindCount}` : "up to date"}</span>
+          <span className="text-[11px] font-mono text-muted-foreground/70 flex-1">
+            {aheadCount || behindCount ? `↑${aheadCount} ↓${behindCount}` : "up to date"}
+          </span>
           {!isDetached && (
             <Button variant="ghost" size="sm" onClick={() => setForm("rename")}>
               Rename
@@ -236,21 +280,46 @@ export function BranchesPanel({
           otherBranches.map((b) => {
             const action = actionBranchMap[b.name];
             return (
-              <div key={b.name} className="flex items-center gap-2.5 px-2 py-2 border-b border-border/50 last:border-0">
-                <span className="text-xs font-mono text-foreground/90 flex-1 truncate">{b.name}</span>
+              <div
+                key={b.name}
+                className="flex items-center gap-2.5 px-2 py-2 border-b border-border/50 last:border-0"
+              >
+                <span className="text-xs font-mono text-foreground/90 flex-1 truncate">
+                  {b.name}
+                </span>
                 <Badge variant="outline">{b.isRemote ? "remote" : "local"}</Badge>
-                <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => setConfirmModal({ type: "merge", targetBranch: b.name })}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={Boolean(action)}
+                  onClick={() => setConfirmModal({ type: "merge", targetBranch: b.name })}
+                >
                   Merge into current
                 </Button>
-                <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => setConfirmModal({ type: "rebase", targetBranch: b.name })}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={Boolean(action)}
+                  onClick={() => setConfirmModal({ type: "rebase", targetBranch: b.name })}
+                >
                   Rebase onto…
                 </Button>
-                <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => void checkoutBranch(b.name)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={Boolean(action)}
+                  onClick={() => void checkoutBranch(b.name)}
+                >
                   {action === "checkout" ? <Loader2 size={12} className="animate-spin" /> : null}
                   {action === "checkout" ? "Switching…" : "Switch"}
                 </Button>
                 {!b.isRemote && (
-                  <Button variant="ghost" size="sm" disabled={Boolean(action)} onClick={() => void deleteBranch(b.name, false)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={Boolean(action)}
+                    onClick={() => void deleteBranch(b.name, false)}
+                  >
                     {action === "delete" ? <Loader2 size={12} className="animate-spin" /> : null}
                     {action === "delete" ? "Deleting…" : "Delete"}
                   </Button>
@@ -290,11 +359,18 @@ export function BranchesPanel({
       )}
 
       {confirmModal && (
-        <Dialog open onOpenChange={(open) => { if (!open && !isSubmittingModal) setConfirmModal(null); }}>
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !isSubmittingModal) setConfirmModal(null);
+          }}
+        >
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {confirmModal.type === "merge" ? `Merge ${confirmModal.targetBranch}` : `Rebase onto ${confirmModal.targetBranch}`}
+                {confirmModal.type === "merge"
+                  ? `Merge ${confirmModal.targetBranch}`
+                  : `Rebase onto ${confirmModal.targetBranch}`}
               </DialogTitle>
             </DialogHeader>
             <DialogPanel className="space-y-4">
@@ -304,11 +380,17 @@ export function BranchesPanel({
                   : `Are you sure you want to rebase '${activeBranch?.name}' onto '${confirmModal.targetBranch}'?`}
               </p>
               <p className="text-[11px] text-muted-foreground/70">
-                This operation modifies the current working tree and commit history. If conflicts occur, you can resolve them in the Changes panel.
+                This operation modifies the current working tree and commit history. If conflicts
+                occur, you can resolve them in the Changes panel.
               </p>
             </DialogPanel>
             <DialogFooter>
-              <Button variant="outline" size="sm" disabled={isSubmittingModal} onClick={() => setConfirmModal(null)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSubmittingModal}
+                onClick={() => setConfirmModal(null)}
+              >
                 Cancel
               </Button>
               <Button
@@ -325,7 +407,9 @@ export function BranchesPanel({
               >
                 {isSubmittingModal ? <Loader2 size={12} className="animate-spin" /> : null}
                 {isSubmittingModal
-                  ? confirmModal.type === "merge" ? "Merging…" : "Rebasing…"
+                  ? confirmModal.type === "merge"
+                    ? "Merging…"
+                    : "Rebasing…"
                   : `Confirm ${confirmModal.type === "merge" ? "Merge" : "Rebase"}`}
               </Button>
             </DialogFooter>
