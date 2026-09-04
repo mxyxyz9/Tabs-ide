@@ -525,7 +525,7 @@ export function CreatePRModal({
     if (lastSubject) {
       setTitle(lastSubject);
     }
-    const defaultTemplate = `## Summary\n\n${lastSubject || "Describe the changes introduced in this pull request."}\n\n## Changes Included\n\n- Updated implementation details for ${head}.\n- Passed unit & integration tests.\n\n## Verification\n\n- Verified manually in dev workspace.`;
+    const defaultTemplate = `## Summary\n\n${lastSubject || "Describe the changes introduced in this pull request."}\n\n## Changes Included\n\n- Describe the implementation changes on ${head}.\n\n## Verification\n\n- Add the checks or manual verification actually performed.`;
     setBody(defaultTemplate);
   };
 

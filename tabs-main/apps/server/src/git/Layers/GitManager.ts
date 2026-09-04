@@ -1040,6 +1040,38 @@ export const makeGitManager = Effect.gen(function* () {
     },
   );
 
+  const createPullRequest: GitManagerShape["createPullRequest"] = Effect.fnUntraced(
+    function* (input) {
+      const bodyFile = path.join(tempDir, `tabs-pr-body-${process.pid}-${randomUUID()}.md`);
+      yield* fileSystem
+        .writeFileString(bodyFile, input.body)
+        .pipe(
+          Effect.mapError((cause) =>
+            gitManagerError(
+              "createPullRequest",
+              "Failed to write pull request body temp file.",
+              cause,
+            ),
+          ),
+        );
+      yield* gitHubCli
+        .createPullRequest({
+          cwd: input.cwd,
+          baseBranch: input.baseBranch,
+          headSelector: input.headBranch,
+          title: input.title,
+          bodyFile,
+          ...(input.draft !== undefined ? { draft: input.draft } : {}),
+        })
+        .pipe(Effect.ensuring(fileSystem.remove(bodyFile).pipe(Effect.catch(() => Effect.void))));
+      const created = yield* gitHubCli.getPullRequest({
+        cwd: input.cwd,
+        reference: input.headBranch,
+      });
+      return { pullRequest: toResolvedPullRequest(created) };
+    },
+  );
+
   const preparePullRequestThread: GitManagerShape["preparePullRequestThread"] = Effect.fnUntraced(
     function* (input) {
       const normalizedReference = normalizePullRequestReference(input.reference);
@@ -1985,6 +2017,7 @@ export const makeGitManager = Effect.gen(function* () {
     resolvePullRequest,
     listPullRequests,
     mutatePullRequest,
+    createPullRequest,
     preparePullRequestThread,
     runStackedAction,
     generateDiffSummary,

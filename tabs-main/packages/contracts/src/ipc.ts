@@ -19,6 +19,8 @@ import type {
   GitListPullRequestsResult,
   GitMutatePullRequestInput,
   GitMutatePullRequestResult,
+  GitCreatePullRequestInput,
+  GitCreatePullRequestResult,
   GitListWorkflowRunsInput,
   GitListWorkflowRunsResult,
   VcsStatusInput,
@@ -1398,6 +1400,7 @@ export interface EnvironmentApi {
     resolvePullRequest: (input: GitPullRequestRefInput) => Promise<GitResolvePullRequestResult>;
     listPullRequests: (input: GitListPullRequestsInput) => Promise<GitListPullRequestsResult>;
     mutatePullRequest: (input: GitMutatePullRequestInput) => Promise<GitMutatePullRequestResult>;
+    createPullRequest: (input: GitCreatePullRequestInput) => Promise<GitCreatePullRequestResult>;
     preparePullRequestThread: (
       input: GitPreparePullRequestThreadInput,
     ) => Promise<GitPreparePullRequestThreadResult>;

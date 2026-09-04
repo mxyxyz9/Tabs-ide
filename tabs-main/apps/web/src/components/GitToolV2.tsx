@@ -670,35 +670,26 @@ export function GitToolV2({
             lastSubject={commits[0]?.subject || ""}
             onClose={closeModal}
             onCreate={async (pr) => {
-              // Security: never interpolate user-controlled title/body directly into a shell
-              // string — the terminal writes verbatim to a PTY and shell metacharacters
-              // (quotes, backticks, $(...), ;) would be executed.
-              //
-              // Body: written to .git/GITUI_PR_BODY and passed via --body-file so the
-              // content never touches the shell at all.
-              //
-              // Title: single-quote escaped (replace every ' with '\''). Single-quoted
-              // strings in POSIX shells treat every character literally except `'` itself.
-              const safeTitle = pr.title.replace(/'/g, `'\''`);
-              const bodyFilePath = ".git/GITUI_PR_BODY";
+              if (!api) return;
               try {
-                await api?.projects.writeFile({
+                await api.git.createPullRequest({
                   cwd,
-                  relativePath: bodyFilePath,
-                  contents: pr.body,
+                  title: pr.title,
+                  body: pr.body,
+                  headBranch: pr.head,
+                  baseBranch: pr.base,
+                  draft: pr.draft,
                 });
-              } catch {
+                await invalidateGitQueries(queryClient);
+                closeModal();
+                toastManager.add({ type: "success", title: "Pull request created" });
+              } catch (error) {
                 toastManager.add({
                   type: "error",
-                  title: "Could not prepare PR body",
-                  description: "Failed to write body to temp file.",
+                  title: "Pull request creation failed",
+                  description: toGitUserFacingErrorMessage(error),
                 });
-                return;
               }
-              onRunInTerminal(
-                `gh pr create --title '${safeTitle}' --head '${pr.head}' --base '${pr.base}' --body-file ${bodyFilePath}${pr.draft ? " --draft" : ""}; rm -f ${bodyFilePath}`,
-              );
-              closeModal();
             }}
           />
         )}

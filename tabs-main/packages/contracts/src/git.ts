@@ -771,6 +771,21 @@ export const GitMutatePullRequestResult = Schema.Struct({
 });
 export type GitMutatePullRequestResult = typeof GitMutatePullRequestResult.Type;
 
+export const GitCreatePullRequestInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  baseBranch: TrimmedNonEmptyStringSchema,
+  headBranch: TrimmedNonEmptyStringSchema,
+  title: TrimmedNonEmptyStringSchema.check(Schema.isMaxLength(512)),
+  body: Schema.String.check(Schema.isMaxLength(100_000)),
+  draft: Schema.optional(Schema.Boolean),
+});
+export type GitCreatePullRequestInput = typeof GitCreatePullRequestInput.Type;
+
+export const GitCreatePullRequestResult = Schema.Struct({
+  pullRequest: GitResolvedPullRequest,
+});
+export type GitCreatePullRequestResult = typeof GitCreatePullRequestResult.Type;
+
 export const GitPreparePullRequestThreadResult = Schema.Struct({
   pullRequest: GitResolvedPullRequest,
   branch: TrimmedNonEmptyStringSchema,

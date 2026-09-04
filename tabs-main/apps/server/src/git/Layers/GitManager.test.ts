@@ -1509,6 +1509,39 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     }),
   );
 
+  it.effect("creates a pull request through the typed manager operation", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("tabs-git-manager-");
+      yield* initRepo(repoDir);
+      const { manager, ghCalls } = yield* makeManager({
+        ghScenario: {
+          pullRequest: {
+            number: 43,
+            title: "Typed creation",
+            url: "https://github.com/pingdotgg/codething-mvp/pull/43",
+            baseRefName: "main",
+            headRefName: "feature/typed-create",
+            state: "open",
+          },
+        },
+      });
+
+      const result = yield* manager.createPullRequest({
+        cwd: repoDir,
+        baseBranch: "main",
+        headBranch: "feature/typed-create",
+        title: "Typed creation",
+        body: "Body with `$(literal)` content.",
+        draft: true,
+      });
+
+      expect(
+        ghCalls.some((call) => call.includes("pr create --base main --head feature/typed-create")),
+      ).toBe(true);
+      expect(result.pullRequest).toMatchObject({ provider: "github", number: 43 });
+    }),
+  );
+
   it.effect("prepares pull request threads in local mode by checking out the PR branch", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("tabs-git-manager-");

@@ -17,6 +17,8 @@ import {
   GitListPullRequestsResult,
   GitMutatePullRequestInput,
   GitMutatePullRequestResult,
+  GitCreatePullRequestInput,
+  GitCreatePullRequestResult,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
   GitStatusInput,
@@ -71,6 +73,10 @@ export interface GitManagerShape {
   readonly mutatePullRequest: (
     input: GitMutatePullRequestInput,
   ) => Effect.Effect<GitMutatePullRequestResult, GitManagerServiceError>;
+
+  readonly createPullRequest: (
+    input: GitCreatePullRequestInput,
+  ) => Effect.Effect<GitCreatePullRequestResult, GitManagerServiceError>;
 
   /**
    * Prepare a new thread workspace from a pull request in local or worktree mode.
