@@ -40,9 +40,11 @@ import {
   Trash2Icon,
   FingerprintIcon,
   GaugeIcon,
+  ActivityIcon,
 } from "lucide-react";
 import { UsageLimitsPage } from "../components/settings/usage/UsageLimitsPage";
 import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesSettings";
+import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
@@ -422,7 +424,8 @@ type SettingsSectionId =
   | "connections"
   | "startup-animation"
   | "keybindings"
-  | "about";
+  | "about"
+  | "diagnostics";
 
 const SETTINGS_NAV: ReadonlyArray<{
   id: SettingsSectionId;
@@ -434,6 +437,7 @@ const SETTINGS_NAV: ReadonlyArray<{
   { id: "startup-animation", label: "Animations", icon: MonitorPlayIcon },
   { id: "providers", label: "Providers", icon: BotIcon },
   { id: "usage", label: "Usage & Limits", icon: GaugeIcon },
+  { id: "diagnostics", label: "Diagnostics", icon: ActivityIcon },
   { id: "source-control", label: "Source Control", icon: GitBranchIcon },
   { id: "connections", label: "Connections", icon: Link2Icon },
   { id: "workspace", label: "Workspace", icon: FolderIcon },
@@ -6110,6 +6114,7 @@ function SettingsRouteView() {
                   />
                 ) : null}
                 {activeSettingsSection === "usage" ? <UsageLimitsPage /> : null}
+                {activeSettingsSection === "diagnostics" ? <DiagnosticsSettings /> : null}
                 {activeSettingsSection === "about" ? (
                   <div className="space-y-6">
                     <div>
