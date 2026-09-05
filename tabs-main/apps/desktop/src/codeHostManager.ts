@@ -1761,10 +1761,17 @@ export class CodeHostManager {
 
       try {
         const fileResponse = await browserSession.fetch(pathToFileURL(resolvedPath).toString());
-        // Return Electron's network response directly. Re-wrapping its body in
-        // a global Response leaves the file stream open in Electron 40 and the
-        // main-frame navigation never commits.
-        return fileResponse;
+        const headers = new Headers(fileResponse.headers);
+        headers.set("Content-Type", this.getDesktopContentType(resolvedPath));
+        // Materialize the file before constructing the response. Passing the
+        // original stream through a second Response can leave it open, while
+        // returning it untouched gives worker modules and WASM resources the
+        // wrong MIME type.
+        return new Response(await fileResponse.arrayBuffer(), {
+          status: fileResponse.status,
+          statusText: fileResponse.statusText,
+          headers,
+        });
       } catch (error) {
         writeCodeHostDiagnostic(`${prefix} protocol-read-error`, {
           url: request.url,
@@ -1865,6 +1872,8 @@ export class CodeHostManager {
         return "font/woff2";
       case ".ttf":
         return "font/ttf";
+      case ".wasm":
+        return "application/wasm";
       default:
         return "application/octet-stream";
     }
@@ -1904,7 +1913,18 @@ export class CodeHostManager {
       }
 
       const fileUrl = new URL(`file://${parsed.pathname}${parsed.search}${parsed.hash}`);
-      const resolvedPath = Path.resolve(fileURLToPath(fileUrl));
+      let resolvedPath = Path.resolve(fileURLToPath(fileUrl));
+      // Packaged Code-OSS emits `.asar.unpacked` resource URLs. Development
+      // runtimes are ordinary source trees, where the same dependencies live
+      // under `node_modules`; keep the generated URL contract while resolving
+      // it to the real on-disk resource.
+      if (!FS.existsSync(resolvedPath) && resolvedPath.includes("node_modules.asar.unpacked")) {
+        const developmentPath = resolvedPath.replace(
+          `${Path.sep}node_modules.asar.unpacked${Path.sep}`,
+          `${Path.sep}node_modules${Path.sep}`,
+        );
+        if (FS.existsSync(developmentPath)) resolvedPath = developmentPath;
+      }
       if (
         allowedRoots.some((root) => {
           const relativePath = Path.relative(root, resolvedPath);

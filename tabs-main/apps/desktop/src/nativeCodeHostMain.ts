@@ -1,7 +1,8 @@
-import { BrowserWindow, type WebContents } from "electron";
+import { BrowserWindow, nativeTheme, type WebContents } from "electron";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
+import { rootCertificates } from "node:tls";
 import { pathToFileURL } from "node:url";
 import * as Path from "node:path";
 import * as OS from "node:os";
@@ -593,25 +594,54 @@ export async function createNativeCodeHostMainBackend(
       return undefined;
     }),
   );
-  ipcServer.registerChannel(
-    "nativeHost",
-    passiveChannel(modules.EventNone, (command) => {
-      if (command === "getWindowCount") return windows.size;
-      if (command === "getWindows") {
-        return Array.from(windows.keys(), (id) => ({ id, pid: process.pid }));
-      }
-      if (command === "getActiveWindowId") return BrowserWindow.getFocusedWindow()?.id;
-      if (command === "getOSStatistics") {
-        return { totalmem: 0, freemem: 0, loadavg: [0, 0, 0] };
-      }
-      if (command === "getOSProperties") {
-        return { type: process.platform, release: "", arch: process.arch, cpus: [] };
-      }
-      if (command === "getOSVirtualMachineHint") return 0;
-      if (command === "getOSColorScheme") return { dark: true, highContrast: false };
-      if (command === "isAdmin") return false;
+  const nativeHostChannel = passiveChannel(modules.EventNone, async (command, arg) => {
+    const args = Array.isArray(arg) ? arg : [];
+    const windowId = typeof args[0] === "number" ? args[0] : undefined;
+    const embeddedWindow = windowId === undefined ? undefined : windows.get(windowId);
+    const webContents = embeddedWindow?.webContents;
+    if (command === "getWindowCount") return windows.size;
+    if (command === "getWindows") {
+      return Array.from(windows.keys(), (id) => ({ id, pid: process.pid }));
+    }
+    if (command === "getActiveWindowId") return BrowserWindow.getFocusedWindow()?.id;
+    if (command === "getOSStatistics") {
+      return { totalmem: OS.totalmem(), freemem: OS.freemem(), loadavg: OS.loadavg() };
+    }
+    if (command === "getOSProperties") {
+      return {
+        type: OS.type(),
+        release: OS.release(),
+        arch: OS.arch(),
+        cpus: OS.cpus(),
+      };
+    }
+    if (command === "getOSVirtualMachineHint") return 0;
+    if (command === "getOSColorScheme") {
+      return {
+        dark: nativeTheme.shouldUseDarkColors,
+        highContrast: nativeTheme.shouldUseHighContrastColors,
+      };
+    }
+    if (command === "isAdmin") return false;
+    if (command === "syncSystemWideKeybindings") return { failed: [] };
+    if (command === "resolveProxy") {
+      const url = typeof args[1] === "string" ? args[1] : undefined;
+      return url && webContents && !webContents.isDestroyed()
+        ? webContents.session.resolveProxy(url)
+        : undefined;
+    }
+    if (command === "loadCertificates") return [...rootCertificates];
+    if (command === "lookupAuthorization" || command === "lookupKerberosAuthorization") {
       return undefined;
-    }),
+    }
+    return undefined;
+  });
+  ipcServer.registerChannel("nativeHost", nativeHostChannel);
+  ipcServer.registerChannel(
+    "meteredConnection",
+    passiveChannel(modules.EventNone, (command) =>
+      command === "IsConnectionMetered" ? false : undefined,
+    ),
   );
 
   return {

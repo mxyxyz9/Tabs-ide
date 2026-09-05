@@ -579,38 +579,40 @@ function resolveUpdaterErrorContext(): DesktopUpdateErrorContext {
   return updateState.errorContext;
 }
 
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: DESKTOP_SCHEME,
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
+function registerPrivilegedSchemes(): void {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: DESKTOP_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+      },
     },
-  },
-  {
-    scheme: "vscode-file",
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-      codeCache: true,
+    {
+      scheme: "vscode-file",
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+        codeCache: true,
+      },
     },
-  },
-  {
-    scheme: "vscode-webview",
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-      allowServiceWorkers: true,
-      codeCache: true,
+    {
+      scheme: "vscode-webview",
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        corsEnabled: true,
+        allowServiceWorkers: true,
+        codeCache: true,
+      },
     },
-  },
-]);
+  ]);
+}
 
 function resolveAppRoot(): string {
   if (!app.isPackaged) {
@@ -2762,6 +2764,11 @@ const clerkBridge = createClerkBridge({
   passkeys: true,
   renderer: { scheme: DESKTOP_SCHEME, host: "app" },
 });
+// Clerk registers its renderer scheme while constructing the bridge. Electron
+// materializes the most recent privileged-scheme registration into command-line
+// switches, so register the complete set afterwards or Clerk's `tabs` entry can
+// leave embedded Code-OSS without secure `vscode-file`/`vscode-webview` origins.
+registerPrivilegedSchemes();
 if (!clerkBridge.isPrimaryInstance) {
   app.quit();
 }
