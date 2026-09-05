@@ -5,13 +5,13 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk";
 import type { ThreadTokenUsageSnapshot } from "@tabs/contracts";
 import {
+  getProviderOptionCurrentValue,
+  getProviderOptionDescriptors,
   trimOrNull,
 } from "@tabs/shared/model";
-const getModelCapabilities = (..._args: any[]) => ({ contextWindowTokens: 200_000 } as any);
-const getDefaultAutoCompactWindow = (_c: any) => "2000";
-const hasAutoCompactWindowOption = (_c: any, _o: any) => false;
 
 import { positiveFiniteNumber } from "./tokenUsage.ts";
+import { getClaudeModelCapabilities } from "./Layers/ClaudeProvider.ts";
 
 export const CLAUDE_CONTEXT_WINDOW_MAX_TOKENS = {
   "200k": 200_000,
@@ -160,22 +160,34 @@ export function resolveClaudeApiModelIdContextWindowMaxTokens(
   if (!apiModelId) {
     return undefined;
   }
-  return positiveFiniteNumber(
-    getModelCapabilities("claudeAgent", stripClaudeContextWindowSuffix(apiModelId))
-      .contextWindowTokens,
+  if (/\[(?:[^\]]*,)?context=1m(?:,[^\]]*)?\]$/u.test(apiModelId)) {
+    return CLAUDE_CONTEXT_WINDOW_MAX_TOKENS["1m"];
+  }
+  const caps = getClaudeModelCapabilities(stripClaudeContextWindowSuffix(apiModelId));
+  const descriptor = getProviderOptionDescriptors({ caps }).find(
+    (candidate) => candidate.id === "contextWindow",
   );
+  const value = getProviderOptionCurrentValue(descriptor);
+  return typeof value === "string" &&
+    Object.prototype.hasOwnProperty.call(CLAUDE_CONTEXT_WINDOW_MAX_TOKENS, value)
+    ? CLAUDE_CONTEXT_WINDOW_MAX_TOKENS[value as keyof typeof CLAUDE_CONTEXT_WINDOW_MAX_TOKENS]
+    : CLAUDE_DEFAULT_CONTEXT_WINDOW_TOKENS;
 }
 
 export function resolveSelectedClaudeAutoCompactWindow(
   model: string | null | undefined,
   selectedAutoCompactWindow: string | null | undefined,
 ): number | undefined {
-  const caps = getModelCapabilities("claudeAgent", model);
+  const caps = getClaudeModelCapabilities(model);
+  const descriptor = getProviderOptionDescriptors({ caps }).find(
+    (candidate) => candidate.id === "contextWindow",
+  );
   const resolvedAutoCompactWindow =
-    trimOrNull(selectedAutoCompactWindow) ?? getDefaultAutoCompactWindow(caps) ?? null;
+    trimOrNull(selectedAutoCompactWindow) ?? getProviderOptionCurrentValue(descriptor) ?? null;
   if (
-    !resolvedAutoCompactWindow ||
-    !hasAutoCompactWindowOption(caps, resolvedAutoCompactWindow) ||
+    typeof resolvedAutoCompactWindow !== "string" ||
+    descriptor?.type !== "select" ||
+    !descriptor.options.some((option) => option.id === resolvedAutoCompactWindow) ||
     !Object.prototype.hasOwnProperty.call(
       CLAUDE_CONTEXT_WINDOW_MAX_TOKENS,
       resolvedAutoCompactWindow,

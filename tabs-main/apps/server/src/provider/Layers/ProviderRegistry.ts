@@ -195,29 +195,23 @@ const snapshotInstanceKey = (provider: ServerProvider): ProviderInstanceId => {
 // after `ProviderInstanceRegistry` rebuilds an instance (e.g. because
 // its settings changed), a fresh source rides the new PubSub instead
 // of a closed one.
+const enrichSnapshot = (instance: ProviderInstance, snapshot: ServerProvider): ServerProvider => ({
+  ...snapshot,
+  ...(instance.capabilities ? { capabilities: instance.capabilities } : {}),
+  ...(instance.lifecycle ? { lifecycleActions: instance.lifecycle.actions } : {}),
+});
+
 const buildSnapshotSource = (instance: ProviderInstance): ProviderSnapshotSource => ({
   instanceId: instance.instanceId,
   driverKind: instance.driverKind,
   getSnapshot: instance.snapshot.getSnapshot.pipe(
-    Effect.map((snapshot) => ({
-      ...snapshot,
-      capabilities: instance.capabilities,
-      lifecycleActions: instance.lifecycle.actions,
-    })),
+    Effect.map((snapshot) => enrichSnapshot(instance, snapshot)),
   ),
   refresh: instance.snapshot.refresh.pipe(
-    Effect.map((snapshot) => ({
-      ...snapshot,
-      capabilities: instance.capabilities,
-      lifecycleActions: instance.lifecycle.actions,
-    })),
+    Effect.map((snapshot) => enrichSnapshot(instance, snapshot)),
   ),
   streamChanges: instance.snapshot.streamChanges.pipe(
-    Stream.map((snapshot) => ({
-      ...snapshot,
-      capabilities: instance.capabilities,
-      lifecycleActions: instance.lifecycle.actions,
-    })),
+    Stream.map((snapshot) => enrichSnapshot(instance, snapshot)),
   ),
 });
 

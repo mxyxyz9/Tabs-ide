@@ -381,7 +381,9 @@ describe("ClaudeAdapterLive", () => {
   });
 
   it.effect("runs Claude SDK sessions with the configured Claude HOME", () => {
-    const harness = makeHarness({ claudeConfig: { homePath: "~/.claude-work" } });
+    const harness = makeHarness({
+      claudeConfig: { homePath: "~/.claude-work" },
+    });
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
       yield* adapter.startSession({
@@ -1603,6 +1605,7 @@ describe("ClaudeAdapterLive", () => {
           usage: {
             usedTokens: 321,
             lastUsedTokens: 321,
+            maxTokens: 200_000,
             toolUses: 2,
             durationMs: 654,
           },
@@ -1861,7 +1864,12 @@ describe("ClaudeAdapterLive", () => {
           message: {
             id: "assistant-message-early",
             content: [
-              { type: "tool_use", id: "tool-early", name: "Read", input: { path: "a.ts" } },
+              {
+                type: "tool_use",
+                id: "tool-early",
+                name: "Read",
+                input: { path: "a.ts" },
+              },
             ],
           },
         } as unknown as SDKMessage);
@@ -3471,7 +3479,9 @@ describe("ClaudeAdapterLive", () => {
       assert.equal((permissionResult as PermissionResult).behavior, "allow");
       const updatedInput = (permissionResult as { updatedInput: Record<string, unknown> })
         .updatedInput;
-      assert.deepEqual(updatedInput.answers, { "Deploy to which env?": "Staging" });
+      assert.deepEqual(updatedInput.answers, {
+        "Deploy to which env?": "Staging",
+      });
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

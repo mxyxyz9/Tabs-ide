@@ -1333,10 +1333,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
                     cursor: {
                       enabled: false,
                     },
+                    droid: {
+                      enabled: false,
+                    },
                     grok: {
                       enabled: false,
                     },
                   },
+                  providerInstances: {
+                    droid: {
+                      driver: "droid",
+                      enabled: false,
+                      config: {},
+                    },
+                  } as unknown as ContractServerSettings["providerInstances"],
                 }),
               ),
             );

@@ -17,8 +17,25 @@ export const checkDroidProviderStatus = Effect.fn("checkDroidProviderStatus")(fu
   environment: NodeJS.ProcessEnv = process.env,
 ) {
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
+  if (!settings.enabled) {
+    return buildServerProvider({
+      presentation: { displayName: "Factory Droid" },
+      enabled: false,
+      checkedAt,
+      models: [],
+      probe: {
+        installed: false,
+        version: null,
+        status: "warning",
+        auth: { status: "unknown" },
+        message: "Factory Droid is disabled in Tabs settings.",
+      },
+    });
+  }
   const binary = settings.binaryPath?.trim() || "droid";
-  const command = ChildProcess.make(binary, ["--version"], { env: environment });
+  const command = ChildProcess.make(binary, ["--version"], {
+    env: environment,
+  });
   const probe = yield* spawnAndCollect(binary, command).pipe(
     Effect.timeoutOption(DEFAULT_TIMEOUT_MS),
     Effect.result,
