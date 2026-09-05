@@ -381,6 +381,8 @@ export function createWsNativeApi(options?: {
       performRepositoryAction: (input) =>
         transport.request(WS_METHODS.gitPerformRepositoryAction, input),
       publishRelease: (input) => transport.request(WS_METHODS.gitPublishRelease, input),
+      triggerReleaseWorkflow: (input) =>
+        transport.request(WS_METHODS.gitTriggerReleaseWorkflow, input),
       environment: (input) => transport.request(WS_METHODS.gitEnvironment, input),
       gitHubSwitchAccount: (input) =>
         transport.request(WS_METHODS.gitHubSwitchAccount, input, { timeoutMs: null }),

@@ -43,13 +43,13 @@ The current Tabs implementation is therefore a strong base. Its provider-neutral
 
 3. **Typed PR mutation — all four providers routed.** The repository remote selects GitHub, GitLab, Azure DevOps, or Bitbucket before list, detail, creation, or mutation. CLI adapters pass literal argument arrays; Bitbucket uses structured JSON over authenticated HTTPS. Azure advertises no diff or comment controls because its current CLI surface cannot fulfill them. Bitbucket supports paginated lists/conversations, provider diffs, comments, verdicts, inline replies, and resolution. Advanced Azure auto-merge/edit and Bitbucket reviewer/edit/search refinements remain.
 
-4. **Eliminate shell interpolation.** Worktree paths, release titles/notes, remote names/URLs, branch names, and tags are interpolated into terminal commands in several paths. Move these actions behind typed API methods with argument arrays. Escaping individual strings is only an interim mitigation.
+4. **Eliminate shell interpolation — completed.** Worktree paths, release titles/notes, workflow refs/versions, remote names/URLs, branch names, tags, and reset targets now cross typed schemas and execute as literal process argument arrays. The remaining terminal shortcuts use fixed commands only (for example `git merge --abort` and `gh auth login`).
 
 5. **Environment-scoped Git UI state — completed.** Panel drafts, selected commits/files, collapsed state, excluded branches, summaries, audit state, and review badges are keyed by `(environmentId, cwd)`, preventing equal remote and local paths from colliding.
 
 ### P2 — quality and performance
 
-1. Mount only the active panel, or disable inactive queries. The current hidden-panel design can keep unnecessary effects and provider calls alive.
+1. **Mount only the active panel — completed.** Inactive Git panels no longer retain queries, effects, or provider polling.
 2. Include untracked and conflicted files in the sidebar change count where appropriate.
 3. Add explicit tab/tabpanel relationships and complete icon-button accessible names.
 4. Add panel interaction tests for error, loading, remote-environment routing, destructive confirmations, authentication failure, and PR state transitions.

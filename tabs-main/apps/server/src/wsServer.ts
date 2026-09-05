@@ -1870,6 +1870,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* gitEnvironment.publishRelease(body);
       }
 
+      case WS_METHODS.gitTriggerReleaseWorkflow: {
+        const body = stripRequestTag(request.body);
+        return yield* gitEnvironment.triggerReleaseWorkflow(body);
+      }
+
       case WS_METHODS.gitEnvironment: {
         const body = stripRequestTag(request.body);
         return yield* gitEnvironment.detect(body);

@@ -270,6 +270,13 @@ export const GitPublishReleaseInput = Schema.Struct({
 });
 export type GitPublishReleaseInput = typeof GitPublishReleaseInput.Type;
 
+export const GitTriggerReleaseWorkflowInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  ref: TrimmedNonEmptyStringSchema,
+  version: TrimmedNonEmptyStringSchema,
+});
+export type GitTriggerReleaseWorkflowInput = typeof GitTriggerReleaseWorkflowInput.Type;
+
 export const GitFetchInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });

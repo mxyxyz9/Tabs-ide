@@ -10,6 +10,7 @@ import {
   GitListPullRequestsInput,
   GitListPullRequestsResult,
   GitRepositoryActionInput,
+  GitTriggerReleaseWorkflowInput,
 } from "./git.ts";
 
 const decodeCreateWorktreeInput = Schema.decodeUnknownSync(VcsCreateWorktreeInput);
@@ -22,6 +23,7 @@ const decodeResolvePullRequestResult = Schema.decodeUnknownSync(GitResolvePullRe
 const decodeListPullRequestsInput = Schema.decodeUnknownSync(GitListPullRequestsInput);
 const decodeListPullRequestsResult = Schema.decodeUnknownSync(GitListPullRequestsResult);
 const decodeRepositoryActionInput = Schema.decodeUnknownSync(GitRepositoryActionInput);
+const decodeTriggerReleaseWorkflowInput = Schema.decodeUnknownSync(GitTriggerReleaseWorkflowInput);
 
 describe("GitRepositoryActionInput", () => {
   it("accepts a discriminated repository operation envelope", () => {
@@ -45,6 +47,18 @@ describe("GitRepositoryActionInput", () => {
         operation: { action: "remove_remote", ref: "main" },
       }),
     ).toThrow();
+  });
+});
+
+describe("GitTriggerReleaseWorkflowInput", () => {
+  it("keeps workflow arguments as separately validated fields", () => {
+    const parsed = decodeTriggerReleaseWorkflowInput({
+      cwd: "/repo",
+      ref: "main",
+      version: "1.3.0",
+    });
+
+    expect(parsed).toEqual({ cwd: "/repo", ref: "main", version: "1.3.0" });
   });
 });
 

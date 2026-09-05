@@ -154,6 +154,38 @@ const makeGitEnvironment = Effect.sync(() => {
                 ),
         ),
       ),
+    triggerReleaseWorkflow: (input) =>
+      tryRun(
+        "gh",
+        [
+          "workflow",
+          "run",
+          "release.yml",
+          "--ref",
+          input.ref,
+          "--field",
+          `version=${input.version}`,
+        ],
+        input.cwd,
+      ).pipe(
+        Effect.flatMap((result) =>
+          result === null
+            ? Effect.fail(
+                new GitHubCliError({
+                  operation: "execute",
+                  detail: "GitHub CLI (`gh`) is required but not available on PATH.",
+                }),
+              )
+            : result.code === 0
+              ? Effect.void
+              : Effect.fail(
+                  new GitHubCliError({
+                    operation: "execute",
+                    detail: result.stderr.trim() || "GitHub release workflow dispatch failed.",
+                  }),
+                ),
+        ),
+      ),
   };
 
   return service;

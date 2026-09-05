@@ -92,6 +92,22 @@ it.effect("accepts discriminated git repository action requests", () =>
   }),
 );
 
+it.effect("accepts typed release workflow requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-release-1",
+      body: {
+        _tag: WS_METHODS.gitTriggerReleaseWorkflow,
+        cwd: "/repo",
+        ref: "main",
+        version: "1.3.0",
+      },
+    });
+
+    assert.strictEqual(parsed.body._tag, WS_METHODS.gitTriggerReleaseWorkflow);
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

@@ -15,6 +15,7 @@ import type {
   GitHubLogoutInput,
   GitHubSwitchAccountInput,
   GitPublishReleaseInput,
+  GitTriggerReleaseWorkflowInput,
 } from "@tabs/contracts";
 
 import type { GitHubCliError } from "../Errors.ts";
@@ -49,6 +50,11 @@ export interface GitEnvironmentShape {
 
   /** Publish a GitHub release without passing user text through a shell. */
   readonly publishRelease: (input: GitPublishReleaseInput) => Effect.Effect<void, GitHubCliError>;
+
+  /** Trigger the repository release workflow without shell interpolation. */
+  readonly triggerReleaseWorkflow: (
+    input: GitTriggerReleaseWorkflowInput,
+  ) => Effect.Effect<void, GitHubCliError>;
 }
 
 /**

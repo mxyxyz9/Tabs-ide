@@ -6549,8 +6549,8 @@ function GitTool(props: {
             <DialogHeader>
               <DialogTitle>Trigger a release</DialogTitle>
               <DialogDescription>
-                Runs <code>gh workflow run release.yml</code> in the terminal to build and publish
-                installers for this version. Needs the GitHub CLI signed in.
+                Dispatches the repository release workflow to build and publish installers for this
+                version. Needs the GitHub CLI signed in.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
@@ -10930,18 +10930,28 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     [runCommandInGitTerminal],
   );
   const dispatchReleaseInGitTerminal = useCallback(
-    (version: string, branch: string) => {
+    async (version: string, branch: string) => {
       const trimmed = version.trim().replace(/^v/, "");
       const branchRef = branch.trim();
-      if (trimmed.length === 0 || branchRef.length === 0) return;
-      // `--ref` selects the branch the release workflow runs from; release.yml
-      // builds and tags from that ref.
-      void runCommandInGitTerminal(
-        `gh workflow run release.yml --ref ${branchRef} --field version=${trimmed}`,
-        "Could not trigger release",
-      );
+      if (trimmed.length === 0 || branchRef.length === 0 || !activeProjectApi || !activeProject) {
+        return;
+      }
+      try {
+        await activeProjectApi.git.triggerReleaseWorkflow({
+          cwd: activeProject.cwd,
+          ref: branchRef,
+          version: trimmed,
+        });
+        toastManager.add({ type: "success", title: `Release ${trimmed} dispatched` });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not trigger release",
+          description: error instanceof Error ? error.message : "Release dispatch failed.",
+        });
+      }
     },
-    [runCommandInGitTerminal],
+    [activeProject, activeProjectApi],
   );
   const setServerTerminalOpen = useCallback(
     (open: boolean) => {
