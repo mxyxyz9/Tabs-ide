@@ -57,6 +57,7 @@ import {
   readWorkspaceTabs,
   resolveCodeHostConfig,
   resolveCodeOssNodeModulesResource,
+  resolveCodeOssWorkbenchTheme,
   writeWorkspaceTabs,
 } from "./codeHostManager";
 
@@ -117,6 +118,23 @@ describe("resolveCodeOssNodeModulesResource", () => {
       ).toBe(wasmPath);
     },
   );
+});
+
+describe("resolveCodeOssWorkbenchTheme", () => {
+  it("matches the embedded workbench to light Tabs themes", () => {
+    expect(resolveCodeOssWorkbenchTheme("tabs-light")).toBe("Default Light Modern");
+    expect(resolveCodeOssWorkbenchTheme("solarized-light")).toBe("Default Light Modern");
+    expect(resolveCodeOssWorkbenchTheme("custom", { baseVariant: "light" })).toBe(
+      "Default Light Modern",
+    );
+  });
+
+  it("defaults unknown and dark themes to the dark workbench", () => {
+    expect(resolveCodeOssWorkbenchTheme("tabs-dark")).toBe("Default Dark Modern");
+    expect(resolveCodeOssWorkbenchTheme("custom", { baseVariant: "dark" })).toBe(
+      "Default Dark Modern",
+    );
+  });
 });
 
 function writeVsCodeDesktopCheckout(rootDir: string): void {

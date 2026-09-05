@@ -809,6 +809,14 @@ export function resolveCodeOssNodeModulesResource(
   return resourcePath;
 }
 
+export function resolveCodeOssWorkbenchTheme(themeId: string, customConfig?: any): string {
+  const isLight =
+    themeId === "custom"
+      ? customConfig?.baseVariant === "light"
+      : ["tabs-light", "solarized-light", "light"].includes(themeId);
+  return isLight ? "Default Light Modern" : "Default Dark Modern";
+}
+
 export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
@@ -849,10 +857,9 @@ export class CodeHostManager {
   }
 
   private isCurrentThemeLight(): boolean {
-    if (this.currentThemeId === "custom") {
-      return this.currentCustomConfig?.baseVariant === "light";
-    }
-    return ["tabs-light", "solarized-light", "light"].includes(this.currentThemeId);
+    return resolveCodeOssWorkbenchTheme(this.currentThemeId, this.currentCustomConfig).includes(
+      "Light",
+    );
   }
 
   setAiProvider(provider: "tabs" | "copilot"): void {
@@ -2097,7 +2104,17 @@ export class CodeHostManager {
     }
     try {
       const desktopSettingsPath = Path.join(location, "settings.json");
-      writeMergedJsonFile(desktopSettingsPath, CODE_OSS_EMBED_DEFAULT_SETTINGS);
+      writeMergedJsonFile(desktopSettingsPath, {
+        ...CODE_OSS_EMBED_DEFAULT_SETTINGS,
+        // Apply the outer Tabs theme before the extension host starts. The
+        // integration extension still installs the detailed color overrides,
+        // but the workbench must not flash or remain on a stale opposite theme
+        // while that host is activating.
+        "workbench.colorTheme": resolveCodeOssWorkbenchTheme(
+          this.currentThemeId,
+          this.currentCustomConfig,
+        ),
+      });
     } catch {
       // Non-fatal. The integration extension also enforces these settings.
     }
