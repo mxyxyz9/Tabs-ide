@@ -19,9 +19,13 @@ function keychainLocation(name: ProviderSecretName): { service: string; account:
   return { service: SERVICE, account: name };
 }
 
-export function getProviderSecret(name: ProviderSecretName): Promise<string | null> {
-  const location = keychainLocation(name);
-  return keytar.getPassword(location.service, location.account);
+export async function getProviderSecret(name: ProviderSecretName): Promise<string | null> {
+  try {
+    const location = keychainLocation(name);
+    return await keytar.getPassword(location.service, location.account);
+  } catch {
+    return null;
+  }
 }
 
 export async function setProviderSecret(name: ProviderSecretName, value: string): Promise<void> {
@@ -35,6 +39,10 @@ export async function setProviderSecret(name: ProviderSecretName, value: string)
 }
 
 export async function deleteProviderSecret(name: ProviderSecretName): Promise<void> {
-  const location = keychainLocation(name);
-  await keytar.deletePassword(location.service, location.account);
+  try {
+    const location = keychainLocation(name);
+    await keytar.deletePassword(location.service, location.account);
+  } catch {
+    return;
+  }
 }

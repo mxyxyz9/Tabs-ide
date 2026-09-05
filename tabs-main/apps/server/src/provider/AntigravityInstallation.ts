@@ -4,6 +4,7 @@ import { ProviderDriverKind, type ProviderInstallState } from "@tabs/contracts";
 import {
   HostProcessArchitecture,
   HostProcessEnvironment,
+  HostProcessExecutablePath,
   HostProcessPlatform,
 } from "@tabs/shared/hostProcess";
 import * as Clock from "effect/Clock";
@@ -270,6 +271,7 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
   const platform = yield* HostProcessPlatform;
   const arch = yield* HostProcessArchitecture;
   const environment = yield* HostProcessEnvironment;
+  const runtimeExecutablePath = yield* HostProcessExecutablePath;
   const releaseAsset =
     options.releaseAsset === undefined
       ? resolveAntigravityReleaseAsset(platform, arch)
@@ -495,6 +497,10 @@ export const makeAntigravityInstallation = Effect.fn("AntigravityInstallation.ma
       Effect.provideService(Path.Path, path),
       Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       Effect.provideService(Crypto.Crypto, crypto),
+      Effect.provideService(HostProcessPlatform, platform),
+      Effect.provideService(HostProcessArchitecture, arch),
+      Effect.provideService(HostProcessEnvironment, environment),
+      Effect.provideService(HostProcessExecutablePath, runtimeExecutablePath),
       Effect.mapError(
         wrapFailure(
           "verify",
