@@ -1,5 +1,6 @@
 import { BrowserWindow, nativeTheme, shell, type WebContents } from "electron";
 import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { rootCertificates } from "node:tls";
 import { pathToFileURL } from "node:url";
@@ -116,6 +117,12 @@ type NativeCodeWindow = {
   readonly onDidClose: unknown;
   readonly onDidDestroy: unknown;
   isDestroyed(): boolean;
+};
+
+type ExtensionHostWindow = {
+  readonly webContents: WebContents;
+  isDestroyed(): boolean;
+  on(event: string, listener: () => void): unknown;
 };
 
 function passiveChannel(
@@ -343,7 +350,12 @@ export async function createNativeCodeHostMainBackend(
   const logService = new modules.NullLogService();
   const onWillShutdown = new modules.Emitter();
   const onWillLoadWindow = new modules.Emitter();
-  const windows = new Map<number, NativeCodeWindow>();
+  // Extension/utility processes must reply to the embedded WebContents. Native
+  // browser views, however, need the owning BrowserWindow so Electron can host
+  // a WebContentsView. These IDs are intentionally the same, but the values
+  // must remain separate.
+  const windows = new Map<number, ExtensionHostWindow>();
+  const browserWindows = new Map<number, NativeCodeWindow>();
   const embeddedBounds = new Map<number, () => Electron.Rectangle | null>();
 
   // The stock Code-OSS main process installs this application-level IPC
@@ -374,7 +386,13 @@ export async function createNativeCodeHostMainBackend(
   };
   const windowsService = {
     getWindowById(windowId: number) {
-      return windows.get(windowId);
+      const win = windows.get(windowId);
+      return win ? { id: windowId, win } : undefined;
+    },
+  };
+  const browserWindowsService = {
+    getWindowById(windowId: number) {
+      return browserWindows.get(windowId);
     },
   };
   const configurationService = {
@@ -489,7 +507,7 @@ export async function createNativeCodeHostMainBackend(
       Path.join(stateDir, "code-oss-desktop", "browser-workspaces"),
     ),
   });
-  browserServices.set(modules.IWindowsMainService, windowsService);
+  browserServices.set(modules.IWindowsMainService, browserWindowsService);
   browserServices.set(modules.IAuxiliaryWindowsMainService, {
     getWindowByWebContents() {
       return undefined;
@@ -795,7 +813,8 @@ export async function createNativeCodeHostMainBackend(
       const onDidClose = new modules.Emitter();
       const onDidDestroy = new modules.Emitter();
       const windowId = window.webContents.id;
-      windows.set(windowId, {
+      windows.set(windowId, window);
+      browserWindows.set(windowId, {
         id: windowId,
         win: window,
         webContents: window.webContents,
@@ -809,6 +828,7 @@ export async function createNativeCodeHostMainBackend(
         onDidClose.dispose();
         onDidDestroy.dispose();
         windows.delete(windowId);
+        browserWindows.delete(windowId);
       });
     },
     registerWebContents(webContents, getBounds, ownerWindow) {
@@ -818,6 +838,10 @@ export async function createNativeCodeHostMainBackend(
       }
       const onDidClose = new modules.Emitter();
       const onDidDestroy = new modules.Emitter();
+      const extensionHostWindow = Object.assign(new EventEmitter(), {
+        webContents,
+        isDestroyed: () => webContents.isDestroyed(),
+      });
       const embeddedWindow = {
         id: webContents.id,
         win: window,
@@ -826,19 +850,23 @@ export async function createNativeCodeHostMainBackend(
         onDidDestroy: onDidDestroy.event,
         isDestroyed: () => webContents.isDestroyed(),
       } satisfies NativeCodeWindow;
-      windows.set(webContents.id, embeddedWindow);
+      windows.set(webContents.id, extensionHostWindow);
+      browserWindows.set(webContents.id, embeddedWindow);
       if (getBounds) embeddedBounds.set(webContents.id, getBounds);
       webContents.once("destroyed", () => {
+        extensionHostWindow.emit("closed");
         onDidClose.fire(undefined);
         onDidDestroy.fire(undefined);
         onDidClose.dispose();
         onDidDestroy.dispose();
         windows.delete(webContents.id);
+        browserWindows.delete(webContents.id);
         embeddedBounds.delete(webContents.id);
       });
     },
     unregisterWindow(windowId) {
       windows.delete(windowId);
+      browserWindows.delete(windowId);
     },
     dispose() {
       onWillShutdown.fire({
@@ -846,6 +874,7 @@ export async function createNativeCodeHostMainBackend(
         join: (_id: string, promise: Promise<void>) => void promise.catch(() => undefined),
       });
       windows.clear();
+      browserWindows.clear();
       embeddedBounds.clear();
       ptyHostService.dispose();
       (loggerService as { dispose(): void }).dispose();
