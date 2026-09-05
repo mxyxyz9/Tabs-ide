@@ -253,24 +253,31 @@ const makeReconcile = <R>(input: {
       const previousOrder = [...previousEntries.keys()];
       const nextOrder: Array<ProviderInstanceId> = [];
 
-      for (const [rawInstanceId, entry] of nextRaw) {
-        const instanceId = rawInstanceId as ProviderInstanceId;
+      const resolvedEntries = yield* Effect.forEach(
+        nextRaw,
+        ([rawInstanceId, entry]) => {
+          const instanceId = rawInstanceId as ProviderInstanceId;
+          const existing = previousEntries.get(instanceId);
+          return existing !== undefined && !replacedIds.has(instanceId)
+            ? Effect.succeed({
+                instanceId,
+                result: { kind: "live", live: existing } as const,
+              })
+            : buildEntry({
+                driversById,
+                parentScope,
+                instanceId,
+                rawInstanceId,
+                entry,
+              }).pipe(Effect.map((result) => ({ instanceId, result })));
+        },
+        { concurrency: "unbounded" },
+      );
+
+      // Populate in settings order after all independent builds settle. Map
+      // insertion order remains deterministic even though probes run concurrently.
+      for (const { instanceId, result } of resolvedEntries) {
         nextOrder.push(instanceId);
-
-        const existing = previousEntries.get(instanceId);
-        if (existing !== undefined && !replacedIds.has(instanceId)) {
-          // No-op update: keep the existing live entry and scope.
-          builtEntries.set(instanceId, existing);
-          continue;
-        }
-
-        const result = yield* buildEntry({
-          driversById,
-          parentScope,
-          instanceId,
-          rawInstanceId,
-          entry,
-        });
         if (result.kind === "live") {
           builtEntries.set(instanceId, result.live);
         } else {
