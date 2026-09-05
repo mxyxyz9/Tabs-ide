@@ -1,6 +1,6 @@
 import type { GitHistoryCommit, GitWatchedBranchStatus, ThreadId } from "@tabs/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import "./git/GitToolV2.css";
 
@@ -26,7 +26,6 @@ import { DivergencePanel } from "./git/DivergencePanel";
 import { GitCheckingState } from "./git/GitCheckingState";
 import { GitEnvironmentGate } from "./git/GitEnvironmentGate";
 import { PanelErrorBoundary } from "./git/PanelErrorBoundary";
-import { cn } from "../lib/utils";
 
 import { HistoryPanel } from "./git/HistoryPanel";
 import { OverviewPanel } from "./git/OverviewPanel";
@@ -462,200 +461,165 @@ export function GitToolV2({
   );
 
   const repoName = cwd.split("/").pop() ?? cwd;
+  const panelIdPrefix = `git-${useId().replaceAll(":", "")}`;
+
+  const panelContainer = (panelName: string, content: React.ReactNode) => (
+    <PanelErrorBoundary panelName={panelName}>
+      <div
+        id={`${panelIdPrefix}-panel-${panel}`}
+        role="tabpanel"
+        aria-labelledby={`${panelIdPrefix}-tab-${panel}`}
+        tabIndex={0}
+      >
+        {content}
+      </div>
+    </PanelErrorBoundary>
+  );
 
   const renderPanel = () => {
-    return (
-      <>
-        <PanelErrorBoundary panelName="Overview">
-          <div
-            className={cn(panel === "overview" ? "block" : "hidden")}
-            aria-hidden={panel !== "overview"}
-          >
-            <OverviewPanel
-              cwd={cwd}
-              repoName={repoName}
-              statusData={statusData}
-              environmentData={environmentData}
-              branchList={branchList}
-              commits={commits}
-              watchedBranchStatuses={watchedBranchStatuses}
-              onGoToChanges={() => setPanel("changes")}
-              onGoToAccounts={() => setPanel("accounts")}
-              onGoToDivergence={() => setPanel("divergence")}
-              onOpenSignIn={() => setModal("deviceAuth")}
-              onOpenAddRemote={() => setModal("addRemote")}
-              onOpenCreateBranch={() => setModal("newWorktree")}
-              onRunInTerminal={onRunInTerminal}
-              onInitRepo={() => void gitInitMutation.mutateAsync()}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Changes">
-          <div
-            className={cn(panel === "changes" ? "block" : "hidden")}
-            aria-hidden={panel !== "changes"}
-          >
-            <ChangesPanel
-              cwd={cwd}
-              statusData={statusData}
-              onOpenDiff={() => setPanel("diff")}
-              onOpenStash={() => setModal("stash")}
-              onOpenDiscardAll={() => setModal("discardAll")}
-              onRunInTerminal={onRunInTerminal}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Review">
-          <div
-            className={cn(panel === "review" ? "block" : "hidden")}
-            aria-hidden={panel !== "review"}
-          >
-            <ReviewPanel cwd={cwd} activePanel={panel} />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Diff">
-          <div className={cn(panel === "diff" ? "block" : "hidden")} aria-hidden={panel !== "diff"}>
-            <DiffPage cwd={cwd} statusData={statusData} commits={commits} />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Divergence">
-          <div
-            className={cn(panel === "divergence" ? "block" : "hidden")}
-            aria-hidden={panel !== "divergence"}
-          >
-            <DivergencePanel
-              cwd={cwd}
-              watchedBranchStatuses={fullScanResult ?? watchedBranchStatuses}
-              isFullScan={Boolean(fullScanResult)}
-              isScanning={isFullScanning}
-              onScanAllBranches={handleScanAllBranches}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Branches">
-          <div
-            className={cn(panel === "branches" ? "block" : "hidden")}
-            aria-hidden={panel !== "branches"}
-          >
-            <BranchesPanel
-              cwd={cwd}
-              activeBranch={activeBranch}
-              allBranches={allBranches}
-              aheadCount={aheadCount}
-              behindCount={behindCount}
-              isDetached={!activeBranch}
-              loadingBranches={branchesQuery.isLoading}
-              onOpenNewBranch={() => setModal("newWorktree")}
-              onOpenNewWorktree={() => setModal("newWorktree")}
-              onGoToChanges={() => setPanel("changes")}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="History">
-          <div
-            className={cn(panel === "history" ? "block" : "hidden")}
-            aria-hidden={panel !== "history"}
-          >
-            <HistoryPanel
-              cwd={cwd}
-              commits={commits}
-              loadingHistory={historyQuery.isLoading}
-              onReset={(c) => setModal({ kind: "reset", commit: c })}
-              onRevert={(c) => void runCommitOperation("revert", c)}
-              onCherryPick={(c) => void runCommitOperation("cherry-pick", c)}
-              onLoadMoreHistory={() => setHistoryLimit((l) => l + 50)}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="PRs">
-          <div className={cn(panel === "prs" ? "block" : "hidden")} aria-hidden={panel !== "prs"}>
-            {panel === "prs" ? (
-              <PRsPanel
-                cwd={cwd}
-                environmentId={environmentId}
-                branchName={branchName}
-                onOpenCreatePR={() => setModal("createPR")}
-              />
-            ) : null}
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Tags">
-          <div className={cn(panel === "tags" ? "block" : "hidden")} aria-hidden={panel !== "tags"}>
-            {panel === "tags" ? (
-              <TagsPanel
-                cwd={cwd}
-                commits={commits}
-                pushAccess={branchesQuery.data?.pushAccess}
-                onOpenDraftRelease={() => setModal("draftRelease")}
-                onRunInTerminal={onRunInTerminal}
-              />
-            ) : null}
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Stashes">
-          <div
-            className={cn(panel === "stashes" ? "block" : "hidden")}
-            aria-hidden={panel !== "stashes"}
-          >
-            <StashesPanel
-              stashes={stashes}
-              hasChanges={changeCount > 0}
-              behindCount={behindCount}
-              hasConflict={hasConflict}
-              onOpenStash={() => setModal("stash")}
-              onOpenStashPullReapply={() => setModal("pullSource")}
-              onApplyStash={(ref) => void applyStash(ref)}
-              onDropStash={(ref) => void dropStash(ref)}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Accounts">
-          <div
-            className={cn(panel === "accounts" ? "block" : "hidden")}
-            aria-hidden={panel !== "accounts"}
-          >
-            <AccountsPanel
-              accounts={accounts}
-              activeAccountLogin={activeAccountLogin}
-              repoName={repoName}
-              credentialMismatch={isCredentialMismatch}
-              onOpenConnectAccount={() => setModal("deviceAuth")}
-              onSwitchAccount={switchAccount}
-              onRemoveAccount={removeAccount}
-            />
-          </div>
-        </PanelErrorBoundary>
-
-        <PanelErrorBoundary panelName="Settings">
-          <div
-            className={cn(panel === "settings" ? "block" : "hidden")}
-            aria-hidden={panel !== "settings"}
-          >
-            {panel === "settings" ? (
-              <SettingsPanel
-                cwd={cwd}
-                environmentData={environmentData}
-                excludedBranches={excludedWatchedBranches}
-                onAddExcludedBranch={addExcludedBranch}
-                onRemoveExcludedBranch={removeExcludedBranch}
-                onOpenAddRemote={() => setModal("addRemote")}
-                onRunInTerminal={onRunInTerminal}
-              />
-            ) : null}
-          </div>
-        </PanelErrorBoundary>
-      </>
-    );
+    switch (panel) {
+      case "overview":
+        return panelContainer(
+          "Overview",
+          <OverviewPanel
+            cwd={cwd}
+            repoName={repoName}
+            statusData={statusData}
+            environmentData={environmentData}
+            branchList={branchList}
+            commits={commits}
+            watchedBranchStatuses={watchedBranchStatuses}
+            onGoToChanges={() => setPanel("changes")}
+            onGoToAccounts={() => setPanel("accounts")}
+            onGoToDivergence={() => setPanel("divergence")}
+            onOpenSignIn={() => setModal("deviceAuth")}
+            onOpenAddRemote={() => setModal("addRemote")}
+            onOpenCreateBranch={() => setModal("newWorktree")}
+            onRunInTerminal={onRunInTerminal}
+            onInitRepo={() => void gitInitMutation.mutateAsync()}
+          />,
+        );
+      case "changes":
+        return panelContainer(
+          "Changes",
+          <ChangesPanel
+            cwd={cwd}
+            statusData={statusData}
+            onOpenDiff={() => setPanel("diff")}
+            onOpenStash={() => setModal("stash")}
+            onOpenDiscardAll={() => setModal("discardAll")}
+            onRunInTerminal={onRunInTerminal}
+          />,
+        );
+      case "review":
+        return panelContainer("Review", <ReviewPanel cwd={cwd} activePanel={panel} />);
+      case "diff":
+        return panelContainer(
+          "Diff",
+          <DiffPage cwd={cwd} statusData={statusData} commits={commits} />,
+        );
+      case "divergence":
+        return panelContainer(
+          "Divergence",
+          <DivergencePanel
+            cwd={cwd}
+            watchedBranchStatuses={fullScanResult ?? watchedBranchStatuses}
+            isFullScan={Boolean(fullScanResult)}
+            isScanning={isFullScanning}
+            onScanAllBranches={handleScanAllBranches}
+          />,
+        );
+      case "branches":
+        return panelContainer(
+          "Branches",
+          <BranchesPanel
+            cwd={cwd}
+            activeBranch={activeBranch}
+            allBranches={allBranches}
+            aheadCount={aheadCount}
+            behindCount={behindCount}
+            isDetached={!activeBranch}
+            loadingBranches={branchesQuery.isLoading}
+            onOpenNewBranch={() => setModal("newWorktree")}
+            onOpenNewWorktree={() => setModal("newWorktree")}
+            onGoToChanges={() => setPanel("changes")}
+          />,
+        );
+      case "history":
+        return panelContainer(
+          "History",
+          <HistoryPanel
+            cwd={cwd}
+            commits={commits}
+            loadingHistory={historyQuery.isLoading}
+            onReset={(c) => setModal({ kind: "reset", commit: c })}
+            onRevert={(c) => void runCommitOperation("revert", c)}
+            onCherryPick={(c) => void runCommitOperation("cherry-pick", c)}
+            onLoadMoreHistory={() => setHistoryLimit((l) => l + 50)}
+          />,
+        );
+      case "prs":
+        return panelContainer(
+          "PRs",
+          <PRsPanel
+            cwd={cwd}
+            environmentId={environmentId}
+            branchName={branchName}
+            onOpenCreatePR={() => setModal("createPR")}
+          />,
+        );
+      case "tags":
+        return panelContainer(
+          "Tags",
+          <TagsPanel
+            cwd={cwd}
+            commits={commits}
+            pushAccess={branchesQuery.data?.pushAccess}
+            onOpenDraftRelease={() => setModal("draftRelease")}
+            onRunInTerminal={onRunInTerminal}
+          />,
+        );
+      case "stashes":
+        return panelContainer(
+          "Stashes",
+          <StashesPanel
+            stashes={stashes}
+            hasChanges={changeCount > 0}
+            behindCount={behindCount}
+            hasConflict={hasConflict}
+            onOpenStash={() => setModal("stash")}
+            onOpenStashPullReapply={() => setModal("pullSource")}
+            onApplyStash={(ref) => void applyStash(ref)}
+            onDropStash={(ref) => void dropStash(ref)}
+          />,
+        );
+      case "accounts":
+        return panelContainer(
+          "Accounts",
+          <AccountsPanel
+            accounts={accounts}
+            activeAccountLogin={activeAccountLogin}
+            repoName={repoName}
+            credentialMismatch={isCredentialMismatch}
+            onOpenConnectAccount={() => setModal("deviceAuth")}
+            onSwitchAccount={switchAccount}
+            onRemoveAccount={removeAccount}
+          />,
+        );
+      case "settings":
+        return panelContainer(
+          "Settings",
+          <SettingsPanel
+            cwd={cwd}
+            environmentData={environmentData}
+            excludedBranches={excludedWatchedBranches}
+            onAddExcludedBranch={addExcludedBranch}
+            onRemoveExcludedBranch={removeExcludedBranch}
+            onOpenAddRemote={() => setModal("addRemote")}
+            onRunInTerminal={onRunInTerminal}
+          />,
+        );
+    }
   };
 
   return (
@@ -682,6 +646,7 @@ export function GitToolV2({
             changeCount={changeCount}
             reviewBadgeCount={unreadCount}
             hasConflict={hasConflict}
+            idPrefix={panelIdPrefix}
           />
 
           {/* Main Panel Area */}
