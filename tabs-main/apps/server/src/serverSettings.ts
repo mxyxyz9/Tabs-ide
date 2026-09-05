@@ -237,6 +237,7 @@ function providerSecretsFromSettings(
     ["copilot.byok-api-key", settings.providers.copilot.byokApiKey],
     ["gemini.api-key", settings.providers.gemini.apiKey],
     ["droid.api-key", settings.providers.droid.apiKey],
+    ["antigravity.api-key", settings.providers.antigravity.apiKey],
     ["openrouter.api-key", settings.providers.openrouter.apiKey],
     ["opencode.server-password", settings.providers.opencode.serverPassword],
     ["kilo.server-password", settings.providers.kilo.serverPassword],
@@ -252,6 +253,7 @@ function withoutPlaintextProviderSecrets(settings: ServerSettings): ServerSettin
       copilot: { ...settings.providers.copilot, token: "", byokApiKey: "" },
       gemini: { ...settings.providers.gemini, apiKey: "" },
       droid: { ...settings.providers.droid, apiKey: "" },
+      antigravity: { ...settings.providers.antigravity, apiKey: "" },
       openrouter: { ...settings.providers.openrouter, apiKey: "" },
       opencode: { ...settings.providers.opencode, serverPassword: "" },
       kilo: { ...settings.providers.kilo, serverPassword: "" },
@@ -268,6 +270,7 @@ function providerSecretsFromPatch(
     ["copilot.byok-api-key", providers?.copilot?.byokApiKey],
     ["gemini.api-key", providers?.gemini?.apiKey],
     ["droid.api-key", providers?.droid?.apiKey],
+    ["antigravity.api-key", providers?.antigravity?.apiKey],
     ["openrouter.api-key", providers?.openrouter?.apiKey],
     ["opencode.server-password", providers?.opencode?.serverPassword],
     ["kilo.server-password", providers?.kilo?.serverPassword],
@@ -288,6 +291,9 @@ function withoutPlaintextProviderSecretsPatch(patch: ServerSettingsPatch): Serve
         : {}),
       ...(patch.providers.gemini ? { gemini: { ...patch.providers.gemini, apiKey: "" } } : {}),
       ...(patch.providers.droid ? { droid: { ...patch.providers.droid, apiKey: "" } } : {}),
+      ...(patch.providers.antigravity
+        ? { antigravity: { ...patch.providers.antigravity, apiKey: "" } }
+        : {}),
       ...(patch.providers.openrouter
         ? { openrouter: { ...patch.providers.openrouter, apiKey: "" } }
         : {}),

@@ -7,6 +7,7 @@ export type ProviderSecretName =
   | "copilot.byok-api-key"
   | "gemini.api-key"
   | "droid.api-key"
+  | "antigravity.api-key"
   | "openrouter.api-key"
   | "opencode.server-password"
   | "kilo.server-password";

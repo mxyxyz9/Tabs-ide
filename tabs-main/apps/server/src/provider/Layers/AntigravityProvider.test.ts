@@ -44,7 +44,15 @@ describe("parseAntigravityModels", () => {
 describe("makeAntigravityCommand", () => {
   it("closes stdin so non-interactive discovery can exit", () => {
     const command = makeAntigravityCommand(
-      { enabled: true, binaryPath: "/custom/agy", customModels: [] },
+      {
+        enabled: true,
+        authMethod: "oauth-personal",
+        apiKey: "",
+        gcpProject: "",
+        gcpLocation: "",
+        binaryPath: "/custom/agy",
+        customModels: [],
+      },
       ["models"],
       { PATH: "/custom/bin" },
     );

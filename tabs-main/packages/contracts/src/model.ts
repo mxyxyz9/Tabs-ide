@@ -152,6 +152,8 @@ const OPENROUTER_DRIVER_KIND = ProviderDriverKind.make("openrouter");
 
 export const DEFAULT_MODEL = "gpt-5.4";
 export const DEFAULT_GIT_TEXT_GENERATION_MODEL = "gpt-5.4-mini";
+/** Keep the native Antigravity session's selected default model. */
+export const ANTIGRAVITY_DEFAULT_MODEL = "antigravity-default";
 
 export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, string>> = {
   [CODEX_DRIVER_KIND]: DEFAULT_MODEL,
@@ -161,7 +163,7 @@ export const DEFAULT_MODEL_BY_PROVIDER: Partial<Record<ProviderDriverKind, strin
   [OPENCODE_DRIVER_KIND]: "openai/gpt-5",
   [GEMINI_DRIVER_KIND]: "gemini-3.6-flash",
   [DROID_DRIVER_KIND]: "auto",
-  [ANTIGRAVITY_DRIVER_KIND]: "gemini-3.7-flash",
+  [ANTIGRAVITY_DRIVER_KIND]: ANTIGRAVITY_DEFAULT_MODEL,
 };
 
 /** Per-provider text generation model defaults. */
