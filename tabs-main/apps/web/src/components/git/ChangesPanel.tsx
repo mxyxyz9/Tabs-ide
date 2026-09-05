@@ -111,7 +111,9 @@ export function FileRow({
           type="button"
           onClick={toggleInlineDiff}
           aria-label={
-            expanded ? `Collapse inline diff for ${f.path}` : `Preview inline diff for ${f.path}`
+            expanded
+              ? `Collapse inline diff for ${f.path}`
+              : `Toggle inline diff preview for ${f.path}`
           }
           aria-expanded={expanded}
           title={expanded ? "Collapse inline diff" : "Preview inline diff"}

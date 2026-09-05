@@ -1,13 +1,16 @@
-import type { GitEnvironmentResult, NativeApi } from "@tabs/contracts";
+import type { GitEnvironmentResult, GitStatusFile, NativeApi } from "@tabs/contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createRef } from "react";
 import { page } from "vitest/browser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
 import "../../index.css";
+import { FileRow } from "./ChangesPanel";
 import { GitEnvironmentGate } from "./GitEnvironmentGate";
 import { GitApiProvider } from "./gitApiContext";
 import { DeviceAuthModal, DiscardAllModal, ForcePushModal } from "./gitModals";
+import { PanelErrorBoundary } from "./PanelErrorBoundary";
 
 const environment = (authenticated: boolean): GitEnvironmentResult => ({
   git: { installed: true, version: "2.52.0" },
@@ -42,6 +45,7 @@ function authApi(authenticated: boolean): NativeApi {
 
 describe("Git workflow interaction states", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
 
@@ -122,5 +126,60 @@ describe("Git workflow interaction states", () => {
       expect(document.body.textContent).toContain("GitHub is not authenticated yet");
     });
     expect(confirmed).not.toHaveBeenCalled();
+  });
+
+  it("recovers a failed panel when the user retries", async () => {
+    const boundaryRef = createRef<PanelErrorBoundary>();
+
+    await using _ = await mount(
+      <PanelErrorBoundary ref={boundaryRef} panelName="Pull requests">
+        <div>Recovered panel</div>
+      </PanelErrorBoundary>,
+    );
+
+    boundaryRef.current?.setState({
+      hasError: true,
+      error: new Error("provider temporarily unavailable"),
+    });
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain(
+        "Something went wrong in the Pull requests panel",
+      ),
+    );
+    await page.getByRole("button", { name: "Try again" }).click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Recovered panel"));
+  });
+
+  it("routes a change-row diff through its injected environment API", async () => {
+    const diff = vi.fn().mockResolvedValue({ patch: "@@ -1 +1 @@\n-old\n+new" });
+    const remoteApi = { git: { diff } } as unknown as NativeApi;
+    const file: GitStatusFile = {
+      path: "src/remote.ts",
+      staged: false,
+      unstaged: true,
+      conflicted: false,
+      untracked: false,
+      insertions: 1,
+      deletions: 1,
+    };
+
+    await using _ = await mount(
+      <GitApiProvider api={remoteApi} scopeKey="remote-environment:/workspace">
+        <FileRow
+          cwd="/workspace"
+          f={file}
+          staged={false}
+          onOpenDiff={vi.fn()}
+          onToggleStage={vi.fn()}
+          onDiscard={vi.fn()}
+        />
+      </GitApiProvider>,
+    );
+
+    await page.getByRole("button", { name: "Preview inline diff for src/remote.ts" }).click();
+    await vi.waitFor(() =>
+      expect(diff).toHaveBeenCalledWith({ cwd: "/workspace", path: file.path }),
+    );
+    expect(document.body.textContent).toContain("new");
   });
 });
