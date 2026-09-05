@@ -325,7 +325,6 @@ jobs:
             --target "${{ matrix.target }}"
             --arch "${{ matrix.arch }}"
             --build-version "${{ needs.preflight.outputs.version }}"
-            --thin
             --verbose
           )
 
@@ -382,8 +381,6 @@ jobs:
             "tabs-main/release/*.AppImage.blockmap" \
             "tabs-main/release/*.exe" \
             "tabs-main/release/*.exe.blockmap" \
-            "tabs-main/release/tabs-code-runtime-*.zip" \
-            "tabs-main/release/tabs-code-runtime-*.zip.sha256" \
             "tabs-main/release/latest.yml" \
             "tabs-main/release/latest-linux.yml"; do
             for file in $pattern; do
@@ -433,19 +430,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          required_runtime_targets=(mac-arm64 mac-x64 linux-x64 win-x64)
-          for target in "${required_runtime_targets[@]}"; do
-            archive="release-assets/tabs-code-runtime-${RELEASE_VERSION}-${target}.zip"
-            checksum="${archive}.sha256"
-            test -s "$archive"
-            test -s "$checksum"
-          done
-
-          (
-            cd release-assets
-            sha256sum --check tabs-code-runtime-*.zip.sha256
-          )
-
           shopt -s nullglob
           dmgs=(release-assets/*.dmg)
           appimages=(release-assets/*.AppImage)
@@ -470,7 +454,5 @@ jobs:
             release-assets/*.AppImage.blockmap
             release-assets/*.exe
             release-assets/*.exe.blockmap
-            release-assets/tabs-code-runtime-*.zip
-            release-assets/tabs-code-runtime-*.zip.sha256
             release-assets/latest.yml
             release-assets/latest-linux.yml
