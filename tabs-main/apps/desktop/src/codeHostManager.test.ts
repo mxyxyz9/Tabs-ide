@@ -56,6 +56,7 @@ import {
   reconcileSharedExtensionRegistry,
   readWorkspaceTabs,
   resolveCodeHostConfig,
+  resolveCodeOssNodeModulesResource,
   writeWorkspaceTabs,
 } from "./codeHostManager";
 
@@ -99,6 +100,24 @@ describe("reconcileSharedExtensionRegistry", () => {
 function makeTempDir(prefix: string): string {
   return FS.mkdtempSync(Path.join(OS.tmpdir(), prefix));
 }
+
+describe("resolveCodeOssNodeModulesResource", () => {
+  it.each(["node_modules.asar", "node_modules.asar.unpacked"])(
+    "maps %s URLs to source-tree node_modules resources",
+    (asarDirectory) => {
+      const runtimeDir = makeTempDir("tabs-code-resource-");
+      const wasmPath = Path.join(runtimeDir, "node_modules/vscode-oniguruma/release/onig.wasm");
+      FS.mkdirSync(Path.dirname(wasmPath), { recursive: true });
+      FS.writeFileSync(wasmPath, "wasm");
+
+      expect(
+        resolveCodeOssNodeModulesResource(
+          Path.join(runtimeDir, asarDirectory, "vscode-oniguruma/release/onig.wasm"),
+        ),
+      ).toBe(wasmPath);
+    },
+  );
+});
 
 function writeVsCodeDesktopCheckout(rootDir: string): void {
   for (const relativePath of [

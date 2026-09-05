@@ -792,6 +792,23 @@ export function filterWorkspaceTabs(
   });
 }
 
+export function resolveCodeOssNodeModulesResource(
+  resourcePath: string,
+  existsSync: (path: string) => boolean = FS.existsSync,
+): string {
+  if (existsSync(resourcePath)) return resourcePath;
+
+  for (const asarDirectory of ["node_modules.asar.unpacked", "node_modules.asar"]) {
+    const marker = `${Path.sep}${asarDirectory}${Path.sep}`;
+    if (!resourcePath.includes(marker)) continue;
+
+    const developmentPath = resourcePath.replace(marker, `${Path.sep}node_modules${Path.sep}`);
+    if (existsSync(developmentPath)) return developmentPath;
+  }
+
+  return resourcePath;
+}
+
 export class CodeHostManager {
   private readonly sessions = new Map<string, CodeSession>();
   private readonly loadPromiseByProjectId = new Map<string, Promise<void>>();
@@ -1914,17 +1931,10 @@ export class CodeHostManager {
 
       const fileUrl = new URL(`file://${parsed.pathname}${parsed.search}${parsed.hash}`);
       let resolvedPath = Path.resolve(fileURLToPath(fileUrl));
-      // Packaged Code-OSS emits `.asar.unpacked` resource URLs. Development
-      // runtimes are ordinary source trees, where the same dependencies live
-      // under `node_modules`; keep the generated URL contract while resolving
-      // it to the real on-disk resource.
-      if (!FS.existsSync(resolvedPath) && resolvedPath.includes("node_modules.asar.unpacked")) {
-        const developmentPath = resolvedPath.replace(
-          `${Path.sep}node_modules.asar.unpacked${Path.sep}`,
-          `${Path.sep}node_modules${Path.sep}`,
-        );
-        if (FS.existsSync(developmentPath)) resolvedPath = developmentPath;
-      }
+      // Packaged Code-OSS emits both `.asar` and `.asar.unpacked` resource
+      // URLs. Downloaded and development runtimes are ordinary source trees,
+      // where those dependencies live under `node_modules`.
+      resolvedPath = resolveCodeOssNodeModulesResource(resolvedPath);
       if (
         allowedRoots.some((root) => {
           const relativePath = Path.relative(root, resolvedPath);
