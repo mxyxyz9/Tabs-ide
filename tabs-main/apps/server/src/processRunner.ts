@@ -8,6 +8,7 @@ export interface ProcessRunOptions {
   allowNonZeroExit?: boolean | undefined;
   maxBufferBytes?: number | undefined;
   outputMode?: "error" | "truncate" | undefined;
+  signal?: AbortSignal | undefined;
 }
 
 export interface ProcessRunResult {
@@ -152,6 +153,11 @@ export async function runProcess(
   const outputMode = options.outputMode ?? "error";
 
   return new Promise<ProcessRunResult>((resolve, reject) => {
+    if (options.signal?.aborted) {
+      reject(new Error("Process execution aborted"));
+      return;
+    }
+
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
@@ -169,6 +175,15 @@ export async function runProcess(
     let settled = false;
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null;
 
+    const onAbort = (): void => {
+      timedOut = true;
+      killChild(child, "SIGTERM");
+      forceKillTimer = setTimeout(() => {
+        killChild(child, "SIGKILL");
+      }, 1_000);
+    };
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+
     const timeoutTimer = setTimeout(() => {
       timedOut = true;
       killChild(child, "SIGTERM");
@@ -180,6 +195,7 @@ export async function runProcess(
     const finalize = (callback: () => void): void => {
       if (settled) return;
       settled = true;
+      options.signal?.removeEventListener("abort", onAbort);
       clearTimeout(timeoutTimer);
       if (forceKillTimer) {
         clearTimeout(forceKillTimer);

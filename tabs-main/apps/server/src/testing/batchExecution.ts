@@ -5,6 +5,7 @@ export async function runBounded<T>(
   items: readonly T[],
   concurrency: number,
   run: (item: T, index: number) => Promise<void>,
+  signal?: AbortSignal,
 ): Promise<void> {
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) {
     throw new Error("Test concurrency must be an integer between 1 and 4");
@@ -13,6 +14,7 @@ export async function runBounded<T>(
   await Promise.all(
     Array.from({ length: Math.min(concurrency, items.length) }, async () => {
       while (next < items.length) {
+        if (signal?.aborted) break;
         const index = next++;
         await run(items[index]!, index);
       }
