@@ -646,6 +646,8 @@ export function SettingsPanel({
                     />
                     <button
                       type="button"
+                      aria-label={showGeminiKey ? "Hide Gemini API key" : "Show Gemini API key"}
+                      aria-pressed={showGeminiKey}
                       onClick={() => setShowGeminiKey((v) => !v)}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground transition-colors cursor-pointer"
                     >

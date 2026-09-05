@@ -110,6 +110,10 @@ export function FileRow({
         <button
           type="button"
           onClick={toggleInlineDiff}
+          aria-label={
+            expanded ? `Collapse inline diff for ${f.path}` : `Preview inline diff for ${f.path}`
+          }
+          aria-expanded={expanded}
           title={expanded ? "Collapse inline diff" : "Preview inline diff"}
           className="shrink-0 text-muted-foreground/70 hover:text-foreground cursor-pointer"
         >
@@ -119,6 +123,7 @@ export function FileRow({
         <button
           type="button"
           onClick={() => onOpenDiff(f)}
+          aria-label={`Open full diff for ${f.path}`}
           className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
         >
           <span
@@ -145,6 +150,10 @@ export function FileRow({
         <button
           type="button"
           onClick={toggleInlineDiff}
+          aria-label={
+            expanded ? `Collapse inline diff for ${f.path}` : `Preview inline diff for ${f.path}`
+          }
+          aria-expanded={expanded}
           title="Toggle inline diff preview"
           className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 flex items-center justify-center w-5 h-5 rounded bg-muted/50 border border-border text-muted-foreground hover:text-foreground cursor-pointer"
         >
@@ -153,6 +162,7 @@ export function FileRow({
         <button
           type="button"
           disabled={isRowLoading}
+          aria-label={`Discard changes to ${f.path}`}
           onClick={(e) => {
             e.stopPropagation();
             if (!isRowLoading) onDiscard(f);
@@ -169,6 +179,7 @@ export function FileRow({
         <button
           type="button"
           disabled={isRowLoading}
+          aria-label={staged ? `Unstage ${f.path}` : `Stage ${f.path}`}
           onClick={(e) => {
             e.stopPropagation();
             if (!isRowLoading) onToggleStage(f);

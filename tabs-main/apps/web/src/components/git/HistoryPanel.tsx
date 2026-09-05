@@ -100,6 +100,8 @@ export function CommitRow({
       <div className="absolute right-1 top-3" ref={menuRef} onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
+          aria-label={`Open actions for commit ${c.shortSha}`}
+          aria-expanded={menuOpen}
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen((o) => !o);

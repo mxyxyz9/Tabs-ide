@@ -355,6 +355,7 @@ export function DivergencePanel({
           {searchQuery && (
             <button
               type="button"
+              aria-label="Clear branch search"
               onClick={() => setSearchQuery("")}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground"
             >
@@ -365,9 +366,14 @@ export function DivergencePanel({
 
         <div className="flex items-center gap-2 shrink-0">
           {/* View Switcher — three tabs: Spotlight | Active | Archived */}
-          <div className="flex items-center bg-muted/50 border border-border rounded-lg p-0.5">
+          <div
+            className="flex items-center bg-muted/50 border border-border rounded-lg p-0.5"
+            role="group"
+            aria-label="Branch view"
+          >
             <button
               type="button"
+              aria-pressed={activeView === "spotlight"}
               onClick={() => switchView("spotlight")}
               className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
                 activeView === "spotlight"
@@ -388,6 +394,7 @@ export function DivergencePanel({
             </button>
             <button
               type="button"
+              aria-pressed={activeView === "active"}
               onClick={() => switchView("active")}
               className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
                 activeView === "active"
@@ -399,6 +406,7 @@ export function DivergencePanel({
             </button>
             <button
               type="button"
+              aria-pressed={activeView === "archived"}
               onClick={() => switchView("archived")}
               className={`px-3 py-1 text-[11px] font-medium rounded-md transition-colors ${
                 activeView === "archived"
@@ -569,6 +577,8 @@ export function DivergencePanel({
                     {isSelectMode && (
                       <button
                         type="button"
+                        aria-label={isSelected ? `Deselect ${b.name}` : `Select ${b.name}`}
+                        aria-pressed={isSelected}
                         onClick={() => toggleSelectOne(b.name)}
                         className="cursor-pointer shrink-0"
                         title={isSelected ? "Deselect" : "Select"}
@@ -623,6 +633,10 @@ export function DivergencePanel({
                     {/* Spotlight toggle */}
                     <button
                       type="button"
+                      aria-label={
+                        isSpotlit ? `Remove ${b.name} from Spotlight` : `Add ${b.name} to Spotlight`
+                      }
+                      aria-pressed={isSpotlit}
                       title={isSpotlit ? "Remove from Spotlight" : "Add to Spotlight"}
                       onClick={() => handleToggleSpotlight(b.name)}
                       className={`p-1 rounded transition-colors cursor-pointer ${
@@ -637,6 +651,11 @@ export function DivergencePanel({
                     {/* Archive toggle */}
                     <button
                       type="button"
+                      aria-label={
+                        activeView === "archived"
+                          ? `Restore ${b.name} from archive`
+                          : `Archive ${b.name}`
+                      }
                       title={activeView === "archived" ? "Remove from archive" : "Archive branch"}
                       onClick={() => handleToggleArchive(b.name)}
                       className="p-1 rounded text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer"

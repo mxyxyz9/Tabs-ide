@@ -322,9 +322,14 @@ export function DiffPage({
 
   return (
     <div>
-      <div className="flex items-center gap-1 mb-4 bg-muted/50 border border-border rounded-lg p-1 w-fit">
+      <div
+        className="flex items-center gap-1 mb-4 bg-muted/50 border border-border rounded-lg p-1 w-fit"
+        role="group"
+        aria-label="Diff source"
+      >
         <button
           type="button"
+          aria-pressed={diffMode === "working"}
           onClick={() => setDiffMode("working")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
             diffMode === "working"
@@ -336,6 +341,7 @@ export function DiffPage({
         </button>
         <button
           type="button"
+          aria-pressed={diffMode === "history"}
           onClick={() => setDiffMode("history")}
           className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
             diffMode === "history"

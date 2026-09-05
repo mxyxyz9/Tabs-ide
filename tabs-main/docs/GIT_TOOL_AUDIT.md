@@ -50,8 +50,12 @@ The current Tabs implementation is therefore a strong base. Its provider-neutral
 ### P2 — quality and performance
 
 1. **Mount only the active panel — completed.** Inactive Git panels no longer retain queries, effects, or provider polling.
-2. Include untracked and conflicted files in the sidebar change count where appropriate.
-3. Add explicit tab/tabpanel relationships and complete icon-button accessible names.
+2. **Complete change counts — completed.** The sidebar badge deduplicates staged, unstaged,
+   untracked, and conflicted paths, so a conflicted file represented in multiple status groups is
+   counted once.
+3. **Accessible navigation and actions — completed.** The source-control rail uses linked
+   tab/tabpanel semantics with roving keyboard focus, segmented views expose selection state, and
+   icon-only Git actions have contextual accessible names and toggle state where applicable.
 4. Add panel interaction tests for error, loading, remote-environment routing, destructive confirmations, authentication failure, and PR state transitions.
 5. **Provider capability gating — completed for GitHub and GitLab.** The server declares diff, creation, action, verdict, and merge-method support; the renderer hides unsupported controls, and the manager rejects unsupported mutations independently.
 

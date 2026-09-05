@@ -865,6 +865,7 @@ export function GitModelPicker({
             {searchQuery && (
               <button
                 type="button"
+                aria-label="Clear model search"
                 onClick={() => setSearchQuery("")}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-foreground cursor-pointer"
               >
