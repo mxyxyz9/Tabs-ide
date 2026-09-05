@@ -3,12 +3,15 @@ import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import { makeUnsupportedTextGeneration } from "../../textGeneration/UnsupportedTextGeneration";
 import { ServerConfig } from "../../config";
 import { ProviderDriverError } from "../Errors";
 import { makeAntigravityAdapter } from "../Layers/AntigravityAdapter";
+import { makeLegacyAntigravityAdapter } from "../Layers/LegacyAntigravityAdapter";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import { checkAntigravityProviderStatus } from "../Layers/AntigravityProvider";
 import {
@@ -26,6 +29,10 @@ const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
 const DRIVER_KIND = "antigravity" as ProviderDriverKind;
 const SNAPSHOT_REFRESH_INTERVAL = Duration.minutes(5);
 
+export function isNativeAntigravityAcpBinary(binaryPath: string | null | undefined): boolean {
+  return /(?:^|[\\/])agy_acp_server(?:\.par|\.exe)?$/iu.test(binaryPath?.trim() ?? "");
+}
+
 const withInstanceIdentity =
   (input: {
     readonly instanceId: ProviderInstance["instanceId"];
@@ -42,7 +49,11 @@ const withInstanceIdentity =
     continuation: { groupKey: input.continuationGroupKey },
   });
 
-export type AntigravityDriverEnv = ChildProcessSpawner.ChildProcessSpawner | ServerConfig;
+export type AntigravityDriverEnv =
+  | ChildProcessSpawner.ChildProcessSpawner
+  | FileSystem.FileSystem
+  | Path.Path
+  | ServerConfig;
 
 export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityDriverEnv> = {
   driverKind: DRIVER_KIND,
@@ -68,6 +79,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         continuationGroupKey: continuationIdentity.continuationKey,
       });
       const effectiveConfig = { ...config, enabled } satisfies AntigravitySettings;
+      const usesNativeAcp = isNativeAntigravityAcpBinary(effectiveConfig.binaryPath);
       const maintenanceCapabilities = makeProviderMaintenanceCapabilities({
         provider: DRIVER_KIND,
         packageName: null,
@@ -103,12 +115,19 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         ),
       );
 
-      const antigravityAdapter = yield* makeAntigravityAdapter(effectiveConfig, {
-        instanceId,
-        environment: processEnv,
-        defaultCwd: serverConfig.cwd,
-        attachmentsDir: serverConfig.attachmentsDir,
-      });
+      const antigravityAdapter = yield* usesNativeAcp
+        ? makeAntigravityAdapter(effectiveConfig, {
+            instanceId,
+            environment: processEnv,
+            defaultCwd: serverConfig.cwd,
+            attachmentsDir: serverConfig.attachmentsDir,
+          })
+        : makeLegacyAntigravityAdapter(effectiveConfig, {
+            instanceId,
+            environment: processEnv,
+            defaultCwd: serverConfig.cwd,
+            attachmentsDir: serverConfig.attachmentsDir,
+          });
 
       return {
         instanceId,
@@ -119,6 +138,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         enabled,
         capabilities: makeProviderInstanceCapabilities({
           modelDiscovery: "runtime",
+          agentSessions: usesNativeAcp ? "supported" : "unsupported",
           textGeneration: "unsupported",
           structuredGeneration: "unsupported",
           login: "external",
