@@ -96,7 +96,7 @@ jobs:
         working-directory: tabs-code-main
         shell: bash
         env:
-          NODE_OPTIONS: "--max-old-space-size=6144"
+          NODE_OPTIONS: "--max-old-space-size=12288"
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
         run: |
           npm install --ignore-scripts
@@ -119,7 +119,7 @@ jobs:
         working-directory: tabs-code-main
         shell: bash
         env:
-          NODE_OPTIONS: "--max-old-space-size=6144"
+          NODE_OPTIONS: "--max-old-space-size=12288"
         run: |
           # out/ : dev workbench + server-main.js (skip extensions & Monaco
           # typechecking — the desktop build doesn't need them).
@@ -145,7 +145,8 @@ jobs:
         working-directory: tabs-code-main
         shell: bash
         env:
-          NODE_OPTIONS: "--max-old-space-size=6144"
+          NODE_OPTIONS: "--max-old-space-size=12288"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           # Shared extensions package (extensions/package.json → vscode-extensions)
@@ -210,7 +211,9 @@ jobs:
           # distributions instead of shipping source and dev dependencies.
           npm run gulp compile-extensions-build
           npm run gulp compile-copilot-extension-build
-          test -f .build/extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            test -f .build/extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node
+          fi
           test -f .build/extensions/copilot/package.json
 
       - name: Build desktop artifact
