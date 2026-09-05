@@ -244,7 +244,7 @@ describe("RpcSessionFactory", () => {
           requestId: probeRequest.id,
           exit: {
             _tag: "Success",
-            value: SERVER_CONFIG,
+            value: ENCODED_SERVER_CONFIG,
           },
         }),
       );
@@ -287,7 +287,7 @@ describe("RpcSessionFactory", () => {
     }),
   );
 
-  it.effect("tolerates two missed pong windows before closing the session", () =>
+  it.effect("closes after the RPC transport misses a pong window", () =>
     Effect.gen(function* () {
       const { factory, sockets } = yield* makeFactory();
       const session = yield* factory.connect(PREPARED);
@@ -299,11 +299,9 @@ describe("RpcSessionFactory", () => {
       yield* completeInitialConfig(socket);
       yield* Fiber.join(readyFiber);
 
-      yield* TestClock.adjust("15 seconds");
+      yield* TestClock.adjust("5 seconds");
       expect(closedFiber.pollUnsafe()).toBeUndefined();
       expect(socket.sent.slice(1).map((request) => decodeJson(request))).toEqual([
-        { _tag: "Ping" },
-        { _tag: "Ping" },
         { _tag: "Ping" },
       ]);
 
