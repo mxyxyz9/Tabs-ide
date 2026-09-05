@@ -1,25 +1,38 @@
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const workspaceFiles = [
-  "package.json",
-  "bun.lock",
-  "apps/server/package.json",
-  "apps/desktop/package.json",
-  "apps/web/package.json",
-  "apps/marketing/package.json",
-  "packages/contracts/package.json",
-  "packages/shared/package.json",
-  "scripts/package.json",
-] as const;
+const workspaceFiles = ["package.json", "bun.lock"] as const;
+
+function workspacePackageManifests(): string[] {
+  return ["apps", "packages", "scripts"].flatMap((workspaceDirectory) => {
+    const directoryPath = resolve(repoRoot, workspaceDirectory);
+    return readdirSync(directoryPath, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(workspaceDirectory, entry.name, "package.json"))
+      .filter((relativePath) => existsSync(resolve(repoRoot, relativePath)));
+  });
+}
 
 function copyWorkspaceManifestFixture(targetRoot: string): void {
-  for (const relativePath of workspaceFiles) {
+  for (const relativePath of [
+    ...workspaceFiles,
+    "scripts/package.json",
+    ...workspacePackageManifests(),
+  ]) {
     const sourcePath = resolve(repoRoot, relativePath);
     const destinationPath = resolve(targetRoot, relativePath);
     mkdirSync(dirname(destinationPath), { recursive: true });
