@@ -868,6 +868,7 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
     ? path.resolve(envOverride)
     : path.join(repoRoot, "..", "tabs-code-main");
   const vsCodeDestDir = path.join(stageResourcesDir, "tabs-code-main");
+  const packagedExtensionsDir = path.join(vsCodeSourceDir, ".build", "extensions");
 
   if (!(yield* fs.exists(vsCodeSourceDir))) {
     yield* Effect.log(
@@ -877,6 +878,16 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
         "from the GitHub release on first launch.",
     );
     return false;
+  }
+
+  if (!(yield* fs.exists(packagedExtensionsDir))) {
+    return yield* new BuildScriptError({
+      message:
+        `The VS Code runtime at ${vsCodeSourceDir} has no production-packaged extensions. ` +
+        "Run `npm run gulp compile-extensions-build` and " +
+        "`npm run gulp compile-copilot-extension-build` in tabs-code-main before building. " +
+        "Shipping the source extensions directory would include gigabytes of build/test dependencies.",
+    });
   }
 
   // Guard: the source must be FULLY compiled before we stage/zip it. A common
@@ -941,6 +952,19 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
   yield* Effect.log("[desktop-artifact] Staging VS Code runtime...");
   yield* fs.copy(vsCodeSourceDir, vsCodeDestDir);
 
+  // The source extensions tree is a development checkout and can exceed 3 GB:
+  // it contains TypeScript sources, tests and complete dev dependency trees.
+  // Code-OSS' own build tasks apply each extension's VSIX inclusion rules,
+  // bundle esbuild-based extensions and retain only required native/runtime
+  // dependencies in .build/extensions. Always replace the copied source tree
+  // with that canonical production output. Besides keeping release assets well
+  // below GitHub's 2 GiB limit, this prevents development-only modules from
+  // shadowing the exact dependencies the extension was packaged against.
+  const stagedExtensionsDir = path.join(vsCodeDestDir, "extensions");
+  yield* Effect.log("[desktop-artifact] Installing production-packaged Code-OSS extensions...");
+  yield* fs.remove(stagedExtensionsDir, { recursive: true });
+  yield* fs.copy(packagedExtensionsDir, stagedExtensionsDir);
+
   // The shared process verifies Marketplace signatures with @vscode/vsce-sign.
   // Upstream installs that package under build/node_modules, but build/ is not
   // part of the runtime artifact. Preserve only the verifier and its matching
@@ -979,6 +1003,7 @@ const stageVsCodeRuntime = Effect.fn("stageVsCodeRuntime")(function* (
     ".vscode",
     ".devcontainer",
     ".eslint-plugin-local",
+    ".build",
     "build",
     "cli",
   ];

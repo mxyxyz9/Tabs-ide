@@ -200,6 +200,13 @@ jobs:
           echo "Compiling ${#tasks[@]} product built-in extensions"
           npm run gulp -- "${tasks[@]}"
 
+          # Produce the same lean extension layout used by upstream Code-OSS
+          # distributions instead of shipping source and dev dependencies.
+          npm run gulp compile-extensions-build
+          npm run gulp compile-copilot-extension-build
+          test -f .build/extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node
+          test -f .build/extensions/copilot/package.json
+
       - name: Build desktop artifact
         working-directory: tabs-main
         shell: bash

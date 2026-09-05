@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { releasePackageFiles } from "./update-release-package-versions.ts";
+
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const workspaceFiles = ["package.json", "bun.lock"] as const;
@@ -112,12 +114,22 @@ try {
     stdio: "inherit",
   });
 
-  const lockfile = readFileSync(resolve(tempRoot, "bun.lock"), "utf8");
-  assertContains(
-    lockfile,
-    `"version": "9.9.9-smoke.0"`,
-    "Expected bun.lock to contain the smoke version.",
-  );
+  for (const relativePath of releasePackageFiles) {
+    const packageJson = JSON.parse(
+      readFileSync(resolve(tempRoot, relativePath), "utf8"),
+    ) as { version?: unknown };
+    if (packageJson.version !== "9.9.9-smoke.0") {
+      throw new Error(`Expected ${relativePath} to contain the smoke version.`);
+    }
+  }
+
+  // Workspace versions are not a stable serialized field in Bun's text lock
+  // format (Bun 1.3.14 no longer rewrites them). What matters for a release is
+  // that the updated manifests still resolve with the generated frozen lock.
+  execFileSync("bun", ["install", "--frozen-lockfile", "--ignore-scripts"], {
+    cwd: tempRoot,
+    stdio: "inherit",
+  });
 
   const { arm64Path, x64Path } = writeMacManifestFixtures(tempRoot);
   execFileSync(

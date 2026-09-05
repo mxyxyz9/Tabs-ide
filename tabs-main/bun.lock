@@ -265,6 +265,7 @@
         "@effect/platform-node": "catalog:",
         "@effect/vitest": "catalog:",
         "@types/node": "catalog:",
+        "typescript": "catalog:",
         "vite-plus": "catalog:",
       },
     },
@@ -278,6 +279,7 @@
       "devDependencies": {
         "@effect/vitest": "catalog:",
         "@types/node": "catalog:",
+        "typescript": "catalog:",
         "vite-plus": "catalog:",
       },
     },

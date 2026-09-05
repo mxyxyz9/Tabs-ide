@@ -264,6 +264,16 @@ jobs:
           echo "Compiling ${#tasks[@]} product built-in extensions"
           npm run gulp -- "${tasks[@]}"
 
+          # Produce the canonical runtime extension tree. These upstream tasks
+          # apply every extension's VSIX ignore rules, bundle esbuild-based
+          # extensions, and retain required production/native dependencies.
+          # Packaging the development extensions/ tree would add several GB of
+          # source, tests and dev dependencies to each downloadable runtime.
+          npm run gulp compile-extensions-build
+          npm run gulp compile-copilot-extension-build
+          test -f .build/extensions/git/node_modules/@vscode/fs-copyfile/build/Release/vscode_fs.node
+          test -f .build/extensions/copilot/package.json
+
       # Cache electron-builder's downloaded NSIS/7zip/winCodeSign toolchain so a
       # populated run never re-downloads it. The download host (GitHub's
       # electron-builder-binaries releases) intermittently returns 504s that
