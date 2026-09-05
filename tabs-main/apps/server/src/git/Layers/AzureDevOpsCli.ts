@@ -306,6 +306,19 @@ export const makeAzureDevOpsCli = Effect.sync(() => {
             "false",
           ];
           break;
+        case "edit_pull_request":
+          args = [
+            "repos",
+            "pr",
+            "update",
+            "--detect",
+            "true",
+            "--id",
+            reference,
+            ...(input.title === undefined ? [] : ["--title", input.title]),
+            ...(input.body === undefined ? [] : ["--description", input.body]),
+          ];
+          break;
         case "add_reviewer":
         case "remove_reviewer":
           args = [

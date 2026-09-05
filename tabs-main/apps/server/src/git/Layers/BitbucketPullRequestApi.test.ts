@@ -33,7 +33,9 @@ describe("BitbucketPullRequestApi normalization", () => {
             reviewers: [{ nickname: "reviewer" }],
             source: { branch: { name: "feature/bitbucket" } },
             destination: { branch: { name: "main" } },
-            links: { html: { href: "https://bitbucket.org/tabs/app/pull-requests/12" } },
+            links: {
+              html: { href: "https://bitbucket.org/tabs/app/pull-requests/12" },
+            },
           },
         ],
       }),
@@ -117,7 +119,9 @@ describe("BitbucketPullRequestApi requests", () => {
       state: "OPEN",
       source: { branch: { name: `feature-${id}` } },
       destination: { branch: { name: "main" } },
-      links: { html: { href: `https://bitbucket.org/tabs/app/pull-requests/${id}` } },
+      links: {
+        html: { href: `https://bitbucket.org/tabs/app/pull-requests/${id}` },
+      },
     });
     const fetchMock = vi
       .fn()
@@ -131,7 +135,9 @@ describe("BitbucketPullRequestApi requests", () => {
         ),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ values: [pullRequest(2)] }), { status: 200 }),
+        new Response(JSON.stringify({ values: [pullRequest(2)] }), {
+          status: 200,
+        }),
       )
       .mockResolvedValueOnce(new Response("{}", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -161,5 +167,36 @@ describe("BitbucketPullRequestApi requests", () => {
       content: { raw: "Handle `$(literal)`." },
       inline: { path: "src/app.ts", to: 9 },
     });
+  });
+
+  it("partially updates pull request text without overwriting other fields", async () => {
+    process.env.T3CODE_BITBUCKET_ACCESS_TOKEN = "token";
+    mockedRunProcess.mockResolvedValue({
+      stdout: "git@bitbucket.org:tabs/app.git\n",
+      stderr: "",
+      code: 0,
+      signal: null,
+      timedOut: false,
+    });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = await Effect.runPromise(makeBitbucketPullRequestApi);
+    await Effect.runPromise(
+      api.mutatePullRequest({
+        cwd: "/repo",
+        reference: "12",
+        action: "edit_pull_request",
+        title: "Updated title",
+      }),
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.bitbucket.org/2.0/repositories/tabs/app/pullrequests/12",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ title: "Updated title" }),
+      }),
+    );
   });
 });

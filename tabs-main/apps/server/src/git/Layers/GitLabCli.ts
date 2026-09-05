@@ -47,7 +47,9 @@ function parseMergeRequest(value: unknown): GitResolvedPullRequest | null {
               {
                 login,
                 ...(text(reviewer?.avatar_url ?? reviewer?.avatarUrl)
-                  ? { avatarUrl: text(reviewer?.avatar_url ?? reviewer?.avatarUrl)! }
+                  ? {
+                      avatarUrl: text(reviewer?.avatar_url ?? reviewer?.avatarUrl)!,
+                    }
                   : {}),
               },
             ]
@@ -59,7 +61,12 @@ function parseMergeRequest(value: unknown): GitResolvedPullRequest | null {
         const label = record(entry);
         const name = text(label?.name ?? entry);
         return name
-          ? [{ name, ...(text(label?.color) ? { color: text(label?.color)! } : {}) }]
+          ? [
+              {
+                name,
+                ...(text(label?.color) ? { color: text(label?.color)! } : {}),
+              },
+            ]
           : [];
       })
     : [];
@@ -89,7 +96,9 @@ function parseMergeRequest(value: unknown): GitResolvedPullRequest | null {
           author: {
             login: authorLogin,
             ...(text(authorRecord?.avatar_url ?? authorRecord?.avatarUrl)
-              ? { avatarUrl: text(authorRecord?.avatar_url ?? authorRecord?.avatarUrl)! }
+              ? {
+                  avatarUrl: text(authorRecord?.avatar_url ?? authorRecord?.avatarUrl)!,
+                }
               : {}),
           },
         }
@@ -413,6 +422,7 @@ export const makeGitLabCli = Effect.sync(() => {
           break;
         case "enable_auto_merge":
         case "disable_auto_merge":
+        case "edit_pull_request":
           return Effect.fail(
             new GitLabCliError({
               operation: "mutatePullRequest",

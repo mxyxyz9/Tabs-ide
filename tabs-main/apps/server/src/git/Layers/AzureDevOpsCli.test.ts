@@ -30,7 +30,11 @@ it("normalizes Azure DevOps pull request metadata", () => {
         createdBy: { uniqueName: "author@example.com", displayName: "Author" },
         reviewers: [{ uniqueName: "reviewer@example.com" }],
         repository: { webUrl: "https://dev.azure.com/org/project/_git/repo" },
-        _links: { web: { href: "https://dev.azure.com/org/project/_git/repo/pullrequest/17" } },
+        _links: {
+          web: {
+            href: "https://dev.azure.com/org/project/_git/repo/pullrequest/17",
+          },
+        },
       },
     ]),
   ).toMatchObject([
@@ -160,6 +164,47 @@ layer("AzureDevOpsCliLive", (it) => {
           "42",
           "--auto-complete",
           "false",
+          "--only-show-errors",
+          "--output",
+          "json",
+        ],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
+  it.effect("updates Azure pull request text as literal CLI arguments", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValue({
+        stdout: "{}",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+      const azure = yield* AzureDevOpsCli;
+      yield* azure.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "edit_pull_request",
+        title: "Literal $(title)",
+        body: "Updated description",
+      });
+
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "az",
+        [
+          "repos",
+          "pr",
+          "update",
+          "--detect",
+          "true",
+          "--id",
+          "42",
+          "--title",
+          "Literal $(title)",
+          "--description",
+          "Updated description",
           "--only-show-errors",
           "--output",
           "json",

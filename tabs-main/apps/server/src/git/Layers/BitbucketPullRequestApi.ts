@@ -26,7 +26,10 @@ function actor(value: unknown) {
   const links = record(raw?.links);
   const avatar = record(links?.avatar);
   return login
-    ? { login, ...(text(avatar?.href) ? { avatarUrl: text(avatar?.href)! } : {}) }
+    ? {
+        login,
+        ...(text(avatar?.href) ? { avatarUrl: text(avatar?.href)! } : {}),
+      }
     : null;
 }
 
@@ -169,7 +172,9 @@ export function decodeBitbucketThreads(
   });
   const threads = new Map<
     string,
-    (typeof comments)[number] & { comments: Array<(typeof comments)[number]["comment"]> }
+    (typeof comments)[number] & {
+      comments: Array<(typeof comments)[number]["comment"]>;
+    }
   >();
   for (const item of comments) {
     const existing = threads.get(item.rootId);
@@ -188,7 +193,9 @@ function credentials(): Record<string, string> | null {
   const email = process.env.T3CODE_BITBUCKET_EMAIL;
   const apiToken = process.env.T3CODE_BITBUCKET_API_TOKEN;
   return email && apiToken
-    ? { Authorization: `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}` }
+    ? {
+        Authorization: `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`,
+      }
     : null;
 }
 
@@ -325,7 +332,9 @@ export const makeBitbucketPullRequestApi = Effect.sync(() => {
             if (Array.isArray(pageRecord?.values)) commentValues.push(...pageRecord.values);
             nextComments = text(pageRecord?.next);
           }
-          const reviewThreads = decodeBitbucketThreads({ values: commentValues });
+          const reviewThreads = decodeBitbucketThreads({
+            values: commentValues,
+          });
           return {
             ...detail,
             ...(files.length ? { files } : {}),
@@ -351,9 +360,17 @@ export const makeBitbucketPullRequestApi = Effect.sync(() => {
               }),
             }).pipe(Effect.asVoid);
           case "close":
-            return request("declinePullRequest", `${root}/decline`, { method: "POST" }).pipe(
-              Effect.asVoid,
-            );
+            return request("declinePullRequest", `${root}/decline`, {
+              method: "POST",
+            }).pipe(Effect.asVoid);
+          case "edit_pull_request":
+            return request("editPullRequest", root, {
+              method: "PUT",
+              body: JSON.stringify({
+                ...(input.title === undefined ? {} : { title: input.title }),
+                ...(input.body === undefined ? {} : { description: input.body }),
+              }),
+            }).pipe(Effect.asVoid);
           case "comment":
             return request("comment", `${root}/comments`, {
               method: "POST",

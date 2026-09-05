@@ -685,6 +685,7 @@ const makeGitHubCli = Effect.sync(() => {
           break;
         case "enable_auto_merge":
         case "disable_auto_merge":
+        case "edit_pull_request":
           return Effect.fail(
             new GitHubCliError({
               operation: "mutatePullRequest",

@@ -7,6 +7,7 @@ import {
   GitMerge,
   GitPullRequest,
   MessageSquare,
+  Pencil,
   Plus,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -130,6 +131,11 @@ export function PRsPanel({
   );
 
   const [mergePr, setMergePr] = useState<PullRequestRow | null>(null);
+  const [editPr, setEditPr] = useState<{
+    number: number;
+    title: string;
+    body: string;
+  } | null>(null);
   const [mergeIntent, setMergeIntent] = useState<"merge" | "auto_merge">("merge");
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
@@ -241,6 +247,7 @@ export function PRsPanel({
       subjectId?: string;
       reaction?: (typeof REACTION_OPTIONS)[number][0];
     },
+    title?: string,
   ) => {
     if (!api) return false;
     setPendingAction(action);
@@ -253,6 +260,7 @@ export function PRsPanel({
           ? { mergeMethod, ...(action === "merge" ? { deleteBranch } : {}) }
           : {}),
         ...(body !== undefined ? { body } : {}),
+        ...(title !== undefined ? { title } : {}),
         ...(value !== undefined ? { value } : {}),
         ...(inline?.path ? { path: inline.path } : {}),
         ...(inline?.line ? { line: inline.line } : {}),
@@ -554,7 +562,8 @@ export function PRsPanel({
                       });
                     }}
                   >
-                    Open{pr.provider ? ` on ${formatProviderName(pr.provider)}` : " pull request"}
+                    Open
+                    {pr.provider ? ` on ${formatProviderName(pr.provider)}` : " pull request"}
                   </Button>
                 </div>
               </div>
@@ -642,6 +651,22 @@ export function PRsPanel({
                                 {detailQuery.data.pullRequest.isDraft
                                   ? "Mark ready for review"
                                   : "Convert to draft"}
+                              </Button>
+                            ) : null}
+                            {supportsAction("edit_pull_request") ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={pendingAction !== null}
+                                onClick={() =>
+                                  setEditPr({
+                                    number: pr.n,
+                                    title: detailQuery.data.pullRequest.title,
+                                    body: detailQuery.data.pullRequest.body ?? "",
+                                  })
+                                }
+                              >
+                                <Pencil /> Edit title and description
                               </Button>
                             ) : null}
                             {detailQuery.data.pullRequest.body ? (
@@ -904,7 +929,11 @@ export function PRsPanel({
                                           "inline_comment",
                                           inlineBody.trim(),
                                           undefined,
-                                          { path: selectedFile.path, line, side: inlineSide },
+                                          {
+                                            path: selectedFile.path,
+                                            line,
+                                            side: inlineSide,
+                                          },
                                         ).then((ok) => {
                                           if (ok) {
                                             setInlineBody("");
@@ -1350,6 +1379,87 @@ export function PRsPanel({
           </DialogPopup>
         </Dialog>
       )}
+
+      {editPr ? (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditPr(null);
+          }}
+        >
+          <DialogPopup className="git-tool-v2 max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Edit Pull Request #{editPr.number}</DialogTitle>
+            </DialogHeader>
+            <DialogPanel className="space-y-4">
+              <div>
+                <label
+                  htmlFor="git-pr-edit-title"
+                  className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                >
+                  Title
+                </label>
+                <input
+                  id="git-pr-edit-title"
+                  value={editPr.title}
+                  maxLength={1_000}
+                  autoFocus
+                  onChange={(event) =>
+                    setEditPr((current) =>
+                      current ? { ...current, title: event.target.value } : current,
+                    )
+                  }
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="git-pr-edit-description"
+                  className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="git-pr-edit-description"
+                  value={editPr.body}
+                  maxLength={100_000}
+                  rows={10}
+                  onChange={(event) =>
+                    setEditPr((current) =>
+                      current ? { ...current, body: event.target.value } : current,
+                    )
+                  }
+                  className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </DialogPanel>
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setEditPr(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={!editPr.title.trim() || pendingAction !== null}
+                onClick={() => {
+                  const current = editPr;
+                  void mutatePullRequest(
+                    current.number,
+                    "edit_pull_request",
+                    current.body,
+                    undefined,
+                    undefined,
+                    current.title.trim(),
+                  ).then((ok) => {
+                    if (ok) setEditPr(null);
+                  });
+                }}
+              >
+                Save changes
+              </Button>
+            </DialogFooter>
+          </DialogPopup>
+        </Dialog>
+      ) : null}
     </div>
   );
 }

@@ -400,6 +400,7 @@ const AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES = {
     "draft",
     "add_reviewer",
     "remove_reviewer",
+    "edit_pull_request",
   ] as const,
   mergeMethods: ["merge", "squash"] as const,
 };
@@ -414,6 +415,7 @@ const BITBUCKET_PULL_REQUEST_CAPABILITIES = {
     "comment",
     "approve",
     "request_changes",
+    "edit_pull_request",
     "inline_comment",
     "reply_to_thread",
     "resolve_thread",
@@ -521,7 +523,11 @@ export const makeGitManager = Effect.gen(function* () {
       const remoteUrl =
         origin ||
         (yield* gitCore
-          .execute({ operation: "repositoryProvider.list", cwd, args: ["remote", "-v"] })
+          .execute({
+            operation: "repositoryProvider.list",
+            cwd,
+            args: ["remote", "-v"],
+          })
           .pipe(
             Effect.map((result) => result.stdout.split(/\r?\n/)[0]?.split(/\s+/)[1]?.trim() ?? ""),
             Effect.catch(() => Effect.succeed("")),
@@ -1154,7 +1160,10 @@ export const makeGitManager = Effect.gen(function* () {
       const pullRequest =
         provider === "github"
           ? yield* Effect.gen(function* () {
-              const details = yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference });
+              const details = yield* gitHubCli.getPullRequest({
+                cwd: input.cwd,
+                reference,
+              });
               const files = yield* gitHubCli.getPullRequestFiles({
                 cwd: input.cwd,
                 reference: String(details.number),
@@ -1171,16 +1180,28 @@ export const makeGitManager = Effect.gen(function* () {
             })
           : provider === "gitlab"
             ? yield* Effect.gen(function* () {
-                const details = yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference });
+                const details = yield* gitLabCli.getPullRequest({
+                  cwd: input.cwd,
+                  reference,
+                });
                 const reviewThreads = yield* gitLabCli.getPullRequestReviewThreads({
                   cwd: input.cwd,
                   reference: String(details.number),
                 });
-                return { ...details, ...(reviewThreads.length > 0 ? { reviewThreads } : {}) };
+                return {
+                  ...details,
+                  ...(reviewThreads.length > 0 ? { reviewThreads } : {}),
+                };
               })
             : provider === "azure-devops"
-              ? yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference })
-              : yield* bitbucketApi.getPullRequest({ cwd: input.cwd, reference });
+              ? yield* azureDevOpsCli.getPullRequest({
+                  cwd: input.cwd,
+                  reference,
+                })
+              : yield* bitbucketApi.getPullRequest({
+                  cwd: input.cwd,
+                  reference,
+                });
 
       return { pullRequest, capabilities: pullRequestCapabilities(provider) };
     },
@@ -1193,7 +1214,11 @@ export const makeGitManager = Effect.gen(function* () {
       const pullRequests =
         provider === "github"
           ? yield* gitHubCli
-              .listOpenPullRequests({ cwd: input.cwd, state: input.state ?? "all", limit })
+              .listOpenPullRequests({
+                cwd: input.cwd,
+                state: input.state ?? "all",
+                limit,
+              })
               .pipe(Effect.map((list) => list.map(toResolvedPullRequest)))
           : provider === "gitlab"
             ? yield* gitLabCli.listPullRequests({
@@ -1247,6 +1272,16 @@ export const makeGitManager = Effect.gen(function* () {
           `Action ${input.action} requires a non-empty message.`,
         );
       }
+      if (
+        input.action === "edit_pull_request" &&
+        input.title === undefined &&
+        input.body === undefined
+      ) {
+        return yield* gitManagerError(
+          "mutatePullRequest",
+          "Editing a pull request requires a title or description.",
+        );
+      }
       if (["inline_comment", "reply_to_thread"].includes(input.action) && !input.body?.trim()) {
         return yield* gitManagerError("mutatePullRequest", `${input.action} requires a message.`);
       }
@@ -1274,6 +1309,7 @@ export const makeGitManager = Effect.gen(function* () {
         action: input.action,
         ...(input.mergeMethod ? { mergeMethod: input.mergeMethod } : {}),
         ...(input.deleteBranch !== undefined ? { deleteBranch: input.deleteBranch } : {}),
+        ...(input.title !== undefined ? { title: input.title } : {}),
         ...(input.body !== undefined ? { body: input.body } : {}),
         ...(input.value !== undefined ? { value: input.value } : {}),
         ...(input.path !== undefined ? { path: input.path } : {}),
@@ -1284,7 +1320,10 @@ export const makeGitManager = Effect.gen(function* () {
         ...(input.reaction !== undefined ? { reaction: input.reaction } : {}),
       } satisfies typeof input;
       if (provider === "github") {
-        yield* gitHubCli.mutatePullRequest({ ...mutation, action: mutation.action });
+        yield* gitHubCli.mutatePullRequest({
+          ...mutation,
+          action: mutation.action,
+        });
       } else if (provider === "gitlab") yield* gitLabCli.mutatePullRequest(mutation);
       else if (provider === "azure-devops") yield* azureDevOpsCli.mutatePullRequest(mutation);
       else yield* bitbucketApi.mutatePullRequest(mutation);
@@ -1294,8 +1333,14 @@ export const makeGitManager = Effect.gen(function* () {
           : provider === "gitlab"
             ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference })
             : provider === "azure-devops"
-              ? yield* azureDevOpsCli.getPullRequest({ cwd: input.cwd, reference })
-              : yield* bitbucketApi.getPullRequest({ cwd: input.cwd, reference });
+              ? yield* azureDevOpsCli.getPullRequest({
+                  cwd: input.cwd,
+                  reference,
+                })
+              : yield* bitbucketApi.getPullRequest({
+                  cwd: input.cwd,
+                  reference,
+                });
       return { pullRequest };
     },
   );
@@ -1344,10 +1389,16 @@ export const makeGitManager = Effect.gen(function* () {
       const created =
         provider === "github"
           ? toResolvedPullRequest(
-              yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch }),
+              yield* gitHubCli.getPullRequest({
+                cwd: input.cwd,
+                reference: input.headBranch,
+              }),
             )
           : provider === "gitlab"
-            ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: input.headBranch })
+            ? yield* gitLabCli.getPullRequest({
+                cwd: input.cwd,
+                reference: input.headBranch,
+              })
             : provider === "azure-devops"
               ? azureCreated!
               : bitbucketCreated!;
@@ -1362,12 +1413,18 @@ export const makeGitManager = Effect.gen(function* () {
       const provider = yield* requireSupportedPullRequestProvider(input.cwd);
       const pullRequestSummary =
         provider === "github"
-          ? yield* gitHubCli.getPullRequest({ cwd: input.cwd, reference: normalizedReference })
+          ? yield* gitHubCli.getPullRequest({
+              cwd: input.cwd,
+              reference: normalizedReference,
+            })
           : null;
       const pullRequest = pullRequestSummary
         ? toResolvedPullRequest(pullRequestSummary)
         : provider === "gitlab"
-          ? yield* gitLabCli.getPullRequest({ cwd: input.cwd, reference: normalizedReference })
+          ? yield* gitLabCli.getPullRequest({
+              cwd: input.cwd,
+              reference: normalizedReference,
+            })
           : provider === "azure-devops"
             ? yield* azureDevOpsCli.getPullRequest({
                 cwd: input.cwd,
@@ -1600,7 +1657,10 @@ export const makeGitManager = Effect.gen(function* () {
             "Cannot create a pull request from detached HEAD.",
           );
         }
-        let branchStep: { status: "created" | "skipped_not_requested"; name?: string };
+        let branchStep: {
+          status: "created" | "skipped_not_requested";
+          name?: string;
+        };
         let commitMessageForStep = input.commitMessage;
         let preResolvedCommitSuggestion: CommitAndBranchSuggestion | undefined = undefined;
 
@@ -1792,7 +1852,10 @@ export const makeGitManager = Effect.gen(function* () {
       if (input.target.kind === "commit") {
         targetScope = "commit";
         const commitSha = input.target.sha;
-        const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
+        const diffRes = yield* gitCore.diff({
+          cwd: input.cwd,
+          commit: commitSha,
+        });
         rawPatch = diffRes.patch;
         diffSummary = `Commit ${commitSha}`;
       } else if (input.target.kind === "full_codebase") {
@@ -2025,7 +2088,10 @@ export const makeGitManager = Effect.gen(function* () {
         if (input.target.kind === "commit") {
           targetScope = "commit";
           const commitSha = input.target.sha;
-          const diffRes = yield* gitCore.diff({ cwd: input.cwd, commit: commitSha });
+          const diffRes = yield* gitCore.diff({
+            cwd: input.cwd,
+            commit: commitSha,
+          });
           rawPatch = diffRes.patch;
           diffSummary = `Commit ${commitSha}`;
         } else if (input.target.kind === "full_codebase") {

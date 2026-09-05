@@ -197,7 +197,7 @@ describe("Git workflow interaction states", () => {
       provider: "azure-devops" as const,
       diff: true,
       create: true,
-      actions: ["enable_auto_merge", "disable_auto_merge"] as const,
+      actions: ["enable_auto_merge", "disable_auto_merge", "edit_pull_request"] as const,
       mergeMethods: ["merge", "squash"] as const,
     };
     const pullRequest = (state: "open" | "merged") => ({
@@ -253,6 +253,20 @@ describe("Git workflow interaction states", () => {
         reference: "41",
         action: "enable_auto_merge",
         mergeMethod: "squash",
+      }),
+    );
+    await page.getByRole("button", { name: "Details" }).click();
+    await page.getByRole("button", { name: "Edit title and description" }).click();
+    await page.getByRole("textbox", { name: "Title" }).fill("Updated provider title");
+    await page.getByRole("textbox", { name: "Description" }).fill("Updated provider description");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await vi.waitFor(() =>
+      expect(mutatePullRequest).toHaveBeenCalledWith({
+        cwd: "/workspace",
+        reference: "41",
+        action: "edit_pull_request",
+        title: "Updated provider title",
+        body: "Updated provider description",
       }),
     );
     await page.getByRole("button", { name: "merged" }).click();
