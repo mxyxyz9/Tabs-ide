@@ -304,12 +304,17 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
       );
       const methods: string[] = [];
       const profiles = new Set<string>();
+      const spawnedCommands: Array<{
+        readonly command: string;
+        readonly args: ReadonlyArray<string>;
+      }> = [];
       let closedRuntimes = 0;
       const spawner = ChildProcessSpawner.make(
         Effect.fn("test.spawnAntigravityValidator")(function* (command) {
           if (command._tag !== "StandardCommand") {
             return yield* Effect.die("Expected one validation process.");
           }
+          spawnedCommands.push({ command: command.command, args: command.args });
           const profile = command.options.env?.GEMINI_HOME;
           if (!profile) return yield* Effect.die("Expected a disposable validation profile.");
           profiles.add(profile);
@@ -395,7 +400,8 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
         Effect.provideService(HostProcessExecutablePath, "/fixture/node"),
       );
       yield* installation.start;
-      expect((yield* terminalState(installation)).phase).toBe(
+      const state = yield* terminalState(installation);
+      expect(state.phase, JSON.stringify({ message: state.message, spawnedCommands })).toBe(
         testCase.valid ? "succeeded" : "failed",
       );
       yield* Deferred.await(stagingReleased);
