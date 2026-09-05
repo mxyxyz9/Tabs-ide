@@ -9,6 +9,7 @@ import {
   GitResolvePullRequestResult,
   GitListPullRequestsInput,
   GitListPullRequestsResult,
+  GitRepositoryActionInput,
 } from "./git.ts";
 
 const decodeCreateWorktreeInput = Schema.decodeUnknownSync(VcsCreateWorktreeInput);
@@ -20,6 +21,32 @@ const decodeRunStackedActionResult = Schema.decodeUnknownSync(GitRunStackedActio
 const decodeResolvePullRequestResult = Schema.decodeUnknownSync(GitResolvePullRequestResult);
 const decodeListPullRequestsInput = Schema.decodeUnknownSync(GitListPullRequestsInput);
 const decodeListPullRequestsResult = Schema.decodeUnknownSync(GitListPullRequestsResult);
+const decodeRepositoryActionInput = Schema.decodeUnknownSync(GitRepositoryActionInput);
+
+describe("GitRepositoryActionInput", () => {
+  it("accepts a discriminated repository operation envelope", () => {
+    const parsed = decodeRepositoryActionInput({
+      cwd: "/repo",
+      operation: {
+        action: "push_ref",
+        remote: "origin",
+        ref: "feature/safe-transport",
+        forceWithLease: true,
+      },
+    });
+
+    expect(parsed.operation.action).toBe("push_ref");
+  });
+
+  it("rejects operation fields that do not match the discriminator", () => {
+    expect(() =>
+      decodeRepositoryActionInput({
+        cwd: "/repo",
+        operation: { action: "remove_remote", ref: "main" },
+      }),
+    ).toThrow();
+  });
+});
 
 describe("VcsCreateWorktreeInput", () => {
   it("accepts omitted newRefName for existing-refName worktrees", () => {

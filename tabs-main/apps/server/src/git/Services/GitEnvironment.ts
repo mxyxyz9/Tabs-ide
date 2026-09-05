@@ -14,6 +14,7 @@ import type {
   GitEnvironmentResult,
   GitHubLogoutInput,
   GitHubSwitchAccountInput,
+  GitPublishReleaseInput,
 } from "@tabs/contracts";
 
 import type { GitHubCliError } from "../Errors.ts";
@@ -45,6 +46,9 @@ export interface GitEnvironmentShape {
   readonly logout: (
     input: GitHubLogoutInput,
   ) => Effect.Effect<GitEnvironmentResult, GitHubCliError>;
+
+  /** Publish a GitHub release without passing user text through a shell. */
+  readonly publishRelease: (input: GitPublishReleaseInput) => Effect.Effect<void, GitHubCliError>;
 }
 
 /**

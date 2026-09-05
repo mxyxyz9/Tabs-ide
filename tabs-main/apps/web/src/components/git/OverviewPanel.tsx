@@ -4,6 +4,7 @@ import type {
   GitListBranchesResult,
   GitStatusResult,
   GitWatchedBranchStatus,
+  GitRepositoryActionInput,
 } from "@tabs/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -80,6 +81,7 @@ export function OverviewPanel({
   onOpenSignIn,
   onOpenAddRemote,
   onOpenCreateBranch,
+  onOpenCreatePullRequest,
   onRunInTerminal,
   onInitRepo,
 }: {
@@ -96,6 +98,7 @@ export function OverviewPanel({
   onOpenSignIn: () => void;
   onOpenAddRemote: () => void;
   onOpenCreateBranch: () => void;
+  onOpenCreatePullRequest: () => void;
   onRunInTerminal: (cmd: string) => void;
   onInitRepo: () => void;
 }) {
@@ -131,6 +134,24 @@ export function OverviewPanel({
   const hasConflict = conflictedFiles.length > 0;
   const remoteName = branchList?.remoteName ?? "origin";
   const pushAccess = branchList?.pushAccess ?? "unknown";
+
+  const performRepositoryAction = useCallback(
+    async (operation: GitRepositoryActionInput["operation"], successTitle: string) => {
+      if (!api) return;
+      try {
+        await api.git.performRepositoryAction({ cwd, operation });
+        await invalidateGitQueries(queryClient);
+        toastManager.add({ type: "success", title: successTitle });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Git operation failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
+      }
+    },
+    [api, cwd, queryClient],
+  );
 
   const handleExecuteMergeWatched = async (targetBranch: string) => {
     if (!api) return;
@@ -425,10 +446,10 @@ export function OverviewPanel({
                       void handleCreateFork();
                       break;
                     case "pull_merge":
-                      onRunInTerminal("git pull");
+                      void api?.git.pull({ cwd });
                       break;
                     case "push":
-                      onRunInTerminal(`git push origin ${branchName}`);
+                      void api?.git.push({ cwd });
                       break;
                     case "init_repo":
                       onInitRepo();
@@ -467,7 +488,7 @@ export function OverviewPanel({
                 {notice.actionLabel}
               </Button>
             ) : notice.actionLabel && notice.actionType === "pull_merge" ? (
-              <Button size="sm" onClick={() => onRunInTerminal("git pull")}>
+              <Button size="sm" onClick={() => void api?.git.pull({ cwd })}>
                 <Download /> {notice.actionLabel}
               </Button>
             ) : undefined
@@ -781,7 +802,12 @@ export function OverviewPanel({
               size="sm"
               disabled={!repoState.canPush}
               title={repoState.pushDisabledReason}
-              onClick={() => onRunInTerminal(`git push origin ${branchName}`)}
+              onClick={() =>
+                void performRepositoryAction(
+                  { action: "push_ref", remote: "origin", ref: branchName },
+                  `Pushed ${branchName}`,
+                )
+              }
             >
               <ArrowUp /> Push
             </Button>
@@ -790,7 +816,17 @@ export function OverviewPanel({
               size="sm"
               disabled={!repoState.canForcePush}
               title={repoState.pushDisabledReason}
-              onClick={() => onRunInTerminal(`git push --force-with-lease origin ${branchName}`)}
+              onClick={() =>
+                void performRepositoryAction(
+                  {
+                    action: "push_ref",
+                    remote: "origin",
+                    ref: branchName,
+                    forceWithLease: true,
+                  },
+                  `Force-pushed ${branchName}`,
+                )
+              }
             >
               Force push…
             </Button>
@@ -798,7 +834,12 @@ export function OverviewPanel({
               variant="outline"
               size="sm"
               disabled={!repoState.canPull}
-              onClick={() => onRunInTerminal(`git pull origin ${branchName}`)}
+              onClick={() =>
+                void performRepositoryAction(
+                  { action: "pull_ref", remote: "origin", ref: branchName },
+                  `Pulled ${branchName}`,
+                )
+              }
             >
               <ArrowDown /> Pull
             </Button>
@@ -808,7 +849,7 @@ export function OverviewPanel({
             size="sm"
             disabled={!repoState.canCreatePR}
             title={repoState.prDisabledReason}
-            onClick={() => onRunInTerminal(`gh pr create --head ${branchName}`)}
+            onClick={onOpenCreatePullRequest}
           >
             <GitPullRequest /> Create pull request
           </Button>

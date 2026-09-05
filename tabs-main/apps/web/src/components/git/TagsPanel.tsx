@@ -105,13 +105,11 @@ export function TagsPanel({
   commits,
   pushAccess = "unknown",
   onOpenDraftRelease,
-  onRunInTerminal,
 }: {
   cwd: string;
   commits: ReadonlyArray<GitHistoryCommit>;
   pushAccess?: GitPushAccess | undefined;
   onOpenDraftRelease: () => void;
-  onRunInTerminal: (cmd: string) => void;
 }) {
   const [gitState, setGitState] = useProjectGitState(useGitScopeKey());
   const form = gitState.tagForm;
@@ -133,6 +131,27 @@ export function TagsPanel({
 
   const api = useGitApi();
   const queryClient = useQueryClient();
+
+  const pushTag = useCallback(
+    async (tag: string) => {
+      if (!api) return;
+      try {
+        await api.git.performRepositoryAction({
+          cwd,
+          operation: { action: "push_tag", remote: "origin", tag },
+        });
+        await invalidateGitQueries(queryClient);
+        toastManager.add({ type: "success", title: `Pushed tag ${tag}` });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not push tag",
+          description: toGitUserFacingErrorMessage(error),
+        });
+      }
+    },
+    [api, cwd, queryClient],
+  );
 
   const fetchTags = useCallback(async () => {
     if (!api || !cwd) {
@@ -355,7 +374,7 @@ export function TagsPanel({
                         : `Push ${tagName} to origin`
                     }
                     className="opacity-0 group-hover/row:opacity-100 transition-opacity duration-150 h-6 px-2 text-[11px] shrink-0"
-                    onClick={() => onRunInTerminal(`git push origin ${tagName}`)}
+                    onClick={() => void pushTag(tagName)}
                   >
                     Push tag
                   </Button>

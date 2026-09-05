@@ -221,6 +221,55 @@ export const GitPushInput = Schema.Struct({
 });
 export type GitPushInput = typeof GitPushInput.Type;
 
+export const GitRepositoryOperation = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("push_ref"),
+    remote: TrimmedNonEmptyStringSchema,
+    ref: TrimmedNonEmptyStringSchema,
+    forceWithLease: Schema.optional(Schema.Boolean),
+  }),
+  Schema.Struct({
+    action: Schema.Literal("pull_ref"),
+    remote: TrimmedNonEmptyStringSchema,
+    ref: TrimmedNonEmptyStringSchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("push_tag"),
+    remote: TrimmedNonEmptyStringSchema,
+    tag: TrimmedNonEmptyStringSchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("add_remote"),
+    name: TrimmedNonEmptyStringSchema,
+    url: TrimmedNonEmptyStringSchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("remove_remote"),
+    name: TrimmedNonEmptyStringSchema,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("reset"),
+    mode: Schema.Literals(["soft", "mixed", "hard"]),
+    sha: TrimmedNonEmptyStringSchema,
+  }),
+]);
+export type GitRepositoryOperation = typeof GitRepositoryOperation.Type;
+
+export const GitRepositoryActionInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  operation: GitRepositoryOperation,
+});
+export type GitRepositoryActionInput = typeof GitRepositoryActionInput.Type;
+
+export const GitPublishReleaseInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  tag: TrimmedNonEmptyStringSchema,
+  title: TrimmedNonEmptyStringSchema,
+  notes: Schema.String,
+  prerelease: Schema.Boolean,
+});
+export type GitPublishReleaseInput = typeof GitPublishReleaseInput.Type;
+
 export const GitFetchInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
 });

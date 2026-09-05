@@ -1837,6 +1837,39 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         return yield* git.pushCurrentBranch(body.cwd, null);
       }
 
+      case WS_METHODS.gitPerformRepositoryAction: {
+        const body = stripRequestTag(request.body);
+        const operation = body.operation;
+        const args = (() => {
+          switch (operation.action) {
+            case "push_ref":
+              return [
+                "push",
+                ...(operation.forceWithLease ? ["--force-with-lease"] : []),
+                operation.remote,
+                operation.ref,
+              ];
+            case "pull_ref":
+              return ["pull", operation.remote, operation.ref];
+            case "push_tag":
+              return ["push", operation.remote, operation.tag];
+            case "add_remote":
+              return ["remote", "add", operation.name, operation.url];
+            case "remove_remote":
+              return ["remote", "remove", operation.name];
+            case "reset":
+              return ["reset", `--${operation.mode}`, operation.sha];
+          }
+        })();
+        yield* git.execute({ operation: `GitCore.${operation.action}`, cwd: body.cwd, args });
+        return undefined;
+      }
+
+      case WS_METHODS.gitPublishRelease: {
+        const body = stripRequestTag(request.body);
+        return yield* gitEnvironment.publishRelease(body);
+      }
+
       case WS_METHODS.gitEnvironment: {
         const body = stripRequestTag(request.body);
         return yield* gitEnvironment.detect(body);

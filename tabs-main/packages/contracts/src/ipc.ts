@@ -72,6 +72,8 @@ import type {
   GitPullResult,
   GitPushInput,
   GitPushResult,
+  GitRepositoryActionInput,
+  GitPublishReleaseInput,
   GitStatusInput,
   GitStatusResult,
   GitRunStackedActionInput,
@@ -1532,6 +1534,8 @@ export interface NativeApi extends LocalApi, EnvironmentApi {
     fetch: (input: GitFetchInput) => Promise<void>;
     pull: (input: GitPullInput) => Promise<GitPullResult>;
     push: (input: GitPushInput) => Promise<GitPushResult>;
+    performRepositoryAction: (input: GitRepositoryActionInput) => Promise<void>;
+    publishRelease: (input: GitPublishReleaseInput) => Promise<void>;
     status: (input: GitStatusInput) => Promise<GitStatusResult>;
     runStackedAction: (input: GitRunStackedActionInput) => Promise<GitRunStackedActionResult>;
     onActionProgress: (callback: (event: GitActionProgressEvent) => void) => () => void;

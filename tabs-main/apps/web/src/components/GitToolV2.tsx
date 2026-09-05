@@ -1,4 +1,9 @@
-import type { GitHistoryCommit, GitWatchedBranchStatus, ThreadId } from "@tabs/contracts";
+import type {
+  GitHistoryCommit,
+  GitRepositoryActionInput,
+  GitWatchedBranchStatus,
+  ThreadId,
+} from "@tabs/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -418,6 +423,44 @@ export function GitToolV2({
     [api, cwd, queryClient],
   );
 
+  const performRepositoryAction = useCallback(
+    async (operation: GitRepositoryActionInput["operation"], successTitle: string) => {
+      if (!api) return;
+      try {
+        await api.git.performRepositoryAction({ cwd, operation });
+        await invalidateGitQueries(queryClient);
+        closeModal();
+        toastManager.add({ type: "success", title: successTitle });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Git operation failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
+      }
+    },
+    [api, closeModal, cwd, queryClient],
+  );
+
+  const publishRelease = useCallback(
+    async (release: { tag: string; title: string; notes: string; prerelease: boolean }) => {
+      if (!api) return;
+      try {
+        await api.git.publishRelease({ cwd, ...release });
+        await invalidateGitQueries(queryClient);
+        closeModal();
+        toastManager.add({ type: "success", title: `Published release ${release.tag}` });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Release creation failed",
+          description: toGitUserFacingErrorMessage(error),
+        });
+      }
+    },
+    [api, closeModal, cwd, queryClient],
+  );
+
   const createWorktree = useCallback(
     async (input: { base: string; branch: string; path: string }) => {
       if (!api) return;
@@ -495,6 +538,7 @@ export function GitToolV2({
             onOpenSignIn={() => setModal("deviceAuth")}
             onOpenAddRemote={() => setModal("addRemote")}
             onOpenCreateBranch={() => setModal("newWorktree")}
+            onOpenCreatePullRequest={() => setModal("createPR")}
             onRunInTerminal={onRunInTerminal}
             onInitRepo={() => void gitInitMutation.mutateAsync()}
           />,
@@ -576,7 +620,6 @@ export function GitToolV2({
             commits={commits}
             pushAccess={branchesQuery.data?.pushAccess}
             onOpenDraftRelease={() => setModal("draftRelease")}
-            onRunInTerminal={onRunInTerminal}
           />,
         );
       case "stashes":
@@ -616,7 +659,6 @@ export function GitToolV2({
             onAddExcludedBranch={addExcludedBranch}
             onRemoveExcludedBranch={removeExcludedBranch}
             onOpenAddRemote={() => setModal("addRemote")}
-            onRunInTerminal={onRunInTerminal}
           />,
         );
     }
@@ -685,8 +727,15 @@ export function GitToolV2({
             branch={branchName}
             onClose={closeModal}
             onConfirm={() => {
-              onRunInTerminal(`git push --force-with-lease origin ${branchName}`);
-              closeModal();
+              void performRepositoryAction(
+                {
+                  action: "push_ref",
+                  remote: "origin",
+                  ref: branchName,
+                  forceWithLease: true,
+                },
+                `Force-pushed ${branchName}`,
+              );
             }}
           />
         )}
@@ -723,10 +772,12 @@ export function GitToolV2({
         {modal === "addRemote" && (
           <AddRemoteModal
             onClose={closeModal}
-            onAdd={(r) => {
-              onRunInTerminal(`git remote add ${r.name} ${r.url}`);
-              closeModal();
-            }}
+            onAdd={(r) =>
+              void performRepositoryAction(
+                { action: "add_remote", name: r.name, url: r.url },
+                `Added remote ${r.name}`,
+              )
+            }
           />
         )}
         {modal === "deviceAuth" && (
@@ -752,12 +803,7 @@ export function GitToolV2({
             tags={commits.map((c) => ({ name: c.shortSha }))}
             commits={commits}
             onClose={closeModal}
-            onPublish={(rel) => {
-              onRunInTerminal(
-                `gh release create ${rel.tag} --title "${rel.title}" --notes "${rel.notes}"${rel.prerelease ? " --prerelease" : ""}`,
-              );
-              closeModal();
-            }}
+            onPublish={(release) => void publishRelease(release)}
           />
         )}
         {modal === "pullSource" && (
@@ -772,10 +818,12 @@ export function GitToolV2({
           <ResetModal
             commit={modal.commit}
             onClose={closeModal}
-            onReset={(mode) => {
-              onRunInTerminal(`git reset --${mode} ${modal.commit.sha}`);
-              closeModal();
-            }}
+            onReset={(mode) =>
+              void performRepositoryAction(
+                { action: "reset", mode, sha: modal.commit.sha },
+                `Reset to ${modal.commit.shortSha}`,
+              )
+            }
           />
         )}
       </GitEnvironmentGate>

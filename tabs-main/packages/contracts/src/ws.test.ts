@@ -73,6 +73,25 @@ it.effect("accepts git.preparePullRequestThread requests", () =>
   }),
 );
 
+it.effect("accepts discriminated git repository action requests", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeWebSocketRequest({
+      id: "req-git-action-1",
+      body: {
+        _tag: WS_METHODS.gitPerformRepositoryAction,
+        cwd: "/repo",
+        operation: {
+          action: "add_remote",
+          name: "upstream",
+          url: "https://github.com/example/project.git",
+        },
+      },
+    });
+
+    assert.strictEqual(parsed.body._tag, WS_METHODS.gitPerformRepositoryAction);
+  }),
+);
+
 it.effect("accepts typed websocket push envelopes with sequence", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeWsResponse({

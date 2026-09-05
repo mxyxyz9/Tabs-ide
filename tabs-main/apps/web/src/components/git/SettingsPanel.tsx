@@ -129,7 +129,6 @@ export function SettingsPanel({
   onAddExcludedBranch,
   onRemoveExcludedBranch,
   onOpenAddRemote,
-  onRunInTerminal,
 }: {
   cwd: string;
   environmentData: GitEnvironmentResult | null;
@@ -137,7 +136,6 @@ export function SettingsPanel({
   onAddExcludedBranch?: (name: string) => void;
   onRemoveExcludedBranch?: (name: string) => void;
   onOpenAddRemote: () => void;
-  onRunInTerminal: (cmd: string) => void;
 }) {
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
@@ -154,6 +152,24 @@ export function SettingsPanel({
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [customInstructions, setCustomInstructions] = useState("");
   const api = useGitApi();
+
+  const removeRemote = async (remoteName: string) => {
+    if (!api) return;
+    try {
+      await api.git.performRepositoryAction({
+        cwd,
+        operation: { action: "remove_remote", name: remoteName },
+      });
+      setRemotes((current) => current.filter((remote) => remote.name !== remoteName));
+      toastManager.add({ type: "success", title: `Removed remote ${remoteName}` });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not remove remote",
+        description: toGitUserFacingErrorMessage(error),
+      });
+    }
+  };
 
   const isGeminiConfigured = Boolean(settings?.providers?.gemini?.apiKey?.trim());
 
@@ -928,7 +944,7 @@ export function SettingsPanel({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onRunInTerminal(`git remote remove ${r.name}`)}
+                onClick={() => void removeRemote(r.name)}
               >
                 Remove
               </Button>
