@@ -6,11 +6,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
 import "../../index.css";
+import { environmentApi } from "../../connection/environmentApiRegistry";
+import { useScopedStateStore } from "../../state/scopedStateStore";
 import { FileRow } from "./ChangesPanel";
 import { GitEnvironmentGate } from "./GitEnvironmentGate";
 import { GitApiProvider } from "./gitApiContext";
 import { DeviceAuthModal, DiscardAllModal, ForcePushModal } from "./gitModals";
 import { PanelErrorBoundary } from "./PanelErrorBoundary";
+import { PRsPanel } from "./PRsPanel";
+
+vi.mock("../../connection/environmentApiRegistry", () => ({
+  environmentApi: vi.fn(),
+}));
 
 const environment = (authenticated: boolean): GitEnvironmentResult => ({
   git: { installed: true, version: "2.52.0" },
@@ -46,6 +53,8 @@ function authApi(authenticated: boolean): NativeApi {
 describe("Git workflow interaction states", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(environmentApi).mockReset();
+    useScopedStateStore.setState({ gitStateByProjectId: {} });
     document.body.innerHTML = "";
   });
 
@@ -181,5 +190,65 @@ describe("Git workflow interaction states", () => {
       expect(diff).toHaveBeenCalledWith({ cwd: "/workspace", path: file.path }),
     );
     expect(document.body.textContent).toContain("new");
+  });
+
+  it("transitions repository pull requests through provider-backed state filters", async () => {
+    const capabilities = {
+      provider: "github" as const,
+      diff: true,
+      create: true,
+      actions: [],
+      mergeMethods: [],
+    };
+    const pullRequest = (state: "open" | "merged") => ({
+      provider: "github" as const,
+      number: state === "merged" ? 42 : 41,
+      title: state === "merged" ? "Merged provider result" : "Open provider result",
+      url: `https://github.com/tabs/example/pull/${state === "merged" ? 42 : 41}`,
+      baseBranch: "main",
+      headBranch: `feature/${state}`,
+      state,
+    });
+    const listPullRequests = vi.fn().mockImplementation(({ state }: { state?: string }) =>
+      Promise.resolve({
+        pullRequests: [pullRequest(state === "merged" ? "merged" : "open")],
+        hasMore: false,
+        capabilities,
+      }),
+    );
+    const api = {
+      git: {
+        listPullRequests,
+        resolvePullRequest: vi.fn().mockResolvedValue({
+          pullRequest: pullRequest("open"),
+          capabilities,
+        }),
+      },
+    } as unknown as NativeApi;
+    vi.mocked(environmentApi).mockResolvedValue(api);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await using _ = await mount(
+      <QueryClientProvider client={queryClient}>
+        <GitApiProvider api={api} scopeKey="remote-pr-environment">
+          <PRsPanel
+            cwd="/workspace"
+            environmentId="remote-pr-environment"
+            branchName="feature/open"
+            onOpenCreatePR={vi.fn()}
+          />
+        </GitApiProvider>
+      </QueryClientProvider>,
+    );
+
+    await page.getByRole("button", { name: "All repository PRs" }).click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Open provider result"));
+    await page.getByRole("button", { name: "merged" }).click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Merged provider result"));
+    expect(listPullRequests).toHaveBeenCalledWith({
+      cwd: "/workspace",
+      state: "merged",
+      limit: 50,
+    });
   });
 });
