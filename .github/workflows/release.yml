@@ -149,6 +149,7 @@ jobs:
 
       - name: Install VS Code dependencies
         working-directory: tabs-code-main
+        shell: bash
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
@@ -158,6 +159,13 @@ jobs:
           # which exhausts 7GB RAM on CI runners and hangs indefinitely.
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
+
+          # Generate buildcheck.gypi for cpu-features if present.
+          # Because --ignore-scripts skips lifecycle scripts, cpu-features
+          # lacks buildcheck.gypi which node-gyp / electron-rebuild requires.
+          if [ -d "node_modules/cpu-features" ]; then
+            (cd node_modules/cpu-features && node buildcheck.js > buildcheck.gypi)
+          fi
 
           # Rebuild native modules against Electron headers (~5-10 min).
           # @electron/rebuild handles header downloading + cross-platform
@@ -180,6 +188,7 @@ jobs:
 
       - name: Compile VS Code workbench
         working-directory: tabs-code-main
+        shell: bash
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
         run: |
@@ -244,7 +253,7 @@ jobs:
           # .../build/Release/vscode_fs.node" and cascades to dependents.
           electron_version="$(node -p "const p = require('../tabs-main/apps/desktop/package.json'); (p.dependencies && p.dependencies.electron) || (p.devDependencies && p.devDependencies.electron)")"
           npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" \
-            --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
+            --module-dir extensions/git --only @vscode/fs-copyfile
 
           # Compile every PRODUCT built-in extension to extensions/<ext>/out (and
           # client/out, server/out for the language features). We deliberately do

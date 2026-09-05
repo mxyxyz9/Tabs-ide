@@ -94,12 +94,16 @@ jobs:
 
       - name: Install VS Code dependencies
         working-directory: tabs-code-main
+        shell: bash
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
           VSCODE_SKIP_NODE_VERSION_CHECK: "1"
         run: |
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
+          if [ -d "node_modules/cpu-features" ]; then
+            (cd node_modules/cpu-features && node buildcheck.js > buildcheck.gypi)
+          fi
           # Target the Electron that RUNS these modules at runtime (from Tabs'
           # desktop package) — not tabs-code-main's development Electron. The
           # Code-OSS server runs via ELECTRON_RUN_AS_NODE
@@ -112,6 +116,7 @@ jobs:
 
       - name: Compile VS Code workbench
         working-directory: tabs-code-main
+        shell: bash
         env:
           NODE_OPTIONS: "--max-old-space-size=6144"
         run: |
@@ -175,7 +180,7 @@ jobs:
           # .../build/Release/vscode_fs.node" and cascades to dependents.
           electron_version="$(node -p "const p = require('../tabs-main/apps/desktop/package.json'); (p.dependencies && p.dependencies.electron) || (p.devDependencies && p.devDependencies.electron)")"
           npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" \
-            --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
+            --module-dir extensions/git --only @vscode/fs-copyfile
 
           # Compile every PRODUCT built-in extension to extensions/<ext>/out (and
           # client/out, server/out for the language features). We deliberately do
