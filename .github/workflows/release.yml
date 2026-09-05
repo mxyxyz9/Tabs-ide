@@ -174,7 +174,7 @@ jobs:
           # `--arch` matters: macos-14 is arm64, so the mac-x64 artifact must
           # cross-build x64 natives here, otherwise the x64 DMG ships arm64
           # binaries that won't load on Intel Macs.
-          electron_version="$(node -p "require('../tabs-main/apps/desktop/package.json').devDependencies.electron")"
+          electron_version="$(node -p "const p = require('../tabs-main/apps/desktop/package.json'); (p.dependencies && p.dependencies.electron) || (p.devDependencies && p.devDependencies.electron)")"
           echo "Rebuilding Code-OSS native modules for Tabs Electron $electron_version"
           npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}"
 
@@ -242,7 +242,7 @@ jobs:
           # Tabs' current Electron ABI (the Code-OSS server runs under
           # ELECTRON_RUN_AS_NODE), else git throws "Cannot find module
           # .../build/Release/vscode_fs.node" and cascades to dependents.
-          electron_version="$(node -p "require('../tabs-main/apps/desktop/package.json').devDependencies.electron")"
+          electron_version="$(node -p "const p = require('../tabs-main/apps/desktop/package.json'); (p.dependencies && p.dependencies.electron) || (p.devDependencies && p.devDependencies.electron)")"
           npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" \
             --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
 
