@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 import { ExecutionEnvironmentDescriptor } from "./environment.ts";
 import { ServerAuthDescriptor } from "./auth.ts";
 import {
+  ForwardCompatibleArray,
   IsoDateTime,
   NonNegativeInt,
   PositiveInt,
@@ -38,7 +39,10 @@ export const ServerConfigIssue = Schema.Union([
 ]);
 export type ServerConfigIssue = typeof ServerConfigIssue.Type;
 
-const ServerConfigIssues = Schema.Array(ServerConfigIssue);
+// Config snapshots cross version boundaries: a newer server can report an
+// issue kind that an older client cannot render. Keep the connection usable
+// and retain the issue kinds this client understands.
+const ServerConfigIssues = ForwardCompatibleArray(ServerConfigIssue);
 
 export const EnvironmentThemeId = Schema.String.check(
   Schema.isPattern(/^(?!(?:system|light|dark|custom)$)[a-z0-9](?:[a-z0-9-]{0,47})$/),
@@ -234,6 +238,7 @@ export const ServerProviderCapabilities = Schema.Struct({
   logout: ServerProviderCapabilitySupport,
   accountSwitch: ServerProviderCapabilitySupport,
   installation: ServerProviderCapabilitySupport,
+  testingMcpTools: Schema.optional(ServerProviderCapabilitySupport),
 });
 export type ServerProviderCapabilities = typeof ServerProviderCapabilities.Type;
 
@@ -532,7 +537,8 @@ export const ServerConfig = Schema.Struct({
   keybindings: ResolvedKeybindingsConfig,
   issues: ServerConfigIssues,
   providers: ServerProviders,
-  availableEditors: Schema.Array(EditorId),
+  // Editor ids are extended independently by newer server releases.
+  availableEditors: ForwardCompatibleArray(EditorId),
   observability: ServerObservability,
   settings: ServerSettings,
   environmentThemes: Schema.optional(Schema.Array(EnvironmentTheme)),
