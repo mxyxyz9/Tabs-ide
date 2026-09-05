@@ -49,6 +49,9 @@ export interface AcpSessionRuntimeOptions {
   };
   readonly authMethodId: string;
   readonly transformStdout?: EffectAcpClient.AcpClientOptions["transformStdout"];
+  readonly transformSessionUpdate?: (
+    notification: EffectAcpSchema.SessionNotification,
+  ) => EffectAcpSchema.SessionNotification;
   /** Receives bounded stderr chunks. A handler failure terminates the ACP process. */
   readonly onStderr?: (text: string) => Effect.Effect<void, EffectAcpErrors.AcpError>;
   readonly requestLogger?: (event: AcpSessionRequestLogEvent) => Effect.Effect<void, never>;
@@ -285,7 +288,7 @@ const makeAcpSessionRuntime = (
         modeStateRef,
         toolCallsRef,
         assistantSegmentRef,
-        params: notification,
+        params: options.transformSessionUpdate?.(notification) ?? notification,
       }),
     );
 

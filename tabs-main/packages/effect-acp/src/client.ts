@@ -29,7 +29,7 @@ export interface AcpClientOptions {
   /** Transforms child stdout before protocol parsing and protocol logging. */
   readonly transformStdout?: (
     stdout: ChildProcessSpawner.ChildProcessHandle["stdout"],
-  ) => Stdio.Stdio["stdin"];
+  ) => AcpProtocol.AcpStdio["stdin"];
 }
 
 type AcpClientRaw = {
@@ -311,7 +311,7 @@ interface BufferedNotificationHandler<A> {
 }
 
 export const make = Effect.fn("effect-acp/AcpClient.make")(function* (
-  stdio: Stdio.Stdio,
+  stdio: AcpProtocol.AcpStdio,
   options: AcpClientOptions = {},
   terminationError?: Effect.Effect<AcpError.AcpError>,
 ): Effect.fn.Return<AcpClientShape, never, Scope.Scope> {
