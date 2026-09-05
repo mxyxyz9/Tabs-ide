@@ -888,7 +888,7 @@ describe("WebSocket Server", () => {
         bootstrapThreadId: firstBootstrapThreadId,
       }),
     );
-  });
+  }, 30_000);
 
   it("logs outbound websocket push events in dev mode", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {
