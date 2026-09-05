@@ -25,6 +25,7 @@ import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
 import * as Scope from "effect/Scope";
 import * as Schema from "effect/Schema";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
@@ -42,6 +43,12 @@ const OPENCODE_EMPTY_CONFIG_CONTENT = "{}";
 const OPENCODE_SERVER_READY_PREFIX = "opencode server listening";
 const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 5_000;
 const DEFAULT_HOSTNAME = "127.0.0.1";
+const OPENCODE_STARTUP_OUTPUT_MAX_CHARS = 4_000;
+const REDACTED_STARTUP_SECRET = "[redacted]";
+const STARTUP_OUTPUT_AUTHORIZATION_PATTERN =
+  /(["']?)(authorization)\1(\s*[:=]\s*)(["']?)(bearer\s+)?[^"'\s,;}]+\4/giu;
+const STARTUP_OUTPUT_SECRET_ASSIGNMENT_PATTERN =
+  /(["']?)([A-Za-z0-9_-]*(?:api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_-]*)\1(\s*[:=]\s*)(["']?)[^"'\s,;}]+\4/giu;
 export const KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS = [500, 1_500] as const;
 export interface OpenCodeServerProcess {
   readonly url: string;
@@ -52,6 +59,15 @@ export interface OpenCodeServerConnection {
   readonly url: string;
   readonly exitCode: Effect.Effect<number, never> | null;
   readonly external: boolean;
+}
+
+interface PooledOpenCodeServer {
+  readonly key: string;
+  readonly server: OpenCodeServerProcess;
+  readonly scope: Scope.Closeable;
+  readonly closeOnRelease: boolean;
+  refCount: number;
+  idleCloseFiber: Fiber.Fiber<void, never> | null;
 }
 
 export interface OpenCodeCliModelDescriptor {
@@ -158,6 +174,7 @@ export interface OpenCodeRuntimeShape {
   readonly startOpenCodeServerProcess: (input: {
     readonly binaryPath: string;
     readonly environment?: NodeJS.ProcessEnv;
+    readonly cwd?: string;
     readonly port?: number;
     readonly hostname?: string;
     readonly timeoutMs?: number;
@@ -175,6 +192,8 @@ export interface OpenCodeRuntimeShape {
     readonly hostname?: string;
     readonly timeoutMs?: number;
     readonly retryKiloCredentialStartup?: boolean;
+    readonly cwd?: string;
+    readonly poolIsolationKey?: string;
   }) => Effect.Effect<OpenCodeServerConnection, OpenCodeRuntimeError, Scope.Scope>;
   readonly runOpenCodeCommand: (input: {
     readonly binaryPath: string;
@@ -200,6 +219,65 @@ function parseServerUrlFromOutput(output: string): string | null {
     return match?.[1] ?? null;
   }
   return null;
+}
+
+function formatCommandPart(value: string): string {
+  return /^[A-Za-z0-9_./:=@+-]+$/u.test(value) ? value : JSON.stringify(value);
+}
+
+function redactStartupOutput(value: string): string {
+  return value
+    .replace(
+      STARTUP_OUTPUT_AUTHORIZATION_PATTERN,
+      (_match, keyQuote, key, separator, valueQuote, scheme = "") =>
+        `${keyQuote}${key}${keyQuote}${separator}${valueQuote}${scheme}${REDACTED_STARTUP_SECRET}${valueQuote}`,
+    )
+    .replace(
+      STARTUP_OUTPUT_SECRET_ASSIGNMENT_PATTERN,
+      (_match, keyQuote, key, separator, valueQuote) =>
+        `${keyQuote}${key}${keyQuote}${separator}${valueQuote}${REDACTED_STARTUP_SECRET}${valueQuote}`,
+    );
+}
+
+function truncateStartupOutput(value: string): string | null {
+  const trimmed = redactStartupOutput(value).trim();
+  if (!trimmed) return null;
+  if (trimmed.length <= OPENCODE_STARTUP_OUTPUT_MAX_CHARS) return trimmed;
+  return `${trimmed.slice(0, OPENCODE_STARTUP_OUTPUT_MAX_CHARS)}\n\n[truncated ${trimmed.length - OPENCODE_STARTUP_OUTPUT_MAX_CHARS} chars]`;
+}
+
+function formatOpenCodeServerStartupDetail(input: {
+  readonly summary: string;
+  readonly binaryPath: string;
+  readonly args: ReadonlyArray<string>;
+  readonly stdout: string;
+  readonly stderr: string;
+}): string {
+  const stdout = truncateStartupOutput(input.stdout);
+  const stderr = truncateStartupOutput(input.stderr);
+  return [
+    input.summary,
+    `command: ${[input.binaryPath, ...input.args].map(formatCommandPart).join(" ")}`,
+    `OpenCode ready prefix: ${JSON.stringify(OPENCODE_SERVER_READY_PREFIX)}`,
+    stdout ? `stdout:\n${stdout}` : "stdout: <empty>",
+    stderr ? `stderr:\n${stderr}` : "stderr: <empty>",
+  ].join("\n\n");
+}
+
+function pooledOpenCodeServerKey(input: {
+  readonly binaryPath: string;
+  readonly cwd?: string;
+  readonly port?: number;
+  readonly hostname?: string;
+  readonly poolIsolationKey?: string;
+}): string {
+  return JSON.stringify({
+    binaryPath: input.binaryPath,
+    cwd: input.cwd ?? null,
+    hostname: input.hostname ?? DEFAULT_HOSTNAME,
+    port: input.port ?? null,
+    poolIsolationKey: input.poolIsolationKey ?? null,
+  });
 }
 
 export function toOpenCodePermissionReply(
@@ -267,6 +345,11 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const platformNetService = yield* NetService.NetService;
     const netService = options?.netService ?? platformNetService;
+    const pooledServerScope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
+      Scope.close(scope, Exit.void),
+    );
+    const pooledServerMutex = yield* Semaphore.make(1);
+    const pooledServers = new Map<string, PooledOpenCodeServer>();
 
     const runOpenCodeCommand: OpenCodeRuntimeShape["runOpenCodeCommand"] = (input) =>
       Effect.gen(function* () {
@@ -331,7 +414,7 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
             ),
           ));
         const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
-        const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
+        const args = ["serve", "--hostname", hostname, "--port", String(port)];
         const binary = input.binaryPath?.trim() || "opencode";
 
         const child = yield* spawner
@@ -339,6 +422,7 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
             ChildProcess.make(binary, args, {
               detached: process.platform !== "win32",
               shell: process.platform === "win32",
+              ...(input.cwd ? { cwd: input.cwd } : {}),
               env: {
                 ...(input.environment ?? process.env),
                 OPENCODE_CONFIG_CONTENT: OPENCODE_EMPTY_CONFIG_CONTENT,
@@ -450,9 +534,27 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
         const readyOption = readyExit.value;
         if (Option.isNone(readyOption)) {
           yield* Fiber.interrupt(exitFiber).pipe(Effect.ignore);
+          const stdout = yield* Ref.get(stdoutRef);
+          const stderr = yield* Ref.get(stderrRef);
+          const redactedStdout = redactStartupOutput(stdout);
+          const redactedStderr = redactStartupOutput(stderr);
           return yield* new OpenCodeRuntimeError({
             operation: "startOpenCodeServerProcess",
-            detail: `Timed out waiting for OpenCode server start after ${timeoutMs}ms.`,
+            detail: formatOpenCodeServerStartupDetail({
+              summary: `Timed out waiting for OpenCode server start after ${timeoutMs}ms.`,
+              binaryPath: binary,
+              args,
+              stdout: redactedStdout,
+              stderr: redactedStderr,
+            }),
+            cause: {
+              timeoutMs,
+              stdout: redactedStdout,
+              stderr: redactedStderr,
+              binaryPath: binary,
+              args,
+              readyPrefix: OPENCODE_SERVER_READY_PREFIX,
+            },
           });
         }
 
@@ -465,6 +567,124 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
         } satisfies OpenCodeServerProcess;
       });
 
+    const cancelIdleClose = Effect.fn("cancelOpenCodeIdleClose")(function* (
+      pooled: PooledOpenCodeServer,
+    ) {
+      const fiber = pooled.idleCloseFiber;
+      pooled.idleCloseFiber = null;
+      if (fiber) yield* Fiber.interrupt(fiber).pipe(Effect.ignore);
+    });
+
+    const closePooledServer = Effect.fn("closePooledOpenCodeServer")(function* (
+      pooled: PooledOpenCodeServer,
+    ) {
+      yield* cancelIdleClose(pooled);
+      yield* Scope.close(pooled.scope, Exit.void);
+      if (pooledServers.get(pooled.key) === pooled) pooledServers.delete(pooled.key);
+      pooled.refCount = 0;
+    });
+
+    const scheduleIdleClose = Effect.fn("scheduleOpenCodeIdleClose")(function* (
+      pooled: PooledOpenCodeServer,
+    ) {
+      yield* cancelIdleClose(pooled);
+      pooled.idleCloseFiber = yield* Effect.sleep(OPENCODE_LOCAL_SERVER_IDLE_TTL_MS).pipe(
+        Effect.andThen(
+          pooledServerMutex.withPermit(
+            Effect.gen(function* () {
+              if (pooledServers.get(pooled.key) === pooled && pooled.refCount === 0) {
+                pooled.idleCloseFiber = null;
+                yield* closePooledServer(pooled);
+              }
+            }),
+          ),
+        ),
+        Effect.forkIn(pooledServerScope),
+      );
+    });
+
+    const acquirePooledServer = (
+      input: Parameters<OpenCodeRuntimeShape["connectToOpenCodeServer"]>[0],
+    ) =>
+      pooledServerMutex.withPermit(
+        Effect.gen(function* () {
+          const key = pooledOpenCodeServerKey(input);
+          const existing = pooledServers.get(key);
+          if (existing) {
+            yield* cancelIdleClose(existing);
+            existing.refCount += 1;
+            return existing;
+          }
+
+          const startInput = {
+            binaryPath: input.binaryPath,
+            ...(input.environment !== undefined ? { environment: input.environment } : {}),
+            ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
+            ...(input.port !== undefined ? { port: input.port } : {}),
+            ...(input.hostname !== undefined ? { hostname: input.hostname } : {}),
+            ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
+          };
+          let retryIndex = 0;
+          let started:
+            | { readonly server: OpenCodeServerProcess; readonly scope: Scope.Closeable }
+            | undefined;
+          while (!started) {
+            const serverScope = yield* Scope.make();
+            const attempt = yield* Effect.exit(
+              startOpenCodeServerProcess(startInput).pipe(
+                Effect.provideService(Scope.Scope, serverScope),
+              ),
+            );
+            if (Exit.isSuccess(attempt)) {
+              started = { server: attempt.value, scope: serverScope };
+              break;
+            }
+            yield* Scope.close(serverScope, Exit.void).pipe(Effect.ignore);
+            const retryDelayMs = input.retryKiloCredentialStartup
+              ? KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS[retryIndex]
+              : undefined;
+            const failure = Cause.squash(attempt.cause);
+            if (retryDelayMs === undefined || !isRetryableKiloCredentialStartupFailure(failure)) {
+              return yield* Effect.failCause(attempt.cause);
+            }
+            retryIndex += 1;
+            yield* Effect.logWarning(
+              "Kilo credential reconciliation failed during startup; retrying",
+              { attempt: retryIndex + 1, delayMs: retryDelayMs },
+            );
+            yield* Effect.sleep(retryDelayMs);
+          }
+          const pooled: PooledOpenCodeServer = {
+            key,
+            server: started.server,
+            scope: started.scope,
+            closeOnRelease: input.poolIsolationKey !== undefined,
+            refCount: 1,
+            idleCloseFiber: null,
+          };
+          pooledServers.set(key, pooled);
+          return pooled;
+        }),
+      );
+
+    const releasePooledServer = (pooled: PooledOpenCodeServer) =>
+      pooledServerMutex.withPermit(
+        Effect.gen(function* () {
+          if (pooledServers.get(pooled.key) !== pooled) return;
+          pooled.refCount = Math.max(0, pooled.refCount - 1);
+          if (pooled.refCount === 0) {
+            if (pooled.closeOnRelease) yield* closePooledServer(pooled);
+            else yield* scheduleIdleClose(pooled);
+          }
+        }),
+      );
+
+    yield* Effect.addFinalizer(() =>
+      Effect.forEach(Array.from(pooledServers.values()), closePooledServer, {
+        discard: true,
+      }),
+    );
+
     const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {
       const serverUrl = input.serverUrl?.trim();
       if (serverUrl) {
@@ -476,52 +696,16 @@ const makeOpenCodeRuntime = (options?: OpenCodeRuntimeLiveOptions) =>
         });
       }
 
-      const startInput = {
-        binaryPath: input.binaryPath,
-        ...(input.environment !== undefined ? { environment: input.environment } : {}),
-        ...(input.port !== undefined ? { port: input.port } : {}),
-        ...(input.hostname !== undefined ? { hostname: input.hostname } : {}),
-        ...(input.timeoutMs !== undefined ? { timeoutMs: input.timeoutMs } : {}),
-      };
-      const startServer = input.retryKiloCredentialStartup
-        ? Effect.gen(function* () {
-            let retryIndex = 0;
-            while (true) {
-              const attemptScope = yield* Scope.make();
-              const attempt = yield* Effect.exit(
-                startOpenCodeServerProcess(startInput).pipe(
-                  Effect.provideService(Scope.Scope, attemptScope),
-                ),
-              );
-              if (Exit.isSuccess(attempt)) {
-                yield* Effect.addFinalizer(() => Scope.close(attemptScope, Exit.void));
-                return attempt.value;
-              }
-
-              yield* Scope.close(attemptScope, Exit.void).pipe(Effect.ignore);
-              const retryDelayMs = KILO_CREDENTIAL_STARTUP_RETRY_DELAYS_MS[retryIndex];
-              const failure = Cause.squash(attempt.cause);
-              if (retryDelayMs === undefined || !isRetryableKiloCredentialStartupFailure(failure)) {
-                return yield* Effect.failCause(attempt.cause);
-              }
-
-              retryIndex += 1;
-              yield* Effect.logWarning(
-                "Kilo credential reconciliation failed during startup; retrying",
-                { attempt: retryIndex + 1, delayMs: retryDelayMs },
-              );
-              yield* Effect.sleep(retryDelayMs);
-            }
-          })
-        : startOpenCodeServerProcess(startInput);
-
-      return startServer.pipe(
-        Effect.map((server) => ({
-          url: server.url,
-          exitCode: server.exitCode,
+      return Effect.gen(function* () {
+        const callerScope = yield* Scope.Scope;
+        const pooled = yield* acquirePooledServer(input);
+        yield* Scope.addFinalizer(callerScope, releasePooledServer(pooled));
+        return {
+          url: pooled.server.url,
+          exitCode: pooled.server.exitCode,
           external: false,
-        })),
-      );
+        };
+      });
     };
 
     const createOpenCodeSdkClient: OpenCodeRuntimeShape["createOpenCodeSdkClient"] = (input) =>
@@ -638,6 +822,52 @@ function fallbackOpenCodeModelName(slug: string, parsedSlug: ParsedOpenCodeModel
   return trimToNull(parsedSlug.modelID) ?? slug;
 }
 
+function readOpenCodeVariantEffort(
+  variantKey: string,
+  variantObject: Record<string, unknown>,
+): string | null {
+  const direct =
+    trimToNull(variantObject.reasoningEffort) ??
+    trimToNull(variantObject.reasoning_effort) ??
+    trimToNull(variantObject.effort);
+  if (direct) return direct;
+
+  const thinking =
+    variantObject.thinkingConfig && typeof variantObject.thinkingConfig === "object"
+      ? (variantObject.thinkingConfig as Record<string, unknown>)
+      : variantObject.thinking_config && typeof variantObject.thinking_config === "object"
+        ? (variantObject.thinking_config as Record<string, unknown>)
+        : null;
+  const thinkingLevel = trimToNull(thinking?.thinkingLevel) ?? trimToNull(thinking?.thinking_level);
+  if (thinkingLevel) return thinkingLevel;
+
+  const reasoning =
+    variantObject.reasoning && typeof variantObject.reasoning === "object"
+      ? (variantObject.reasoning as Record<string, unknown>)
+      : null;
+  const reasoningConfig =
+    variantObject.reasoningConfig && typeof variantObject.reasoningConfig === "object"
+      ? (variantObject.reasoningConfig as Record<string, unknown>)
+      : variantObject.reasoning_config && typeof variantObject.reasoning_config === "object"
+        ? (variantObject.reasoning_config as Record<string, unknown>)
+        : null;
+  const nested =
+    trimToNull(reasoning?.effort) ??
+    trimToNull(reasoningConfig?.maxReasoningEffort) ??
+    trimToNull(reasoningConfig?.max_reasoning_effort);
+  if (nested) return nested;
+
+  return "thinking" in variantObject ||
+    "thinkingConfig" in variantObject ||
+    "thinking_config" in variantObject ||
+    "reasoning" in variantObject ||
+    "reasoningConfig" in variantObject ||
+    "reasoning_config" in variantObject ||
+    Object.keys(variantObject).length === 0
+    ? trimToNull(variantKey)
+    : null;
+}
+
 function readJsonObjectBlock(
   source: string,
   startIndex: number,
@@ -706,6 +936,32 @@ function parseOpenCodeCliModelJson(
     .map((variant) => variant.trim())
     .filter((variant) => variant.length > 0)
     .toSorted((left, right) => left.localeCompare(right));
+  const supportedReasoningEfforts = Array.from(
+    new Map(
+      Object.entries(variantsObject).flatMap(([variantKey, variant]) => {
+        if (!variant || typeof variant !== "object" || Array.isArray(variant)) return [];
+        const variantObject = variant as Record<string, unknown>;
+        const value = readOpenCodeVariantEffort(variantKey, variantObject);
+        if (!value) return [];
+        const label = trimToNull(variantObject.label);
+        const description = trimToNull(variantObject.description);
+        return [
+          [
+            value,
+            { value, ...(label ? { label } : {}), ...(description ? { description } : {}) },
+          ] as const,
+        ];
+      }),
+    ).values(),
+  );
+  const defaultReasoningEffort =
+    trimToNull(object.defaultReasoningEffort) ??
+    trimToNull(object.default_reasoning_effort) ??
+    (object.options && typeof object.options === "object" && !Array.isArray(object.options)
+      ? (trimToNull((object.options as Record<string, unknown>).reasoningEffort) ??
+        trimToNull((object.options as Record<string, unknown>).reasoning_effort) ??
+        trimToNull((object.options as Record<string, unknown>).effort))
+      : null);
 
   return {
     slug,
@@ -713,7 +969,8 @@ function parseOpenCodeCliModelJson(
     modelID,
     name,
     variants,
-    supportedReasoningEfforts: [],
+    supportedReasoningEfforts,
+    ...(defaultReasoningEffort ? { defaultReasoningEffort } : {}),
     ...(typeof object.isFree === "boolean" ? { isFree: object.isFree } : {}),
   };
 }

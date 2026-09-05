@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
+import path from "node:path";
 
 import type { ChatAttachment } from "@tabs/contracts";
 
@@ -61,6 +62,11 @@ export function attachmentRelativePath(attachment: ChatAttachment): string {
         fileName: attachment.name,
       });
       return `${attachment.id}${extension}`;
+    }
+    default: {
+      const extension = path.extname((attachment as { readonly name?: string }).name ?? "");
+      const safeExtension = /^\.[a-z0-9]{1,16}$/iu.test(extension) ? extension : ".bin";
+      return `${attachment.id}${safeExtension}`;
     }
   }
 }
