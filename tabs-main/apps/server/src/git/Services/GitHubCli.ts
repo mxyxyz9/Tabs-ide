@@ -10,6 +10,7 @@ import type { Effect } from "effect";
 
 import type { ProcessRunResult } from "../../processRunner";
 import type { GitHubCliError } from "../Errors.ts";
+import type { GitMutatePullRequestInput } from "@tabs/contracts";
 
 export interface GitHubPullRequestSummary {
   readonly number: number;
@@ -159,24 +160,7 @@ export interface GitHubCliShape {
   readonly mutatePullRequest: (input: {
     readonly cwd: string;
     readonly reference: string;
-    readonly action:
-      | "merge"
-      | "close"
-      | "reopen"
-      | "ready"
-      | "draft"
-      | "comment"
-      | "approve"
-      | "request_changes"
-      | "add_reviewer"
-      | "remove_reviewer"
-      | "add_label"
-      | "remove_label"
-      | "inline_comment"
-      | "reply_to_thread"
-      | "resolve_thread"
-      | "add_reaction"
-      | "remove_reaction";
+    readonly action: GitMutatePullRequestInput["action"];
     readonly mergeMethod?: "merge" | "squash" | "rebase";
     readonly deleteBranch?: boolean;
     readonly body?: string;

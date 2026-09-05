@@ -345,6 +345,8 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
     "reopen",
     "ready",
     "draft",
+    "enable_auto_merge",
+    "disable_auto_merge",
     "comment",
     "approve",
     "request_changes",

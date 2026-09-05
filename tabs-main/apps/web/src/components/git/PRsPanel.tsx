@@ -54,6 +54,8 @@ interface PullRequestRow {
   additions?: number;
   deletions?: number;
   changedFiles?: number;
+  autoMergeEnabled?: boolean;
+  autoMergeMethod?: "merge" | "squash" | "rebase";
 }
 
 const REACTION_OPTIONS = [
@@ -128,6 +130,7 @@ export function PRsPanel({
   );
 
   const [mergePr, setMergePr] = useState<PullRequestRow | null>(null);
+  const [mergeIntent, setMergeIntent] = useState<"merge" | "auto_merge">("merge");
   const [mergeMethod, setMergeMethod] = useState<"squash" | "merge" | "rebase">("squash");
   const [deleteBranch, setDeleteBranch] = useState(true);
   const [expandedPrNumber, setExpandedPrNumber] = useState<number | null>(null);
@@ -197,6 +200,8 @@ export function PRsPanel({
           ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
           ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
           ...(pr.changedFiles !== undefined ? { changedFiles: pr.changedFiles } : {}),
+          ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
+          ...(pr.autoMergeMethod ? { autoMergeMethod: pr.autoMergeMethod } : {}),
         },
       ];
     } else {
@@ -217,6 +222,8 @@ export function PRsPanel({
         ...(pr.additions !== undefined ? { additions: pr.additions } : {}),
         ...(pr.deletions !== undefined ? { deletions: pr.deletions } : {}),
         ...(pr.changedFiles !== undefined ? { changedFiles: pr.changedFiles } : {}),
+        ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
+        ...(pr.autoMergeMethod ? { autoMergeMethod: pr.autoMergeMethod } : {}),
       }));
     }
   }, [viewMode, branchPrQuery.data, allPrsQuery.data, branchName]);
@@ -242,7 +249,9 @@ export function PRsPanel({
         cwd,
         reference: String(reference),
         action,
-        ...(action === "merge" ? { mergeMethod, deleteBranch } : {}),
+        ...(action === "merge" || action === "enable_auto_merge"
+          ? { mergeMethod, ...(action === "merge" ? { deleteBranch } : {}) }
+          : {}),
         ...(body !== undefined ? { body } : {}),
         ...(value !== undefined ? { value } : {}),
         ...(inline?.path ? { path: inline.path } : {}),
@@ -275,7 +284,8 @@ export function PRsPanel({
 
   const handleConfirmMerge = async () => {
     if (!mergePr) return;
-    if (await mutatePullRequest(mergePr.n, "merge")) setMergePr(null);
+    const action = mergeIntent === "auto_merge" ? "enable_auto_merge" : "merge";
+    if (await mutatePullRequest(mergePr.n, action)) setMergePr(null);
   };
 
   return (
@@ -475,6 +485,7 @@ export function PRsPanel({
                             : undefined
                       }
                       onClick={() => {
+                        setMergeIntent("merge");
                         const methods = capabilities?.mergeMethods ?? ["squash", "merge", "rebase"];
                         if (!methods.includes(mergeMethod)) {
                           setMergeMethod(methods[0] ?? "squash");
@@ -485,6 +496,32 @@ export function PRsPanel({
                       <GitMerge /> Merge…
                     </Button>
                   )}
+                  {pr.state === "open" && supportsAction("enable_auto_merge") ? (
+                    pr.autoMergeEnabled && supportsAction("disable_auto_merge") ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pendingAction !== null}
+                        onClick={() => void mutatePullRequest(pr.n, "disable_auto_merge")}
+                      >
+                        Disable auto-merge
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={pendingAction !== null}
+                        onClick={() => {
+                          setMergeIntent("auto_merge");
+                          const methods = capabilities?.mergeMethods ?? ["squash", "merge"];
+                          if (!methods.includes(mergeMethod)) setMergeMethod(methods[0] ?? "merge");
+                          setMergePr(pr);
+                        }}
+                      >
+                        Enable auto-merge…
+                      </Button>
+                    )
+                  ) : null}
                   {pr.state === "open" && supportsAction("close") ? (
                     <Button
                       variant="ghost"
@@ -1248,11 +1285,24 @@ export function PRsPanel({
         >
           <DialogPopup className="git-tool-v2 max-w-md">
             <DialogHeader>
-              <DialogTitle>Merge Pull Request #{mergePr.n}</DialogTitle>
+              <DialogTitle>
+                {mergeIntent === "auto_merge" ? "Enable auto-merge" : "Merge Pull Request"} #
+                {mergePr.n}
+              </DialogTitle>
             </DialogHeader>
             <DialogPanel className="space-y-4">
               <p className="text-xs text-foreground/90">
-                Are you sure you want to merge <strong>{mergePr.title}</strong> into base branch?
+                {mergeIntent === "auto_merge" ? (
+                  <>
+                    Merge <strong>{mergePr.title}</strong> automatically after its policies and
+                    checks pass.
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to merge <strong>{mergePr.title}</strong> into base
+                    branch?
+                  </>
+                )}
               </p>
 
               <div>
@@ -1275,12 +1325,14 @@ export function PRsPanel({
                 </Select>
               </div>
 
-              <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20 mt-2">
-                <span className="text-xs text-foreground/90 font-medium">
-                  Delete head branch after merging
-                </span>
-                <Switch checked={deleteBranch} onCheckedChange={(c) => setDeleteBranch(!!c)} />
-              </div>
+              {mergeIntent === "merge" ? (
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-border/60 bg-muted/20 mt-2">
+                  <span className="text-xs text-foreground/90 font-medium">
+                    Delete head branch after merging
+                  </span>
+                  <Switch checked={deleteBranch} onCheckedChange={(c) => setDeleteBranch(!!c)} />
+                </div>
+              ) : null}
             </DialogPanel>
             <DialogFooter>
               <Button variant="outline" size="sm" onClick={() => setMergePr(null)}>
@@ -1291,7 +1343,8 @@ export function PRsPanel({
                 disabled={pendingAction !== null}
                 onClick={() => void handleConfirmMerge()}
               >
-                <CheckCircle2 /> Confirm Merge
+                <CheckCircle2 />
+                {mergeIntent === "auto_merge" ? "Enable auto-merge" : "Confirm Merge"}
               </Button>
             </DialogFooter>
           </DialogPopup>

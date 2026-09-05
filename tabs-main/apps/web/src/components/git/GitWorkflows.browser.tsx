@@ -194,14 +194,14 @@ describe("Git workflow interaction states", () => {
 
   it("transitions repository pull requests through provider-backed state filters", async () => {
     const capabilities = {
-      provider: "github" as const,
+      provider: "azure-devops" as const,
       diff: true,
       create: true,
-      actions: [],
-      mergeMethods: [],
+      actions: ["enable_auto_merge", "disable_auto_merge"] as const,
+      mergeMethods: ["merge", "squash"] as const,
     };
     const pullRequest = (state: "open" | "merged") => ({
-      provider: "github" as const,
+      provider: "azure-devops" as const,
       number: state === "merged" ? 42 : 41,
       title: state === "merged" ? "Merged provider result" : "Open provider result",
       url: `https://github.com/tabs/example/pull/${state === "merged" ? 42 : 41}`,
@@ -216,9 +216,11 @@ describe("Git workflow interaction states", () => {
         capabilities,
       }),
     );
+    const mutatePullRequest = vi.fn().mockResolvedValue({ pullRequest: pullRequest("open") });
     const api = {
       git: {
         listPullRequests,
+        mutatePullRequest,
         resolvePullRequest: vi.fn().mockResolvedValue({
           pullRequest: pullRequest("open"),
           capabilities,
@@ -243,6 +245,16 @@ describe("Git workflow interaction states", () => {
 
     await page.getByRole("button", { name: "All repository PRs" }).click();
     await vi.waitFor(() => expect(document.body.textContent).toContain("Open provider result"));
+    await page.getByRole("button", { name: "Enable auto-merge…" }).click();
+    await page.getByRole("button", { name: "Enable auto-merge", exact: true }).click();
+    await vi.waitFor(() =>
+      expect(mutatePullRequest).toHaveBeenCalledWith({
+        cwd: "/workspace",
+        reference: "41",
+        action: "enable_auto_merge",
+        mergeMethod: "squash",
+      }),
+    );
     await page.getByRole("button", { name: "merged" }).click();
     await vi.waitFor(() => expect(document.body.textContent).toContain("Merged provider result"));
     expect(listPullRequests).toHaveBeenCalledWith({

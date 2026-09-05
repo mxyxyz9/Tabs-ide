@@ -201,6 +201,8 @@ const GitResolvedPullRequest = Schema.Struct({
   commits: Schema.optional(Schema.Array(GitPullRequestCommit)),
   files: Schema.optional(Schema.Array(GitPullRequestFile)),
   reviewThreads: Schema.optional(Schema.Array(GitPullRequestReviewThread)),
+  autoMergeEnabled: Schema.optional(Schema.Boolean),
+  autoMergeMethod: Schema.optional(Schema.Literals(["merge", "squash", "rebase"])),
 });
 export type GitResolvedPullRequest = typeof GitResolvedPullRequest.Type;
 
@@ -840,6 +842,8 @@ export const GitPullRequestAction = Schema.Literals([
   "reopen",
   "ready",
   "draft",
+  "enable_auto_merge",
+  "disable_auto_merge",
   "comment",
   "approve",
   "request_changes",

@@ -21,6 +21,8 @@ it("normalizes Azure DevOps pull request metadata", () => {
         description: "Provider-backed.",
         status: "active",
         isDraft: true,
+        autoCompleteSetBy: { uniqueName: "merger@example.com" },
+        completionOptions: { squashMerge: true },
         mergeStatus: "conflicts",
         sourceRefName: "refs/heads/feature/azure",
         targetRefName: "refs/heads/main",
@@ -39,6 +41,8 @@ it("normalizes Azure DevOps pull request metadata", () => {
       baseBranch: "main",
       state: "open",
       isDraft: true,
+      autoMergeEnabled: true,
+      autoMergeMethod: "squash",
       mergeability: "conflicting",
       author: { login: "author@example.com" },
       reviewers: [{ login: "reviewer@example.com" }],
@@ -79,6 +83,83 @@ layer("AzureDevOpsCliLive", (it) => {
           "42",
           "--reviewers",
           "reviewer@example.com;$(literal)",
+          "--only-show-errors",
+          "--output",
+          "json",
+        ],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
+  it.effect("configures Azure auto-complete with the selected merge strategy", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValue({
+        stdout: "{}",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+      const azure = yield* AzureDevOpsCli;
+      yield* azure.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "enable_auto_merge",
+        mergeMethod: "squash",
+      });
+
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "az",
+        [
+          "repos",
+          "pr",
+          "update",
+          "--detect",
+          "true",
+          "--id",
+          "42",
+          "--auto-complete",
+          "true",
+          "--squash",
+          "true",
+          "--only-show-errors",
+          "--output",
+          "json",
+        ],
+        expect.objectContaining({ cwd: "/repo" }),
+      );
+    }),
+  );
+
+  it.effect("disables Azure auto-complete without changing merge state", () =>
+    Effect.gen(function* () {
+      mockedRunProcess.mockResolvedValue({
+        stdout: "{}",
+        stderr: "",
+        code: 0,
+        signal: null,
+        timedOut: false,
+      });
+      const azure = yield* AzureDevOpsCli;
+      yield* azure.mutatePullRequest({
+        cwd: "/repo",
+        reference: "42",
+        action: "disable_auto_merge",
+      });
+
+      expect(mockedRunProcess).toHaveBeenCalledWith(
+        "az",
+        [
+          "repos",
+          "pr",
+          "update",
+          "--detect",
+          "true",
+          "--id",
+          "42",
+          "--auto-complete",
+          "false",
           "--only-show-errors",
           "--output",
           "json",

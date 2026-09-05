@@ -683,6 +683,14 @@ const makeGitHubCli = Effect.sync(() => {
         case "draft":
           args.push("ready", input.reference, "--undo");
           break;
+        case "enable_auto_merge":
+        case "disable_auto_merge":
+          return Effect.fail(
+            new GitHubCliError({
+              operation: "mutatePullRequest",
+              detail: `GitHub does not advertise ${input.action.replaceAll("_", " ")} here.`,
+            }),
+          );
         case "comment":
           args.push("comment", input.reference, "--body", input.body ?? "");
           break;

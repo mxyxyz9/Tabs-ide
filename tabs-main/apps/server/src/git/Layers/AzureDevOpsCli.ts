@@ -35,6 +35,8 @@ function decodePullRequest(value: unknown) {
   const authorLogin = text(author?.uniqueName ?? author?.displayName);
   const status = text(raw.status)?.toLowerCase();
   const mergeStatus = text(raw.mergeStatus)?.toLowerCase();
+  const completionOptions = record(raw.completionOptions);
+  const autoMergeEnabled = record(raw.autoCompleteSetBy) !== null;
   const reviewers = Array.isArray(raw.reviewers)
     ? raw.reviewers.flatMap((entry) => {
         const reviewer = record(entry);
@@ -70,6 +72,13 @@ function decodePullRequest(value: unknown) {
         }
       : null,
     reviewers,
+    autoMergeEnabled,
+    ...(autoMergeEnabled
+      ? {
+          autoMergeMethod:
+            completionOptions?.squashMerge === true ? ("squash" as const) : ("merge" as const),
+        }
+      : {}),
     mergeability: ["conflicts", "failure", "rejectedbypolicy"].includes(mergeStatus ?? "")
       ? ("conflicting" as const)
       : mergeStatus === "succeeded"
@@ -267,6 +276,34 @@ export const makeAzureDevOpsCli = Effect.sync(() => {
             reference,
             "--draft",
             input.action === "draft" ? "true" : "false",
+          ];
+          break;
+        case "enable_auto_merge":
+          args = [
+            "repos",
+            "pr",
+            "update",
+            "--detect",
+            "true",
+            "--id",
+            reference,
+            "--auto-complete",
+            "true",
+            "--squash",
+            input.mergeMethod === "squash" ? "true" : "false",
+          ];
+          break;
+        case "disable_auto_merge":
+          args = [
+            "repos",
+            "pr",
+            "update",
+            "--detect",
+            "true",
+            "--id",
+            reference,
+            "--auto-complete",
+            "false",
           ];
           break;
         case "add_reviewer":

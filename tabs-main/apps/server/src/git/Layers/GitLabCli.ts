@@ -411,6 +411,14 @@ export const makeGitLabCli = Effect.sync(() => {
         case "draft":
           args = ["mr", "update", reference, "--draft"];
           break;
+        case "enable_auto_merge":
+        case "disable_auto_merge":
+          return Effect.fail(
+            new GitLabCliError({
+              operation: "mutatePullRequest",
+              detail: `GitLab does not advertise ${input.action.replaceAll("_", " ")} here.`,
+            }),
+          );
         case "comment":
           args = ["mr", "note", reference, "--message", input.body ?? ""];
           break;
