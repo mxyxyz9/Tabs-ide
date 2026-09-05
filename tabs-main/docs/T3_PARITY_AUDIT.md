@@ -107,6 +107,10 @@ an adapter over that engine.
       submenus. Tabs retains its existing implementation because it is already more complete.
 - [x] Enforce the provider contract's 120,000-character turn limit before side effects, preserve
       oversized drafts, disable invalid submissions, and render accessible actionable feedback.
-- [ ] Remaining T3 chat actions and in-application documentation surfaces.
+- [x] Remaining T3 active-chat actions and in-application documentation surfaces: configurable
+      shortcuts copy the durable linked-PR/thread reference and toggle settle/unsettle or
+      pin/unpin through server lifecycle commands, while searchable Documentation settings cover
+      composer/agents, remote environments, browser collaboration, source control, thread
+      lifecycle, diagnostics, and keybindings.
 
 Mobile applications and mobile-only protocol/UI work are explicitly excluded.

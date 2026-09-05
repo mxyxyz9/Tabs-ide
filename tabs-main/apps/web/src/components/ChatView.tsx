@@ -2379,6 +2379,83 @@ export default function ChatView({
       });
       if (!command) return;
 
+      if (command === "thread.copyReference") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isServerThread || !activeThread || event.repeat) return;
+        const reference = activeThread.linkedPullRequest?.url ?? activeThread.id;
+        const label = activeThread.linkedPullRequest?.url ? "PR link" : "Thread ID";
+        void navigator.clipboard.writeText(reference).then(
+          () => {
+            toastManager.add({
+              type: "success",
+              title: `${label} copied`,
+              description: reference,
+            });
+          },
+          (error: unknown) => {
+            toastManager.add({
+              type: "error",
+              title: `Failed to copy ${label.toLowerCase()}`,
+              description: error instanceof Error ? error.message : "Clipboard access failed.",
+            });
+          },
+        );
+        return;
+      }
+
+      if (command === "thread.settle") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isServerThread || !activeThread || event.repeat) return;
+        if (!threadApi) return;
+        void threadApi.orchestration
+          .dispatchCommand(
+            activeThreadIsSettled
+              ? {
+                  type: "thread.unsettle",
+                  commandId: newCommandId(),
+                  threadId: activeThread.id,
+                  reason: "user",
+                }
+              : {
+                  type: "thread.settle",
+                  commandId: newCommandId(),
+                  threadId: activeThread.id,
+                },
+          )
+          .catch((error: unknown) => {
+            toastManager.add({
+              type: "error",
+              title: activeThreadIsSettled ? "Could not unsettle thread" : "Could not settle thread",
+              description: error instanceof Error ? error.message : "The thread action failed.",
+            });
+          });
+        return;
+      }
+
+      if (command === "thread.pin") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!isServerThread || !activeThread || event.repeat) return;
+        const isPinned = activeThread.pinnedAt != null;
+        if (!threadApi) return;
+        void threadApi.orchestration
+          .dispatchCommand({
+            type: isPinned ? "thread.unpin" : "thread.pin",
+            commandId: newCommandId(),
+            threadId: activeThread.id,
+          })
+          .catch((error: unknown) => {
+            toastManager.add({
+              type: "error",
+              title: isPinned ? "Could not unpin thread" : "Could not pin thread",
+              description: error instanceof Error ? error.message : "The thread action failed.",
+            });
+          });
+        return;
+      }
+
       if (command === "terminal.toggle") {
         event.preventDefault();
         event.stopPropagation();
@@ -2433,6 +2510,8 @@ export default function ChatView({
     return () => window.removeEventListener("keydown", handler);
   }, [
     activeProject,
+    activeThread,
+    activeThreadIsSettled,
     terminalState.terminalOpen,
     terminalState.activeTerminalId,
     activeThreadId,
@@ -2444,6 +2523,8 @@ export default function ChatView({
     keybindings,
     onToggleDiff,
     toggleTerminalVisibility,
+    isServerThread,
+    threadApi,
   ]);
 
   const addComposerImages = (files: File[]) => {

@@ -259,6 +259,16 @@ it.layer(NodeServices.layer)("keybindings", (it) => {
       }).pipe(Effect.provide(makeKeybindingsLayer())),
   );
 
+  it("ships lifecycle and reference shortcuts from the T3 thread workflow", () => {
+    const defaultsByCommand = new Map(
+      DEFAULT_KEYBINDINGS.map((binding) => [binding.command, binding.key] as const),
+    );
+
+    assert.equal(defaultsByCommand.get("thread.copyReference"), "mod+shift+c");
+    assert.equal(defaultsByCommand.get("thread.settle"), "mod+shift+s");
+    assert.equal(defaultsByCommand.get("thread.pin"), "mod+shift+p");
+  });
+
   it.effect("skips conflicting default keybindings on startup and logs a detailed warning", () => {
     const messages: string[] = [];
     const logger = Logger.make(({ message }) => {
