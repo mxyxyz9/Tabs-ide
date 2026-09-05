@@ -169,6 +169,7 @@ import {
   EDITOR_FONT_OPTIONS,
   FONT_COMBOS,
   HEADING_FONT_OPTIONS,
+  RANDOM_STYLE_OPTIONS,
   THEME_DEFINITIONS,
   UI_FONT_OPTIONS,
   calculateContrastRatio,
@@ -180,6 +181,7 @@ import {
   hexToRgb,
   rgbToHex,
   type CustomThemeConfig,
+  type RandomStyleMode,
   type ThemePreference,
 } from "../lib/themes";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
@@ -952,17 +954,6 @@ function saveSavedPresetsToStorage(presets: SavedCustomPreset[]) {
     localStorage.setItem(SAVED_PRESETS_KEY, JSON.stringify(presets));
   } catch (err) {}
 }
-
-export type RandomStyleMode = "balanced" | "pastel" | "vivid" | "minimal" | "cyberpunk" | "warm";
-
-export const RANDOM_STYLE_OPTIONS: { id: RandomStyleMode; label: string }[] = [
-  { id: "pastel", label: "Pastel Soft" },
-  { id: "vivid", label: "Vivid Electric" },
-  { id: "minimal", label: "Minimal Mono" },
-  { id: "cyberpunk", label: "Cyberpunk Neon" },
-  { id: "warm", label: "Warm Earthy" },
-  { id: "balanced", label: "Harmonized (Default)" },
-];
 
 const AESTHETIC_PREFIXES = [
   "Tokyo",
