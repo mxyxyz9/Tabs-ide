@@ -7,8 +7,6 @@ import {
   TrimmedString,
   ProjectId,
   ThreadId,
-  NonNegativeInt,
-  PositiveInt,
 } from "./baseSchemas.ts";
 import { DEFAULT_GIT_TEXT_GENERATION_MODEL, ProviderOptionSelections } from "./model.ts";
 import { ModelSelection } from "./orchestration.ts";
