@@ -154,6 +154,8 @@ export function PRsPanel({
   const [replyBody, setReplyBody] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [listLimit, setListLimit] = useState(50);
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Query 1: Branch PR query
   const branchPrQuery = useQuery(
@@ -166,7 +168,7 @@ export function PRsPanel({
 
   // Query 2: Repository PRs query (supports state filter for past merged/closed PRs)
   const allPrsQuery = useQuery(
-    gitAllPullRequestsQueryOptions(cwd || null, filterState, environmentId, listLimit),
+    gitAllPullRequestsQueryOptions(cwd || null, filterState, environmentId, listLimit, searchQuery),
   );
   const detailQuery = useQuery(
     gitResolvePullRequestQueryOptions({
@@ -349,6 +351,46 @@ export function PRsPanel({
               ))}
             </div>
           )}
+          {viewMode === "all" && capabilities?.search ? (
+            <form
+              role="search"
+              aria-label="Search pull requests"
+              className="flex min-w-56 items-center gap-1"
+              onSubmit={(event) => {
+                event.preventDefault();
+                setListLimit(50);
+                setSearchQuery(searchInput.trim());
+              }}
+            >
+              <label htmlFor="git-pr-search" className="sr-only">
+                Search pull requests
+              </label>
+              <input
+                id="git-pr-search"
+                type="search"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search pull requests"
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              />
+              <Button type="submit" size="sm">
+                Search
+              </Button>
+              {searchQuery ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearchQuery("");
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </form>
+          ) : null}
         </div>
 
         {/* Action Button */}
@@ -691,7 +733,7 @@ export function PRsPanel({
                                         pr.n,
                                         "remove_reviewer",
                                         undefined,
-                                        reviewer.login,
+                                        reviewer.id ?? reviewer.login,
                                       )
                                     }
                                   >

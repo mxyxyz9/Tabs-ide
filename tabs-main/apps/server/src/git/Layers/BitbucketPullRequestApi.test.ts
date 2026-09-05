@@ -199,4 +199,56 @@ describe("BitbucketPullRequestApi requests", () => {
       }),
     );
   });
+
+  it("escapes provider search filters and replaces the complete reviewer set", async () => {
+    process.env.T3CODE_BITBUCKET_ACCESS_TOKEN = "token";
+    mockedRunProcess.mockResolvedValue({
+      stdout: "git@bitbucket.org:tabs/app.git\n",
+      stderr: "",
+      code: 0,
+      signal: null,
+      timedOut: false,
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ values: [] }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ reviewers: [{ uuid: "{existing}", nickname: "existing" }] }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            values: [{ user: { uuid: "{new}", nickname: 'new"reviewer' } }],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const api = await Effect.runPromise(makeBitbucketPullRequestApi);
+    await Effect.runPromise(
+      api.listPullRequests({ cwd: "/repo", state: "open", limit: 20, query: 'fix "login"' }),
+    );
+    const listUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(listUrl.searchParams.get("q")).toBe(
+      '(title ~ "fix \\"login\\"" OR description ~ "fix \\"login\\"")',
+    );
+
+    await Effect.runPromise(
+      api.mutatePullRequest({
+        cwd: "/repo",
+        reference: "12",
+        action: "add_reviewer",
+        value: 'new"reviewer',
+      }),
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/workspaces/tabs/members?");
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+      reviewers: [{ uuid: "{existing}" }, { uuid: "{new}" }],
+    });
+  });
 });

@@ -141,6 +141,7 @@ describe("GitListPullRequests", () => {
         provider: "gitlab",
         diff: true,
         create: true,
+        search: false,
         actions: ["comment", "approve"],
         mergeMethods: ["merge", "squash"],
       },

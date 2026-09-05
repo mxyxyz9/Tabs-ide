@@ -277,4 +277,62 @@ describe("Git workflow interaction states", () => {
       limit: 50,
     });
   });
+
+  it("submits pull request search only when the provider advertises it", async () => {
+    const capabilities = {
+      provider: "bitbucket" as const,
+      diff: true,
+      create: true,
+      search: true,
+      actions: [] as const,
+      mergeMethods: ["merge", "squash", "rebase"] as const,
+    };
+    const pullRequest = {
+      provider: "bitbucket" as const,
+      number: 7,
+      title: "Provider search result",
+      url: "https://bitbucket.org/tabs/example/pull-requests/7",
+      baseBranch: "main",
+      headBranch: "feature/search",
+      state: "open" as const,
+    };
+    const listPullRequests = vi.fn().mockResolvedValue({
+      pullRequests: [pullRequest],
+      hasMore: false,
+      capabilities,
+    });
+    const api = {
+      git: {
+        listPullRequests,
+        resolvePullRequest: vi.fn().mockResolvedValue({ pullRequest, capabilities }),
+      },
+    } as unknown as NativeApi;
+    vi.mocked(environmentApi).mockResolvedValue(api);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await using _ = await mount(
+      <QueryClientProvider client={queryClient}>
+        <GitApiProvider api={api} scopeKey="bitbucket-pr-environment">
+          <PRsPanel
+            cwd="/workspace"
+            environmentId="bitbucket-pr-environment"
+            branchName="feature/search"
+            onOpenCreatePR={vi.fn()}
+          />
+        </GitApiProvider>
+      </QueryClientProvider>,
+    );
+
+    await page.getByRole("button", { name: "All repository PRs" }).click();
+    await page.getByRole("searchbox", { name: "Search pull requests" }).fill('fix "auth"');
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await vi.waitFor(() =>
+      expect(listPullRequests).toHaveBeenCalledWith({
+        cwd: "/workspace",
+        state: "all",
+        limit: 50,
+        query: 'fix "auth"',
+      }),
+    );
+  });
 });

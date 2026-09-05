@@ -339,6 +339,7 @@ const GITHUB_PULL_REQUEST_CAPABILITIES = {
   provider: "github" as const,
   diff: true,
   create: true,
+  search: false,
   actions: [
     "merge",
     "close",
@@ -367,6 +368,7 @@ const GITLAB_PULL_REQUEST_CAPABILITIES = {
   provider: "gitlab" as const,
   diff: true,
   create: true,
+  search: false,
   actions: [
     "merge",
     "close",
@@ -392,6 +394,7 @@ const AZURE_DEVOPS_PULL_REQUEST_CAPABILITIES = {
   provider: "azure-devops" as const,
   diff: false,
   create: true,
+  search: false,
   actions: [
     "merge",
     "close",
@@ -409,12 +412,15 @@ const BITBUCKET_PULL_REQUEST_CAPABILITIES = {
   provider: "bitbucket" as const,
   diff: true,
   create: true,
+  search: true,
   actions: [
     "merge",
     "close",
     "comment",
     "approve",
     "request_changes",
+    "add_reviewer",
+    "remove_reviewer",
     "edit_pull_request",
     "inline_comment",
     "reply_to_thread",
@@ -1236,6 +1242,7 @@ export const makeGitManager = Effect.gen(function* () {
                   cwd: input.cwd,
                   state: input.state ?? "all",
                   limit,
+                  ...(input.query !== undefined ? { query: input.query } : {}),
                 });
 
       return {

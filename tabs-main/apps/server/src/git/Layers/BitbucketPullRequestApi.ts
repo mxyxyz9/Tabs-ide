@@ -27,10 +27,23 @@ function actor(value: unknown) {
   const avatar = record(links?.avatar);
   return login
     ? {
+        ...(text(raw?.uuid ?? raw?.account_id) ? { id: text(raw?.uuid ?? raw?.account_id)! } : {}),
         login,
         ...(text(avatar?.href) ? { avatarUrl: text(avatar?.href)! } : {}),
       }
     : null;
+}
+
+function filterLiteral(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function reviewerIdentity(value: unknown): { id: string; login: string } | null {
+  const member = record(value);
+  const raw = record(member?.user) ?? member;
+  const id = text(raw?.uuid ?? raw?.account_id);
+  const login = text(raw?.nickname ?? raw?.username ?? raw?.display_name);
+  return id && login ? { id, login } : null;
 }
 
 function decodePullRequest(value: unknown): GitResolvedPullRequest | null {
@@ -279,6 +292,7 @@ export const makeBitbucketPullRequestApi = Effect.sync(() => {
       cwd: string;
       state: "all" | "open" | "merged" | "closed";
       limit: number;
+      query?: string;
     }) =>
       withRepo(input.cwd, (repo) => {
         const state =
@@ -294,6 +308,11 @@ export const makeBitbucketPullRequestApi = Effect.sync(() => {
           sort: "-updated_on",
         });
         if (state) query.set("state", state);
+        const search = input.query?.trim();
+        if (search) {
+          const literal = filterLiteral(search);
+          query.set("q", `(title ~ "${literal}" OR description ~ "${literal}")`);
+        }
         return Effect.gen(function* () {
           const items: GitResolvedPullRequest[] = [];
           let next: string | null = `${repo}/pullrequests?${query}`;
@@ -371,6 +390,64 @@ export const makeBitbucketPullRequestApi = Effect.sync(() => {
                 ...(input.body === undefined ? {} : { description: input.body }),
               }),
             }).pipe(Effect.asVoid);
+          case "add_reviewer":
+          case "remove_reviewer":
+            return Effect.gen(function* () {
+              const current = yield* request("getPullRequest", root).pipe(
+                Effect.flatMap((body) => parseJson("getPullRequest", body)),
+              );
+              const currentRaw = record(current);
+              const reviewers = Array.isArray(currentRaw?.reviewers)
+                ? currentRaw.reviewers.flatMap((entry) => {
+                    const identity = reviewerIdentity(entry);
+                    return identity ? [identity] : [];
+                  })
+                : [];
+              const requestedValue = input.value ?? "";
+              let requested = reviewers.find(
+                (reviewer) => reviewer.id === requestedValue || reviewer.login === requestedValue,
+              );
+              if (input.action === "add_reviewer" && !requested) {
+                const workspace = repo.split("/")[0]!;
+                const literal = filterLiteral(requestedValue);
+                const membersBody = yield* request(
+                  "findReviewer",
+                  `https://api.bitbucket.org/2.0/workspaces/${workspace}/members?pagelen=50&q=${encodeURIComponent(
+                    `user.nickname = "${literal}"`,
+                  )}`,
+                );
+                const members = record(yield* parseJson("findReviewer", membersBody));
+                requested = Array.isArray(members?.values)
+                  ? members.values
+                      .flatMap((entry) => {
+                        const identity = reviewerIdentity(entry);
+                        return identity ? [identity] : [];
+                      })
+                      .find((reviewer) => reviewer.login === requestedValue)
+                  : undefined;
+                if (!requested) {
+                  return yield* new BitbucketApiError({
+                    operation: "findReviewer",
+                    detail: `Bitbucket workspace member ${requestedValue} was not found.`,
+                  });
+                }
+              }
+              if (!requested) {
+                return yield* new BitbucketApiError({
+                  operation: "setReviewers",
+                  detail: `Reviewer ${requestedValue} is not assigned to this pull request.`,
+                });
+              }
+              const next = new Map(reviewers.map((reviewer) => [reviewer.id, reviewer]));
+              if (input.action === "add_reviewer") next.set(requested.id, requested);
+              else next.delete(requested.id);
+              yield* request("setReviewers", root, {
+                method: "PUT",
+                body: JSON.stringify({
+                  reviewers: [...next.keys()].map((uuid) => ({ uuid })),
+                }),
+              });
+            });
           case "comment":
             return request("comment", `${root}/comments`, {
               method: "POST",

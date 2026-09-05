@@ -255,15 +255,21 @@ export function gitAllPullRequestsQueryOptions(
   state: "open" | "closed" | "merged" | "all" = "all",
   environmentId?: string,
   limit = 50,
+  search = "",
 ) {
   return queryOptions({
-    queryKey: scopedGitKey(environmentId, ["git", "all-pull-requests", cwd, state, limit]),
+    queryKey: scopedGitKey(environmentId, ["git", "all-pull-requests", cwd, state, limit, search]),
     queryFn: async () => {
       const api = await environmentApi(environmentId);
       if (!cwd) {
         throw new Error("Pull requests lookup is unavailable.");
       }
-      return api.git.listPullRequests({ cwd, state, limit });
+      return api.git.listPullRequests({
+        cwd,
+        state,
+        limit,
+        ...(search ? { query: search } : {}),
+      });
     },
     enabled: cwd !== null,
     staleTime: 30_000,

@@ -72,6 +72,7 @@ const GitWorktree = Schema.Struct({
   branch: TrimmedNonEmptyStringSchema,
 });
 export const GitPullRequestActor = Schema.Struct({
+  id: Schema.optional(TrimmedNonEmptyStringSchema),
   login: TrimmedNonEmptyStringSchema,
   avatarUrl: Schema.optional(Schema.String),
   url: Schema.optional(Schema.String),
@@ -824,6 +825,7 @@ export type GitCreateWorktreeResult = typeof GitCreateWorktreeResult.Type;
 
 export const GitListPullRequestsInput = Schema.Struct({
   cwd: TrimmedNonEmptyStringSchema,
+  query: Schema.optional(Schema.String.check(Schema.isMaxLength(256))),
   state: Schema.optional(
     Schema.Union([
       Schema.Literal("open"),
@@ -864,6 +866,7 @@ export const GitPullRequestCapabilities = Schema.Struct({
   provider: SourceControlProviderKind,
   diff: Schema.Boolean,
   create: Schema.Boolean,
+  search: Schema.Boolean,
   actions: Schema.Array(GitPullRequestAction),
   mergeMethods: Schema.Array(Schema.Literals(["merge", "squash", "rebase"])),
 });
