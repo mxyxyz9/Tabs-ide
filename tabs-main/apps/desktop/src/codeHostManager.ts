@@ -433,11 +433,42 @@ function buildVsCodeFileUrl(pathname: string): string {
 }
 
 function getCodeOssEmbedExtensionPath(baseDir: string): string {
-  return Path.resolve(baseDir, CODE_OSS_EMBED_EXTENSION_RELATIVE_PATH);
+  return resolveCodeOssExtensionPath(baseDir, "tabs-embed-defaults");
 }
 
 function getCodeOssIntegrationExtensionPath(baseDir: string): string {
-  return Path.resolve(baseDir, CODE_OSS_INTEGRATION_EXTENSION_RELATIVE_PATH);
+  return resolveCodeOssExtensionPath(baseDir, "tabs-workbench-integration");
+}
+
+export function resolveCodeOssExtensionPath(
+  baseDir: string,
+  extensionDirectory: string,
+  existsSync: (path: string) => boolean = FS.existsSync,
+): string {
+  const sourcePath = Path.resolve(
+    baseDir,
+    "..",
+    "resources",
+    "code-oss-extensions",
+    extensionDirectory,
+  );
+  const packagedPath = Path.resolve(
+    baseDir,
+    "..",
+    "prod-resources",
+    "code-oss-extensions",
+    extensionDirectory,
+  );
+  const unpackedPath = packagedPath.replace(
+    `${Path.sep}app.asar${Path.sep}`,
+    `${Path.sep}app.asar.unpacked${Path.sep}`,
+  );
+
+  for (const candidate of [unpackedPath, packagedPath, sourcePath]) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  return sourcePath;
 }
 
 /**

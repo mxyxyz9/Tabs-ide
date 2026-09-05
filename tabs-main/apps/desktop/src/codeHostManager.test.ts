@@ -56,6 +56,7 @@ import {
   reconcileSharedExtensionRegistry,
   readWorkspaceTabs,
   resolveCodeHostConfig,
+  resolveCodeOssExtensionPath,
   resolveCodeOssNodeModulesResource,
   resolveCodeOssWorkbenchTheme,
   writeWorkspaceTabs,
@@ -118,6 +119,43 @@ describe("resolveCodeOssNodeModulesResource", () => {
       ).toBe(wasmPath);
     },
   );
+});
+
+describe("resolveCodeOssExtensionPath", () => {
+  it("uses source resources in development", () => {
+    const baseDir = Path.join("/repo", "apps/desktop/dist-electron");
+    const sourcePath = Path.join(
+      "/repo",
+      "apps/desktop/resources/code-oss-extensions/tabs-workbench-integration",
+    );
+
+    expect(
+      resolveCodeOssExtensionPath(
+        baseDir,
+        "tabs-workbench-integration",
+        (candidate) => candidate === sourcePath,
+      ),
+    ).toBe(sourcePath);
+  });
+
+  it("uses the unpacked production extension beside app.asar", () => {
+    const baseDir = Path.join(
+      "/Applications/Tabs.app/Contents/Resources/app.asar",
+      "apps/desktop/dist-electron",
+    );
+    const unpackedPath = Path.join(
+      "/Applications/Tabs.app/Contents/Resources/app.asar.unpacked",
+      "apps/desktop/prod-resources/code-oss-extensions/tabs-workbench-integration",
+    );
+
+    expect(
+      resolveCodeOssExtensionPath(
+        baseDir,
+        "tabs-workbench-integration",
+        (candidate) => candidate === unpackedPath,
+      ),
+    ).toBe(unpackedPath);
+  });
 });
 
 describe("resolveCodeOssWorkbenchTheme", () => {
