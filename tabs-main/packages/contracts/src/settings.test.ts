@@ -9,6 +9,7 @@ import {
   DEFAULT_SERVER_SETTINGS,
   ProjectBrowserSettings,
   ProjectCustomEmbedDefinition,
+  ProjectWorkspaceSettings,
   ServerSettings,
   ServerSettingsPatch,
   resolveBrowserPartition,
@@ -18,6 +19,18 @@ const decodeClientSettings = Schema.decodeUnknownSync(ClientSettingsSchema);
 const decodeServerSettings = Schema.decodeUnknownSync(ServerSettings);
 const decodeServerSettingsPatch = Schema.decodeUnknownSync(ServerSettingsPatch);
 const encodeServerSettings = Schema.encodeSync(ServerSettings);
+
+describe("ProjectWorkspaceSettings tools", () => {
+  it("decodes persisted Testing tools without crashing workspace startup", () => {
+    const decodeWorkspaceSettings = Schema.decodeUnknownSync(ProjectWorkspaceSettings);
+
+    expect(
+      decodeWorkspaceSettings({
+        tools: [{ id: "testing", kind: "testing", label: "Testing", visible: true }],
+      }).tools,
+    ).toEqual([{ id: "testing", kind: "testing", label: "Testing", visible: true }]);
+  });
+});
 
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
