@@ -2863,7 +2863,11 @@ async function bootstrap(): Promise<void> {
       codeHostConfig.runtime.stateDir,
     );
     codeHostManager.setNativeWebContentsRegistrar((webContents, getBounds) => {
-      nativeCodeHostMainBackend?.registerWebContents(webContents, getBounds);
+      nativeCodeHostMainBackend?.registerWebContents(
+        webContents,
+        getBounds,
+        mainWindow ?? undefined,
+      );
     });
     writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");
   }

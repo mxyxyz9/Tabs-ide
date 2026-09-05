@@ -1,6 +1,5 @@
-import { BrowserWindow, nativeTheme, type WebContents } from "electron";
+import { BrowserWindow, nativeTheme, shell, type WebContents } from "electron";
 import { createHash, randomUUID } from "node:crypto";
-import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { rootCertificates } from "node:tls";
 import { pathToFileURL } from "node:url";
@@ -80,11 +79,43 @@ type NativeCodeHostModules = {
     dispose(): void;
   };
   EncryptionMainService: new (...args: unknown[]) => unknown;
+  ServiceCollection: new () => { set(id: unknown, service: unknown): unknown };
+  InstantiationService: new (...args: unknown[]) => {
+    createInstance<T>(ctor: new (...args: never[]) => T, ...args: unknown[]): T;
+    dispose(): void;
+  };
+  BrowserViewMainService: new (...args: never[]) => {
+    tryGetBrowserView(id: string): { readonly hostWindowId: number } | undefined;
+    layout(id: string, bounds: Electron.Rectangle): Promise<void>;
+    dispose(): void;
+  };
+  BrowserViewGroupMainService: new (...args: never[]) => { dispose(): void };
+  IBrowserViewMainService: unknown;
+  ipcBrowserViewChannelName: string;
+  ipcBrowserViewGroupChannelName: string;
+  IEnvironmentMainService: unknown;
+  IWindowsMainService: unknown;
+  IAuxiliaryWindowsMainService: unknown;
+  ITelemetryService: unknown;
+  INativeHostMainService: unknown;
+  IApplicationStorageMainService: unknown;
+  ILogService: unknown;
+  IProductService: unknown;
 };
 
 type ServerChannel = {
   listen(context: unknown, event: string, arg?: unknown): unknown;
   call(context: unknown, command: string, arg?: unknown): Promise<unknown>;
+};
+
+type NativeCodeWindow = {
+  readonly id: number;
+  readonly win: BrowserWindow;
+  readonly webContents: WebContents;
+  readonly openedWorkspace?: { readonly id: string };
+  readonly onDidClose: unknown;
+  readonly onDidDestroy: unknown;
+  isDestroyed(): boolean;
 };
 
 function passiveChannel(
@@ -103,7 +134,11 @@ function passiveChannel(
 
 export interface NativeCodeHostMainBackend {
   registerWindow(window: BrowserWindow): void;
-  registerWebContents(webContents: WebContents, getBounds?: () => Electron.Rectangle | null): void;
+  registerWebContents(
+    webContents: WebContents,
+    getBounds?: () => Electron.Rectangle | null,
+    ownerWindow?: BrowserWindow,
+  ): void;
   unregisterWindow(windowId: number): void;
   dispose(): void;
 }
@@ -140,6 +175,19 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     sharedProcess,
     messagePortIpc,
     encryptionMain,
+    instantiationService,
+    serviceCollection,
+    browserViewMainService,
+    browserViewGroupMainService,
+    browserViewContract,
+    browserViewGroupContract,
+    environmentMainContract,
+    windowsMainContract,
+    auxiliaryWindowsMainContract,
+    telemetryContract,
+    nativeHostMainContract,
+    storageMainContract,
+    productContract,
   ] = await Promise.all([
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.electron.js")),
     import(moduleUrl(vscodeRoot, "vs/base/parts/contextmenu/electron-main/contextmenu.js")),
@@ -176,6 +224,25 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     import(moduleUrl(vscodeRoot, "vs/platform/sharedProcess/electron-main/sharedProcess.js")),
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.mp.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/encryption/electron-main/encryptionMainService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/instantiation/common/instantiationService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/instantiation/common/serviceCollection.js")),
+    import(
+      moduleUrl(vscodeRoot, "vs/platform/browserView/electron-main/browserViewMainService.js")
+    ),
+    import(
+      moduleUrl(vscodeRoot, "vs/platform/browserView/electron-main/browserViewGroupMainService.js")
+    ),
+    import(moduleUrl(vscodeRoot, "vs/platform/browserView/common/browserView.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/browserView/common/browserViewGroup.js")),
+    import(
+      moduleUrl(vscodeRoot, "vs/platform/environment/electron-main/environmentMainService.js")
+    ),
+    import(moduleUrl(vscodeRoot, "vs/platform/windows/electron-main/windows.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/auxiliaryWindow/electron-main/auxiliaryWindows.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/telemetry/common/telemetry.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/native/electron-main/nativeHostMainService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/storage/electron-main/storageMainService.js")),
+    import(moduleUrl(vscodeRoot, "vs/platform/product/common/productService.js")),
   ]);
 
   return {
@@ -214,6 +281,21 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     SharedProcess: sharedProcess.SharedProcess,
     MessagePortClient: messagePortIpc.Client,
     EncryptionMainService: encryptionMain.EncryptionMainService,
+    ServiceCollection: serviceCollection.ServiceCollection,
+    InstantiationService: instantiationService.InstantiationService,
+    BrowserViewMainService: browserViewMainService.BrowserViewMainService,
+    BrowserViewGroupMainService: browserViewGroupMainService.BrowserViewGroupMainService,
+    IBrowserViewMainService: browserViewMainService.IBrowserViewMainService,
+    ipcBrowserViewChannelName: browserViewContract.ipcBrowserViewChannelName,
+    ipcBrowserViewGroupChannelName: browserViewGroupContract.ipcBrowserViewGroupChannelName,
+    IEnvironmentMainService: environmentMainContract.IEnvironmentMainService,
+    IWindowsMainService: windowsMainContract.IWindowsMainService,
+    IAuxiliaryWindowsMainService: auxiliaryWindowsMainContract.IAuxiliaryWindowsMainService,
+    ITelemetryService: telemetryContract.ITelemetryService,
+    INativeHostMainService: nativeHostMainContract.INativeHostMainService,
+    IApplicationStorageMainService: storageMainContract.IApplicationStorageMainService,
+    ILogService: log.ILogService,
+    IProductService: productContract.IProductService,
   };
 }
 
@@ -261,14 +343,7 @@ export async function createNativeCodeHostMainBackend(
   const logService = new modules.NullLogService();
   const onWillShutdown = new modules.Emitter();
   const onWillLoadWindow = new modules.Emitter();
-  const windows = new Map<
-    number,
-    {
-      webContents: WebContents;
-      isDestroyed(): boolean;
-      on(event: string, listener: () => void): unknown;
-    }
-  >();
+  const windows = new Map<number, NativeCodeWindow>();
   const embeddedBounds = new Map<number, () => Electron.Rectangle | null>();
 
   // The stock Code-OSS main process installs this application-level IPC
@@ -299,8 +374,7 @@ export async function createNativeCodeHostMainBackend(
   };
   const windowsService = {
     getWindowById(windowId: number) {
-      const win = windows.get(windowId);
-      return win ? { id: windowId, win } : undefined;
+      return windows.get(windowId);
     },
   };
   const configurationService = {
@@ -394,6 +468,67 @@ export async function createNativeCodeHostMainBackend(
     }
     return undefined;
   });
+
+  const applicationStorageService = {
+    get(key: string) {
+      return storage.get(key);
+    },
+    store(key: string, value: string) {
+      storage.set(key, value);
+      saveNativeCodeHostStorage(storagePath, storage);
+    },
+    remove(key: string) {
+      storage.delete(key);
+      saveNativeCodeHostStorage(storagePath, storage);
+    },
+  };
+  const browserServices = new modules.ServiceCollection();
+  browserServices.set(modules.IEnvironmentMainService, {
+    ...environmentService,
+    workspaceStorageHome: modules.URI.file(
+      Path.join(stateDir, "code-oss-desktop", "browser-workspaces"),
+    ),
+  });
+  browserServices.set(modules.IWindowsMainService, windowsService);
+  browserServices.set(modules.IAuxiliaryWindowsMainService, {
+    getWindowByWebContents() {
+      return undefined;
+    },
+  });
+  browserServices.set(modules.ITelemetryService, modules.NullTelemetryService);
+  browserServices.set(modules.INativeHostMainService, {
+    async openExternal(_windowId: number | undefined, url: string) {
+      await shell.openExternal(url);
+    },
+  });
+  browserServices.set(modules.IApplicationStorageMainService, applicationStorageService);
+  browserServices.set(modules.ILogService, logService);
+  browserServices.set(modules.IProductService, {
+    nameShort: "Tabs",
+    nameLong: "Tabs",
+    version: process.env.npm_package_version ?? "0.0.0",
+    commit: "",
+    urlProtocol: "tabs",
+  });
+  const browserInstantiationService = new modules.InstantiationService(browserServices, true);
+  const browserViewMainService = browserInstantiationService.createInstance(
+    modules.BrowserViewMainService,
+  );
+  const layoutBrowserView = browserViewMainService.layout.bind(browserViewMainService);
+  browserViewMainService.layout = (id, bounds) => {
+    const hostWindowId = browserViewMainService.tryGetBrowserView(id)?.hostWindowId;
+    const hostBounds = hostWindowId === undefined ? undefined : embeddedBounds.get(hostWindowId)?.();
+    return layoutBrowserView(
+      id,
+      hostBounds
+        ? { ...bounds, x: bounds.x + hostBounds.x, y: bounds.y + hostBounds.y }
+        : bounds,
+    );
+  };
+  browserServices.set(modules.IBrowserViewMainService, browserViewMainService);
+  const browserViewGroupMainService = browserInstantiationService.createInstance(
+    modules.BrowserViewGroupMainService,
+  );
 
   for (const pathname of [
     environmentService.args["extensions-dir"],
@@ -569,6 +704,17 @@ export async function createNativeCodeHostMainBackend(
     "webview",
     modules.ProxyChannel.fromService(webviewMainService, disposables),
   );
+  const browserViewChannel = modules.ProxyChannel.fromService(browserViewMainService, disposables);
+  const browserViewGroupChannel = modules.ProxyChannel.fromService(
+    browserViewGroupMainService,
+    disposables,
+  );
+  ipcServer.registerChannel(modules.ipcBrowserViewChannelName, browserViewChannel);
+  ipcServer.registerChannel(modules.ipcBrowserViewGroupChannelName, browserViewGroupChannel);
+  void sharedProcessMainClient.then((client) => {
+    client.registerChannel(modules.ipcBrowserViewChannelName, browserViewChannel);
+    client.registerChannel(modules.ipcBrowserViewGroupChannelName, browserViewGroupChannel);
+  });
 
   ipcServer.registerChannel("logger", loggerChannel);
   ipcServer.registerChannel("storage", storageChannel);
@@ -646,18 +792,47 @@ export async function createNativeCodeHostMainBackend(
 
   return {
     registerWindow(window) {
-      windows.set(window.webContents.id, window);
-      window.once("closed", () => windows.delete(window.webContents.id));
-    },
-    registerWebContents(webContents, getBounds) {
-      const embeddedWindow = Object.assign(new EventEmitter(), {
-        webContents,
-        isDestroyed: () => webContents.isDestroyed(),
+      const onDidClose = new modules.Emitter();
+      const onDidDestroy = new modules.Emitter();
+      const windowId = window.webContents.id;
+      windows.set(windowId, {
+        id: windowId,
+        win: window,
+        webContents: window.webContents,
+        onDidClose: onDidClose.event,
+        onDidDestroy: onDidDestroy.event,
+        isDestroyed: () => window.isDestroyed(),
       });
+      window.once("closed", () => {
+        onDidClose.fire(undefined);
+        onDidDestroy.fire(undefined);
+        onDidClose.dispose();
+        onDidDestroy.dispose();
+        windows.delete(windowId);
+      });
+    },
+    registerWebContents(webContents, getBounds, ownerWindow) {
+      const window = ownerWindow ?? BrowserWindow.fromWebContents(webContents);
+      if (!window) {
+        throw new Error("An owning BrowserWindow is required for embedded Code browser views.");
+      }
+      const onDidClose = new modules.Emitter();
+      const onDidDestroy = new modules.Emitter();
+      const embeddedWindow = {
+        id: webContents.id,
+        win: window,
+        webContents,
+        onDidClose: onDidClose.event,
+        onDidDestroy: onDidDestroy.event,
+        isDestroyed: () => webContents.isDestroyed(),
+      } satisfies NativeCodeWindow;
       windows.set(webContents.id, embeddedWindow);
       if (getBounds) embeddedBounds.set(webContents.id, getBounds);
       webContents.once("destroyed", () => {
-        embeddedWindow.emit("closed");
+        onDidClose.fire(undefined);
+        onDidDestroy.fire(undefined);
+        onDidClose.dispose();
+        onDidDestroy.dispose();
         windows.delete(webContents.id);
         embeddedBounds.delete(webContents.id);
       });
@@ -675,6 +850,9 @@ export async function createNativeCodeHostMainBackend(
       ptyHostService.dispose();
       (loggerService as { dispose(): void }).dispose();
       utilityProcessWorkerService.dispose();
+      browserViewGroupMainService.dispose();
+      browserViewMainService.dispose();
+      browserInstantiationService.dispose();
       webviewMainService.dispose();
       fileProviderRegistration.dispose();
       fileService.dispose();
