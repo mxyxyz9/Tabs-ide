@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -74,6 +75,10 @@ jobs:
       - name: Typecheck
         working-directory: tabs-main
         run: bun run typecheck
+
+      - name: Lint
+        working-directory: tabs-main
+        run: bun run lint
 
       - name: Test
         working-directory: tabs-main
@@ -156,15 +161,17 @@ jobs:
           #
           # IMPORTANT: target the Electron that actually RUNS these modules at
           # runtime — Tabs' Electron (apps/desktop/package.json), NOT
-          # tabs-code-main's dev electron (39.8.3). The Code-OSS server is
-          # spawned via ELECTRON_RUN_AS_NODE on Tabs' Electron 40 binary, so
+          # tabs-code-main's development Electron. The Code-OSS server is
+          # spawned via ELECTRON_RUN_AS_NODE on Tabs' Electron binary, so
           # @parcel/watcher / node-pty / native-keymap must match its ABI or
           # they fail with NODE_MODULE_VERSION mismatch.
           #
           # `--arch` matters: macos-14 is arm64, so the mac-x64 artifact must
           # cross-build x64 natives here, otherwise the x64 DMG ships arm64
           # binaries that won't load on Intel Macs.
-          npx --yes @electron/rebuild -v 40.6.0 --arch ${{ matrix.arch }}
+          electron_version="$(node -p "require('../tabs-main/apps/desktop/package.json').devDependencies.electron")"
+          echo "Rebuilding Code-OSS native modules for Tabs Electron $electron_version"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}"
 
       - name: Compile VS Code workbench
         working-directory: tabs-code-main
@@ -227,10 +234,11 @@ jobs:
           done
 
           # git's native fs helper (@vscode/fs-copyfile) must be built AND match
-          # Tabs' Electron 40 ABI (the Code-OSS server runs under
+          # Tabs' current Electron ABI (the Code-OSS server runs under
           # ELECTRON_RUN_AS_NODE), else git throws "Cannot find module
           # .../build/Release/vscode_fs.node" and cascades to dependents.
-          npx --yes @electron/rebuild -v 40.6.0 --arch "${{ matrix.arch }}" \
+          electron_version="$(node -p "require('../tabs-main/apps/desktop/package.json').devDependencies.electron")"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" \
             --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
 
           # Compile every PRODUCT built-in extension to extensions/<ext>/out (and
@@ -273,14 +281,56 @@ jobs:
       - name: Build desktop artifact
         working-directory: tabs-main
         shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ secrets.AZURE_TRUSTED_SIGNING_ENDPOINT }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
         run: |
           args=(
             --platform "${{ matrix.platform }}"
             --target "${{ matrix.target }}"
             --arch "${{ matrix.arch }}"
             --build-version "${{ needs.preflight.outputs.version }}"
+            --thin
             --verbose
           )
+
+          has_all() {
+            for value in "$@"; do
+              if [[ -z "$value" ]]; then
+                return 1
+              fi
+            done
+            return 0
+          }
+
+          if [[ "${{ matrix.platform }}" == "mac" ]]; then
+            if has_all "$CSC_LINK" "$CSC_KEY_PASSWORD" "$APPLE_API_KEY" "$APPLE_API_KEY_ID" "$APPLE_API_ISSUER"; then
+              key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+              printf '%s' "$APPLE_API_KEY" > "$key_path"
+              export APPLE_API_KEY="$key_path"
+              args+=(--signed)
+            else
+              echo "::warning::macOS signing disabled because one or more Apple signing secrets are missing."
+            fi
+          elif [[ "${{ matrix.platform }}" == "win" ]]; then
+            if has_all "$AZURE_TENANT_ID" "$AZURE_CLIENT_ID" "$AZURE_CLIENT_SECRET" \
+              "$AZURE_TRUSTED_SIGNING_ENDPOINT" "$AZURE_TRUSTED_SIGNING_ACCOUNT_NAME" \
+              "$AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME" "$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME"; then
+              args+=(--signed)
+            else
+              echo "::warning::Windows signing disabled because one or more Azure signing secrets are missing."
+            fi
+          fi
 
           bun run dist:desktop:artifact -- "${args[@]}"
 
@@ -307,6 +357,8 @@ jobs:
             "tabs-main/release/*.AppImage.blockmap" \
             "tabs-main/release/*.exe" \
             "tabs-main/release/*.exe.blockmap" \
+            "tabs-main/release/tabs-code-runtime-*.zip" \
+            "tabs-main/release/tabs-code-runtime-*.zip.sha256" \
             "tabs-main/release/latest.yml" \
             "tabs-main/release/latest-linux.yml"; do
             for file in $pattern; do
@@ -327,6 +379,7 @@ jobs:
           name: desktop-${{ matrix.platform }}-${{ matrix.arch }}
           path: release-publish/*
           if-no-files-found: error
+          compression-level: 0
 
   release:
     name: Publish GitHub Release
@@ -348,6 +401,35 @@ jobs:
       - name: List release assets
         run: ls -lah release-assets/
 
+      - name: Verify release asset set
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          required_runtime_targets=(mac-arm64 mac-x64 linux-x64 win-x64)
+          for target in "${required_runtime_targets[@]}"; do
+            archive="release-assets/tabs-code-runtime-${RELEASE_VERSION}-${target}.zip"
+            checksum="${archive}.sha256"
+            test -s "$archive"
+            test -s "$checksum"
+          done
+
+          (
+            cd release-assets
+            sha256sum --check tabs-code-runtime-*.zip.sha256
+          )
+
+          shopt -s nullglob
+          dmgs=(release-assets/*.dmg)
+          appimages=(release-assets/*.AppImage)
+          installers=(release-assets/*.exe)
+          if (( ${#dmgs[@]} != 2 || ${#appimages[@]} != 1 || ${#installers[@]} != 1 )); then
+            echo "::error::Expected 2 DMGs, 1 AppImage, and 1 Windows installer; found ${#dmgs[@]}, ${#appimages[@]}, and ${#installers[@]}."
+            exit 1
+          fi
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -363,5 +445,7 @@ jobs:
             release-assets/*.AppImage.blockmap
             release-assets/*.exe
             release-assets/*.exe.blockmap
+            release-assets/tabs-code-runtime-*.zip
+            release-assets/tabs-code-runtime-*.zip.sha256
             release-assets/latest.yml
             release-assets/latest-linux.yml

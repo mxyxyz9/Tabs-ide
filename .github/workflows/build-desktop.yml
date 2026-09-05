@@ -100,13 +100,15 @@ jobs:
         run: |
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
-          # Target the Electron that RUNS these modules at runtime (Tabs'
-          # Electron 40, apps/desktop/package.json) — not tabs-code-main's dev
-          # electron (39.8.3). The Code-OSS server runs via ELECTRON_RUN_AS_NODE
+          # Target the Electron that RUNS these modules at runtime (from Tabs'
+          # desktop package) — not tabs-code-main's development Electron. The
+          # Code-OSS server runs via ELECTRON_RUN_AS_NODE
           # on Tabs' Electron, so native modules must match its ABI.
           # `--arch` cross-builds x64 natives for the mac-x64 artifact on the
           # arm64 macos-14 runner.
-          npx --yes @electron/rebuild -v 40.6.0 --arch ${{ matrix.arch }}
+          electron_version="$(node -p "require('../tabs-main/apps/desktop/package.json').devDependencies.electron")"
+          echo "Rebuilding Code-OSS native modules for Tabs Electron $electron_version"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}"
 
       - name: Compile VS Code workbench
         working-directory: tabs-code-main
@@ -168,10 +170,11 @@ jobs:
           done
 
           # git's native fs helper (@vscode/fs-copyfile) must be built AND match
-          # Tabs' Electron 40 ABI (the Code-OSS server runs under
+          # Tabs' current Electron ABI (the Code-OSS server runs under
           # ELECTRON_RUN_AS_NODE), else git throws "Cannot find module
           # .../build/Release/vscode_fs.node" and cascades to dependents.
-          npx --yes @electron/rebuild -v 40.6.0 --arch "${{ matrix.arch }}" \
+          electron_version="$(node -p "require('../tabs-main/apps/desktop/package.json').devDependencies.electron")"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" \
             --module-dir "$(pwd)/extensions/git" --only @vscode/fs-copyfile
 
           # Compile every PRODUCT built-in extension to extensions/<ext>/out (and
