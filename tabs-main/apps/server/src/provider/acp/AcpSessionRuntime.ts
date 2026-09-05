@@ -96,6 +96,11 @@ export interface AcpSessionRuntimeStartResult {
 }
 
 export interface AcpSessionRuntimeShape {
+  /** Initialize and inspect the ACP agent without authenticating or creating a session. */
+  readonly initialize: () => Effect.Effect<
+    EffectAcpSchema.InitializeResponse,
+    EffectAcpErrors.AcpError
+  >;
   readonly handleRequestPermission: EffectAcpClient.AcpClientShape["handleRequestPermission"];
   readonly handleElicitation: EffectAcpClient.AcpClientShape["handleElicitation"];
   readonly handleReadTextFile: EffectAcpClient.AcpClientShape["handleReadTextFile"];
@@ -417,18 +422,22 @@ const makeAcpSessionRuntime = (
         ),
       );
 
-    const startOnce = Effect.gen(function* () {
+    const initialize = () => {
       const initializePayload = {
         protocolVersion: 1,
         clientCapabilities: initializeClientCapabilities,
         clientInfo: options.clientInfo,
       } satisfies EffectAcpSchema.InitializeRequest;
 
-      const initializeResult = yield* runLoggedRequest(
+      return runLoggedRequest(
         "initialize",
         initializePayload,
         acp.agent.initialize(initializePayload),
       );
+    };
+
+    const startOnce = Effect.gen(function* () {
+      const initializeResult = yield* initialize();
 
       const authenticationMethod = resolveAcpAuthenticationMethod(
         initializeResult,
@@ -536,6 +545,7 @@ const makeAcpSessionRuntime = (
     });
 
     return {
+      initialize,
       handleRequestPermission: acp.handleRequestPermission,
       handleElicitation: acp.handleElicitation,
       handleReadTextFile: acp.handleReadTextFile,

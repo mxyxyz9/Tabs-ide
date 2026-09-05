@@ -44,7 +44,8 @@
     "pdfjs-dist": "^5.4.624",
     "playwright": "^1.61.1",
     "typescript": "catalog:",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
@@ -55,6 +56,7 @@
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "^8.5.13",
+    "@types/yauzl": "^3.4.0",
     "tsdown": "catalog:",
     "vitest": "catalog:"
   },

@@ -44,6 +44,7 @@ import * as PreviewManager from "./preview/Manager.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
+import { AntigravityInstallation } from "./provider/AntigravityInstallation.ts";
 
 type RuntimePtyAdapterLoader = {
   layer: Layer.Layer<PtyAdapter, never, FileSystem.FileSystem | Path.Path>;
@@ -79,6 +80,7 @@ const makeRuntimePtyAdapterLayer = () =>
 // ServerSettingsService) which the outer composition supplies.
 export function makeProviderInstanceRegistryLayer() {
   return ProviderInstanceRegistryHydrationLive.pipe(
+    Layer.provideMerge(AntigravityInstallation.layer),
     Layer.provideMerge(ProviderEventLoggersLive),
     Layer.provideMerge(OpenCodeRuntimeLive),
     Layer.provideMerge(FetchHttpClient.layer),
@@ -172,7 +174,7 @@ export function makeServerRuntimeServicesLayer() {
     PreviewAutomationBroker.layer,
     EnvironmentTheme.layer,
     TraceDiagnostics.layer,
-  );
+  ).pipe(Layer.provideMerge(AntigravityInstallation.layer));
 }
 
 /** Stable environment identity plus the persisted pairing/session authority used by remote clients. */

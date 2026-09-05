@@ -23,6 +23,7 @@ import {
 import { buildServerProvider } from "../providerSnapshot";
 import { makeProviderMaintenanceCapabilities } from "../providerMaintenance";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment";
+import { AntigravityInstallation } from "../AntigravityInstallation";
 
 const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
 
@@ -67,6 +68,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const serverConfig = yield* ServerConfig;
+      const installation = yield* Effect.serviceOption(AntigravityInstallation);
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
@@ -78,7 +80,18 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         accentColor,
         continuationGroupKey: continuationIdentity.continuationKey,
       });
-      const effectiveConfig = { ...config, enabled } satisfies AntigravitySettings;
+      const configuredBinaryPath = config.binaryPath?.trim();
+      const managedExecutable =
+        configuredBinaryPath || installation._tag === "None"
+          ? null
+          : yield* installation.value.resolve(undefined, processEnv).pipe(Effect.option);
+      const nativeBinaryPath =
+        managedExecutable?._tag === "Some" ? managedExecutable.value.executablePath : undefined;
+      const effectiveConfig = {
+        ...config,
+        enabled,
+        ...(nativeBinaryPath ? { binaryPath: nativeBinaryPath } : {}),
+      } satisfies AntigravitySettings;
       const usesNativeAcp = isNativeAntigravityAcpBinary(effectiveConfig.binaryPath);
       const maintenanceCapabilities = makeProviderMaintenanceCapabilities({
         provider: DRIVER_KIND,

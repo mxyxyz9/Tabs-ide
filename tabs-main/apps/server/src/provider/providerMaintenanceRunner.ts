@@ -25,6 +25,7 @@ import { makeProviderMaintenanceCommandCoordinator } from "./providerMaintenance
 import { enrichProviderSnapshotWithVersionAdvisory } from "./providerMaintenance";
 import type { ProviderMaintenanceCapabilities } from "./providerMaintenance";
 import { collectUint8StreamText } from "../stream/collectUint8StreamText";
+import { AntigravityInstallation } from "./AntigravityInstallation";
 const isServerProviderUpdateError = Schema.is(ServerProviderUpdateError);
 
 const UPDATE_TIMEOUT_MS = 5 * 60_000;
@@ -238,6 +239,7 @@ function makeUpdateState(input: {
 
 export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
   const providerRegistry = yield* ProviderRegistry;
+  const antigravityInstallation = yield* Effect.serviceOption(AntigravityInstallation);
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const httpClient = yield* HttpClient.HttpClient;
   const runMaintenanceCommand = (command: string, args: ReadonlyArray<string>) =>
@@ -464,8 +466,9 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
       typeof target === "string"
         ? defaultInstanceIdForDriver(provider)
         : (target.instanceId ?? defaultInstanceIdForDriver(provider));
+    const managedAntigravity = (provider as unknown as string) === "antigravity";
     const command = resolveInstallCommand(provider);
-    if (!command) {
+    if (!managedAntigravity && !command) {
       return yield* new ServerProviderUpdateError({
         provider,
         reason: "This provider does not support one-click install.",
@@ -507,7 +510,36 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
               }),
             );
 
-            const result = yield* runMaintenanceCommand(command.executable, command.args);
+            if (managedAntigravity) {
+              if (antigravityInstallation._tag === "None") {
+                return yield* new ServerProviderUpdateError({
+                  provider,
+                  reason: "The managed Antigravity installer is unavailable in this environment.",
+                });
+              }
+              const installedState = yield* antigravityInstallation.value.start;
+              const providers = yield* providerRegistry.refreshInstance(instanceId);
+              const installed =
+                installedState.phase === "succeeded" &&
+                providers.some(
+                  (candidate) =>
+                    candidate.driver === provider &&
+                    candidate.instanceId === instanceId &&
+                    candidate.installed,
+                );
+              return yield* finish(
+                makeUpdateState({
+                  status: installed ? "succeeded" : "unchanged",
+                  startedAt,
+                  finishedAt: yield* nowIso,
+                  message: installed
+                    ? `Antigravity ACP ${installedState.installedVersion ?? "runtime"} installed and verified.`
+                    : "The managed runtime was installed, but Tabs could not activate it for this provider instance.",
+                }),
+              );
+            }
+
+            const result = yield* runMaintenanceCommand(command!.executable, command!.args);
             const finishedAt = yield* nowIso;
             if (result.timedOut || result.exitCode !== 0) {
               return yield* finish(
@@ -567,7 +599,7 @@ export const make = Effect.fn("ProviderMaintenanceRunner.make")(function* () {
     return yield* commandCoordinator
       .withCommandLock({
         targetKey,
-        lockKey: command.lockKey,
+        lockKey: managedAntigravity ? "antigravity-managed-runtime" : command!.lockKey,
         onQueued: setQueuedState,
         run: runProviderInstall(),
       })
