@@ -78,7 +78,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.2",
-    "@vitest/browser-playwright": "^4.1.8",
+    "@vitest/browser-playwright": "4.1.9",
     "babel-plugin-react-compiler": "^19.0.0-beta-e552027-20250112",
     "msw": "^2.14.6",
     "playwright": "^1.60.0",

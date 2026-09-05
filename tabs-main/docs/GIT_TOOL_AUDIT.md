@@ -56,7 +56,10 @@ The current Tabs implementation is therefore a strong base. Its provider-neutral
 3. **Accessible navigation and actions — completed.** The source-control rail uses linked
    tab/tabpanel semantics with roving keyboard focus, segmented views expose selection state, and
    icon-only Git actions have contextual accessible names and toggle state where applicable.
-4. Add panel interaction tests for error, loading, remote-environment routing, destructive confirmations, authentication failure, and PR state transitions.
+4. **Panel interaction coverage — in progress.** Browser tests now exercise loading/setup gates,
+   destructive discard and force-push confirmations, and unsuccessful authentication staying open.
+   Error-boundary recovery, complete remote-environment interaction routing, and PR state
+   transitions still need browser-level coverage.
 5. **Provider capability gating — completed for GitHub and GitLab.** The server declares diff, creation, action, verdict, and merge-method support; the renderer hides unsupported controls, and the manager rejects unsupported mutations independently.
 
 ## Recommended port strategy

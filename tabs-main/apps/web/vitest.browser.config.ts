@@ -6,24 +6,28 @@ import viteConfig from "./vite.config";
 
 const srcPath = fileURLToPath(new URL("./src", import.meta.url));
 
-export default mergeConfig(
-  viteConfig,
-  defineConfig({
-    resolve: {
-      alias: {
-        "~": srcPath,
+export default defineConfig(async (env) => {
+  const resolvedViteConfig = await viteConfig(env);
+
+  return mergeConfig(
+    resolvedViteConfig,
+    defineConfig({
+      resolve: {
+        alias: {
+          "~": srcPath,
+        },
       },
-    },
-    test: {
-      include: ["src/components/**/*.browser.tsx"],
-      browser: {
-        enabled: true,
-        provider: playwright(),
-        instances: [{ browser: "chromium" }],
-        headless: true,
+      test: {
+        include: ["src/components/**/*.browser.tsx"],
+        browser: {
+          enabled: true,
+          provider: playwright(),
+          instances: [{ browser: "chromium" }],
+          headless: true,
+        },
+        testTimeout: 30_000,
+        hookTimeout: 30_000,
       },
-      testTimeout: 30_000,
-      hookTimeout: 30_000,
-    },
-  }),
-);
+    }),
+  );
+});
