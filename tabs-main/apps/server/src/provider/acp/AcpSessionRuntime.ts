@@ -35,6 +35,7 @@ export interface AcpSpawnInput {
   readonly args: ReadonlyArray<string>;
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
+  readonly extendEnv?: boolean;
 }
 
 export interface AcpSessionRuntimeOptions {
@@ -47,6 +48,9 @@ export interface AcpSessionRuntimeOptions {
     readonly version: string;
   };
   readonly authMethodId: string;
+  readonly transformStdout?: EffectAcpClient.AcpClientOptions["transformStdout"];
+  /** Receives bounded stderr chunks. A handler failure terminates the ACP process. */
+  readonly onStderr?: (text: string) => Effect.Effect<void, EffectAcpErrors.AcpError>;
   readonly requestLogger?: (event: AcpSessionRequestLogEvent) => Effect.Effect<void, never>;
   readonly protocolLogging?: {
     readonly logIncoming?: boolean;
@@ -183,6 +187,7 @@ const makeAcpSessionRuntime = (
     const assistantSegmentRef = yield* Ref.make<AcpAssistantSegmentState>({ nextSegmentIndex: 0 });
     const configOptionsRef = yield* Ref.make(sessionConfigOptionsFromSetup(undefined));
     const startStateRef = yield* Ref.make<AcpStartState>({ _tag: "NotStarted" });
+    const stderrFailure = yield* Deferred.make<never, EffectAcpErrors.AcpError>();
 
     const logRequest = (event: AcpSessionRequestLogEvent) =>
       options.requestLogger ? options.requestLogger(event) : Effect.void;
@@ -194,7 +199,10 @@ const makeAcpSessionRuntime = (
     ): Effect.Effect<A, EffectAcpErrors.AcpError> =>
       logRequest({ method, payload, status: "started" }).pipe(
         Effect.flatMap(() =>
-          effect.pipe(
+          (options.onStderr
+            ? Effect.raceFirst(effect, Deferred.await(stderrFailure))
+            : effect
+          ).pipe(
             Effect.tap((result) =>
               logRequest({
                 method,
@@ -219,7 +227,14 @@ const makeAcpSessionRuntime = (
       .spawn(
         ChildProcess.make(options.spawn.command, [...options.spawn.args], {
           ...(options.spawn.cwd ? { cwd: options.spawn.cwd } : {}),
-          ...(options.spawn.env ? { env: { ...process.env, ...options.spawn.env } } : {}),
+          ...(options.spawn.env
+            ? {
+                env:
+                  options.spawn.extendEnv === false
+                    ? options.spawn.env
+                    : { ...process.env, ...options.spawn.env },
+              }
+            : {}),
           shell: process.platform === "win32",
         }),
       )
@@ -234,8 +249,24 @@ const makeAcpSessionRuntime = (
         ),
       );
 
+    yield* child.stderr.pipe(
+      Stream.decodeText(),
+      Stream.runForEach((chunk) =>
+        (options.onStderr ? options.onStderr(chunk.slice(-32_768)) : Effect.void).pipe(
+          Effect.catch((error) =>
+            Deferred.fail(stderrFailure, error).pipe(
+              Effect.andThen(child.kill({ forceKillAfter: "1 second" }).pipe(Effect.ignore)),
+            ),
+          ),
+        ),
+      ),
+      Effect.ignore,
+      Effect.forkIn(runtimeScope),
+    );
+
     const acpContext = yield* Layer.build(
       EffectAcpClient.layerChildProcess(child, {
+        ...(options.transformStdout ? { transformStdout: options.transformStdout } : {}),
         ...(options.protocolLogging?.logIncoming !== undefined
           ? { logIncoming: options.protocolLogging.logIncoming }
           : {}),

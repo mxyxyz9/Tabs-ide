@@ -26,6 +26,10 @@ export interface AcpClientOptions {
   readonly logIncoming?: boolean;
   readonly logOutgoing?: boolean;
   readonly logger?: (event: AcpProtocol.AcpProtocolLogEvent) => Effect.Effect<void, never>;
+  /** Transforms child stdout before protocol parsing and protocol logging. */
+  readonly transformStdout?: (
+    stdout: ChildProcessSpawner.ChildProcessHandle["stdout"],
+  ) => Stdio.Stdio["stdin"];
 }
 
 type AcpClientRaw = {
@@ -563,7 +567,10 @@ export const layerChildProcess = (
   handle: ChildProcessSpawner.ChildProcessHandle,
   options: AcpClientOptions = {},
 ): Layer.Layer<AcpClient> => {
-  const stdio = makeChildStdio(handle);
+  const stdio = {
+    ...makeChildStdio(handle),
+    stdin: options.transformStdout?.(handle.stdout) ?? handle.stdout,
+  };
   const terminationError = makeTerminationError(handle);
   return Layer.effect(AcpClient, make(stdio, options, terminationError));
 };

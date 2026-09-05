@@ -16,6 +16,7 @@ import {
   type AcpSessionRequestLogEvent,
 } from "./AcpSessionRuntime";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
+import * as EffectAcpErrors from "effect-acp/errors";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const mockAgentPath = path.join(__dirname, "../../../scripts/acp-mock-agent.ts");
@@ -92,6 +93,81 @@ describe("AcpSessionRuntime", () => {
       Effect.provide(NodeServices.layer),
     );
   });
+
+  it.effect("surfaces stderr handler failures to an active startup request", () =>
+    Effect.gen(function* () {
+      const runtime = yield* AcpSessionRuntime;
+      expect(yield* runtime.start().pipe(Effect.flip)).toMatchObject({
+        _tag: "AcpTransportError",
+        detail: "Sign in before continuing.",
+      });
+    }).pipe(
+      Effect.provide(
+        AcpSessionRuntime.layer({
+          spawn: {
+            command: mockAgentCommand,
+            args: mockAgentArgs,
+            env: { T3_ACP_STDERR_FAILURE: "authentication required" },
+          },
+          cwd: process.cwd(),
+          clientInfo: { name: "tabs-test", version: "0.0.0" },
+          authMethodId: "test",
+          onStderr: (text) =>
+            text.includes("authentication required")
+              ? Effect.fail(
+                  new EffectAcpErrors.AcpTransportError({
+                    detail: "Sign in before continuing.",
+                    cause: undefined,
+                  }),
+                )
+              : Effect.void,
+        }),
+      ),
+      Effect.scoped,
+      Effect.provide(NodeServices.layer),
+    ),
+  );
+
+  it.effect("can launch an ACP process with a sanitized environment", () =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const previous = process.env.T3_ACP_RUNTIME_AMBIENT;
+        process.env.T3_ACP_RUNTIME_AMBIENT = "sentinel";
+        return previous;
+      }),
+      () =>
+        Effect.gen(function* () {
+          const runtime = yield* AcpSessionRuntime;
+          yield* runtime.start();
+          expect(yield* runtime.request("_test/environment", {})).toEqual({
+            inherited: false,
+            explicit: true,
+          });
+        }).pipe(
+          Effect.provide(
+            AcpSessionRuntime.layer({
+              spawn: {
+                command: mockAgentCommand,
+                args: mockAgentArgs,
+                extendEnv: false,
+                env: {
+                  PATH: process.env.PATH,
+                  T3_ACP_RUNTIME_EXPLICIT: "kept",
+                },
+              },
+              cwd: process.cwd(),
+              clientInfo: { name: "tabs-test", version: "0.0.0" },
+              authMethodId: "test",
+            }),
+          ),
+        ),
+      (previous) =>
+        Effect.sync(() => {
+          if (previous === undefined) delete process.env.T3_ACP_RUNTIME_AMBIENT;
+          else process.env.T3_ACP_RUNTIME_AMBIENT = previous;
+        }),
+    ).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
 
   it.effect("starts a session, prompts, and emits normalized events against the mock agent", () =>
     Effect.gen(function* () {

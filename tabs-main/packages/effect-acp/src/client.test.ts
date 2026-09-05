@@ -153,6 +153,34 @@ describe.skipIf(!fixtureExists)("effect-acp client", () => {
       }),
     );
 
+    it.effect("applies a stdout transform before parsing protocol messages", () =>
+      Effect.gen(function* () {
+        let transformed = false;
+        const handle = yield* makeHandle();
+        const scope = yield* Scope.make();
+        const context = yield* Layer.buildWithScope(
+          AcpClient.layerChildProcess(handle, {
+            transformStdout: (stdout) => {
+              transformed = true;
+              return stdout;
+            },
+          }),
+          scope,
+        );
+
+        yield* Effect.gen(function* () {
+          const acp = yield* AcpClient.AcpClient;
+          const initialized = yield* acp.agent.initialize({
+            protocolVersion: 1,
+            clientCapabilities: {},
+          });
+          assert.equal(initialized.protocolVersion, 1);
+        }).pipe(Effect.provide(context), Effect.ensuring(Scope.close(scope, Exit.void)));
+
+        assert.equal(transformed, true);
+      }),
+    );
+
     it.effect(
       "returns formatted invalid params when a typed extension request payload is wrong",
       () =>
