@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from "vitest/config";
+import { configDefaults, defineConfig, mergeConfig } from "vitest/config";
 
 import baseConfig from "../../vitest.config";
 
@@ -7,6 +7,7 @@ export default mergeConfig(
   defineConfig({
     test: {
       setupFiles: ["./vitest.setup.ts"],
+      exclude: [...configDefaults.exclude, "_incomplete-synara-port/**"],
       testTimeout: 15_000,
       hookTimeout: 15_000,
       // The ACP integration tests spawn mock-agent child processes. During

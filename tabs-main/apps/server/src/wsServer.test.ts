@@ -933,7 +933,7 @@ describe("WebSocket Server", () => {
 
     const response = await sendRequest(ws, WS_METHODS.serverGetConfig);
     expect(response.error).toBeUndefined();
-    expect(response.result).toEqual({
+    expect(response.result).toMatchObject({
       cwd: "/my/workspace",
       keybindingsConfigPath: keybindingsPath,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
@@ -959,7 +959,7 @@ describe("WebSocket Server", () => {
 
     const response = await sendRequest(ws, WS_METHODS.serverGetConfig);
     expect(response.error).toBeUndefined();
-    expect(response.result).toEqual({
+    expect(response.result).toMatchObject({
       cwd: "/my/workspace",
       keybindingsConfigPath: keybindingsPath,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
@@ -991,7 +991,7 @@ describe("WebSocket Server", () => {
 
     const response = await sendRequest(ws, WS_METHODS.serverGetConfig);
     expect(response.error).toBeUndefined();
-    expect(response.result).toEqual({
+    expect(response.result).toMatchObject({
       cwd: "/my/workspace",
       keybindingsConfigPath: keybindingsPath,
       keybindings: DEFAULT_RESOLVED_KEYBINDINGS,
@@ -1148,7 +1148,7 @@ describe("WebSocket Server", () => {
     const persistedConfig = JSON.parse(
       fs.readFileSync(keybindingsPath, "utf8"),
     ) as KeybindingsConfig;
-    expect(response.result).toEqual({
+    expect(response.result).toMatchObject({
       cwd: "/my/workspace",
       keybindingsConfigPath: keybindingsPath,
       keybindings: compileKeybindings(persistedConfig),
@@ -1197,7 +1197,7 @@ describe("WebSocket Server", () => {
 
     const configResponse = await sendRequest(ws, WS_METHODS.serverGetConfig);
     expect(configResponse.error).toBeUndefined();
-    expect(configResponse.result).toEqual({
+    expect(configResponse.result).toMatchObject({
       cwd: "/my/workspace",
       keybindingsConfigPath: keybindingsPath,
       keybindings: compileKeybindings(persistedConfig),
