@@ -1,10 +1,9 @@
 import type { DesktopSshPasswordPromptRequest } from "@tabs/contracts";
 import { type ReactNode, useEffect, useState } from "react";
-import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
-import { SettingsSection, SettingsHeaderPortal } from "~/routes/_chat.settings";
+import { SettingsSection } from "~/routes/_chat.settings";
 import { toastManager } from "~/components/ui/toast";
 import { useConfirm } from "~/hooks/useConfirm";
 import { useTheme } from "~/hooks/useTheme";
@@ -19,7 +18,6 @@ import {
   ChevronRightIcon,
   TerminalIcon,
   PlusIcon,
-  RotateCcwIcon,
   Trash2Icon,
   LoaderCircleIcon,
 } from "lucide-react";
@@ -61,7 +59,6 @@ export function ConnectionsSettings() {
   const { confirm, confirmDialog } = useConfirm();
   const { fontPreferences } = useTheme();
   const activeFontCombo = getActiveFontCombo(fontPreferences);
-  const [networkAccess, setNetworkAccess] = useState(false);
   const [tailscaleStatus, setTailscaleStatus] = useState<TailscaleStatus>({
     available: false,
     running: false,
@@ -90,12 +87,6 @@ export function ConnectionsSettings() {
     readonly DesktopSshPasswordPromptRequest[]
   >([]);
   const [sshPassword, setSshPassword] = useState("");
-
-  // Initialize network access toggle
-  useEffect(() => {
-    const val = localStorage.getItem("networkAccessEnabled");
-    setNetworkAccess(val === "true");
-  }, []);
 
   // Load Tailscale status
   useEffect(() => {
@@ -161,12 +152,6 @@ export function ConnectionsSettings() {
       });
   };
 
-  const handleNetworkAccessChange = (checked: boolean) => {
-    if (!isDesktop) return;
-    setNetworkAccess(checked);
-    localStorage.setItem("networkAccessEnabled", String(checked));
-  };
-
   const openUrl = (url: string) => {
     if (typeof window !== "undefined" && window.desktopBridge) {
       window.desktopBridge.openExternal(url);
@@ -211,14 +196,6 @@ export function ConnectionsSettings() {
       setIsSavingConnection(false);
     }
   };
-
-  const toggleSwitch = (
-    <Switch
-      checked={networkAccess}
-      onCheckedChange={handleNetworkAccessChange}
-      disabled={!isDesktop}
-    />
-  );
 
   const isTailscaleReady = tailscaleStatus.available && tailscaleStatus.running;
 
@@ -311,61 +288,7 @@ export function ConnectionsSettings() {
         />
       </div>
 
-      <SettingsSection
-        title="This Environment"
-        headerAction={
-          <SettingsHeaderPortal>
-            <Button
-              size="xs"
-              variant="outline"
-              className="no-drag"
-              onClick={async () => {
-                const confirmed = await confirm(
-                  "Restore default settings?\n\nThis will reset: Network Access.",
-                );
-                if (confirmed) {
-                  setNetworkAccess(false);
-                  localStorage.setItem("networkAccessEnabled", "false");
-                }
-              }}
-            >
-              <RotateCcwIcon className="size-3.5 mr-1" />
-              Restore defaults
-            </Button>
-          </SettingsHeaderPortal>
-        }
-      >
-        {/* Network Access Row */}
-        <div className="border-t border-border/60 px-4 py-4 first:border-t-0 sm:px-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="relative inline-flex size-5 shrink-0 items-center justify-center">
-                  <MonitorIcon className="size-4.5 text-foreground/80" />
-                </span>
-                <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground">
-                  Network Access
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground/80 leading-relaxed max-w-xl">
-                {networkAccess
-                  ? "Environment is visible to other devices on your local network."
-                  : "Limited to this machine."}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              {!isDesktop ? (
-                <Tooltip>
-                  <TooltipTrigger render={toggleSwitch} />
-                  <TooltipPopup side="top">Only available on desktop</TooltipPopup>
-                </Tooltip>
-              ) : (
-                toggleSwitch
-              )}
-            </div>
-          </div>
-        </div>
-
+      <SettingsSection title="This Environment">
         {/* Tailscale Row */}
         <div className="border-t border-border/60 px-4 py-4 first:border-t-0 sm:px-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
