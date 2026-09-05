@@ -101,18 +101,19 @@ jobs:
         run: |
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
-          if [ -d "node_modules/cpu-features" ]; then
-            (cd node_modules/cpu-features && node buildcheck.js > buildcheck.gypi)
-          fi
+          # Remove cpu-features (optional dependency of ssh2) which fails to compile
+          # against modern Electron/V8 due to nan pointer tagging deprecation.
+          rm -rf node_modules/cpu-features
           # Target the Electron that RUNS these modules at runtime (from Tabs'
           # desktop package) — not tabs-code-main's development Electron. The
           # Code-OSS server runs via ELECTRON_RUN_AS_NODE
           # on Tabs' Electron, so native modules must match its ABI.
           # `--arch` cross-builds x64 natives for the mac-x64 artifact on the
           # arm64 macos-14 runner.
+          # `--types prod` skips dev and optional dependencies (such as cpu-features).
           electron_version="$(node -p "const p = require('../tabs-main/apps/desktop/package.json'); (p.dependencies && p.dependencies.electron) || (p.devDependencies && p.devDependencies.electron)")"
           echo "Rebuilding Code-OSS native modules for Tabs Electron $electron_version"
-          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" --types prod
 
       - name: Compile VS Code workbench
         working-directory: tabs-code-main

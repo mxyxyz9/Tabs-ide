@@ -160,12 +160,9 @@ jobs:
           npm install --ignore-scripts
           cd build && npm install --ignore-scripts && cd ..
 
-          # Generate buildcheck.gypi for cpu-features if present.
-          # Because --ignore-scripts skips lifecycle scripts, cpu-features
-          # lacks buildcheck.gypi which node-gyp / electron-rebuild requires.
-          if [ -d "node_modules/cpu-features" ]; then
-            (cd node_modules/cpu-features && node buildcheck.js > buildcheck.gypi)
-          fi
+          # Remove cpu-features (optional dependency of ssh2) which fails to compile
+          # against modern Electron/V8 due to nan pointer tagging deprecation.
+          rm -rf node_modules/cpu-features
 
           # Rebuild native modules against Electron headers (~5-10 min).
           # @electron/rebuild handles header downloading + cross-platform
@@ -182,9 +179,10 @@ jobs:
           # `--arch` matters: macos-14 is arm64, so the mac-x64 artifact must
           # cross-build x64 natives here, otherwise the x64 DMG ships arm64
           # binaries that won't load on Intel Macs.
+          # `--types prod` skips dev and optional dependencies (such as cpu-features).
           electron_version="$(node -p "const p = require('../tabs-main/apps/desktop/package.json'); (p.dependencies && p.dependencies.electron) || (p.devDependencies && p.devDependencies.electron)")"
           echo "Rebuilding Code-OSS native modules for Tabs Electron $electron_version"
-          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}"
+          npx --yes @electron/rebuild -v "$electron_version" --arch "${{ matrix.arch }}" --types prod
 
       - name: Compile VS Code workbench
         working-directory: tabs-code-main
