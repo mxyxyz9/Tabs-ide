@@ -776,7 +776,9 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // Electron's asar layer does NOT patch `cpSync`, so a source path inside
     // `app.asar` silently fails with ENOENT. The unpacked copy lands at
     // `app.asar.unpacked/apps/desktop/prod-resources/…` where cpSync works.
-    asarUnpack: ["apps/desktop/prod-resources/code-oss-extensions/tabs-workbench-integration/**"],
+    // Code-OSS loads extensions through original-fs, which cannot traverse app.asar.
+    // Keep every bundled Tabs integration extension on the real filesystem.
+    asarUnpack: ["apps/desktop/prod-resources/code-oss-extensions/**"],
     // Thin builds ship without the VS Code runtime (it's downloaded on first
     // run from the emitted tabs-code-runtime-*.zip asset).
     extraFiles: thin
@@ -1345,6 +1347,8 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     [
       "node_modules/@clerk/electron/dist/cjs/storage/index.js",
       "node_modules/electron-store/index.js",
+      "apps/desktop/prod-resources/code-oss-extensions/tabs-embed-defaults/package.json",
+      "apps/desktop/prod-resources/code-oss-extensions/tabs-workbench-integration/package.json",
     ],
     "Staged desktop runtime",
   );
