@@ -439,7 +439,11 @@ function resolveDesktopRuntimeDependencies(
   }
 
   const runtimeDependencies = Object.fromEntries(
-    Object.entries(dependencies).filter(([dependencyName]) => dependencyName !== "electron"),
+    Object.entries(dependencies).filter(
+      ([dependencyName, spec]) =>
+        dependencyName !== "electron" &&
+        (typeof spec !== "string" || !spec.startsWith("workspace:")),
+    ),
   );
 
   return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/desktop");
@@ -1331,6 +1335,18 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       // Windows needs shell mode to resolve .cmd shims (e.g. bun.cmd).
       shell: process.platform === "win32",
     })`bun install --production`,
+  );
+
+  // Clerk loads electron-store dynamically from its CommonJS storage entry.
+  // Validate the isolated release tree before electron-builder packs it so a
+  // missing transitive dependency cannot become a main-process launch crash.
+  yield* assertRequiredPaths(
+    stageAppDir,
+    [
+      "node_modules/@clerk/electron/dist/cjs/storage/index.js",
+      "node_modules/electron-store/index.js",
+    ],
+    "Staged desktop runtime",
   );
 
   const buildEnv: NodeJS.ProcessEnv = {
