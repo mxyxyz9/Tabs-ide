@@ -1,6 +1,6 @@
 import { RegistryContext } from "@effect/atom-react";
 import { AtomRegistry } from "@tabs/client-runtime/state";
-import { createElement, type PropsWithChildren } from "react";
+import { createElement, type PropsWithChildren, type ReactElement } from "react";
 
 /**
  * The renderer has one registry for its lifetime so socket callbacks and React
@@ -8,7 +8,7 @@ import { createElement, type PropsWithChildren } from "react";
  */
 export let appAtomRegistry = AtomRegistry.make();
 
-export function AppAtomRegistryProvider({ children }: PropsWithChildren) {
+export function AppAtomRegistryProvider({ children }: PropsWithChildren): ReactElement {
   return createElement(RegistryContext.Provider, { value: appAtomRegistry }, children);
 }
 
