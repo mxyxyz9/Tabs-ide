@@ -623,6 +623,7 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
   readonly arch: typeof BuildArch.Type;
   readonly verbose: boolean;
   readonly thin: boolean;
+  readonly signed: boolean;
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -662,9 +663,9 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     })`ditto ${packagedAppPath} ${path.join(dmgRoot, `${input.productName}.app`)}`,
   );
 
-  // electron-builder can drop `node_modules` from the `extraFiles` copy of
-  // tabs-code-main. Restore native service and extension dependencies before
-  // validating and assembling the DMG.
+  // The afterPack hook restores `node_modules` before electron-builder signs
+  // the app. Keep this fallback for unsigned local builds, where repairing the
+  // bundle here and applying a fresh ad-hoc signature is safe.
   const codeOssAppDir = path.join(
     dmgRoot,
     `${input.productName}.app`,
@@ -673,7 +674,12 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     "tabs-code-main",
   );
   const codeOssNodeModules = path.join(codeOssAppDir, "node_modules");
-  if (!input.thin && (yield* fs.exists(codeOssAppDir)) && !(yield* fs.exists(codeOssNodeModules))) {
+  if (
+    !input.signed &&
+    !input.thin &&
+    (yield* fs.exists(codeOssAppDir)) &&
+    !(yield* fs.exists(codeOssNodeModules))
+  ) {
     const stageAppDir = path.dirname(input.stageDistDir);
     const stagedNodeModules = path.join(
       stageAppDir,
@@ -695,15 +701,12 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     }
   }
 
-  // Ad-hoc codesign the assembled app. We modify the bundle after
-  // electron-builder runs (injecting node_modules above), which invalidates any
-  // existing signature; combined with no Developer ID, the unsigned build is
-  // reported by Gatekeeper on Apple Silicon as "damaged and can't be opened".
-  // A deep ad-hoc signature applied as the final step makes the bundle
-  // launchable. Without a Developer ID we cannot notarize, so users still clear
-  // quarantine on first launch (right-click -> Open, or `xattr -cr`).
+  // Unsigned builds need a final ad-hoc signature after the fallback repair.
+  // Signed releases must retain electron-builder's Developer ID signature:
+  // replacing it here changes the app identity seen by macOS Keychain and makes
+  // users enter their login password to read "Tabs Safe Storage" on startup.
   const appPath = path.join(dmgRoot, `${input.productName}.app`);
-  if (yield* fs.exists(appPath)) {
+  if (!input.signed && (yield* fs.exists(appPath))) {
     yield* Effect.log("[desktop-artifact] Ad-hoc codesigning the app bundle (no Developer ID)...");
     yield* runCommand(
       ChildProcess.make({
@@ -715,6 +718,15 @@ const createMacDmgFromZip = Effect.fn("createMacDmgFromZip")(function* (input: {
     // bundle. Without this pause the subsequent `hdiutil create -srcfolder`
     // often fails with "Resource busy" on CI runners.
     yield* Effect.sleep(Duration.seconds(5));
+  }
+
+  if (input.signed && (yield* fs.exists(appPath))) {
+    yield* Effect.log("[desktop-artifact] Verifying preserved Developer ID signature...");
+    yield* runCommand(
+      ChildProcess.make({
+        ...commandOutputOptions(input.verbose),
+      })`codesign --verify --deep --strict ${appPath}`,
+    );
   }
 
   yield* assertRequiredPaths(
@@ -765,9 +777,9 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       buildResources: "apps/desktop/resources",
     },
     // Restore tabs-code-main/node_modules that electron-builder drops from the
-    // extraFiles copy (Windows/Linux installers). Without it the packaged
-    // Code-OSS server fails on `import minimist from 'minimist'`. macOS is
-    // handled separately in createMacDmgFromZip. No-op for thin builds.
+    // extraFiles copy before platform signing runs. Without it the packaged
+    // Code-OSS server fails on `import minimist from 'minimist'`. No-op for
+    // thin builds.
     // Only referenced when the hook was actually staged (see below) — otherwise
     // electron-builder would abort trying to resolve a missing module.
     ...(afterPackHook ? { afterPack: "./build/afterPack.cjs" } : {}),
@@ -1434,6 +1446,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       arch: options.arch,
       verbose: options.verbose,
       thin: effectiveThin,
+      signed: options.signed,
     });
   }
 

@@ -7,12 +7,13 @@
  * `tabs-code-main`, which removes dependencies used by native main-process
  * services and built-in extensions.
  *
- * This hook runs after the app directory is packed but before the installer
- * (nsis / AppImage / dmg) is assembled, and restores the runtime `node_modules`
- * into the packaged `resources/tabs-code-main`.
+ * This hook runs after the app directory is packed but before platform signing
+ * and installer assembly, and restores the runtime `node_modules` into the
+ * packaged `resources/tabs-code-main`.
  *
- * macOS is intentionally skipped here: its DMG is rebuilt from a verified ZIP
- * payload in `createMacDmgFromZip`, which performs the same restore.
+ * On macOS this must happen here, before electron-builder applies the Developer
+ * ID signature. Mutating and ad-hoc signing the app during DMG assembly changes
+ * its Keychain identity and triggers a login-password prompt on startup.
  */
 
 const fs = require("node:fs");
@@ -21,12 +22,11 @@ const path = require("node:path");
 /** @param {{ appOutDir: string, electronPlatformName: string, packager: any }} context */
 module.exports = async function afterPack(context) {
   const platform = context.electronPlatformName; // 'darwin' | 'win32' | 'linux' | 'mas'
-  if (platform === "darwin" || platform === "mas") {
-    return;
-  }
-
-  // Windows and Linux place app resources under `<appOutDir>/resources`.
-  const resourcesDir = path.join(context.appOutDir, "resources");
+  const productFilename = context.packager?.appInfo?.productFilename;
+  const resourcesDir =
+    platform === "darwin" || platform === "mas"
+      ? path.join(context.appOutDir, `${productFilename}.app`, "Contents", "Resources")
+      : path.join(context.appOutDir, "resources");
   const runtimeDir = path.join(resourcesDir, "tabs-code-main");
 
   // Thin builds (or any build without the bundled runtime) have no

@@ -47,6 +47,7 @@ export interface ProviderInstanceCapabilities {
   readonly logout: ProviderCapabilitySupport;
   readonly accountSwitch: ProviderCapabilitySupport;
   readonly installation: ProviderCapabilitySupport;
+  readonly testingMcpTools?: ProviderCapabilitySupport;
 }
 
 export type ProviderLifecycleActionKind = "login" | "logout" | "install" | "switch-account";
@@ -74,6 +75,7 @@ export function makeProviderInstanceCapabilities(
     logout: "unsupported",
     accountSwitch: "unsupported",
     installation: "unsupported",
+    testingMcpTools: "unsupported",
     ...overrides,
   };
 }

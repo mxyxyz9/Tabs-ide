@@ -100,6 +100,15 @@ interface StoredGenerationJobRow {
   readonly id: string;
   readonly project_id: string;
   readonly status: TestingGenerationJob["status"];
+  readonly engine: TestingGenerationJob["engine"];
+  readonly stage: TestingGenerationJob["stage"];
+  readonly parent_job_id: string | null;
+  readonly parent_run_id: string | null;
+  readonly attempt_count: number;
+  readonly validation_summary_json: string | null;
+  readonly immutable_artifact_paths_json: string | null;
+  readonly provider_provenance_json: string | null;
+  readonly usage_measured: number;
   readonly framework: "playwright-ts";
   readonly provider_instance_id: string;
   readonly model: string;
@@ -340,6 +349,15 @@ export class TestingGraphStore {
         status TEXT NOT NULL CHECK (
           status IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'budget-stopped')
         ),
+        engine TEXT NOT NULL DEFAULT 'standard',
+        stage TEXT NOT NULL DEFAULT 'planned',
+        parent_job_id TEXT,
+        parent_run_id TEXT,
+        attempt_count INTEGER NOT NULL DEFAULT 1,
+        validation_summary_json TEXT,
+        immutable_artifact_paths_json TEXT,
+        provider_provenance_json TEXT,
+        usage_measured INTEGER NOT NULL DEFAULT 0,
         framework TEXT NOT NULL,
         provider_instance_id TEXT NOT NULL DEFAULT 'codex',
         model TEXT NOT NULL DEFAULT 'gpt-5.3-codex',
@@ -499,6 +517,47 @@ export class TestingGraphStore {
       "model_options_json",
       "TEXT NOT NULL DEFAULT '[]'",
     );
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "engine",
+      "TEXT NOT NULL DEFAULT 'standard'",
+    );
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "stage",
+      "TEXT NOT NULL DEFAULT 'planned'",
+    );
+    ensureTableColumn(this.#database, "generation_jobs", "parent_job_id", "TEXT");
+    ensureTableColumn(this.#database, "generation_jobs", "parent_run_id", "TEXT");
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "attempt_count",
+      "INTEGER NOT NULL DEFAULT 1",
+    );
+    ensureTableColumn(this.#database, "generation_jobs", "validation_summary_json", "TEXT");
+    ensureTableColumn(this.#database, "generation_jobs", "immutable_artifact_paths_json", "TEXT");
+    ensureTableColumn(this.#database, "generation_jobs", "provider_provenance_json", "TEXT");
+    ensureTableColumn(
+      this.#database,
+      "generation_jobs",
+      "usage_measured",
+      "INTEGER NOT NULL DEFAULT 0",
+    );
+    this.#database.exec(`
+      UPDATE generation_jobs
+      SET stage = CASE status
+        WHEN 'completed' THEN 'validated'
+        WHEN 'failed' THEN 'failed'
+        WHEN 'cancelled' THEN 'cancelled'
+        WHEN 'budget-stopped' THEN 'blocked'
+        WHEN 'running' THEN 'generating'
+        ELSE 'planned'
+      END
+      WHERE stage IS NULL OR (stage = 'planned' AND status != 'queued');
+    `);
     ensureTableColumn(this.#database, "test_cases", "expected_result", "TEXT NOT NULL DEFAULT ''");
     ensureTableColumn(
       this.#database,
@@ -1118,18 +1177,38 @@ export class TestingGraphStore {
     readonly outputDirectory: string;
     readonly totalCases: number;
     readonly modelSelection: TestingGenerationJob["modelSelection"];
+    readonly engine?: TestingGenerationJob["engine"];
+    readonly stage?: TestingGenerationJob["stage"];
+    readonly parentJobId?: string | null;
+    readonly parentRunId?: string | null;
+    readonly attemptCount?: number;
+    readonly validationSummary?: TestingGenerationJob["validationSummary"];
+    readonly immutableArtifactPaths?: TestingGenerationJob["immutableArtifactPaths"];
+    readonly providerProvenance?: TestingGenerationJob["providerProvenance"];
+    readonly usageMeasured?: boolean;
   }): void {
     const now = new Date().toISOString();
     this.#database
       .query(
         `INSERT INTO generation_jobs
-          (id, project_id, status, framework, provider_instance_id, model, model_options_json,
+          (id, project_id, status, engine, stage, parent_job_id, parent_run_id, attempt_count,
+           validation_summary_json, immutable_artifact_paths_json, provider_provenance_json, usage_measured,
+           framework, provider_instance_id, model, model_options_json,
            output_directory, total_cases, created_at, updated_at)
-         VALUES (?, ?, 'queued', 'playwright-ts', ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'playwright-ts', ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
         input.projectId,
+        input.engine ?? "standard",
+        input.stage ?? "planned",
+        input.parentJobId ?? null,
+        input.parentRunId ?? null,
+        input.attemptCount ?? 1,
+        input.validationSummary ? JSON.stringify(input.validationSummary) : null,
+        input.immutableArtifactPaths ? JSON.stringify(input.immutableArtifactPaths) : null,
+        input.providerProvenance ? JSON.stringify(input.providerProvenance) : null,
+        input.usageMeasured ? 1 : 0,
         input.modelSelection.instanceId,
         input.modelSelection.model,
         JSON.stringify(input.modelSelection.options ?? []),
@@ -1144,6 +1223,15 @@ export class TestingGraphStore {
     id: string,
     patch: {
       readonly status: TestingGenerationJob["status"];
+      readonly engine?: TestingGenerationJob["engine"];
+      readonly stage?: TestingGenerationJob["stage"];
+      readonly parentJobId?: string | null;
+      readonly parentRunId?: string | null;
+      readonly attemptCount?: number;
+      readonly validationSummary?: TestingGenerationJob["validationSummary"];
+      readonly immutableArtifactPaths?: TestingGenerationJob["immutableArtifactPaths"];
+      readonly providerProvenance?: TestingGenerationJob["providerProvenance"];
+      readonly usageMeasured?: boolean;
       readonly completedCases?: number;
       readonly estimatedTokens?: number;
       readonly estimatedCostUsd?: number;
@@ -1152,13 +1240,40 @@ export class TestingGraphStore {
   ): void {
     this.#database
       .query(
-        `UPDATE generation_jobs SET status = ?, completed_cases = COALESCE(?, completed_cases),
-         estimated_tokens = COALESCE(?, estimated_tokens),
-         estimated_cost_usd = COALESCE(?, estimated_cost_usd), error = ?, updated_at = ?
+        `UPDATE generation_jobs SET
+          status = ?,
+          engine = COALESCE(?, engine),
+          stage = COALESCE(?, stage),
+          parent_job_id = CASE WHEN ? IS NOT NULL THEN ? ELSE parent_job_id END,
+          parent_run_id = CASE WHEN ? IS NOT NULL THEN ? ELSE parent_run_id END,
+          attempt_count = COALESCE(?, attempt_count),
+          validation_summary_json = CASE WHEN ? IS NOT NULL THEN ? ELSE validation_summary_json END,
+          immutable_artifact_paths_json = CASE WHEN ? IS NOT NULL THEN ? ELSE immutable_artifact_paths_json END,
+          provider_provenance_json = CASE WHEN ? IS NOT NULL THEN ? ELSE provider_provenance_json END,
+          usage_measured = COALESCE(?, usage_measured),
+          completed_cases = COALESCE(?, completed_cases),
+          estimated_tokens = COALESCE(?, estimated_tokens),
+          estimated_cost_usd = COALESCE(?, estimated_cost_usd),
+          error = ?,
+          updated_at = ?
          WHERE id = ?`,
       )
       .run(
         patch.status,
+        patch.engine ?? null,
+        patch.stage ?? null,
+        patch.parentJobId !== undefined ? 1 : null,
+        patch.parentJobId ?? null,
+        patch.parentRunId !== undefined ? 1 : null,
+        patch.parentRunId ?? null,
+        patch.attemptCount ?? null,
+        patch.validationSummary !== undefined ? 1 : null,
+        patch.validationSummary ? JSON.stringify(patch.validationSummary) : null,
+        patch.immutableArtifactPaths !== undefined ? 1 : null,
+        patch.immutableArtifactPaths ? JSON.stringify(patch.immutableArtifactPaths) : null,
+        patch.providerProvenance !== undefined ? 1 : null,
+        patch.providerProvenance ? JSON.stringify(patch.providerProvenance) : null,
+        patch.usageMeasured !== undefined ? (patch.usageMeasured ? 1 : 0) : null,
         patch.completedCases ?? null,
         patch.estimatedTokens ?? null,
         patch.estimatedCostUsd ?? null,
@@ -1242,7 +1357,10 @@ export class TestingGraphStore {
   listGenerationJobs(projectId: string): TestingGenerationJobListResult {
     const rows = this.#database
       .query<StoredGenerationJobRow, [string]>(
-        `SELECT id, project_id, status, framework, provider_instance_id, model,
+        `SELECT id, project_id, status, engine, stage, parent_job_id, parent_run_id,
+          attempt_count, validation_summary_json, immutable_artifact_paths_json,
+          provider_provenance_json, usage_measured,
+          framework, provider_instance_id, model,
           model_options_json, output_directory, total_cases,
           completed_cases, estimated_tokens, estimated_cost_usd, error
          FROM generation_jobs WHERE project_id = ? ORDER BY created_at DESC`,
@@ -1267,6 +1385,21 @@ export class TestingGraphStore {
           id: row.id,
           projectId: row.project_id,
           status: row.status,
+          engine: row.engine ?? "standard",
+          stage: row.stage ?? "planned",
+          parentJobId: row.parent_job_id ?? undefined,
+          parentRunId: row.parent_run_id ?? undefined,
+          attemptCount: row.attempt_count ?? 1,
+          validationSummary: row.validation_summary_json
+            ? (JSON.parse(row.validation_summary_json) as TestingGenerationJob["validationSummary"])
+            : undefined,
+          immutableArtifactPaths: row.immutable_artifact_paths_json
+            ? (JSON.parse(row.immutable_artifact_paths_json) as TestingGenerationJob["immutableArtifactPaths"])
+            : undefined,
+          providerProvenance: row.provider_provenance_json
+            ? (JSON.parse(row.provider_provenance_json) as TestingGenerationJob["providerProvenance"])
+            : undefined,
+          usageMeasured: Boolean(row.usage_measured),
           framework: row.framework,
           modelSelection: {
             instanceId:

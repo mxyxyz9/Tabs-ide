@@ -27,7 +27,7 @@ export const TESTING_LOCATOR_DOM_FUNCTION = String.raw`(() => {
     const icon = element.querySelector('i[class],svg[data-icon]');
     const iconName = icon?.getAttribute('data-icon') || icon?.className || '';
     const rawName = element.getAttribute('aria-label') || labelledBy || labels || element.getAttribute('placeholder') || element.getAttribute('title') || element.getAttribute('alt') || element.getAttribute('name') || element.textContent?.trim() || (typeof iconName === 'string' ? iconName : '') || role || tag;
-    const name = rawName.replace(/[\uE000-\uF8FF]/g, '').replace(/\s+/g, ' ').trim().slice(0, 160) || (typeof iconName === 'string' && iconName.trim()) || role || tag;
+    const name = rawName.replace(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 160) || (typeof iconName === 'string' && iconName.trim()) || role || tag;
     let selector = '';
     let testId = '';
     for (const attr of ['data-testid', 'data-test-id', 'data-test', 'data-cy', 'id', 'name', 'aria-label', 'placeholder', 'href']) {

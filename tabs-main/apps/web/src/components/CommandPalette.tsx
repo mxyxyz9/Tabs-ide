@@ -363,7 +363,7 @@ function OpenCommandPaletteDialog(props: {
     [handleNewThread, projects],
   );
 
-  const recentThreadItems = useMemo(
+  const allThreadItems = useMemo(
     () =>
       buildThreadActionItems({
         threads,
@@ -379,9 +379,13 @@ function OpenCommandPaletteDialog(props: {
             });
           }
         },
-        limit: RECENT_THREAD_LIMIT,
       }),
     [threads, projects, navigate, currentThreadId],
+  );
+
+  const recentThreadItems = useMemo(
+    () => allThreadItems.slice(0, RECENT_THREAD_LIMIT),
+    [allThreadItems],
   );
 
   const openAddProjectFlow = useCallback(async () => {
@@ -735,9 +739,9 @@ function OpenCommandPaletteDialog(props: {
       query,
       isInSubmenu: currentView !== null,
       projectSearchItems,
-      threadSearchItems: [],
+      threadSearchItems: allThreadItems,
     });
-  }, [activeGroups, query, currentView, projectSearchItems, addProjectCloneFlow]);
+  }, [activeGroups, query, currentView, projectSearchItems, allThreadItems, addProjectCloneFlow]);
 
   const flatItems = useMemo(() => filteredGroups.flatMap((g) => g.items), [filteredGroups]);
 

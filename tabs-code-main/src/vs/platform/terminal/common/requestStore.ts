@@ -49,7 +49,15 @@ export class RequestStore<T, RequestArgs> extends Disposable {
 			this._pendingRequests.set(requestId, resolve);
 			this._onCreateRequest.fire({ requestId, ...args });
 			const tokenSource = new CancellationTokenSource();
-			timeout(this._timeout, tokenSource.token).then(() => reject(`Request ${requestId} timed out (${this._timeout}ms)`));
+			// Resolving a request cancels its timeout. `timeout` rejects on
+			// cancellation, so the cancellation path must be consumed or every
+			// successful terminal variable-resolution reply becomes an unhandled
+			// promise rejection in embedders that do not install VS Code's process
+			// level rejection handler.
+			void timeout(this._timeout, tokenSource.token).then(
+				() => reject(`Request ${requestId} timed out (${this._timeout}ms)`),
+				() => undefined
+			);
 			this._pendingRequestDisposables.set(requestId, [toDisposable(() => tokenSource.cancel())]);
 		});
 	}

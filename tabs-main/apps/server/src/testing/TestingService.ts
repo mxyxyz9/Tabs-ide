@@ -1,4 +1,12 @@
-import { chmod, copyFile, readFile, realpath, stat, mkdir, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  copyFile,
+  readFile,
+  realpath,
+  stat,
+  mkdir,
+  writeFile,
+} from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type {
@@ -22,6 +30,7 @@ import type {
   TestingExplorationResult,
   TestingExecutionInput,
   TestingExecutionRun,
+  TestingExecutionRunInput,
   TestingExecutionRunListResult,
   TestingGraphExplorerResult,
   TestingGraphSummary,
@@ -85,10 +94,16 @@ import {
 } from "./locatorDiscovery";
 import { indexLocatorFolder } from "./locatorImporter";
 import { LocatorLibraryStore } from "./locatorLibrary";
-import { applyLocatorRepositoryWrite, previewLocatorRepositoryWrite } from "./locatorRepository";
+import {
+  applyLocatorRepositoryWrite,
+  previewLocatorRepositoryWrite,
+} from "./locatorRepository";
 import { TestingGenerator } from "./generator";
 import { TestingExecutor } from "./execution";
-import { createPlaywrightMcpSession, type PlaywrightMcpSession } from "./playwrightMcp";
+import {
+  createPlaywrightMcpSession,
+  type PlaywrightMcpSession,
+} from "./playwrightMcp";
 import { TestingReporter } from "./reporting";
 import {
   reconcileWorkbookCase,
@@ -145,7 +160,9 @@ function locatorMatchScore(step: string, entry: TestingLocatorEntry): number {
       value
         .toLocaleLowerCase()
         .split(/[^a-z0-9]+/)
-        .filter((word) => word.length > 1 && !LOCATOR_MATCH_STOP_WORDS.has(word)),
+        .filter(
+          (word) => word.length > 1 && !LOCATOR_MATCH_STOP_WORDS.has(word),
+        ),
     );
   const expected = words(step);
   const candidate = words(
@@ -173,7 +190,8 @@ function automaticActionAllowed(
   input: TestingLocatorDiscoveryInput,
 ): boolean {
   if (input.safetyProfile === "read-only") return false;
-  if (["link", "tab", "treeitem", "menuitem"].includes(action.role)) return true;
+  if (["link", "tab", "treeitem", "menuitem"].includes(action.role))
+    return true;
   if (input.safetyProfile === "supervised") return false;
   const approved = new Set(input.approvedActionCategories ?? []);
   if (
@@ -182,13 +200,24 @@ function automaticActionAllowed(
   ) {
     return true;
   }
-  if (approved.has("filters") && /\b(?:filter|sort|search|apply)\b/i.test(action.name)) return true;
+  if (
+    approved.has("filters") &&
+    /\b(?:filter|sort|search|apply)\b/i.test(action.name)
+  )
+    return true;
   if (approved.has("tabs") && action.role === "tab") return true;
-  return approved.has("form-drafts") && /\b(?:add|draft|preview)\b/i.test(action.name);
+  return (
+    approved.has("form-drafts") &&
+    /\b(?:add|draft|preview)\b/i.test(action.name)
+  );
 }
 
 const FailureTriage = Schema.Struct({
-  classification: Schema.Literals(["application-regression", "test-update", "uncertain"]),
+  classification: Schema.Literals([
+    "application-regression",
+    "test-update",
+    "uncertain",
+  ]),
   observedFacts: Schema.Array(Schema.String),
   inference: Schema.String,
   recommendation: Schema.String,
@@ -221,10 +250,19 @@ export class TestingService {
 
   constructor(stateDirectory: string, textGeneration?: TextGenerationShape) {
     this.#testingRoot = join(stateDirectory, "testing");
-    this.#store = new TestingGraphStore(join(this.#testingRoot, "state-graph.sqlite"));
-    this.#locatorStore = new LocatorLibraryStore(join(this.#testingRoot, "state-graph.sqlite"));
+    this.#store = new TestingGraphStore(
+      join(this.#testingRoot, "state-graph.sqlite"),
+    );
+    this.#locatorStore = new LocatorLibraryStore(
+      join(this.#testingRoot, "state-graph.sqlite"),
+    );
     this.#generator = textGeneration
-      ? new TestingGenerator(this.#store, this.#locatorStore, this.#testingRoot, textGeneration)
+      ? new TestingGenerator(
+          this.#store,
+          this.#locatorStore,
+          this.#testingRoot,
+          textGeneration,
+        )
       : null;
     this.#textGeneration = textGeneration ?? null;
     this.#executor = new TestingExecutor(this.#store, this.#testingRoot);
@@ -239,7 +277,10 @@ export class TestingService {
       groups: result.groups,
       cases: result.cases.map((testCase) => ({
         ...testCase,
-        locatorEntryIds: this.#locatorStore.caseLocatorIds(projectId, testCase.id),
+        locatorEntryIds: this.#locatorStore.caseLocatorIds(
+          projectId,
+          testCase.id,
+        ),
       })),
     };
   }
@@ -265,7 +306,9 @@ export class TestingService {
     return this.#locatorStore.library(input.projectId);
   }
 
-  setDiscoveryExperience(input: TestingDiscoveryExperienceInput): TestingLocatorLibraryResult {
+  setDiscoveryExperience(
+    input: TestingDiscoveryExperienceInput,
+  ): TestingLocatorLibraryResult {
     this.#locatorStore.setExperience(input.projectId, input.experience);
     return this.#locatorStore.library(input.projectId);
   }
@@ -292,15 +335,23 @@ export class TestingService {
     input: TestingLocatorDiscoveryInput,
   ): Promise<TestingLocatorDiscoverySession> {
     if (!this.#locatorStore.isFeatureEnabled()) {
-      throw new Error("Locator-first discovery is disabled by the server feature flag");
+      throw new Error(
+        "Locator-first discovery is disabled by the server feature flag",
+      );
     }
     if (this.#authCaptures.has(input.projectId)) {
-      throw new Error("Finish authentication capture before starting locator discovery");
+      throw new Error(
+        "Finish authentication capture before starting locator discovery",
+      );
     }
     if (
-      [...this.#locatorSessions.values()].some((item) => item.input.projectId === input.projectId)
+      [...this.#locatorSessions.values()].some(
+        (item) => item.input.projectId === input.projectId,
+      )
     ) {
-      throw new Error("A locator-discovery session is already running for this project");
+      throw new Error(
+        "A locator-discovery session is already running for this project",
+      );
     }
     const environmentLabel = input.environmentLabel?.trim() || "default";
     const sessionId = this.#locatorStore.beginSession({
@@ -342,7 +393,9 @@ export class TestingService {
         let truncated = false;
         for (const node of pages) {
           if (!this.#locatorStore.isFeatureEnabled()) {
-            throw new Error("Locator-first discovery was disabled during this session");
+            throw new Error(
+              "Locator-first discovery was disabled during this session",
+            );
           }
           const parsed = locatorCandidatesFromSnapshot({
             projectId: input.projectId,
@@ -371,7 +424,11 @@ export class TestingService {
           input.projectId,
           sessionId,
           "completed",
-          pageLimited ? "page-limit" : truncated ? "element-limit" : "completed",
+          pageLimited
+            ? "page-limit"
+            : truncated
+              ? "element-limit"
+              : "completed",
           `Captured ${pages.length} page${pages.length === 1 ? "" : "s"} into the Locator Library`,
         );
       } catch (error) {
@@ -417,7 +474,11 @@ export class TestingService {
       }
     }
     const session = await createPlaywrightMcpSession({
-      profilePath: join(this.#testingRoot, "auth", shortDigest(input.projectId)),
+      profilePath: join(
+        this.#testingRoot,
+        "auth",
+        shortDigest(input.projectId),
+      ),
       outputPath: join(this.#testingRoot, "mcp-output", `locator-${sessionId}`),
       headless: false,
       ...(input.cdpEndpoint ? { cdpEndpoint: input.cdpEndpoint } : {}),
@@ -429,19 +490,26 @@ export class TestingService {
       currentUrl: input.targetUrl,
       capturedUrls: new Set(),
     });
-    if (input.mode === "guided") await this.#captureLocatorPage(input.projectId, sessionId);
+    if (input.mode === "guided")
+      await this.#captureLocatorPage(input.projectId, sessionId);
     return this.#locatorSessionResult(input.projectId, sessionId);
   }
 
   async navigateLocatorDiscovery(
     input: TestingLocatorDiscoveryNavigateInput,
   ): Promise<TestingLocatorDiscoverySession> {
-    const active = await this.#activeLocatorSession(input.projectId, input.sessionId);
-    if (!active.session) throw new Error("Navigate in the preview, then scan the current page.");
+    const active = await this.#activeLocatorSession(
+      input.projectId,
+      input.sessionId,
+    );
+    if (!active.session)
+      throw new Error("Navigate in the preview, then scan the current page.");
     await active.session.call("browser_navigate", { url: input.targetUrl });
     if (!this.#locatorStore.isFeatureEnabled()) {
       await this.cancelLocatorDiscovery(input);
-      throw new Error("Locator discovery was cancelled because the feature was disabled");
+      throw new Error(
+        "Locator discovery was cancelled because the feature was disabled",
+      );
     }
     active.currentUrl = input.targetUrl;
     if (active.input.mode === "guided")
@@ -463,7 +531,10 @@ export class TestingService {
   async finishLocatorDiscovery(
     input: TestingLocatorDiscoverySessionInput,
   ): Promise<TestingLocatorDiscoverySession> {
-    const active = await this.#activeLocatorSession(input.projectId, input.sessionId);
+    const active = await this.#activeLocatorSession(
+      input.projectId,
+      input.sessionId,
+    );
     this.#locatorSessions.delete(input.sessionId);
     await active.session?.close();
     this.#locatorStore.finishSession(
@@ -497,31 +568,44 @@ export class TestingService {
     return this.#locatorSessionResult(input.projectId, input.sessionId);
   }
 
-  reviewLocatorEntry(input: TestingLocatorEntryReviewInput): TestingLocatorLibraryResult {
+  reviewLocatorEntry(
+    input: TestingLocatorEntryReviewInput,
+  ): TestingLocatorLibraryResult {
     this.#locatorStore.reviewEntry(input);
     return this.#locatorStore.library(input.projectId);
   }
 
-  updateLocatorPage(input: TestingLocatorPageUpdateInput): TestingLocatorLibraryResult {
+  updateLocatorPage(
+    input: TestingLocatorPageUpdateInput,
+  ): TestingLocatorLibraryResult {
     return this.#locatorStore.updatePage(input);
   }
 
-  setLocatorPageSelection(input: TestingLocatorPageSelectionInput): TestingLocatorLibraryResult {
+  setLocatorPageSelection(
+    input: TestingLocatorPageSelectionInput,
+  ): TestingLocatorLibraryResult {
     return this.#locatorStore.setPageSelection(input);
   }
 
-  deleteLocatorPage(input: TestingLocatorPageDeleteInput): TestingLocatorLibraryResult {
+  deleteLocatorPage(
+    input: TestingLocatorPageDeleteInput,
+  ): TestingLocatorLibraryResult {
     return this.#locatorStore.deletePage(input);
   }
 
-  updatePageObjectCode(input: TestingPageObjectCodeUpdateInput): TestingLocatorLibraryResult {
+  updatePageObjectCode(
+    input: TestingPageObjectCodeUpdateInput,
+  ): TestingLocatorLibraryResult {
     return this.#locatorStore.updatePageObjectCode(input);
   }
 
   previewLocatorRepositoryWrite(
     input: TestingLocatorRepositoryPreviewInput,
   ): Promise<TestingLocatorRepositoryProposal> {
-    return previewLocatorRepositoryWrite({ ...input, store: this.#locatorStore });
+    return previewLocatorRepositoryWrite({
+      ...input,
+      store: this.#locatorStore,
+    });
   }
 
   applyLocatorRepositoryWrite(
@@ -534,17 +618,25 @@ export class TestingService {
     return this.#locatorStore.previewSync(input.projectId);
   }
 
-  resolveLocatorSync(input: TestingLocatorSyncDecisionInput): TestingLocatorSyncPreview {
+  resolveLocatorSync(
+    input: TestingLocatorSyncDecisionInput,
+  ): TestingLocatorSyncPreview {
     return this.#locatorStore.resolveSync(input);
   }
 
-  disconnectLocatorFolder(input: TestingProjectInput): TestingLocatorLibraryResult {
+  disconnectLocatorFolder(
+    input: TestingProjectInput,
+  ): TestingLocatorLibraryResult {
     return this.#locatorStore.disconnectSources(input.projectId);
   }
 
-  indexLocatorFolder(input: TestingLocatorFolderInput): Promise<TestingLocatorFolderResult> {
+  indexLocatorFolder(
+    input: TestingLocatorFolderInput,
+  ): Promise<TestingLocatorFolderResult> {
     if (!this.#locatorStore.isFeatureEnabled()) {
-      throw new Error("Locator-first discovery is disabled by the server feature flag");
+      throw new Error(
+        "Locator-first discovery is disabled by the server feature flag",
+      );
     }
     return indexLocatorFolder({
       ...input,
@@ -557,8 +649,16 @@ export class TestingService {
     input: TestingLocatorVerificationInput,
   ): Promise<TestingLocatorLibraryResult> {
     const session = await createPlaywrightMcpSession({
-      profilePath: join(this.#testingRoot, "auth", shortDigest(input.projectId)),
-      outputPath: join(this.#testingRoot, "mcp-output", `verify-${crypto.randomUUID()}`),
+      profilePath: join(
+        this.#testingRoot,
+        "auth",
+        shortDigest(input.projectId),
+      ),
+      outputPath: join(
+        this.#testingRoot,
+        "mcp-output",
+        `verify-${crypto.randomUUID()}`,
+      ),
       headless: true,
       ...(input.cdpEndpoint ? { cdpEndpoint: input.cdpEndpoint } : {}),
     });
@@ -576,7 +676,11 @@ export class TestingService {
         const rawTarget = new URL(input.targetUrl);
         try {
           const pagePattern = new URL(page.urlPattern);
-          if (!decodeURIComponent(pagePattern.pathname).includes("<REDACTED_PATH_SEGMENT>")) {
+          if (
+            !decodeURIComponent(pagePattern.pathname).includes(
+              "<REDACTED_PATH_SEGMENT>",
+            )
+          ) {
             rawTarget.pathname = pagePattern.pathname;
             rawTarget.hash = pagePattern.hash;
           }
@@ -592,7 +696,9 @@ export class TestingService {
           maxElements: 5_000,
           fallbackUrl: rawTarget.href,
         });
-        for (const entry of page.entries.filter((item) => requested.has(item.id))) {
+        for (const entry of page.entries.filter((item) =>
+          requested.has(item.id),
+        )) {
           const count =
             capture.resolvedCounts?.get(entry.locatorKey) ??
             countLocatorMatches(capture.storedSnapshot, entry);
@@ -605,7 +711,10 @@ export class TestingService {
             status: verificationStatusForCount(count),
             matchCount: count,
             pageFingerprint: capture.fingerprint,
-            message: count === 1 ? "Locator resolved uniquely" : `Locator resolved ${count} times`,
+            message:
+              count === 1
+                ? "Locator resolved uniquely"
+                : `Locator resolved ${count} times`,
           });
         }
       }
@@ -615,8 +724,11 @@ export class TestingService {
     }
   }
 
-  async importUserStory(input: TestingStoryImportInput): Promise<TestingStoryImportResult> {
-    if (!this.#textGeneration) throw new Error("No configured Fusion model backend is available");
+  async importUserStory(
+    input: TestingStoryImportInput,
+  ): Promise<TestingStoryImportResult> {
+    if (!this.#textGeneration)
+      throw new Error("No configured Fusion model backend is available");
     const parsed = await parseUserStory(input);
     const sanitized = sanitizeModelBoundText(input.projectId, parsed.content);
     const storyImportId = this.#locatorStore.createStoryImport({
@@ -630,7 +742,10 @@ export class TestingService {
       .flatMap((page) =>
         page.entries
           .filter((entry) => entry.lifecycleStatus !== "archived")
-          .map((entry) => `${entry.locatorKey}: ${entry.classification} on ${page.name}`),
+          .map(
+            (entry) =>
+              `${entry.locatorKey}: ${entry.classification} on ${page.name}`,
+          ),
       )
       .slice(0, 1_000)
       .join("\n");
@@ -645,7 +760,8 @@ export class TestingService {
           "User story:",
           sanitized.tokenized,
           "Locator Library:",
-          locatorContext || "No locators captured yet; leave locatorKeys empty.",
+          locatorContext ||
+            "No locators captured yet; leave locatorKeys empty.",
         ].join("\n\n"),
         outputSchema: StoryCases,
         modelSelection: input.modelSelection,
@@ -653,18 +769,24 @@ export class TestingService {
         budget: { maxEstimatedTokens: 30_000, maxEstimatedCostUsd: 2 },
       }),
     );
-    const beforeIds = new Set(this.#store.listCases(input.projectId).cases.map((item) => item.id));
+    const beforeIds = new Set(
+      this.#store.listCases(input.projectId).cases.map((item) => item.id),
+    );
     const cases = this.#store.saveGeneratedCases(
       input.projectId,
       generated.cases.map((testCase, index) => ({
-        externalId: testCase.externalId.trim() || `STORY-${String(index + 1).padStart(3, "0")}`,
+        externalId:
+          testCase.externalId.trim() ||
+          `STORY-${String(index + 1).padStart(3, "0")}`,
         description: testCase.description,
         steps: [
           ...testCase.preconditions.map((item) => `Precondition: ${item}`),
           ...testCase.steps,
         ],
         expectedResults: [
-          ...testCase.preconditions.map((item) => `Precondition is satisfied: ${item}`),
+          ...testCase.preconditions.map(
+            (item) => `Precondition is satisfied: ${item}`,
+          ),
           ...testCase.expectedResults,
         ],
         expectedResult: testCase.expectedResults.filter(Boolean).join("\n"),
@@ -681,7 +803,9 @@ export class TestingService {
       this.#locatorStore.mapCaseLocators(
         createdCase.id,
         generatedCase.locatorKeys.flatMap((locatorKey, stepIndex) => {
-          const entry = libraryEntries.find((item) => item.locatorKey === locatorKey);
+          const entry = libraryEntries.find(
+            (item) => item.locatorKey === locatorKey,
+          );
           return entry
             ? [
                 {
@@ -711,36 +835,56 @@ export class TestingService {
     };
   }
 
-  async startAuthCapture(input: TestingTargetInput): Promise<TestingAuthStartResult> {
+  async startAuthCapture(
+    input: TestingTargetInput,
+  ): Promise<TestingAuthStartResult> {
     if (this.#authCaptures.has(input.projectId)) {
-      throw new Error("An authentication capture browser is already open for this project");
+      throw new Error(
+        "An authentication capture browser is already open for this project",
+      );
     }
     const target = new URL(input.targetUrl);
     if (target.protocol !== "http:" && target.protocol !== "https:") {
-      throw new Error("Authentication capture requires an http:// or https:// target URL");
+      throw new Error(
+        "Authentication capture requires an http:// or https:// target URL",
+      );
     }
     const projectKey = shortDigest(input.projectId);
     const profilePath = join(this.#testingRoot, "auth", projectKey);
-    const outputPath = join(this.#testingRoot, "mcp-output", `auth-${projectKey}`);
+    const outputPath = join(
+      this.#testingRoot,
+      "mcp-output",
+      `auth-${projectKey}`,
+    );
     const session = await createPlaywrightMcpSession({
       profilePath,
       outputPath,
       headless: false,
     });
     await session.call("browser_navigate", { url: target.href });
-    this.#authCaptures.set(input.projectId, { session, profilePath, outputPath });
+    this.#authCaptures.set(input.projectId, {
+      session,
+      profilePath,
+      outputPath,
+    });
     return { started: true, profilePath };
   }
 
-  async finishAuthCapture(input: TestingProjectInput): Promise<TestingGraphSummary> {
+  async finishAuthCapture(
+    input: TestingProjectInput,
+  ): Promise<TestingGraphSummary> {
     const capture = this.#authCaptures.get(input.projectId);
     if (!capture) {
-      throw new Error("No authentication capture browser is open for this project");
+      throw new Error(
+        "No authentication capture browser is open for this project",
+      );
     }
     this.#authCaptures.delete(input.projectId);
     try {
       const exportedStatePath = join(capture.outputPath, "storage-state.json");
-      await capture.session.call("browser_storage_state", { filename: exportedStatePath });
+      await capture.session.call("browser_storage_state", {
+        filename: exportedStatePath,
+      });
       await chmod(exportedStatePath, 0o600);
       const storageStatePath = join(capture.profilePath, "storage-state.json");
       await copyFile(exportedStatePath, storageStatePath);
@@ -752,25 +896,34 @@ export class TestingService {
     return this.#store.summary(input.projectId);
   }
 
-  async startExploration(input: TestingExplorationInput): Promise<TestingExplorationResult> {
+  async startExploration(
+    input: TestingExplorationInput,
+  ): Promise<TestingExplorationResult> {
     if (this.#runningCrawls.has(input.projectId)) {
       throw new Error("An exploration is already running for this project");
     }
     if (this.#authCaptures.has(input.projectId)) {
-      throw new Error("Finish authentication capture before starting exploration");
+      throw new Error(
+        "Finish authentication capture before starting exploration",
+      );
     }
     this.#runningCrawls.add(input.projectId);
     try {
-      return await new TestingCrawler(this.#store, this.#testingRoot).explore(input);
+      return await new TestingCrawler(this.#store, this.#testingRoot).explore(
+        input,
+      );
     } finally {
       this.#runningCrawls.delete(input.projectId);
     }
   }
 
-  async importWorkbook(input: TestingWorkbookImportInput): Promise<TestingWorkbookImportResult> {
+  async importWorkbook(
+    input: TestingWorkbookImportInput,
+  ): Promise<TestingWorkbookImportResult> {
     const parsed = await parseTestingWorkbook(input.workbookPath);
     const graph = this.#store.graph(input.projectId);
-    const targetUrl = input.targetUrl ?? this.#store.summary(input.projectId).targetUrl;
+    const targetUrl =
+      input.targetUrl ?? this.#store.summary(input.projectId).targetUrl;
     const initialEntries = this.#locatorStore
       .library(input.projectId)
       .pages.flatMap((page) => page.entries);
@@ -812,13 +965,18 @@ export class TestingService {
           }),
         );
       } else {
-        const mismatches: TestingMismatch[] = parsedCase.errors.map((error) => ({
-          stepIndex: null,
-          expected: parsedCase.externalId,
-          actual: error,
-          kind: error.startsWith("Duplicate") ? "duplicate" : "parse",
-        }));
-        const mappings: Array<{ entry: TestingLocatorEntry; stepIndex: number }> = [];
+        const mismatches: TestingMismatch[] = parsedCase.errors.map(
+          (error) => ({
+            stepIndex: null,
+            expected: parsedCase.externalId,
+            actual: error,
+            kind: error.startsWith("Duplicate") ? "duplicate" : "parse",
+          }),
+        );
+        const mappings: Array<{
+          entry: TestingLocatorEntry;
+          stepIndex: number;
+        }> = [];
         parsedCase.steps.forEach((step, stepIndex) => {
           const candidate = bestLocatorForStep(step, entries);
           if (candidate?.verificationStatus === "verified") {
@@ -866,7 +1024,9 @@ export class TestingService {
         mappingsByExternalId.get(testCase.externalId) ??
         testCase.steps.flatMap((step, stepIndex) => {
           const entry = bestLocatorForStep(step, entries);
-          return entry?.verificationStatus === "verified" ? [{ entry, stepIndex }] : [];
+          return entry?.verificationStatus === "verified"
+            ? [{ entry, stepIndex }]
+            : [];
         });
       this.#locatorStore.mapCaseLocators(
         testCase.id,
@@ -888,14 +1048,20 @@ export class TestingService {
   }
 
   listCases(input: TestingProjectInput): TestingCaseListResult {
-    return this.#withCaseLocatorMappings(input.projectId, this.#store.listCases(input.projectId));
+    return this.#withCaseLocatorMappings(
+      input.projectId,
+      this.#store.listCases(input.projectId),
+    );
   }
 
   createCase(input: TestingCaseCreateInput): TestingCaseListResult {
     const externalId =
-      input.externalId?.trim() || this.#locatorStore.allocateCaseIds(input.projectId, 1)[0]!;
+      input.externalId?.trim() ||
+      this.#locatorStore.allocateCaseIds(input.projectId, 1)[0]!;
     const result = this.#store.createCase({ ...input, externalId });
-    const created = result.cases.find((testCase) => testCase.externalId === externalId);
+    const created = result.cases.find(
+      (testCase) => testCase.externalId === externalId,
+    );
     if (!created) throw new Error("The manual case was not created");
     this.#locatorStore.replaceCaseLocators(
       input.projectId,
@@ -908,7 +1074,11 @@ export class TestingService {
   reviewCase(input: TestingCaseReviewInput): TestingCaseListResult {
     const result = this.#store.reviewCase(input);
     if (input.locatorEntryIds) {
-      this.#locatorStore.replaceCaseLocators(input.projectId, input.caseId, input.locatorEntryIds);
+      this.#locatorStore.replaceCaseLocators(
+        input.projectId,
+        input.caseId,
+        input.locatorEntryIds,
+      );
     }
     return this.#withCaseLocatorMappings(input.projectId, result);
   }
@@ -922,7 +1092,10 @@ export class TestingService {
   }
 
   updateCaseGroup(input: TestingCaseGroupUpdateInput): TestingCaseListResult {
-    return this.#withCaseLocatorMappings(input.projectId, this.#store.updateCaseGroup(input));
+    return this.#withCaseLocatorMappings(
+      input.projectId,
+      this.#store.updateCaseGroup(input),
+    );
   }
 
   createCaseGroup(input: TestingCaseGroupCreateInput): TestingCaseListResult {
@@ -943,23 +1116,32 @@ export class TestingService {
     const graph = this.#store.graph(input.projectId);
     const scenarios = scenariosFromGraph(graph);
     if (scenarios.length === 0) {
-      throw new Error("Explore the target application before generating discovered scenarios");
+      throw new Error(
+        "Explore the target application before generating discovered scenarios",
+      );
     }
 
     const existingResult = this.#store.listCases(input.projectId);
     const existingCases = existingResult.cases;
-    const existingGenerated = existingCases.filter((c) => c.source === "generated");
+    const existingGenerated = existingCases.filter(
+      (c) => c.source === "generated",
+    );
 
     const newScenarios = scenarios.filter((scenario) => {
       const stepsJson = JSON.stringify(scenario.steps);
-      return !existingGenerated.some((existing) => JSON.stringify(existing.steps) === stepsJson);
+      return !existingGenerated.some(
+        (existing) => JSON.stringify(existing.steps) === stepsJson,
+      );
     });
 
     if (newScenarios.length === 0) {
       return this.#withCaseLocatorMappings(input.projectId, existingResult);
     }
 
-    const allocatedIds = this.#locatorStore.allocateCaseIds(input.projectId, newScenarios.length);
+    const allocatedIds = this.#locatorStore.allocateCaseIds(
+      input.projectId,
+      newScenarios.length,
+    );
     const renumberedScenarios = newScenarios.map((scenario, index) => ({
       ...scenario,
       externalId: allocatedIds[index]!,
@@ -973,17 +1155,37 @@ export class TestingService {
 
   clearGraph(input: TestingProjectInput): TestingClearGraphResult {
     if (this.#runningCrawls.has(input.projectId)) {
-      throw new Error("Wait for the active exploration to finish before clearing its graph");
+      throw new Error(
+        "Wait for the active exploration to finish before clearing its graph",
+      );
     }
     return this.#store.clearGraph(input.projectId);
   }
 
-  async generateTests(input: TestingGenerationInput): Promise<TestingGenerationJob> {
+  async generateTests(
+    input: TestingGenerationInput,
+  ): Promise<TestingGenerationJob> {
     if (input.engine === "recording") {
       const code = input.recordedCode?.trim();
       const expected = input.recordedExpectedResult?.trim();
-      if (!code || !expected || code.includes('throw new Error("Add expected-result assertions'))
-        throw new Error("Review the recording and add an expected-result assertion before saving.");
+      if (
+        !code ||
+        !expected ||
+        code.includes('throw new Error("Add expected-result assertions')
+      )
+        throw new Error(
+          "Review the recording and add an expected-result assertion before saving.",
+        );
+      if (/\btest\s*\.\s*(skip|fixme|fail|only)\s*\(/.test(code)) {
+        throw new Error(
+          "Recorded tests cannot be skipped, marked as expected failures, or exclusive.",
+        );
+      }
+      if (!/\bexpect\s*\(/.test(code)) {
+        throw new Error(
+          "Recorded tests require at least one Playwright assertion.",
+        );
+      }
       const jobId = crypto.randomUUID();
       const outputDirectory = join(
         this.#testingRoot,
@@ -997,9 +1199,13 @@ export class TestingService {
       const dataPath = join(outputDirectory, "data.ts");
       await Promise.all([
         writeFile(specPath, code, { flag: "wx" }),
-        writeFile(pageObjectPath, "// Self-contained reviewed recording.\nexport {};\n", {
-          flag: "wx",
-        }),
+        writeFile(
+          pageObjectPath,
+          "// Self-contained reviewed recording.\nexport {};\n",
+          {
+            flag: "wx",
+          },
+        ),
         writeFile(
           dataPath,
           "// Input placeholders must be supplied before execution.\nexport {};\n",
@@ -1013,13 +1219,29 @@ export class TestingService {
         description: "Recorded browser journey",
         steps: ["Replay the reviewed browser recording"],
         expectedResult: expected,
+        ...(input.locatorEntryIds
+          ? { locatorEntryIds: [...input.locatorEntryIds] }
+          : {}),
       }).cases.find((item) => item.externalId === externalId)!;
+      this.reviewCase({
+        projectId: input.projectId,
+        caseId: testCase.id,
+        decision: "accepted",
+        ...(input.locatorEntryIds
+          ? { locatorEntryIds: [...input.locatorEntryIds] }
+          : {}),
+      });
       this.#store.createGenerationJob({
         id: jobId,
         projectId: input.projectId,
         outputDirectory,
         totalCases: 1,
         modelSelection: input.modelSelection,
+        engine: "recording",
+        stage: "generated",
+        attemptCount: 1,
+        immutableArtifactPaths: [specPath, pageObjectPath, dataPath],
+        usageMeasured: true,
       });
       this.#store.addGeneratedArtifact({
         jobId,
@@ -1042,24 +1264,31 @@ export class TestingService {
     }
     if (
       input.failureRunId &&
-      !this.#store.executionRuns(input.projectId).runs.some((run) => run.id === input.failureRunId)
+      !this.#store
+        .executionRuns(input.projectId)
+        .runs.some((run) => run.id === input.failureRunId)
     ) {
       throw new Error("The failure run does not belong to this project.");
     }
     if (!this.#generator) {
-      throw new Error("No configured coding-agent text-generation backend is available");
+      throw new Error(
+        "No configured coding-agent text-generation backend is available",
+      );
     }
     const selectedCases = this.#store
       .listCases(input.projectId)
       .cases.filter((testCase) =>
         input.caseIds
           ? input.caseIds.includes(testCase.id)
-          : testCase.reviewDecision === "accepted" || testCase.reviewDecision === "edited",
+          : testCase.reviewDecision === "accepted" ||
+            testCase.reviewDecision === "edited",
       );
     const entryIds = [
       ...new Set(
         selectedCases.flatMap((testCase) =>
-          this.#locatorStore.caseLocators(input.projectId, testCase.id).map((entry) => entry.id),
+          this.#locatorStore
+            .caseLocators(input.projectId, testCase.id)
+            .map((entry) => entry.id),
         ),
       ),
     ];
@@ -1076,7 +1305,9 @@ export class TestingService {
               await this.verifyLocators({
                 projectId: input.projectId,
                 targetUrl: input.targetUrl,
-                ...(input.cdpEndpoint ? { cdpEndpoint: input.cdpEndpoint } : {}),
+                ...(input.cdpEndpoint
+                  ? { cdpEndpoint: input.cdpEndpoint }
+                  : {}),
                 entryIds,
                 environmentLabel: "default",
               });
@@ -1086,26 +1317,37 @@ export class TestingService {
     });
   }
 
-  listGenerationJobs(input: TestingProjectInput): TestingGenerationJobListResult {
+  listGenerationJobs(
+    input: TestingProjectInput,
+  ): TestingGenerationJobListResult {
     return this.#store.listGenerationJobs(input.projectId);
   }
 
   cancelGenerationJob(input: TestingGenerationJobInput): TestingGenerationJob {
     if (!this.#generator) {
-      throw new Error("No configured coding-agent text-generation backend is available");
+      throw new Error(
+        "No configured coding-agent text-generation backend is available",
+      );
     }
     return this.#generator.cancel(input.projectId, input.jobId);
   }
 
-  async readArtifact(input: TestingArtifactReadInput): Promise<TestingArtifactReadResult> {
-    const job = this.#store.generationJob(input.projectId, input.generationJobId);
+  async readArtifact(
+    input: TestingArtifactReadInput,
+  ): Promise<TestingArtifactReadResult> {
+    const job = this.#store.generationJob(
+      input.projectId,
+      input.generationJobId,
+    );
     if (!job) {
       throw new Error("Generation job was not found in this project");
     }
     if (job.status !== "completed") {
       throw new Error("Generation job is not completed");
     }
-    const artifact = job.artifacts.find((candidate) => candidate.caseId === input.caseId);
+    const artifact = job.artifacts.find(
+      (candidate) => candidate.caseId === input.caseId,
+    );
     if (!artifact) {
       throw new Error("Generated artifact was not found for this case");
     }
@@ -1115,14 +1357,15 @@ export class TestingService {
         : input.artifactKind === "page"
           ? artifact.pageObjectPath
           : artifact.dataPath;
-    const [canonicalOutputDirectory, canonicalArtifactPath] = await Promise.all([
-      realpath(resolve(job.outputDirectory)),
-      realpath(resolve(storedPath)),
-    ]).catch((cause) => {
+    const [canonicalOutputDirectory, canonicalArtifactPath] = await Promise.all(
+      [realpath(resolve(job.outputDirectory)), realpath(resolve(storedPath))],
+    ).catch((cause) => {
       throw new Error("Generated artifact file is unavailable", { cause });
     });
     if (!isPathInside(canonicalOutputDirectory, canonicalArtifactPath)) {
-      throw new Error("Generated artifact path escapes the generation output directory");
+      throw new Error(
+        "Generated artifact path escapes the generation output directory",
+      );
     }
     const fileInfo = await stat(canonicalArtifactPath);
     if (!fileInfo.isFile()) {
@@ -1138,12 +1381,21 @@ export class TestingService {
     return this.#executor.execute(input);
   }
 
+  cancelExecutionRun(input: TestingExecutionRunInput): TestingExecutionRun {
+    return this.#executor.cancel(input.projectId, input.runId);
+  }
+
   listExecutionRuns(input: TestingProjectInput): TestingExecutionRunListResult {
     return this.#store.executionRuns(input.projectId);
   }
 
-  decideHealingProposal(input: TestingHealingDecisionInput): TestingExecutionRunListResult {
-    const proposal = this.#store.healingProposal(input.projectId, input.proposalId);
+  decideHealingProposal(
+    input: TestingHealingDecisionInput,
+  ): TestingExecutionRunListResult {
+    const proposal = this.#store.healingProposal(
+      input.projectId,
+      input.proposalId,
+    );
     if (!proposal) throw new Error("Healing proposal not found");
     if (
       input.decision === "accepted" &&
@@ -1209,7 +1461,8 @@ export class TestingService {
         testCase.expectedResult || testCase.description,
         "",
         "## Actual",
-        result.error ?? "The generated test failed without additional error text.",
+        result.error ??
+          "The generated test failed without additional error text.",
         "",
         "## Local evidence",
         `- Trace: ${result.tracePath ?? "Not captured"}`,
@@ -1226,7 +1479,8 @@ export class TestingService {
   }
 
   async triageFailure(input: TestingTriageInput): Promise<TestingTriageResult> {
-    if (!this.#textGeneration) throw new Error("No configured coding-agent backend is available");
+    if (!this.#textGeneration)
+      throw new Error("No configured coding-agent backend is available");
     const run = this.#store
       .executionRuns(input.projectId)
       .runs.find((item) => item.id === input.runId);
@@ -1247,7 +1501,9 @@ export class TestingService {
     const raw = [
       `Case: ${testCase.externalId} - ${testCase.description}`,
       `Expected steps: ${testCase.steps.join(" | ")}`,
-      ...(testCase.expectedResult ? [`Expected outcome: ${testCase.expectedResult}`] : []),
+      ...(testCase.expectedResult
+        ? [`Expected outcome: ${testCase.expectedResult}`]
+        : []),
       `Observed failure: ${result.error ?? "No error text"}`,
       `Artifact revision: ${run.artifactRevision}`,
       "Separate observed facts from inference. Decide whether this is an application regression, a test update, or uncertain.",
@@ -1275,11 +1531,15 @@ export class TestingService {
   ): Promise<LocatorCaptureSession> {
     const active = this.#locatorSessions.get(sessionId);
     if (!active || active.input.projectId !== projectId) {
-      throw new Error("The locator-discovery session is not active for this project");
+      throw new Error(
+        "The locator-discovery session is not active for this project",
+      );
     }
     if (!this.#locatorStore.isFeatureEnabled()) {
       await this.cancelLocatorDiscovery({ projectId, sessionId });
-      throw new Error("Locator discovery was cancelled because the feature was disabled");
+      throw new Error(
+        "Locator discovery was cancelled because the feature was disabled",
+      );
     }
     return active;
   }
@@ -1297,7 +1557,8 @@ export class TestingService {
       projectId,
       session: active.session,
       ...(previewSnapshot ? { previewSnapshot } : {}),
-      coverage: captureMode === "all" ? "everything-accessible" : active.input.coverage,
+      coverage:
+        captureMode === "all" ? "everything-accessible" : active.input.coverage,
       maxElements: active.input.maxElementsPerPage,
       fallbackUrl: active.currentUrl,
       ...(captureMode === "relevant" &&
@@ -1317,7 +1578,9 @@ export class TestingService {
     }
     if (!this.#locatorStore.isFeatureEnabled()) {
       await this.cancelLocatorDiscovery({ projectId, sessionId });
-      throw new Error("Locator discovery was cancelled because the feature was disabled");
+      throw new Error(
+        "Locator discovery was cancelled because the feature was disabled",
+      );
     }
     active.currentUrl = capture.rawUrl;
     this.#locatorStore.saveCapturedPage({
@@ -1355,14 +1618,19 @@ export class TestingService {
           matchCount: count,
           pageFingerprint: capture.fingerprint,
           message:
-            count === 1 ? "Verified during capture" : `Resolved ${count} times during capture`,
+            count === 1
+              ? "Verified during capture"
+              : `Resolved ${count} times during capture`,
         });
       }
     }
     return this.#locatorSessionResult(projectId, sessionId);
   }
 
-  #locatorSessionResult(projectId: string, sessionId: string): TestingLocatorDiscoverySession {
+  #locatorSessionResult(
+    projectId: string,
+    sessionId: string,
+  ): TestingLocatorDiscoverySession {
     const row = this.#locatorStore.session(projectId, sessionId);
     if (!row) throw new Error("Locator-discovery session was not found");
     return {
@@ -1371,15 +1639,23 @@ export class TestingService {
       status: row.status as TestingLocatorDiscoverySession["status"],
       mode: row.mode as TestingLocatorDiscoverySession["mode"],
       coverage: row.coverage as TestingLocatorDiscoverySession["coverage"],
-      safetyProfile: row.safety_profile as TestingLocatorDiscoverySession["safetyProfile"],
-      currentUrl: typeof row.current_url_pattern === "string" ? row.current_url_pattern : null,
-      currentPageName: typeof row.current_page_name === "string" ? row.current_page_name : null,
+      safetyProfile:
+        row.safety_profile as TestingLocatorDiscoverySession["safetyProfile"],
+      currentUrl:
+        typeof row.current_url_pattern === "string"
+          ? row.current_url_pattern
+          : null,
+      currentPageName:
+        typeof row.current_page_name === "string"
+          ? row.current_page_name
+          : null,
       observedElements: Number(row.observed_elements ?? 0),
       storedElements: Number(row.stored_elements ?? 0),
       truncatedElements: Number(row.truncated_elements ?? 0),
       capturedPages: Number(row.captured_pages ?? 0),
       terminationReason:
-        (row.termination_reason as TestingLocatorDiscoverySession["terminationReason"]) ?? null,
+        (row.termination_reason as TestingLocatorDiscoverySession["terminationReason"]) ??
+        null,
       message: typeof row.message === "string" ? row.message : "",
       library: this.#locatorStore.library(projectId),
     };

@@ -1,0 +1,190 @@
+[
+  {
+    "tag_name": "v1.3.1",
+    "name": "Tabs v1.3.1",
+    "published_at": "2026-09-05T16:47:42Z",
+    "body": "**Full Changelog**: https://github.com/mxyxyz9/Tabs-ide/compare/v1.3.0...v1.3.1",
+    "html_url": "https://github.com/mxyxyz9/Tabs-ide/releases/tag/v1.3.1",
+    "assets": [
+      {
+        "name": "latest-linux.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/latest-linux.yml"
+      },
+      {
+        "name": "latest.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/latest.yml"
+      },
+      {
+        "name": "Tabs-1.3.1-arm64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/Tabs-1.3.1-arm64.dmg"
+      },
+      {
+        "name": "Tabs-1.3.1-x64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/Tabs-1.3.1-x64.dmg"
+      },
+      {
+        "name": "Tabs-1.3.1-x64.exe",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/Tabs-1.3.1-x64.exe"
+      },
+      {
+        "name": "Tabs-1.3.1-x64.exe.blockmap",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/Tabs-1.3.1-x64.exe.blockmap"
+      },
+      {
+        "name": "Tabs-1.3.1-x86_64.AppImage",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.1/Tabs-1.3.1-x86_64.AppImage"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.3.0",
+    "name": "Tabs v1.3.0",
+    "published_at": "2026-09-05T15:09:49Z",
+    "body": "**Full Changelog**: https://github.com/mxyxyz9/Tabs-ide/compare/v1.2.122...v1.3.0",
+    "html_url": "https://github.com/mxyxyz9/Tabs-ide/releases/tag/v1.3.0",
+    "assets": [
+      {
+        "name": "latest-linux.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/latest-linux.yml"
+      },
+      {
+        "name": "latest.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/latest.yml"
+      },
+      {
+        "name": "Tabs-1.3.0-arm64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/Tabs-1.3.0-arm64.dmg"
+      },
+      {
+        "name": "Tabs-1.3.0-x64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/Tabs-1.3.0-x64.dmg"
+      },
+      {
+        "name": "Tabs-1.3.0-x64.exe",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/Tabs-1.3.0-x64.exe"
+      },
+      {
+        "name": "Tabs-1.3.0-x64.exe.blockmap",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/Tabs-1.3.0-x64.exe.blockmap"
+      },
+      {
+        "name": "Tabs-1.3.0-x86_64.AppImage",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/Tabs-1.3.0-x86_64.AppImage"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-linux-x64.zip",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-linux-x64.zip"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-linux-x64.zip.sha256",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-linux-x64.zip.sha256"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-mac-arm64.zip",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-mac-arm64.zip"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-mac-arm64.zip.sha256",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-mac-arm64.zip.sha256"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-mac-x64.zip",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-mac-x64.zip"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-mac-x64.zip.sha256",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-mac-x64.zip.sha256"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-win-x64.zip",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-win-x64.zip"
+      },
+      {
+        "name": "tabs-code-runtime-1.3.0-win-x64.zip.sha256",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.3.0/tabs-code-runtime-1.3.0-win-x64.zip.sha256"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.2.122",
+    "name": "Tabs v1.2.122",
+    "published_at": "2026-08-30T09:27:32Z",
+    "body": "**Full Changelog**: https://github.com/mxyxyz9/Tabs-ide/compare/v1.2.121...v1.2.122",
+    "html_url": "https://github.com/mxyxyz9/Tabs-ide/releases/tag/v1.2.122",
+    "assets": []
+  },
+  {
+    "tag_name": "v1.2.120",
+    "name": "Tabs v1.2.120",
+    "published_at": "2026-08-04T14:17:06Z",
+    "body": "**Full Changelog**: https://github.com/mxyxyz9/Tabs-ide/compare/v1.2.119...v1.2.120",
+    "html_url": "https://github.com/mxyxyz9/Tabs-ide/releases/tag/v1.2.120",
+    "assets": [
+      {
+        "name": "latest-linux.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/latest-linux.yml"
+      },
+      {
+        "name": "latest.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/latest.yml"
+      },
+      {
+        "name": "Tabs-1.2.120-arm64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/Tabs-1.2.120-arm64.dmg"
+      },
+      {
+        "name": "Tabs-1.2.120-x64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/Tabs-1.2.120-x64.dmg"
+      },
+      {
+        "name": "Tabs-1.2.120-x64.exe",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/Tabs-1.2.120-x64.exe"
+      },
+      {
+        "name": "Tabs-1.2.120-x64.exe.blockmap",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/Tabs-1.2.120-x64.exe.blockmap"
+      },
+      {
+        "name": "Tabs-1.2.120-x86_64.AppImage",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.120/Tabs-1.2.120-x86_64.AppImage"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.2.119",
+    "name": "Tabs v1.2.119",
+    "published_at": "2026-08-04T12:10:57Z",
+    "body": "**Full Changelog**: https://github.com/mxyxyz9/Tabs-ide/compare/v1.2.118...v1.2.119",
+    "html_url": "https://github.com/mxyxyz9/Tabs-ide/releases/tag/v1.2.119",
+    "assets": [
+      {
+        "name": "latest-linux.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/latest-linux.yml"
+      },
+      {
+        "name": "latest.yml",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/latest.yml"
+      },
+      {
+        "name": "Tabs-1.2.119-arm64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/Tabs-1.2.119-arm64.dmg"
+      },
+      {
+        "name": "Tabs-1.2.119-x64.dmg",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/Tabs-1.2.119-x64.dmg"
+      },
+      {
+        "name": "Tabs-1.2.119-x64.exe",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/Tabs-1.2.119-x64.exe"
+      },
+      {
+        "name": "Tabs-1.2.119-x64.exe.blockmap",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/Tabs-1.2.119-x64.exe.blockmap"
+      },
+      {
+        "name": "Tabs-1.2.119-x86_64.AppImage",
+        "browser_download_url": "https://github.com/mxyxyz9/Tabs-ide/releases/download/v1.2.119/Tabs-1.2.119-x86_64.AppImage"
+      }
+    ]
+  }
+]

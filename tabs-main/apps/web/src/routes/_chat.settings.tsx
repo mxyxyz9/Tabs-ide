@@ -47,12 +47,23 @@ import { UsageLimitsPage } from "../components/settings/usage/UsageLimitsPage";
 import { BrowserProfilesSettings } from "../components/settings/BrowserProfilesSettings";
 import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
 import { DocumentationSettings } from "../components/settings/DocumentationSettings";
+import { RedactedSensitiveText } from "../components/settings/RedactedSensitiveText";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { UnifiedSettings } from "@tabs/contracts/settings";
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import {
+  DndContext,
+  closestCenter,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 import {
   arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -185,7 +196,7 @@ import {
   type ThemePreference,
 } from "../lib/themes";
 import { serverConfigQueryOptions, serverQueryKeys } from "../lib/serverReactQuery";
-import { cn } from "../lib/utils";
+import { cn, getHashAwareSearchParams, isPopoutMode } from "../lib/utils";
 import { formatRelativeTime } from "../timestampFormat";
 import { ensureNativeApi, readNativeApi } from "../nativeApi";
 import {
@@ -486,6 +497,29 @@ function SortableModelRowItem({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(isDragging && "relative z-10 opacity-70")}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  );
+}
+
+function SortablePinnedModelItem({
+  id,
+  children,
+}: {
+  id: string;
+  children: (handle: Pick<ReturnType<typeof useSortable>, "attributes" | "listeners">) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(
+        isDragging && "relative z-20 opacity-70 shadow-md ring-1 ring-border rounded-lg",
+      )}
     >
       {children({ attributes, listeners })}
     </div>
@@ -842,44 +876,62 @@ function useRelativeTimeTick(intervalMs = 1_000): number {
 
 export function SettingsSection({
   title,
+  description,
   headerAction,
+  className,
+  contentClassName,
   children,
 }: {
   title: string;
+  description?: ReactNode;
   headerAction?: ReactNode;
+  className?: string;
+  contentClassName?: string;
   children: ReactNode;
 }) {
   const { fontPreferences } = useTheme();
   const activeFontCombo = useMemo(() => getActiveFontCombo(fontPreferences), [fontPreferences]);
 
   return (
-    <section className={cn("space-y-3", activeFontCombo.isNeutral ? "pt-2" : "pt-0 -mt-2")}>
-      <div className="flex items-center justify-between">
-        {activeFontCombo.isNeutral ? (
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            {title}
-          </h3>
-        ) : (
-          <h2
-            className={cn(
-              "text-[18px] leading-relaxed text-foreground/80",
-              activeFontCombo.serifClass,
-            )}
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {title}
-          </h2>
-        )}
-        {headerAction}
+    <section className={cn("space-y-3", activeFontCombo.isNeutral ? "pt-2" : "pt-0 -mt-2", className)}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          {activeFontCombo.isNeutral ? (
+            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {title}
+            </h3>
+          ) : (
+            <h2
+              className={cn(
+                "text-[18px] leading-relaxed text-foreground/80",
+                activeFontCombo.serifClass,
+              )}
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {title}
+            </h2>
+          )}
+          {description ? (
+            <div className="mt-1 text-xs text-muted-foreground leading-normal">
+              {description}
+            </div>
+          ) : null}
+        </div>
+        {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
-      <div className="relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]">
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-2xl border bg-card not-dark:bg-clip-padding text-card-foreground shadow-xs/5 before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-2xl)-1px)] before:shadow-[0_1px_--theme(--color-black/4%)] dark:before:shadow-[0_-1px_--theme(--color-white/6%)]",
+          contentClassName,
+        )}
+      >
         {children}
       </div>
     </section>
   );
 }
 
-function SettingsRow({
+export function SettingsRow({
   title,
   description,
   status,
@@ -2240,6 +2292,11 @@ function SettingsRouteView() {
       cancelled = true;
     };
   }, []);
+
+  const pinnedDndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const { copyToClipboard } = useCopyToClipboard<{ providerName: string }>({
     onCopy: ({ providerName }) => {
       toastManager.add({
@@ -2252,8 +2309,18 @@ function SettingsRouteView() {
 
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
+
+  const isPopout = isPopoutMode();
+
+  const urlSection = useMemo(() => {
+    return getHashAwareSearchParams().get("section") as SettingsSectionId | null;
+  }, []);
+
   const [settingsViewState, updateSettingsViewState] = useSettingsViewState();
-  const activeSettingsSection = (settingsViewState.activeSection as SettingsSectionId) || "general";
+  const activeSettingsSection =
+    (urlSection && SETTINGS_NAV.some((item) => item.id === urlSection)
+      ? urlSection
+      : (settingsViewState.activeSection as SettingsSectionId)) || "general";
   const setActiveSettingsSection = useCallback(
     (s: SettingsSectionId) => {
       updateSettingsViewState({ activeSection: s });
@@ -3110,6 +3177,21 @@ function SettingsRouteView() {
       claudeAgent: "",
     });
     setCustomModelErrorByProvider({});
+  }
+
+  if (isPopout) {
+    return (
+      <div className="isolate flex h-screen min-h-0 min-w-0 flex-col overflow-y-auto overscroll-y-none bg-background text-foreground">
+        {activeSettingsSection === "documentation" ? (
+          <div className="p-6 max-w-7xl mx-auto w-full">
+            <DocumentationSettings />
+          </div>
+        ) : (
+          <DiagnosticsSettings />
+        )}
+        {confirmDialog}
+      </div>
+    );
   }
 
   return (
@@ -5263,127 +5345,118 @@ function SettingsRouteView() {
                               </div>
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                              {pinnedEntries.map((entry, index) => {
-                                const providerName =
-                                  PROVIDER_DISPLAY_NAMES[
-                                    entry.provider as keyof typeof PROVIDER_DISPLAY_NAMES
-                                  ] ?? entry.provider;
-                                const IconComponent =
-                                  PROVIDER_ICONS_BY_KIND[entry.provider] ?? BotIcon;
+                            <DndContext
+                              sensors={pinnedDndSensors}
+                              collisionDetection={closestCenter}
+                              onDragEnd={(event: DragEndEvent) => {
+                                const { active, over } = event;
+                                if (!over || active.id === over.id) return;
+                                const oldIndex = pinnedEntries.findIndex(
+                                  (entry) => `${entry.provider}:${entry.model}` === active.id,
+                                );
+                                const newIndex = pinnedEntries.findIndex(
+                                  (entry) => `${entry.provider}:${entry.model}` === over.id,
+                                );
+                                if (oldIndex !== -1 && newIndex !== -1) {
+                                  const nextPinned = reorderPinnedModels(
+                                    settings.pinnedModels,
+                                    oldIndex,
+                                    newIndex,
+                                  );
+                                  updateSettings({
+                                    pinnedModels: nextPinned as any,
+                                  });
+                                }
+                              }}
+                            >
+                              <SortableContext
+                                items={pinnedEntries.map(
+                                  (entry) => `${entry.provider}:${entry.model}`,
+                                )}
+                                strategy={rectSortingStrategy}
+                              >
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                  {pinnedEntries.map((entry) => {
+                                    const itemId = `${entry.provider}:${entry.model}`;
+                                    const providerName =
+                                      PROVIDER_DISPLAY_NAMES[
+                                        entry.provider as keyof typeof PROVIDER_DISPLAY_NAMES
+                                      ] ?? entry.provider;
+                                    const IconComponent =
+                                      PROVIDER_ICONS_BY_KIND[entry.provider] ?? BotIcon;
 
-                                const providerModels = getProviderModels(
-                                  serverProviders,
-                                  entry.provider,
-                                );
-                                const matchedModel = providerModels.find(
-                                  (m) => m.slug === entry.model,
-                                );
-                                const displayName = matchedModel?.name ?? entry.model;
+                                    const providerModels = getProviderModels(
+                                      serverProviders,
+                                      entry.provider,
+                                    );
+                                    const matchedModel = providerModels.find(
+                                      (m) => m.slug === entry.model,
+                                    );
+                                    const displayName = matchedModel?.name ?? entry.model;
 
-                                return (
-                                  <div
-                                    key={`${entry.provider}:${entry.model}`}
-                                    className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/20 px-3 py-2 transition-all hover:bg-muted/40 hover:border-border"
-                                  >
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                                        <IconComponent className="size-3.5 text-muted-foreground" />
-                                      </div>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-1.5 truncate">
-                                          <span className="text-xs font-semibold text-foreground truncate">
-                                            {displayName}
-                                          </span>
-                                          <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">
-                                            ({providerName})
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-0.5 shrink-0">
-                                      <Tooltip>
-                                        <TooltipTrigger
-                                          render={
-                                            <Button
-                                              size="icon-xs"
-                                              variant="ghost"
-                                              disabled={index === 0}
-                                              className="size-6 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
-                                              onClick={() => {
-                                                const nextPinned = reorderPinnedModels(
-                                                  settings.pinnedModels,
-                                                  index,
-                                                  index - 1,
-                                                );
-                                                updateSettings({
-                                                  pinnedModels: nextPinned as any,
-                                                });
-                                              }}
-                                              aria-label={`Move ${displayName} up`}
-                                            >
-                                              <ChevronUpIcon className="size-3.5" />
-                                            </Button>
-                                          }
-                                        />
-                                        <TooltipPopup side="top">Move up</TooltipPopup>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger
-                                          render={
-                                            <Button
-                                              size="icon-xs"
-                                              variant="ghost"
-                                              disabled={index === pinnedEntries.length - 1}
-                                              className="size-6 shrink-0 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 disabled:opacity-20 disabled:pointer-events-none cursor-pointer"
-                                              onClick={() => {
-                                                const nextPinned = reorderPinnedModels(
-                                                  settings.pinnedModels,
-                                                  index,
-                                                  index + 1,
-                                                );
-                                                updateSettings({
-                                                  pinnedModels: nextPinned as any,
-                                                });
-                                              }}
-                                              aria-label={`Move ${displayName} down`}
-                                            >
-                                              <ChevronDownIcon className="size-3.5" />
-                                            </Button>
-                                          }
-                                        />
-                                        <TooltipPopup side="top">Move down</TooltipPopup>
-                                      </Tooltip>
-                                      <Tooltip>
-                                        <TooltipTrigger
-                                          render={
-                                            <Button
-                                              size="icon-xs"
-                                              variant="ghost"
-                                              className="size-6 shrink-0 rounded text-foreground/80 hover:text-muted-foreground hover:bg-muted/50 cursor-pointer"
-                                              onClick={() => {
-                                                const nextPinned = togglePinnedModel(
-                                                  settings.pinnedModels,
-                                                  entry.provider,
-                                                  entry.model,
-                                                );
-                                                updateSettings({
-                                                  pinnedModels: nextPinned as any,
-                                                });
-                                              }}
-                                              aria-label={`Unpin ${displayName}`}
-                                            >
-                                              <PinIcon className="size-3.5 fill-current" />
-                                            </Button>
-                                          }
-                                        />
-                                        <TooltipPopup side="top">Unpin model</TooltipPopup>
-                                      </Tooltip>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                    return (
+                                      <SortablePinnedModelItem key={itemId} id={itemId}>
+                                        {(handle) => (
+                                          <div className="group/pinnedcard flex items-center justify-between gap-2.5 rounded-lg border border-border/50 bg-muted/20 px-2.5 py-2 transition-all hover:bg-muted/40 hover:border-border">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <button
+                                                type="button"
+                                                className="cursor-grab active:cursor-grabbing text-muted-foreground/40 group-hover/pinnedcard:text-muted-foreground hover:!text-foreground transition-colors p-0.5 rounded touch-none shrink-0"
+                                                aria-label={`Reorder ${displayName}`}
+                                                {...handle.attributes}
+                                                {...handle.listeners}
+                                              >
+                                                <GripVerticalIcon className="size-3.5" />
+                                              </button>
+                                              <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                                                <IconComponent className="size-3.5 text-muted-foreground" />
+                                              </div>
+                                              <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                  <span className="text-xs font-semibold text-foreground truncate">
+                                                    {displayName}
+                                                  </span>
+                                                  <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">
+                                                    ({providerName})
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-0.5 shrink-0">
+                                              <Tooltip>
+                                                <TooltipTrigger
+                                                  render={
+                                                    <Button
+                                                      size="icon-xs"
+                                                      variant="ghost"
+                                                      className="size-6 shrink-0 rounded text-foreground/80 hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                                                      onClick={() => {
+                                                        const nextPinned = togglePinnedModel(
+                                                          settings.pinnedModels,
+                                                          entry.provider,
+                                                          entry.model,
+                                                        );
+                                                        updateSettings({
+                                                          pinnedModels: nextPinned as any,
+                                                        });
+                                                      }}
+                                                      aria-label={`Unpin ${displayName}`}
+                                                    >
+                                                      <PinIcon className="size-3.5 fill-current" />
+                                                    </Button>
+                                                  }
+                                                />
+                                                <TooltipPopup side="top">Unpin model</TooltipPopup>
+                                              </Tooltip>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </SortablePinnedModelItem>
+                                    );
+                                  })}
+                                </div>
+                              </SortableContext>
+                            </DndContext>
                           )}
                         </div>
                       );
@@ -5629,78 +5702,7 @@ function SettingsRouteView() {
                                       </Button>
                                     ) : null}
 
-                                    {providerCard.isAuthenticated && providerCard.logoutCommand ? (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer"
-                                        disabled={providerActionBusy}
-                                        onClick={() => {
-                                          const api = readNativeApi();
-                                          if (!api) return;
-                                          const secretPatch =
-                                            providerCard.provider === "copilot"
-                                              ? {
-                                                  providers: {
-                                                    copilot: {
-                                                      token: "",
-                                                      byokApiKey: "",
-                                                    },
-                                                  },
-                                                }
-                                              : providerCard.provider === "opencode"
-                                                ? {
-                                                    providers: {
-                                                      opencode: {
-                                                        serverPassword: "",
-                                                      },
-                                                    },
-                                                  }
-                                                : providerCard.provider === "kilo"
-                                                  ? {
-                                                      providers: {
-                                                        kilo: {
-                                                          serverPassword: "",
-                                                        },
-                                                      },
-                                                    }
-                                                  : {};
-                                          void api.server
-                                            .updateSettings(secretPatch)
-                                            .then(() => {
-                                              const isCopilot = providerCard.provider === "copilot";
-                                              startProviderAction(
-                                                isCopilot
-                                                  ? {
-                                                      provider: "copilot",
-                                                      providerName: providerDisplayName,
-                                                      command: "copilot",
-                                                      followUpCommand: "/logout",
-                                                      kind: "logout",
-                                                    }
-                                                  : {
-                                                      provider: providerCard.provider,
-                                                      providerName: providerDisplayName,
-                                                      command: providerCard.logoutCommand!,
-                                                      kind: "logout",
-                                                    },
-                                              );
-                                            })
-                                            .catch(() => {
-                                              toastManager.add({
-                                                type: "error",
-                                                title: `Could not log out of ${providerDisplayName}`,
-                                                description:
-                                                  "Tabs could not clear the provider credentials. The logout command was not started.",
-                                              });
-                                            });
-                                        }}
-                                        aria-label={`Log out of ${providerDisplayName}`}
-                                      >
-                                        <LogOutIcon className="size-3.5" />
-                                        Log out
-                                      </Button>
-                                    ) : null}
+
 
                                     <Button
                                       size="sm"
@@ -5847,9 +5849,19 @@ function SettingsRouteView() {
                                     {providerCard.hasApiKey ? (
                                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
                                         <label className="block">
-                                          <span className="text-xs font-medium text-foreground">
-                                            API key
-                                          </span>
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-xs font-medium text-foreground">
+                                              API key
+                                            </span>
+                                            {"apiKey" in providerCard.providerConfig && providerCard.providerConfig.apiKey ? (
+                                              <RedactedSensitiveText
+                                                value={providerCard.providerConfig.apiKey}
+                                                ariaLabel={`Toggle ${providerDisplayName} API key visibility`}
+                                                revealTooltip="Click to reveal API key"
+                                                hideTooltip="Click to hide API key"
+                                              />
+                                            ) : null}
+                                          </div>
                                           <Input
                                             aria-label={`${providerDisplayName} API key`}
                                             className="mt-1.5"
@@ -5990,6 +6002,91 @@ function SettingsRouteView() {
                                           </label>
                                         </div>
                                       </>
+                                    ) : null}
+
+                                    {/* Account & Session (Log out) */}
+                                    {providerCard.isAuthenticated && providerCard.logoutCommand ? (
+                                      <div className="border-t border-border/60 px-4 py-3 sm:px-5 flex items-center justify-between gap-4">
+                                        <div>
+                                          <span className="text-xs font-medium text-foreground">
+                                            Account Session
+                                          </span>
+                                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                                            Currently authenticated. Disconnect and log out of {providerDisplayName}.
+                                          </span>
+                                        </div>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 gap-1.5 px-2.5 text-xs cursor-pointer shrink-0 text-muted-foreground hover:text-foreground"
+                                          disabled={providerActionBusy}
+                                          onClick={() => {
+                                            const api = readNativeApi();
+                                            if (!api) return;
+                                            const secretPatch =
+                                              providerCard.provider === "copilot"
+                                                ? {
+                                                    providers: {
+                                                      copilot: {
+                                                        token: "",
+                                                        byokApiKey: "",
+                                                      },
+                                                    },
+                                                  }
+                                                : providerCard.provider === "opencode"
+                                                  ? {
+                                                      providers: {
+                                                        opencode: {
+                                                          serverPassword: "",
+                                                        },
+                                                      },
+                                                    }
+                                                  : providerCard.provider === "kilo"
+                                                    ? {
+                                                        providers: {
+                                                          kilo: {
+                                                            serverPassword: "",
+                                                          },
+                                                        },
+                                                      }
+                                                    : {};
+                                            void api.server
+                                              .updateSettings(secretPatch)
+                                              .then(() => {
+                                                const isCopilot =
+                                                  providerCard.provider === "copilot";
+                                                startProviderAction(
+                                                  isCopilot
+                                                    ? {
+                                                        provider: "copilot",
+                                                        providerName: providerDisplayName,
+                                                        command: "copilot",
+                                                        followUpCommand: "/logout",
+                                                        kind: "logout",
+                                                      }
+                                                    : {
+                                                        provider: providerCard.provider,
+                                                        providerName: providerDisplayName,
+                                                        command: providerCard.logoutCommand!,
+                                                        kind: "logout",
+                                                      },
+                                                );
+                                              })
+                                              .catch(() => {
+                                                toastManager.add({
+                                                  type: "error",
+                                                  title: `Could not log out of ${providerDisplayName}`,
+                                                  description:
+                                                    "Tabs could not clear the provider credentials. The logout command was not started.",
+                                                });
+                                              });
+                                          }}
+                                          aria-label={`Log out of ${providerDisplayName}`}
+                                        >
+                                          <LogOutIcon className="size-3.5" />
+                                          Log out
+                                        </Button>
+                                      </div>
                                     ) : null}
 
                                     {/* Models Section */}

@@ -10362,10 +10362,28 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     activeProjectId: workspaceState.session.activeProjectId,
     activePendingTabId: workspaceState.session.activePendingTabId,
   };
+  const ensureProjectForWorkspaceRootRef = useRef<(workspaceRoot: string) => Promise<ProjectId>>(
+    async () => {
+      throw new Error("Project opening is not ready yet.");
+    },
+  );
   useEffect(() => {
     const bridge = window.desktopBridge;
     if (!bridge) return;
     return bridge.onMenuAction((action) => {
+      if (action.startsWith("code-open-folder:")) {
+        const encodedPath = action.slice("code-open-folder:".length);
+        void ensureProjectForWorkspaceRootRef
+          .current(decodeURIComponent(encodedPath))
+          .catch((error) => {
+            toastManager.add({
+              type: "error",
+              title: "Could not open folder",
+              description: error instanceof Error ? error.message : "The folder path is invalid.",
+            });
+          });
+        return;
+      }
       const { openProjectIds, pendingTabIds, activeProjectId, activePendingTabId } =
         tabShortcutStateRef.current;
 
@@ -10456,6 +10474,7 @@ export function WorkspaceShell(props: { agentsContent: ReactNode; settingsConten
     },
     [openProject, projects],
   );
+  ensureProjectForWorkspaceRootRef.current = ensureProjectForWorkspaceRoot;
 
   const [cloneDialogOpen, setCloneDialogOpen] = useState(false);
   const handleClonedRepository = useCallback(

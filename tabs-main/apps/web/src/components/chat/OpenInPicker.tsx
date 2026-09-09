@@ -38,7 +38,7 @@ const resolveOptions = (platform: string, availableEditors: ReadonlyArray<Editor
         : isWindowsPlatform(platform)
           ? "Explorer"
           : "Files",
-      Icon: FolderClosedIcon,
+      Icon: FolderClosedIcon as unknown as Icon,
       value: "file-manager",
     },
   ];

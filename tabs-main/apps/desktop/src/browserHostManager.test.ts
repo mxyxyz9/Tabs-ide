@@ -411,6 +411,8 @@ describe("BrowserHostManager artifacts", () => {
       },
     });
     expect(executeJavaScript).toHaveBeenCalledOnce();
+    // Parse the actual injected source: template escapes must remain valid JavaScript.
+    expect(() => new Function(executeJavaScript.mock.calls[0]?.[0] as string)).not.toThrow();
   });
 });
 

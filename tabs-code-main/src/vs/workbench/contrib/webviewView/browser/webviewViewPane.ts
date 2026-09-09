@@ -205,7 +205,13 @@ export class WebviewViewPane extends ViewPane {
 		this._webviewDisposables.add(toDisposable(() => source.cancel()));
 
 		this.withProgress(async () => {
-			await this.extensionService.activateByEvent(`onView:${this.id}`);
+			// Start extension activation without blocking resolver lookup on the
+			// extension host's activation-complete acknowledgement. Providers often
+			// register synchronously during activation, and `resolve` already waits
+			// safely when registration has not happened yet. Running both operations
+			// together prevents an otherwise registered provider from leaving behind
+			// a permanently empty webview if activation completion is delayed.
+			const activation = this.extensionService.activateByEvent(`onView:${this.id}`);
 
 			const self = this;
 			const webviewView: WebviewView = {
@@ -234,7 +240,10 @@ export class WebviewViewPane extends ViewPane {
 				}
 			};
 
-			await this.webviewViewService.resolve(this.id, webviewView, source.token);
+			await Promise.all([
+				activation,
+				this.webviewViewService.resolve(this.id, webviewView, source.token)
+			]);
 		});
 	}
 

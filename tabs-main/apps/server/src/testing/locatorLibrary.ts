@@ -44,6 +44,8 @@ export interface LocatorCandidate {
   readonly sourceLine?: number;
   readonly fragile?: boolean;
   readonly lifecycleStatus?: TestingLocatorEntry["lifecycleStatus"];
+  readonly elementFingerprint?: string | null;
+  readonly targetPageFingerprint?: string | null;
 }
 
 interface PageRow {
@@ -67,6 +69,12 @@ interface EntryRow {
   readonly lifecycle_status: TestingLocatorEntry["lifecycleStatus"];
   readonly sync_status: TestingLocatorEntry["syncStatus"];
   readonly current_version_id: string;
+  readonly health: TestingLocatorEntry["health"];
+  readonly element_fingerprint: string | null;
+  readonly target_page_fingerprint: string | null;
+  readonly verification_count: number;
+  readonly consecutive_repair_attempts: number;
+  readonly last_failure_classification: string | null;
   readonly version_number: number;
   readonly strategy: TestingLocatorEntry["strategy"];
   readonly arguments_json: string;
@@ -79,15 +87,19 @@ interface EntryRow {
 }
 
 function featureEnabled(): boolean {
-  return process.env.TABS_TESTING_LOCATOR_FIRST_ENABLED?.trim().toLowerCase() !== "false";
+  return (
+    process.env.TABS_TESTING_LOCATOR_FIRST_ENABLED?.trim().toLowerCase() !==
+    "false"
+  );
 }
 
 function safeName(value: string): string {
   return (
     value
+      .replace(/[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu, "")
       .toLowerCase()
       .replace(/<[^>]+>/g, " redacted ")
-      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/[^\p{L}\p{N}]+/gu, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 72) || "locator"
   );
@@ -102,7 +114,9 @@ function humanizePageSegment(value: string): string {
   if (!words) return "Captured page";
   const label = words
     .split(/\s+/u)
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`)
+    .map(
+      (word) => `${word.charAt(0).toUpperCase()}${word.slice(1).toLowerCase()}`,
+    )
     .join(" ");
   return /\bpage$/iu.test(label) ? label : `${label} page`;
 }
@@ -115,7 +129,9 @@ function pageName(urlPattern: string): string {
     const segment = segments.findLast(
       (part) => !/^(?:index|default|web)(?:\.[a-z]+)?$/iu.test(part),
     );
-    return segment ? humanizePageSegment(decodeURIComponent(segment)) : "Landing page";
+    return segment
+      ? humanizePageSegment(decodeURIComponent(segment))
+      : "Landing page";
   } catch {
     return "Captured page";
   }
@@ -150,6 +166,8 @@ function locatorExpression(entry: TestingLocatorEntry): string {
       return `this.page.getByText(${text("text")})`;
     case "css":
       return `this.page.locator(${text("selector")})`;
+    default:
+      return `this.page.locator(${text("selector")})`;
   }
 }
 
@@ -163,10 +181,12 @@ function generatePageObject(page: TestingLocatorPage): {
   const className = `${pascalCase(artifactName)}Page`;
   const containsRedactedArgument = (entry: TestingLocatorEntry) =>
     Object.values(entry.arguments).some(
-      (value) => typeof value === "string" && /<(?:PII_|REDACTED_)[^>]*>/u.test(value),
+      (value) =>
+        typeof value === "string" && /<(?:PII_|REDACTED_)[^>]*>/u.test(value),
     );
   const usable = page.entries.filter(
-    (entry) => entry.lifecycleStatus === "accepted" && !containsRedactedArgument(entry),
+    (entry) =>
+      entry.lifecycleStatus === "accepted" && !containsRedactedArgument(entry),
   );
   const lines = usable.map(
     (entry) =>
@@ -277,6 +297,12 @@ export class LocatorLibraryStore {
         lifecycle_status TEXT NOT NULL DEFAULT 'draft',
         sync_status TEXT NOT NULL DEFAULT 'managed',
         current_version_id TEXT NOT NULL,
+        health TEXT NOT NULL DEFAULT 'healthy',
+        element_fingerprint TEXT,
+        target_page_fingerprint TEXT,
+        verification_count INTEGER NOT NULL DEFAULT 0,
+        consecutive_repair_attempts INTEGER NOT NULL DEFAULT 0,
+        last_failure_classification TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(project_id, page_id, locator_key)
@@ -422,6 +448,7 @@ export class LocatorLibraryStore {
     this.#ensurePreferenceColumns();
     this.#ensurePageColumns();
     this.#ensureArtifactColumns();
+    this.#ensureEntryHealthColumns();
     this.#refreshGeneratedPageNames();
     this.#recoverSessions();
     this.#backfill();
@@ -441,13 +468,21 @@ export class LocatorLibraryStore {
         .query<{ discovery_experience: TestingDiscoveryExperience }, [string]>(
           "SELECT discovery_experience FROM testing_project_preferences WHERE project_id = ?",
         )
-        .get(projectId)?.discovery_experience ?? (featureEnabled() ? "locator-first" : "classic")
+        .get(projectId)?.discovery_experience ??
+      (featureEnabled() ? "locator-first" : "classic")
     );
   }
 
   caseIdPolicy(projectId: string): TestingCaseIdPolicy {
     const row = this.#database
-      .query<{ case_id_prefix: string; case_id_padding: number; case_id_next: number }, [string]>(
+      .query<
+        {
+          case_id_prefix: string;
+          case_id_padding: number;
+          case_id_next: number;
+        },
+        [string]
+      >(
         "SELECT case_id_prefix, case_id_padding, case_id_next FROM testing_project_preferences WHERE project_id = ?",
       )
       .get(projectId);
@@ -500,9 +535,14 @@ export class LocatorLibraryStore {
     return values;
   }
 
-  setExperience(projectId: string, experience: TestingDiscoveryExperience): void {
+  setExperience(
+    projectId: string,
+    experience: TestingDiscoveryExperience,
+  ): void {
     if (experience === "locator-first" && !featureEnabled()) {
-      throw new Error("Locator-first discovery is disabled by the server feature flag");
+      throw new Error(
+        "Locator-first discovery is disabled by the server feature flag",
+      );
     }
     this.#database
       .query(
@@ -513,7 +553,9 @@ export class LocatorLibraryStore {
       .run(projectId, experience, new Date().toISOString());
   }
 
-  updatePage(input: TestingLocatorPageUpdateInput): TestingLocatorLibraryResult {
+  updatePage(
+    input: TestingLocatorPageUpdateInput,
+  ): TestingLocatorLibraryResult {
     const name = input.name.trim().replace(/\s+/gu, " ").slice(0, 80);
     if (!name) throw new Error("Enter a page name before saving");
     const exists = this.#database
@@ -531,18 +573,24 @@ export class LocatorLibraryStore {
     return this.library(input.projectId);
   }
 
-  setPageSelection(input: TestingLocatorPageSelectionInput): TestingLocatorLibraryResult {
+  setPageSelection(
+    input: TestingLocatorPageSelectionInput,
+  ): TestingLocatorLibraryResult {
     const requested = new Set(input.entryIds);
     const entries = this.#database
       .query<
-        { id: string; lifecycle_status: TestingLocatorEntry["lifecycleStatus"] },
+        {
+          id: string;
+          lifecycle_status: TestingLocatorEntry["lifecycleStatus"];
+        },
         [string, string]
       >(
         `SELECT id, lifecycle_status FROM locator_entries
          WHERE project_id = ? AND page_id = ?`,
       )
       .all(input.projectId, input.pageId);
-    if (entries.length === 0) throw new Error("Locator page was not found or has no locators");
+    if (entries.length === 0)
+      throw new Error("Locator page was not found or has no locators");
     const validIds = new Set(entries.map((entry) => entry.id));
     if ([...requested].some((id) => !validIds.has(id))) {
       throw new Error("A selected locator does not belong to this page");
@@ -550,9 +598,14 @@ export class LocatorLibraryStore {
     const now = new Date().toISOString();
     this.#database.transaction(() => {
       for (const entry of entries) {
-        if (entry.lifecycle_status === "archived" || entry.lifecycle_status === "manual-required") {
+        if (
+          entry.lifecycle_status === "archived" ||
+          entry.lifecycle_status === "manual-required"
+        ) {
           if (requested.has(entry.id)) {
-            throw new Error("Archived or manual-required locators cannot be added to code");
+            throw new Error(
+              "Archived or manual-required locators cannot be added to code",
+            );
           }
           continue;
         }
@@ -573,7 +626,9 @@ export class LocatorLibraryStore {
     return this.library(input.projectId);
   }
 
-  deletePage(input: TestingLocatorPageDeleteInput): TestingLocatorLibraryResult {
+  deletePage(
+    input: TestingLocatorPageDeleteInput,
+  ): TestingLocatorLibraryResult {
     const exists = this.#database
       .query<{ id: string }, [string, string]>(
         "SELECT id FROM locator_pages WHERE id = ? AND project_id = ?",
@@ -591,18 +646,28 @@ export class LocatorLibraryStore {
         this.#database
           .query("DELETE FROM case_locator_mappings WHERE locator_entry_id = ?")
           .run(entryId);
-        this.#database.query("DELETE FROM locator_sync_conflicts WHERE entry_id = ?").run(entryId);
-        this.#database.query("DELETE FROM locator_verifications WHERE entry_id = ?").run(entryId);
-        this.#database.query("DELETE FROM locator_entry_versions WHERE entry_id = ?").run(entryId);
+        this.#database
+          .query("DELETE FROM locator_sync_conflicts WHERE entry_id = ?")
+          .run(entryId);
+        this.#database
+          .query("DELETE FROM locator_verifications WHERE entry_id = ?")
+          .run(entryId);
+        this.#database
+          .query("DELETE FROM locator_entry_versions WHERE entry_id = ?")
+          .run(entryId);
       }
       this.#database
-        .query("DELETE FROM locator_entries WHERE project_id = ? AND page_id = ?")
+        .query(
+          "DELETE FROM locator_entries WHERE project_id = ? AND page_id = ?",
+        )
         .run(input.projectId, input.pageId);
       this.#database
         .query("DELETE FROM locator_page_artifacts WHERE page_id = ?")
         .run(input.pageId);
       this.#database
-        .query("DELETE FROM locator_repository_targets WHERE project_id = ? AND page_id = ?")
+        .query(
+          "DELETE FROM locator_repository_targets WHERE project_id = ? AND page_id = ?",
+        )
         .run(input.projectId, input.pageId);
       this.#database
         .query("DELETE FROM locator_pages WHERE id = ? AND project_id = ?")
@@ -611,23 +676,33 @@ export class LocatorLibraryStore {
     return this.library(input.projectId);
   }
 
-  updatePageObjectCode(input: TestingPageObjectCodeUpdateInput): TestingLocatorLibraryResult {
+  updatePageObjectCode(
+    input: TestingPageObjectCodeUpdateInput,
+  ): TestingLocatorLibraryResult {
     const code = input.code.replaceAll("\r\n", "\n");
     if (!code.trim()) throw new Error("Page-object code cannot be empty");
     if (code.length > 200_000)
       throw new Error("Page-object code must be 200,000 characters or less");
-    if (code.includes("\0")) throw new Error("Page-object code contains an invalid null character");
+    if (code.includes("\0"))
+      throw new Error("Page-object code contains an invalid null character");
     if (
       redactCredentialLikeText(code) !== code ||
       tokenizePii(input.projectId, code).tokens.length > 0
     ) {
-      throw new Error("Remove credentials, high-entropy secrets, or personal data before saving");
+      throw new Error(
+        "Remove credentials, high-entropy secrets, or personal data before saving",
+      );
     }
-    const page = this.library(input.projectId).pages.find((value) => value.id === input.pageId);
-    if (!page?.pageObject) throw new Error("Locator page was not found in this project");
+    const page = this.library(input.projectId).pages.find(
+      (value) => value.id === input.pageId,
+    );
+    if (!page?.pageObject)
+      throw new Error("Locator page was not found in this project");
     const pageObject = page.pageObject;
     if (pageObject.sourceHash !== input.expectedSourceHash) {
-      throw new Error("The page object changed after editing started. Review the latest version.");
+      throw new Error(
+        "The page object changed after editing started. Review the latest version.",
+      );
     }
     const sourceFile = ts.createSourceFile(
       pageObject.fileName,
@@ -637,8 +712,11 @@ export class LocatorLibraryStore {
       ts.ScriptKind.TS,
     );
     const parseDiagnostics =
-      (sourceFile as ts.SourceFile & { readonly parseDiagnostics?: readonly ts.Diagnostic[] })
-        .parseDiagnostics ?? [];
+      (
+        sourceFile as ts.SourceFile & {
+          readonly parseDiagnostics?: readonly ts.Diagnostic[];
+        }
+      ).parseDiagnostics ?? [];
     if (parseDiagnostics.length > 0) {
       throw new Error(
         `Fix the TypeScript syntax before saving: ${ts.flattenDiagnosticMessageText(parseDiagnostics[0]!.messageText, " ")}`,
@@ -648,10 +726,14 @@ export class LocatorLibraryStore {
       (statement) =>
         ts.isClassDeclaration(statement) &&
         statement.name?.text === pageObject.className &&
-        statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+        statement.modifiers?.some(
+          (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+        ),
     );
     if (!preservesExpectedClass) {
-      throw new Error(`Keep the exported ${pageObject.className} class in this page object`);
+      throw new Error(
+        `Keep the exported ${pageObject.className} class in this page object`,
+      );
     }
     const generated = generatePageObject(page);
     const id = crypto.randomUUID();
@@ -768,7 +850,9 @@ export class LocatorLibraryStore {
       pages,
       pageCount: pages.length,
       locatorCount: entries.length,
-      verifiedCount: entries.filter((entry) => entry.verificationStatus === "verified").length,
+      verifiedCount: entries.filter(
+        (entry) => entry.verificationStatus === "verified",
+      ).length,
       reviewCount: entries.filter(
         (entry) =>
           entry.lifecycleStatus === "draft" ||
@@ -790,7 +874,8 @@ export class LocatorLibraryStore {
     readonly maxElementsPerPage: number;
     readonly maxPagesPerSession: number;
   }): string {
-    if (!featureEnabled()) throw new Error("Locator-first discovery is disabled");
+    if (!featureEnabled())
+      throw new Error("Locator-first discovery is disabled");
     const id = crypto.randomUUID();
     const targetUrlPattern = sanitizePersistedUrl(input.targetUrl);
     this.#database
@@ -869,7 +954,9 @@ export class LocatorLibraryStore {
         this.#upsertCandidate(input.projectId, pageId, candidate, now);
       }
       if (input.replaceMissing) {
-        const keys = new Set(input.candidates.map((candidate) => safeName(candidate.locatorKey)));
+        const keys = new Set(
+          input.candidates.map((candidate) => safeName(candidate.locatorKey)),
+        );
         const entries = this.#database
           .query<{ id: string; locator_key: string }, [string]>(
             "SELECT e.id, e.locator_key FROM locator_entries e JOIN locator_entry_versions v ON v.id = e.current_version_id WHERE e.page_id = ? AND v.source = 'discovered'",
@@ -921,7 +1008,14 @@ export class LocatorLibraryStore {
           `UPDATE locator_discovery_sessions SET status = ?, termination_reason = ?, message = ?,
             completed_at = ? WHERE id = ? AND project_id = ?`,
         )
-        .run(status, reason, message, new Date().toISOString(), sessionId, projectId);
+        .run(
+          status,
+          reason,
+          message,
+          new Date().toISOString(),
+          sessionId,
+          projectId,
+        );
       if (incomplete) {
         this.#database
           .query(
@@ -933,7 +1027,10 @@ export class LocatorLibraryStore {
     })();
   }
 
-  session(projectId: string, sessionId: string): Record<string, unknown> | null {
+  session(
+    projectId: string,
+    sessionId: string,
+  ): Record<string, unknown> | null {
     return (
       this.#database
         .query<Record<string, unknown>, [string, string]>(
@@ -950,7 +1047,8 @@ export class LocatorLibraryStore {
         : input.decision === "restore"
           ? "draft"
           : "accepted";
-    const syncStatus = input.decision === "keep-managed" ? "managed-only" : undefined;
+    const syncStatus =
+      input.decision === "keep-managed" ? "managed-only" : undefined;
     const current = this.#database
       .query<
         {
@@ -972,7 +1070,8 @@ export class LocatorLibraryStore {
          WHERE e.id = ? AND e.project_id = ?`,
       )
       .get(input.entryId, input.projectId);
-    if (!current) throw new Error("Locator entry was not found in this project");
+    if (!current)
+      throw new Error("Locator entry was not found in this project");
     const nextKey = input.locatorKey?.trim() || current.locator_key;
     if (!/^[A-Za-z][A-Za-z0-9_-]{0,79}$/u.test(nextKey)) {
       throw new Error(
@@ -986,20 +1085,31 @@ export class LocatorLibraryStore {
            AND lifecycle_status != 'archived'`,
       )
       .get(input.projectId, current.page_id, nextKey, input.entryId);
-    if (duplicate) throw new Error(`Another locator on this page already uses ${nextKey}`);
+    if (duplicate)
+      throw new Error(`Another locator on this page already uses ${nextKey}`);
 
     const nextClassification = input.classification ?? current.classification;
     const nextStrategy = input.strategy ?? current.strategy;
     const nextArguments =
       input.arguments ??
-      (JSON.parse(current.arguments_json) as Record<string, string | number | boolean>);
-    const nextSemanticContext = input.semanticContext?.trim() ?? current.semantic_context;
-    const sensitiveText = [nextKey, nextSemanticContext, JSON.stringify(nextArguments)].join("\n");
+      (JSON.parse(current.arguments_json) as Record<
+        string,
+        string | number | boolean
+      >);
+    const nextSemanticContext =
+      input.semanticContext?.trim() ?? current.semantic_context;
+    const sensitiveText = [
+      nextKey,
+      nextSemanticContext,
+      JSON.stringify(nextArguments),
+    ].join("\n");
     if (
       redactCredentialLikeText(sensitiveText) !== sensitiveText ||
       tokenizePii(input.projectId, sensitiveText).tokens.length > 0
     ) {
-      throw new Error("Remove credentials, high-entropy secrets, or personal data before saving");
+      throw new Error(
+        "Remove credentials, high-entropy secrets, or personal data before saving",
+      );
     }
     const argumentsJson = JSON.stringify(nextArguments);
     const versionChanged =
@@ -1012,7 +1122,9 @@ export class LocatorLibraryStore {
       if (versionChanged) {
         currentVersionId = crypto.randomUUID();
         this.#database
-          .query("UPDATE locator_entry_versions SET superseded_at = ? WHERE id = ?")
+          .query(
+            "UPDATE locator_entry_versions SET superseded_at = ? WHERE id = ?",
+          )
           .run(now, current.current_version_id);
         this.#database
           .query(
@@ -1029,7 +1141,9 @@ export class LocatorLibraryStore {
             argumentsJson,
             nextSemanticContext,
             current.fragile,
-            shortDigest(`${nextStrategy}\0${argumentsJson}\0${nextSemanticContext}`),
+            shortDigest(
+              `${nextStrategy}\0${argumentsJson}\0${nextSemanticContext}`,
+            ),
             now,
           );
       }
@@ -1061,9 +1175,13 @@ export class LocatorLibraryStore {
     readonly status: TestingLocatorVerificationStatus;
     readonly matchCount: number | null;
     readonly pageFingerprint?: string;
+    readonly elementFingerprint?: string;
     readonly sourceHash?: string;
     readonly message?: string;
+    readonly failureClassification?: string;
+    readonly isRepairAttempt?: boolean;
   }): void {
+    const now = new Date().toISOString();
     this.#database
       .query(
         `INSERT INTO locator_verifications
@@ -1083,8 +1201,91 @@ export class LocatorLibraryStore {
         input.pageFingerprint ?? null,
         input.sourceHash ?? null,
         input.message ?? "",
-        new Date().toISOString(),
+        now,
       );
+
+    const current = this.#database
+      .query<
+        {
+          health: TestingLocatorEntry["health"];
+          verification_count: number;
+          consecutive_repair_attempts: number;
+        },
+        [string, string]
+      >(
+        "SELECT health, verification_count, consecutive_repair_attempts FROM locator_entries WHERE id = ? AND project_id = ?",
+      )
+      .get(input.entryId, input.projectId);
+
+    if (current) {
+      let nextHealth = current.health ?? "healthy";
+      let consecutiveRepair = current.consecutive_repair_attempts ?? 0;
+      let lastFailureClassification: string | null = null;
+
+      const isSelectorActionabilityFailure =
+        !input.failureClassification ||
+        input.failureClassification === "selector-drift" ||
+        input.failureClassification === "actionability-timing" ||
+        input.failureClassification === "navigation-readiness" ||
+        input.failureClassification === "ambiguous-selector" ||
+        input.failureClassification === "stale-dom" ||
+        input.failureClassification === "missing-element";
+
+      if (
+        input.status === "verified" ||
+        (input.matchCount === 1 &&
+          input.status !== "invalid" &&
+          input.status !== "missing")
+      ) {
+        nextHealth = "healthy";
+        consecutiveRepair = 0;
+        lastFailureClassification = null;
+      } else if (isSelectorActionabilityFailure) {
+        if (input.isRepairAttempt) {
+          consecutiveRepair += 1;
+        }
+        if (consecutiveRepair >= 2) {
+          nextHealth = "quarantined";
+        } else if (
+          input.status === "ambiguous" ||
+          (input.matchCount !== null && input.matchCount > 1)
+        ) {
+          nextHealth = "degraded";
+        } else if (input.status === "stale") {
+          nextHealth = "degraded";
+        } else {
+          nextHealth = "broken";
+        }
+        lastFailureClassification =
+          input.failureClassification ??
+          (input.status === "ambiguous"
+            ? "ambiguous-selector"
+            : "selector-drift");
+      }
+
+      this.#database
+        .query(
+          `UPDATE locator_entries
+           SET health = ?,
+               element_fingerprint = COALESCE(?, element_fingerprint),
+               target_page_fingerprint = COALESCE(?, target_page_fingerprint),
+               verification_count = verification_count + 1,
+               consecutive_repair_attempts = ?,
+               last_failure_classification = ?,
+               updated_at = ?
+           WHERE id = ? AND project_id = ?`,
+        )
+        .run(
+          nextHealth,
+          input.elementFingerprint ?? null,
+          input.pageFingerprint ?? null,
+          consecutiveRepair,
+          lastFailureClassification,
+          now,
+          input.entryId,
+          input.projectId,
+        );
+    }
   }
 
   createStoryImport(input: {
@@ -1111,9 +1312,14 @@ export class LocatorLibraryStore {
     return id;
   }
 
-  updateStoryCases(storyImportId: string, caseIds: ReadonlyArray<string>): void {
+  updateStoryCases(
+    storyImportId: string,
+    caseIds: ReadonlyArray<string>,
+  ): void {
     this.#database
-      .query("UPDATE story_imports SET generated_case_ids_json = ? WHERE id = ?")
+      .query(
+        "UPDATE story_imports SET generated_case_ids_json = ? WHERE id = ?",
+      )
       .run(JSON.stringify(caseIds), storyImportId);
   }
 
@@ -1146,13 +1352,20 @@ export class LocatorLibraryStore {
     })();
   }
 
-  replaceCaseLocators(projectId: string, caseId: string, entryIds: ReadonlyArray<string>): void {
+  replaceCaseLocators(
+    projectId: string,
+    caseId: string,
+    entryIds: ReadonlyArray<string>,
+  ): void {
     const uniqueIds = [...new Set(entryIds)];
     const entries = this.#entries(projectId).filter(
-      (entry) => uniqueIds.includes(entry.id) && entry.lifecycleStatus !== "archived",
+      (entry) =>
+        uniqueIds.includes(entry.id) && entry.lifecycleStatus !== "archived",
     );
     if (entries.length !== uniqueIds.length) {
-      throw new Error("One or more selected locators are unavailable in this project");
+      throw new Error(
+        "One or more selected locators are unavailable in this project",
+      );
     }
     const statement = this.#database.query(
       `INSERT INTO case_locator_mappings
@@ -1161,7 +1374,9 @@ export class LocatorLibraryStore {
     );
     const now = new Date().toISOString();
     this.#database.transaction(() => {
-      this.#database.query("DELETE FROM case_locator_mappings WHERE case_id = ?").run(caseId);
+      this.#database
+        .query("DELETE FROM case_locator_mappings WHERE case_id = ?")
+        .run(caseId);
       for (const entry of entries) {
         statement.run(caseId, entry.id, entry.currentVersionId, now);
       }
@@ -1172,7 +1387,10 @@ export class LocatorLibraryStore {
     return this.caseLocators(projectId, caseId).map((entry) => entry.id);
   }
 
-  caseLocators(projectId: string, caseId: string): ReadonlyArray<TestingLocatorEntry> {
+  caseLocators(
+    projectId: string,
+    caseId: string,
+  ): ReadonlyArray<TestingLocatorEntry> {
     const mappedIds = new Set(
       this.#database
         .query<{ locator_entry_id: string }, [string]>(
@@ -1221,7 +1439,10 @@ export class LocatorLibraryStore {
     return id;
   }
 
-  markManagedOnly(projectId: string, repositoryEntryIds: ReadonlySet<string>): number {
+  markManagedOnly(
+    projectId: string,
+    repositoryEntryIds: ReadonlySet<string>,
+  ): number {
     const entries = this.#database
       .query<{ id: string; source_file: string | null }, [string]>(
         "SELECT id, source_file FROM locator_entries WHERE project_id = ? AND lifecycle_status != 'archived'",
@@ -1231,7 +1452,9 @@ export class LocatorLibraryStore {
     for (const entry of entries) {
       if (repositoryEntryIds.has(entry.id) || entry.source_file) continue;
       this.#database
-        .query("UPDATE locator_entries SET sync_status = 'managed-only' WHERE id = ?")
+        .query(
+          "UPDATE locator_entries SET sync_status = 'managed-only' WHERE id = ?",
+        )
         .run(entry.id);
       count += 1;
     }
@@ -1245,7 +1468,11 @@ export class LocatorLibraryStore {
     readonly environmentLabel: string;
     readonly candidate: LocatorCandidate;
     readonly storageMode: TestingLocatorStorageMode;
-  }): { readonly entryId: string; readonly linked: boolean; readonly conflict: boolean } {
+  }): {
+    readonly entryId: string;
+    readonly linked: boolean;
+    readonly conflict: boolean;
+  } {
     const urlPattern = sanitizePersistedUrl(input.rawUrl);
     const now = new Date().toISOString();
     let page = this.#database
@@ -1274,7 +1501,10 @@ export class LocatorLibraryStore {
       page = { id };
     }
     const existing = this.#database
-      .query<{ id: string; arguments_json: string; strategy: string }, [string, string, string]>(
+      .query<
+        { id: string; arguments_json: string; strategy: string },
+        [string, string, string]
+      >(
         `SELECT e.id, v.arguments_json, v.strategy FROM locator_entries e
          JOIN locator_entry_versions v ON v.id = e.current_version_id
          WHERE e.project_id = ? AND e.page_id = ? AND e.locator_key = ?`,
@@ -1325,7 +1555,13 @@ export class LocatorLibraryStore {
       }
       return { entryId: existing.id, linked: !conflict, conflict };
     }
-    this.#upsertCandidate(input.projectId, page.id, input.candidate, now, "repository-only");
+    this.#upsertCandidate(
+      input.projectId,
+      page.id,
+      input.candidate,
+      now,
+      "repository-only",
+    );
     const entryId = this.#database
       .query<{ id: string }, [string, string, string]>(
         "SELECT id FROM locator_entries WHERE project_id = ? AND page_id = ? AND locator_key = ?",
@@ -1345,7 +1581,10 @@ export class LocatorLibraryStore {
     readonly expectedVersionId: string;
   }): string {
     const entry = this.#database
-      .query<{ current_version_id: string; version_number: number }, [string, string]>(
+      .query<
+        { current_version_id: string; version_number: number },
+        [string, string]
+      >(
         `SELECT e.current_version_id, v.version_number FROM locator_entries e
          JOIN locator_entry_versions v ON v.id = e.current_version_id
          WHERE e.id = ? AND e.project_id = ?`,
@@ -1353,14 +1592,18 @@ export class LocatorLibraryStore {
       .get(input.entryId, input.projectId);
     if (!entry) throw new Error("Healing locator entry was not found");
     if (entry.current_version_id !== input.expectedVersionId) {
-      throw new Error("The locator changed after this healing proposal was created");
+      throw new Error(
+        "The locator changed after this healing proposal was created",
+      );
     }
     const versionId = crypto.randomUUID();
     const now = new Date().toISOString();
     const argumentsJson = JSON.stringify(input.arguments);
     this.#database.transaction(() => {
       this.#database
-        .query("UPDATE locator_entry_versions SET superseded_at = ? WHERE id = ?")
+        .query(
+          "UPDATE locator_entry_versions SET superseded_at = ? WHERE id = ?",
+        )
         .run(now, entry.current_version_id);
       this.#database
         .query(
@@ -1380,7 +1623,9 @@ export class LocatorLibraryStore {
           now,
         );
       this.#database
-        .query("UPDATE locator_entries SET current_version_id = ?, updated_at = ? WHERE id = ?")
+        .query(
+          "UPDATE locator_entries SET current_version_id = ?, updated_at = ? WHERE id = ?",
+        )
         .run(versionId, now, input.entryId);
       this.#database
         .query(
@@ -1426,27 +1671,34 @@ export class LocatorLibraryStore {
          WHERE project_id = ? ORDER BY created_at DESC`,
       )
       .all(projectId);
-    const items: Array<TestingLocatorSyncPreview["items"][number]> = rows.flatMap((row) => {
-      const entry = entries.find((candidate) => candidate.id === row.entry_id);
-      return entry
-        ? [
-            {
-              id: row.id,
-              entryId: entry.id,
-              locatorKey: entry.locatorKey,
-              kind: row.kind as "conflict" | "healing-source-diff",
-              sourceFile: entry.sourceFile,
-              details: JSON.parse(row.details_json) as Record<string, unknown>,
-              status: row.status,
-            },
-          ]
-        : [];
-    });
+    const items: Array<TestingLocatorSyncPreview["items"][number]> =
+      rows.flatMap((row) => {
+        const entry = entries.find(
+          (candidate) => candidate.id === row.entry_id,
+        );
+        return entry
+          ? [
+              {
+                id: row.id,
+                entryId: entry.id,
+                locatorKey: entry.locatorKey,
+                kind: row.kind as "conflict" | "healing-source-diff",
+                sourceFile: entry.sourceFile,
+                details: JSON.parse(row.details_json) as Record<
+                  string,
+                  unknown
+                >,
+                status: row.status,
+              },
+            ]
+          : [];
+      });
     const represented = new Set(items.map((item) => item.entryId));
     for (const entry of entries) {
       if (
         represented.has(entry.id) ||
-        (entry.syncStatus !== "managed-only" && entry.syncStatus !== "repository-only")
+        (entry.syncStatus !== "managed-only" &&
+          entry.syncStatus !== "repository-only")
       ) {
         continue;
       }
@@ -1463,21 +1715,32 @@ export class LocatorLibraryStore {
     return { items, library: this.library(projectId) };
   }
 
-  resolveSync(input: TestingLocatorSyncDecisionInput): TestingLocatorSyncPreview {
+  resolveSync(
+    input: TestingLocatorSyncDecisionInput,
+  ): TestingLocatorSyncPreview {
     const conflict = input.conflictId.startsWith("entry:")
       ? null
       : this.#database
           .query<
-            { entry_id: string; details_json: string; kind: string; status: string },
+            {
+              entry_id: string;
+              details_json: string;
+              kind: string;
+              status: string;
+            },
             [string, string]
           >(
             `SELECT entry_id, details_json, kind, status FROM locator_sync_conflicts
              WHERE id = ? AND project_id = ?`,
           )
           .get(input.conflictId, input.projectId);
-    const entryId = conflict?.entry_id ?? input.conflictId.replace(/^entry:/, "");
+    const entryId =
+      conflict?.entry_id ?? input.conflictId.replace(/^entry:/, "");
     const entry = this.#database
-      .query<{ current_version_id: string; version_number: number }, [string, string]>(
+      .query<
+        { current_version_id: string; version_number: number },
+        [string, string]
+      >(
         `SELECT e.current_version_id, v.version_number FROM locator_entries e
          JOIN locator_entry_versions v ON v.id = e.current_version_id
          WHERE e.id = ? AND e.project_id = ?`,
@@ -1504,12 +1767,16 @@ export class LocatorLibraryStore {
         semanticContext?: string;
       };
       if (!details.strategy || !details.arguments) {
-        throw new Error("This synchronization item has no repository locator to accept");
+        throw new Error(
+          "This synchronization item has no repository locator to accept",
+        );
       }
       const versionId = crypto.randomUUID();
       this.#database.transaction(() => {
         this.#database
-          .query("UPDATE locator_entry_versions SET superseded_at = ? WHERE id = ?")
+          .query(
+            "UPDATE locator_entry_versions SET superseded_at = ? WHERE id = ?",
+          )
           .run(now, entry.current_version_id);
         this.#database
           .query(
@@ -1525,7 +1792,9 @@ export class LocatorLibraryStore {
             details.strategy,
             JSON.stringify(details.arguments),
             details.semanticContext ?? "",
-            shortDigest(`${details.strategy}\0${JSON.stringify(details.arguments)}`),
+            shortDigest(
+              `${details.strategy}\0${JSON.stringify(details.arguments)}`,
+            ),
             now,
           );
         this.#database
@@ -1537,7 +1806,9 @@ export class LocatorLibraryStore {
     }
     if (conflict) {
       this.#database
-        .query("UPDATE locator_sync_conflicts SET status = ?, decided_at = ? WHERE id = ?")
+        .query(
+          "UPDATE locator_sync_conflicts SET status = ?, decided_at = ? WHERE id = ?",
+        )
         .run(
           input.decision === "accept-repository" ? "accepted" : "rejected",
           now,
@@ -1556,7 +1827,9 @@ export class LocatorLibraryStore {
       )
       .run(now, projectId);
     this.#database
-      .query("UPDATE locator_sources SET disconnected_at = ?, updated_at = ? WHERE project_id = ?")
+      .query(
+        "UPDATE locator_sources SET disconnected_at = ?, updated_at = ? WHERE project_id = ?",
+      )
       .run(now, now, projectId);
     return this.library(projectId);
   }
@@ -1565,7 +1838,10 @@ export class LocatorLibraryStore {
     const rows = this.#database
       .query<EntryRow, [string]>(
         `SELECT e.id, e.page_id, e.locator_key, e.classification, e.source_file, e.source_line,
-          e.lifecycle_status, e.sync_status, e.current_version_id, v.version_number, v.strategy,
+          e.lifecycle_status, e.sync_status, e.current_version_id, e.health, e.element_fingerprint,
+          e.target_page_fingerprint, e.verification_count, e.consecutive_repair_attempts,
+          e.last_failure_classification,
+          v.version_number, v.strategy,
           v.arguments_json, v.semantic_context, v.source, v.fragile,
           (SELECT status FROM locator_verifications lv WHERE lv.entry_id = e.id
            AND lv.version_id = e.current_version_id ORDER BY lv.verified_at DESC LIMIT 1)
@@ -1586,7 +1862,10 @@ export class LocatorLibraryStore {
       locatorKey: row.locator_key,
       classification: row.classification,
       strategy: row.strategy,
-      arguments: JSON.parse(row.arguments_json) as Record<string, string | number | boolean>,
+      arguments: JSON.parse(row.arguments_json) as Record<
+        string,
+        string | number | boolean
+      >,
       semanticContext: row.semantic_context,
       source: row.source,
       sourceFile: row.source_file,
@@ -1599,6 +1878,12 @@ export class LocatorLibraryStore {
       verificationStatus: row.verification_status ?? "unverified",
       verificationEnvironment: row.environment_label,
       verifiedAt: row.verified_at,
+      health: (row.health as TestingLocatorEntry["health"]) ?? "healthy",
+      elementFingerprint: row.element_fingerprint,
+      targetPageFingerprint: row.target_page_fingerprint,
+      verificationCount: row.verification_count ?? 0,
+      consecutiveRepairAttempts: row.consecutive_repair_attempts ?? 0,
+      lastFailureClassification: row.last_failure_classification,
     }));
   }
 
@@ -1609,9 +1894,14 @@ export class LocatorLibraryStore {
     now: string,
     syncStatus: TestingLocatorEntry["syncStatus"] = "managed",
   ): void {
-    const tokenized = tokenizePii(projectId, redactCredentialLikeText(candidate.semanticContext));
+    const tokenized = tokenizePii(
+      projectId,
+      redactCredentialLikeText(candidate.semanticContext),
+    );
     this.#storeTokens(projectId, tokenized.tokens, now);
-    const containsSensitiveToken = /<PII_|<REDACTED_/u.test(tokenized.tokenized);
+    const containsSensitiveToken = /<PII_|<REDACTED_/u.test(
+      tokenized.tokenized,
+    );
     const lifecycleStatus = containsSensitiveToken
       ? "manual-required"
       : (candidate.lifecycleStatus ?? "draft");
@@ -1629,8 +1919,9 @@ export class LocatorLibraryStore {
       .query(
         `INSERT INTO locator_entries
           (id, project_id, page_id, locator_key, classification, source_file, source_line,
-           lifecycle_status, sync_status, current_version_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           lifecycle_status, sync_status, current_version_id, health, element_fingerprint,
+           target_page_fingerprint, verification_count, consecutive_repair_attempts, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'healthy', ?, ?, 0, 0, ?, ?)`,
       )
       .run(
         entryId,
@@ -1643,6 +1934,8 @@ export class LocatorLibraryStore {
         lifecycleStatus,
         syncStatus,
         versionId,
+        candidate.elementFingerprint ?? null,
+        candidate.targetPageFingerprint ?? null,
         now,
         now,
       );
@@ -1666,17 +1959,31 @@ export class LocatorLibraryStore {
       );
   }
 
-  #storeTokens(projectId: string, tokens: ReturnType<typeof tokenizePii>["tokens"], now: string) {
+  #storeTokens(
+    projectId: string,
+    tokens: ReturnType<typeof tokenizePii>["tokens"],
+    now: string,
+  ) {
     const statement = this.#database.query(
       `INSERT OR IGNORE INTO pii_tokens
         (project_id, token, kind, plaintext, digest, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
     );
     for (const token of tokens) {
-      statement.run(projectId, token.token, token.kind, token.plaintext, token.digest, now);
+      statement.run(
+        projectId,
+        token.token,
+        token.kind,
+        token.plaintext,
+        token.digest,
+        now,
+      );
     }
   }
 
-  #repositoryTarget(projectId: string, pageId: string): TestingLocatorRepositoryTarget | null {
+  #repositoryTarget(
+    projectId: string,
+    pageId: string,
+  ): TestingLocatorRepositoryTarget | null {
     const row = this.#database
       .query<
         {
@@ -1703,7 +2010,10 @@ export class LocatorLibraryStore {
       : null;
   }
 
-  #pageObjectArtifact(projectId: string, page: TestingLocatorPage): TestingPageObjectArtifact {
+  #pageObjectArtifact(
+    projectId: string,
+    page: TestingLocatorPage,
+  ): TestingPageObjectArtifact {
     const generated = generatePageObject(page);
     const current = this.#database
       .query<
@@ -1729,7 +2039,8 @@ export class LocatorLibraryStore {
       .get(projectId, page.id);
     if (
       current?.source_hash === generated.sourceHash ||
-      (current?.origin === "manual" && current.base_generated_source_hash === generated.sourceHash)
+      (current?.origin === "manual" &&
+        current.base_generated_source_hash === generated.sourceHash)
     ) {
       return {
         id: current.id,
@@ -1749,7 +2060,9 @@ export class LocatorLibraryStore {
     const createdAt = new Date().toISOString();
     this.#database.transaction(() => {
       this.#database
-        .query("UPDATE locator_page_artifacts SET status = 'stale' WHERE page_id = ?")
+        .query(
+          "UPDATE locator_page_artifacts SET status = 'stale' WHERE page_id = ?",
+        )
         .run(page.id);
       this.#database
         .query(
@@ -1790,10 +2103,14 @@ export class LocatorLibraryStore {
       .query<{ name: string }, []>("PRAGMA table_info(locator_fingerprints)")
       .all();
     if (!columns.some((column) => column.name === "locator_entry_id")) {
-      this.#database.exec("ALTER TABLE locator_fingerprints ADD COLUMN locator_entry_id TEXT");
+      this.#database.exec(
+        "ALTER TABLE locator_fingerprints ADD COLUMN locator_entry_id TEXT",
+      );
     }
     if (!columns.some((column) => column.name === "locator_version_id")) {
-      this.#database.exec("ALTER TABLE locator_fingerprints ADD COLUMN locator_version_id TEXT");
+      this.#database.exec(
+        "ALTER TABLE locator_fingerprints ADD COLUMN locator_version_id TEXT",
+      );
     }
   }
 
@@ -1802,13 +2119,17 @@ export class LocatorLibraryStore {
       .query<{ name: string }, []>("PRAGMA table_info(locator_sources)")
       .all();
     if (!columns.some((column) => column.name === "disconnected_at")) {
-      this.#database.exec("ALTER TABLE locator_sources ADD COLUMN disconnected_at TEXT");
+      this.#database.exec(
+        "ALTER TABLE locator_sources ADD COLUMN disconnected_at TEXT",
+      );
     }
   }
 
   #ensurePreferenceColumns(): void {
     const columns = this.#database
-      .query<{ name: string }, []>("PRAGMA table_info(testing_project_preferences)")
+      .query<{ name: string }, []>(
+        "PRAGMA table_info(testing_project_preferences)",
+      )
       .all();
     if (!columns.some((column) => column.name === "case_id_prefix")) {
       this.#database.exec(
@@ -1847,7 +2168,9 @@ export class LocatorLibraryStore {
         "ALTER TABLE locator_page_artifacts ADD COLUMN origin TEXT NOT NULL DEFAULT 'generated'",
       );
     }
-    if (!columns.some((column) => column.name === "base_generated_source_hash")) {
+    if (
+      !columns.some((column) => column.name === "base_generated_source_hash")
+    ) {
       this.#database.exec(
         "ALTER TABLE locator_page_artifacts ADD COLUMN base_generated_source_hash TEXT",
       );
@@ -1857,11 +2180,49 @@ export class LocatorLibraryStore {
     }
   }
 
+  #ensureEntryHealthColumns(): void {
+    const columns = this.#database
+      .query<{ name: string }, []>("PRAGMA table_info(locator_entries)")
+      .all();
+    const columnNames = new Set(columns.map((c) => c.name));
+    if (!columnNames.has("health")) {
+      this.#database.exec(
+        "ALTER TABLE locator_entries ADD COLUMN health TEXT NOT NULL DEFAULT 'healthy'",
+      );
+    }
+    if (!columnNames.has("element_fingerprint")) {
+      this.#database.exec(
+        "ALTER TABLE locator_entries ADD COLUMN element_fingerprint TEXT",
+      );
+    }
+    if (!columnNames.has("target_page_fingerprint")) {
+      this.#database.exec(
+        "ALTER TABLE locator_entries ADD COLUMN target_page_fingerprint TEXT",
+      );
+    }
+    if (!columnNames.has("verification_count")) {
+      this.#database.exec(
+        "ALTER TABLE locator_entries ADD COLUMN verification_count INTEGER NOT NULL DEFAULT 0",
+      );
+    }
+    if (!columnNames.has("consecutive_repair_attempts")) {
+      this.#database.exec(
+        "ALTER TABLE locator_entries ADD COLUMN consecutive_repair_attempts INTEGER NOT NULL DEFAULT 0",
+      );
+    }
+    if (!columnNames.has("last_failure_classification")) {
+      this.#database.exec(
+        "ALTER TABLE locator_entries ADD COLUMN last_failure_classification TEXT",
+      );
+    }
+  }
+
   #refreshGeneratedPageNames(): void {
     const pages = this.#database
-      .query<{ id: string; name: string; url_pattern: string; name_source: string }, []>(
-        "SELECT id, name, url_pattern, name_source FROM locator_pages",
-      )
+      .query<
+        { id: string; name: string; url_pattern: string; name_source: string },
+        []
+      >("SELECT id, name, url_pattern, name_source FROM locator_pages")
       .all();
     const update = this.#database.query(
       "UPDATE locator_pages SET name = ?, updated_at = ? WHERE id = ?",
@@ -1877,7 +2238,9 @@ export class LocatorLibraryStore {
   #recoverSessions(): void {
     const now = new Date().toISOString();
     const featureDisabled = !this.isFeatureEnabled();
-    const terminationReason = featureDisabled ? "feature-disabled" : "cancelled";
+    const terminationReason = featureDisabled
+      ? "feature-disabled"
+      : "cancelled";
     this.#database
       .query(
         `UPDATE locator_discovery_sessions SET status = 'cancelled',
@@ -1898,7 +2261,13 @@ export class LocatorLibraryStore {
   #backfill(): void {
     const edges = this.#database
       .query<
-        { project_id: string; page_url: string; role: string; name: string; state_id: string },
+        {
+          project_id: string;
+          page_url: string;
+          role: string;
+          name: string;
+          state_id: string;
+        },
         []
       >(
         `SELECT e.project_id, n.page_url, e.action_role AS role, e.action_name AS name,

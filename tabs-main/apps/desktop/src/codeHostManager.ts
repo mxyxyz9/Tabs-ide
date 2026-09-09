@@ -103,7 +103,11 @@ export interface CodeHostConfig {
 
 type FsLike = Pick<typeof FS, "existsSync" | "readdirSync" | "statSync">;
 
-type CodeHostRuntime = { kind: "desktop-renderer"; vscodeRoot: string; stateDir: string };
+type CodeHostRuntime = {
+  kind: "desktop-renderer";
+  vscodeRoot: string;
+  stateDir: string;
+};
 
 type CodeSession = {
   projectId: string;
@@ -225,6 +229,50 @@ function normalizeFilePath(input: string): string {
   return input.replace(/\\/g, "/");
 }
 
+export function getCodeOssContentType(pathname: string): string {
+  switch (Path.extname(pathname).toLowerCase()) {
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".js":
+    case ".mjs":
+      return "text/javascript; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".json":
+    case ".map":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    case ".woff":
+      return "font/woff";
+    case ".woff2":
+      return "font/woff2";
+    case ".ttf":
+      return "font/ttf";
+    case ".wasm":
+      return "application/wasm";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+export async function readCodeOssProtocolFile(
+  pathname: string,
+  initialHeaders?: HeadersInit,
+): Promise<Response> {
+  const contents = await FS.promises.readFile(pathname);
+  const headers = new Headers(initialHeaders);
+  headers.set("Content-Type", getCodeOssContentType(pathname));
+  return new Response(contents, { status: 200, headers });
+}
+
 function findDefaultWorkspaceFile(workspaceRoot: string): string | null {
   try {
     const candidates = [
@@ -287,12 +335,12 @@ const CODE_OSS_EMBED_DEFAULT_SETTINGS: Record<string, unknown> = {
   // an untrusted workspace can prevent the bundled Tabs integration extension
   // from activating.
   "security.workspace.trust.enabled": false,
-  // Tabs has its own Agents surface; VS Code's built-in Chat ("Build with
-  // Agent") duplicates it and its auxiliary bar squeezes the editor. Disable
-  // the AI features and keep the secondary side bar closed by default. (The
-  // integration extension also closes the auxiliary bar on activation, which
-  // covers workspaces whose persisted layout still has the chat panel open.)
-  "chat.disableAIFeatures": true,
+  // Keep Code-OSS AI extensions enabled even when Tabs' own Agents surface is
+  // selected. Changing this setting makes upstream Code-OSS stop and restart
+  // the extension host, which cancels authentication and extension RPCs during
+  // startup. The outer shell controls whether Copilot's auxiliary bar is
+  // visible without changing extension enablement.
+  "chat.disableAIFeatures": false,
   "chat.commandCenter.enabled": false,
   "workbench.secondarySideBar.defaultVisibility": "hidden",
   // Open VSX signature archives are not Microsoft Marketplace repository
@@ -325,6 +373,25 @@ type ExtensionRegistration = {
   relativeLocation?: string;
   metadata?: { installedTimestamp?: number };
 };
+
+export function resolveCodeOssAiProviderSettings(
+  provider: "tabs" | "copilot",
+): Record<string, unknown> {
+  return {
+    // This must remain false for both providers. `chat.disableAIFeatures` is a
+    // global Code-OSS extension-enablement switch, not a view-visibility flag.
+    "chat.disableAIFeatures": false,
+    "chat.commandCenter.enabled": provider === "copilot",
+    "workbench.secondarySideBar.defaultVisibility": provider === "copilot" ? "visible" : "hidden",
+  };
+}
+
+export function resolveCodeOssApplicationSettingsPaths(stateDir: string): string[] {
+  return [
+    Path.join(stateDir, "code-oss-main", "profile", "default", "settings.json"),
+    Path.join(stateDir, "code-oss-desktop", "shared-profile", "default", "settings.json"),
+  ];
+}
 
 function readExtensionRegistrations(pathname: string): ExtensionRegistration[] {
   try {
@@ -366,7 +433,9 @@ export function reconcileSharedExtensionRegistry(stateDir: string): string {
   const registryPaths = new Set<string>([sharedRegistry]);
 
   try {
-    for (const entry of FS.readdirSync(desktopStateRoot, { withFileTypes: true })) {
+    for (const entry of FS.readdirSync(desktopStateRoot, {
+      withFileTypes: true,
+    })) {
       if (!entry.isDirectory()) continue;
       registryPaths.add(
         Path.join(desktopStateRoot, entry.name, "profile", "default", "extensions.json"),
@@ -498,7 +567,10 @@ export function mergeProductConfigurationDefaults(
     return { product, changed: false };
   }
   return {
-    product: { ...product, configurationDefaults: { ...existing, ...defaults } },
+    product: {
+      ...product,
+      configurationDefaults: { ...existing, ...defaults },
+    },
     changed: true,
   };
 }
@@ -571,7 +643,7 @@ function safeReadDirectoryNames(pathname: string, fs: FsLike): string[] {
   }
 }
 
-function resolveWorkspaceRootForSession(
+export function resolveWorkspaceRootForSession(
   requestedWorkspaceRoot: string,
   config: Pick<CodeHostConfig, "rootDir" | "runtime">,
   fs: FsLike,
@@ -620,7 +692,10 @@ function resolveWorkspaceRootForSession(
     }
   }
 
-  return normalizedRequestedRoot;
+  throw new Error(
+    `The project folder no longer exists: ${normalizedRequestedRoot}. ` +
+      "Update the project folder in Tabs or reopen the project before starting Code.",
+  );
 }
 
 function resolveManagedDesktopRoot(
@@ -856,19 +931,31 @@ export class CodeHostManager {
   private currentCustomConfig: any = null;
   private disposed = false;
   private registerNativeWebContents:
-    | ((webContents: Electron.WebContents, getBounds: () => Electron.Rectangle | null) => void)
+    | ((
+        webContents: Electron.WebContents,
+        getBounds: () => Electron.Rectangle | null,
+        projectId: string,
+      ) => void)
     | null = null;
 
   setNativeWebContentsRegistrar(
     registrar:
-      | ((webContents: Electron.WebContents, getBounds: () => Electron.Rectangle | null) => void)
+      | ((
+          webContents: Electron.WebContents,
+          getBounds: () => Electron.Rectangle | null,
+          projectId: string,
+        ) => void)
       | null,
   ): void {
     this.registerNativeWebContents = registrar;
     if (registrar) {
       for (const session of this.sessions.values()) {
         if (session.view && !session.view.webContents.isDestroyed()) {
-          registrar(session.view.webContents, () => session.view?.getBounds() ?? null);
+          registrar(
+            session.view.webContents,
+            () => session.view?.getBounds() ?? null,
+            session.projectId,
+          );
         }
       }
     }
@@ -902,41 +989,10 @@ export class CodeHostManager {
       // Open VSX packages never fall back to Microsoft's repository-signature
       // verifier after a provider switch or a fresh application profile.
       "extensions.verifySignature": false,
-      ...(provider === "copilot"
-        ? {
-            "chat.disableAIFeatures": false,
-            "chat.commandCenter.enabled": true,
-            "workbench.secondarySideBar.defaultVisibility": "visible",
-          }
-        : {
-            "chat.disableAIFeatures": true,
-            "chat.commandCenter.enabled": false,
-            "workbench.secondarySideBar.defaultVisibility": "hidden",
-          }),
+      ...resolveCodeOssAiProviderSettings(provider),
     };
-    const settingsPaths = new Set<string>([
-      Path.join(
-        DEFAULT_CODE_HOST_STATE_DIR,
-        "code-oss-main",
-        "profile",
-        "default",
-        "settings.json",
-      ),
-    ]);
-    const runtime = this.config.runtime;
-    if (runtime) {
-      for (const session of this.sessions.values()) {
-        settingsPaths.add(
-          Path.join(
-            this.getDesktopSessionStateRoot(session.projectId, runtime.stateDir),
-            "profile",
-            "default",
-            "settings.json",
-          ),
-        );
-      }
-    }
-    for (const settingsPath of settingsPaths) {
+    const stateDir = this.config.runtime?.stateDir ?? DEFAULT_CODE_HOST_STATE_DIR;
+    for (const settingsPath of resolveCodeOssApplicationSettingsPaths(stateDir)) {
       try {
         writeMergedJsonFile(settingsPath, settingsPatch);
         console.log(`[code-oss] updated AI provider settings (${provider}) → ${settingsPath}`);
@@ -1136,7 +1192,7 @@ export class CodeHostManager {
           : null),
       },
     });
-    this.registerNativeWebContents?.(view.webContents, () => view.getBounds());
+    this.registerNativeWebContents?.(view.webContents, () => view.getBounds(), input.projectId);
     view.setBackgroundColor(this.isCurrentThemeLight() ? "#f8f8f8" : "#141414");
 
     const allowedPermissions = new Set([
@@ -1815,18 +1871,15 @@ export class CodeHostManager {
       }
 
       try {
-        const fileResponse = await browserSession.fetch(pathToFileURL(resolvedPath).toString());
-        const headers = new Headers(fileResponse.headers);
-        headers.set("Content-Type", this.getDesktopContentType(resolvedPath));
-        // Materialize the file before constructing the response. Passing the
-        // original stream through a second Response can leave it open, while
-        // returning it untouched gives worker modules and WASM resources the
-        // wrong MIME type.
-        return new Response(await fileResponse.arrayBuffer(), {
-          status: fileResponse.status,
-          statusText: fileResponse.statusText,
-          headers,
-        });
+        // Do not route local workbench resources back through Chromium's
+        // `session.fetch(file://...)`. Custom partitions intermittently return
+        // an empty body for file URLs (most visibly Oniguruma WASM and worker
+        // modules), even though the file exists. The stock vscode-file provider
+        // reads from disk too; doing so here preserves exact bytes and MIME.
+        return await readCodeOssProtocolFile(
+          resolvedPath,
+          this.buildDesktopProtocolHeaders(request.url, resolvedPath, runtime),
+        );
       } catch (error) {
         writeCodeHostDiagnostic(`${prefix} protocol-read-error`, {
           url: request.url,
@@ -1858,14 +1911,8 @@ export class CodeHostManager {
           "pre",
           resourceName,
         );
-        const fileResponse = await browserSession.fetch(pathToFileURL(resourcePath).toString());
-        const headers = new Headers(fileResponse.headers);
-        headers.set("Content-Type", this.getDesktopContentType(resourcePath));
-        headers.set("Cross-Origin-Resource-Policy", "cross-origin");
-        return new Response(fileResponse.body, {
-          status: fileResponse.status,
-          statusText: fileResponse.statusText,
-          headers,
+        return await readCodeOssProtocolFile(resourcePath, {
+          "Cross-Origin-Resource-Policy": "cross-origin",
         });
       } catch {
         return new Response(null, { status: 404, statusText: "Not Found" });
@@ -1898,40 +1945,6 @@ export class CodeHostManager {
     }
 
     return headers;
-  }
-
-  private getDesktopContentType(pathname: string): string {
-    switch (Path.extname(pathname).toLowerCase()) {
-      case ".html":
-        return "text/html; charset=utf-8";
-      case ".js":
-      case ".mjs":
-        return "text/javascript; charset=utf-8";
-      case ".css":
-        return "text/css; charset=utf-8";
-      case ".json":
-      case ".map":
-        return "application/json; charset=utf-8";
-      case ".svg":
-        return "image/svg+xml";
-      case ".png":
-        return "image/png";
-      case ".jpg":
-      case ".jpeg":
-        return "image/jpeg";
-      case ".gif":
-        return "image/gif";
-      case ".woff":
-        return "font/woff";
-      case ".woff2":
-        return "font/woff2";
-      case ".ttf":
-        return "font/ttf";
-      case ".wasm":
-        return "application/wasm";
-      default:
-        return "application/octet-stream";
-    }
   }
 
   private getDesktopAllowedRoots(session: CodeSession): string[] {
@@ -2276,7 +2289,11 @@ export class CodeHostManager {
           errorDescription,
           validatedURL,
         });
-        console.error(`${prefix} did-fail-load`, { errorCode, errorDescription, validatedURL });
+        console.error(`${prefix} did-fail-load`, {
+          errorCode,
+          errorDescription,
+          validatedURL,
+        });
       },
     );
     session.view.webContents.on("render-process-gone", (_event, details) => {
@@ -2311,7 +2328,10 @@ export class CodeHostManager {
       });
     });
     session.view.webContents.on("preload-error", (_event, preloadPathname, error) => {
-      writeCodeHostDiagnostic(`${prefix} preload-error`, { preloadPathname, error });
+      writeCodeHostDiagnostic(`${prefix} preload-error`, {
+        preloadPathname,
+        error,
+      });
       console.error(`${prefix} preload-error`, preloadPathname, error);
     });
   }

@@ -18,7 +18,9 @@ export const DEFAULT_TESTING_EXPLORATION_SCOPE = "origin";
 export const TESTING_EXPLORATION_SCOPES = ["page", "path", "origin"] as const;
 export const MAX_TESTING_DURATION_SECONDS = 86_400;
 
-export const TestingExplorationScope = Schema.Literals(TESTING_EXPLORATION_SCOPES);
+export const TestingExplorationScope = Schema.Literals(
+  TESTING_EXPLORATION_SCOPES,
+);
 export type TestingExplorationScope = typeof TestingExplorationScope.Type;
 
 export const TestingExplorationInput = Schema.Struct({
@@ -39,7 +41,11 @@ export const TestingExplorationInput = Schema.Struct({
 });
 export type TestingExplorationInput = typeof TestingExplorationInput.Type;
 
-export const TESTING_DISCOVERY_MODES = ["automatic", "guided", "manual"] as const;
+export const TESTING_DISCOVERY_MODES = [
+  "automatic",
+  "guided",
+  "manual",
+] as const;
 export const TESTING_LOCATOR_COVERAGE_MODES = [
   "actions-assertions",
   "actions-only",
@@ -63,13 +69,23 @@ export const MAX_TESTING_MAX_PAGES_PER_SESSION = 250;
 
 export const TestingDiscoveryMode = Schema.Literals(TESTING_DISCOVERY_MODES);
 export type TestingDiscoveryMode = typeof TestingDiscoveryMode.Type;
-export const TestingLocatorCoverageMode = Schema.Literals(TESTING_LOCATOR_COVERAGE_MODES);
+export const TestingLocatorCoverageMode = Schema.Literals(
+  TESTING_LOCATOR_COVERAGE_MODES,
+);
 export type TestingLocatorCoverageMode = typeof TestingLocatorCoverageMode.Type;
-export const TestingDiscoverySafetyProfile = Schema.Literals(TESTING_DISCOVERY_SAFETY_PROFILES);
-export type TestingDiscoverySafetyProfile = typeof TestingDiscoverySafetyProfile.Type;
-export const TestingLocatorStorageMode = Schema.Literals(TESTING_LOCATOR_STORAGE_MODES);
+export const TestingDiscoverySafetyProfile = Schema.Literals(
+  TESTING_DISCOVERY_SAFETY_PROFILES,
+);
+export type TestingDiscoverySafetyProfile =
+  typeof TestingDiscoverySafetyProfile.Type;
+export const TestingLocatorStorageMode = Schema.Literals(
+  TESTING_LOCATOR_STORAGE_MODES,
+);
 export type TestingLocatorStorageMode = typeof TestingLocatorStorageMode.Type;
-export const TestingDiscoveryExperience = Schema.Literals(["classic", "locator-first"]);
+export const TestingDiscoveryExperience = Schema.Literals([
+  "classic",
+  "locator-first",
+]);
 export type TestingDiscoveryExperience = typeof TestingDiscoveryExperience.Type;
 
 export const TestingLocatorPreviewSnapshot = Schema.Struct({
@@ -89,7 +105,8 @@ export const TestingLocatorPreviewSnapshot = Schema.Struct({
     ),
   ),
 });
-export type TestingLocatorPreviewSnapshot = typeof TestingLocatorPreviewSnapshot.Type;
+export type TestingLocatorPreviewSnapshot =
+  typeof TestingLocatorPreviewSnapshot.Type;
 
 export const TestingLocatorDiscoveryInput = Schema.Struct({
   previewSnapshot: Schema.optionalKey(TestingLocatorPreviewSnapshot),
@@ -118,10 +135,13 @@ export const TestingLocatorDiscoveryInput = Schema.Struct({
     Schema.isLessThanOrEqualTo(MAX_TESTING_MAX_PAGES_PER_SESSION),
   ),
   environmentLabel: Schema.optionalKey(Schema.String),
-  captureScope: Schema.optionalKey(Schema.Literals(["task", "page", "path", "origin"])),
+  captureScope: Schema.optionalKey(
+    Schema.Literals(["task", "page", "path", "origin"]),
+  ),
   taskContext: Schema.optionalKey(Schema.String),
 });
-export type TestingLocatorDiscoveryInput = typeof TestingLocatorDiscoveryInput.Type;
+export type TestingLocatorDiscoveryInput =
+  typeof TestingLocatorDiscoveryInput.Type;
 
 export const TestingLocatorDiscoverySessionInput = Schema.Struct({
   previewSnapshot: Schema.optionalKey(TestingLocatorPreviewSnapshot),
@@ -129,25 +149,30 @@ export const TestingLocatorDiscoverySessionInput = Schema.Struct({
   sessionId: Schema.String,
   captureMode: Schema.optionalKey(Schema.Literals(["relevant", "page", "all"])),
 });
-export type TestingLocatorDiscoverySessionInput = typeof TestingLocatorDiscoverySessionInput.Type;
+export type TestingLocatorDiscoverySessionInput =
+  typeof TestingLocatorDiscoverySessionInput.Type;
 
 export const TestingLocatorDiscoveryNavigateInput = Schema.Struct({
   projectId: Schema.String,
   sessionId: Schema.String,
   targetUrl: Schema.String,
 });
-export type TestingLocatorDiscoveryNavigateInput = typeof TestingLocatorDiscoveryNavigateInput.Type;
+export type TestingLocatorDiscoveryNavigateInput =
+  typeof TestingLocatorDiscoveryNavigateInput.Type;
 
 export const TestingDiscoveryExperienceInput = Schema.Struct({
   projectId: Schema.String,
   experience: TestingDiscoveryExperience,
 });
-export type TestingDiscoveryExperienceInput = typeof TestingDiscoveryExperienceInput.Type;
+export type TestingDiscoveryExperienceInput =
+  typeof TestingDiscoveryExperienceInput.Type;
 
 export const TestingCaseIdPolicyInput = Schema.Struct({
   projectId: Schema.String,
   prefix: Schema.String,
-  padding: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(Schema.isLessThanOrEqualTo(12)),
+  padding: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+    Schema.isLessThanOrEqualTo(12),
+  ),
   nextSequence: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
 });
 export type TestingCaseIdPolicyInput = typeof TestingCaseIdPolicyInput.Type;
@@ -165,7 +190,9 @@ export const TestingLocatorEntryReviewInput = Schema.Struct({
   entryId: Schema.String,
   decision: Schema.Literals(["accept", "archive", "keep-managed", "restore"]),
   locatorKey: Schema.optionalKey(Schema.String),
-  classification: Schema.optionalKey(Schema.Literals(["action", "assertion", "content"])),
+  classification: Schema.optionalKey(
+    Schema.Literals(["action", "assertion", "content"]),
+  ),
   strategy: Schema.optionalKey(
     Schema.Literals([
       "role",
@@ -179,31 +206,38 @@ export const TestingLocatorEntryReviewInput = Schema.Struct({
     ]),
   ),
   arguments: Schema.optionalKey(
-    Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Number, Schema.Boolean])),
+    Schema.Record(
+      Schema.String,
+      Schema.Union([Schema.String, Schema.Number, Schema.Boolean]),
+    ),
   ),
   semanticContext: Schema.optionalKey(Schema.String),
 });
-export type TestingLocatorEntryReviewInput = typeof TestingLocatorEntryReviewInput.Type;
+export type TestingLocatorEntryReviewInput =
+  typeof TestingLocatorEntryReviewInput.Type;
 
 export const TestingLocatorPageUpdateInput = Schema.Struct({
   projectId: Schema.String,
   pageId: Schema.String,
   name: Schema.String,
 });
-export type TestingLocatorPageUpdateInput = typeof TestingLocatorPageUpdateInput.Type;
+export type TestingLocatorPageUpdateInput =
+  typeof TestingLocatorPageUpdateInput.Type;
 
 export const TestingLocatorPageSelectionInput = Schema.Struct({
   projectId: Schema.String,
   pageId: Schema.String,
   entryIds: Schema.Array(Schema.String),
 });
-export type TestingLocatorPageSelectionInput = typeof TestingLocatorPageSelectionInput.Type;
+export type TestingLocatorPageSelectionInput =
+  typeof TestingLocatorPageSelectionInput.Type;
 
 export const TestingLocatorPageDeleteInput = Schema.Struct({
   projectId: Schema.String,
   pageId: Schema.String,
 });
-export type TestingLocatorPageDeleteInput = typeof TestingLocatorPageDeleteInput.Type;
+export type TestingLocatorPageDeleteInput =
+  typeof TestingLocatorPageDeleteInput.Type;
 
 export const TestingPageObjectCodeUpdateInput = Schema.Struct({
   projectId: Schema.String,
@@ -211,7 +245,8 @@ export const TestingPageObjectCodeUpdateInput = Schema.Struct({
   expectedSourceHash: Schema.String,
   code: Schema.String,
 });
-export type TestingPageObjectCodeUpdateInput = typeof TestingPageObjectCodeUpdateInput.Type;
+export type TestingPageObjectCodeUpdateInput =
+  typeof TestingPageObjectCodeUpdateInput.Type;
 
 export const TestingLocatorRepositoryPreviewInput = Schema.Struct({
   projectId: Schema.String,
@@ -220,7 +255,8 @@ export const TestingLocatorRepositoryPreviewInput = Schema.Struct({
   destinationFolder: Schema.String,
   fileName: Schema.String,
 });
-export type TestingLocatorRepositoryPreviewInput = typeof TestingLocatorRepositoryPreviewInput.Type;
+export type TestingLocatorRepositoryPreviewInput =
+  typeof TestingLocatorRepositoryPreviewInput.Type;
 
 export const TestingLocatorRepositoryApplyInput = Schema.Struct({
   projectId: Schema.String,
@@ -231,14 +267,16 @@ export const TestingLocatorRepositoryApplyInput = Schema.Struct({
   expectedArtifactSourceHash: Schema.String,
   expectedDestinationSourceHash: Schema.NullOr(Schema.String),
 });
-export type TestingLocatorRepositoryApplyInput = typeof TestingLocatorRepositoryApplyInput.Type;
+export type TestingLocatorRepositoryApplyInput =
+  typeof TestingLocatorRepositoryApplyInput.Type;
 
 export const TestingLocatorSyncDecisionInput = Schema.Struct({
   projectId: Schema.String,
   conflictId: Schema.String,
   decision: Schema.Literals(["keep-managed", "accept-repository", "archive"]),
 });
-export type TestingLocatorSyncDecisionInput = typeof TestingLocatorSyncDecisionInput.Type;
+export type TestingLocatorSyncDecisionInput =
+  typeof TestingLocatorSyncDecisionInput.Type;
 
 export const TestingLocatorVerificationInput = Schema.Struct({
   projectId: Schema.String,
@@ -247,7 +285,8 @@ export const TestingLocatorVerificationInput = Schema.Struct({
   entryIds: Schema.Array(Schema.String),
   environmentLabel: Schema.optionalKey(Schema.String),
 });
-export type TestingLocatorVerificationInput = typeof TestingLocatorVerificationInput.Type;
+export type TestingLocatorVerificationInput =
+  typeof TestingLocatorVerificationInput.Type;
 
 export const TestingStoryImportInput = Schema.Struct({
   projectId: Schema.String,
@@ -293,19 +332,22 @@ export const TestingCaseGroupUpdateInput = Schema.Struct({
   caseId: Schema.String,
   groupName: Schema.String,
 });
-export type TestingCaseGroupUpdateInput = typeof TestingCaseGroupUpdateInput.Type;
+export type TestingCaseGroupUpdateInput =
+  typeof TestingCaseGroupUpdateInput.Type;
 
 export const TestingCaseGroupCreateInput = Schema.Struct({
   projectId: Schema.String,
   groupName: Schema.String,
 });
-export type TestingCaseGroupCreateInput = typeof TestingCaseGroupCreateInput.Type;
+export type TestingCaseGroupCreateInput =
+  typeof TestingCaseGroupCreateInput.Type;
 
 export const TestingCaseGroupDeleteInput = Schema.Struct({
   projectId: Schema.String,
   groupName: Schema.String,
 });
-export type TestingCaseGroupDeleteInput = typeof TestingCaseGroupDeleteInput.Type;
+export type TestingCaseGroupDeleteInput =
+  typeof TestingCaseGroupDeleteInput.Type;
 
 export const TestingCaseCreateInput = Schema.Struct({
   projectId: Schema.String,
@@ -322,16 +364,59 @@ export const DEFAULT_TESTING_BATCH_MAX_CASES = 25;
 export const DEFAULT_TESTING_BATCH_MAX_TOKENS = 200_000;
 export const DEFAULT_TESTING_BATCH_MAX_COST_USD = 5;
 
+export const TestingGenerationEngine = Schema.Literals([
+  "standard",
+  "official-playwright",
+  "recording",
+]);
+export type TestingGenerationEngine = typeof TestingGenerationEngine.Type;
+
+export const TestingGenerationStage = Schema.Literals([
+  "planned",
+  "generating",
+  "generated",
+  "validating",
+  "validated",
+  "blocked",
+  "repair-proposed",
+  "failed",
+  "cancelled",
+]);
+export type TestingGenerationStage = typeof TestingGenerationStage.Type;
+
+export interface TestingValidationSummary {
+  readonly discoveredTests: number;
+  readonly passedTests: number;
+  readonly failedTests: number;
+  readonly skippedTests: number;
+  readonly flakyTests: number;
+  readonly errors: ReadonlyArray<string>;
+}
+
+export interface TestingProviderProvenance {
+  readonly instanceId: string;
+  readonly model: string;
+  readonly options?: ReadonlyArray<string>;
+}
+
 export const TestingGenerationInput = Schema.Struct({
-  engine: Schema.optionalKey(Schema.Literals(["standard", "official-playwright", "recording"])),
-  recordedCode: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(1_000_000))),
+  engine: Schema.optionalKey(
+    Schema.Literals(["standard", "official-playwright", "recording"]),
+  ),
+  recordedCode: Schema.optionalKey(
+    Schema.String.check(Schema.isMaxLength(1_000_000)),
+  ),
   recordedExpectedResult: Schema.optionalKey(Schema.String),
   failureRunId: Schema.optionalKey(Schema.String),
+  parentJobId: Schema.optionalKey(Schema.String),
+  parentRunId: Schema.optionalKey(Schema.String),
+  attemptCount: Schema.optionalKey(Schema.Int),
   projectId: Schema.String,
   projectPath: Schema.String,
   targetUrl: Schema.optionalKey(Schema.String),
   cdpEndpoint: Schema.optionalKey(Schema.String),
   caseIds: Schema.optionalKey(Schema.Array(Schema.String)),
+  locatorEntryIds: Schema.optionalKey(Schema.Array(Schema.String)),
   framework: Schema.optionalKey(Schema.Literal("playwright-ts")),
   modelSelection: ModelSelection,
   reasoningTier: Schema.optionalKey(Schema.Literals(["low", "medium", "high"])),
@@ -339,9 +424,15 @@ export const TestingGenerationInput = Schema.Struct({
   repositoryOutputPath: Schema.optionalKey(Schema.String),
   templatePath: Schema.optionalKey(Schema.String),
   captureReplay: Schema.optionalKey(Schema.Boolean),
-  maxCases: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-  maxEstimatedTokens: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-  maxEstimatedCostUsd: Schema.optionalKey(Schema.Number.check(Schema.isGreaterThan(0))),
+  maxCases: Schema.optionalKey(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  ),
+  maxEstimatedTokens: Schema.optionalKey(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  ),
+  maxEstimatedCostUsd: Schema.optionalKey(
+    Schema.Number.check(Schema.isGreaterThan(0)),
+  ),
 });
 export type TestingGenerationInput = typeof TestingGenerationInput.Type;
 
@@ -369,7 +460,9 @@ export type TestingArtifactReadResult = typeof TestingArtifactReadResult.Type;
 
 export const TestingExecutionInput = Schema.Struct({
   concurrency: Schema.optionalKey(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(Schema.isLessThanOrEqualTo(4)),
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+      Schema.isLessThanOrEqualTo(4),
+    ),
   ),
   projectId: Schema.String,
   generationJobId: Schema.String,
@@ -377,7 +470,9 @@ export const TestingExecutionInput = Schema.Struct({
   mode: Schema.Literals(["standalone", "ci"]),
   caseIds: Schema.optionalKey(Schema.Array(Schema.String)),
   timeoutSeconds: Schema.optionalKey(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(Schema.isLessThanOrEqualTo(3_600)),
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).check(
+      Schema.isLessThanOrEqualTo(3_600),
+    ),
   ),
   visualComparison: Schema.optionalKey(Schema.Boolean),
 });
@@ -394,7 +489,8 @@ export const TestingHealingDecisionInput = Schema.Struct({
   proposalId: Schema.String,
   decision: Schema.Literals(["accepted", "rejected"]),
 });
-export type TestingHealingDecisionInput = typeof TestingHealingDecisionInput.Type;
+export type TestingHealingDecisionInput =
+  typeof TestingHealingDecisionInput.Type;
 
 export const TestingScheduleInput = Schema.Struct({
   projectId: Schema.String,
@@ -439,16 +535,31 @@ export type TestingTriageInput = typeof TestingTriageInput.Type;
 
 export const TestingCaseSource = Schema.Literals(["excel", "generated"]);
 export type TestingCaseSource = typeof TestingCaseSource.Type;
-export const TestingReconciliationStatus = Schema.Literals(["matches", "needs-review", "blocked"]);
-export type TestingReconciliationStatus = typeof TestingReconciliationStatus.Type;
-export const TestingReviewDecision = Schema.Literals(["pending", "accepted", "edited", "rejected"]);
+export const TestingReconciliationStatus = Schema.Literals([
+  "matches",
+  "needs-review",
+  "blocked",
+]);
+export type TestingReconciliationStatus =
+  typeof TestingReconciliationStatus.Type;
+export const TestingReviewDecision = Schema.Literals([
+  "pending",
+  "accepted",
+  "edited",
+  "rejected",
+]);
 export type TestingReviewDecision = typeof TestingReviewDecision.Type;
 
 export interface TestingMismatch {
   readonly stepIndex: number | null;
   readonly expected: string;
   readonly actual: string;
-  readonly kind: "parse" | "duplicate" | "unreachable" | "live-verification" | "expected-result";
+  readonly kind:
+    | "parse"
+    | "duplicate"
+    | "unreachable"
+    | "live-verification"
+    | "expected-result";
 }
 
 export interface TestingCaseSummary {
@@ -467,7 +578,8 @@ export interface TestingCaseSummary {
   readonly reviewDecision: TestingReviewDecision;
   readonly mismatches: ReadonlyArray<TestingMismatch>;
   readonly matchedStateIds: ReadonlyArray<string>;
-  readonly standaloneStatus: "passed" | "failed" | "blocked" | "not-applicable" | "not-yet-tested";
+  readonly standaloneStatus:
+    "passed" | "failed" | "blocked" | "not-applicable" | "not-yet-tested";
   readonly ciStatus: "pass" | "fail" | null;
   readonly notes: string;
   readonly locatorEntryIds?: ReadonlyArray<string>;
@@ -493,12 +605,20 @@ export interface TestingClearGraphResult extends TestingGraphSummary {
 }
 
 export type TestingLocatorVerificationStatus =
-  | "unverified"
-  | "verified"
-  | "stale"
-  | "missing"
-  | "ambiguous"
-  | "invalid";
+  "unverified" | "verified" | "stale" | "missing" | "ambiguous" | "invalid";
+
+export type TestingFailureClassification =
+  | "selector-drift"
+  | "actionability-timing"
+  | "navigation-readiness"
+  | "fixture-defect"
+  | "product-assertion"
+  | "missing-credentials"
+  | "auth-redirect"
+  | "network-failure"
+  | "browser-crash"
+  | "infrastructure-failure"
+  | "unknown";
 
 export interface TestingLocatorEntry {
   readonly id: string;
@@ -519,7 +639,8 @@ export interface TestingLocatorEntry {
   readonly source: "discovered" | "repository" | "manual" | "healing";
   readonly sourceFile: string | null;
   readonly sourceLine: number | null;
-  readonly lifecycleStatus: "draft" | "accepted" | "archived" | "manual-required";
+  readonly lifecycleStatus:
+    "draft" | "accepted" | "archived" | "manual-required";
   readonly syncStatus:
     | "managed"
     | "linked"
@@ -533,6 +654,14 @@ export interface TestingLocatorEntry {
   readonly verificationStatus: TestingLocatorVerificationStatus;
   readonly verificationEnvironment: string | null;
   readonly verifiedAt: string | null;
+  readonly health?:
+    "healthy" | "degraded" | "broken" | "quarantined" | undefined;
+  readonly elementFingerprint?: string | null | undefined;
+  readonly targetPageFingerprint?: string | null | undefined;
+  readonly verificationCount?: number | undefined;
+  readonly consecutiveRepairAttempts?: number | undefined;
+  readonly lastFailureClassification?:
+    TestingFailureClassification | string | null | undefined;
 }
 
 export interface TestingLocatorPage {
@@ -541,7 +670,8 @@ export interface TestingLocatorPage {
   readonly urlPattern: string;
   readonly environmentLabel: string;
   readonly structuralFingerprint: string;
-  readonly captureSource: "automatic" | "guided" | "manual" | "repository" | "backfill";
+  readonly captureSource:
+    "automatic" | "guided" | "manual" | "repository" | "backfill";
   readonly lifecycleStatus: "draft" | "accepted";
   readonly incompleteSession: boolean;
   readonly pageObject: TestingPageObjectArtifact | null;
@@ -604,7 +734,8 @@ export interface TestingTestInventoryNode {
   readonly kind: "root" | "file" | "suite" | "test" | "case";
   readonly label: string;
   readonly source: "managed" | "repository" | "vscode";
-  readonly status: "unknown" | "queued" | "running" | "passed" | "failed" | "skipped";
+  readonly status:
+    "unknown" | "queued" | "running" | "passed" | "failed" | "skipped";
   readonly filePath: string | null;
   readonly line: number | null;
   readonly externalCaseId: string | null;
@@ -683,7 +814,8 @@ export interface TestingLocatorSyncItem {
   readonly id: string;
   readonly entryId: string;
   readonly locatorKey: string;
-  readonly kind: "conflict" | "managed-only" | "repository-only" | "healing-source-diff";
+  readonly kind:
+    "conflict" | "managed-only" | "repository-only" | "healing-source-diff";
   readonly sourceFile: string | null;
   readonly details: Readonly<Record<string, unknown>>;
   readonly status: "pending" | "accepted" | "rejected";
@@ -713,7 +845,22 @@ export interface TestingGeneratedArtifact {
 export interface TestingGenerationJob {
   readonly id: string;
   readonly projectId: string;
-  readonly status: "queued" | "running" | "completed" | "failed" | "cancelled" | "budget-stopped";
+  readonly status:
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "cancelled"
+    | "budget-stopped";
+  readonly engine: TestingGenerationEngine;
+  readonly stage: TestingGenerationStage;
+  readonly parentJobId?: string | null | undefined;
+  readonly parentRunId?: string | null | undefined;
+  readonly attemptCount: number;
+  readonly validationSummary?: TestingValidationSummary | null | undefined;
+  readonly immutableArtifactPaths?: ReadonlyArray<string> | undefined;
+  readonly providerProvenance?: TestingProviderProvenance | null | undefined;
+  readonly usageMeasured: boolean;
   readonly framework: "playwright-ts";
   readonly modelSelection: ModelSelection;
   readonly outputDirectory: string;
@@ -757,11 +904,7 @@ export interface TestingExecutionCaseResult {
   readonly flaky: boolean;
   readonly quarantined: boolean;
   readonly visualStatus:
-    | "disabled"
-    | "baseline-created"
-    | "matched"
-    | "changed"
-    | "review-required";
+    "disabled" | "baseline-created" | "matched" | "changed" | "review-required";
 }
 
 export interface TestingExecutionRun {
@@ -810,8 +953,13 @@ export interface TestingReport {
 
 export interface TestingTraceabilityResult {
   readonly case: TestingCaseSummary;
-  readonly import: { readonly workbookName: string; readonly workbookPath: string } | null;
-  readonly generatedArtifacts: ReadonlyArray<TestingGeneratedArtifact & { readonly jobId: string }>;
+  readonly import: {
+    readonly workbookName: string;
+    readonly workbookPath: string;
+  } | null;
+  readonly generatedArtifacts: ReadonlyArray<
+    TestingGeneratedArtifact & { readonly jobId: string }
+  >;
   readonly executions: ReadonlyArray<{
     readonly runId: string;
     readonly mode: "standalone" | "ci";
@@ -820,7 +968,9 @@ export interface TestingTraceabilityResult {
     readonly durationMs: number;
     readonly error: string | null;
   }>;
-  readonly healing: ReadonlyArray<TestingHealingProposal & { readonly runId: string }>;
+  readonly healing: ReadonlyArray<
+    TestingHealingProposal & { readonly runId: string }
+  >;
 }
 
 export interface TestingBugDraft {
@@ -830,7 +980,8 @@ export interface TestingBugDraft {
 }
 
 export interface TestingTriageResult {
-  readonly classification: "application-regression" | "test-update" | "uncertain";
+  readonly classification:
+    "application-regression" | "test-update" | "uncertain";
   readonly observedFacts: ReadonlyArray<string>;
   readonly inference: string;
   readonly recommendation: string;
@@ -865,7 +1016,8 @@ export interface TestingGraphSummary {
   readonly lastRunStatus: "idle" | "running" | "completed" | "failed";
   readonly lastRunError: string | null;
   readonly lastRunMetrics: null | {
-    readonly terminationReason: "plateaued" | "max-states" | "time-budget" | null;
+    readonly terminationReason:
+      "plateaued" | "max-states" | "time-budget" | null;
     readonly statesVisited: number | null;
     readonly transitionsObserved: number | null;
     readonly durationMs: number | null;
@@ -893,13 +1045,21 @@ export interface TestingExplorationResult extends TestingGraphSummary {
 }
 
 export interface TestingApi {
-  readonly getStatus: (input: TestingProjectInput) => Promise<TestingGraphSummary>;
-  readonly getLocatorLibrary: (input: TestingProjectInput) => Promise<TestingLocatorLibraryResult>;
+  readonly getStatus: (
+    input: TestingProjectInput,
+  ) => Promise<TestingGraphSummary>;
+  readonly getLocatorLibrary: (
+    input: TestingProjectInput,
+  ) => Promise<TestingLocatorLibraryResult>;
   readonly setDiscoveryExperience: (
     input: TestingDiscoveryExperienceInput,
   ) => Promise<TestingLocatorLibraryResult>;
-  readonly getCaseIdPolicy: (input: TestingProjectInput) => Promise<TestingCaseIdPolicy>;
-  readonly setCaseIdPolicy: (input: TestingCaseIdPolicyInput) => Promise<TestingCaseIdPolicy>;
+  readonly getCaseIdPolicy: (
+    input: TestingProjectInput,
+  ) => Promise<TestingCaseIdPolicy>;
+  readonly setCaseIdPolicy: (
+    input: TestingCaseIdPolicyInput,
+  ) => Promise<TestingCaseIdPolicy>;
   readonly getTestInventory: (
     input: TestingProjectInput & { readonly projectPath: string },
   ) => Promise<TestingTestInventoryResult>;
@@ -939,7 +1099,9 @@ export interface TestingApi {
   readonly applyLocatorRepositoryWrite: (
     input: TestingLocatorRepositoryApplyInput,
   ) => Promise<TestingLocatorRepositoryApplyResult>;
-  readonly previewLocatorSync: (input: TestingProjectInput) => Promise<TestingLocatorSyncPreview>;
+  readonly previewLocatorSync: (
+    input: TestingProjectInput,
+  ) => Promise<TestingLocatorSyncPreview>;
   readonly resolveLocatorSync: (
     input: TestingLocatorSyncDecisionInput,
   ) => Promise<TestingLocatorSyncPreview>;
@@ -952,40 +1114,89 @@ export interface TestingApi {
   readonly verifyLocators: (
     input: TestingLocatorVerificationInput,
   ) => Promise<TestingLocatorLibraryResult>;
-  readonly importUserStory: (input: TestingStoryImportInput) => Promise<TestingStoryImportResult>;
-  readonly startAuthCapture: (input: TestingTargetInput) => Promise<TestingAuthStartResult>;
-  readonly finishAuthCapture: (input: TestingProjectInput) => Promise<TestingGraphSummary>;
-  readonly startExploration: (input: TestingExplorationInput) => Promise<TestingExplorationResult>;
+  readonly importUserStory: (
+    input: TestingStoryImportInput,
+  ) => Promise<TestingStoryImportResult>;
+  readonly startAuthCapture: (
+    input: TestingTargetInput,
+  ) => Promise<TestingAuthStartResult>;
+  readonly finishAuthCapture: (
+    input: TestingProjectInput,
+  ) => Promise<TestingGraphSummary>;
+  readonly startExploration: (
+    input: TestingExplorationInput,
+  ) => Promise<TestingExplorationResult>;
   readonly importWorkbook: (
     input: TestingWorkbookImportInput,
   ) => Promise<TestingWorkbookImportResult>;
-  readonly listCases: (input: TestingProjectInput) => Promise<TestingCaseListResult>;
-  readonly createCase: (input: TestingCaseCreateInput) => Promise<TestingCaseListResult>;
-  readonly reviewCase: (input: TestingCaseReviewInput) => Promise<TestingCaseListResult>;
-  readonly deleteCase: (input: TestingCaseDeleteInput) => Promise<TestingCaseListResult>;
-  readonly updateCaseGroup: (input: TestingCaseGroupUpdateInput) => Promise<TestingCaseListResult>;
-  readonly createCaseGroup: (input: TestingCaseGroupCreateInput) => Promise<TestingCaseListResult>;
-  readonly deleteCaseGroup: (input: TestingCaseGroupDeleteInput) => Promise<TestingCaseListResult>;
-  readonly generateScenarios: (input: TestingProjectInput) => Promise<TestingCaseListResult>;
-  readonly clearGraph: (input: TestingProjectInput) => Promise<TestingClearGraphResult>;
-  readonly generateTests: (input: TestingGenerationInput) => Promise<TestingGenerationJob>;
+  readonly listCases: (
+    input: TestingProjectInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly createCase: (
+    input: TestingCaseCreateInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly reviewCase: (
+    input: TestingCaseReviewInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly deleteCase: (
+    input: TestingCaseDeleteInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly updateCaseGroup: (
+    input: TestingCaseGroupUpdateInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly createCaseGroup: (
+    input: TestingCaseGroupCreateInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly deleteCaseGroup: (
+    input: TestingCaseGroupDeleteInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly generateScenarios: (
+    input: TestingProjectInput,
+  ) => Promise<TestingCaseListResult>;
+  readonly clearGraph: (
+    input: TestingProjectInput,
+  ) => Promise<TestingClearGraphResult>;
+  readonly generateTests: (
+    input: TestingGenerationInput,
+  ) => Promise<TestingGenerationJob>;
   readonly listGenerationJobs: (
     input: TestingProjectInput,
   ) => Promise<TestingGenerationJobListResult>;
-  readonly cancelGenerationJob: (input: TestingGenerationJobInput) => Promise<TestingGenerationJob>;
-  readonly readArtifact: (input: TestingArtifactReadInput) => Promise<TestingArtifactReadResult>;
-  readonly runTests: (input: TestingExecutionInput) => Promise<TestingExecutionRun>;
+  readonly cancelGenerationJob: (
+    input: TestingGenerationJobInput,
+  ) => Promise<TestingGenerationJob>;
+  readonly readArtifact: (
+    input: TestingArtifactReadInput,
+  ) => Promise<TestingArtifactReadResult>;
+  readonly runTests: (
+    input: TestingExecutionInput,
+  ) => Promise<TestingExecutionRun>;
+  readonly cancelExecutionRun: (
+    input: TestingExecutionRunInput,
+  ) => Promise<TestingExecutionRun>;
   readonly listExecutionRuns: (
     input: TestingProjectInput,
   ) => Promise<TestingExecutionRunListResult>;
   readonly decideHealingProposal: (
     input: TestingHealingDecisionInput,
   ) => Promise<TestingExecutionRunListResult>;
-  readonly createSchedule: (input: TestingScheduleInput) => Promise<TestingSchedule>;
-  readonly listSchedules: (input: TestingProjectInput) => Promise<TestingScheduleListResult>;
-  readonly generateReport: (input: TestingReportInput) => Promise<TestingReport>;
-  readonly getTraceability: (input: TestingTraceabilityInput) => Promise<TestingTraceabilityResult>;
+  readonly createSchedule: (
+    input: TestingScheduleInput,
+  ) => Promise<TestingSchedule>;
+  readonly listSchedules: (
+    input: TestingProjectInput,
+  ) => Promise<TestingScheduleListResult>;
+  readonly generateReport: (
+    input: TestingReportInput,
+  ) => Promise<TestingReport>;
+  readonly getTraceability: (
+    input: TestingTraceabilityInput,
+  ) => Promise<TestingTraceabilityResult>;
   readonly draftBug: (input: TestingBugDraftInput) => Promise<TestingBugDraft>;
-  readonly getGraphExplorer: (input: TestingProjectInput) => Promise<TestingGraphExplorerResult>;
-  readonly triageFailure: (input: TestingTriageInput) => Promise<TestingTriageResult>;
+  readonly getGraphExplorer: (
+    input: TestingProjectInput,
+  ) => Promise<TestingGraphExplorerResult>;
+  readonly triageFailure: (
+    input: TestingTriageInput,
+  ) => Promise<TestingTriageResult>;
 }

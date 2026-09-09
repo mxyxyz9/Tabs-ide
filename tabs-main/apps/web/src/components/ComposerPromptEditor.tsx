@@ -71,6 +71,14 @@ import {
   COMPOSER_INLINE_CHIP_LABEL_CLASS_NAME,
 } from "./composerInlineChip";
 import { ComposerPendingTerminalContextChip } from "./chat/ComposerPendingTerminalContexts";
+import {
+  buildComposerPromptHistoryEntries,
+  stepComposerPromptHistory,
+  type ComposerPromptHistoryMessage,
+  type ComposerPromptHistoryPosition,
+} from "./chat/composerPromptHistory";
+
+export type { ComposerPromptHistoryMessage };
 
 const COMPOSER_EDITOR_HMR_KEY = `composer-editor-${Math.random().toString(36).slice(2)}`;
 
@@ -642,6 +650,7 @@ interface ComposerPromptEditorProps {
   disabled: boolean;
   placeholder: string;
   className?: string;
+  historyMessages?: ReadonlyArray<ComposerPromptHistoryMessage> | undefined;
   onRemoveTerminalContext: (contextId: string) => void;
   onChange: (
     nextValue: string,
@@ -662,27 +671,111 @@ interface ComposerPromptEditorInnerProps extends ComposerPromptEditorProps {
 }
 
 function ComposerCommandKeyPlugin(props: {
+  value: string;
+  terminalContexts: ReadonlyArray<TerminalContextDraft>;
+  historyMessages?: ReadonlyArray<ComposerPromptHistoryMessage> | undefined;
+  onChange: (
+    nextValue: string,
+    nextCursor: number,
+    expandedCursor: number,
+    cursorAdjacentToMention: boolean,
+    terminalContextIds: string[],
+  ) => void;
   onCommandKeyDown?: (
     key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
     event: KeyboardEvent,
   ) => boolean;
 }) {
   const [editor] = useLexicalComposerContext();
+  const promptHistoryPositionRef = useRef<ComposerPromptHistoryPosition | null>(null);
+  const unsentDraftRef = useRef<string>("");
+  const historyMessagesRef = useRef(props.historyMessages ?? []);
+  const valueRef = useRef(props.value);
+
+  useEffect(() => {
+    historyMessagesRef.current = props.historyMessages ?? [];
+  }, [props.historyMessages]);
+
+  useEffect(() => {
+    if (
+      promptHistoryPositionRef.current !== null &&
+      promptHistoryPositionRef.current.recalled !== props.value
+    ) {
+      promptHistoryPositionRef.current = null;
+    }
+    valueRef.current = props.value;
+  }, [props.value]);
 
   useEffect(() => {
     const handleCommand = (
       key: "ArrowDown" | "ArrowUp" | "Enter" | "Tab",
       event: KeyboardEvent | null,
     ): boolean => {
-      if (!props.onCommandKeyDown || !event) {
+      if (!event) {
         return false;
       }
-      const handled = props.onCommandKeyDown(key, event);
-      if (handled) {
+      if (props.onCommandKeyDown) {
+        const handled = props.onCommandKeyDown(key, event);
+        if (handled) {
+          event.preventDefault();
+          event.stopPropagation();
+          return true;
+        }
+      }
+
+      if (key === "ArrowUp" || key === "ArrowDown") {
+        if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey || event.isComposing) {
+          return false;
+        }
+        const direction = key === "ArrowUp" ? "backward" : "forward";
+        const entries = buildComposerPromptHistoryEntries(historyMessagesRef.current);
+        if (entries.length === 0) return false;
+
+        if (promptHistoryPositionRef.current === null) {
+          if (direction === "backward") {
+            if (valueRef.current.trim().length > 0) return false;
+            unsentDraftRef.current = valueRef.current;
+          } else {
+            return false;
+          }
+        }
+
+        const step = stepComposerPromptHistory({
+          direction,
+          entries,
+          position: promptHistoryPositionRef.current,
+          currentPrompt: valueRef.current,
+        });
+
+        if (!step) return false;
+        promptHistoryPositionRef.current = step.position;
+        const nextPrompt = step.position === null ? unsentDraftRef.current : step.prompt;
+
         event.preventDefault();
         event.stopPropagation();
+
+        editor.update(() => {
+          const root = $getRoot();
+          root.clear();
+          const paragraph = $createParagraphNode();
+          if (nextPrompt.length > 0) {
+            paragraph.append($createTextNode(nextPrompt));
+          }
+          root.append(paragraph);
+          paragraph.select();
+        });
+
+        props.onChange(
+          nextPrompt,
+          nextPrompt.length,
+          nextPrompt.length,
+          false,
+          props.terminalContexts.map((t) => t.id),
+        );
+        return true;
       }
-      return handled;
+
+      return false;
     };
 
     const unregisterArrowDown = editor.registerCommand(
@@ -885,6 +978,7 @@ function ComposerPromptEditorInner({
   disabled,
   placeholder,
   className,
+  historyMessages,
   onRemoveTerminalContext,
   onChange,
   onCommandKeyDown,
@@ -1112,7 +1206,13 @@ function ComposerPromptEditorInner({
           ErrorBoundary={LexicalErrorBoundary}
         />
         <OnChangePlugin onChange={handleEditorChange} />
-        <ComposerCommandKeyPlugin {...(onCommandKeyDown ? { onCommandKeyDown } : {})} />
+        <ComposerCommandKeyPlugin
+          value={value}
+          terminalContexts={terminalContexts}
+          {...(historyMessages !== undefined ? { historyMessages } : {})}
+          onChange={onChange}
+          {...(onCommandKeyDown ? { onCommandKeyDown } : {})}
+        />
         <ComposerInlineTokenArrowPlugin />
         <ComposerInlineTokenSelectionNormalizePlugin />
         <ComposerInlineTokenBackspacePlugin />
@@ -1133,6 +1233,7 @@ export const ComposerPromptEditor = forwardRef<
     disabled,
     placeholder,
     className,
+    historyMessages,
     onRemoveTerminalContext,
     onChange,
     onCommandKeyDown,
@@ -1165,6 +1266,7 @@ export const ComposerPromptEditor = forwardRef<
         terminalContexts={terminalContexts}
         disabled={disabled}
         placeholder={placeholder}
+        {...(historyMessages !== undefined ? { historyMessages } : {})}
         onRemoveTerminalContext={onRemoveTerminalContext}
         onChange={onChange}
         onPaste={onPaste}

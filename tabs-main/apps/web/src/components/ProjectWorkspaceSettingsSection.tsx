@@ -1146,6 +1146,20 @@ export function ProjectWorkspaceSettingsSection() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                                   <span>{tool.label}</span>
+                                  {tool.kind === "testing" ? (
+                                    <Tooltip>
+                                      <TooltipTrigger
+                                        className="rounded border border-border/60 px-1.5 py-0.5 text-xs font-normal text-muted-foreground"
+                                        aria-label="Testing early access information"
+                                      >
+                                        Early access
+                                      </TooltipTrigger>
+                                      <TooltipPopup>
+                                        Testing is in development. You may encounter errors.
+                                        Disabled by default.
+                                      </TooltipPopup>
+                                    </Tooltip>
+                                  ) : null}
                                   {isLastToolLocked ? (
                                     <span className="inline-flex items-center gap-1 rounded border border-border/50 bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground font-normal">
                                       <LockIcon className="size-2.5 text-muted-foreground/80" />

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  captureLocatorSnapshot,
   countLocatorMatches,
   locatorCandidatesFromSnapshot,
   locatorCandidatesFromDom,
@@ -130,5 +131,121 @@ describe("DOM locator coverage", () => {
         maxElements: 50,
       }).truncatedElements,
     ).toBe(100);
+  });
+
+  it("permits in-preview navigation during capture without cancelling or throwing", async () => {
+    const result = await captureLocatorSnapshot({
+      projectId: "p",
+      session: null,
+      fallbackUrl: "http://localhost:3000",
+      coverage: "everything-accessible",
+      maxElements: 100,
+      previewSnapshot: {
+        url: "http://localhost:3000/dashboard",
+        snapshot: '- heading "Dashboard"',
+        elements: [
+          {
+            selector: "#emp-link",
+            name: "Employees",
+            tag: "a",
+            role: "link",
+            testId: "",
+            matchCount: 1,
+            fragile: false,
+          },
+        ],
+      },
+    });
+
+    expect(result.rawUrl).toBe("http://localhost:3000/dashboard");
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.strategy).toBe("role");
+    expect(result.candidates[0]?.arguments).toEqual({ role: "link", name: "Employees" });
+  });
+
+  it("strips private-use icon glyphs while preserving non-Latin accessible names", () => {
+    const parsed = locatorCandidatesFromSnapshot({
+      projectId: "p",
+      coverage: "actions-only",
+      maxElements: 50,
+      snapshot: '- button "\uE001 Save"\n- button "\uF015 Home \uE002"\n- button "\u{F0000} Настройки \u{100000}"',
+    });
+
+    expect(parsed.candidates).toHaveLength(3);
+    expect(parsed.candidates[0]?.arguments).toEqual({ role: "button", name: "Save" });
+    expect(parsed.candidates[1]?.arguments).toEqual({ role: "button", name: "Home" });
+    expect(parsed.candidates[2]?.arguments).toEqual({ role: "button", name: "Настройки" });
+  });
+
+  it("selects candidate strategy based on priority: test ID -> role/name -> label -> placeholder -> text -> css", () => {
+    const elements = [
+      {
+        selector: "#btn1",
+        name: "Save",
+        tag: "button",
+        role: "button",
+        testId: "save-button",
+        matchCount: 1,
+        fragile: false,
+      },
+      {
+        selector: "#btn2",
+        name: "Cancel",
+        tag: "button",
+        role: "button",
+        testId: "",
+        matchCount: 1,
+        fragile: false,
+      },
+      {
+        selector: "label[for=email]",
+        name: "Email Address",
+        tag: "label",
+        role: "",
+        testId: "",
+        matchCount: 1,
+        fragile: false,
+      },
+      {
+        selector: "input[placeholder='Enter email']",
+        name: "Enter email",
+        tag: "input",
+        role: "textbox",
+        testId: "",
+        matchCount: 1,
+        fragile: false,
+      },
+      {
+        selector: "div.custom-complex > span:nth-child(2)",
+        name: "",
+        tag: "div",
+        role: "",
+        testId: "",
+        matchCount: 1,
+        fragile: true,
+      },
+    ];
+
+    const parsed = locatorCandidatesFromDom({
+      projectId: "p",
+      elements,
+      coverage: "everything-accessible",
+      maxElements: 10,
+    });
+
+    expect(parsed.candidates[0]?.strategy).toBe("test-id");
+    expect(parsed.candidates[0]?.fragile).toBe(false);
+
+    expect(parsed.candidates[1]?.strategy).toBe("role");
+    expect(parsed.candidates[1]?.fragile).toBe(false);
+
+    expect(parsed.candidates[2]?.strategy).toBe("label");
+    expect(parsed.candidates[2]?.fragile).toBe(false);
+
+    expect(parsed.candidates[3]?.strategy).toBe("role"); // role=textbox has role priority over placeholder
+    expect(parsed.candidates[3]?.fragile).toBe(false);
+
+    expect(parsed.candidates[4]?.strategy).toBe("css");
+    expect(parsed.candidates[4]?.fragile).toBe(true);
   });
 });

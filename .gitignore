@@ -11,3 +11,5 @@ _analysis/
 _maintenance/legacy-repair/
 vscode-main/
 synara-main/
+.vercel
+.env*

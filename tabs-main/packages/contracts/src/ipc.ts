@@ -155,6 +155,12 @@ import type {
   ServerListProviderUsageInput,
   ServerListProviderUsageResult,
 } from "./usage.ts";
+import type {
+  ResourceTelemetrySnapshot,
+  ResourceTelemetryHistory,
+  ResourceTelemetryHistoryInput,
+  ResourceTelemetryRetryResult,
+} from "./resourceTelemetry.ts";
 import * as Schema from "effect/Schema";
 import type {
   DiscoveredLocalServerList,
@@ -1135,6 +1141,13 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
+  isPopout?: boolean;
+  openPopoutWindow?: (options: {
+    readonly url: string;
+    readonly title?: string;
+    readonly width?: number;
+    readonly height?: number;
+  }) => Promise<void>;
   onMenuAction: (listener: (action: string) => void) => () => void;
   getUpdateState: () => Promise<DesktopUpdateState>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
@@ -1328,6 +1341,11 @@ export interface LocalApi {
     getProcessResourceHistory: (
       input: ServerProcessResourceHistoryInput,
     ) => Promise<ServerProcessResourceHistoryResult>;
+    getResourceTelemetry: () => Promise<ResourceTelemetrySnapshot>;
+    getResourceTelemetryHistory: (
+      input: ResourceTelemetryHistoryInput,
+    ) => Promise<ResourceTelemetryHistory>;
+    retryResourceTelemetry: () => Promise<ResourceTelemetryRetryResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
     createSupportBundle: () => Promise<ServerSupportBundleResult>;
     reportClientActivity: (input: ClientActivityReportInput) => Promise<void>;

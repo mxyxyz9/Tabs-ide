@@ -29,17 +29,20 @@ const sidebarViewContainerIds = new Set([
 
 const hiddenViewContainerIds = new Set(['copilot-chat', 'context-inspector'].map(extensionViewContainerId));
 
+export function getTabsViewContainerTargetLocation(id: string): ViewContainerLocation | undefined {
+	if (assistantViewContainerIds.has(id)) {
+		// Product placement must be stable throughout extension activation.
+		return ViewContainerLocation.AuxiliaryBar;
+	}
+	return sidebarViewContainerIds.has(id) ? ViewContainerLocation.Sidebar : undefined;
+}
+
 CommandsRegistry.registerCommand('_tabs.getViewContainers', accessor => {
 	const viewDescriptorService = accessor.get(IViewDescriptorService);
 	for (const container of viewDescriptorService.viewContainers) {
-		if (assistantViewContainerIds.has(container.id)) {
-			const hasActiveViews = viewDescriptorService.getViewContainerModel(container).activeViewDescriptors.length > 0;
-			const targetLocation = hasActiveViews ? ViewContainerLocation.AuxiliaryBar : ViewContainerLocation.Sidebar;
-			if (viewDescriptorService.getViewContainerLocation(container) !== targetLocation) {
-				viewDescriptorService.moveViewContainerToLocation(container, targetLocation, undefined, '_tabs.getViewContainers');
-			}
-		} else if (sidebarViewContainerIds.has(container.id) && viewDescriptorService.getViewContainerLocation(container) !== ViewContainerLocation.Sidebar) {
-			viewDescriptorService.moveViewContainerToLocation(container, ViewContainerLocation.Sidebar, undefined, '_tabs.getViewContainers');
+		const targetLocation = getTabsViewContainerTargetLocation(container.id);
+		if (targetLocation !== undefined && viewDescriptorService.getViewContainerLocation(container) !== targetLocation) {
+			viewDescriptorService.moveViewContainerToLocation(container, targetLocation, undefined, '_tabs.getViewContainers');
 		}
 	}
 	const railContainers = [ViewContainerLocation.Sidebar, ViewContainerLocation.AuxiliaryBar]

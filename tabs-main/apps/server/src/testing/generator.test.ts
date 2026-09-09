@@ -20,8 +20,29 @@ async function runCommand(command: string, args: ReadonlyArray<string>) {
     return await execFile(command, [...args]);
   } catch (error) {
     const output = error as Error & { stdout?: string; stderr?: string };
-    throw new Error([output.message, output.stdout, output.stderr].filter(Boolean).join("\n"));
+    throw new Error(
+      [output.message, output.stdout, output.stderr].filter(Boolean).join("\n"),
+    );
   }
+}
+
+async function waitFor(
+  fn: () => void | Promise<void>,
+  timeoutMs = 2000,
+  intervalMs = 20,
+): Promise<void> {
+  const start = Date.now();
+  let lastError: unknown;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await fn();
+      return;
+    } catch (err) {
+      lastError = err;
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+  }
+  throw lastError;
 }
 
 function textGeneration(generate = vi.fn()) {
@@ -79,7 +100,10 @@ function seedAcceptedCase(store: TestingGraphStore): TestingCaseSummary {
         externalId: "QA-101",
         description: "Open account settings",
         steps: ["Open Settings", "Choose Account"],
-        expectedResults: ["Settings are visible", "Account Settings page is visible"],
+        expectedResults: [
+          "Settings are visible",
+          "Account Settings page is visible",
+        ],
         expectedResult: "Account Settings page is visible",
         sourceSheet: "Cases",
         sourceRow: 2,
@@ -167,7 +191,11 @@ describe("TestingGenerator", () => {
       );
       const job = await generator.generate(generationInput(root));
 
-      expect(job).toMatchObject({ status: "completed", completedCases: 1, totalCases: 1 });
+      expect(job).toMatchObject({
+        status: "completed",
+        completedCases: 1,
+        totalCases: 1,
+      });
       expect(job.modelSelection).toMatchObject({
         instanceId: "codex",
         model: "gpt-5.3-codex",
@@ -189,8 +217,10 @@ describe("TestingGenerator", () => {
       expect(spec).not.toContain("Open account settings");
       // Verify the prompt sent to the LLM was enriched with the expected result.
       const promptArg =
-        (localGenerate.mock.calls[0]?.[0] as { sanitizedPrompt?: string } | undefined)
-          ?.sanitizedPrompt ?? "";
+        (
+          localGenerate.mock.calls[0]?.[0] as
+            { sanitizedPrompt?: string } | undefined
+        )?.sanitizedPrompt ?? "";
       expect(promptArg).toContain("Expected Result:");
       if (process.env.TABS_VERIFY_GENERATED_SUITE) {
         await runCommand("bunx", [
@@ -243,7 +273,11 @@ describe("TestingGenerator", () => {
         JSON.stringify({
           version: 1,
           name: "Company layout",
-          directories: { pages: "qa/pages", data: "qa/data", specs: "qa/specs" },
+          directories: {
+            pages: "qa/pages",
+            data: "qa/data",
+            specs: "qa/specs",
+          },
           filePatterns: {
             pageObject: "{feature}/{caseId}.page.ts",
             data: "{feature}/{caseId}.data.ts",
@@ -270,9 +304,9 @@ describe("TestingGenerator", () => {
       expect(job.artifacts[0]?.pageObjectPath).toContain(
         join("generated", "qa", "pages", "account-settings", "qa-101.page.ts"),
       );
-      expect(await readFile(job.artifacts[0]!.pageObjectPath, "utf8")).toContain(
-        "class AccountSettingsScreen",
-      );
+      expect(
+        await readFile(job.artifacts[0]!.pageObjectPath, "utf8"),
+      ).toContain("class AccountSettingsScreen");
     } finally {
       locatorStore.close();
       store.close();
@@ -299,7 +333,10 @@ describe("TestingGenerator", () => {
         maxEstimatedTokens: 1,
       });
 
-      expect(job).toMatchObject({ status: "budget-stopped", completedCases: 0 });
+      expect(job).toMatchObject({
+        status: "budget-stopped",
+        completedCases: 0,
+      });
       expect(generate).not.toHaveBeenCalled();
     } finally {
       locatorStore.close();
@@ -329,12 +366,61 @@ describe("TestingGenerator", () => {
       });
 
       expect(["queued", "running"]).toContain(job.status);
-      await vi.waitFor(() => {
+      await waitFor(() => {
         expect(store.generationJob("project", job.id)).toMatchObject({
           status: "failed",
           error: "Locator preflight failed",
         });
       });
+    } finally {
+      locatorStore.close();
+      store.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("enforces maximum repair attempts and tracks lifecycle stages", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tabs-testing-repair-capping-"));
+    const databasePath = join(root, "state.sqlite");
+    const store = new TestingGraphStore(databasePath);
+    const locatorStore = new LocatorLibraryStore(databasePath);
+    try {
+      seedAcceptedCase(store);
+      const generator = new TestingGenerator(
+        store,
+        locatorStore,
+        join(root, "state"),
+        textGeneration(),
+      );
+
+      // Initial job
+      const job1 = await generator.generate(generationInput(root));
+      expect(job1.stage).toBe("generated");
+      expect(job1.attemptCount).toBe(1);
+
+      // First repair attempt (attempt 2)
+      const job2 = await generator.generate({
+        ...generationInput(root),
+        parentJobId: job1.id,
+      });
+      expect(job2.stage).toBe("repair-proposed");
+      expect(job2.attemptCount).toBe(2);
+
+      // Second repair attempt (attempt 3 - should throw)
+      await expect(
+        generator.generate({
+          ...generationInput(root),
+          parentJobId: job2.id,
+        }),
+      ).rejects.toThrow("Maximum repair attempts exceeded (2)");
+
+      // Explicit attemptCount > 2 should also throw
+      await expect(
+        generator.generate({
+          ...generationInput(root),
+          attemptCount: 3,
+        }),
+      ).rejects.toThrow("Maximum repair attempts exceeded (2)");
     } finally {
       locatorStore.close();
       store.close();

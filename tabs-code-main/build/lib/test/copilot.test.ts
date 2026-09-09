@@ -32,6 +32,15 @@ function createPinnedCopilotWin32Tarball(dir: string): { tarball: string; integr
 }
 
 suite('copilot', () => {
+	test('keeps dynamically imported Copilot runtime modules in production packages', () => {
+		const extensionPackage = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', '..', '..', 'extensions', 'copilot', 'package.json'), 'utf8'));
+		assert.equal(extensionPackage.dependencies.dotenv, '^17.2.0');
+		assert.equal(extensionPackage.dependencies['source-map-support'], '^0.5.21');
+
+		const moduleIgnore = fs.readFileSync(path.join(import.meta.dirname, '..', '..', '..', 'build', '.moduleignore'), 'utf8');
+		assert.equal(moduleIgnore.split(/\r?\n/).includes('@github/copilot/sdk/index.js'), false);
+	});
+
 	test('keeps the public copilot platform package include list scoped to the selected package', () => {
 		const files = getCopilotRuntimePrebuildFiles('linux', 'x64');
 

@@ -1110,7 +1110,7 @@ export class BrowserHostManager {
       throw new Error("The requested browser session is unavailable.");
     }
     const picked = (await session.view.webContents.executeJavaScript(
-      `(() => new Promise((resolve) => {
+      String.raw`(() => new Promise((resolve) => {
         const overlay = document.createElement("div");
         overlay.setAttribute("data-tabs-element-picker", "");
         Object.assign(overlay.style, {
@@ -1156,8 +1156,8 @@ export class BrowserHostManager {
         };
         const onClick = (event) => {
           event.preventDefault(); event.stopImmediatePropagation();
-          const target = hovered;
-          if (!(target instanceof HTMLElement)) return;
+          const target = event.composedPath().find((node) => node instanceof Element) ?? hovered;
+          if (!(target instanceof Element)) return;
           const rect = target.getBoundingClientRect();
           const computed = getComputedStyle(target);
           const styles = ["display", "position", "color", "background-color", "font", "margin", "padding", "border", "border-radius", "width", "height"]

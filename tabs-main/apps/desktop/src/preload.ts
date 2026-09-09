@@ -4,6 +4,13 @@ import type { DesktopBridge } from "@tabs/contracts";
 
 exposeClerkBridge({ passkeys: true });
 
+const isPopoutProcess = process.argv.includes("--tabs-popout-window");
+if (isPopoutProcess) {
+  try {
+    contextBridge.exposeInMainWorld("__TABS_IS_POPOUT__", true);
+  } catch {}
+}
+
 const PICK_FOLDER_CHANNEL = "desktop:pick-folder";
 const CLONE_REPOSITORY_CHANNEL = "desktop:clone-repository";
 const PICK_FILE_CHANNEL = "desktop:pick-file";
@@ -14,6 +21,7 @@ const SET_AI_PROVIDER_CHANNEL = "desktop:set-ai-provider";
 const SET_ZOOM_FACTOR_CHANNEL = "desktop:set-zoom-factor";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
+const OPEN_POPOUT_WINDOW_CHANNEL = "desktop:open-popout-window";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const APP_CLOSING_CHANNEL = "desktop:app-closing";
 const QUIT_CONFIRMATION_REQUEST_CHANNEL = "desktop:quit-confirmation-request";
@@ -169,6 +177,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   setZoomFactor: (factor) => ipcRenderer.invoke(SET_ZOOM_FACTOR_CHANNEL, factor),
   showContextMenu: (items, position) => ipcRenderer.invoke(CONTEXT_MENU_CHANNEL, items, position),
   openExternal: (url: string) => ipcRenderer.invoke(OPEN_EXTERNAL_CHANNEL, url),
+  isPopout: isPopoutProcess,
+  openPopoutWindow: (options: {
+    url: string;
+    title?: string;
+    width?: number;
+    height?: number;
+  }) => ipcRenderer.invoke(OPEN_POPOUT_WINDOW_CHANNEL, options),
   onMenuAction: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
       if (typeof action !== "string") return;

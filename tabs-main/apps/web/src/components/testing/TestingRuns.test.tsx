@@ -78,6 +78,10 @@ function makeJob(specPath: string): TestingGenerationJob {
     id: "job-1",
     projectId,
     status: "completed",
+    engine: "standard",
+    stage: "validated",
+    attemptCount: 1,
+    usageMeasured: false,
     framework: "playwright-ts",
     modelSelection: {
       instanceId: ProviderInstanceId.makeUnsafe("codex"),

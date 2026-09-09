@@ -38,6 +38,7 @@ import {
   type TestingDiscoveryExperienceInput,
   type TestingExplorationInput,
   type TestingExecutionInput,
+  type TestingExecutionRunInput,
   type TestingArtifactReadInput,
   type TestingGenerationInput,
   type TestingGenerationJobInput,
@@ -156,7 +157,14 @@ import {
   readProcessResourceHistory,
   signalProcess,
 } from "./diagnostics/ProcessDiagnostics.ts";
+import {
+  readResourceTelemetrySnapshot,
+  readResourceTelemetryHistory,
+  retryResourceTelemetry,
+} from "./diagnostics/ResourceTelemetryService.ts";
+import { recordResourceAttribution } from "./diagnostics/ResourceAttribution.ts";
 import { createSupportBundle } from "./diagnostics/SupportBundle.ts";
+import type { ResourceTelemetryHistoryInput } from "@tabs/contracts";
 
 /**
  * ServerShape - Service API for server lifecycle control.
@@ -1412,6 +1420,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         });
       }
 
+      case WS_METHODS.testingCancelExecutionRun: {
+        const body = stripRequestTag(request.body) as TestingExecutionRunInput;
+        return testingService.cancelExecutionRun(body);
+      }
+
       case WS_METHODS.testingListExecutionRuns: {
         const body = stripRequestTag(request.body) as TestingProjectInput;
         return testingService.listExecutionRuns(body);
@@ -2013,21 +2026,80 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       }
 
       case WS_METHODS.serverGetProcessDiagnostics:
-        return yield* Effect.tryPromise(() => readProcessDiagnostics());
+        return yield* Effect.tryPromise({
+          try: () => readProcessDiagnostics(),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
 
       case WS_METHODS.serverGetProcessResourceHistory:
-        return yield* Effect.tryPromise(() =>
-          readProcessResourceHistory(
-            stripRequestTag(request.body) as ServerProcessResourceHistoryInput,
-          ),
-        );
+        return yield* Effect.tryPromise({
+          try: () =>
+            readProcessResourceHistory(
+              stripRequestTag(request.body) as ServerProcessResourceHistoryInput,
+            ),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
+
+      case WS_METHODS.serverGetResourceTelemetry: {
+        const policy = yield* backgroundPolicy.snapshot;
+        return yield* Effect.tryPromise({
+          try: () => readResourceTelemetrySnapshot(policy.hostPower),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
+      }
+
+      case WS_METHODS.serverGetResourceTelemetryHistory: {
+        const policy = yield* backgroundPolicy.snapshot;
+        return yield* Effect.tryPromise({
+          try: () =>
+            readResourceTelemetryHistory(
+              stripRequestTag(request.body) as ResourceTelemetryHistoryInput,
+              policy.hostPower,
+            ),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
+      }
+
+      case WS_METHODS.serverRetryResourceTelemetry: {
+        const policy = yield* backgroundPolicy.snapshot;
+        return yield* Effect.tryPromise({
+          try: () => retryResourceTelemetry(policy.hostPower),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
+      }
 
       case WS_METHODS.serverSignalProcess:
-        return yield* Effect.tryPromise(() =>
-          signalProcess(stripRequestTag(request.body) as ServerSignalProcessInput),
-        );
+        return yield* Effect.tryPromise({
+          try: () => signalProcess(stripRequestTag(request.body) as ServerSignalProcessInput),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
 
       case WS_METHODS.serverGetTraceDiagnostics: {
+        recordResourceAttribution({
+          component: "server-trace",
+          operation: "read",
+          logicalReadBytes: 8192,
+          count: 1,
+          durationMs: 5,
+        });
         return yield* TraceDiagnostics.readTraceDiagnostics({
           traceFilePath: serverConfig.serverTracePath,
           maxFiles: 5,
@@ -2035,18 +2107,31 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       }
 
       case WS_METHODS.serverCreateSupportBundle: {
+        recordResourceAttribution({
+          component: "support-bundle",
+          operation: "export",
+          logicalReadBytes: 4096,
+          logicalWriteBytes: 16384,
+          count: 1,
+          durationMs: 20,
+        });
         const descriptor = yield* serverEnvironment.getDescriptor;
         const traces = yield* TraceDiagnostics.readTraceDiagnostics({
           traceFilePath: serverConfig.serverTracePath,
           maxFiles: 5,
         });
-        return yield* Effect.tryPromise(() =>
-          createSupportBundle({
-            environmentId: descriptor.environmentId,
-            appVersion: descriptor.serverVersion,
-            traces,
-          }),
-        );
+        return yield* Effect.tryPromise({
+          try: () =>
+            createSupportBundle({
+              environmentId: descriptor.environmentId,
+              appVersion: descriptor.serverVersion,
+              traces,
+            }),
+          catch: (cause) =>
+            new RouteRequestError({
+              message: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
       }
 
       case WS_METHODS.serverReportClientActivity: {

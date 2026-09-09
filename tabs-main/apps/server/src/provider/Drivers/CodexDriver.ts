@@ -204,6 +204,7 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
           agentSessions: "supported",
           textGeneration: "supported",
           structuredGeneration: "supported",
+          testingMcpTools: "supported",
           login: "external",
           logout: "external",
           accountSwitch: "external",

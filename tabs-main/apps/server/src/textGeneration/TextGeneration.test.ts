@@ -50,6 +50,7 @@ const makeStubInstance = (
       logout: "external",
       accountSwitch: "external",
       installation: "external",
+      testingMcpTools: "unsupported",
     },
     lifecycle: { actions: [] },
     snapshot: {} as ProviderInstance["snapshot"],

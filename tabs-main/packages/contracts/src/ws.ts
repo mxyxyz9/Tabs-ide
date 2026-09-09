@@ -96,6 +96,7 @@ import {
   ServerSignalProcessInput,
 } from "./server";
 import { ServerSettingsPatch } from "./settings";
+import { ResourceTelemetryHistoryInput } from "./resourceTelemetry";
 import {
   SourceControlCloneRepositoryInput,
   SourceControlRepositoryLookupInput,
@@ -129,6 +130,7 @@ import {
   TestingDiscoveryExperienceInput,
   TestingExplorationInput,
   TestingExecutionInput,
+  TestingExecutionRunInput,
   TestingGenerationInput,
   TestingGenerationJobInput,
   TestingArtifactReadInput,
@@ -206,6 +208,7 @@ export const WS_METHODS = {
   testingCancelGenerationJob: "testing.cancelGenerationJob",
   testingReadArtifact: "testing.readArtifact",
   testingRunTests: "testing.runTests",
+  testingCancelExecutionRun: "testing.cancelExecutionRun",
   testingListExecutionRuns: "testing.listExecutionRuns",
   testingDecideHealingProposal: "testing.decideHealingProposal",
   testingCreateSchedule: "testing.createSchedule",
@@ -313,6 +316,9 @@ export const WS_METHODS = {
   serverGetConfig: "server.getConfig",
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
+  serverGetResourceTelemetry: "server.getResourceTelemetry",
+  serverGetResourceTelemetryHistory: "server.getResourceTelemetryHistory",
+  serverRetryResourceTelemetry: "server.retryResourceTelemetry",
   serverGetSettings: "server.getSettings",
   serverGetTraceDiagnostics: "server.getTraceDiagnostics",
   serverLookupRepository: "server.lookupRepository",
@@ -433,6 +439,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.testingCancelGenerationJob, TestingGenerationJobInput),
   tagRequestBody(WS_METHODS.testingReadArtifact, TestingArtifactReadInput),
   tagRequestBody(WS_METHODS.testingRunTests, TestingExecutionInput),
+  tagRequestBody(WS_METHODS.testingCancelExecutionRun, TestingExecutionRunInput),
   tagRequestBody(WS_METHODS.testingListExecutionRuns, TestingProjectInput),
   tagRequestBody(WS_METHODS.testingDecideHealingProposal, TestingHealingDecisionInput),
   tagRequestBody(WS_METHODS.testingCreateSchedule, TestingScheduleInput),
@@ -543,6 +550,9 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.serverGetTraceDiagnostics, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverGetProcessDiagnostics, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverGetProcessResourceHistory, ServerProcessResourceHistoryInput),
+  tagRequestBody(WS_METHODS.serverGetResourceTelemetry, Schema.Struct({})),
+  tagRequestBody(WS_METHODS.serverGetResourceTelemetryHistory, ResourceTelemetryHistoryInput),
+  tagRequestBody(WS_METHODS.serverRetryResourceTelemetry, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverSignalProcess, ServerSignalProcessInput),
   tagRequestBody(WS_METHODS.serverCreateSupportBundle, Schema.Struct({})),
   tagRequestBody(WS_METHODS.serverReportClientActivity, ClientActivityReportInput),

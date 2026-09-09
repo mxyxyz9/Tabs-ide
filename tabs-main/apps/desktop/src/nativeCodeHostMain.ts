@@ -1,4 +1,19 @@
-import { BrowserWindow, nativeTheme, shell, type WebContents } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  contentTracing,
+  dialog,
+  nativeTheme,
+  Notification,
+  net,
+  powerMonitor,
+  powerSaveBlocker,
+  screen,
+  shell,
+  systemPreferences,
+  type WebContents,
+} from "electron";
 import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
@@ -8,6 +23,11 @@ import * as Path from "node:path";
 import * as OS from "node:os";
 
 import { loadNativeCodeHostStorage, saveNativeCodeHostStorage } from "./nativeCodeHostStorage";
+import { handleNativeCodeHostCommand } from "./nativeCodeHostCommand";
+import { getNativeCodeOpenTargets } from "./nativeCodeHostOpen";
+import { parseElectronProxyResult, readProxyEnvironment } from "./nativeCodeHostProxy";
+import { uploadFileViaGitHubMobileApi } from "./nativeCodeHostUpload";
+import { createNativeCodeZip } from "./nativeCodeHostZip";
 
 type NativeCodeHostModules = {
   registerContextMenuListener(
@@ -21,6 +41,11 @@ type NativeCodeHostModules = {
   ): void;
   ElectronIPCServer: new () => {
     registerChannel(name: string, channel: unknown): void;
+    readonly connections: Array<{ readonly ctx: string }>;
+    getChannel(
+      name: string,
+      clientFilter: (client: { readonly ctx: string }) => boolean,
+    ): { call(command: string, arg?: unknown): Promise<unknown> };
     dispose(): void;
   };
   ProxyChannel: {
@@ -36,6 +61,17 @@ type NativeCodeHostModules = {
     dispose(): void;
   };
   EventNone: unknown;
+  VSBuffer: {
+    wrap(value: Uint8Array): unknown;
+  };
+  isPortFree(port: number, timeout: number): Promise<boolean>;
+  findFreePort(
+    startPort: number,
+    giveUpAfter: number,
+    timeout: number,
+    stride?: number,
+  ): Promise<number>;
+  zip(zipPath: string, files: unknown[]): Promise<string>;
   NullLogService: new () => unknown;
   NullLoggerService: new () => unknown;
   NullTelemetryService: unknown;
@@ -67,7 +103,10 @@ type NativeCodeHostModules = {
   ExternalTerminalService: new () => unknown;
   NativeMcpDiscoveryHelperService: new () => unknown;
   NativeMcpDiscoveryHelperChannelName: string;
-  URI: { file(path: string): unknown };
+  URI: {
+    file(path: string): unknown;
+    parse(value: string): { toJSON(): unknown };
+  };
   SharedProcess: new (...args: unknown[]) => {
     connect(payload?: unknown): Promise<unknown>;
     dispose(): void;
@@ -145,8 +184,10 @@ export interface NativeCodeHostMainBackend {
     webContents: WebContents,
     getBounds?: () => Electron.Rectangle | null,
     ownerWindow?: BrowserWindow,
+    projectId?: string,
   ): void;
   unregisterWindow(windowId: number): void;
+  handleURL(url: string): Promise<boolean>;
   dispose(): void;
 }
 
@@ -195,6 +236,9 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     nativeHostMainContract,
     storageMainContract,
     productContract,
+    buffer,
+    ports,
+    zip,
   ] = await Promise.all([
     import(moduleUrl(vscodeRoot, "vs/base/parts/ipc/electron-main/ipc.electron.js")),
     import(moduleUrl(vscodeRoot, "vs/base/parts/contextmenu/electron-main/contextmenu.js")),
@@ -250,6 +294,9 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     import(moduleUrl(vscodeRoot, "vs/platform/native/electron-main/nativeHostMainService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/storage/electron-main/storageMainService.js")),
     import(moduleUrl(vscodeRoot, "vs/platform/product/common/productService.js")),
+    import(moduleUrl(vscodeRoot, "vs/base/common/buffer.js")),
+    import(moduleUrl(vscodeRoot, "vs/base/node/ports.js")),
+    import(moduleUrl(vscodeRoot, "vs/base/node/zip.js")),
   ]);
 
   return {
@@ -303,6 +350,10 @@ async function loadNativeCodeHostModules(vscodeRoot: string): Promise<NativeCode
     IApplicationStorageMainService: storageMainContract.IApplicationStorageMainService,
     ILogService: log.ILogService,
     IProductService: productContract.IProductService,
+    VSBuffer: buffer.VSBuffer,
+    isPortFree: ports.isPortFree,
+    findFreePort: ports.findFreePort,
+    zip: zip.zip,
   };
 }
 
@@ -335,6 +386,11 @@ function createSharedProcessProfile(modules: NativeCodeHostModules, stateDir: st
 export async function createNativeCodeHostMainBackend(
   vscodeRoot: string,
   stateDir: string,
+  callbacks?: {
+    openFile?(projectId: string, path: string): void;
+    openFolder?(path?: string): void;
+    dispatchTabAction?(action: "tab-new" | "tab-next" | "tab-prev"): void;
+  },
 ): Promise<NativeCodeHostMainBackend> {
   const vsceSignEntry = [
     Path.join(vscodeRoot, "node_modules", "@vscode", "vsce-sign", "src", "main.js"),
@@ -356,7 +412,90 @@ export async function createNativeCodeHostMainBackend(
   // must remain separate.
   const windows = new Map<number, ExtensionHostWindow>();
   const browserWindows = new Map<number, NativeCodeWindow>();
+  const projectIdsByWindow = new Map<number, string>();
   const embeddedBounds = new Map<number, () => Electron.Rectangle | null>();
+  const reportedUnsupportedNativeHostCommands = new Set<string>();
+  const activeToasts = new Map<
+    string,
+    {
+      notification: Notification;
+      finish(result: { supported: boolean; clicked: boolean; actionIndex?: number }): void;
+    }
+  >();
+  const clearToast = (id: string) => {
+    const active = activeToasts.get(id);
+    if (!active) return;
+    active.finish({ supported: true, clicked: false });
+  };
+  const nativeHostEventNames = [
+    "onDidOpenMainWindow",
+    "onDidMaximizeWindow",
+    "onDidUnmaximizeWindow",
+    "onDidFocusMainWindow",
+    "onDidBlurMainWindow",
+    "onDidChangeWindowFullScreen",
+    "onDidChangeWindowAlwaysOnTop",
+    "onDidFocusMainOrAuxiliaryWindow",
+    "onDidBlurMainOrAuxiliaryWindow",
+    "onDidChangeDisplay",
+    "onDidSuspendOS",
+    "onDidResumeOS",
+    "onDidChangeOnBatteryPower",
+    "onDidChangeThermalState",
+    "onDidChangeSpeedLimit",
+    "onWillShutdownOS",
+    "onDidLockScreen",
+    "onDidUnlockScreen",
+    "onDidChangeColorScheme",
+  ] as const;
+  const nativeHostEvents = new Map(
+    nativeHostEventNames.map((name) => [name, new modules.Emitter()] as const),
+  );
+  const fireNativeHostEvent = (name: (typeof nativeHostEventNames)[number], value?: unknown) =>
+    nativeHostEvents.get(name)?.fire(value);
+
+  const nativeThemeUpdated = () =>
+    fireNativeHostEvent("onDidChangeColorScheme", {
+      dark: nativeTheme.shouldUseDarkColors,
+      highContrast: nativeTheme.shouldUseHighContrastColors,
+    });
+  nativeTheme.on("updated", nativeThemeUpdated);
+
+  const displayChanged = () => fireNativeHostEvent("onDidChangeDisplay", undefined);
+  screen.on("display-added", displayChanged);
+  screen.on("display-removed", displayChanged);
+  screen.on("display-metrics-changed", displayChanged);
+
+  const powerListeners: Array<[string, (...args: unknown[]) => void]> = [
+    ["suspend", () => fireNativeHostEvent("onDidSuspendOS", undefined)],
+    ["resume", () => fireNativeHostEvent("onDidResumeOS", undefined)],
+    ["on-ac", () => fireNativeHostEvent("onDidChangeOnBatteryPower", false)],
+    ["on-battery", () => fireNativeHostEvent("onDidChangeOnBatteryPower", true)],
+    [
+      "thermal-state-change",
+      (_event, state) => fireNativeHostEvent("onDidChangeThermalState", state),
+    ],
+    ["speed-limit-change", (_event, limit) => fireNativeHostEvent("onDidChangeSpeedLimit", limit)],
+    ["shutdown", () => fireNativeHostEvent("onWillShutdownOS", undefined)],
+    ["lock-screen", () => fireNativeHostEvent("onDidLockScreen", undefined)],
+    ["unlock-screen", () => fireNativeHostEvent("onDidUnlockScreen", undefined)],
+  ];
+  const powerMonitorEmitter = powerMonitor as unknown as EventEmitter;
+  for (const [event, listener] of powerListeners) powerMonitorEmitter.on(event, listener);
+
+  disposables.add({
+    dispose() {
+      nativeTheme.removeListener("updated", nativeThemeUpdated);
+      screen.removeListener("display-added", displayChanged);
+      screen.removeListener("display-removed", displayChanged);
+      screen.removeListener("display-metrics-changed", displayChanged);
+      for (const [event, listener] of powerListeners) {
+        powerMonitorEmitter.removeListener(event, listener);
+      }
+      for (const emitter of nativeHostEvents.values()) emitter.dispose();
+      for (const id of Array.from(activeToasts.keys())) clearToast(id);
+    },
+  });
 
   // The stock Code-OSS main process installs this application-level IPC
   // listener during startup. Tabs replaces that main process, so embedded
@@ -399,6 +538,12 @@ export async function createNativeCodeHostMainBackend(
     onDidChangeConfiguration: modules.EventNone,
     getValue(key?: string) {
       if (key === "terminal.integrated.persistentSessionScrollback") return 100;
+      // PtyHostService forwards this setting to the utility-process pty service
+      // as soon as the first terminal starts. The full Code main process gets
+      // the registered default (`[]`) from ConfigurationService; this embedded
+      // main-process shim must preserve that contract instead of returning
+      // undefined, which makes PtyService spread a non-iterable value.
+      if (key === "terminal.integrated.ignoreProcessNames") return [];
       return undefined;
     },
   };
@@ -471,7 +616,10 @@ export async function createNativeCodeHostMainBackend(
       return Array.from(storage.entries());
     }
     if (command === "updateItems" && arg && typeof arg === "object") {
-      const update = arg as { insert?: Array<[string, string]>; delete?: string[] };
+      const update = arg as {
+        insert?: Array<[string, string]>;
+        delete?: string[];
+      };
       for (const [key, value] of update.insert ?? []) storage.set(key, value);
       for (const key of update.delete ?? []) storage.delete(key);
       saveNativeCodeHostStorage(storagePath, storage);
@@ -535,12 +683,11 @@ export async function createNativeCodeHostMainBackend(
   const layoutBrowserView = browserViewMainService.layout.bind(browserViewMainService);
   browserViewMainService.layout = (id, bounds) => {
     const hostWindowId = browserViewMainService.tryGetBrowserView(id)?.hostWindowId;
-    const hostBounds = hostWindowId === undefined ? undefined : embeddedBounds.get(hostWindowId)?.();
+    const hostBounds =
+      hostWindowId === undefined ? undefined : embeddedBounds.get(hostWindowId)?.();
     return layoutBrowserView(
       id,
-      hostBounds
-        ? { ...bounds, x: bounds.x + hostBounds.x, y: bounds.y + hostBounds.y }
-        : bounds,
+      hostBounds ? { ...bounds, x: bounds.x + hostBounds.x, y: bounds.y + hostBounds.y } : bounds,
     );
   };
   browserServices.set(modules.IBrowserViewMainService, browserViewMainService);
@@ -758,48 +905,599 @@ export async function createNativeCodeHostMainBackend(
       return undefined;
     }),
   );
-  const nativeHostChannel = passiveChannel(modules.EventNone, async (command, arg) => {
-    const args = Array.isArray(arg) ? arg : [];
-    const windowId = typeof args[0] === "number" ? args[0] : undefined;
-    const embeddedWindow = windowId === undefined ? undefined : windows.get(windowId);
-    const webContents = embeddedWindow?.webContents;
-    if (command === "getWindowCount") return windows.size;
-    if (command === "getWindows") {
-      return Array.from(windows.keys(), (id) => ({ id, pid: process.pid }));
-    }
-    if (command === "getActiveWindowId") return BrowserWindow.getFocusedWindow()?.id;
-    if (command === "getOSStatistics") {
-      return { totalmem: OS.totalmem(), freemem: OS.freemem(), loadavg: OS.loadavg() };
-    }
-    if (command === "getOSProperties") {
-      return {
-        type: OS.type(),
-        release: OS.release(),
-        arch: OS.arch(),
-        cpus: OS.cpus(),
+  const nativeHostChannel: ServerChannel = {
+    listen(_context, event) {
+      return (
+        nativeHostEvents.get(event as (typeof nativeHostEventNames)[number])?.event ??
+        modules.EventNone
+      );
+    },
+    async call(_context, command, arg) {
+      const args = Array.isArray(arg) ? arg : [];
+      const windowId = typeof args[0] === "number" ? args[0] : undefined;
+      const embeddedWindow = windowId === undefined ? undefined : browserWindows.get(windowId);
+      const webContents = embeddedWindow?.webContents;
+      const projectId = windowId === undefined ? undefined : projectIdsByWindow.get(windowId);
+      const routeOpenTargets = async (openables: unknown) => {
+        for (const target of getNativeCodeOpenTargets(openables)) {
+          if (target.kind === "file") {
+            if (!projectId) throw new Error("Cannot identify the Tabs project for the Code window");
+            callbacks?.openFile?.(projectId, target.path);
+          } else if (target.kind === "folder") {
+            callbacks?.openFolder?.(target.path);
+          } else {
+            const options: Electron.MessageBoxOptions = {
+              type: "info",
+              message: "Multi-root Code workspaces are not supported in Tabs yet.",
+              detail: `Open one of the folders from ${target.path} as a Tabs project instead.`,
+              buttons: ["OK"],
+            };
+            if (embeddedWindow) await dialog.showMessageBox(embeddedWindow.win, options);
+            else await dialog.showMessageBox(options);
+          }
+        }
       };
-    }
-    if (command === "getOSVirtualMachineHint") return 0;
-    if (command === "getOSColorScheme") {
-      return {
-        dark: nativeTheme.shouldUseDarkColors,
-        highContrast: nativeTheme.shouldUseHighContrastColors,
+      // Electron's newer W3C clipboard typings omit the legacy native methods
+      // that the Code-OSS desktop contract still uses. Electron 40 exposes them
+      // at runtime, so keep the compatibility cast localized to this boundary
+      // and retain safe fallbacks for runtimes that remove them.
+      const nativeClipboard = clipboard as typeof clipboard & {
+        readFindText?: () => string;
+        writeFindText?: (text: string) => void;
+        readBuffer?: (format: string) => Buffer;
+        writeBuffer?: (format: string, buffer: Buffer, type?: "selection" | "clipboard") => void;
+        readImage?: () => { toPNG(): Buffer };
       };
-    }
-    if (command === "isAdmin") return false;
-    if (command === "syncSystemWideKeybindings") return { failed: [] };
-    if (command === "resolveProxy") {
-      const url = typeof args[1] === "string" ? args[1] : undefined;
-      return url && webContents && !webContents.isDestroyed()
-        ? webContents.session.resolveProxy(url)
-        : undefined;
-    }
-    if (command === "loadCertificates") return [...rootCertificates];
-    if (command === "lookupAuthorization" || command === "lookupKerberosAuthorization") {
+      const osCommand = await handleNativeCodeHostCommand(command, args, {
+        clipboard,
+        shell,
+        ...(webContents && !webContents.isDestroyed() ? { webContents } : null),
+      });
+      if (osCommand.handled) return osCommand.value;
+      if (command === "openWindow") {
+        const targets = getNativeCodeOpenTargets(args[1]);
+        if (targets.length === 0) callbacks?.openFolder?.();
+        else await routeOpenTargets(args[1]);
+        return undefined;
+      }
+      if (command === "openAgentsWindow") {
+        callbacks?.openFolder?.();
+        return undefined;
+      }
+      if (command === "getWindowCount") return windows.size;
+      if (command === "getWindows") {
+        return Array.from(windows.keys(), (id) => ({ id, pid: process.pid }));
+      }
+      if (command === "getActiveWindowId") {
+        const focused = Array.from(browserWindows.values()).find(
+          (candidate) => !candidate.webContents.isDestroyed() && candidate.webContents.isFocused(),
+        );
+        return focused?.id;
+      }
+      if (command === "getActiveWindowPosition") {
+        const focused = Array.from(browserWindows.values()).find(
+          (candidate) => !candidate.webContents.isDestroyed() && candidate.webContents.isFocused(),
+        );
+        return focused?.win.getBounds();
+      }
+      if (command === "getNativeWindowHandle") {
+        const requestedId = typeof args[1] === "number" ? args[1] : windowId;
+        const requestedWindow =
+          requestedId === undefined ? undefined : browserWindows.get(requestedId);
+        return requestedWindow
+          ? modules.VSBuffer.wrap(requestedWindow.win.getNativeWindowHandle())
+          : undefined;
+      }
+      if (command === "getProcessId") return webContents?.getOSProcessId();
+      if (command === "killProcess") {
+        if (typeof args[1] === "number" && typeof args[2] === "string") {
+          process.kill(args[1], args[2] as NodeJS.Signals);
+        }
+        return undefined;
+      }
+      if (command === "isFullScreen") return embeddedWindow?.win.isFullScreen() ?? false;
+      if (command === "toggleFullScreen") {
+        embeddedWindow?.win.setFullScreen(!(embeddedWindow.win.isFullScreen() ?? false));
+        return undefined;
+      }
+      if (command === "getCursorScreenPoint") {
+        const point = screen.getCursorScreenPoint();
+        return { point, display: screen.getDisplayNearestPoint(point).bounds };
+      }
+      if (command === "isMaximized") return embeddedWindow?.win.isMaximized() ?? false;
+      if (command === "focusWindow") {
+        embeddedWindow?.webContents.focus();
+        return undefined;
+      }
+      if (command === "maximizeWindow") return embeddedWindow?.win.maximize();
+      if (command === "unmaximizeWindow") return embeddedWindow?.win.unmaximize();
+      if (command === "minimizeWindow") return embeddedWindow?.win.minimize();
+      if (command === "moveWindowTop") return embeddedWindow?.win.moveTop();
+      if (command === "positionWindow") {
+        const position = args[1] as Electron.Rectangle | undefined;
+        if (position) embeddedWindow?.win.setBounds(position);
+        return undefined;
+      }
+      if (command === "isWindowAlwaysOnTop") return embeddedWindow?.win.isAlwaysOnTop() ?? false;
+      if (command === "toggleWindowAlwaysOnTop") {
+        if (embeddedWindow) embeddedWindow.win.setAlwaysOnTop(!embeddedWindow.win.isAlwaysOnTop());
+        return undefined;
+      }
+      if (command === "setWindowAlwaysOnTop") {
+        embeddedWindow?.win.setAlwaysOnTop(Boolean(args[1]));
+        return undefined;
+      }
+      if (command === "setMinimumSize") {
+        if (!embeddedWindow) return undefined;
+        const [currentWidth, currentHeight] = embeddedWindow.win.getMinimumSize();
+        const width = typeof args[1] === "number" ? args[1] : currentWidth;
+        const height = typeof args[2] === "number" ? args[2] : currentHeight;
+        embeddedWindow.win.setMinimumSize(width ?? 0, height ?? 0);
+        return undefined;
+      }
+      if (command === "setBackgroundThrottling") {
+        webContents?.setBackgroundThrottling(Boolean(args[1]));
+        return undefined;
+      }
+      if (command === "updateWindowAccentColor") {
+        if (process.platform === "win32" && embeddedWindow) {
+          const accentColor = typeof args[1] === "string" ? args[1] : undefined;
+          embeddedWindow.win.setAccentColor(accentColor || false);
+        }
+        return undefined;
+      }
+      if (command === "updateWindowControls") {
+        // Code's custom title-bar controls belong to its standalone window.
+        // Tabs renders and owns the outer window chrome.
+        return undefined;
+      }
+      if (command === "showMessageBox") {
+        const owner = embeddedWindow?.win;
+        return owner
+          ? dialog.showMessageBox(owner, args[1] as Electron.MessageBoxOptions)
+          : dialog.showMessageBox(args[1] as Electron.MessageBoxOptions);
+      }
+      if (command === "showSaveDialog") {
+        const owner = embeddedWindow?.win;
+        return owner
+          ? dialog.showSaveDialog(owner, args[1] as Electron.SaveDialogOptions)
+          : dialog.showSaveDialog(args[1] as Electron.SaveDialogOptions);
+      }
+      if (command === "showOpenDialog") {
+        const owner = embeddedWindow?.win;
+        return owner
+          ? dialog.showOpenDialog(owner, args[1] as Electron.OpenDialogOptions)
+          : dialog.showOpenDialog(args[1] as Electron.OpenDialogOptions);
+      }
+      if (
+        command === "pickFileFolderAndOpen" ||
+        command === "pickFileAndOpen" ||
+        command === "pickFolderAndOpen" ||
+        command === "pickWorkspaceAndOpen"
+      ) {
+        const options = (args[1] ?? {}) as Electron.OpenDialogOptions;
+        const properties: Electron.OpenDialogOptions["properties"] = [
+          command === "pickFileAndOpen" || command === "pickWorkspaceAndOpen"
+            ? "openFile"
+            : command === "pickFolderAndOpen"
+              ? "openDirectory"
+              : "openFile",
+        ];
+        if (command === "pickFileFolderAndOpen") properties.push("openDirectory");
+        if ((options as { canSelectMany?: boolean }).canSelectMany)
+          properties.push("multiSelections");
+        const filters =
+          command === "pickWorkspaceAndOpen"
+            ? [{ name: "Code Workspace", extensions: ["code-workspace"] }]
+            : options.filters;
+        const dialogOptions: Electron.OpenDialogOptions = {
+          ...options,
+          properties,
+          ...(filters ? { filters } : null),
+        };
+        const result = embeddedWindow?.win
+          ? await dialog.showOpenDialog(embeddedWindow.win, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions);
+        if (!result.canceled) {
+          const openables = await Promise.all(
+            result.filePaths.map(async (path) => {
+              if (command === "pickWorkspaceAndOpen") {
+                return { workspaceUri: { fsPath: path } };
+              }
+              if (command === "pickFolderAndOpen") return { folderUri: { fsPath: path } };
+              if (command === "pickFileAndOpen") return { fileUri: { fsPath: path } };
+              try {
+                return (await import("node:fs/promises"))
+                  .stat(path)
+                  .then((stat) =>
+                    stat.isDirectory()
+                      ? { folderUri: { fsPath: path } }
+                      : { fileUri: { fsPath: path } },
+                  );
+              } catch {
+                return { fileUri: { fsPath: path } };
+              }
+            }),
+          );
+          await routeOpenTargets(openables);
+        }
+        return undefined;
+      }
+      if (command === "getOSStatistics") {
+        return {
+          totalmem: OS.totalmem(),
+          freemem: OS.freemem(),
+          loadavg: OS.loadavg(),
+        };
+      }
+      if (command === "getOSProperties") {
+        return {
+          type: OS.type(),
+          release: OS.release(),
+          arch: OS.arch(),
+          cpus: OS.cpus(),
+        };
+      }
+      if (command === "getOSVirtualMachineHint") return 0;
+      if (command === "getOSColorScheme") {
+        return {
+          dark: nativeTheme.shouldUseDarkColors,
+          highContrast: nativeTheme.shouldUseHighContrastColors,
+        };
+      }
+      if (command === "isAdmin") return false;
+      if (command === "isRunningUnderARM64Translation") return app.runningUnderARM64Translation;
+      if (command === "hasWSLFeatureInstalled") return false;
+      if (command === "getMediaAccessStatus") {
+        const mediaType = args[1];
+        return process.platform === "darwin" &&
+          (mediaType === "microphone" || mediaType === "camera" || mediaType === "screen")
+          ? systemPreferences.getMediaAccessStatus(mediaType)
+          : "unknown";
+      }
+      if (command === "writeElevated") {
+        throw new Error(
+          "Elevated file writes are not available in the embedded editor because Tabs does not ship the Code CLI privilege helper.",
+        );
+      }
+      if (command === "setRepresentedFilename") {
+        embeddedWindow?.win.setRepresentedFilename(typeof args[1] === "string" ? args[1] : "");
+        return undefined;
+      }
+      if (command === "setDocumentEdited") {
+        embeddedWindow?.win.setDocumentEdited(Boolean(args[1]));
+        return undefined;
+      }
+      if (command === "hasClipboard") {
+        return typeof args[1] === "string" ? clipboard.has(args[1]) : false;
+      }
+      if (command === "readClipboardFindText") {
+        return nativeClipboard.readFindText?.() ?? clipboard.readText();
+      }
+      if (command === "writeClipboardFindText") {
+        if (typeof args[1] === "string") {
+          if (nativeClipboard.writeFindText) nativeClipboard.writeFindText(args[1]);
+          else clipboard.writeText(args[1]);
+        }
+        return undefined;
+      }
+      if (command === "readClipboardBuffer") {
+        return typeof args[1] === "string" && nativeClipboard.readBuffer
+          ? modules.VSBuffer.wrap(nativeClipboard.readBuffer(args[1]))
+          : modules.VSBuffer.wrap(new Uint8Array());
+      }
+      if (command === "writeClipboardBuffer") {
+        const value = args[2] as { buffer?: Uint8Array } | Uint8Array | undefined;
+        const bytes = value instanceof Uint8Array ? value : value?.buffer;
+        if (typeof args[1] === "string" && bytes) {
+          nativeClipboard.writeBuffer?.(
+            args[1],
+            Buffer.from(bytes),
+            args[3] === "selection" ? "selection" : "clipboard",
+          );
+        }
+        return undefined;
+      }
+      if (command === "readImage") {
+        return nativeClipboard.readImage?.().toPNG() ?? new Uint8Array();
+      }
+      if (command === "getSystemIdleTime") return powerMonitor.getSystemIdleTime();
+      if (command === "getSystemIdleState") {
+        return powerMonitor.getSystemIdleState(typeof args[1] === "number" ? args[1] : 60);
+      }
+      if (command === "getCurrentThermalState") return powerMonitor.getCurrentThermalState();
+      if (command === "isOnBatteryPower") return powerMonitor.isOnBatteryPower();
+      if (command === "startPowerSaveBlocker") {
+        return powerSaveBlocker.start(
+          args[1] === "prevent-display-sleep" ? "prevent-display-sleep" : "prevent-app-suspension",
+        );
+      }
+      if (command === "stopPowerSaveBlocker") {
+        return typeof args[1] === "number" ? powerSaveBlocker.stop(args[1]) : false;
+      }
+      if (command === "isPowerSaveBlockerStarted") {
+        return typeof args[1] === "number" ? powerSaveBlocker.isStarted(args[1]) : false;
+      }
+      if (command === "reload") return webContents?.reload();
+      if (command === "relaunch") {
+        const options = args[1] as { addArgs?: string[]; removeArgs?: string[] } | undefined;
+        let nextArgs = process.argv.slice(1);
+        if (options?.removeArgs?.length) {
+          const removed = new Set(options.removeArgs);
+          nextArgs = nextArgs.filter((value) => !removed.has(value));
+        }
+        if (options?.addArgs?.length) nextArgs.push(...options.addArgs);
+        app.relaunch({ args: nextArgs });
+        app.exit(0);
+        return undefined;
+      }
+      if (command === "closeWindow") return embeddedWindow?.win.close();
+      if (command === "quit") return app.quit();
+      if (command === "exit") return app.exit(typeof args[1] === "number" ? args[1] : 0);
+      if (command === "openDevTools") {
+        webContents?.openDevTools(args[1] as Electron.OpenDevToolsOptions | undefined);
+        return undefined;
+      }
+      if (command === "toggleDevTools") {
+        webContents?.toggleDevTools();
+        return undefined;
+      }
+      if (command === "openGPUInfoWindow") {
+        const gpuWindow = new BrowserWindow({
+          width: 900,
+          height: 700,
+          ...(embeddedWindow ? { parent: embeddedWindow.win } : null),
+          title: "Tabs GPU Information",
+        });
+        await gpuWindow.loadURL("chrome://gpu");
+        return undefined;
+      }
+      if (command === "openDevToolsWindow") {
+        if (typeof args[1] !== "string") throw new Error("A DevTools URL is required");
+        const devToolsWindow = new BrowserWindow({
+          width: 1000,
+          height: 800,
+          ...(embeddedWindow ? { parent: embeddedWindow.win } : null),
+        });
+        await devToolsWindow.loadURL(args[1]);
+        return undefined;
+      }
+      if (command === "openContentTracingWindow") {
+        const tracingWindow = new BrowserWindow({ width: 1000, height: 800 });
+        await tracingWindow.loadURL("chrome://tracing");
+        return undefined;
+      }
+      if (command === "profileRenderer") {
+        throw new Error("Renderer CPU profiling is not available in the embedded editor.");
+      }
+      if (command === "startTracing") {
+        const categories = typeof args[1] === "string" ? args[1] : "";
+        const options = args[2] as { enableHeapProfiling?: boolean } | undefined;
+        await contentTracing.startRecording(
+          options?.enableHeapProfiling
+            ? {
+                recording_mode: "record-until-full",
+                included_categories: categories.split(",").filter(Boolean),
+              }
+            : { categoryFilter: categories, traceOptions: "record-until-full,enable-sampling" },
+        );
+        return undefined;
+      }
+      if (command === "stopTracing") {
+        const tracePath = await contentTracing.stopRecording(
+          Path.join(OS.tmpdir(), `tabs-${Date.now()}.trace.json`),
+        );
+        const options: Electron.MessageBoxOptions = {
+          type: "info",
+          message: "Successfully created the trace file",
+          detail: tracePath,
+          buttons: ["OK"],
+        };
+        if (embeddedWindow) await dialog.showMessageBox(embeddedWindow.win, options);
+        else await dialog.showMessageBox(options);
+        return undefined;
+      }
+      if (command === "getScreenshot") {
+        if (!webContents || webContents.isDestroyed()) return undefined;
+        const rect = args[1] as Electron.Rectangle | undefined;
+        const captured = await webContents.capturePage(rect);
+        return modules.VSBuffer.wrap(captured.toJPEG(95));
+      }
+      if (command === "uploadFileViaMobileApi") {
+        const value = args[4] as { buffer?: Uint8Array } | Uint8Array | undefined;
+        const bytes = value instanceof Uint8Array ? value : value?.buffer;
+        if (
+          typeof args[1] !== "string" ||
+          typeof args[2] !== "string" ||
+          typeof args[3] !== "string" ||
+          !bytes ||
+          typeof args[5] !== "string"
+        ) {
+          throw new Error("Invalid GitHub mobile upload arguments");
+        }
+        return uploadFileViaGitHubMobileApi(net.fetch, args[1], args[2], args[3], bytes, args[5]);
+      }
+      if (command === "showToast") {
+        const options = args[1] as
+          | { id?: string; title?: string; body?: string; actions?: string[]; silent?: boolean }
+          | undefined;
+        if (!Notification.isSupported() || !options?.id || !options.title) {
+          return { supported: false, clicked: false };
+        }
+        clearToast(options.id);
+        const notification = new Notification({
+          title: options.title,
+          ...(options.body !== undefined ? { body: options.body } : null),
+          ...(options.silent !== undefined ? { silent: options.silent } : null),
+          ...(options.actions
+            ? { actions: options.actions.map((text) => ({ type: "button" as const, text })) }
+            : null),
+        });
+        return new Promise((resolve) => {
+          let finished = false;
+          const finish = (result: {
+            supported: boolean;
+            clicked: boolean;
+            actionIndex?: number;
+          }) => {
+            if (finished) return;
+            finished = true;
+            activeToasts.delete(options.id!);
+            notification.removeAllListeners();
+            notification.close();
+            resolve(result);
+          };
+          activeToasts.set(options.id!, { notification, finish });
+          notification.on("click", () => finish({ supported: true, clicked: true }));
+          notification.on("action", (_event, actionIndex) =>
+            finish({ supported: true, clicked: true, actionIndex }),
+          );
+          notification.on("close", () => finish({ supported: true, clicked: false }));
+          notification.on("failed", () => finish({ supported: false, clicked: false }));
+          notification.show();
+        });
+      }
+      if (command === "clearToast") {
+        if (typeof args[1] === "string") clearToast(args[1]);
+        return undefined;
+      }
+      if (command === "clearToasts") {
+        for (const id of Array.from(activeToasts.keys())) clearToast(id);
+        return undefined;
+      }
+      if (
+        command === "notifyReady" ||
+        command === "saveWindowSplash" ||
+        // Code's Touch Bar actions target a standalone VS Code BrowserWindow.
+        // Tabs embeds the workbench in a shared outer window, so installing that
+        // command surface would target the wrong application command router.
+        command === "updateTouchBar"
+      ) {
+        return undefined;
+      }
+      if (command === "newWindowTab") {
+        callbacks?.dispatchTabAction?.("tab-new");
+        return undefined;
+      }
+      if (command === "showPreviousWindowTab") {
+        callbacks?.dispatchTabAction?.("tab-prev");
+        return undefined;
+      }
+      if (command === "showNextWindowTab") {
+        callbacks?.dispatchTabAction?.("tab-next");
+        return undefined;
+      }
+      if (
+        command === "moveWindowTabToNewWindow" ||
+        command === "mergeAllWindowTabs" ||
+        command === "toggleWindowTabsBar"
+      ) {
+        // Tabs owns one cross-platform tab strip inside its application window;
+        // Electron's macOS native window-tab operations do not apply to it.
+        return undefined;
+      }
+      if (command === "installShellCommand" || command === "uninstallShellCommand") {
+        throw new Error(
+          "The Code shell command is unavailable because Tabs does not ship a standalone Code CLI.",
+        );
+      }
+      if (command === "syncSystemWideKeybindings") return { failed: [] };
+      if (command === "resolveProxy") {
+        const url = typeof args[1] === "string" ? args[1] : undefined;
+        return url && webContents && !webContents.isDestroyed()
+          ? webContents.session.resolveProxy(url)
+          : undefined;
+      }
+      if (command === "resolveProxyWithPackage") {
+        const url = typeof args[1] === "string" ? args[1] : undefined;
+        if (!url || !webContents || webContents.isDestroyed()) return [{ kind: "direct" }];
+        return parseElectronProxyResult(await webContents.session.resolveProxy(url));
+      }
+      if (command === "readProxyConfigWithPackage") {
+        return {
+          environment: readProxyEnvironment(process.env),
+          autoDetect: true,
+          wpadDhcp: { state: "unknown" },
+          wpadDns: { state: "unknown" },
+          configuredPac: { state: "unknown" },
+          platform: {
+            kind:
+              process.platform === "darwin"
+                ? "macos"
+                : process.platform === "linux"
+                  ? "linux"
+                  : process.platform === "win32"
+                    ? "windows"
+                    : "unknown",
+            ...(process.platform === "darwin"
+              ? { exceptions: [], excludeSimpleHostnames: false }
+              : process.platform === "linux"
+                ? { ignoreHosts: [] }
+                : null),
+          },
+        };
+      }
+      if (command === "isPortFree") {
+        return typeof args[1] === "number" ? modules.isPortFree(args[1], 1_000) : false;
+      }
+      if (command === "findFreePort") {
+        return modules.findFreePort(
+          typeof args[1] === "number" ? args[1] : 0,
+          typeof args[2] === "number" ? args[2] : 100,
+          typeof args[3] === "number" ? args[3] : 1_000,
+          typeof args[4] === "number" ? args[4] : 1,
+        );
+      }
+      if (command === "loadCertificates") return [...rootCertificates];
+      if (command === "windowsGetStringRegKey") {
+        if (process.platform !== "win32") return undefined;
+        if (
+          typeof args[1] !== "string" ||
+          typeof args[2] !== "string" ||
+          typeof args[3] !== "string"
+        ) {
+          return undefined;
+        }
+        const registry = (await import(
+          pathToFileURL(
+            Path.join(
+              vscodeRoot,
+              "node_modules",
+              "@vscode",
+              "windows-registry",
+              "dist",
+              "index.js",
+            ),
+          ).href
+        )) as {
+          GetStringRegKey(hive: string, path: string, name: string): string | undefined;
+        };
+        try {
+          return registry.GetStringRegKey(args[1], args[2], args[3]);
+        } catch {
+          return undefined;
+        }
+      }
+      if (command === "createZipFile") {
+        const files = Array.isArray(args[2]) ? args[2] : [];
+        await createNativeCodeZip(
+          modules.zip,
+          args[1],
+          files as never[],
+          args[3] as { maxSize?: number; maxEntries?: number } | undefined,
+        );
+        return undefined;
+      }
+      if (command === "lookupAuthorization" || command === "lookupKerberosAuthorization") {
+        return undefined;
+      }
+      if (!reportedUnsupportedNativeHostCommands.has(command)) {
+        reportedUnsupportedNativeHostCommands.add(command);
+        console.warn(`[code-oss] unsupported nativeHost command: ${command}`);
+      }
       return undefined;
-    }
-    return undefined;
-  });
+    },
+  };
   ipcServer.registerChannel("nativeHost", nativeHostChannel);
   ipcServer.registerChannel(
     "meteredConnection",
@@ -831,7 +1529,7 @@ export async function createNativeCodeHostMainBackend(
         browserWindows.delete(windowId);
       });
     },
-    registerWebContents(webContents, getBounds, ownerWindow) {
+    registerWebContents(webContents, getBounds, ownerWindow, projectId) {
       const window = ownerWindow ?? BrowserWindow.fromWebContents(webContents);
       if (!window) {
         throw new Error("An owning BrowserWindow is required for embedded Code browser views.");
@@ -852,8 +1550,66 @@ export async function createNativeCodeHostMainBackend(
       } satisfies NativeCodeWindow;
       windows.set(webContents.id, extensionHostWindow);
       browserWindows.set(webContents.id, embeddedWindow);
+      if (projectId) projectIdsByWindow.set(webContents.id, projectId);
       if (getBounds) embeddedBounds.set(webContents.id, getBounds);
+      const webContentsListeners: Array<[string, (...args: unknown[]) => void]> = [
+        [
+          "focus",
+          () => {
+            fireNativeHostEvent("onDidFocusMainWindow", webContents.id);
+            fireNativeHostEvent("onDidFocusMainOrAuxiliaryWindow", webContents.id);
+          },
+        ],
+        [
+          "blur",
+          () => {
+            fireNativeHostEvent("onDidBlurMainWindow", webContents.id);
+            fireNativeHostEvent("onDidBlurMainOrAuxiliaryWindow", webContents.id);
+          },
+        ],
+      ];
+      const nativeWindowListeners: Array<[string, (...args: unknown[]) => void]> = [
+        ["maximize", () => fireNativeHostEvent("onDidMaximizeWindow", webContents.id)],
+        ["unmaximize", () => fireNativeHostEvent("onDidUnmaximizeWindow", webContents.id)],
+        [
+          "enter-full-screen",
+          () =>
+            fireNativeHostEvent("onDidChangeWindowFullScreen", {
+              windowId: webContents.id,
+              fullscreen: true,
+            }),
+        ],
+        [
+          "leave-full-screen",
+          () =>
+            fireNativeHostEvent("onDidChangeWindowFullScreen", {
+              windowId: webContents.id,
+              fullscreen: false,
+            }),
+        ],
+        [
+          "always-on-top-changed",
+          (_event, alwaysOnTop) =>
+            fireNativeHostEvent("onDidChangeWindowAlwaysOnTop", {
+              windowId: webContents.id,
+              alwaysOnTop,
+            }),
+        ],
+      ];
+      const windowEmitter = window as unknown as EventEmitter;
+      const webContentsEmitter = webContents as unknown as EventEmitter;
+      for (const [event, listener] of webContentsListeners) {
+        webContentsEmitter.on(event, listener);
+      }
+      for (const [event, listener] of nativeWindowListeners) windowEmitter.on(event, listener);
+      fireNativeHostEvent("onDidOpenMainWindow", webContents.id);
       webContents.once("destroyed", () => {
+        for (const [event, listener] of webContentsListeners) {
+          webContentsEmitter.removeListener(event, listener);
+        }
+        for (const [event, listener] of nativeWindowListeners) {
+          windowEmitter.removeListener(event, listener);
+        }
         extensionHostWindow.emit("closed");
         onDidClose.fire(undefined);
         onDidDestroy.fire(undefined);
@@ -861,12 +1617,36 @@ export async function createNativeCodeHostMainBackend(
         onDidDestroy.dispose();
         windows.delete(webContents.id);
         browserWindows.delete(webContents.id);
+        projectIdsByWindow.delete(webContents.id);
         embeddedBounds.delete(webContents.id);
       });
     },
     unregisterWindow(windowId) {
       windows.delete(windowId);
       browserWindows.delete(windowId);
+      projectIdsByWindow.delete(windowId);
+    },
+    async handleURL(url) {
+      const uri = modules.URI.parse(url);
+      const requestedWindowId = /(?:^|&)windowId=(\d+)(?:&|$)/.exec(
+        new URL(url).search.slice(1),
+      )?.[1];
+      const candidateIds = requestedWindowId
+        ? [Number(requestedWindowId)]
+        : Array.from(windows.keys()).reverse();
+
+      for (const windowId of candidateIds) {
+        const clientPattern = new RegExp(`(?:^|,)window:${windowId}(?:,|$)`);
+        if (!ipcServer.connections.some((connection) => clientPattern.test(connection.ctx))) {
+          continue;
+        }
+        const channel = ipcServer.getChannel("urlHandler", (client) =>
+          clientPattern.test(client.ctx),
+        );
+        return Boolean(await channel.call("handleURL", [uri.toJSON(), { originalUrl: url }]));
+      }
+
+      return false;
     },
     dispose() {
       onWillShutdown.fire({
@@ -875,6 +1655,7 @@ export async function createNativeCodeHostMainBackend(
       });
       windows.clear();
       browserWindows.clear();
+      projectIdsByWindow.clear();
       embeddedBounds.clear();
       ptyHostService.dispose();
       (loggerService as { dispose(): void }).dispose();

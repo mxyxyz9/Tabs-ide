@@ -1,5 +1,15 @@
 import { DiffsHighlighter, getSharedHighlighter, SupportedLanguages } from "@pierre/diffs";
-import { CheckIcon, CopyIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  InfoIcon,
+  LightbulbIcon,
+  Maximize2Icon,
+  MessageSquareWarningIcon,
+  OctagonAlertIcon,
+  TriangleAlertIcon,
+  WrapTextIcon,
+} from "lucide-react";
 import React, {
   Children,
   Suspense,
@@ -16,11 +26,16 @@ import React, {
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Button } from "~/components/ui/button";
+import { Dialog, DialogHeader, DialogPopup, DialogTitle } from "~/components/ui/dialog";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { cn } from "~/lib/utils";
 import { openInPreferredEditor } from "../editorPreferences";
 import { resolveDiffThemeName, type DiffThemeName } from "../lib/diffRendering";
 import { fnv1a32 } from "../lib/diffRendering";
 import { LRUCache } from "../lib/lruCache";
 import { useTheme } from "../hooks/useTheme";
+import { remarkGithubAlerts } from "../markdown-github-alerts";
 import { resolveMarkdownFileLinkTarget } from "../markdown-links";
 import { readNativeApi } from "../nativeApi";
 
@@ -59,6 +74,43 @@ const highlightedCodeCache = new LRUCache<string>(
   MAX_HIGHLIGHT_CACHE_MEMORY_BYTES,
 );
 const highlighterPromiseCache = new Map<string, Promise<DiffsHighlighter>>();
+
+/** GitHub alert presentations: note, tip, important, warning, caution */
+const GITHUB_ALERT_PRESENTATIONS: Record<
+  string,
+  { label: string; Icon: typeof InfoIcon; borderClassName: string; titleClassName: string }
+> = {
+  note: {
+    label: "Note",
+    Icon: InfoIcon,
+    borderClassName: "border-blue-500/70",
+    titleClassName: "text-blue-600 dark:text-blue-400",
+  },
+  tip: {
+    label: "Tip",
+    Icon: LightbulbIcon,
+    borderClassName: "border-emerald-500/70",
+    titleClassName: "text-emerald-600 dark:text-emerald-400",
+  },
+  important: {
+    label: "Important",
+    Icon: MessageSquareWarningIcon,
+    borderClassName: "border-purple-500/70",
+    titleClassName: "text-purple-600 dark:text-purple-400",
+  },
+  warning: {
+    label: "Warning",
+    Icon: TriangleAlertIcon,
+    borderClassName: "border-amber-500/70",
+    titleClassName: "text-amber-600 dark:text-amber-500",
+  },
+  caution: {
+    label: "Caution",
+    Icon: OctagonAlertIcon,
+    borderClassName: "border-red-500/70",
+    titleClassName: "text-red-600 dark:text-red-400",
+  },
+};
 
 function extractFenceLanguage(className: string | undefined): string {
   const match = className?.match(CODE_FENCE_LANGUAGE_REGEX);
@@ -131,9 +183,20 @@ function getHighlighterPromise(language: string): Promise<DiffsHighlighter> {
   return promise;
 }
 
-function MarkdownCodeBlock({ code, children }: { code: string; children: ReactNode }) {
+function MarkdownCodeBlock({
+  code,
+  language,
+  children,
+}: {
+  code: string;
+  language?: string;
+  children: ReactNode;
+}) {
   const [copied, setCopied] = useState(false);
+  const [wrapped, setWrapped] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleCopy = useCallback(() => {
     if (typeof navigator === "undefined" || navigator.clipboard == null) {
       return;
@@ -148,7 +211,7 @@ function MarkdownCodeBlock({ code, children }: { code: string; children: ReactNo
         copiedTimerRef.current = setTimeout(() => {
           setCopied(false);
           copiedTimerRef.current = null;
-        }, 1200);
+        }, 2000);
       })
       .catch(() => undefined);
   }, [code]);
@@ -163,19 +226,119 @@ function MarkdownCodeBlock({ code, children }: { code: string; children: ReactNo
     [],
   );
 
+  const displayLanguage = language && language !== "text" ? language : "";
+  const wrapLabel = wrapped ? "Disable line wrap" : "Wrap lines";
+  const copyLabel = copied ? "Copied" : "Copy code";
+  const maximizeLabel = "Maximize code block";
+
   return (
-    <div className="chat-markdown-codeblock">
-      <button
-        type="button"
-        className="chat-markdown-copy-button"
-        onClick={handleCopy}
-        title={copied ? "Copied" : "Copy code"}
-        aria-label={copied ? "Copied" : "Copy code"}
+    <>
+      <div
+        className="chat-markdown-codeblock"
+        data-language={displayLanguage || undefined}
+        data-wrap={wrapped ? "true" : "false"}
       >
-        {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
-      </button>
-      {children}
-    </div>
+        <div className="chat-markdown-codeblock-header select-none">
+          <span className="chat-markdown-codeblock-title">
+            {displayLanguage && <span>{displayLanguage}</span>}
+          </span>
+          <div className="flex items-center gap-1" role="toolbar" aria-label="Code block actions">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="chat-markdown-chrome-action"
+                    aria-pressed={wrapped}
+                    onClick={() => setWrapped((val) => !val)}
+                    aria-label={wrapLabel}
+                  />
+                }
+              >
+                <WrapTextIcon className="size-3" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">{wrapLabel}</TooltipPopup>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="chat-markdown-chrome-action"
+                    onClick={() => setIsMaximized(true)}
+                    aria-label={maximizeLabel}
+                  />
+                }
+              >
+                <Maximize2Icon className="size-3" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">{maximizeLabel}</TooltipPopup>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="chat-markdown-chrome-action"
+                    onClick={handleCopy}
+                    aria-label={copyLabel}
+                  />
+                }
+              >
+                {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+              </TooltipTrigger>
+              <TooltipPopup side="top">{copyLabel}</TooltipPopup>
+            </Tooltip>
+          </div>
+        </div>
+        {children}
+      </div>
+
+      <Dialog open={isMaximized} onOpenChange={setIsMaximized}>
+        <DialogPopup className="max-w-4xl w-[90vw] max-h-[85vh] flex flex-col p-4 sm:p-6">
+          <DialogHeader className="p-0 pb-3 flex flex-row items-center justify-between">
+            <DialogTitle className="text-sm font-mono">{displayLanguage || "Code"}</DialogTitle>
+            <div className="flex items-center gap-1 pr-8">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="chat-markdown-chrome-action"
+                aria-pressed={wrapped}
+                onClick={() => setWrapped((val) => !val)}
+                aria-label={wrapLabel}
+              >
+                <WrapTextIcon className="size-3" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="chat-markdown-chrome-action"
+                onClick={handleCopy}
+                aria-label={copyLabel}
+              >
+                {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+              </Button>
+            </div>
+          </DialogHeader>
+          <div
+            data-wrap={wrapped ? "true" : "false"}
+            className="chat-markdown-codeblock flex-1 overflow-auto rounded-md border border-border/70 bg-background/50 p-3"
+          >
+            {children}
+          </div>
+        </DialogPopup>
+      </Dialog>
+    </>
   );
 }
 
@@ -240,6 +403,32 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
   const diffThemeName = resolveDiffThemeName(resolvedTheme);
   const markdownComponents = useMemo<Components>(
     () => ({
+      blockquote({ node: _node, children, ...props }) {
+        const alertType = String(
+          (props as Record<string, unknown>)["data-alert"] ??
+            (props as Record<string, unknown>)["dataAlert"] ??
+            "",
+        );
+        const alert = GITHUB_ALERT_PRESENTATIONS[alertType];
+        if (!alert) {
+          return <blockquote {...props}>{children}</blockquote>;
+        }
+        return (
+          <div
+            role="note"
+            className={cn(
+              "my-2 rounded-r-md border-l-2 pl-3 py-1.5 bg-muted/30 text-foreground/90",
+              alert.borderClassName,
+            )}
+          >
+            <p className={cn("flex items-center gap-1.5 font-medium text-xs mb-1", alert.titleClassName)}>
+              <alert.Icon aria-hidden className="size-3.5 shrink-0" />
+              {alert.label}
+            </p>
+            <div className="[&>p:first-child]:mt-0 [&>p:last-child]:mb-0">{children}</div>
+          </div>
+        );
+      },
       a({ node: _node, href, ...props }) {
         const targetPath = resolveMarkdownFileLinkTarget(href, cwd);
         if (!targetPath) {
@@ -269,8 +458,10 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
           return <pre {...props}>{children}</pre>;
         }
 
+        const language = extractFenceLanguage(codeBlock.className);
+
         return (
-          <MarkdownCodeBlock code={codeBlock.code}>
+          <MarkdownCodeBlock code={codeBlock.code} language={language}>
             <CodeHighlightErrorBoundary fallback={<pre {...props}>{children}</pre>}>
               <Suspense fallback={<pre {...props}>{children}</pre>}>
                 <SuspenseShikiCodeBlock
@@ -290,7 +481,7 @@ function ChatMarkdown({ text, cwd, isStreaming = false }: ChatMarkdownProps) {
 
   return (
     <div className="chat-markdown w-full min-w-0 text-sm leading-relaxed text-foreground/80">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkGithubAlerts]} components={markdownComponents}>
         {text}
       </ReactMarkdown>
     </div>

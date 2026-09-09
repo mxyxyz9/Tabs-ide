@@ -372,16 +372,26 @@ export const TestingAutomate = memo(function TestingAutomate({ onNavigate }: Tes
                     <CardTitle className="text-base">Playwright TypeScript batch</CardTitle>
                     <CardDescription className="break-all">{job.outputDirectory}</CardDescription>
                   </div>
-                  <Badge variant={job.status === "completed" ? "success" : "outline"}>
-                    {job.status.replace("-", " ")}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {job.engine && job.engine !== "standard" ? (
+                      <Badge variant="outline">{job.engine}</Badge>
+                    ) : null}
+                    {job.stage ? (
+                      <Badge variant="secondary">{job.stage}</Badge>
+                    ) : null}
+                    <Badge variant={job.status === "completed" ? "success" : "outline"}>
+                      {job.status.replace("-", " ")}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
                   {job.completedCases} of {job.totalCases} cases · approximately{" "}
-                  {job.estimatedTokens.toLocaleString()} tokens · approximately $
-                  {job.estimatedCostUsd.toFixed(2)}
+                  {job.estimatedTokens.toLocaleString()} tokens ·{" "}
+                  {job.usageMeasured
+                    ? `approximately $${job.estimatedCostUsd.toFixed(2)}`
+                    : "provider cost unmeasured"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Generated with {job.modelSelection.instanceId} / {job.modelSelection.model}

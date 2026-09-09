@@ -28,7 +28,8 @@ import {
   STARTUP_ANIMATION_EXIT_MS,
   STARTUP_ANIMATION_HOLD_MS,
 } from "../components/SplashScreen";
-import { cn } from "../lib/utils";
+import { cn, isPopoutMode } from "../lib/utils";
+import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
 import { providerQueryKeys } from "../lib/providerReactQuery";
 import { projectQueryKeys } from "../lib/projectReactQuery";
 import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
@@ -68,7 +69,33 @@ export const Route = createRootRouteWithContext<{
   }),
 });
 
-function RootRouteView() {
+/**
+ * Minimal shell rendered in popout windows (dedicated Resources Explorer).
+ * No splash screen, no EventRouter, no WebSocket bootstrap — popouts call
+ * Electron IPC directly and don't need any of the heavy infrastructure.
+ * Locks the view to DiagnosticsSettings so that app reloads, redirects, or
+ * route resets never navigate away to the full Tabs instance.
+ */
+function PopoutRootView() {
+  return (
+    <ToastProvider>
+      <AnchoredToastProvider>
+        <CommandPalette>
+          <div className="isolate flex h-screen min-h-0 min-w-0 flex-col overflow-y-auto overscroll-y-none bg-background text-foreground">
+            <DiagnosticsSettings />
+          </div>
+        </CommandPalette>
+        <GlobalConfirmDialog />
+      </AnchoredToastProvider>
+    </ToastProvider>
+  );
+}
+
+/**
+ * Full app root for the main Tabs window: splash screen, WebSocket bootstrap,
+ * thread/project sync, CommandPalette, etc.
+ */
+function FullAppRootView() {
   const isNativeApiReady = !!readNativeApi();
   const threadsHydrated = useAtomValue(threadsHydratedAtom);
   const settings = useSettings();
@@ -138,6 +165,20 @@ function RootRouteView() {
     </>
   );
 }
+
+/**
+ * Dispatches to either the lightweight popout shell or the full app root
+ * depending on whether the window was opened as a standalone popout.
+ * `isPopoutMode` is a module-level constant so this conditional is stable
+ * across all renders — no hooks are called before it.
+ */
+function RootRouteView() {
+  if (isPopoutMode()) {
+    return <PopoutRootView />;
+  }
+  return <FullAppRootView />;
+}
+
 
 function RootRouteErrorView({ error, reset }: ErrorComponentProps) {
   const message = errorMessage(error);

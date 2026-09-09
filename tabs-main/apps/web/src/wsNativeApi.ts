@@ -262,6 +262,8 @@ export function createWsNativeApi(options?: {
       readArtifact: (input) => transport.request(WS_METHODS.testingReadArtifact, input),
       runTests: (input) =>
         transport.request(WS_METHODS.testingRunTests, input, { timeoutMs: null }),
+      cancelExecutionRun: (input) =>
+        transport.request(WS_METHODS.testingCancelExecutionRun, input),
       listExecutionRuns: (input) => transport.request(WS_METHODS.testingListExecutionRuns, input),
       decideHealingProposal: (input) =>
         transport.request(WS_METHODS.testingDecideHealingProposal, input),
@@ -443,6 +445,10 @@ export function createWsNativeApi(options?: {
       getProcessDiagnostics: () => transport.request(WS_METHODS.serverGetProcessDiagnostics),
       getProcessResourceHistory: (input) =>
         transport.request(WS_METHODS.serverGetProcessResourceHistory, input),
+      getResourceTelemetry: () => transport.request(WS_METHODS.serverGetResourceTelemetry),
+      getResourceTelemetryHistory: (input) =>
+        transport.request(WS_METHODS.serverGetResourceTelemetryHistory, input),
+      retryResourceTelemetry: () => transport.request(WS_METHODS.serverRetryResourceTelemetry),
       signalProcess: (input) => transport.request(WS_METHODS.serverSignalProcess, input),
       createSupportBundle: () => transport.request(WS_METHODS.serverCreateSupportBundle),
       reportClientActivity: (input) =>

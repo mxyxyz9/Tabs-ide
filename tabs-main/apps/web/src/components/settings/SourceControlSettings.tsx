@@ -14,6 +14,7 @@ import {
   JujutsuIcon,
 } from "~/components/Icons";
 import { cn } from "~/lib/utils";
+import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SettingsSection } from "~/routes/_chat.settings";
 import { useTheme } from "~/hooks/useTheme";
 import { getActiveFontCombo } from "~/lib/themes";
@@ -331,8 +332,16 @@ export function SourceControlSettingsPanel({
                       {item.cliAvailable ? (
                         item.authenticated ? (
                           <span>
-                            Authenticated as <strong>{item.authenticatedAs}</strong>. Pull request
-                            and issue integrations are enabled.
+                            Authenticated as{" "}
+                            <strong>
+                              <RedactedSensitiveText
+                                value={item.authenticatedAs}
+                                ariaLabel="Toggle source control account visibility"
+                                revealTooltip="Click to reveal account"
+                                hideTooltip="Click to hide account"
+                              />
+                            </strong>
+                            . Pull request and issue integrations are enabled.
                           </span>
                         ) : (
                           <span>

@@ -81,4 +81,112 @@ describe("official Playwright candidate integration (no model calls)", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("blocks repair for non-repairable product assertion failure", async () => {
+    const root = await mkdtemp(join(process.cwd(), "official-agent-non-repairable-"));
+    try {
+      await expect(
+        generateOfficialPlaywright({
+          request: {
+            projectId: "project",
+            projectPath: root,
+            targetUrl: "https://example.test",
+            modelSelection: {
+              instanceId: ProviderInstanceId.makeUnsafe("codex"),
+              model: "selected",
+            },
+          },
+          testCase: {
+            id: "case",
+            steps: [],
+            expectedResult: "Page",
+          } as unknown as TestingCaseSummary,
+          outputDirectory: root,
+          textGeneration: {} as unknown as TextGenerationShape,
+          previousSpec: 'import { test, expect } from "playwright/test"; test("x", () => { expect(1).toBe(1); });',
+          failureEvidence: "Error: expect(received).toEqual(expected) - Expected '404', Received '200'",
+        }),
+      ).rejects.toThrow("failure classified as product-assertion");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects weakened assertions when repairing a test", async () => {
+    const root = await mkdtemp(join(process.cwd(), "official-agent-weakened-"));
+    const textGeneration = {
+      generateStructuredTesting: (input: { cwd: string }) =>
+        Effect.tryPromise(async () => {
+          await writeFile(
+            join(input.cwd, "tests/generated.spec.ts"),
+            'import { test, expect } from "playwright/test"; test("weakened", () => { expect(1).toBe(1); });',
+          );
+          return { summary: "Weakened candidate", blockedReason: "" };
+        }),
+    } as unknown as TextGenerationShape;
+    try {
+      await expect(
+        generateOfficialPlaywright({
+          request: {
+            projectId: "project",
+            projectPath: root,
+            targetUrl: "https://example.test",
+            modelSelection: {
+              instanceId: ProviderInstanceId.makeUnsafe("codex"),
+              model: "selected",
+            },
+          },
+          testCase: {
+            id: "case",
+            steps: [],
+            expectedResult: "Page",
+          } as unknown as TestingCaseSummary,
+          outputDirectory: root,
+          textGeneration,
+          previousSpec: 'import { test, expect } from "playwright/test"; test("x", () => { expect(1).toBe(1); expect(2).toBe(2); });',
+          failureEvidence: "TimeoutError: locator.click: Timeout 5000ms waiting for locator('#button')",
+        }),
+      ).rejects.toThrow("Weakened assertions");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects skipped or excluded tests in generated candidate", async () => {
+    const root = await mkdtemp(join(process.cwd(), "official-agent-skipped-"));
+    const textGeneration = {
+      generateStructuredTesting: (input: { cwd: string }) =>
+        Effect.tryPromise(async () => {
+          await writeFile(
+            join(input.cwd, "tests/generated.spec.ts"),
+            'import { test, expect } from "playwright/test"; test.skip("skipped test", () => { expect(1).toBe(1); });',
+          );
+          return { summary: "Skipped candidate", blockedReason: "" };
+        }),
+    } as unknown as TextGenerationShape;
+    try {
+      await expect(
+        generateOfficialPlaywright({
+          request: {
+            projectId: "project",
+            projectPath: root,
+            targetUrl: "https://example.test",
+            modelSelection: {
+              instanceId: ProviderInstanceId.makeUnsafe("codex"),
+              model: "selected",
+            },
+          },
+          testCase: {
+            id: "case",
+            steps: [],
+            expectedResult: "Page",
+          } as unknown as TestingCaseSummary,
+          outputDirectory: root,
+          textGeneration,
+        }),
+      ).rejects.toThrow("Agent output contains excluded/expected-failure tests");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

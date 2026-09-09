@@ -216,4 +216,51 @@ describe("MessagesTimeline", () => {
 
     expect(rows.map((row) => row.id)).toEqual(["user-1", "assistant-1", "tasks-turn-1", "user-2"]);
   });
+
+  it("renders work log groups with AnimatedHeight for smooth expansion", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline
+        hasMessages
+        isWorking={false}
+        activeTurnInProgress={false}
+        activeTurnStartedAt={null}
+        scrollContainer={null}
+        timelineEntries={[
+          {
+            id: "work-group-1",
+            kind: "work",
+            createdAt: "2026-03-17T19:12:20.000Z",
+            entry: {
+              id: "work-1",
+              label: "Searching code",
+              tone: "tool",
+              detail: "ripgrep",
+              command: "rg search",
+              createdAt: "2026-03-17T19:12:20.000Z",
+            },
+          },
+        ]}
+        completionDividerBeforeEntryId={null}
+        completionSummary={null}
+        turnDiffSummaryByAssistantMessageId={new Map()}
+        nowIso="2026-03-17T19:12:28.000Z"
+        expandedWorkGroups={{}}
+        onToggleWorkGroup={() => {}}
+        onOpenTurnDiff={() => {}}
+        revertTurnCountByUserMessageId={new Map()}
+        onRevertUserMessage={() => {}}
+        isRevertingCheckpoint={false}
+        onImageExpand={() => {}}
+        markdownCwd={undefined}
+        resolvedTheme="dark"
+        timestampFormat="12-hour"
+        workspaceRoot={undefined}
+        latestTaskDescription={null}
+      />,
+    );
+
+    expect(markup).toContain('data-slot="animated-height"');
+    expect(markup).toContain("Searching code");
+  });
 });

@@ -1,7 +1,11 @@
 import { type EnvironmentId, type MessageId, type TurnId } from "@tabs/contracts";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import gsap from "gsap";
 import { deriveTimelineEntries, formatElapsed } from "../../session-logic";
+import { isScrollContainerNearBottom } from "../../chat-scroll";
+import { AnimatedHeight } from "../AnimatedHeight";
+import { RenderErrorBoundary } from "../RenderErrorBoundary";
+import { CHAT_TIMELINE_ANCHOR_OFFSET } from "./timelineScrollAnchoring";
 import { TaskProgressCard } from "./TaskProgressCard";
 import { type TurnDiffSummary } from "../../types";
 import { summarizeTurnDiffStats } from "../../lib/turnDiffTree";
@@ -207,6 +211,44 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     }));
   }, []);
 
+  // Scroll anchoring: maintain reading position when user is scrolled up and active turn streams
+  const scrollAnchorRef = useRef<{
+    element: HTMLElement | null;
+    offsetFromTop: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!scrollContainer) return;
+    const isNearBottom = isScrollContainerNearBottom(scrollContainer);
+    if (isNearBottom) {
+      scrollAnchorRef.current = null;
+      return;
+    }
+
+    if (scrollAnchorRef.current?.element?.isConnected) {
+      const currentRect = scrollAnchorRef.current.element.getBoundingClientRect();
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const currentOffset = currentRect.top - containerRect.top;
+      const drift = currentOffset - scrollAnchorRef.current.offsetFromTop;
+      if (Math.abs(drift) > 0.5) {
+        scrollContainer.scrollTop += drift;
+      }
+    } else {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const rowElements = scrollContainer.querySelectorAll<HTMLElement>("[data-timeline-row-kind]");
+      for (const row of rowElements) {
+        const rowRect = row.getBoundingClientRect();
+        if (rowRect.bottom > containerRect.top + CHAT_TIMELINE_ANCHOR_OFFSET) {
+          scrollAnchorRef.current = {
+            element: row,
+            offsetFromTop: rowRect.top - containerRect.top,
+          };
+          break;
+        }
+      }
+    }
+  }, [scrollContainer, timelineEntries, isWorking]);
+
   const renderRowContent = (row: TimelineRow) => (
     <div
       className="pb-4"
@@ -296,37 +338,41 @@ export const MessagesTimeline = memo(function MessagesTimeline({
                     )}
                     onClick={() => hasOverflow && onToggleWorkGroup(groupId)}
                   >
-                    {visibleEntries.map((workEntry, idx) => {
-                      const heading = toolWorkEntryHeading(workEntry);
-                      const detail = workEntry.command ?? workEntry.detail ?? null;
-                      const entryNum =
-                        hasOverflow && !isExpanded
-                          ? regularEntries.length - visibleEntries.length + idx + 1
-                          : idx + 1;
-                      return (
-                        <div
-                          key={`work-row:${workEntry.id}`}
-                          className="flex items-center gap-3.5 text-xs font-sans leading-relaxed"
-                        >
-                          <span className="font-mono text-[11px] text-muted-foreground/25 select-none shrink-0">
-                            [{String(entryNum).padStart(2, "0")}]
-                          </span>
-                          <div className="min-w-0 flex-1 truncate flex items-center gap-2">
-                            <span className="font-sans font-medium text-foreground/85">
-                              {heading}
-                            </span>
-                            {detail && (
-                              <>
-                                <span className="text-muted-foreground/30">•</span>
-                                <span className="font-mono text-[11px] text-muted-foreground/55 truncate">
-                                  {detail}
+                    <AnimatedHeight>
+                      <div className="flex flex-col gap-2.5">
+                        {visibleEntries.map((workEntry, idx) => {
+                          const heading = toolWorkEntryHeading(workEntry);
+                          const detail = workEntry.command ?? workEntry.detail ?? null;
+                          const entryNum =
+                            hasOverflow && !isExpanded
+                              ? regularEntries.length - visibleEntries.length + idx + 1
+                              : idx + 1;
+                          return (
+                            <div
+                              key={`work-row:${workEntry.id}`}
+                              className="flex items-center gap-3.5 text-xs font-sans leading-relaxed"
+                            >
+                              <span className="font-mono text-[11px] text-muted-foreground/25 select-none shrink-0">
+                                [{String(entryNum).padStart(2, "0")}]
+                              </span>
+                              <div className="min-w-0 flex-1 truncate flex items-center gap-2">
+                                <span className="font-sans font-medium text-foreground/85">
+                                  {heading}
                                 </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                                {detail && (
+                                  <>
+                                    <span className="text-muted-foreground/30">•</span>
+                                    <span className="font-mono text-[11px] text-muted-foreground/55 truncate">
+                                      {detail}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AnimatedHeight>
                     {/* Blinking cursor — only while actively working */}
                     {isWorking && (
                       <div className="flex items-start gap-4 text-sm font-mono leading-relaxed">
@@ -624,12 +670,26 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   return (
     <div data-timeline-root="true" className="mx-auto w-full min-w-0 max-w-3xl overflow-x-hidden">
       {rows.map((row, index) => (
-        <div key={`timeline-row-group:${row.id}`}>
-          <div key={`timeline-row:${row.id}`}>{renderRowContent(row)}</div>
-          {changedFilesMapByIndex.get(index)?.map((msgId) => (
-            <div key={`changed-files-for:${msgId}`}>{renderChangedFilesForMessage(msgId)}</div>
-          ))}
-        </div>
+        <RenderErrorBoundary
+          key={`timeline-row-boundary:${row.id}`}
+          fallback={
+            <div className="my-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              Failed to render message.
+            </div>
+          }
+          resetKeys={[
+            row.id,
+            row.kind === "message" ? row.message.text : undefined,
+            row.kind === "work" ? row.groupedEntries.length : undefined,
+          ]}
+        >
+          <div key={`timeline-row-group:${row.id}`}>
+            <div key={`timeline-row:${row.id}`}>{renderRowContent(row)}</div>
+            {changedFilesMapByIndex.get(index)?.map((msgId) => (
+              <div key={`changed-files-for:${msgId}`}>{renderChangedFilesForMessage(msgId)}</div>
+            ))}
+          </div>
+        </RenderErrorBoundary>
       ))}
     </div>
   );

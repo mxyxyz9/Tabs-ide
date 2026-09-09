@@ -1,0 +1,18 @@
+@media (prefers-reduced-motion:no-preference) {
+  .headspace :is(.cta,.hs-nav-download,.platform-download,.e2-server-illustration button) { transition:transform .3s cubic-bezier(.22,1,.36,1),box-shadow .3s,background .3s; }
+  .headspace :is(.cta,.hs-nav-download,.platform-download,.e2-server-illustration button):hover { transform:translateY(-3px); box-shadow:0 9px 22px #3259ed25; }
+  .headspace :is(.cta,.hs-nav-download,.platform-download,.e2-server-illustration button):active { transform:translateY(0) scale(.98); box-shadow:none; }
+  .headspace :is(.cta,.hs-nav-download,.platform-download) svg { transition:transform .4s cubic-bezier(.22,1,.36,1); }
+  .headspace :is(.cta,.hs-nav-download,.platform-download):hover svg { transform:translate(2px,-2px); }
+  .headspace .hs-nav nav a { position:relative; }
+  .headspace .hs-nav nav a::after { content:""; position:absolute; left:0; right:0; bottom:-6px; height:1px; background:currentColor; transform:scaleX(0); transform-origin:left; transition:transform .3s; }
+  .headspace .hs-nav nav a:hover::after { transform:scaleX(1); }
+  .headspace .tool-setup-path .setup-icon { transition:transform .5s cubic-bezier(.22,1,.36,1); }
+  .headspace .tool-setup-path:hover .setup-icon { transform:translateY(-4px) rotate(-9deg); }
+  .headspace .tool-setup-path .setup-arrow { transition:transform .4s; }
+  .headspace .tool-setup-path:hover .setup-arrow { transform:translateY(5px); }
+  .headspace .e2-workflow-options button > span:last-child { transition:transform .3s; }
+  .headspace .e2-workflow-options button:hover > span:last-child { transform:translate(3px,-3px); }
+  .headspace .platform-shelf { transition:transform .4s,border-color .4s; }
+  .headspace .platform-shelf:hover { transform:translateY(-5px); border-color:#8099ed; }
+}

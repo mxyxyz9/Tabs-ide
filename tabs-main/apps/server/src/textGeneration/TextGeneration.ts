@@ -259,12 +259,12 @@ export const makeTextGenerationFromRegistry = (
               detail: "Selected provider is unavailable",
             }),
           );
-        if (input.playwrightTools && instance.driverKind !== "codex")
+        if (input.playwrightTools && instance.capabilities.testingMcpTools !== "supported")
           return Effect.fail(
             new TextGenerationError({
               operation: "generateStructuredTesting",
               detail:
-                "Official Playwright tool integration currently supports the Codex provider only. Your selected provider was not changed. Use the standard builder or choose a supported provider explicitly.",
+                "Official Playwright tool integration requires a provider with testing MCP tool support. Your selected provider was not changed. Use the standard builder or choose a supported provider explicitly.",
             }),
           );
         return instance.textGeneration.generateStructuredTesting(input);

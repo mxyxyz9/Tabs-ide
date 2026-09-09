@@ -1958,7 +1958,7 @@ export const TestingDiscover = memo(function TestingDiscover({ projectId }: Test
                                   {selectedLocatorPage.entries.length} locators shown
                                 </p>
                                 <div className="divide-y divide-border/60">
-                                  {filteredLocatorEntries.slice(0, 100).map((entry) => (
+                                  {filteredLocatorEntries.map((entry) => (
                                     <div
                                       key={entry.id}
                                       className="flex flex-wrap items-start justify-between gap-3 py-3"

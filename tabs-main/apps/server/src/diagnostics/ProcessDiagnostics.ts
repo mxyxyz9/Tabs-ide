@@ -1,6 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import type {
   ServerProcessDiagnosticsEntry,
   ServerProcessDiagnosticsResult,
@@ -13,17 +10,7 @@ import type {
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
 
-const execFileAsync = promisify(execFile);
-
-interface ProcessRow {
-  readonly pid: number;
-  readonly ppid: number;
-  readonly status: string;
-  readonly cpuPercent: number;
-  readonly rssBytes: number;
-  readonly elapsedSeconds: number;
-  readonly command: string;
-}
+import { type ProcessRow, readSystemProcessRows } from "./ProcessEnumerator.ts";
 
 interface Sample {
   readonly at: DateTime.Utc;
@@ -40,60 +27,6 @@ function elapsed(seconds: number): string {
   return hours > 0
     ? `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`
     : `${minutes}:${String(rest).padStart(2, "0")}`;
-}
-
-function parseElapsed(value: string): number {
-  const [clock, days = "0"] = value.split("-").reverse();
-  const parts = clock!.split(":").map(Number);
-  const seconds = parts.pop() ?? 0;
-  const minutes = parts.pop() ?? 0;
-  const hours = parts.pop() ?? 0;
-  return Number(days) * 86_400 + hours * 3_600 + minutes * 60 + seconds;
-}
-
-function parseProcessRows(output: string): ProcessRow[] {
-  return output
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .flatMap((line) => {
-      const match = /^(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+)\s+(\d+)\s+(\S+)\s+(.+)$/u.exec(line);
-      if (!match) return [];
-      return [
-        {
-          pid: Number(match[1]),
-          ppid: Number(match[2]),
-          status: match[3]!,
-          cpuPercent: Number(match[4]),
-          rssBytes: Number(match[5]) * 1_024,
-          elapsedSeconds: parseElapsed(match[6]!),
-          command: match[7]!,
-        },
-      ];
-    });
-}
-
-async function readRows(): Promise<ProcessRow[]> {
-  if (process.platform === "win32") {
-    const memory = process.memoryUsage();
-    return [
-      {
-        pid: process.pid,
-        ppid: process.ppid,
-        status: "running",
-        cpuPercent: 0,
-        rssBytes: memory.rss,
-        elapsedSeconds: process.uptime(),
-        command: process.argv.join(" ") || "tabs",
-      },
-    ];
-  }
-  const { stdout } = await execFileAsync(
-    "ps",
-    ["-axo", "pid=,ppid=,state=,%cpu=,rss=,etime=,command="],
-    { maxBuffer: 4 * 1024 * 1024 },
-  );
-  return parseProcessRows(stdout);
 }
 
 function descendants(rows: readonly ProcessRow[]): readonly ProcessRow[] {
@@ -171,7 +104,7 @@ function entries(rows: readonly ProcessRow[]): ServerProcessDiagnosticsEntry[] {
 export async function readProcessDiagnostics(): Promise<ServerProcessDiagnosticsResult> {
   const readAt = DateTime.nowUnsafe();
   try {
-    const processes = entries(descendants(await readRows()));
+    const processes = entries(descendants(await readSystemProcessRows()));
     samples.push({ at: readAt, processes });
     const cutoff = readAt.epochMilliseconds - MAX_SAMPLE_AGE_MS;
     while (samples[0] && samples[0].at.epochMilliseconds < cutoff) samples.shift();
@@ -202,83 +135,101 @@ export async function readProcessDiagnostics(): Promise<ServerProcessDiagnostics
 export async function readProcessResourceHistory(
   input: ServerProcessResourceHistoryInput,
 ): Promise<ServerProcessResourceHistoryResult> {
-  await readProcessDiagnostics();
   const readAt = DateTime.nowUnsafe();
   const windowMs = Math.max(1_000, input.windowMs);
   const bucketMs = Math.max(1_000, input.bucketMs);
-  const retained = samples.filter(
-    (sample) => sample.at.epochMilliseconds >= readAt.epochMilliseconds - windowMs,
-  );
-  const byProcess = new Map<
-    string,
-    Array<{ sample: Sample; process: ServerProcessDiagnosticsEntry }>
-  >();
-  for (const sample of retained)
-    for (const entry of sample.processes) {
-      const key = String(entry.pid);
-      byProcess.set(key, [...(byProcess.get(key) ?? []), { sample, process: entry }]);
-    }
-  const topProcesses = [...byProcess.entries()]
-    .map(([key, observations]) => {
-      const first = observations[0]!;
-      const last = observations.at(-1)!;
-      return {
-        processKey: key,
-        pid: last.process.pid,
-        ppid: last.process.ppid,
-        command: last.process.command,
-        depth: last.process.depth,
-        isServerRoot: last.process.pid === process.pid,
-        firstSeenAt: first.sample.at,
-        lastSeenAt: last.sample.at,
-        currentCpuPercent: last.process.cpuPercent,
-        avgCpuPercent:
-          observations.reduce((sum, item) => sum + item.process.cpuPercent, 0) /
-          observations.length,
-        maxCpuPercent: Math.max(...observations.map((item) => item.process.cpuPercent)),
-        cpuSecondsApprox: observations.reduce(
-          (sum, item) => sum + (item.process.cpuPercent * bucketMs) / 100_000,
-          0,
-        ),
-        currentRssBytes: last.process.rssBytes,
-        maxRssBytes: Math.max(...observations.map((item) => item.process.rssBytes)),
-        sampleCount: observations.length,
-        category: last.process.category,
-        attribution: last.process.attribution,
-      };
-    })
-    .sort((left, right) => right.currentCpuPercent - left.currentCpuPercent);
-  return {
-    readAt,
-    windowMs,
-    bucketMs,
-    sampleIntervalMs: 0,
-    retainedSampleCount: retained.length,
-    totalCpuSecondsApprox: topProcesses.reduce((sum, entry) => sum + entry.cpuSecondsApprox, 0),
-    buckets: retained.map((sample) => ({
-      startedAt: sample.at,
-      endedAt: DateTime.add(sample.at, { milliseconds: bucketMs }),
-      avgCpuPercent: sample.processes.reduce((sum, entry) => sum + entry.cpuPercent, 0),
-      maxCpuPercent: sample.processes.reduce((sum, entry) => sum + entry.cpuPercent, 0),
-      maxRssBytes: sample.processes.reduce((sum, entry) => sum + entry.rssBytes, 0),
-      maxProcessCount: sample.processes.length,
-    })),
-    topProcesses,
-    error: Option.none(),
-  };
+
+  try {
+    await readProcessDiagnostics();
+    const retained = samples.filter(
+      (sample) => sample.at.epochMilliseconds >= readAt.epochMilliseconds - windowMs,
+    );
+    const byProcess = new Map<
+      string,
+      Array<{ sample: Sample; process: ServerProcessDiagnosticsEntry }>
+    >();
+    for (const sample of retained)
+      for (const entry of sample.processes) {
+        const key = String(entry.pid);
+        byProcess.set(key, [...(byProcess.get(key) ?? []), { sample, process: entry }]);
+      }
+    const topProcesses = [...byProcess.entries()]
+      .map(([key, observations]) => {
+        const first = observations[0]!;
+        const last = observations.at(-1)!;
+        return {
+          processKey: key,
+          pid: last.process.pid,
+          ppid: last.process.ppid,
+          command: last.process.command,
+          depth: last.process.depth,
+          isServerRoot: last.process.pid === process.pid,
+          firstSeenAt: first.sample.at,
+          lastSeenAt: last.sample.at,
+          currentCpuPercent: last.process.cpuPercent,
+          avgCpuPercent:
+            observations.reduce((sum, item) => sum + item.process.cpuPercent, 0) /
+            observations.length,
+          maxCpuPercent: Math.max(...observations.map((item) => item.process.cpuPercent)),
+          cpuSecondsApprox: observations.reduce(
+            (sum, item) => sum + (item.process.cpuPercent * bucketMs) / 100_000,
+            0,
+          ),
+          currentRssBytes: last.process.rssBytes,
+          maxRssBytes: Math.max(...observations.map((item) => item.process.rssBytes)),
+          sampleCount: observations.length,
+          category: last.process.category,
+          attribution: last.process.attribution,
+        };
+      })
+      .sort((left, right) => right.currentCpuPercent - left.currentCpuPercent);
+    return {
+      readAt,
+      windowMs,
+      bucketMs,
+      sampleIntervalMs: 0,
+      retainedSampleCount: retained.length,
+      totalCpuSecondsApprox: topProcesses.reduce((sum, entry) => sum + entry.cpuSecondsApprox, 0),
+      buckets: retained.map((sample) => ({
+        startedAt: sample.at,
+        endedAt: DateTime.add(sample.at, { milliseconds: bucketMs }),
+        avgCpuPercent: sample.processes.reduce((sum, entry) => sum + entry.cpuPercent, 0),
+        maxCpuPercent: sample.processes.reduce((sum, entry) => sum + entry.cpuPercent, 0),
+        maxRssBytes: sample.processes.reduce((sum, entry) => sum + entry.rssBytes, 0),
+        maxProcessCount: sample.processes.length,
+      })),
+      topProcesses,
+      error: Option.none(),
+    };
+  } catch (error) {
+    return {
+      readAt,
+      windowMs,
+      bucketMs,
+      sampleIntervalMs: 0,
+      retainedSampleCount: 0,
+      totalCpuSecondsApprox: 0,
+      buckets: [],
+      topProcesses: [],
+      error: Option.some({
+        failureTag: "ProcessDiagnosticsQueryFailedError",
+        message: error instanceof Error ? error.message : "Could not read process resource history.",
+      }),
+    };
+  }
 }
 
 export async function signalProcess(
   input: ServerSignalProcessInput,
 ): Promise<ServerSignalProcessResult> {
-  const rows = descendants(await readRows());
-  if (input.pid === process.pid || !rows.some((row) => row.pid === input.pid))
-    return {
-      ...input,
-      signaled: false,
-      message: Option.some("Refusing to signal a process outside the Tabs backend tree."),
-    };
   try {
+    const rows = descendants(await readSystemProcessRows());
+    if (input.pid === process.pid || !rows.some((row) => row.pid === input.pid))
+      return {
+        ...input,
+        signaled: false,
+        message: Option.some("Refusing to signal a process outside the Tabs backend tree."),
+      };
     process.kill(input.pid, input.signal);
     return { ...input, signaled: true, message: Option.none() };
   } catch (error) {

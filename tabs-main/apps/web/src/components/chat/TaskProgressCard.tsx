@@ -2,6 +2,7 @@ import { memo, useEffect, useId, useRef, useState } from "react";
 import { CheckIcon, ChevronDownIcon, ListChecksIcon, LoaderIcon, XIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import type { TaskNode } from "../../session-logic";
+import { AnimatedHeight } from "../AnimatedHeight";
 
 // ---------------------------------------------------------------------------
 // Self-ticking elapsed timer (direct DOM mutation — no React re-renders)
@@ -163,16 +164,18 @@ export const TaskProgressCard = memo(function TaskProgressCard({
       </button>
 
       {/* Task rows */}
-      {expanded && (
-        <div
-          id={contentId}
-          className="flex flex-col gap-0 px-4 pb-3 animate-in fade-in slide-in-from-top-1 duration-150"
-        >
-          {tasks.map((task) => (
-            <TaskRow key={task.taskId} task={task} />
-          ))}
-        </div>
-      )}
+      <AnimatedHeight>
+        {expanded && (
+          <div
+            id={contentId}
+            className="flex flex-col gap-0 px-4 pb-3"
+          >
+            {tasks.map((task) => (
+              <TaskRow key={task.taskId} task={task} />
+            ))}
+          </div>
+        )}
+      </AnimatedHeight>
     </div>
   );
 });

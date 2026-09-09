@@ -51,16 +51,110 @@ import {
   CODE_OSS_PRODUCT_CONFIGURATION_RELATIVE_PATH,
   CodeHostManager,
   filterWorkspaceTabs,
+  readCodeOssProtocolFile,
   isPathInsideWorkspace,
   mergeProductConfigurationDefaults,
   reconcileSharedExtensionRegistry,
   readWorkspaceTabs,
   resolveCodeHostConfig,
+  resolveCodeOssAiProviderSettings,
+  resolveCodeOssApplicationSettingsPaths,
+  resolveWorkspaceRootForSession,
   resolveCodeOssExtensionPath,
   resolveCodeOssNodeModulesResource,
   resolveCodeOssWorkbenchTheme,
   writeWorkspaceTabs,
 } from "./codeHostManager";
+
+describe("resolveCodeOssAiProviderSettings", () => {
+  it.each(["tabs", "copilot"] as const)(
+    "keeps Code-OSS AI extensions enabled for the %s provider",
+    (provider) => {
+      expect(resolveCodeOssAiProviderSettings(provider)["chat.disableAIFeatures"]).toBe(false);
+    },
+  );
+
+  it("changes only the native Copilot chrome visibility between providers", () => {
+    expect(resolveCodeOssAiProviderSettings("tabs")).toMatchObject({
+      "chat.commandCenter.enabled": false,
+      "workbench.secondarySideBar.defaultVisibility": "hidden",
+    });
+    expect(resolveCodeOssAiProviderSettings("copilot")).toMatchObject({
+      "chat.commandCenter.enabled": true,
+      "workbench.secondarySideBar.defaultVisibility": "visible",
+    });
+  });
+});
+
+describe("resolveCodeOssApplicationSettingsPaths", () => {
+  it("targets the active shared desktop profile rather than project-local profile remnants", () => {
+    const stateDir = Path.join(Path.sep, "tmp", "tabs-state");
+
+    expect(resolveCodeOssApplicationSettingsPaths(stateDir)).toEqual([
+      Path.join(stateDir, "code-oss-main", "profile", "default", "settings.json"),
+      Path.join(stateDir, "code-oss-desktop", "shared-profile", "default", "settings.json"),
+    ]);
+  });
+});
+
+describe("resolveWorkspaceRootForSession", () => {
+  it("uses an existing requested workspace", () => {
+    const workspaceRoot = makeTempDir("tabs-existing-workspace-");
+
+    expect(
+      resolveWorkspaceRootForSession(
+        workspaceRoot,
+        { rootDir: Path.join(workspaceRoot, "tabs-main"), runtime: null },
+        FS,
+      ),
+    ).toBe(workspaceRoot);
+  });
+
+  it("recovers a moved workspace with the same basename near the application checkout", () => {
+    const checkoutRoot = makeTempDir("tabs-moved-workspace-");
+    const currentWorkspace = Path.join(checkoutRoot, "project");
+    FS.mkdirSync(currentWorkspace);
+
+    expect(
+      resolveWorkspaceRootForSession(
+        Path.join(checkoutRoot, "deleted-parent", "project"),
+        { rootDir: Path.join(checkoutRoot, "tabs-main"), runtime: null },
+        FS,
+      ),
+    ).toBe(currentWorkspace);
+  });
+
+  it("rejects a missing workspace before starting an extension host", () => {
+    const checkoutRoot = makeTempDir("tabs-missing-workspace-");
+    const missingWorkspace = Path.join(checkoutRoot, "deleted-project");
+
+    expect(() =>
+      resolveWorkspaceRootForSession(
+        missingWorkspace,
+        { rootDir: Path.join(checkoutRoot, "tabs-main"), runtime: null },
+        FS,
+      ),
+    ).toThrow(`The project folder no longer exists: ${missingWorkspace}`);
+  });
+});
+
+describe("readCodeOssProtocolFile", () => {
+  it("serves exact WASM bytes with the MIME type required by WebAssembly streaming", async () => {
+    const runtimeDir = makeTempDir("tabs-code-protocol-");
+    const wasmPath = Path.join(runtimeDir, "onig.wasm");
+    const bytes = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    FS.writeFileSync(wasmPath, bytes);
+
+    const response = await readCodeOssProtocolFile(wasmPath, {
+      "Cache-Control": "no-cache",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/wasm");
+    expect(response.headers.get("Cache-Control")).toBe("no-cache");
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+  });
+});
 
 describe("reconcileSharedExtensionRegistry", () => {
   it("keeps valid registrations and removes stale workspace registrations", () => {
@@ -94,7 +188,10 @@ describe("reconcileSharedExtensionRegistry", () => {
     const sharedRegistry = reconcileSharedExtensionRegistry(stateDir);
 
     expect(JSON.parse(FS.readFileSync(sharedRegistry, "utf8"))).toEqual([
-      expect.objectContaining({ identifier: { id: "openai.chatgpt" }, version: "1.0.0" }),
+      expect.objectContaining({
+        identifier: { id: "openai.chatgpt" },
+        version: "1.0.0",
+      }),
     ]);
   });
 });
@@ -266,7 +363,10 @@ describe("resolveCodeHostConfig", () => {
 });
 
 describe("mergeProductConfigurationDefaults", () => {
-  const defaults = { "security.workspace.trust.enabled": false, "chat.disableAIFeatures": true };
+  const defaults = {
+    "security.workspace.trust.enabled": false,
+    "chat.disableAIFeatures": true,
+  };
 
   it("adds configurationDefaults to a product without any", () => {
     const { product, changed } = mergeProductConfigurationDefaults({ nameShort: "Code" }, defaults);
@@ -281,7 +381,10 @@ describe("mergeProductConfigurationDefaults", () => {
       defaults,
     );
     expect(changed).toBe(true);
-    expect(product.configurationDefaults).toEqual({ "editor.fontSize": 13, ...defaults });
+    expect(product.configurationDefaults).toEqual({
+      "editor.fontSize": 13,
+      ...defaults,
+    });
   });
 
   it("reports unchanged when the defaults are already present", () => {
@@ -298,7 +401,49 @@ describe("CodeHostManager", () => {
     webContentsViews.length = 0;
   });
 
+  it("registers each embedded native window with its owning Tabs project", async () => {
+    const workspaceRoot = makeTempDir("tabs-native-owner-");
+    const window = createMockWindow();
+    const registrar = vi.fn();
+    const manager = new CodeHostManager(() => window as never, {
+      state: {
+        available: true,
+        mode: "embedded",
+        entry: "http://127.0.0.1:3000",
+        reason: null,
+      },
+      runtime: null,
+    });
+    manager.setNativeWebContentsRegistrar(registrar);
+
+    await manager.ensureSession({ projectId: "project-owner", workspaceRoot });
+
+    expect(registrar).toHaveBeenCalledOnce();
+    expect(registrar.mock.calls[0]?.[2]).toBe("project-owner");
+  });
+
+  it("does not create a workbench or extension host for a missing project folder", async () => {
+    const window = createMockWindow();
+    const missingWorkspace = Path.join(makeTempDir("tabs-deleted-session-"), "gone");
+    const manager = new CodeHostManager(() => window as never, {
+      state: {
+        available: true,
+        mode: "embedded",
+        entry: "http://127.0.0.1:3000",
+        reason: null,
+      },
+      runtime: null,
+    });
+
+    await expect(
+      manager.ensureSession({ projectId: "missing", workspaceRoot: missingWorkspace }),
+    ).rejects.toThrow(`The project folder no longer exists: ${missingWorkspace}`);
+    expect(webContentsViews).toHaveLength(0);
+  });
+
   it("switches active sessions by detaching the previous WebContentsView", async () => {
+    const workspaceA = makeTempDir("tabs-session-a-");
+    const workspaceB = makeTempDir("tabs-session-b-");
     const window = createMockWindow();
     const manager = new CodeHostManager(() => window as never, {
       state: {
@@ -310,10 +455,24 @@ describe("CodeHostManager", () => {
       runtime: null,
     });
 
-    await manager.ensureSession({ projectId: "a", workspaceRoot: "/tmp/a" });
-    await manager.ensureSession({ projectId: "b", workspaceRoot: "/tmp/b" });
-    manager.setBounds({ projectId: "a", x: 0, y: 0, width: 800, height: 600, visible: true });
-    manager.setBounds({ projectId: "b", x: 0, y: 0, width: 800, height: 600, visible: true });
+    await manager.ensureSession({ projectId: "a", workspaceRoot: workspaceA });
+    await manager.ensureSession({ projectId: "b", workspaceRoot: workspaceB });
+    manager.setBounds({
+      projectId: "a",
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
+      visible: true,
+    });
+    manager.setBounds({
+      projectId: "b",
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
+      visible: true,
+    });
 
     await manager.activateSession({ projectId: "a" });
     await manager.activateSession({ projectId: "b" });
@@ -324,6 +483,8 @@ describe("CodeHostManager", () => {
   });
 
   it("hides the active session and disposes stale sessions on sync", async () => {
+    const workspaceA = makeTempDir("tabs-session-a-");
+    const workspaceB = makeTempDir("tabs-session-b-");
     const window = createMockWindow();
     const manager = new CodeHostManager(() => window as never, {
       state: {
@@ -335,9 +496,16 @@ describe("CodeHostManager", () => {
       runtime: null,
     });
 
-    await manager.ensureSession({ projectId: "a", workspaceRoot: "/tmp/a" });
-    await manager.ensureSession({ projectId: "b", workspaceRoot: "/tmp/b" });
-    manager.setBounds({ projectId: "a", x: 0, y: 0, width: 800, height: 600, visible: true });
+    await manager.ensureSession({ projectId: "a", workspaceRoot: workspaceA });
+    await manager.ensureSession({ projectId: "b", workspaceRoot: workspaceB });
+    manager.setBounds({
+      projectId: "a",
+      x: 0,
+      y: 0,
+      width: 800,
+      height: 600,
+      visible: true,
+    });
     await manager.activateSession({ projectId: "a" });
 
     manager.hideActiveSession();
@@ -365,7 +533,12 @@ describe("CodeHostManager", () => {
     const manager = new CodeHostManager(
       () => window as never,
       {
-        state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+        state: {
+          available: true,
+          mode: "embedded",
+          entry: "http://127.0.0.1:3000",
+          reason: null,
+        },
         runtime: null,
       },
       mockControlChannel as never,
@@ -385,13 +558,22 @@ describe("CodeHostManager", () => {
   });
 
   it("verifies setTheme executes cleanly across all 7 built-in themes plus custom theme", async () => {
+    const workspaceRoot = makeTempDir("tabs-all-themes-");
     const window = createMockWindow();
     const manager = new CodeHostManager(() => window as never, {
-      state: { available: true, mode: "embedded", entry: "http://127.0.0.1:3000", reason: null },
+      state: {
+        available: true,
+        mode: "embedded",
+        entry: "http://127.0.0.1:3000",
+        reason: null,
+      },
       runtime: null,
     });
 
-    await manager.ensureSession({ projectId: "proj-all-themes", workspaceRoot: "/tmp/at" });
+    await manager.ensureSession({
+      projectId: "proj-all-themes",
+      workspaceRoot,
+    });
 
     const themesToTest = [
       "tabs-dark",
@@ -415,8 +597,18 @@ describe("CodeHostManager", () => {
       try {
         const projectId = "test-proj-123";
         const sampleTabs = [
-          { filePath: "/path/to/fileA.ts", viewColumn: 1, active: false, pinned: true },
-          { filePath: "/path/to/fileB.ts", viewColumn: 1, active: true, pinned: false },
+          {
+            filePath: "/path/to/fileA.ts",
+            viewColumn: 1,
+            active: false,
+            pinned: true,
+          },
+          {
+            filePath: "/path/to/fileB.ts",
+            viewColumn: 1,
+            active: true,
+            pinned: false,
+          },
         ];
 
         writeWorkspaceTabs(projectId, sampleTabs, testDir);
@@ -443,8 +635,14 @@ describe("CodeHostManager", () => {
       const tabs = [
         { filePath: Path.join(workspaceRoot, "src", "index.ts"), active: true },
         { filePath: "README.md", active: false },
-        { filePath: Path.join(Path.sep, "projects", "throttle", "app.json"), active: false },
-        { filePath: Path.join("..", "throttle", "package.json"), active: false },
+        {
+          filePath: Path.join(Path.sep, "projects", "throttle", "app.json"),
+          active: false,
+        },
+        {
+          filePath: Path.join("..", "throttle", "package.json"),
+          active: false,
+        },
       ];
 
       expect(filterWorkspaceTabs(workspaceRoot, tabs)).toEqual(tabs.slice(0, 2));

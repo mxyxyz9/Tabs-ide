@@ -75,6 +75,7 @@ import {
   createNativeCodeHostMainBackend,
   type NativeCodeHostMainBackend,
 } from "./nativeCodeHostMain";
+import { findNativeCodeHostURLs, isNativeCodeHostURL } from "./nativeCodeHostUrl";
 import {
   createSshEnvironmentBridge,
   resolveSshPasswordPrompt,
@@ -97,6 +98,7 @@ const SET_AI_PROVIDER_CHANNEL = "desktop:set-ai-provider";
 const SET_ZOOM_FACTOR_CHANNEL = "desktop:set-zoom-factor";
 const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
+const OPEN_POPOUT_WINDOW_CHANNEL = "desktop:open-popout-window";
 const MENU_ACTION_CHANNEL = "desktop:menu-action";
 const APP_CLOSING_CHANNEL = "desktop:app-closing";
 const QUIT_CONFIRMATION_REQUEST_CHANNEL = "desktop:quit-confirmation-request";
@@ -234,10 +236,10 @@ function isLightDesktopTheme(themeId: string, customConfig?: any): boolean {
 }
 const ROOT_DIR = resolveRootDir();
 
-const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
+const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL || !app.isPackaged);
 const APP_BASE_NAME = "Tabs";
-const APP_DISPLAY_NAME = isDevelopment ? `${APP_BASE_NAME} (Dev)` : APP_BASE_NAME;
-const APP_USER_MODEL_ID = "com.tabs.app";
+const APP_DISPLAY_NAME = isDevelopment ? "Tabs Dev" : APP_BASE_NAME;
+const APP_USER_MODEL_ID = isDevelopment ? "com.tabs.app.dev" : "com.tabs.app";
 const USER_DATA_DIR_NAME = isDevelopment ? "tabs-dev" : "tabs";
 const LEGACY_USER_DATA_DIR_NAME = isDevelopment ? "Tabs (Dev)" : "Tabs (Alpha)";
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
@@ -308,6 +310,18 @@ let isQuittingConfirmed = false;
 let isQuitConfirmationOpen = false;
 let desktopProtocolRegistered = false;
 let nativeCodeHostMainBackend: NativeCodeHostMainBackend | null = null;
+const pendingNativeCodeHostURLs: string[] = [];
+
+function forwardNativeCodeHostURL(rawUrl: string): void {
+  if (!isNativeCodeHostURL(rawUrl, DESKTOP_SCHEME)) return;
+  if (!nativeCodeHostMainBackend) {
+    pendingNativeCodeHostURLs.push(rawUrl);
+    return;
+  }
+  void nativeCodeHostMainBackend.handleURL(rawUrl).catch((error: unknown) => {
+    console.error("[code-oss] failed to route protocol URL", error);
+  });
+}
 let aboutCommitHashCache: string | null | undefined;
 let desktopLogSink: RotatingFileSink | null = null;
 let backendLogSink: RotatingFileSink | null = null;
@@ -2064,6 +2078,23 @@ function registerIpcHandlers(): void {
     }
   });
 
+  ipcMain.removeHandler(OPEN_POPOUT_WINDOW_CHANNEL);
+  ipcMain.handle(OPEN_POPOUT_WINDOW_CHANNEL, async (_event, input: unknown) => {
+    if (typeof input !== "object" || input === null) return;
+    const { url, title, width, height } = input as {
+      url?: unknown;
+      title?: unknown;
+      width?: unknown;
+      height?: unknown;
+    };
+    if (typeof url !== "string" || url.trim().length === 0) return;
+    createPopoutWindow(url.trim(), {
+      title: typeof title === "string" ? title : undefined,
+      width: typeof width === "number" ? width : undefined,
+      height: typeof height === "number" ? height : undefined,
+    });
+  });
+
   ipcMain.removeHandler(UPDATE_GET_STATE_CHANNEL);
   ipcMain.handle(UPDATE_GET_STATE_CHANNEL, async () => updateState);
 
@@ -2626,6 +2657,128 @@ function getIconOption(): { icon: string } | Record<string, never> {
   return iconPath ? { icon: iconPath } : {};
 }
 
+const popoutWindows = new Set<BrowserWindow>();
+
+function isInternalTabsUrl(rawUrl: string): boolean {
+  if (typeof rawUrl !== "string" || rawUrl.length === 0) return false;
+  if (rawUrl.includes("popout=true") || rawUrl.includes("section=diagnostics")) {
+    return true;
+  }
+  if (isDevelopment && process.env.VITE_DEV_SERVER_URL) {
+    try {
+      const devOrigin = new URL(process.env.VITE_DEV_SERVER_URL).origin;
+      const targetOrigin = new URL(rawUrl).origin;
+      if (devOrigin === targetOrigin) return true;
+    } catch {}
+  }
+  if (rawUrl.startsWith(`${DESKTOP_SCHEME}://app`) || rawUrl.startsWith("/")) {
+    return true;
+  }
+  return false;
+}
+
+function resolveInternalTabsUrl(rawUrl: string): string {
+  if (
+    rawUrl.startsWith("http://") ||
+    rawUrl.startsWith("https://") ||
+    rawUrl.startsWith(`${DESKTOP_SCHEME}://`)
+  ) {
+    return rawUrl;
+  }
+  const cleanPath = rawUrl.startsWith("/") ? rawUrl : `/${rawUrl}`;
+  if (isDevelopment && process.env.VITE_DEV_SERVER_URL) {
+    const devOrigin = new URL(process.env.VITE_DEV_SERVER_URL).origin;
+    return `${devOrigin}/#${cleanPath}`;
+  }
+  return `${DESKTOP_SCHEME}://app/index.html#${cleanPath}`;
+}
+
+function createPopoutWindow(
+  targetUrl: string,
+  options?: {
+    title?: string | undefined;
+    width?: number | undefined;
+    height?: number | undefined;
+  },
+): BrowserWindow {
+  for (const existing of popoutWindows) {
+    if (!existing.isDestroyed()) {
+      if (existing.isMinimized()) {
+        existing.restore();
+      }
+      existing.show();
+      existing.focus();
+      return existing;
+    }
+  }
+
+  const resolvedUrl = resolveInternalTabsUrl(targetUrl);
+  const width = options?.width ?? 780;
+  const height = options?.height ?? 560;
+
+  const window = new BrowserWindow({
+    width,
+    height,
+    minWidth: 540,
+    minHeight: 380,
+    fullscreen: false,
+    show: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#141414" : "#f8f8f8",
+    autoHideMenuBar: true,
+    ...getIconOption(),
+    title: options?.title || "Resources Explorer",
+    ...resolveTitleBarOptions(),
+    ...(process.platform === "darwin"
+      ? {
+          trafficLightPosition: { x: 14, y: 14 },
+        }
+      : {}),
+    webPreferences: {
+      preload: Path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      additionalArguments: ["--tabs-popout-window"],
+    },
+  });
+
+  popoutWindows.add(window);
+  window.on("closed", () => {
+    popoutWindows.delete(window);
+  });
+
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isInternalTabsUrl(url)) {
+      createPopoutWindow(url);
+      return { action: "deny" };
+    }
+    const externalUrl = getSafeExternalUrl(url);
+    if (externalUrl) {
+      void shell.openExternal(externalUrl);
+    }
+    return { action: "deny" };
+  });
+
+  window.webContents.on("will-navigate", (event, navUrl) => {
+    if (!isInternalTabsUrl(navUrl)) {
+      event.preventDefault();
+      const externalUrl = getSafeExternalUrl(navUrl);
+      if (externalUrl) {
+        void shell.openExternal(externalUrl);
+      }
+    }
+  });
+
+  window.once("ready-to-show", () => {
+    window.center();
+    window.show();
+    window.focus();
+  });
+
+  void window.loadURL(resolvedUrl);
+  return window;
+}
+
 function createTabsWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1100,
@@ -2675,6 +2828,10 @@ function createTabsWindow(): BrowserWindow {
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isInternalTabsUrl(url)) {
+      createPopoutWindow(url);
+      return { action: "deny" };
+    }
     const externalUrl = getSafeExternalUrl(url);
     if (externalUrl) {
       void shell.openExternal(externalUrl);
@@ -2718,6 +2875,12 @@ function createTabsWindow(): BrowserWindow {
   window.on("closed", () => {
     if (mainWindow === window) {
       mainWindow = null;
+      for (const popout of popoutWindows) {
+        if (!popout.isDestroyed()) {
+          popout.close();
+        }
+      }
+      popoutWindows.clear();
     }
   });
 
@@ -2736,11 +2899,10 @@ function createTabsWindow(): BrowserWindow {
 function createWindow(): BrowserWindow {
   const window = createTabsWindow();
   window.on("close", (event) => {
-    if (
-      isQuittingConfirmed ||
-      !shouldConfirmBeforeQuit() ||
-      BrowserWindow.getAllWindows().length > 1
-    ) {
+    const nonPopoutWindowsCount = BrowserWindow.getAllWindows().filter(
+      (w) => !popoutWindows.has(w),
+    ).length;
+    if (isQuittingConfirmed || !shouldConfirmBeforeQuit() || nonPopoutWindowsCount > 1) {
       return;
     }
     event.preventDefault();
@@ -2774,7 +2936,12 @@ if (!clerkBridge.isPrimaryInstance) {
 }
 app.once("will-quit", () => clerkBridge.cleanup());
 
-app.on("second-instance", () => {
+app.on("open-url", (_event, rawUrl) => forwardNativeCodeHostURL(rawUrl));
+
+app.on("second-instance", (_event, commandLine) => {
+  for (const rawUrl of findNativeCodeHostURLs(commandLine, DESKTOP_SCHEME)) {
+    forwardNativeCodeHostURL(rawUrl);
+  }
   const targetWindow = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null;
   if (!targetWindow) {
     return;
@@ -2861,12 +3028,36 @@ async function bootstrap(): Promise<void> {
     nativeCodeHostMainBackend = await createNativeCodeHostMainBackend(
       codeHostConfig.runtime.vscodeRoot,
       codeHostConfig.runtime.stateDir,
+      {
+        openFile(projectId, path) {
+          if (!codeControlChannel.openFile(projectId, path, { pinned: true })) {
+            throw new Error(`Code-OSS is not ready to open ${path}`);
+          }
+        },
+        openFolder(path) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(
+              MENU_ACTION_CHANNEL,
+              path ? `code-open-folder:${encodeURIComponent(path)}` : "tab-new",
+            );
+          }
+        },
+        dispatchTabAction(action) {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(MENU_ACTION_CHANNEL, action);
+          }
+        },
+      },
     );
-    codeHostManager.setNativeWebContentsRegistrar((webContents, getBounds) => {
+    for (const rawUrl of pendingNativeCodeHostURLs.splice(0)) {
+      forwardNativeCodeHostURL(rawUrl);
+    }
+    codeHostManager.setNativeWebContentsRegistrar((webContents, getBounds, projectId) => {
       nativeCodeHostMainBackend?.registerWebContents(
         webContents,
         getBounds,
         mainWindow ?? undefined,
+        projectId,
       );
     });
     writeDesktopLogHeader("bootstrap native Code-OSS main-process backend started");

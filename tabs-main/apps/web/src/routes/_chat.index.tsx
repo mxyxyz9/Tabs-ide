@@ -1,14 +1,24 @@
 import { createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { DiagnosticsSettings } from "../components/settings/DiagnosticsSettings";
 import { Button } from "../components/ui/button";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
+import { isPopoutMode } from "../lib/utils";
 import { projectsAtom, threadsAtom } from "../state/threads";
 import { useWorkspaceActiveProjectId, useRememberedThreadId } from "../state/workspaceShell";
 import { composerDraftActions, createScopedComposerDraftActions } from "../state/composerDrafts";
 import { useAtomValue } from "@effect/atom-react";
 
 function ChatIndexRouteView() {
+  if (isPopoutMode()) {
+    return (
+      <div className="isolate flex h-screen min-h-0 min-w-0 flex-col overflow-y-auto overscroll-y-none bg-background text-foreground">
+        <DiagnosticsSettings />
+      </div>
+    );
+  }
+
   const activeProjectId = useWorkspaceActiveProjectId();
   const rememberedThreadId = useRememberedThreadId(activeProjectId);
   const projects = useAtomValue(projectsAtom);
