@@ -4276,7 +4276,7 @@ export default function ChatView({
         )}
         <div
           className={cn(
-            "group rounded-2xl p-0.5 transition-all duration-200",
+            "group relative rounded-2xl p-0.5 transition-all duration-200",
             composerProviderState.composerFrameClassName,
           )}
           onDragEnter={onComposerDragEnter}
@@ -4284,6 +4284,19 @@ export default function ChatView({
           onDragLeave={onComposerDragLeave}
           onDrop={onComposerDrop}
         >
+          {composerMenuOpen && !isComposerApprovalState && (
+            <div className="absolute inset-x-0 bottom-full z-30 mb-2 px-1">
+              <ComposerCommandMenu
+                items={composerMenuItems}
+                resolvedTheme={resolvedTheme}
+                isLoading={isComposerMenuLoading}
+                triggerKind={composerTriggerKind}
+                activeItemId={activeComposerMenuItem?.id ?? null}
+                onHighlightedItemChange={onComposerMenuItemHighlighted}
+                onSelect={onSelectComposerItem}
+              />
+            </div>
+          )}
           <div
             ref={composerCardRef}
             className={cn(
@@ -4560,20 +4573,6 @@ export default function ChatView({
 
             {/* Main Textarea + Floating Action Area */}
             <div className="relative flex min-h-[76px] flex-col justify-between p-3 sm:p-3.5">
-              {composerMenuOpen && !isComposerApprovalState && (
-                <div className="absolute inset-x-0 bottom-full z-20 mb-2 px-1">
-                  <ComposerCommandMenu
-                    items={composerMenuItems}
-                    resolvedTheme={resolvedTheme}
-                    isLoading={isComposerMenuLoading}
-                    triggerKind={composerTriggerKind}
-                    activeItemId={activeComposerMenuItem?.id ?? null}
-                    onHighlightedItemChange={onComposerMenuItemHighlighted}
-                    onSelect={onSelectComposerItem}
-                  />
-                </div>
-              )}
-
               {!isComposerApprovalState &&
                 pendingUserInputs.length === 0 &&
                 composerPreviewAnnotations.length > 0 && (

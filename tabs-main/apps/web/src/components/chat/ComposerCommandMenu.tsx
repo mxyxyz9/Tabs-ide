@@ -8,7 +8,7 @@ import {
   formatProviderSkillDisplayName,
   resolveProviderSkillSourceKind,
 } from "@tabs/client-runtime/providerSkills";
-import { memo } from "react";
+import { memo, useLayoutEffect, useRef } from "react";
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { type ProviderPickerKind } from "../../session-logic";
 import { BotIcon, BlocksIcon } from "lucide-react";
@@ -65,8 +65,19 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   onHighlightedItemChange: (itemId: string | null) => void;
   onSelect: (item: ComposerCommandItem) => void;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!props.activeItemId || !listRef.current) return;
+    const item = listRef.current.querySelector<HTMLElement>(
+      `[data-composer-item-id="${CSS.escape(props.activeItemId)}"]`,
+    );
+    item?.scrollIntoView({ block: "nearest" });
+  }, [props.activeItemId]);
+
   return (
     <Command
+      autoHighlight={false}
       mode="none"
       onItemHighlighted={(highlightedValue) => {
         props.onHighlightedItemChange(
@@ -74,8 +85,12 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
         );
       }}
     >
-      <div className="relative overflow-hidden rounded-xl border border-border/80 bg-popover/96 shadow-lg/8 backdrop-blur-xs">
-        <CommandList className="max-h-64">
+      <div
+        ref={listRef}
+        className="relative flex min-h-0 w-full flex-col overflow-hidden rounded-xl border border-border/80 bg-popover/96 shadow-xl backdrop-blur-xs"
+        data-composer-command-menu="true"
+      >
+        <CommandList className="max-h-[min(22rem,45vh)] min-h-0 scroll-py-2 overflow-y-auto overscroll-contain">
           {props.items.map((item) => (
             <ComposerCommandMenuItem
               key={item.id}
@@ -113,8 +128,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
   return (
     <CommandItem
       value={props.item.id}
+      data-composer-item-id={props.item.id}
       className={cn(
-        "cursor-pointer select-none gap-2",
+        "min-h-10 cursor-pointer select-none gap-3 rounded-lg px-3 py-2",
         props.isActive && "bg-accent text-accent-foreground",
       )}
       onMouseDown={(event) => {
@@ -145,10 +161,14 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           model
         </Badge>
       ) : null}
-      <span className="flex min-w-0 items-center gap-1.5 truncate">
-        <span className="truncate">{props.item.label}</span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="min-w-0 max-w-[45%] shrink-0 truncate text-left text-xs font-medium">
+          {props.item.label}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-left text-xs text-muted-foreground/70">
+          {props.item.description}
+        </span>
       </span>
-      <span className="truncate text-muted-foreground/70 text-xs">{props.item.description}</span>
       {props.item.type === "skill" ? (
         <Badge variant="secondary" className="ms-auto px-1.5 py-0 text-[10px] capitalize">
           {resolveProviderSkillSourceKind(props.item.skill)}
